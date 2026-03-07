@@ -43,7 +43,7 @@ export function TopBar() {
 
   const issueSummary = useMemo(() => {
     if (!validateLayout.data) return null;
-    return validateLayout.data.isValid ? 'Valid' : `${validateLayout.data.issues.length} issue(s)`;
+    return validateLayout.data.isValid ? 'Layout is valid' : `${validateLayout.data.issues.length} issue(s)`;
   }, [validateLayout.data]);
 
   const handleCreateDraft = async () => {
@@ -60,7 +60,7 @@ export function TopBar() {
     if (!layoutDraft || !activeFloorId) return;
     try {
       await saveDraft.mutateAsync(layoutDraft);
-      setStatusMessage('Saved');
+      setStatusMessage('Draft saved');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Save failed');
     }
@@ -70,7 +70,7 @@ export function TopBar() {
     if (!layoutDraft || !activeFloorId) return;
     try {
       const result = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(result.isValid ? 'Layout valid' : `${result.issues.length} issue(s) found`);
+      setStatusMessage(result.isValid ? 'Layout is valid' : `${result.issues.length} issue(s) found`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Validation failed');
     }
@@ -80,7 +80,7 @@ export function TopBar() {
     if (!layoutDraft || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(`Published · ${result.generatedCells} cells`);
+      setStatusMessage(`Published with ${result.generatedCells} generated cells`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Publish failed');
     }
@@ -106,57 +106,61 @@ export function TopBar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border-muted)] bg-[var(--surface-primary)] px-4">
-
-      {/* Left zone: context breadcrumb (site / floor) + draft status pill */}
       <div className="flex items-center gap-2">
+        <label className="sr-only" htmlFor="site-select">
+          Site
+        </label>
         <select
+          id="site-select"
+          aria-label="Site"
           value={activeSiteId ?? ''}
           onChange={(e) => handleSiteChange(e.target.value)}
           className="h-8 rounded-lg border border-[var(--border-muted)] bg-white px-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30"
         >
-          <option value="">Site…</option>
+          <option value="">Site...</option>
           {sites.map((site) => (
-            <option key={site.id} value={site.id}>{site.code} · {site.name}</option>
+            <option key={site.id} value={site.id}>
+              {site.code} · {site.name}
+            </option>
           ))}
         </select>
 
-        <span className="text-slate-300 select-none">/</span>
+        <span className="select-none text-slate-300">/</span>
 
+        <label className="sr-only" htmlFor="floor-select">
+          Floor
+        </label>
         <select
+          id="floor-select"
+          aria-label="Floor"
           value={activeFloorId ?? ''}
           onChange={(e) => handleFloorChange(e.target.value)}
           disabled={!activeSiteId}
           className="h-8 rounded-lg border border-[var(--border-muted)] bg-white px-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         >
-          <option value="">Floor…</option>
+          <option value="">Floor...</option>
           {floors.map((floor) => (
-            <option key={floor.id} value={floor.id}>{floor.code} · {floor.name}</option>
+            <option key={floor.id} value={floor.id}>
+              {floor.code} · {floor.name}
+            </option>
           ))}
         </select>
 
         <span
           className={[
             'rounded-full px-2 py-0.5 text-[11px] font-medium leading-none',
-            isDraftDirty
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-emerald-50 text-emerald-700'
+            isDraftDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'
           ].join(' ')}
         >
-          {isDraftDirty ? '● Unsaved' : '✓ Synced'}
+          {isDraftDirty ? 'Unsaved draft' : 'Draft synced'}
         </span>
       </div>
 
-      {/* Center: grows — shows status feedback or validation summary */}
-      <div className="flex flex-1 items-center justify-center px-4">
-        {(statusMessage || issueSummary) && (
-          <span className="text-xs text-slate-400">{statusMessage ?? issueSummary}</span>
-        )}
+      <div className="flex flex-1 items-center justify-center px-4" aria-live="polite">
+        {(statusMessage || issueSummary) && <span className="text-xs text-slate-400">{statusMessage ?? issueSummary}</span>}
       </div>
 
-      {/* Right zone: undo/redo + add rack + lifecycle actions */}
       <div className="flex items-center gap-1">
-
-        {/* Undo / Redo stubs */}
         <button
           type="button"
           disabled
@@ -176,7 +180,6 @@ export function TopBar() {
 
         <div className="mx-1.5 h-5 w-px bg-slate-200" />
 
-        {/* Add Rack — place-mode toggle */}
         {layoutDraft && (
           <button
             type="button"
@@ -185,17 +188,16 @@ export function TopBar() {
               'flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors',
               isPlacing
                 ? 'border-cyan-400 bg-cyan-50 text-cyan-800 ring-1 ring-cyan-400/40'
-                : 'border-[var(--border-muted)] bg-white text-slate-700 hover:bg-slate-50 shadow-sm'
+                : 'border-[var(--border-muted)] bg-white text-slate-700 shadow-sm hover:bg-slate-50'
             ].join(' ')}
           >
             <PlusSquare className="h-4 w-4" />
-            {isPlacing ? 'Click canvas…' : 'Add Rack'}
+            {isPlacing ? 'Click canvas...' : 'Add Rack'}
           </button>
         )}
 
         <div className="mx-1.5 h-5 w-px bg-slate-200" />
 
-        {/* Layout lifecycle */}
         <button
           type="button"
           disabled={!actions.canCreateDraft || isBusy}
@@ -203,7 +205,7 @@ export function TopBar() {
           className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <FilePlus2 className="h-3.5 w-3.5" />
-          Draft
+          Create Draft
         </button>
 
         <button
@@ -213,7 +215,7 @@ export function TopBar() {
           className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Save className="h-3.5 w-3.5" />
-          Save
+          Save Draft
         </button>
 
         <button
@@ -235,7 +237,6 @@ export function TopBar() {
           <CheckCircle2 className="h-3.5 w-3.5" />
           Publish
         </button>
-
       </div>
     </header>
   );

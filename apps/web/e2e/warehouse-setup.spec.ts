@@ -17,7 +17,7 @@ test.describe('warehouse bootstrap flow', () => {
     await page.getByLabel('Floor Name').fill('Main Floor');
     await page.getByRole('button', { name: 'Create Site, Floor, and First Draft' }).click();
 
-    await expect(page.getByText('Canvas = spatial context only')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
   });
 
   test('existing floor without draft requires explicit draft creation', async ({ page }) => {
@@ -31,6 +31,6 @@ test.describe('warehouse bootstrap flow', () => {
     await expect(createDraftButton).toBeVisible();
     await createDraftButton.click();
 
-    await expect(page.getByText('Canvas = spatial context only')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
   });
 });

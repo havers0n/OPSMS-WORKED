@@ -11,14 +11,14 @@ test.describe('live draft lifecycle', () => {
 
     await page.goto('/warehouse');
     await page.getByLabel('Floor').selectOption(floor.id);
-    await expect(page.getByText('Canvas = spatial context only')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
 
     const displayCodeInput = page.getByLabel('Display Code');
     await displayCodeInput.fill('07');
     await expect(page.getByText('Unsaved draft')).toBeVisible();
     await expect(page.getByRole('button', { name: /Publish/i })).toBeDisabled();
 
-    await page.getByRole('button', { name: /Save Draft/i }).click();
+    await page.getByRole('button', { name: 'Save Draft' }).click();
     await expect(page.getByText('Draft saved')).toBeVisible();
     await expect(page.getByText('Draft synced')).toBeVisible();
 
@@ -35,7 +35,7 @@ test.describe('live draft lifecycle', () => {
 
     await page.goto('/warehouse');
     await page.getByLabel('Floor').selectOption(first.floor.id);
-    await expect(page.getByText('Rack 03')).toBeVisible();
+    await expect(page.getByText('Rack 03').first()).toBeVisible();
 
     await page.getByLabel('Display Code').fill('11');
     await expect(page.getByText('Unsaved draft')).toBeVisible();
@@ -45,7 +45,7 @@ test.describe('live draft lifecycle', () => {
     });
     await page.getByLabel('Floor').selectOption(second.floor.id);
 
-    await expect(page.getByText('Rack 11')).toBeVisible();
+    await expect(page.getByText('Rack 11').first()).toBeVisible();
     await expect(page.getByLabel('Floor')).toHaveValue(first.floor.id);
 
     page.once('dialog', async (dialog) => {
@@ -54,6 +54,6 @@ test.describe('live draft lifecycle', () => {
     await page.getByLabel('Floor').selectOption(second.floor.id);
 
     await expect(page.getByLabel('Floor')).toHaveValue(second.floor.id);
-    await expect(page.getByText('Rack 09')).toBeVisible();
+    await expect(page.getByText('Rack 09').first()).toBeVisible();
   });
 });
