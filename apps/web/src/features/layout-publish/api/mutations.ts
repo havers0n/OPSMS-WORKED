@@ -1,5 +1,5 @@
 import type { LayoutValidationResult } from '@wos/domain';
-import { supabase } from '@/shared/api/supabase/client';
+import { bffRequest } from '@/shared/api/bff/client';
 
 export type PublishLayoutResult = {
   layoutVersionId: string;
@@ -9,14 +9,7 @@ export type PublishLayoutResult = {
 };
 
 export async function publishLayoutVersion(layoutVersionId: string): Promise<PublishLayoutResult> {
-  const { data, error } = await supabase.rpc('publish_layout_version', {
-    layout_version_uuid: layoutVersionId,
-    actor_uuid: null
+  return bffRequest<PublishLayoutResult>(`/layout-drafts/${layoutVersionId}/publish`, {
+    method: 'POST'
   });
-
-  if (error) {
-    throw error;
-  }
-
-  return data as PublishLayoutResult;
 }

@@ -1,7 +1,6 @@
 import type { Floor } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase/client';
-import { mapFloorRowToDomain, type FloorRow } from './mappers';
+import { bffRequest } from '@/shared/api/bff/client';
 
 export const floorKeys = {
   all: ['floor'] as const,
@@ -9,12 +8,7 @@ export const floorKeys = {
 };
 
 async function fetchFloors(siteId: string): Promise<Floor[]> {
-  const { data, error } = await supabase.from('floors').select('id,site_id,code,name,sort_order').eq('site_id', siteId).order('sort_order', { ascending: true });
-  if (error) {
-    throw error;
-  }
-
-  return ((data ?? []) as FloorRow[]).map(mapFloorRowToDomain);
+  return bffRequest<Floor[]>(`/sites/${siteId}/floors`);
 }
 
 export function floorsQueryOptions(siteId: string | null) {

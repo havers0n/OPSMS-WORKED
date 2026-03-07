@@ -5,6 +5,14 @@ import path from 'node:path';
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_BFF_PROXY_TARGET ?? 'http://127.0.0.1:8787',
+        changeOrigin: true
+      }
+    }
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

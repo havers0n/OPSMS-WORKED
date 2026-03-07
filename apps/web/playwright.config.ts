@@ -12,11 +12,20 @@ export default defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173'
   },
-  webServer: {
-    command: 'npm.cmd run dev -- --host 127.0.0.1 --port 4173',
-    cwd: __dirname,
-    url: 'http://127.0.0.1:4173/warehouse',
-    reuseExistingServer: true,
-    timeout: 120000
-  }
+  webServer: [
+    {
+      command: 'npm.cmd run dev --workspace @wos/bff',
+      cwd: path.resolve(__dirname, '../..'),
+      url: 'http://127.0.0.1:8787/health',
+      reuseExistingServer: true,
+      timeout: 120000
+    },
+    {
+      command: 'npm.cmd run dev -- --host 127.0.0.1 --port 4173',
+      cwd: __dirname,
+      url: 'http://127.0.0.1:4173/warehouse',
+      reuseExistingServer: true,
+      timeout: 120000
+    }
+  ]
 });

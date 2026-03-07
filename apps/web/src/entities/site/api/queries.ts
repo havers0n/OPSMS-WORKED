@@ -1,7 +1,6 @@
 import type { Site } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase/client';
-import { mapSiteRowToDomain, type SiteRow } from './mappers';
+import { bffRequest } from '@/shared/api/bff/client';
 
 export const siteKeys = {
   all: ['site'] as const,
@@ -9,12 +8,7 @@ export const siteKeys = {
 };
 
 async function fetchSites(): Promise<Site[]> {
-  const { data, error } = await supabase.from('sites').select('id,code,name,timezone').order('name', { ascending: true });
-  if (error) {
-    throw error;
-  }
-
-  return ((data ?? []) as SiteRow[]).map(mapSiteRowToDomain);
+  return bffRequest<Site[]>('/sites');
 }
 
 export function sitesQueryOptions() {

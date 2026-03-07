@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { floorKeys } from '@/entities/floor/api/queries';
-import { supabase } from '@/shared/api/supabase/client';
+import { bffRequest } from '@/shared/api/bff/client';
 
 type CreateFloorInput = {
   siteId: string;
@@ -10,16 +10,11 @@ type CreateFloorInput = {
 };
 
 async function createFloor(input: CreateFloorInput) {
-  const { data, error } = await supabase
-    .from('floors')
-    .insert({ site_id: input.siteId, code: input.code, name: input.name, sort_order: input.sortOrder })
-    .select('id')
-    .single();
-  if (error) {
-    throw error;
-  }
-
-  return data.id as string;
+  const result = await bffRequest<{ id: string }>('/floors', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+  return result.id;
 }
 
 export function useCreateFloor(siteId: string | null) {

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/shared/api/supabase/client';
+import { bffRequest } from '@/shared/api/bff/client';
 import { siteKeys } from '@/entities/site/api/queries';
 
 type CreateSiteInput = {
@@ -9,12 +9,11 @@ type CreateSiteInput = {
 };
 
 async function createSite(input: CreateSiteInput) {
-  const { data, error } = await supabase.from('sites').insert({ code: input.code, name: input.name, timezone: input.timezone }).select('id').single();
-  if (error) {
-    throw error;
-  }
-
-  return data.id as string;
+  const result = await bffRequest<{ id: string }>('/sites', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+  return result.id;
 }
 
 export function useCreateSite() {
