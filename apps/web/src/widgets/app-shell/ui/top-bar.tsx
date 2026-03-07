@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, FilePlus2, Redo2, Save, SearchCheck, Undo2 } from 'lucide-react';
+import { CheckCircle2, FilePlus2, PlusSquare, Redo2, Save, SearchCheck, Undo2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useActiveFloorId, useActiveSiteId, useSetActiveFloorId, useSetActiveSiteId } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
@@ -8,7 +8,7 @@ import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-cre
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
 import { usePublishLayout } from '@/features/layout-publish/model/use-publish-layout';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
-import { useDraftDirtyState, useLayoutDraftState, useResetDraft } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { useDraftDirtyState, useEditorMode, useLayoutDraftState, useResetDraft, useSetEditorMode } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
 
 export function TopBar() {
@@ -18,6 +18,8 @@ export function TopBar() {
   const setActiveSiteId = useSetActiveSiteId();
   const setActiveFloorId = useSetActiveFloorId();
   const resetDraft = useResetDraft();
+  const editorMode = useEditorMode();
+  const setEditorMode = useSetEditorMode();
   const { data: sites = [] } = useSites();
   const { data: floors = [] } = useFloors(activeSiteId);
   const liveDraftQuery = useActiveLayoutDraft(activeFloorId);
@@ -29,8 +31,6 @@ export function TopBar() {
   const validateLayout = useLayoutValidation();
   const publishLayout = usePublishLayout(activeFloorId);
 
-  const activeSite = sites.find((site) => site.id === activeSiteId) ?? null;
-  const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? null;
   const actions = getLayoutActionState({
     activeFloorId,
     liveDraftIsLoading: liveDraftQuery.isLoading,
@@ -42,18 +42,12 @@ export function TopBar() {
   const isBusy = createDraft.isPending || saveDraft.isPending || validateLayout.isPending || publishLayout.isPending;
 
   const issueSummary = useMemo(() => {
-    if (!validateLayout.data) {
-      return null;
-    }
-
-    return validateLayout.data.isValid ? 'Validation passed' : `${validateLayout.data.issues.length} issue(s) found`;
+    if (!validateLayout.data) return null;
+    return validateLayout.data.isValid ? 'Valid' : `${validateLayout.data.issues.length} issue(s)`;
   }, [validateLayout.data]);
 
   const handleCreateDraft = async () => {
-    if (!activeFloorId) {
-      return;
-    }
-
+    if (!activeFloorId) return;
     try {
       const draftId = await createDraft.mutateAsync(activeFloorId);
       setStatusMessage(`Draft ready: ${draftId}`);
@@ -63,143 +57,185 @@ export function TopBar() {
   };
 
   const handleSaveDraft = async () => {
-    if (!layoutDraft || !activeFloorId) {
-      return;
-    }
-
+    if (!layoutDraft || !activeFloorId) return;
     try {
       await saveDraft.mutateAsync(layoutDraft);
-      setStatusMessage('Draft saved');
+      setStatusMessage('Saved');
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : 'Failed to save draft');
+      setStatusMessage(error instanceof Error ? error.message : 'Save failed');
     }
   };
 
   const handleValidate = async () => {
-    if (!layoutDraft || !activeFloorId) {
-      return;
-    }
-
+    if (!layoutDraft || !activeFloorId) return;
     try {
       const result = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(result.isValid ? 'Layout is valid' : `${result.issues.length} issue(s) found`);
+      setStatusMessage(result.isValid ? 'Layout valid' : `${result.issues.length} issue(s) found`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Validation failed');
     }
   };
 
   const handlePublish = async () => {
-    if (!layoutDraft || !activeFloorId) {
-      return;
-    }
-
+    if (!layoutDraft || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(`Published with ${result.generatedCells} generated cells`);
+      setStatusMessage(`Published · ${result.generatedCells} cells`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Publish failed');
     }
   };
 
   const handleSiteChange = (nextSiteId: string) => {
-    if (nextSiteId === activeSiteId) {
-      return;
-    }
-
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('You have unsaved draft changes. Discard them and switch context?'))) {
-      return;
-    }
-
+    if (nextSiteId === activeSiteId) return;
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved draft changes. Discard and switch?'))) return;
     resetDraft();
     setActiveSiteId(nextSiteId || null);
     setStatusMessage(null);
   };
 
   const handleFloorChange = (nextFloorId: string) => {
-    if (nextFloorId === activeFloorId) {
-      return;
-    }
-
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('You have unsaved draft changes. Discard them and switch context?'))) {
-      return;
-    }
-
+    if (nextFloorId === activeFloorId) return;
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved draft changes. Discard and switch?'))) return;
     resetDraft();
     setActiveFloorId(nextFloorId || null);
     setStatusMessage(null);
   };
 
+  const isPlacing = editorMode === 'place';
+
   return (
-    <header className="mb-4 rounded-[22px] border border-[var(--border-muted)] bg-[var(--surface-primary)] px-6 py-4 shadow-[var(--shadow-soft)] backdrop-blur">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-[240px]">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">Warehouse Setup</div>
-          <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">Layout draft + rack configuration + publish flow</h1>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
-            Build spatial truth first. Save drafts intentionally, validate structurally, then publish immutable layout versions.
-          </p>
-          <p className="mt-3 text-xs text-slate-600">
-            {activeSite ? activeSite.name : 'No site selected'}
-            {' · '}
-            {activeFloor ? activeFloor.name : 'No floor selected'}
-            {(statusMessage || issueSummary) ? ` · ${statusMessage ?? issueSummary}` : ''}
-          </p>
-        </div>
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border-muted)] bg-[var(--surface-primary)] px-4">
 
-        <div className="flex flex-1 flex-wrap items-start justify-end gap-4">
-          <div className="grid min-w-[360px] gap-3 rounded-2xl border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Context</div>
-              <div
-                className={[
-                  'rounded-full px-3 py-1 text-xs font-medium',
-                  isDraftDirty ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                ].join(' ')}
-              >
-                {isDraftDirty ? 'Unsaved draft' : 'Draft synced'}
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs text-slate-500">
-                <span>Site</span>
-                <select value={activeSiteId ?? ''} onChange={(event) => handleSiteChange(event.target.value)} className="min-w-[160px] rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm">
-                  <option value="">Select site</option>
-                  {sites.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.code} · {site.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-xs text-slate-500">
-                <span>Floor</span>
-                <select value={activeFloorId ?? ''} onChange={(event) => handleFloorChange(event.target.value)} disabled={!activeSiteId} className="min-w-[160px] rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400">
-                  <option value="">Select floor</option>
-                  {floors.map((floor) => (
-                    <option key={floor.id} value={floor.id}>
-                      {floor.code} · {floor.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
+      {/* Left zone: context breadcrumb (site / floor) + draft status pill */}
+      <div className="flex items-center gap-2">
+        <select
+          value={activeSiteId ?? ''}
+          onChange={(e) => handleSiteChange(e.target.value)}
+          className="h-8 rounded-lg border border-[var(--border-muted)] bg-white px-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30"
+        >
+          <option value="">Site…</option>
+          {sites.map((site) => (
+            <option key={site.id} value={site.id}>{site.code} · {site.name}</option>
+          ))}
+        </select>
 
-          <div className="grid gap-3 rounded-2xl border border-[var(--border-muted)] bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Actions</div>
-              <div className="text-xs text-slate-500">{issueSummary ?? 'Validation pending'}</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="rounded-xl border border-[var(--border-muted)] px-3 py-2 text-sm text-slate-600"><Undo2 className="mr-2 inline h-4 w-4" />Undo</button>
-              <button type="button" className="rounded-xl border border-[var(--border-muted)] px-3 py-2 text-sm text-slate-600"><Redo2 className="mr-2 inline h-4 w-4" />Redo</button>
-              <button type="button" disabled={!actions.canCreateDraft || isBusy} onClick={handleCreateDraft} className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2 text-sm text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><FilePlus2 className="mr-2 inline h-4 w-4" />Create Draft</button>
-              <button type="button" disabled={!actions.canSaveDraft || isBusy} onClick={handleSaveDraft} className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2 text-sm text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><Save className="mr-2 inline h-4 w-4" />Save Draft</button>
-              <button type="button" disabled={!actions.canValidateDraft || isBusy} onClick={handleValidate} className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2 text-sm text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><SearchCheck className="mr-2 inline h-4 w-4" />Validate</button>
-              <button type="button" disabled={!actions.canPublishDraft || isBusy} onClick={handlePublish} className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"><CheckCircle2 className="mr-2 inline h-4 w-4" />Publish</button>
-            </div>
-          </div>
-        </div>
+        <span className="text-slate-300 select-none">/</span>
+
+        <select
+          value={activeFloorId ?? ''}
+          onChange={(e) => handleFloorChange(e.target.value)}
+          disabled={!activeSiteId}
+          className="h-8 rounded-lg border border-[var(--border-muted)] bg-white px-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+        >
+          <option value="">Floor…</option>
+          {floors.map((floor) => (
+            <option key={floor.id} value={floor.id}>{floor.code} · {floor.name}</option>
+          ))}
+        </select>
+
+        <span
+          className={[
+            'rounded-full px-2 py-0.5 text-[11px] font-medium leading-none',
+            isDraftDirty
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-emerald-50 text-emerald-700'
+          ].join(' ')}
+        >
+          {isDraftDirty ? '● Unsaved' : '✓ Synced'}
+        </span>
+      </div>
+
+      {/* Center: grows — shows status feedback or validation summary */}
+      <div className="flex flex-1 items-center justify-center px-4">
+        {(statusMessage || issueSummary) && (
+          <span className="text-xs text-slate-400">{statusMessage ?? issueSummary}</span>
+        )}
+      </div>
+
+      {/* Right zone: undo/redo + add rack + lifecycle actions */}
+      <div className="flex items-center gap-1">
+
+        {/* Undo / Redo stubs */}
+        <button
+          type="button"
+          disabled
+          title="Undo (coming soon)"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 disabled:cursor-not-allowed"
+        >
+          <Undo2 className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          disabled
+          title="Redo (coming soon)"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 disabled:cursor-not-allowed"
+        >
+          <Redo2 className="h-4 w-4" />
+        </button>
+
+        <div className="mx-1.5 h-5 w-px bg-slate-200" />
+
+        {/* Add Rack — place-mode toggle */}
+        {layoutDraft && (
+          <button
+            type="button"
+            onClick={() => setEditorMode(isPlacing ? 'select' : 'place')}
+            className={[
+              'flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors',
+              isPlacing
+                ? 'border-cyan-400 bg-cyan-50 text-cyan-800 ring-1 ring-cyan-400/40'
+                : 'border-[var(--border-muted)] bg-white text-slate-700 hover:bg-slate-50 shadow-sm'
+            ].join(' ')}
+          >
+            <PlusSquare className="h-4 w-4" />
+            {isPlacing ? 'Click canvas…' : 'Add Rack'}
+          </button>
+        )}
+
+        <div className="mx-1.5 h-5 w-px bg-slate-200" />
+
+        {/* Layout lifecycle */}
+        <button
+          type="button"
+          disabled={!actions.canCreateDraft || isBusy}
+          onClick={handleCreateDraft}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <FilePlus2 className="h-3.5 w-3.5" />
+          Draft
+        </button>
+
+        <button
+          type="button"
+          disabled={!actions.canSaveDraft || isBusy}
+          onClick={handleSaveDraft}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Save className="h-3.5 w-3.5" />
+          Save
+        </button>
+
+        <button
+          type="button"
+          disabled={!actions.canValidateDraft || isBusy}
+          onClick={handleValidate}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <SearchCheck className="h-3.5 w-3.5" />
+          Validate
+        </button>
+
+        <button
+          type="button"
+          disabled={!actions.canPublishDraft || isBusy}
+          onClick={handlePublish}
+          className="flex h-8 items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Publish
+        </button>
+
       </div>
     </header>
   );

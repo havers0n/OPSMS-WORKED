@@ -1,12 +1,12 @@
-﻿import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { LeftDrawer } from '@/widgets/app-shell/ui/left-drawer';
 import { TopBar } from '@/widgets/app-shell/ui/top-bar';
 
 export function AppShell() {
   return (
-    <div className="flex min-h-screen bg-transparent text-slate-900">
+    <div className="flex h-screen overflow-hidden bg-transparent text-slate-900">
       <LeftDrawer />
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />
         <main className="flex-1 overflow-hidden px-5 pb-5 pt-4">
           <Outlet />
