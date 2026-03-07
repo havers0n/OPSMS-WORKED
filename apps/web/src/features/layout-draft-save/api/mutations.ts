@@ -1,17 +1,10 @@
 import type { LayoutDraft } from '@wos/domain';
 import { supabase } from '@/shared/api/supabase/client';
-
-function toSaveLayoutDraftPayload(layoutDraft: LayoutDraft) {
-  return {
-    layoutVersionId: layoutDraft.layoutVersionId,
-    floorId: layoutDraft.floorId,
-    racks: layoutDraft.rackIds.map((rackId) => layoutDraft.racks[rackId])
-  };
-}
+import { mapLayoutDraftToSavePayload } from './mappers';
 
 export async function saveLayoutDraft(layoutDraft: LayoutDraft) {
   const { data, error } = await supabase.rpc('save_layout_draft', {
-    layout_payload: toSaveLayoutDraftPayload(layoutDraft),
+    layout_payload: mapLayoutDraftToSavePayload(layoutDraft),
     actor_uuid: null
   });
 
@@ -37,4 +30,3 @@ export async function createLayoutDraft(floorId: string) {
 
   return data as string;
 }
-

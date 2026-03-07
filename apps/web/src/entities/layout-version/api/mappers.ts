@@ -1,7 +1,7 @@
-import type { LayoutDraft, Rack, RackFace, RackLevel, RackSection } from '@wos/domain';
+import { layoutDraftSchema, type LayoutDraft } from '@wos/domain';
 import type { LayoutDraftRowBundle, RackFaceRow, RackLevelRow, RackRow, RackSectionRow } from './types';
 
-function mapRackLevel(row: RackLevelRow): RackLevel {
+function buildRackLevel(row: RackLevelRow) {
   return {
     id: row.id,
     ordinal: row.ordinal,
@@ -9,7 +9,7 @@ function mapRackLevel(row: RackLevelRow): RackLevel {
   };
 }
 
-function mapRackSection(row: RackSectionRow, allLevels: RackLevelRow[]): RackSection {
+function buildRackSection(row: RackSectionRow, allLevels: RackLevelRow[]) {
   return {
     id: row.id,
     ordinal: row.ordinal,
@@ -17,11 +17,11 @@ function mapRackSection(row: RackSectionRow, allLevels: RackLevelRow[]): RackSec
     levels: allLevels
       .filter((level) => level.rack_section_id === row.id)
       .sort((a, b) => a.ordinal - b.ordinal)
-      .map(mapRackLevel)
+      .map(buildRackLevel)
   };
 }
 
-function mapRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevels: RackLevelRow[]): RackFace {
+function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
   return {
     id: row.id,
     side: row.side,
@@ -33,11 +33,11 @@ function mapRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevels:
     sections: allSections
       .filter((section) => section.rack_face_id === row.id)
       .sort((a, b) => a.ordinal - b.ordinal)
-      .map((section) => mapRackSection(section, allLevels))
+      .map((section) => buildRackSection(section, allLevels))
   };
 }
 
-function mapRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSectionRow[], allLevels: RackLevelRow[]): Rack {
+function buildRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
   return {
     id: row.id,
     displayCode: row.display_code,
@@ -51,19 +51,19 @@ function mapRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSection
     faces: allFaces
       .filter((face) => face.rack_id === row.id)
       .sort((a, b) => a.side.localeCompare(b.side))
-      .map((face) => mapRackFace(face, allSections, allLevels))
+      .map((face) => buildRackFace(face, allSections, allLevels))
   };
 }
 
 export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): LayoutDraft {
   const racks = bundle.racks
     .sort((a, b) => a.display_code.localeCompare(b.display_code))
-    .map((row) => mapRack(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels));
+    .map((row) => buildRack(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels));
 
-  return {
+  return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
     floorId: bundle.layoutVersion.floor_id,
     rackIds: racks.map((rack) => rack.id),
     racks: Object.fromEntries(racks.map((rack) => [rack.id, rack]))
-  };
+  });
 }

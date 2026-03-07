@@ -1,5 +1,7 @@
 import { useEditorStore } from './editor-store';
 
+export const useEditorMode = () => useEditorStore((state) => state.editorMode);
+export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
 export const useSelectedRackId = () => useEditorStore((state) => state.selectedRackId);
 export const useHoveredRackId = () => useEditorStore((state) => state.hoveredRackId);
 export const useCanvasZoom = () => useEditorStore((state) => state.zoom);
@@ -8,6 +10,7 @@ export const useDraftDirtyState = () => useEditorStore((state) => state.isDraftD
 export const useResetDraft = () => useEditorStore((state) => state.resetDraft);
 export const useInitializeDraft = () => useEditorStore((state) => state.initializeDraft);
 export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraftSaved);
+export const useCreateRack = () => useEditorStore((state) => state.createRack);
 export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackId);
 export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
 export const useSetCanvasZoom = () => useEditorStore((state) => state.setZoom);
@@ -16,6 +19,9 @@ export const useRotateRack = () => useEditorStore((state) => state.rotateRack);
 export const useUpdateRackGeneral = () => useEditorStore((state) => state.updateRackGeneral);
 export const useUpdateFaceConfig = () => useEditorStore((state) => state.updateFaceConfig);
 export const useUpdateSectionLength = () => useEditorStore((state) => state.updateSectionLength);
+export const useUpdateSectionSlots = () => useEditorStore((state) => state.updateSectionSlots);
+export const useUpdateLevelCount = () => useEditorStore((state) => state.updateLevelCount);
 export const useAddSection = () => useEditorStore((state) => state.addSection);
+export const useDeleteSection = () => useEditorStore((state) => state.deleteSection);
 export const useAddLevel = () => useEditorStore((state) => state.addLevel);
 export const useSetFaceBMode = () => useEditorStore((state) => state.setFaceBMode);

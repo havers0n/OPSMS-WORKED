@@ -1,47 +1,10 @@
-export type LayoutVersionRow = {
-  id: string;
-  floor_id: string;
-  version_no: number;
-  state: 'draft' | 'published' | 'archived';
-};
+import type { Database } from '@/shared/api/supabase/types';
 
-export type RackRow = {
-  id: string;
-  layout_version_id: string;
-  display_code: string;
-  kind: 'single' | 'paired';
-  axis: 'NS' | 'WE';
-  x: number;
-  y: number;
-  total_length: number;
-  depth: number;
-  rotation_deg: 0 | 90 | 180 | 270;
-};
-
-export type RackFaceRow = {
-  id: string;
-  rack_id: string;
-  side: 'A' | 'B';
-  enabled: boolean;
-  anchor: 'start' | 'end';
-  slot_numbering_direction: 'ltr' | 'rtl';
-  is_mirrored: boolean;
-  mirror_source_face_id: string | null;
-};
-
-export type RackSectionRow = {
-  id: string;
-  rack_face_id: string;
-  ordinal: number;
-  length: number;
-};
-
-export type RackLevelRow = {
-  id: string;
-  rack_section_id: string;
-  ordinal: number;
-  slot_count: number;
-};
+export type LayoutVersionRow = Database['public']['Tables']['layout_versions']['Row'];
+export type RackRow = Database['public']['Tables']['racks']['Row'];
+export type RackFaceRow = Database['public']['Tables']['rack_faces']['Row'];
+export type RackSectionRow = Database['public']['Tables']['rack_sections']['Row'];
+export type RackLevelRow = Database['public']['Tables']['rack_levels']['Row'];
 
 export type LayoutDraftRowBundle = {
   layoutVersion: LayoutVersionRow;

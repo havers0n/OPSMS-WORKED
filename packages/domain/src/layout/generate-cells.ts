@@ -1,4 +1,5 @@
 import type { Cell } from './cell';
+import { buildCellCode } from './cell';
 import { buildCellAddress } from './cell';
 import type { LayoutDraft } from './layout-draft';
 import type { Rack, RackFace, RackLevel, RackSection } from './rack';
@@ -40,6 +41,13 @@ function createCell(args: {
 
   return {
     id: `${rack.id}:${face.id}:${section.id}:${level.id}:${slotNo}`,
+    cellCode: buildCellCode({
+      rackId: rack.id,
+      face: face.side,
+      section: section.ordinal,
+      level: level.ordinal,
+      slot: slotNo
+    }),
     layoutVersionId,
     rackId: rack.id,
     rackFaceId: face.id,
