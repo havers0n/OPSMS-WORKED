@@ -1,6 +1,7 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useActiveFloorId, useActiveSiteId, useSetActiveFloorId, useSetActiveSiteId } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
+import { usePublishedLayoutSummary } from '@/entities/layout-version/api/use-published-layout-summary';
 import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateFloor } from '@/features/floor-create/model/use-create-floor';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
@@ -18,6 +19,7 @@ export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
   const setActiveFloorId = useSetActiveFloorId();
   const { data: sites = [] } = useSites();
   const { data: floors = [] } = useFloors(activeSiteId);
+  const publishedLayoutSummary = usePublishedLayoutSummary(activeFloorId);
   const createSite = useCreateSite();
   const createFloor = useCreateFloor(activeSiteId);
   const createDraft = useCreateLayoutDraft(activeFloorId);
@@ -57,7 +59,7 @@ export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
         <h2 className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">Use a live site and floor context before entering the editor.</h2>
         <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">Use the top bar to switch existing site and floor context. Create missing records here, then create a draft explicitly for the selected floor.</p>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
+        <div className="mt-8 grid gap-4 md:grid-cols-4">
           <div className="rounded-[18px] border border-[var(--border-muted)] bg-white p-5 shadow-sm">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Current Selection</div>
             <div className="mt-4 space-y-2 text-sm text-slate-600">
@@ -85,6 +87,31 @@ export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
             <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
               Pick or create site and floor, then create the draft intentionally. Save, validate, and publish stay in the top bar once the editor opens.
             </div>
+          </div>
+
+          <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Published Layout</div>
+            {!activeFloorId ? (
+              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">Select a floor to inspect the latest published layout snapshot.</div>
+            ) : publishedLayoutSummary.isLoading ? (
+              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">Loading latest published layout snapshot...</div>
+            ) : publishedLayoutSummary.data ? (
+              <div className="mt-3 space-y-2 text-sm text-[var(--text-muted)]">
+                <div>Version: {publishedLayoutSummary.data.versionNo}</div>
+                <div>Generated cells: {publishedLayoutSummary.data.cellCount}</div>
+                <div>Published at: {new Date(publishedLayoutSummary.data.publishedAt).toLocaleString()}</div>
+                <div className="pt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Sample addresses</div>
+                <div className="flex flex-wrap gap-2">
+                  {publishedLayoutSummary.data.sampleAddresses.map((address) => (
+                    <span key={address} className="rounded-full border border-[var(--border-muted)] bg-white px-2.5 py-1 font-mono text-xs text-slate-700 shadow-sm">
+                      {address}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">No published layout exists for the selected floor yet.</div>
+            )}
           </div>
         </div>
       </section>
