@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vscode/
+.env
+.env.local
+.pnpm-store/
+coverage/
+playwright-report/
+apps/web/dist/
+.turbo/
+.claude/
+apps/supabase/.branches/
+apps/supabase/.temp/
+apps/*/.turbo/
+packages/*/.turbo/
+apps/web/test-results/
