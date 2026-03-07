@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LayoutDraft } from '@wos/domain';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
-import { saveLayoutDraft } from '@/features/layout-draft-save/api/mutations';
-import { layoutValidationKeys } from '@/features/layout-validate/api/queries';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import { useEditorStore } from '@/entities/layout-version/model/editor-store';
+import { saveLayoutDraft } from '../api/mutations';
 
 export function useSaveLayoutDraft(floorId: string | null) {
   const queryClient = useQueryClient();
@@ -12,7 +11,9 @@ export function useSaveLayoutDraft(floorId: string | null) {
     mutationFn: (layoutDraft: LayoutDraft) => saveLayoutDraft(layoutDraft),
     onSuccess: ({ layoutVersionId }) => {
       useEditorStore.getState().markDraftSaved(layoutVersionId);
-      queryClient.removeQueries({ queryKey: layoutValidationKeys.byLayoutVersion(layoutVersionId) });
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] === 'layout-validation' && query.queryKey[1] === layoutVersionId
+      });
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(floorId) });
     }
   });

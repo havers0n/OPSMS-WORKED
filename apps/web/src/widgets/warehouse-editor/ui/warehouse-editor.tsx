@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
-import { RackInspector } from '@/widgets/rack-inspector/ui/rack-inspector';
 import {
   useInitializeDraft,
   useLayoutDraftState,
   useResetDraft,
   useSelectedRackId,
   useSetSelectedRackId
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+} from '@/entities/layout-version/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
+import { RackInspector } from './rack-inspector';
 
 export function WarehouseEditor() {
   const activeFloorId = useActiveFloorId();

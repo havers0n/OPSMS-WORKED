@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { User } from '@supabase/supabase-js';
+import { ApiError, sendApiError } from './errors.js';
 import { createAnonClient, createUserClient } from './supabase.js';
 
 export type AuthenticatedRequestContext = {
@@ -20,7 +21,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   const accessToken = getBearerToken(request);
 
   if (!accessToken) {
-    await reply.code(401).send({ message: 'Missing bearer token.' });
+    await sendApiError(reply, new ApiError(401, 'UNAUTHORIZED', 'Missing bearer token.'), request.id);
     return null;
   }
 
@@ -31,7 +32,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   } = await anonClient.auth.getUser(accessToken);
 
   if (error || !user) {
-    await reply.code(401).send({ message: 'Invalid bearer token.' });
+    await sendApiError(reply, new ApiError(401, 'UNAUTHORIZED', 'Invalid bearer token.'), request.id);
     return null;
   }
 

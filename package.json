@@ -16,7 +16,11 @@
     "gen:types": "supabase gen types typescript --workdir apps/supabase --local --schema public 2>/dev/null > apps/web/src/shared/api/supabase/types.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
     "turbo": "^2.5.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.56.1"
   }
 }

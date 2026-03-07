@@ -135,8 +135,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
         return state;
       }
 
-      // Keep current selection if it still exists in the incoming draft;
-      // otherwise auto-select the first rack so the inspector opens immediately.
       const nextSelectedRackId =
         state.selectedRackId && draft.racks[state.selectedRackId]
           ? state.selectedRackId

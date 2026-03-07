@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { layoutValidationKeys } from '@/features/layout-validate/api/queries';
-import { validateLayoutVersion } from '@/features/layout-validate/api/mutations';
+import { layoutValidationKeys } from '../api/queries';
+import { validateLayoutVersion } from '../api/mutations';
 
 export function useCachedLayoutValidation(layoutVersionId: string | null) {
   return useQuery({

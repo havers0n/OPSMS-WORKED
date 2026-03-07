@@ -7,7 +7,7 @@ import {
   useUpdateLevelCount,
   useUpdateSectionLength,
   useUpdateSectionSlots
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+} from '@/entities/layout-version/model/editor-selectors';
 
 export function FaceTab({ title, rackId, face }: { title: string; rackId: string; face: RackFace }) {
   const updateFaceConfig = useUpdateFaceConfig();
@@ -22,7 +22,6 @@ export function FaceTab({ title, rackId, face }: { title: string; rackId: string
 
   return (
     <section className="grid gap-4">
-      {/* Face config */}
       <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
         <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</h2>
         <div className="grid grid-cols-2 gap-3">
@@ -44,14 +43,13 @@ export function FaceTab({ title, rackId, face }: { title: string; rackId: string
               value={face.slotNumberingDirection}
               onChange={(event) => updateFaceConfig(rackId, face.side, { slotNumberingDirection: event.target.value as RackFace['slotNumberingDirection'] })}
             >
-              <option value="ltr">LTR — left to right</option>
-              <option value="rtl">RTL — right to left</option>
+              <option value="ltr">LTR вЂ” left to right</option>
+              <option value="rtl">RTL вЂ” right to left</option>
             </select>
           </label>
         </div>
       </div>
 
-      {/* Sections header */}
       <div className="flex items-center justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
           Sections ({face.sections.length})
@@ -65,7 +63,6 @@ export function FaceTab({ title, rackId, face }: { title: string; rackId: string
         </button>
       </div>
 
-      {/* Section table */}
       {face.sections.length === 0 ? (
         <div className="rounded-[18px] border border-dashed border-[var(--border-muted)] bg-[var(--surface-secondary)] px-4 py-6 text-center text-sm text-slate-500">
           No sections yet. Add a section to start configuring this face.
@@ -124,7 +121,6 @@ export function FaceTab({ title, rackId, face }: { title: string; rackId: string
         </div>
       )}
 
-      {/* Face summary */}
       {face.sections.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-3 text-center">

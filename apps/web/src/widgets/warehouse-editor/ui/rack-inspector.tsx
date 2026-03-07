@@ -3,10 +3,10 @@ import { MousePointer2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { FaceBEmptyState } from '@/features/face-b-configure-mode/ui/face-b-empty-state';
-import { GeneralTab } from '@/features/rack-configure/ui/general-tab';
 import { FaceTab } from '@/features/rack-configure/ui/face-tab';
+import { GeneralTab } from '@/features/rack-configure/ui/general-tab';
 import { SummaryTab } from '@/features/rack-configure/ui/summary-tab';
-import { useDraftDirtyState, useLayoutDraftState, useSelectedRackId, useSetFaceBMode } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { useDraftDirtyState, useLayoutDraftState, useSelectedRackId, useSetFaceBMode } from '@/entities/layout-version/model/editor-selectors';
 
 type InspectorTab = 'general' | 'faceA' | 'faceB' | 'summary';
 type FaceBMode = 'mirror' | 'copy' | 'scratch' | null;
@@ -65,7 +65,6 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
     setFaceBMode(rack.id, mode);
   };
 
-  // Guard: shouldn't normally be visible without a rack selected (parent controls visibility)
   if (!rack || !faceA || !faceB) {
     return (
       <aside className="flex h-full w-full flex-col items-center justify-center bg-white">
@@ -83,7 +82,6 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden bg-white">
-      {/* Sticky summary header */}
       <div className="border-b border-[var(--border-muted)] bg-[var(--surface-secondary)] px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Inspector</div>
@@ -105,7 +103,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
           <span
             className={[
               'rounded-full px-3 py-1 text-xs font-medium',
-              validationBadgeClass(validationResult.isValid, rackIssues.filter(i => i.severity === 'error').length)
+              validationBadgeClass(validationResult.isValid, rackIssues.filter((i) => i.severity === 'error').length)
             ].join(' ')}
           >
             {validLabel}
@@ -134,12 +132,11 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
         <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
           <span>Faces active: {facesCount}</span>
           <span>
-            {rack.totalLength.toFixed(1)} m × {rack.depth.toFixed(1)} m · {rack.rotationDeg}°
+            {rack.totalLength.toFixed(1)} m Г— {rack.depth.toFixed(1)} m В· {rack.rotationDeg}В°
           </span>
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="border-b border-[var(--border-muted)] px-3 py-2.5">
         <div className="flex gap-1">
           {tabs.map((tab) => (
@@ -149,9 +146,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
               onClick={() => setActiveTab(tab.id)}
               className={[
                 'rounded-xl px-3 py-2 text-sm transition-colors',
-                activeTab === tab.id
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                activeTab === tab.id ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
               ].join(' ')}
             >
               {tab.label}
@@ -160,16 +155,13 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* Tab content — scrollable */}
       <div className="flex-1 overflow-auto bg-white p-5">
         {activeTab === 'general' && <GeneralTab rack={rack} />}
         {activeTab === 'faceA' && <FaceTab title="Face A" rackId={rack.id} face={faceA} />}
         {activeTab === 'faceB' && faceB.sections.length === 0 ? (
           <FaceBEmptyState selectedMode={faceBMode} onSelectMode={handleFaceBMode} />
         ) : null}
-        {activeTab === 'faceB' && faceB.sections.length > 0 && (
-          <FaceTab title="Face B" rackId={rack.id} face={faceB} />
-        )}
+        {activeTab === 'faceB' && faceB.sections.length > 0 && <FaceTab title="Face B" rackId={rack.id} face={faceB} />}
         {activeTab === 'summary' && (
           <SummaryTab
             rack={rack}

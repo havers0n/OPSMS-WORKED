@@ -1,0 +1,421 @@
+import Fastify, { type FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
+import { ZodError, z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { env } from './env.js';
+import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
+import {
+  createFloorBodySchema,
+  createLayoutDraftBodySchema,
+  createSiteBodySchema,
+  floorsResponseSchema,
+  idResponseSchema,
+  layoutDraftResponseSchema,
+  layoutVersionIdResponseSchema,
+  publishResponseSchema,
+  publishedLayoutSummaryResponseSchema,
+  saveLayoutDraftBodySchema,
+  sitesResponseSchema,
+  validationResponseSchema
+} from './schemas.js';
+import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
+import { mapFloorRowToDomain, mapLayoutDraftBundleToDomain, mapSiteRowToDomain, mapValidationResult } from './mappers.js';
+import { createAnonClient } from './supabase.js';
+
+type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
+
+type BuildAppOptions = {
+  getAuthContext?: typeof requireAuth;
+  getUserSupabase?: UserClientFactory;
+  getHealthSupabase?: () => SupabaseClient;
+};
+
+function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
+  return schema.parse(payload);
+}
+
+async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string) {
+  const { data: layoutVersions, error: layoutVersionsError } = await supabase
+    .from('layout_versions')
+    .select('id,floor_id,version_no,state')
+    .eq('floor_id', floorId);
+
+  if (layoutVersionsError) {
+    throw layoutVersionsError;
+  }
+
+  const activeDraft = (layoutVersions ?? [])
+    .filter((row) => row.state === 'draft')
+    .sort((a, b) => b.version_no - a.version_no)[0];
+
+  if (!activeDraft) {
+    return null;
+  }
+
+  const { data: racks, error: racksError } = await supabase
+    .from('racks')
+    .select('id,layout_version_id,display_code,kind,axis,x,y,total_length,depth,rotation_deg')
+    .eq('layout_version_id', activeDraft.id);
+
+  if (racksError) {
+    throw racksError;
+  }
+
+  if (!racks || racks.length === 0) {
+    return {
+      layoutVersionId: activeDraft.id,
+      floorId: activeDraft.floor_id,
+      rackIds: [],
+      racks: {}
+    };
+  }
+
+  const rackIds = racks.map((rack) => rack.id);
+  const { data: rackFaces, error: rackFacesError } = await supabase
+    .from('rack_faces')
+    .select('id,rack_id,side,enabled,anchor,slot_numbering_direction,is_mirrored,mirror_source_face_id')
+    .in('rack_id', rackIds);
+
+  if (rackFacesError) {
+    throw rackFacesError;
+  }
+
+  const faceIds = (rackFaces ?? []).map((face) => face.id);
+  const { data: rackSections, error: rackSectionsError } =
+    faceIds.length > 0
+      ? await supabase.from('rack_sections').select('id,rack_face_id,ordinal,length').in('rack_face_id', faceIds)
+      : { data: [], error: null };
+
+  if (rackSectionsError) {
+    throw rackSectionsError;
+  }
+
+  const sectionIds = (rackSections ?? []).map((section) => section.id);
+  const { data: rackLevels, error: rackLevelsError } =
+    sectionIds.length > 0
+      ? await supabase.from('rack_levels').select('id,rack_section_id,ordinal,slot_count').in('rack_section_id', sectionIds)
+      : { data: [], error: null };
+
+  if (rackLevelsError) {
+    throw rackLevelsError;
+  }
+
+  return mapLayoutDraftBundleToDomain({
+    layoutVersion: activeDraft,
+    racks,
+    rackFaces: rackFaces ?? [],
+    rackSections: rackSections ?? [],
+    rackLevels: rackLevels ?? []
+  });
+}
+
+async function fetchPublishedLayoutSummary(supabase: SupabaseClient, floorId: string) {
+  const { data: publishedVersions, error: publishedVersionsError } = await supabase
+    .from('layout_versions')
+    .select('id,floor_id,version_no,published_at')
+    .eq('floor_id', floorId)
+    .eq('state', 'published')
+    .order('version_no', { ascending: false })
+    .limit(1);
+
+  if (publishedVersionsError) {
+    throw publishedVersionsError;
+  }
+
+  const publishedVersion = publishedVersions?.[0];
+  if (!publishedVersion) {
+    return null;
+  }
+
+  const { data: sampleCells, count, error: sampleCellsError } = await supabase
+    .from('cells')
+    .select('address,address_sort_key', { count: 'exact' })
+    .eq('layout_version_id', publishedVersion.id)
+    .order('address_sort_key', { ascending: true })
+    .limit(4);
+
+  if (sampleCellsError) {
+    throw sampleCellsError;
+  }
+
+  return {
+    layoutVersionId: publishedVersion.id,
+    floorId: publishedVersion.floor_id,
+    versionNo: publishedVersion.version_no,
+    publishedAt: publishedVersion.published_at ?? new Date(0).toISOString(),
+    cellCount: count ?? sampleCells?.length ?? 0,
+    sampleAddresses: (sampleCells ?? []).map((cell) => cell.address)
+  };
+}
+
+export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+  const app = Fastify({
+    logger: {
+      level: env.logLevel,
+      base: {
+        service: env.serviceName
+      },
+      redact: {
+        paths: ['req.headers.authorization'],
+        censor: '[REDACTED]'
+      }
+    }
+  });
+
+  const getAuthContext = options.getAuthContext ?? requireAuth;
+  const getUserSupabase = options.getUserSupabase ?? getUserClient;
+  const getHealthSupabase = options.getHealthSupabase ?? createAnonClient;
+
+  void app.register(cors, {
+    origin: env.corsOrigin,
+    credentials: true
+  });
+
+  app.addHook('onResponse', async (request, reply) => {
+    request.log.info(
+      {
+        route: request.routeOptions.url,
+        method: request.method,
+        statusCode: reply.statusCode,
+        responseTimeMs: reply.elapsedTime
+      },
+      'request completed'
+    );
+  });
+
+  app.get('/health', async () =>
+    parseOrThrow(
+      z.object({
+        status: z.literal('ok'),
+        service: z.string(),
+        time: z.string()
+      }),
+      {
+        status: 'ok',
+        service: env.serviceName,
+        time: new Date().toISOString()
+      }
+    )
+  );
+
+  app.get('/ready', async (_request, reply) => {
+    const supabase = getHealthSupabase();
+    const { error } = await supabase.from('sites').select('id').limit(1);
+
+    if (error) {
+      throw new ApiError(503, 'BFF_NOT_READY', 'Supabase connectivity check failed.');
+    }
+
+    return parseOrThrow(
+      z.object({
+        status: z.literal('ready'),
+        service: z.string(),
+        checks: z.object({
+          supabase: z.literal('ok')
+        })
+      }),
+      {
+        status: 'ready',
+        service: env.serviceName,
+        checks: {
+          supabase: 'ok'
+        }
+      }
+    );
+  });
+
+  app.get('/api/sites', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.from('sites').select('id,code,name,timezone').order('name', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(sitesResponseSchema, (data ?? []).map(mapSiteRowToDomain));
+  });
+
+  app.post('/api/sites', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(createSiteBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('sites')
+      .insert({ code: body.code, name: body.name, timezone: body.timezone })
+      .select('id')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(idResponseSchema, { id: data.id });
+  });
+
+  app.get('/api/sites/:siteId/floors', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const siteId = parseOrThrow(idResponseSchema, { id: (request.params as { siteId: string }).siteId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('floors')
+      .select('id,site_id,code,name,sort_order')
+      .eq('site_id', siteId)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(floorsResponseSchema, (data ?? []).map(mapFloorRowToDomain));
+  });
+
+  app.post('/api/floors', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(createFloorBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('floors')
+      .insert({
+        site_id: body.siteId,
+        code: body.code,
+        name: body.name,
+        sort_order: body.sortOrder
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(idResponseSchema, { id: data.id });
+  });
+
+  app.get('/api/floors/:floorId/layout-draft', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
+    const supabase = getUserSupabase(auth);
+    const draft = await fetchActiveLayoutDraft(supabase, floorId);
+    return parseOrThrow(layoutDraftResponseSchema, draft);
+  });
+
+  app.get('/api/floors/:floorId/published-layout', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
+    const supabase = getUserSupabase(auth);
+    const summary = await fetchPublishedLayoutSummary(supabase, floorId);
+    return parseOrThrow(publishedLayoutSummaryResponseSchema, summary);
+  });
+
+  app.post('/api/layout-drafts', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(createLayoutDraftBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('create_layout_draft', {
+      floor_uuid: body.floorId,
+      actor_uuid: auth.user.id
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(idResponseSchema, { id: data });
+  });
+
+  app.post('/api/layout-drafts/save', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(saveLayoutDraftBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('save_layout_draft', {
+      layout_payload: body.layoutDraft,
+      actor_uuid: auth.user.id
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(layoutVersionIdResponseSchema, { layoutVersionId: data });
+  });
+
+  app.post('/api/layout-drafts/:layoutVersionId/validate', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('validate_layout_version', {
+      layout_version_uuid: layoutVersionId
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(validationResponseSchema, mapValidationResult(data ?? { isValid: false, issues: [] }));
+  });
+
+  app.post('/api/layout-drafts/:layoutVersionId/publish', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('publish_layout_version', {
+      layout_version_uuid: layoutVersionId,
+      actor_uuid: auth.user.id
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(publishResponseSchema, data);
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    const mappedSupabaseError = mapSupabaseError(error);
+
+    const apiError =
+      error instanceof ZodError
+        ? new ApiError(400, 'VALIDATION_ERROR', error.issues.map((issue) => issue.message).join('; '))
+        : error instanceof ApiError
+        ? error
+        : mappedSupabaseError
+        ? mappedSupabaseError
+        : new ApiError(500, 'INTERNAL_ERROR', error instanceof Error ? error.message : 'Unexpected BFF error');
+
+    request.log.error(
+      {
+        err: error,
+        requestId: request.id,
+        route: request.routeOptions.url,
+        statusCode: apiError.statusCode,
+        errorCode: apiError.code
+      },
+      'request failed'
+    );
+
+    void sendApiError(reply, apiError, request.id);
+  });
+
+  return app;
+}

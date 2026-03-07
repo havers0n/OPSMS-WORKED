@@ -3,12 +3,12 @@ import { useMemo, useState } from 'react';
 import { useActiveFloorId, useActiveSiteId, useSetActiveFloorId, useSetActiveSiteId } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
+import { useDraftDirtyState, useEditorMode, useLayoutDraftState, useResetDraft, useSetEditorMode } from '@/entities/layout-version/model/editor-selectors';
 import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
 import { usePublishLayout } from '@/features/layout-publish/model/use-publish-layout';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
-import { useDraftDirtyState, useEditorMode, useLayoutDraftState, useResetDraft, useSetEditorMode } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
 
 export function TopBar() {
@@ -124,7 +124,7 @@ export function TopBar() {
           <option value="">Site...</option>
           {sites.map((site) => (
             <option key={site.id} value={site.id}>
-              {site.code} · {site.name}
+              {site.code} В· {site.name}
             </option>
           ))}
         </select>
@@ -145,7 +145,7 @@ export function TopBar() {
           <option value="">Floor...</option>
           {floors.map((floor) => (
             <option key={floor.id} value={floor.id}>
-              {floor.code} · {floor.name}
+              {floor.code} В· {floor.name}
             </option>
           ))}
         </select>

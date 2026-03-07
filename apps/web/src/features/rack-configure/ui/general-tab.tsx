@@ -1,5 +1,5 @@
-﻿import type { Rack } from '@wos/domain';
-import { useUpdateRackGeneral } from '@/widgets/warehouse-editor/model/editor-selectors';
+import type { Rack } from '@wos/domain';
+import { useUpdateRackGeneral } from '@/entities/layout-version/model/editor-selectors';
 
 export function GeneralTab({ rack }: { rack: Rack }) {
   const updateRackGeneral = useUpdateRackGeneral();

@@ -16,7 +16,7 @@ export default defineConfig({
     {
       command: 'npm.cmd run dev --workspace @wos/bff',
       cwd: path.resolve(__dirname, '../..'),
-      url: 'http://127.0.0.1:8787/health',
+      url: 'http://127.0.0.1:8787/ready',
       reuseExistingServer: true,
       timeout: 120000
     },
