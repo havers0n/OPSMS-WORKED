@@ -1,0 +1,8 @@
+{
+  "name": "@wos/supabase",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "test": "powershell -ExecutionPolicy Bypass -File ./tests/sql/check-layout-lifecycle-test.ps1"
+  }
+}
