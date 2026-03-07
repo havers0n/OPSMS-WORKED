@@ -1,0 +1,55 @@
+﻿@import "tailwindcss";
+
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  color: #14213d;
+  background:
+    radial-gradient(circle at top left, rgba(15, 76, 129, 0.08), transparent 28%),
+    linear-gradient(180deg, #f4f8fb 0%, #eef3f7 100%);
+  --app-bg: #edf3f7;
+  --surface-primary: rgba(255, 255, 255, 0.9);
+  --surface-secondary: rgba(247, 250, 252, 0.88);
+  --surface-strong: #ffffff;
+  --border-muted: rgba(148, 163, 184, 0.28);
+  --border-strong: rgba(71, 85, 105, 0.18);
+  --text-primary: #10243e;
+  --text-muted: #5f7084;
+  --accent: #0f6a8e;
+  --accent-soft: rgba(15, 106, 142, 0.12);
+  --success: #147d64;
+  --warning: #b7791f;
+  --danger: #c05621;
+  --shadow-soft: 0 14px 34px rgba(15, 23, 42, 0.08);
+  --shadow-panel: 0 18px 42px rgba(15, 23, 42, 0.1);
+  --radius-panel: 22px;
+  --radius-card: 16px;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+}
+
+body {
+  min-width: 320px;
+  background: var(--app-bg);
+  color: var(--text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(15, 106, 142, 0.2);
+}
