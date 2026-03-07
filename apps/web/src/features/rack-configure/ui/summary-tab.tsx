@@ -73,11 +73,13 @@ export function SummaryTab({
   rack,
   previewAddresses,
   validationResult,
+  validationSource,
   generatedCellCount
 }: {
   rack: Rack;
   previewAddresses: string[];
   validationResult: LayoutValidationResult;
+  validationSource: 'preview' | 'server';
   generatedCellCount: number;
 }) {
   const faceA = rack.faces.find((f) => f.side === 'A');
@@ -130,6 +132,11 @@ export function SummaryTab({
       <div className="rounded-[18px] border border-[var(--border-muted)] bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Validation</div>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">
+            {validationSource === 'server' ? 'Server' : 'Preview'}
+          </span>
+        </div>
+        <div className="mb-3 flex items-center justify-between">
           {validationResult.isValid ? (
             <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
               <CheckCircle2 className="h-3.5 w-3.5" /> Valid

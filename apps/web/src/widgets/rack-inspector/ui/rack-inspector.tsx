@@ -1,11 +1,12 @@
 import { generateLayoutCells, validateLayoutDraft } from '@wos/domain';
 import { MousePointer2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { FaceBEmptyState } from '@/features/face-b-configure-mode/ui/face-b-empty-state';
 import { GeneralTab } from '@/features/rack-configure/ui/general-tab';
 import { FaceTab } from '@/features/rack-configure/ui/face-tab';
 import { SummaryTab } from '@/features/rack-configure/ui/summary-tab';
-import { useLayoutDraftState, useSelectedRackId, useSetFaceBMode } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { useDraftDirtyState, useLayoutDraftState, useSelectedRackId, useSetFaceBMode } from '@/widgets/warehouse-editor/model/editor-selectors';
 
 type InspectorTab = 'general' | 'faceA' | 'faceB' | 'summary';
 type FaceBMode = 'mirror' | 'copy' | 'scratch' | null;
@@ -27,8 +28,10 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<InspectorTab>('general');
   const [faceBMode, setFaceBModeState] = useState<FaceBMode>(null);
   const layoutDraft = useLayoutDraftState();
+  const isDraftDirty = useDraftDirtyState();
   const selectedRackId = useSelectedRackId();
   const setFaceBMode = useSetFaceBMode();
+  const cachedValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
 
   const rack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
   const faceA = rack?.faces.find((face) => face.side === 'A');
@@ -43,10 +46,12 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
     });
   }, [layoutDraft, rack]);
 
-  const validationResult = useMemo(
+  const previewValidationResult = useMemo(
     () => (layoutDraft ? validateLayoutDraft(layoutDraft) : { isValid: false, issues: [] }),
     [layoutDraft]
   );
+  const validationResult = !isDraftDirty && cachedValidation.data ? cachedValidation.data : previewValidationResult;
+  const validationSource: 'preview' | 'server' = !isDraftDirty && cachedValidation.data ? 'server' : 'preview';
   const rackIssues = useMemo(
     () => validationResult.issues.filter((issue) => !issue.entityId || issue.entityId === rack?.id || rack?.faces.some((f) => f.id === issue.entityId)),
     [validationResult.issues, rack]
@@ -170,6 +175,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
             rack={rack}
             previewAddresses={previewAddresses}
             validationResult={validationResult}
+            validationSource={validationSource}
             generatedCellCount={rackCells.length}
           />
         )}

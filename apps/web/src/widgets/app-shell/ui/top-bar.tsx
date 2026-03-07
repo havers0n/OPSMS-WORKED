@@ -28,7 +28,7 @@ export function TopBar() {
   const isDraftDirty = useDraftDirtyState();
   const createDraft = useCreateLayoutDraft(activeFloorId);
   const saveDraft = useSaveLayoutDraft(activeFloorId);
-  const validateLayout = useLayoutValidation();
+  const validateLayout = useLayoutValidation(layoutDraft?.layoutVersionId ?? null);
   const publishLayout = usePublishLayout(activeFloorId);
 
   const actions = getLayoutActionState({
@@ -42,9 +42,13 @@ export function TopBar() {
   const isBusy = createDraft.isPending || saveDraft.isPending || validateLayout.isPending || publishLayout.isPending;
 
   const issueSummary = useMemo(() => {
-    if (!validateLayout.data) return null;
-    return validateLayout.data.isValid ? 'Layout is valid' : `${validateLayout.data.issues.length} issue(s)`;
-  }, [validateLayout.data]);
+    if (isDraftDirty && validateLayout.cachedResult) {
+      return 'Draft changed since last validation';
+    }
+
+    if (!validateLayout.cachedResult) return null;
+    return validateLayout.cachedResult.isValid ? 'Layout is valid' : `${validateLayout.cachedResult.issues.length} issue(s)`;
+  }, [isDraftDirty, validateLayout.cachedResult]);
 
   const handleCreateDraft = async () => {
     if (!activeFloorId) return;
