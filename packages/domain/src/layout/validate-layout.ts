@@ -57,11 +57,13 @@ export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutValidationR
         });
       }
 
-      if (sections.length > 0 && !compareLength(rack.totalLength, sectionLengthSum)) {
+      // Per-face length overrides rack.totalLength for paired racks with asymmetric faces
+      const expectedLength = face.faceLength ?? rack.totalLength;
+      if (sections.length > 0 && !compareLength(expectedLength, sectionLengthSum)) {
         issues.push({
           code: 'rack_face.section_length_mismatch',
           severity: 'error',
-          message: `Face ${face.side} section length sum (${sectionLengthSum}) does not match rack total length (${rack.totalLength}).`,
+          message: `Face ${face.side} section length sum (${sectionLengthSum.toFixed(2)} m) does not match face length (${expectedLength.toFixed(2)} m).`,
           entityId: face.id
         });
       }

@@ -30,6 +30,12 @@ export const rackFaceSchema = z.object({
   slotNumberingDirection: slotNumberingDirectionSchema,
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().nullable(),
+  /**
+   * Per-face override length (metres). When set, this face's sections must sum
+   * to this value instead of rack.totalLength. Used in paired racks where
+   * Face A and Face B can have different physical lengths.
+   */
+  faceLength: z.number().positive().optional(),
   sections: z.array(rackSectionSchema)
 });
 export type RackFace = z.infer<typeof rackFaceSchema>;
