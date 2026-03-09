@@ -6,6 +6,8 @@ type EditorStore = {
   editorMode: EditorMode;
   selectedRackId: string | null;
   hoveredRackId: string | null;
+  /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
+  creatingRackId: string | null;
   zoom: number;
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
@@ -13,11 +15,14 @@ type EditorStore = {
   setEditorMode: (mode: EditorMode) => void;
   setSelectedRackId: (rackId: string | null) => void;
   setHoveredRackId: (rackId: string | null) => void;
+  setCreatingRackId: (rackId: string | null) => void;
   setZoom: (zoom: number) => void;
   resetDraft: () => void;
   initializeDraft: (draft: LayoutDraft) => void;
   markDraftSaved: (layoutVersionId: string) => void;
   createRack: (x: number, y: number) => void;
+  deleteRack: (rackId: string) => void;
+  duplicateRack: (rackId: string) => void;
   updateRackPosition: (rackId: string, x: number, y: number) => void;
   rotateRack: (rackId: string) => void;
   updateRackGeneral: (rackId: string, patch: Partial<Pick<Rack, 'displayCode' | 'kind' | 'axis' | 'totalLength' | 'depth'>>) => void;
@@ -29,6 +34,11 @@ type EditorStore = {
   deleteSection: (rackId: string, side: 'A' | 'B', sectionId: string) => void;
   addLevel: (rackId: string, side: 'A' | 'B', sectionId: string) => void;
   setFaceBMode: (rackId: string, mode: 'mirror' | 'copy' | 'scratch') => void;
+  resetFaceB: (rackId: string) => void;
+  /** Replace all sections in a face with N equal-length sections generated from preset values. */
+  applyFacePreset: (rackId: string, side: 'A' | 'B', sectionCount: number, levelCount: number, slotCount: number) => void;
+  /** Set an independent physical length for one face (paired racks with asymmetric face lengths). */
+  setFaceLength: (rackId: string, side: 'A' | 'B', length: number) => void;
 };
 
 function cloneDraft(draft: LayoutDraft): LayoutDraft {
@@ -112,6 +122,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
   editorMode: 'select',
   selectedRackId: null,
   hoveredRackId: null,
+  creatingRackId: null,
   zoom: 1,
   draft: null,
   draftSourceVersionId: null,
@@ -119,6 +130,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setEditorMode: (editorMode) => set({ editorMode }),
   setSelectedRackId: (selectedRackId) => set({ selectedRackId }),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
+  setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setZoom: (zoom) => set({ zoom }),
   resetDraft: () =>
     set({
@@ -126,6 +138,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       draftSourceVersionId: null,
       selectedRackId: null,
       hoveredRackId: null,
+      creatingRackId: null,
       isDraftDirty: false,
       editorMode: 'select'
     }),
@@ -170,7 +183,65 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraft,
         selectedRackId: newRack.id,
+        creatingRackId: newRack.id,
         editorMode: 'select',
+        isDraftDirty: true
+      };
+    }),
+  deleteRack: (rackId) =>
+    set((state) => {
+      if (!state.draft) return state;
+
+      const nextDraft = cloneDraft(state.draft);
+      delete nextDraft.racks[rackId];
+      nextDraft.rackIds = nextDraft.rackIds.filter((id) => id !== rackId);
+
+      return {
+        draft: nextDraft,
+        selectedRackId: state.selectedRackId === rackId ? null : state.selectedRackId,
+        creatingRackId: state.creatingRackId === rackId ? null : state.creatingRackId,
+        isDraftDirty: true
+      };
+    }),
+  duplicateRack: (rackId) =>
+    set((state) => {
+      if (!state.draft) return state;
+
+      const source = state.draft.racks[rackId];
+      if (!source) return state;
+
+      const newRackId = crypto.randomUUID();
+      const nextDraft = cloneDraft(state.draft);
+      const displayCode = nextRackDisplayCode(nextDraft.racks);
+
+      // Deep-clone the rack and assign new IDs throughout
+      const duplicate: Rack = {
+        ...structuredClone(source),
+        id: newRackId,
+        displayCode,
+        x: source.x + 80,
+        y: source.y + 80,
+        faces: source.faces.map((face) => ({
+          ...face,
+          id: crypto.randomUUID(),
+          mirrorSourceFaceId: null,
+          sections: face.sections.map((section) => ({
+            ...section,
+            id: `sec-${face.side.toLowerCase()}-${section.ordinal}-${crypto.randomUUID()}`,
+            levels: section.levels.map((level) => ({
+              ...level,
+              id: `lvl-${face.side.toLowerCase()}-${section.ordinal}-${level.ordinal}-${crypto.randomUUID()}`
+            }))
+          }))
+        }))
+      };
+
+      nextDraft.rackIds = [...nextDraft.rackIds, newRackId];
+      nextDraft.racks[newRackId] = duplicate;
+
+      return {
+        draft: nextDraft,
+        selectedRackId: newRackId,
         isDraftDirty: true
       };
     }),
@@ -353,6 +424,77 @@ export const useEditorStore = create<EditorStore>((set) => ({
                   )
                 }
               : face
+          )
+        })),
+        isDraftDirty: true
+      };
+    }),
+  applyFacePreset: (rackId, side, sectionCount, levelCount, slotCount) =>
+    set((state) => {
+      if (!state.draft) return state;
+
+      return {
+        draft: updateRackInDraft(state.draft, rackId, (rack) => {
+          const face = rack.faces.find((f) => f.side === side);
+          // Use per-face length if set (asymmetric paired rack), else fall back to rack total
+          const totalLength = face?.faceLength ?? rack.totalLength;
+          const baseLength = Math.floor((totalLength / sectionCount) * 100) / 100;
+          // Last section absorbs rounding remainder
+          const lastLength = Math.round((totalLength - baseLength * (sectionCount - 1)) * 100) / 100;
+
+          return {
+            ...rack,
+            faces: rack.faces.map((face) => {
+              if (face.side !== side) return face;
+
+              const sections = Array.from({ length: sectionCount }, (_, i) => {
+                const ordinal = i + 1;
+                const length = i === sectionCount - 1 ? lastLength : baseLength;
+                return {
+                  id: `sec-${side.toLowerCase()}-${ordinal}-${crypto.randomUUID()}`,
+                  ordinal,
+                  length,
+                  levels: Array.from({ length: levelCount }, (__, j) => ({
+                    id: `lvl-${side.toLowerCase()}-${ordinal}-${j + 1}-${crypto.randomUUID()}`,
+                    ordinal: j + 1,
+                    slotCount
+                  }))
+                };
+              });
+
+              return { ...face, sections };
+            })
+          };
+        }),
+        isDraftDirty: true
+      };
+    }),
+  resetFaceB: (rackId) =>
+    set((state) => {
+      if (!state.draft) return state;
+
+      return {
+        draft: updateRackInDraft(state.draft, rackId, (rack) => ({
+          ...rack,
+          kind: 'single' as RackKind,
+          faces: rack.faces.map((face) =>
+            face.side === 'B'
+              ? { ...face, enabled: false, isMirrored: false, mirrorSourceFaceId: null, sections: [] }
+              : face
+          )
+        })),
+        isDraftDirty: true
+      };
+    }),
+  setFaceLength: (rackId, side, length) =>
+    set((state) => {
+      if (!state.draft) return state;
+
+      return {
+        draft: updateRackInDraft(state.draft, rackId, (rack) => ({
+          ...rack,
+          faces: rack.faces.map((face) =>
+            face.side === side ? { ...face, faceLength: length } : face
           )
         })),
         isDraftDirty: true
