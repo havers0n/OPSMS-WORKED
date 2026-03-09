@@ -17,6 +17,7 @@ import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-
 import { FaceBEmptyState } from '@/features/face-b-configure-mode/ui/face-b-empty-state';
 import { FaceTab } from '@/features/rack-configure/ui/face-tab';
 import { GeneralTab } from '@/features/rack-configure/ui/general-tab';
+import { SpacingTab } from '@/features/rack-configure/ui/spacing-tab';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
 import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wizard';
@@ -38,7 +39,7 @@ import {
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-type AccordionSection = 'geometry' | 'faceA' | 'faceB' | 'address';
+type AccordionSection = 'geometry' | 'spacing' | 'faceA' | 'faceB' | 'address';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -516,6 +517,21 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
           {isOpen('geometry') && (
             <div className="px-5 pb-5">
               <GeneralTab rack={rack} />
+            </div>
+          )}
+        </div>
+
+        {/* ── Spacing accordion ── */}
+        <div className="border-b border-[var(--border-muted)]">
+          <AccordionHeader
+            title="Spacing"
+            subtitle="Position, alignment, and distance controls"
+            isOpen={isOpen('spacing')}
+            onToggle={() => toggleSection('spacing')}
+          />
+          {isOpen('spacing') && (
+            <div className="px-5 pb-5">
+              <SpacingTab />
             </div>
           )}
         </div>

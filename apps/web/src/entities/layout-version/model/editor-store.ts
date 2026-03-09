@@ -1,22 +1,31 @@
 import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
 import { create } from 'zustand';
 import type { EditorMode } from './editor-types';
+import {
+  checkMinimumDistance,
+  alignRacksToLine,
+  distributeRacksEqually,
+  getRackBoundingBox
+} from '../../../widgets/warehouse-editor/lib/rack-spacing';
 
 type EditorStore = {
   editorMode: EditorMode;
-  selectedRackId: string | null;
+  selectedRackIds: string[];
   hoveredRackId: string | null;
   /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
   creatingRackId: string | null;
   zoom: number;
+  minRackDistance: number;
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
   setEditorMode: (mode: EditorMode) => void;
-  setSelectedRackId: (rackId: string | null) => void;
+  setSelectedRackIds: (rackIds: string[]) => void;
+  toggleRackSelection: (rackId: string) => void;
   setHoveredRackId: (rackId: string | null) => void;
   setCreatingRackId: (rackId: string | null) => void;
   setZoom: (zoom: number) => void;
+  setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
   initializeDraft: (draft: LayoutDraft) => void;
   markDraftSaved: (layoutVersionId: string) => void;
@@ -39,6 +48,9 @@ type EditorStore = {
   applyFacePreset: (rackId: string, side: 'A' | 'B', sectionCount: number, levelCount: number, slotCount: number) => void;
   /** Set an independent physical length for one face (paired racks with asymmetric face lengths). */
   setFaceLength: (rackId: string, side: 'A' | 'B', length: number) => void;
+  alignRacksHorizontal: (rackIds: string[]) => void;
+  alignRacksVertical: (rackIds: string[]) => void;
+  distributeRacksEqual: (rackIds: string[], axis: 'x' | 'y') => void;
 };
 
 function cloneDraft(draft: LayoutDraft): LayoutDraft {
@@ -118,23 +130,30 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
 
 export const useEditorStore = create<EditorStore>((set) => ({
   editorMode: 'select',
-  selectedRackId: null,
+  selectedRackIds: [],
   hoveredRackId: null,
   creatingRackId: null,
   zoom: 1,
+  minRackDistance: 0,
   draft: null,
   draftSourceVersionId: null,
   isDraftDirty: false,
   setEditorMode: (editorMode) => set({ editorMode }),
-  setSelectedRackId: (selectedRackId) => set({ selectedRackId }),
+  setSelectedRackIds: (selectedRackIds) => set({ selectedRackIds }),
+  toggleRackSelection: (rackId) => set((state) => ({
+    selectedRackIds: state.selectedRackIds.includes(rackId)
+      ? state.selectedRackIds.filter(id => id !== rackId)
+      : [...state.selectedRackIds, rackId]
+  })),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setZoom: (zoom) => set({ zoom }),
+  setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
   resetDraft: () =>
     set({
       draft: null,
       draftSourceVersionId: null,
-      selectedRackId: null,
+      selectedRackIds: [],
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,
@@ -146,15 +165,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
         return state;
       }
 
-      const nextSelectedRackId =
-        state.selectedRackId && draft.racks[state.selectedRackId]
-          ? state.selectedRackId
-          : (draft.rackIds[0] ?? null);
+      const nextSelectedRackIds =
+        state.selectedRackIds.length > 0 && state.selectedRackIds.every(id => draft.racks[id])
+          ? state.selectedRackIds
+          : (draft.rackIds[0] ? [draft.rackIds[0]] : []);
 
       return {
         draft: cloneDraft(draft),
         draftSourceVersionId: draft.layoutVersionId,
-        selectedRackId: nextSelectedRackId,
+        selectedRackIds: nextSelectedRackIds,
         isDraftDirty: false
       };
     }),
@@ -180,7 +199,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selectedRackId: newRack.id,
+        selectedRackIds: [newRack.id],
         creatingRackId: newRack.id,
         editorMode: 'select',
         isDraftDirty: true
@@ -196,7 +215,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selectedRackId: state.selectedRackId === rackId ? null : state.selectedRackId,
+        selectedRackIds: state.selectedRackIds.filter(id => id !== rackId),
         creatingRackId: state.creatingRackId === rackId ? null : state.creatingRackId,
         isDraftDirty: true
       };
@@ -239,13 +258,25 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selectedRackId: newRackId,
+        selectedRackIds: [newRackId],
         isDraftDirty: true
       };
     }),
   updateRackPosition: (rackId, x, y) =>
     set((state) => {
       if (!state.draft) return state;
+
+      const rack = state.draft.racks[rackId];
+      if (!rack) return state;
+
+      // Validate position with minimum distance constraint
+      const otherRacks = Object.values(state.draft.racks).filter(r => r.id !== rackId);
+      const isValid = checkMinimumDistance({ ...rack, x, y }, x, y, otherRacks, state.minRackDistance);
+
+      if (!isValid) {
+        // Position violates minimum distance - reject update
+        return state;
+      }
 
       return {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({ ...rack, x, y })),
@@ -563,6 +594,67 @@ export const useEditorStore = create<EditorStore>((set) => ({
             faces: rack.faces.map((face) => (face.side === 'B' ? nextFaceB : face))
           };
         }),
+        isDraftDirty: true
+      };
+    }),
+  alignRacksHorizontal: (rackIds) =>
+    set((state) => {
+      if (!state.draft || rackIds.length < 2) return state;
+
+      const racks = rackIds.map(id => state.draft!.racks[id]).filter(Boolean);
+      if (racks.length < 2) return state;
+
+      // Use first rack's Y as reference
+      const referenceY = racks[0].y;
+      const updates = alignRacksToLine(racks, 'y', referenceY);
+
+      let nextDraft = cloneDraft(state.draft);
+      for (const [rackId, pos] of Object.entries(updates)) {
+        nextDraft = updateRackInDraft(nextDraft, rackId, (rack) => ({ ...rack, ...pos }));
+      }
+
+      return {
+        draft: nextDraft,
+        isDraftDirty: true
+      };
+    }),
+  alignRacksVertical: (rackIds) =>
+    set((state) => {
+      if (!state.draft || rackIds.length < 2) return state;
+
+      const racks = rackIds.map(id => state.draft!.racks[id]).filter(Boolean);
+      if (racks.length < 2) return state;
+
+      // Use first rack's X as reference
+      const referenceX = racks[0].x;
+      const updates = alignRacksToLine(racks, 'x', referenceX);
+
+      let nextDraft = cloneDraft(state.draft);
+      for (const [rackId, pos] of Object.entries(updates)) {
+        nextDraft = updateRackInDraft(nextDraft, rackId, (rack) => ({ ...rack, ...pos }));
+      }
+
+      return {
+        draft: nextDraft,
+        isDraftDirty: true
+      };
+    }),
+  distributeRacksEqual: (rackIds, axis) =>
+    set((state) => {
+      if (!state.draft || rackIds.length < 2) return state;
+
+      const racks = rackIds.map(id => state.draft!.racks[id]).filter(Boolean);
+      if (racks.length < 2) return state;
+
+      const updates = distributeRacksEqually(racks, axis, state.minRackDistance);
+
+      let nextDraft = cloneDraft(state.draft);
+      for (const [rackId, pos] of Object.entries(updates)) {
+        nextDraft = updateRackInDraft(nextDraft, rackId, (rack) => ({ ...rack, ...pos }));
+      }
+
+      return {
+        draft: nextDraft,
         isDraftDirty: true
       };
     })

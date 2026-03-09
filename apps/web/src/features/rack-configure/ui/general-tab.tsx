@@ -1,8 +1,9 @@
 import type { Rack } from '@wos/domain';
-import { useUpdateRackGeneral } from '@/entities/layout-version/model/editor-selectors';
+import { useUpdateRackGeneral, useUpdateRackPosition } from '@/entities/layout-version/model/editor-selectors';
 
 export function GeneralTab({ rack }: { rack: Rack }) {
   const updateRackGeneral = useUpdateRackGeneral();
+  const updateRackPosition = useUpdateRackPosition();
 
   return (
     <section className="grid gap-4">
@@ -28,6 +29,16 @@ export function GeneralTab({ rack }: { rack: Rack }) {
             <label className="grid gap-1 text-sm text-slate-700">
               Depth
               <input type="number" step="0.1" className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm" value={rack.depth} onChange={(event) => updateRackGeneral(rack.id, { depth: Number(event.target.value) || 0 })} />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="grid gap-1 text-sm text-slate-700">
+              Position X
+              <input type="number" step="0.1" className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm" value={rack.x.toFixed(2)} onChange={(event) => updateRackPosition(rack.id, Number(event.target.value) || 0, rack.y)} />
+            </label>
+            <label className="grid gap-1 text-sm text-slate-700">
+              Position Y
+              <input type="number" step="0.1" className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm" value={rack.y.toFixed(2)} onChange={(event) => updateRackPosition(rack.id, rack.x, Number(event.target.value) || 0)} />
             </label>
           </div>
         </div>

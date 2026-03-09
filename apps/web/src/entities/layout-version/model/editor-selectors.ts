@@ -2,7 +2,12 @@ import { useEditorStore } from './editor-store';
 
 export const useEditorMode = () => useEditorStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
-export const useSelectedRackId = () => useEditorStore((state) => state.selectedRackId);
+export const useSelectedRackIds = () => useEditorStore((state) => state.selectedRackIds);
+export const useSelectedRackId = () => useEditorStore((state) => state.selectedRackIds[0] ?? null);
+export const useToggleRackSelection = () => useEditorStore((state) => state.toggleRackSelection);
+export const useSetSelectedRackIds = () => useEditorStore((state) => state.setSelectedRackIds);
+export const useMinRackDistance = () => useEditorStore((state) => state.minRackDistance);
+export const useSetMinRackDistance = () => useEditorStore((state) => state.setMinRackDistance);
 export const useHoveredRackId = () => useEditorStore((state) => state.hoveredRackId);
 export const useCreatingRackId = () => useEditorStore((state) => state.creatingRackId);
 export const useSetCreatingRackId = () => useEditorStore((state) => state.setCreatingRackId);
@@ -32,3 +37,6 @@ export const useSetFaceBMode = () => useEditorStore((state) => state.setFaceBMod
 export const useResetFaceB = () => useEditorStore((state) => state.resetFaceB);
 export const useApplyFacePreset = () => useEditorStore((state) => state.applyFacePreset);
 export const useSetFaceLength = () => useEditorStore((state) => state.setFaceLength);
+export const useAlignRacksHorizontal = () => useEditorStore((state) => state.alignRacksHorizontal);
+export const useAlignRacksVertical = () => useEditorStore((state) => state.alignRacksVertical);
+export const useDistributeRacksEqual = () => useEditorStore((state) => state.distributeRacksEqual);
