@@ -5,7 +5,23 @@ import { buildApp } from './app.js';
 const authContext = {
   accessToken: 'token',
   user: {
-    id: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+    id: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d',
+    email: 'operator@wos.local'
+  },
+  displayName: 'Local Operator',
+  memberships: [
+    {
+      tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      tenantCode: 'default',
+      tenantName: 'Default Tenant',
+      role: 'tenant_admin'
+    }
+  ],
+  currentTenant: {
+    tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    tenantCode: 'default',
+    tenantName: 'Default Tenant',
+    role: 'tenant_admin'
   }
 };
 
@@ -22,6 +38,14 @@ function createSupabaseStub() {
             limit: vi.fn(async () => ({
               data: [],
               error: null
+            }))
+          })),
+          insert: vi.fn((payload: unknown) => ({
+            select: vi.fn(() => ({
+              single: vi.fn(async () => ({
+                data: { id: '1f7eec3d-7300-47ff-b5a2-164e31422d22', payload },
+                error: null
+              }))
             }))
           }))
         };
@@ -143,6 +167,41 @@ describe('buildApp', () => {
         timezone: 'Asia/Jerusalem'
       }
     ]);
+
+    await app.close();
+  });
+
+  it('returns the current workspace session contract', async () => {
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => createSupabaseStub() as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      user: {
+        id: authContext.user.id,
+        email: authContext.user.email,
+        displayName: 'Local Operator'
+      },
+      currentTenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      memberships: [
+        {
+          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+          tenantCode: 'default',
+          tenantName: 'Default Tenant',
+          role: 'tenant_admin'
+        }
+      ]
+    });
 
     await app.close();
   });
@@ -271,6 +330,42 @@ describe('buildApp', () => {
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('creates a site inside the active tenant workspace', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        code: 'MAIN',
+        name: 'Main Site',
+        timezone: 'Asia/Jerusalem'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: '1f7eec3d-7300-47ff-b5a2-164e31422d22'
+    });
+
+    const siteApi = supabase.from.mock.results.find((result) => typeof result.value?.insert === 'function')?.value;
+    expect(siteApi.insert).toHaveBeenCalledWith({
+      tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      code: 'MAIN',
+      name: 'Main Site',
+      timezone: 'Asia/Jerusalem'
+    });
 
     await app.close();
   });

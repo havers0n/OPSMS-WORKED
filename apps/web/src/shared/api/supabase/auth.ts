@@ -11,6 +11,21 @@ function isMissingUserError(message: string) {
   );
 }
 
+function isRetryableAuthError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('database error querying schema') ||
+    normalized.includes('database error finding user') ||
+    normalized.includes('database error saving new user') ||
+    normalized.includes('failed to fetch') ||
+    normalized.includes('network request failed')
+  );
+}
+
+async function sleep(delayMs: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
 async function signInWithDevCredentials() {
   const signInResult = await supabase.auth.signInWithPassword({
     email: env.devAuthEmail,
@@ -52,16 +67,32 @@ async function signInWithDevCredentials() {
 }
 
 export async function ensureDevSession() {
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
+  const attempts = 10;
 
-  if (session) {
-    return session;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (session) {
+      return session;
+    }
+
+    try {
+      const result = await signInWithDevCredentials();
+      return result.data.session ?? null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (!isRetryableAuthError(message) || attempt === attempts - 1) {
+        throw error;
+      }
+
+      await sleep(400);
+    }
   }
 
-  const result = await signInWithDevCredentials();
-  return result.data.session ?? null;
+  return null;
 }
 
 export async function getCurrentActorId(): Promise<string | null> {

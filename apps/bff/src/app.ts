@@ -8,6 +8,7 @@ import {
   createFloorBodySchema,
   createLayoutDraftBodySchema,
   createSiteBodySchema,
+  currentWorkspaceResponseSchema,
   floorsResponseSchema,
   idResponseSchema,
   layoutDraftResponseSchema,
@@ -238,15 +239,34 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(sitesResponseSchema, (data ?? []).map(mapSiteRowToDomain));
   });
 
+  app.get('/api/me', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    return parseOrThrow(currentWorkspaceResponseSchema, {
+      user: {
+        id: auth.user.id,
+        email: auth.user.email ?? 'unknown@local.invalid',
+        displayName: auth.displayName
+      },
+      currentTenantId: auth.currentTenant?.tenantId ?? null,
+      memberships: auth.memberships
+    });
+  });
+
   app.post('/api/sites', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
     const body = parseOrThrow(createSiteBodySchema, request.body);
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for site creation.');
+    }
+
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('sites')
-      .insert({ code: body.code, name: body.name, timezone: body.timezone })
+      .insert({ tenant_id: auth.currentTenant.tenantId, code: body.code, name: body.name, timezone: body.timezone })
       .select('id')
       .single();
 

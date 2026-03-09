@@ -66,6 +66,23 @@ export const idResponseSchema = z.object({
   id: z.string().uuid()
 });
 
+export const tenantMembershipSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantCode: z.string().trim().min(1),
+  tenantName: z.string().trim().min(1),
+  role: z.enum(['platform_admin', 'tenant_admin', 'operator'])
+});
+
+export const currentWorkspaceResponseSchema = z.object({
+  user: z.object({
+    id: z.string().uuid(),
+    email: z.string().email(),
+    displayName: z.string().trim().min(1)
+  }),
+  currentTenantId: z.string().uuid().nullable(),
+  memberships: z.array(tenantMembershipSchema)
+});
+
 export const layoutVersionIdResponseSchema = z.object({
   layoutVersionId: z.string().uuid()
 });

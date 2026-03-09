@@ -10,6 +10,34 @@ export const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
 
+async function ensureDefaultTenantId() {
+  const { data: existingTenant, error: existingTenantError } = await adminClient
+    .from('tenants')
+    .select('id')
+    .eq('code', 'default')
+    .maybeSingle();
+
+  if (existingTenantError) {
+    throw existingTenantError;
+  }
+
+  if (existingTenant) {
+    return existingTenant.id;
+  }
+
+  const { data: tenant, error: tenantError } = await adminClient
+    .from('tenants')
+    .insert({ code: 'default', name: 'Default Tenant' })
+    .select('id')
+    .single();
+
+  if (tenantError) {
+    throw tenantError;
+  }
+
+  return tenant.id;
+}
+
 export async function resetWarehouseData() {
   const tableOrder = ['cells', 'rack_levels', 'rack_sections', 'rack_faces', 'racks', 'layout_versions', 'floors', 'sites'] as const;
 
@@ -26,10 +54,11 @@ export async function seedSiteAndFloor(args?: { siteCode?: string; siteName?: st
   const siteName = args?.siteName ?? 'Main Site';
   const floorCode = args?.floorCode ?? 'F1';
   const floorName = args?.floorName ?? 'Main Floor';
+  const tenantId = await ensureDefaultTenantId();
 
   const { data: site, error: siteError } = await adminClient
     .from('sites')
-    .insert({ code: siteCode, name: siteName, timezone: 'Asia/Jerusalem' })
+    .insert({ tenant_id: tenantId, code: siteCode, name: siteName, timezone: 'Asia/Jerusalem' })
     .select('id,code,name')
     .single();
 
