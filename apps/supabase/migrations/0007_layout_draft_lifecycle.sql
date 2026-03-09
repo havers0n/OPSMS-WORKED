@@ -18,6 +18,10 @@ declare
   face_id_map jsonb := '{}'::jsonb;
   section_id_map jsonb := '{}'::jsonb;
 begin
+  if auth.uid() is not null and not public.can_manage_floor(floor_uuid) then
+    raise exception 'Forbidden';
+  end if;
+
   select id
   into existing_draft_uuid
   from public.layout_versions
@@ -184,6 +188,10 @@ declare
 begin
   if layout_version_uuid is null then
     raise exception 'layoutVersionId is required in save_layout_draft payload';
+  end if;
+
+  if auth.uid() is not null and not public.can_manage_layout_version(layout_version_uuid) then
+    raise exception 'Forbidden';
   end if;
 
   if not exists (

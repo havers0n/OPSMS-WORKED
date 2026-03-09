@@ -52,9 +52,13 @@ delete from public.layout_versions where id in (
 );
 delete from public.floors where code in ('SQLF1', 'SQLF2');
 delete from public.sites where code = 'SQLTEST_MAIN';
+delete from public.tenants where code = 'SQLTEST_TENANT';
 
-insert into public.sites (id, code, name, timezone)
-values ('00000000-0000-0000-0000-000000000001'::uuid, 'SQLTEST_MAIN', 'SQL Test Site', 'Asia/Jerusalem');
+insert into public.tenants (id, code, name)
+values ('00000000-0000-0000-0000-000000000900'::uuid, 'SQLTEST_TENANT', 'SQL Test Tenant');
+
+insert into public.sites (id, tenant_id, code, name, timezone)
+values ('00000000-0000-0000-0000-000000000001'::uuid, '00000000-0000-0000-0000-000000000900'::uuid, 'SQLTEST_MAIN', 'SQL Test Site', 'Asia/Jerusalem');
 
 insert into public.floors (id, site_id, code, name, sort_order)
 values

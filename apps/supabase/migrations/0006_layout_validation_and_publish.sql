@@ -55,6 +55,10 @@ declare
   face_record record;
   section_length_sum numeric;
 begin
+  if auth.uid() is not null and not public.can_access_layout_version(layout_version_uuid) then
+    raise exception 'Forbidden';
+  end if;
+
   for rack_record in
     select r.id, r.display_code, r.total_length
     from public.racks r
@@ -182,6 +186,10 @@ begin
 
   if floor_uuid is null then
     raise exception 'Layout version % not found.', layout_version_uuid;
+  end if;
+
+  if auth.uid() is not null and not public.can_publish_floor(floor_uuid) then
+    raise exception 'Forbidden';
   end if;
 
   validation_result := public.validate_layout_version(layout_version_uuid);
