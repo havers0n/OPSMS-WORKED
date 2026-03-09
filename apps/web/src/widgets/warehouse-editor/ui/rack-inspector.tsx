@@ -440,17 +440,16 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
           <div className="min-w-0">
             <div className="text-xl font-semibold text-slate-900">Rack {rack.displayCode}</div>
             <div className="mt-0.5 text-xs text-slate-500">
-              {rack.kind === 'paired' ? 'Paired' : 'Single'} · {rack.axis} · {rack.totalLength.toFixed(1)} m × {rack.depth.toFixed(1)} m · {rack.rotationDeg}°
+              {rack.kind === 'paired' ? 'Paired' : 'Single'} · {rack.totalLength.toFixed(1)} m × {rack.depth.toFixed(1)} m · {rack.rotationDeg}°
             </div>
           </div>
           <StatusBadge rack={rack} issues={rackIssues} />
         </div>
 
         {/* stat chips */}
-        <div className="grid grid-cols-4 gap-1.5 px-5 pb-3">
+        <div className="grid grid-cols-3 gap-1.5 px-5 pb-3">
           {[
             { label: 'Kind', value: rack.kind === 'paired' ? 'Paired' : 'Single' },
-            { label: 'Axis', value: rack.axis },
             { label: 'Sections', value: String(totalSections) },
             { label: 'Cells', value: String(rackCells.length) }
           ].map(({ label, value }) => (
