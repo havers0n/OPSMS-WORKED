@@ -95,12 +95,12 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     if (!container) return;
 
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 2) return;
+      if (e.button !== 1) return; // middle mouse button only
       isPanningRef.current = true;
       panStartRef.current = { x: e.clientX, y: e.clientY };
       offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
       setIsPanning(true);
-      e.preventDefault();
+      e.preventDefault(); // prevent native auto-scroll mode
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -114,23 +114,19 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     };
 
     const onMouseUp = (e: MouseEvent) => {
-      if (e.button !== 2) return;
+      if (e.button !== 1) return;
       isPanningRef.current = false;
       setIsPanning(false);
     };
 
-    const onContextMenu = (e: MouseEvent) => e.preventDefault();
-
     container.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-    container.addEventListener('contextmenu', onContextMenu);
 
     return () => {
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
-      container.removeEventListener('contextmenu', onContextMenu);
     };
   }, []); // stable refs — no deps needed
 
@@ -283,7 +279,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
           {/* Bottom-right hint */}
           {!isPlacing && (
             <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-2xl border border-[var(--border-muted)] bg-slate-950/90 px-4 py-3 text-xs text-slate-200 shadow-[var(--shadow-soft)]">
-              Drag racks · RMB drag to pan · Scroll to zoom · Del to delete
+              Drag racks · MMB to pan · Scroll to zoom · Del to delete
             </div>
           )}
 
