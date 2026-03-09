@@ -4,8 +4,10 @@ import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
 import { FaceBEmptyState } from '@/features/face-b-configure-mode/ui/face-b-empty-state';
+import { RotateCcw } from 'lucide-react';
 import {
   useApplyFacePreset,
+  useRotateRack,
   useSetCreatingRackId,
   useSetFaceBMode,
   useSetFaceLength,
@@ -115,6 +117,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
   const applyFacePreset = useApplyFacePreset();
   const setFaceBMode = useSetFaceBMode();
   const setFaceLength = useSetFaceLength();
+  const rotateRack = useRotateRack();
   const setCreatingRackId = useSetCreatingRackId();
   const deleteRack = useDeleteRack();
   const setSelectedRackId = useSetSelectedRackId();
@@ -232,15 +235,22 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
                 />
               </FieldRow>
 
-              <FieldRow label="Axis Orientation">
-                <TogglePair
-                  value={rack.axis}
-                  options={[
-                    { value: 'NS', label: 'North–South' },
-                    { value: 'WE', label: 'West–East' }
-                  ]}
-                  onChange={(axis) => updateRackGeneral(rack.id, { axis })}
-                />
+              {/* Orientation — rotate the rack 90° at a time, axis syncs automatically */}
+              <FieldRow label="Orientation">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => rotateRack(rack.id)}
+                    className="flex items-center gap-2 rounded-xl border border-[var(--border-muted)] bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Rotate 90°
+                  </button>
+                  <span className="text-sm text-slate-500">
+                    Current: <span className="font-semibold text-slate-800">{rack.rotationDeg}°</span>
+                    <span className="ml-1.5 text-slate-400">({rack.axis})</span>
+                  </span>
+                </div>
               </FieldRow>
 
               {/* Length — single: one field; paired: per-face fields */}
