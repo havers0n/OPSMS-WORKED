@@ -13,11 +13,12 @@ function orderSlots(level: RackLevel, face: RackFace): number[] {
  * Returns sections in address-generation order together with the
  * address ordinal (1-based) to use for each section.
  *
- * anchor='start' (default) — section 1 is at the near/left end:
- *   physical order kept, ordinal = stored ordinal
- * anchor='end' — section 1 is at the far/right end:
- *   sections are visited right-to-left, but address ordinal is
- *   reassigned 1..N from the right so the rightmost section is "01".
+ * slotNumberingDirection='ltr' — section 1 is at the left/near end (default)
+ * slotNumberingDirection='rtl' — section 1 is at the right/far end; sections
+ *   are visited in reverse so the rightmost section is address ordinal 1.
+ *
+ * Both section ordering and slot numbering always follow slotNumberingDirection,
+ * keeping addresses consistent across the full rack length.
  */
 function resolveSections(
   face: RackFace,
@@ -32,8 +33,8 @@ function resolveSections(
     sections = face.sections;
   }
 
-  if (face.anchor === 'end') {
-    // Reverse physical order so the rightmost section becomes address ordinal 1
+  if (face.slotNumberingDirection === 'rtl') {
+    // RTL: the far/right end of the rack is address ordinal 1 — reverse section order
     return [...sections]
       .reverse()
       .map((section, i) => ({ section, addressOrdinal: i + 1 }));

@@ -24,30 +24,17 @@ export function FaceTab({ title, rackId, face }: { title: string; rackId: string
     <section className="grid gap-4">
       <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
         <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="grid gap-1 text-sm text-slate-700">
-            Anchor
-            <select
-              className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm"
-              value={face.anchor}
-              onChange={(event) => updateFaceConfig(rackId, face.side, { anchor: event.target.value as RackFace['anchor'] })}
-            >
-              <option value="start">Start</option>
-              <option value="end">End</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm text-slate-700">
-            Slot Numbering
-            <select
-              className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm"
-              value={face.slotNumberingDirection}
-              onChange={(event) => updateFaceConfig(rackId, face.side, { slotNumberingDirection: event.target.value as RackFace['slotNumberingDirection'] })}
-            >
-              <option value="ltr">LTR вЂ” left to right</option>
-              <option value="rtl">RTL вЂ” right to left</option>
-            </select>
-          </label>
-        </div>
+        <label className="grid gap-1 text-sm text-slate-700">
+          Slot Numbering
+          <select
+            className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm"
+            value={face.slotNumberingDirection}
+            onChange={(event) => updateFaceConfig(rackId, face.side, { slotNumberingDirection: event.target.value as RackFace['slotNumberingDirection'] })}
+          >
+            <option value="ltr">{"① → N"} (left to right)</option>
+            <option value="rtl">{"N → ①"} (right to left)</option>
+          </select>
+        </label>
       </div>
 
       <div className="flex items-center justify-between">

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   rackAxisSchema,
-  rackFaceAnchorSchema,
   rackFaceSideSchema,
   rackKindSchema,
   slotNumberingDirectionSchema
@@ -26,7 +25,6 @@ export const rackFaceSchema = z.object({
   id: z.string(),
   side: rackFaceSideSchema,
   enabled: z.boolean(),
-  anchor: rackFaceAnchorSchema,
   slotNumberingDirection: slotNumberingDirectionSchema,
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().nullable(),

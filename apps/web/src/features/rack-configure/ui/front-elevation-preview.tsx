@@ -19,11 +19,12 @@ export function FrontElevationPreview({
   face,
   side,
 }: {
-  face: Pick<RackFace, 'sections' | 'anchor' | 'slotNumberingDirection'>;
+  face: Pick<RackFace, 'sections' | 'slotNumberingDirection'>;
   side: 'A' | 'B';
 }) {
   const colors = FACE_COLORS[side];
-  const { sections, anchor, slotNumberingDirection } = face;
+  const { sections, slotNumberingDirection } = face;
+  const isRtl = slotNumberingDirection === 'rtl';
 
   if (sections.length === 0) {
     return (
@@ -33,9 +34,9 @@ export function FrontElevationPreview({
     );
   }
 
-  // Apply anchor: 'end' → reverse so the address-ordinal-1 section is shown on the LEFT
-  // (matching the address preview which lists addresses starting from ordinal 1)
-  const orderedSections = anchor === 'end' ? [...sections].reverse() : sections;
+  // RTL: reverse sections so address-ordinal-1 (the "far" end) is shown on the LEFT,
+  // matching the address preview which always lists addresses from ordinal 1.
+  const orderedSections = isRtl ? [...sections].reverse() : sections;
 
   const maxLevels = Math.max(...orderedSections.map((s) => s.levels.length), 1);
   const totalSlots = orderedSections.reduce((sum, s) => sum + (s.levels[0]?.slotCount ?? 1), 0);
@@ -50,8 +51,6 @@ export function FrontElevationPreview({
   const sectionWidthRatios = orderedSections.map(
     (s) => (s.levels[0]?.slotCount ?? 1) / Math.max(totalSlots, 1)
   );
-
-  const isRtl = slotNumberingDirection === 'rtl';
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -171,8 +170,7 @@ export function FrontElevationPreview({
         <span className="text-[10px] text-slate-400">
           {sections.length} sec · {Math.max(...sections.map((s) => s.levels.length), 0)} lvl ·{' '}
           {sections[0]?.levels[0]?.slotCount ?? 0} slots/lvl
-          {anchor === 'end' && <span className="ml-1 text-amber-500">· ↩ anchor end</span>}
-          {isRtl && <span className="ml-1 text-amber-500">· rtl</span>}
+          {isRtl && <span className="ml-1 text-amber-500">· N→①</span>}
         </span>
       </div>
     </div>

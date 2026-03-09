@@ -17,7 +17,6 @@ type SaveRackFacePayload = {
   id: string;
   side: string;
   enabled: boolean;
-  anchor: string;
   slotNumberingDirection: string;
   isMirrored: boolean;
   mirrorSourceFaceId: string | null;
@@ -61,7 +60,6 @@ export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraft
           id: face.id,
           side: face.side,
           enabled: face.enabled,
-          anchor: face.anchor,
           slotNumberingDirection: face.slotNumberingDirection,
           isMirrored: face.isMirrored,
           mirrorSourceFaceId: face.mirrorSourceFaceId,

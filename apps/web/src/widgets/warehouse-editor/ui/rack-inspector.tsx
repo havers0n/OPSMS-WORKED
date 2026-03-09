@@ -198,15 +198,14 @@ function faceSummaryText(face: RackFace): string {
 }
 
 // ─── NumberingPanel ───────────────────────────────────────────────────────────
-// Controls slot numbering direction (LTR / RTL) and section anchor (start / end)
-// Both affect the generated cell addresses for this face.
+// Controls slot numbering direction (LTR / RTL).
+// Section ordering always follows the same direction as slot numbering.
 
 type NumberingPanelProps = {
   rackId: string;
   side: 'A' | 'B';
   slotNumberingDirection: 'ltr' | 'rtl';
-  anchor: 'start' | 'end';
-  onUpdate: (rackId: string, side: 'A' | 'B', patch: { slotNumberingDirection?: 'ltr' | 'rtl'; anchor?: 'start' | 'end' }) => void;
+  onUpdate: (rackId: string, side: 'A' | 'B', patch: { slotNumberingDirection?: 'ltr' | 'rtl' }) => void;
 };
 
 function ToggleGroup<T extends string>({
@@ -240,63 +239,32 @@ function ToggleGroup<T extends string>({
   );
 }
 
-function NumberingPanel({ rackId, side, slotNumberingDirection, anchor, onUpdate }: NumberingPanelProps) {
+function NumberingPanel({ rackId, side, slotNumberingDirection, onUpdate }: NumberingPanelProps) {
   return (
     <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
         Numbering
       </div>
-      <div className="flex flex-col gap-3">
-
-        {/* Section direction — which physical end of the rack is section 1 */}
-        <div>
-          <div className="mb-1.5 text-xs text-slate-600">
-            Секции
-            <span className="ml-1.5 text-slate-400">— секция №1 с какого конца стеллажа</span>
-          </div>
-          <ToggleGroup
-            value={anchor}
-            options={[
-              {
-                value: 'start',
-                label: '① → N',
-                title: 'Section 1 starts at the near/first end of the rack (default)'
-              },
-              {
-                value: 'end',
-                label: 'N → ①',
-                title: 'Section 1 starts at the far/last end of the rack (reversed)'
-              },
-            ]}
-            onChange={(v) => onUpdate(rackId, side, { anchor: v })}
-          />
-        </div>
-
-        {/* Slot direction — which end of each section is slot 1 */}
-        <div>
-          <div className="mb-1.5 text-xs text-slate-600">
-            Слоты внутри секции
-            <span className="ml-1.5 text-slate-400">— слот №1 с какого края секции</span>
-          </div>
-          <ToggleGroup
-            value={slotNumberingDirection}
-            options={[
-              {
-                value: 'ltr',
-                label: '① → N',
-                title: 'Slot 1 at the near end of the section (same direction as sections)'
-              },
-              {
-                value: 'rtl',
-                label: 'N → ①',
-                title: 'Slot 1 at the far end of the section (opposite direction)'
-              },
-            ]}
-            onChange={(v) => onUpdate(rackId, side, { slotNumberingDirection: v })}
-          />
-        </div>
-
+      <div className="mb-1.5 text-xs text-slate-600">
+        Направление нумерации
+        <span className="ml-1.5 text-slate-400">— с какого края начинается слот №1 (и секция №1)</span>
       </div>
+      <ToggleGroup
+        value={slotNumberingDirection}
+        options={[
+          {
+            value: 'ltr',
+            label: '① → N',
+            title: 'Slot 1 (and section 1) at the left/near end of the rack'
+          },
+          {
+            value: 'rtl',
+            label: 'N → ①',
+            title: 'Slot 1 (and section 1) at the right/far end of the rack'
+          },
+        ]}
+        onChange={(v) => onUpdate(rackId, side, { slotNumberingDirection: v })}
+      />
     </div>
   );
 }
@@ -572,7 +540,6 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
                 rackId={rack.id}
                 side="A"
                 slotNumberingDirection={faceA.slotNumberingDirection}
-                anchor={faceA.anchor}
                 onUpdate={updateFaceConfig}
               />
 
@@ -663,7 +630,6 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
                     rackId={rack.id}
                     side="B"
                     slotNumberingDirection={faceB.slotNumberingDirection}
-                    anchor={faceB.anchor}
                     onUpdate={updateFaceConfig}
                   />
                   <SectionPresetForm

@@ -1,4 +1,4 @@
-import type { LayoutDraft, Rack, RackFace, RackFaceAnchor, RackKind, SlotNumberingDirection } from '@wos/domain';
+import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
 import { create } from 'zustand';
 import type { EditorMode } from './editor-types';
 
@@ -26,7 +26,7 @@ type EditorStore = {
   updateRackPosition: (rackId: string, x: number, y: number) => void;
   rotateRack: (rackId: string) => void;
   updateRackGeneral: (rackId: string, patch: Partial<Pick<Rack, 'displayCode' | 'kind' | 'axis' | 'totalLength' | 'depth'>>) => void;
-  updateFaceConfig: (rackId: string, side: 'A' | 'B', patch: Partial<Pick<RackFace, 'anchor' | 'slotNumberingDirection' | 'enabled'>>) => void;
+  updateFaceConfig: (rackId: string, side: 'A' | 'B', patch: Partial<Pick<RackFace, 'slotNumberingDirection' | 'enabled'>>) => void;
   updateSectionLength: (rackId: string, side: 'A' | 'B', sectionId: string, length: number) => void;
   updateSectionSlots: (rackId: string, side: 'A' | 'B', sectionId: string, slotCount: number) => void;
   updateLevelCount: (rackId: string, side: 'A' | 'B', sectionId: string, count: number) => void;
@@ -98,7 +98,6 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
         id: faceAId,
         side: 'A',
         enabled: true,
-        anchor: 'start',
         slotNumberingDirection: 'ltr',
         isMirrored: false,
         mirrorSourceFaceId: null,
@@ -108,7 +107,6 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
         id: faceBId,
         side: 'B',
         enabled: false,
-        anchor: 'start',
         slotNumberingDirection: 'ltr',
         isMirrored: false,
         mirrorSourceFaceId: null,
@@ -534,7 +532,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
               enabled: true,
               isMirrored: true,
               mirrorSourceFaceId: faceA.id,
-              anchor: 'end' as RackFaceAnchor,
               slotNumberingDirection: 'rtl' as SlotNumberingDirection,
               sections: []
             };

@@ -35,8 +35,7 @@ function FaceBlock({ face, label }: { face: RackFace; label: string }) {
         </div>
       </div>
       <div className="mt-2 flex gap-3 text-xs text-slate-500">
-        <span>Anchor: <span className="font-medium text-slate-700">{face.anchor}</span></span>
-        <span>Numbering: <span className="font-medium text-slate-700">{face.slotNumberingDirection.toUpperCase()}</span></span>
+        <span>Numbering: <span className="font-medium text-slate-700">{face.slotNumberingDirection === 'rtl' ? 'N→①' : '①→N'}</span></span>
         {face.isMirrored && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 text-[10px] font-medium">Mirrored</span>}
       </div>
     </div>
@@ -50,7 +49,6 @@ function AsymmetryBlock({ faceA, faceB }: { faceA: RackFace; faceB: RackFace }) 
   if (a.sectionCount !== b.sectionCount) diffs.push(`Section count differs (A: ${a.sectionCount}, B: ${b.sectionCount})`);
   if (Math.abs(a.totalLength - b.totalLength) > 0.01) diffs.push(`Length differs (A: ${a.totalLength.toFixed(1)} m, B: ${b.totalLength.toFixed(1)} m)`);
   if (faceA.slotNumberingDirection !== faceB.slotNumberingDirection) diffs.push(`Slot numbering differs (A: ${faceA.slotNumberingDirection.toUpperCase()}, B: ${faceB.slotNumberingDirection.toUpperCase()})`);
-  if (faceA.anchor !== faceB.anchor) diffs.push(`Anchor differs (A: ${faceA.anchor}, B: ${faceB.anchor})`);
 
   if (diffs.length === 0) return null;
 
