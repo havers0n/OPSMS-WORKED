@@ -23,17 +23,17 @@ const LABEL_FILL        = '#475569';  // slate-600
 const LABEL_FILL_SEL    = '#0f6a8e';
 
 export function RackSections({ geometry, faceA, faceB, isSelected }: Props) {
-  const { width, height, isPaired, spineY } = geometry;
+  const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const divider = isSelected ? DIVIDER_STROKE_SEL : DIVIDER_STROKE;
   const labelFill = isSelected ? LABEL_FILL_SEL : LABEL_FILL;
 
-  // x-offsets for each section boundary
-  const faceAOffsets = getSectionWidths(width, faceA.sections);
+  // x-offsets for each section boundary — each face uses its own pixel width
+  const faceAOffsets = getSectionWidths(faceAWidth, faceA.sections);
 
-  // Face B may have a different section layout if not mirrored
+  // Face B may have a different section layout and a different width
   const faceBOffsets = (faceB && faceB.sections.length > 0)
-    ? getSectionWidths(width, faceB.sections)
-    : faceAOffsets;
+    ? getSectionWidths(faceBWidth, faceB.sections)
+    : getSectionWidths(faceAWidth, faceA.sections);
 
   const faceABottom = isPaired ? spineY : height;
   const faceBTop    = spineY;          // only used when isPaired
