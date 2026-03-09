@@ -9,12 +9,14 @@ import {
   useEditorMode,
   useHoveredRackId,
   useLayoutDraftState,
-  useSelectedRackId,
+  useSelectedRackIds,
   useSetCanvasZoom,
   useSetEditorMode,
   useSetHoveredRackId,
-  useSetSelectedRackId,
-  useUpdateRackPosition
+  useSetSelectedRackIds,
+  useToggleRackSelection,
+  useUpdateRackPosition,
+  useMinRackDistance
 } from '@/entities/layout-version/model/editor-selectors';
 import {
   clampCanvasPosition,
@@ -23,23 +25,27 @@ import {
   getRackGeometry,
   GRID_SIZE
 } from '../lib/canvas-geometry';
+import { getSnapPosition } from '../lib/rack-spacing';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
+import { SnapGuides } from './shapes/snap-guides';
 
 export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const zoom = useCanvasZoom();
   const editorMode = useEditorMode();
   const layoutDraft = useLayoutDraftState();
-  const selectedRackId = useSelectedRackId();
+  const selectedRackIds = useSelectedRackIds();
   const hoveredRackId = useHoveredRackId();
-  const setSelectedRackId = useSetSelectedRackId();
+  const setSelectedRackIds = useSetSelectedRackIds();
+  const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const setCanvasZoom = useSetCanvasZoom();
   const setEditorMode = useSetEditorMode();
   const updateRackPosition = useUpdateRackPosition();
   const createRack = useCreateRack();
   const deleteRack = useDeleteRack();
+  const minRackDistance = useMinRackDistance();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -55,6 +61,9 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const panStartRef = useRef({ x: 0, y: 0 });
   const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
 
+  // ── Snap guides visualization ─────────────────────────────────────────────
+  const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
+
   const racks = useMemo(
     () => (layoutDraft ? layoutDraft.rackIds.map((id) => layoutDraft.racks[id]) : []),
     [layoutDraft]
@@ -67,16 +76,22 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   isPlacingRef.current = isPlacing;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
-  const setSelectedRackIdRef = useRef(setSelectedRackId);
-  setSelectedRackIdRef.current = setSelectedRackId;
+  const setSelectedRackIdsRef = useRef(setSelectedRackIds);
+  setSelectedRackIdsRef.current = setSelectedRackIds;
+  const toggleRackSelectionRef = useRef(toggleRackSelection);
+  toggleRackSelectionRef.current = toggleRackSelection;
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
   const setCanvasZoomRef = useRef(setCanvasZoom);
   setCanvasZoomRef.current = setCanvasZoom;
-  const selectedRackIdRef = useRef(selectedRackId);
-  selectedRackIdRef.current = selectedRackId;
+  const selectedRackIdsRef = useRef(selectedRackIds);
+  selectedRackIdsRef.current = selectedRackIds;
   const deleteRackRef = useRef(deleteRack);
   deleteRackRef.current = deleteRack;
+  const minRackDistanceRef = useRef(minRackDistance);
+  minRackDistanceRef.current = minRackDistance;
+  const updateRackPositionRef = useRef(updateRackPosition);
+  updateRackPositionRef.current = updateRackPosition;
 
   // Resize observer
   useEffect(() => {
@@ -140,7 +155,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
       if (isPlacingRef.current) {
         createRackRef.current(Math.round(pos.x / GRID_SIZE) * GRID_SIZE, Math.round(pos.y / GRID_SIZE) * GRID_SIZE);
       } else {
-        setSelectedRackIdRef.current(null);
+        setSelectedRackIdsRef.current([]);
       }
     };
     stage.on('click.canvas', handler);
@@ -157,7 +172,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
       }
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isPlacingRef.current) {
-        const rackId = selectedRackIdRef.current;
+        const rackId = selectedRackIdsRef.current[0];
         // Only trigger keyboard delete when focus is not inside a text input/textarea/select
         const target = e.target as HTMLElement;
         const isEditing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
@@ -196,10 +211,32 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   }, [zoom, viewport.width, viewport.height, canvasOffset]);
 
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
+    if (!layoutDraft) return;
+
     const node = event.target;
-    const x = clampCanvasPosition(node.x() - node.offsetX());
-    const y = clampCanvasPosition(node.y() - node.offsetY());
-    updateRackPosition(rackId, x, y);
+    let x = clampCanvasPosition(node.x() - node.offsetX());
+    let y = clampCanvasPosition(node.y() - node.offsetY());
+
+    // Get snap information from nearby racks
+    const rack = layoutDraft.racks[rackId];
+    const otherRacks = Object.values(layoutDraft.racks).filter(r => r.id !== rackId);
+    const snapInfo = getSnapPosition(rack, x, y, otherRacks, minRackDistanceRef.current, 0.5);
+
+    // Apply snapping if active
+    if (snapInfo.snappedToX || snapInfo.snappedToY) {
+      x = snapInfo.snappedX;
+      y = snapInfo.snappedY;
+      setSnapGuides(
+        [
+          snapInfo.snappedToX && { type: 'x' as const, position: x },
+          snapInfo.snappedToY && { type: 'y' as const, position: y }
+        ].filter(Boolean) as Array<{ type: 'x' | 'y'; position: number }>
+      );
+    } else {
+      setSnapGuides([]);
+    }
+
+    updateRackPositionRef.current(rackId, x, y);
   };
 
   const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
@@ -322,11 +359,14 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                 ))}
               </Layer>
 
+              {/* Snap guides layer (not interactive) */}
+              <SnapGuides guides={snapGuides} gridLines={gridLines} />
+
               {/* Rack layer */}
               <Layer>
                 {racks.map((rack) => {
                   const geometry = getRackGeometry(rack);
-                  const isSelected = selectedRackId === rack.id;
+                  const isSelected = selectedRackIds.includes(rack.id);
                   const isHovered = hoveredRackId === rack.id;
                   const faceA = rack.faces.find((f) => f.side === 'A') ?? null;
                   const faceB = rack.faces.find((f) => f.side === 'B') ?? null;
@@ -342,11 +382,24 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                       draggable={!isPlacing}
                       onClick={(e) => {
                         e.cancelBubble = true;
-                        if (!isPlacing) setSelectedRackId(rack.id);
+                        if (!isPlacing) {
+                          const evt = e.evt as PointerEvent;
+                          if (evt.ctrlKey || evt.metaKey) {
+                            toggleRackSelectionRef.current(rack.id);
+                          } else {
+                            setSelectedRackIdsRef.current([rack.id]);
+                          }
+                        }
                       }}
                       onTap={(e) => {
                         e.cancelBubble = true;
-                        if (!isPlacing) setSelectedRackId(rack.id);
+                        if (!isPlacing) {
+                          const evt = e.evt as PointerEvent;
+                          if (evt.ctrlKey || evt.metaKey) {
+                            toggleRackSelectionRef.current(rack.id);
+                          } else {
+                            setSelectedRackIdsRef.current([rack.id]);
+                          }
                       }}
                       onMouseEnter={() => {
                         if (!isPlacing) setHoveredRackId(rack.id);
@@ -354,9 +407,13 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                       onMouseLeave={() => {
                         if (!isPlacing) setHoveredRackId(null);
                       }}
-                      onDragStart={() => setSelectedRackId(rack.id)}
+                      onDragStart={() => {
+                        if (!selectedRackIds.includes(rack.id)) {
+                          setSelectedRackIds([rack.id]);
+                        }
+                      }}
                       onDragMove={(e) => handleDragMove(rack.id, e)}
-                      onDragEnd={(e) => handleDragMove(rack.id, e)}
+                      onDragEnd={() => setSnapGuides([])}
                     >
                       {/* Transparent hit target covers the full bounding box */}
                       <Rect x={0} y={0} width={geometry.width} height={geometry.height} fill="transparent" />
