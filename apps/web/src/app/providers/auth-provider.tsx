@@ -1,8 +1,13 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { resetUiStore } from '@/app/store/ui-store';
+import { resetEditorStore } from '@/entities/layout-version/model/editor-store';
 import { bffRequest } from '@/shared/api/bff/client';
-import { ensureDevSession, subscribeToAuthChanges } from '@/shared/api/supabase/auth';
+import { queryClient } from '@/shared/api/supabase/query-client';
+import { ensureDevSession, getCurrentSessionUser, signInWithPassword, signOutSession, signUpWithPassword, subscribeToAuthChanges } from '@/shared/api/supabase/auth';
 import { supabase } from '@/shared/api/supabase/client';
+import { BffRequestError } from '@/shared/api/bff/client';
+import { env } from '@/shared/config/env';
 
 type TenantMembership = {
   tenantId: string;
@@ -26,13 +31,21 @@ type AuthContextValue = {
   user: User | null;
   currentTenantId: string | null;
   memberships: TenantMembership[];
+  workspaceError: string | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   isReady: false,
   user: null,
   currentTenantId: null,
-  memberships: []
+  memberships: [],
+  workspaceError: null,
+  signIn: async () => undefined,
+  signUp: async () => undefined,
+  signOut: async () => undefined
 });
 
 async function resolveAuthenticatedUser(retries = 10, delayMs = 150): Promise<User | null> {
@@ -55,72 +68,102 @@ async function resolveWorkspaceSession(): Promise<WorkspaceSession> {
   return bffRequest<WorkspaceSession>('/me');
 }
 
+function resetLocalWorkspaceState() {
+  queryClient.clear();
+  resetUiStore();
+  resetEditorStore();
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AuthContextValue>({
     isReady: false,
     user: null,
     currentTenantId: null,
-    memberships: []
+    memberships: [],
+    workspaceError: null,
+    signIn: async () => undefined,
+    signUp: async () => undefined,
+    signOut: async () => undefined
   });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    let bootstrapComplete = false;
 
-    async function hydrateAuthenticatedWorkspace() {
-      const user = await resolveAuthenticatedUser();
-
-      if (!user) {
-        throw new Error('Authenticated user session was not established.');
-      }
-
-      const workspaceSession = await resolveWorkspaceSession();
-
+    async function applyAnonymousState() {
       if (!isMounted) return;
-      bootstrapComplete = true;
-      setState({
+      resetLocalWorkspaceState();
+      setState((current) => ({
+        ...current,
         isReady: true,
-        user,
-        currentTenantId: workspaceSession.currentTenantId,
-        memberships: workspaceSession.memberships
-      });
+        user: null,
+        currentTenantId: null,
+        memberships: [],
+        workspaceError: null
+      }));
     }
 
-    void ensureDevSession()
-      .then(hydrateAuthenticatedWorkspace)
-      .catch((authError) => {
+    async function applyWorkspaceForUser(user: User) {
+      try {
+        const workspaceSession = await resolveWorkspaceSession();
         if (!isMounted) return;
-        setError(authError instanceof Error ? authError.message : 'Failed to initialize authentication');
-      });
-
-    const unsubscribe = subscribeToAuthChanges((user) => {
-      if (!isMounted) return;
-      if (!bootstrapComplete && !user) return;
-      if (!user) {
-        setState({
+        setState((current) => ({
+          ...current,
           isReady: true,
-          user: null,
-          currentTenantId: null,
-          memberships: []
-        });
+          user,
+          currentTenantId: workspaceSession.currentTenantId,
+          memberships: workspaceSession.memberships,
+          workspaceError: null
+        }));
+      } catch (authError) {
+        if (!isMounted) return;
+        if (authError instanceof BffRequestError && authError.code === 'WORKSPACE_UNAVAILABLE') {
+          setState((current) => ({
+            ...current,
+            isReady: true,
+            user,
+            currentTenantId: null,
+            memberships: [],
+            workspaceError: authError.message
+          }));
+          return;
+        }
+        throw authError;
+      }
+    }
+
+    async function bootstrap() {
+      if (env.enableDevAutoLogin) {
+        await ensureDevSession();
+      }
+
+      const user = await getCurrentSessionUser();
+      if (!user) {
+        await applyAnonymousState();
         return;
       }
 
-      void resolveWorkspaceSession()
-        .then((workspaceSession) => {
-          if (!isMounted) return;
-          setState({
-            isReady: true,
-            user,
-            currentTenantId: workspaceSession.currentTenantId,
-            memberships: workspaceSession.memberships
-          });
-        })
-        .catch((authError) => {
-          if (!isMounted) return;
-          setError(authError instanceof Error ? authError.message : 'Failed to refresh authenticated workspace');
-        });
+      await applyWorkspaceForUser(user);
+    }
+
+    void bootstrap().catch((authError) => {
+      if (!isMounted) return;
+      setError(authError instanceof Error ? authError.message : 'Failed to initialize authentication');
+    });
+
+    const unsubscribe = subscribeToAuthChanges((user) => {
+      if (!isMounted) return;
+      setError(null);
+
+      if (!user) {
+        void applyAnonymousState();
+        return;
+      }
+
+      void applyWorkspaceForUser(user).catch((authError) => {
+        if (!isMounted) return;
+        setError(authError instanceof Error ? authError.message : 'Failed to initialize authentication');
+      });
     });
 
     return () => {
@@ -153,7 +196,64 @@ export function AuthProvider({ children }: PropsWithChildren) {
     );
   }
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  async function handleSignIn(email: string, password: string) {
+    setError(null);
+    resetLocalWorkspaceState();
+    const result = await signInWithPassword(email, password);
+    if (result.error) {
+      throw result.error;
+    }
+
+    const user = result.data.user ?? (await resolveAuthenticatedUser());
+    if (!user) {
+      throw new Error('Authenticated user session was not established.');
+    }
+
+    await resolveWorkspaceSession();
+  }
+
+  async function handleSignUp(email: string, password: string) {
+    setError(null);
+    resetLocalWorkspaceState();
+    const result = await signUpWithPassword(email, password, email.split('@')[0]);
+    if (result.error) {
+      throw result.error;
+    }
+
+    const user = result.data.user ?? (await resolveAuthenticatedUser());
+    if (!user) {
+      throw new Error('Authenticated user session was not established.');
+    }
+
+    await resolveWorkspaceSession();
+  }
+
+  async function handleSignOut() {
+    setError(null);
+    resetLocalWorkspaceState();
+    await signOutSession();
+    setState((current) => ({
+      ...current,
+      isReady: true,
+      user: null,
+      currentTenantId: null,
+      memberships: [],
+      workspaceError: null
+    }));
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        ...state,
+        signIn: handleSignIn,
+        signUp: handleSignUp,
+        signOut: handleSignOut
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

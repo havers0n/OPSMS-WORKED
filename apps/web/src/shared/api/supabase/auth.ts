@@ -27,10 +27,7 @@ async function sleep(delayMs: number) {
 }
 
 async function signInWithDevCredentials() {
-  const signInResult = await supabase.auth.signInWithPassword({
-    email: env.devAuthEmail,
-    password: env.devAuthPassword
-  });
+  const signInResult = await signInWithPassword(env.devAuthEmail, env.devAuthPassword);
 
   if (!signInResult.error) {
     return signInResult;
@@ -40,30 +37,45 @@ async function signInWithDevCredentials() {
     throw signInResult.error;
   }
 
-  const signUpResult = await supabase.auth.signUp({
-    email: env.devAuthEmail,
-    password: env.devAuthPassword,
-    options: {
-      data: {
-        display_name: 'Local Operator'
-      }
-    }
-  });
+  const signUpResult = await signUpWithPassword(env.devAuthEmail, env.devAuthPassword, 'Local Tenant Admin');
 
   if (signUpResult.error && !signUpResult.error.message.toLowerCase().includes('already registered')) {
     throw signUpResult.error;
   }
 
-  const retryResult = await supabase.auth.signInWithPassword({
-    email: env.devAuthEmail,
-    password: env.devAuthPassword
-  });
+  const retryResult = await signInWithPassword(env.devAuthEmail, env.devAuthPassword);
 
   if (retryResult.error) {
     throw retryResult.error;
   }
 
   return retryResult;
+}
+
+export async function signInWithPassword(email: string, password: string) {
+  return supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+}
+
+export async function signUpWithPassword(email: string, password: string, displayName?: string) {
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        display_name: displayName ?? email.split('@')[0]
+      }
+    }
+  });
+}
+
+export async function signOutSession() {
+  const result = await supabase.auth.signOut();
+  if (result.error) {
+    throw result.error;
+  }
 }
 
 export async function ensureDevSession() {
@@ -101,6 +113,14 @@ export async function getCurrentActorId(): Promise<string | null> {
   } = await supabase.auth.getUser();
 
   return user?.id ?? null;
+}
+
+export async function getCurrentSessionUser() {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  return user;
 }
 
 export function subscribeToAuthChanges(callback: (user: User | null) => void) {

@@ -1,5 +1,6 @@
-import { CheckCircle2, FilePlus2, PlusSquare, Redo2, Save, SearchCheck, Undo2 } from 'lucide-react';
+import { CheckCircle2, FilePlus2, LogOut, PlusSquare, Redo2, Save, SearchCheck, Undo2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useAuth } from '@/app/providers/auth-provider';
 import { useActiveFloorId, useActiveSiteId, useSetActiveFloorId, useSetActiveSiteId } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
@@ -13,6 +14,7 @@ import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/lay
 
 export function TopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const { user, memberships, currentTenantId, signOut } = useAuth();
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
@@ -40,6 +42,7 @@ export function TopBar() {
     isDraftDirty
   });
   const isBusy = createDraft.isPending || saveDraft.isPending || validateLayout.isPending || publishLayout.isPending;
+  const currentMembership = memberships.find((membership) => membership.tenantId === currentTenantId) ?? memberships[0] ?? null;
 
   const issueSummary = useMemo(() => {
     if (isDraftDirty && validateLayout.cachedResult) {
@@ -241,6 +244,25 @@ export function TopBar() {
           <CheckCircle2 className="h-3.5 w-3.5" />
           Publish
         </button>
+
+        <div className="mx-1.5 h-5 w-px bg-slate-200" />
+
+        <div className="hidden items-center gap-2 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 shadow-sm xl:flex">
+          <div className="text-right">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {currentMembership?.role ?? 'user'}
+            </div>
+            <div className="text-xs text-slate-700">{user?.email ?? 'unknown user'}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Sign Out
+          </button>
+        </div>
       </div>
     </header>
   );

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { signInToWarehouse } from './support/auth';
 import { resetWarehouseData, seedAdditionalFloorDraft, seedDraftScenario } from './support/local-supabase';
 
 test.describe('live draft lifecycle', () => {
@@ -9,7 +10,7 @@ test.describe('live draft lifecycle', () => {
   test('selected floor with draft supports edit, save, validate, and publish', async ({ page }) => {
     const { floor } = await seedDraftScenario({ rackDisplayCode: '03' });
 
-    await page.goto('/warehouse');
+    await signInToWarehouse(page);
     await page.getByLabel('Floor').selectOption(floor.id);
     await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
 
@@ -33,7 +34,7 @@ test.describe('live draft lifecycle', () => {
     const first = await seedDraftScenario({ floorCode: 'F1', floorName: 'Main Floor', rackDisplayCode: '03' });
     const second = await seedAdditionalFloorDraft(first.site.id, { floorCode: 'F2', floorName: 'Overflow Floor', sortOrder: 1, rackDisplayCode: '09' });
 
-    await page.goto('/warehouse');
+    await signInToWarehouse(page);
     await page.getByLabel('Floor').selectOption(first.floor.id);
     await expect(page.getByText('Rack 03').first()).toBeVisible();
 

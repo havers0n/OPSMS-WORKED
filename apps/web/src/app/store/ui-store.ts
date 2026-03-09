@@ -9,11 +9,19 @@ type UiState = {
   setActiveFloorId: (floorId: string | null) => void;
 };
 
-export const useUiStore = create<UiState>((set) => ({
+const initialUiState = {
   isDrawerCollapsed: false,
   activeSiteId: null,
-  activeFloorId: null,
+  activeFloorId: null
+} satisfies Pick<UiState, 'isDrawerCollapsed' | 'activeSiteId' | 'activeFloorId'>;
+
+export const useUiStore = create<UiState>((set) => ({
+  ...initialUiState,
   toggleDrawer: () => set((state) => ({ isDrawerCollapsed: !state.isDrawerCollapsed })),
   setActiveSiteId: (activeSiteId) => set({ activeSiteId, activeFloorId: null }),
   setActiveFloorId: (activeFloorId) => set({ activeFloorId })
 }));
+
+export function resetUiStore() {
+  useUiStore.setState(initialUiState);
+}

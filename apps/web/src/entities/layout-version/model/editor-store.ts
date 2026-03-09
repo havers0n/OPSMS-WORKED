@@ -31,6 +31,16 @@ type EditorStore = {
   setFaceBMode: (rackId: string, mode: 'mirror' | 'copy' | 'scratch') => void;
 };
 
+const initialEditorState = {
+  editorMode: 'select' as EditorMode,
+  selectedRackId: null,
+  hoveredRackId: null,
+  zoom: 1,
+  draft: null,
+  draftSourceVersionId: null,
+  isDraftDirty: false
+} satisfies Pick<EditorStore, 'editorMode' | 'selectedRackId' | 'hoveredRackId' | 'zoom' | 'draft' | 'draftSourceVersionId' | 'isDraftDirty'>;
+
 function cloneDraft(draft: LayoutDraft): LayoutDraft {
   return structuredClone(draft);
 }
@@ -109,13 +119,7 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
 }
 
 export const useEditorStore = create<EditorStore>((set) => ({
-  editorMode: 'select',
-  selectedRackId: null,
-  hoveredRackId: null,
-  zoom: 1,
-  draft: null,
-  draftSourceVersionId: null,
-  isDraftDirty: false,
+  ...initialEditorState,
   setEditorMode: (editorMode) => set({ editorMode }),
   setSelectedRackId: (selectedRackId) => set({ selectedRackId }),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
@@ -424,3 +428,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       };
     })
 }));
+
+export function resetEditorStore() {
+  useEditorStore.setState(initialEditorState);
+}

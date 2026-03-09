@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { signInToWarehouse } from './support/auth';
 import { resetWarehouseData, seedSiteAndFloor } from './support/local-supabase';
 
 test.describe('warehouse bootstrap flow', () => {
@@ -7,7 +8,7 @@ test.describe('warehouse bootstrap flow', () => {
   });
 
   test('empty DB opens bootstrap wizard and can enter editor after first draft', async ({ page }) => {
-    await page.goto('/warehouse');
+    await signInToWarehouse(page);
     await expect(page.getByText('Bootstrap Warehouse Setup')).toBeVisible();
 
     await page.getByLabel('Site Code').fill('MAIN');
@@ -23,7 +24,7 @@ test.describe('warehouse bootstrap flow', () => {
   test('existing floor without draft requires explicit draft creation', async ({ page }) => {
     const { floor } = await seedSiteAndFloor();
 
-    await page.goto('/warehouse');
+    await signInToWarehouse(page);
     await expect(page.getByText('Select or Create Site and Floor')).toBeVisible();
     await page.getByLabel('Floor').selectOption(floor.id);
 

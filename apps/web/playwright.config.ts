@@ -24,6 +24,10 @@ export default defineConfig({
       command: 'npm.cmd run dev -- --host 127.0.0.1 --port 4173',
       cwd: __dirname,
       url: 'http://127.0.0.1:4173/warehouse',
+      env: {
+        ...process.env,
+        VITE_ENABLE_DEV_AUTO_LOGIN: 'false'
+      },
       reuseExistingServer: true,
       timeout: 120000
     }
