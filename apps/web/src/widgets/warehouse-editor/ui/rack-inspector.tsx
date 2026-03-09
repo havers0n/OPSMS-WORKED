@@ -32,7 +32,8 @@ import {
   useSelectedRackId,
   useSetCreatingRackId,
   useSetFaceBMode,
-  useSetSelectedRackId
+  useSetSelectedRackId,
+  useUpdateFaceConfig
 } from '@/entities/layout-version/model/editor-selectors';
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -196,6 +197,92 @@ function faceSummaryText(face: RackFace): string {
   return `${face.sections.length} sec · ${face.sections[0]?.levels.length ?? 0} lvl · ${cells} cells`;
 }
 
+// ─── NumberingPanel ───────────────────────────────────────────────────────────
+// Controls slot numbering direction (LTR / RTL) and section anchor (start / end)
+// Both affect the generated cell addresses for this face.
+
+type NumberingPanelProps = {
+  rackId: string;
+  side: 'A' | 'B';
+  slotNumberingDirection: 'ltr' | 'rtl';
+  anchor: 'start' | 'end';
+  onUpdate: (rackId: string, side: 'A' | 'B', patch: { slotNumberingDirection?: 'ltr' | 'rtl'; anchor?: 'start' | 'end' }) => void;
+};
+
+function ToggleGroup<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string; title: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex gap-1 rounded-xl border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-1">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          title={opt.title}
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            'flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+            value === opt.value
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NumberingPanel({ rackId, side, slotNumberingDirection, anchor, onUpdate }: NumberingPanelProps) {
+  return (
+    <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        Numbering
+      </div>
+      <div className="flex flex-col gap-3">
+        {/* Slot direction */}
+        <div>
+          <div className="mb-1.5 text-xs text-slate-600">
+            Slot direction
+            <span className="ml-1.5 text-slate-400">— слот №1 начинается:</span>
+          </div>
+          <ToggleGroup
+            value={slotNumberingDirection}
+            options={[
+              { value: 'ltr', label: '→ Слева (1…N)', title: 'Slot 1 is at the left end of the face' },
+              { value: 'rtl', label: '← Справа (N…1)', title: 'Slot 1 is at the right end of the face' },
+            ]}
+            onChange={(v) => onUpdate(rackId, side, { slotNumberingDirection: v })}
+          />
+        </div>
+
+        {/* Section anchor */}
+        <div>
+          <div className="mb-1.5 text-xs text-slate-600">
+            Section anchor
+            <span className="ml-1.5 text-slate-400">— секция №1 начинается:</span>
+          </div>
+          <ToggleGroup
+            value={anchor}
+            options={[
+              { value: 'start', label: 'С начала', title: 'Section 1 starts at the left/near end of the rack' },
+              { value: 'end',   label: 'С конца',  title: 'Section 1 starts at the right/far end of the rack' },
+            ]}
+            onChange={(v) => onUpdate(rackId, side, { anchor: v })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onAddRack: () => void }) {
@@ -215,6 +302,7 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
   const resetFaceB = useResetFaceB();
   const setSelectedRackId = useSetSelectedRackId();
   const setCreatingRackId = useSetCreatingRackId();
+  const updateFaceConfig = useUpdateFaceConfig();
 
   const cachedValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
 
@@ -257,7 +345,8 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
 
   // ─── empty state ────────────────────────────────────────────────────────────
 
-  if (!rack || !faceA || !faceB) {
+  // Show empty state only when no rack is selected at all
+  if (!rack) {
     return (
       <aside className="flex h-full w-full flex-col bg-white">
         <div className="border-b border-[var(--border-muted)] px-5 py-4">
@@ -299,8 +388,8 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
 
   // ─── derived face state (from store, not local state) ───────────────────────
 
-  const faceBConfigured = faceB.isMirrored || faceB.sections.length > 0;
-  const isMirrored = faceB.isMirrored;
+  const faceBConfigured = !!faceB && (faceB.isMirrored || faceB.sections.length > 0);
+  const isMirrored = !!faceB && faceB.isMirrored;
 
   const handleFaceBMode = (mode: 'mirror' | 'copy' | 'scratch') => {
     setFaceBMode(rack.id, mode);
@@ -461,6 +550,15 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
           />
           {isOpen('faceA') && faceA && (
             <div className="flex flex-col gap-4 px-5 pb-5">
+              {/* Numbering direction */}
+              <NumberingPanel
+                rackId={rack.id}
+                side="A"
+                slotNumberingDirection={faceA.slotNumberingDirection}
+                anchor={faceA.anchor}
+                onUpdate={updateFaceConfig}
+              />
+
               {/* Preset generator */}
               <SectionPresetForm
                 rackId={rack.id}
@@ -544,6 +642,13 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
               ) : (
                 /* Independent Face B configuration */
                 <div className="flex flex-col gap-4">
+                  <NumberingPanel
+                    rackId={rack.id}
+                    side="B"
+                    slotNumberingDirection={faceB.slotNumberingDirection}
+                    anchor={faceB.anchor}
+                    onUpdate={updateFaceConfig}
+                  />
                   <SectionPresetForm
                     rackId={rack.id}
                     side="B"
