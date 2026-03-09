@@ -77,10 +77,18 @@ function FaceCells({ face, totalWidth, bandY, bandH, cellFill, cellStroke, cellT
         const slotW = secW / slotCount;
         if (slotW < MIN_CELL_W) return null;
 
+        // For RTL faces, the leftmost physical position holds the highest slot number.
+        // slotLabel(idx) converts physical canvas position to the displayed slot number.
+        const isRtl = face.slotNumberingDirection === 'rtl';
+
         return Array.from({ length: slotCount }, (_, idx) => {
-          const cellX  = secX + idx * slotW;
-          const cellW  = slotW - 1; // 1 px gap between adjacent slots
-          const showLabel = cellW >= LABEL_MIN_W && cellH >= LABEL_MIN_H;
+          const cellX      = secX + idx * slotW;
+          const cellW      = slotW - 1; // 1 px gap between adjacent slots
+          const showLabel  = cellW >= LABEL_MIN_W && cellH >= LABEL_MIN_H;
+          // Physical position idx=0 is leftmost on canvas.
+          // LTR: slot 1 is leftmost  →  label = idx + 1
+          // RTL: slot 1 is rightmost →  label = slotCount - idx
+          const slotLabel  = isRtl ? slotCount - idx : idx + 1;
 
           return (
             <Group key={`${sec.id}-slot-${idx}`}>
@@ -98,7 +106,7 @@ function FaceCells({ face, totalWidth, bandY, bandH, cellFill, cellStroke, cellT
                 <Text
                   x={cellX + cellW / 2 - 6}
                   y={bandY + INSET + cellH / 2 - 4}
-                  text={String(idx + 1)}
+                  text={String(slotLabel)}
                   fontSize={7}
                   fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
                   fill={cellText}
