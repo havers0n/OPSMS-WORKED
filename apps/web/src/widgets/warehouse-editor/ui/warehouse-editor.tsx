@@ -75,14 +75,19 @@ export function WarehouseEditor() {
         <EditorCanvas onAddRack={handleAddRack} />
       </div>
 
-      {/* Inspector panel — slides in when a rack is selected/created */}
+      {/* Inspector panel — slides in from the right when a rack is selected/created */}
       <div
         className={[
-          'shrink-0 overflow-hidden transition-all duration-300 ease-in-out',
-          inspectorOpen ? 'w-[460px] border-l border-[var(--border-muted)]' : 'w-0'
+          'shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out',
+          inspectorOpen ? 'w-[460px]' : 'w-0'
         ].join(' ')}
       >
-        <div className="h-full w-[460px]">
+        <div
+          className={[
+            'h-full w-[460px] border-l border-[var(--border-muted)] transition-transform duration-300 ease-in-out',
+            inspectorOpen ? 'translate-x-0' : 'translate-x-full'
+          ].join(' ')}
+        >
           <RackInspector
             onClose={() => setSelectedRackId(null)}
             onAddRack={handleAddRack}

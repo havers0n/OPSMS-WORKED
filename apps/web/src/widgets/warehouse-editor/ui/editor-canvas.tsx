@@ -45,6 +45,16 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
+  // ── Canvas pan (right-click drag) ──────────────────────────────────────────
+  const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
+  const canvasOffsetRef = useRef({ x: 0, y: 0 });
+  canvasOffsetRef.current = canvasOffset;
+
+  const [isPanning, setIsPanning] = useState(false);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
+
   const racks = useMemo(
     () => (layoutDraft ? layoutDraft.rackIds.map((id) => layoutDraft.racks[id]) : []),
     [layoutDraft]
@@ -78,6 +88,51 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     ro.observe(node);
     return () => ro.disconnect();
   }, []);
+
+  // Right-click pan handler
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      isPanningRef.current = true;
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+      offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
+      setIsPanning(true);
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanningRef.current) return;
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      setCanvasOffset({
+        x: offsetAtPanStartRef.current.x + dx,
+        y: offsetAtPanStartRef.current.y + dy
+      });
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      isPanningRef.current = false;
+      setIsPanning(false);
+    };
+
+    const onContextMenu = (e: MouseEvent) => e.preventDefault();
+
+    container.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('contextmenu', onContextMenu);
+
+    return () => {
+      container.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      container.removeEventListener('contextmenu', onContextMenu);
+    };
+  }, []); // stable refs — no deps needed
 
   // Canvas click handler
   useEffect(() => {
@@ -121,16 +176,28 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [setEditorMode]);
 
+  // Grid lines: generate in world space to fill the visible area, accounting for pan offset
   const gridLines = useMemo(() => {
-    if (!viewport.width || !viewport.height) return { v: [] as number[], h: [] as number[] };
-    const canvasWidth = viewport.width / zoom;
-    const canvasHeight = viewport.height / zoom;
+    if (!viewport.width || !viewport.height) return { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+
+    // Visible area in world coordinates
+    const offsetX = canvasOffset.x / zoom;
+    const offsetY = canvasOffset.y / zoom;
+    const visibleW = viewport.width / zoom;
+    const visibleH = viewport.height / zoom;
+
+    const startX = Math.floor(-offsetX / GRID_SIZE) * GRID_SIZE;
+    const endX   = startX + visibleW + GRID_SIZE * 2;
+    const startY = Math.floor(-offsetY / GRID_SIZE) * GRID_SIZE;
+    const endY   = startY + visibleH + GRID_SIZE * 2;
+
     const vertical: number[] = [];
-    for (let x = 0; x <= canvasWidth + GRID_SIZE; x += GRID_SIZE) vertical.push(x);
+    for (let x = startX; x <= endX; x += GRID_SIZE) vertical.push(x);
     const horizontal: number[] = [];
-    for (let y = 0; y <= canvasHeight + GRID_SIZE; y += GRID_SIZE) horizontal.push(y);
-    return { v: vertical, h: horizontal };
-  }, [zoom, viewport.width, viewport.height]);
+    for (let y = startY; y <= endY; y += GRID_SIZE) horizontal.push(y);
+
+    return { v: vertical, h: horizontal, startX, endX, startY, endY };
+  }, [zoom, viewport.width, viewport.height, canvasOffset]);
 
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     const node = event.target;
@@ -141,15 +208,12 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
 
   const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
 
-  const canvasWidth = viewport.width / zoom;
-  const canvasHeight = viewport.height / zoom;
-
   return (
     <div
       ref={containerRef}
       className={[
         'relative h-full overflow-hidden',
-        isPlacing ? 'cursor-crosshair bg-cyan-50' : 'bg-slate-100'
+        isPanning ? 'cursor-grabbing' : isPlacing ? 'cursor-crosshair bg-cyan-50' : 'bg-slate-100'
       ].join(' ')}
     >
       {!layoutDraft && (
@@ -219,7 +283,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
           {/* Bottom-right hint */}
           {!isPlacing && (
             <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-2xl border border-[var(--border-muted)] bg-slate-950/90 px-4 py-3 text-xs text-slate-200 shadow-[var(--shadow-soft)]">
-              Drag to move · Scroll to zoom · Del to delete
+              Drag racks · RMB drag to pan · Scroll to zoom · Del to delete
             </div>
           )}
 
@@ -229,6 +293,8 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
               ref={stageRef}
               width={viewport.width}
               height={viewport.height}
+              x={canvasOffset.x}
+              y={canvasOffset.y}
               scale={{ x: zoom, y: zoom }}
               onWheel={(e) => {
                 e.evt.preventDefault();
@@ -241,7 +307,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                 {gridLines.v.map((x) => (
                   <Line
                     key={`v-${x}`}
-                    points={[x, 0, x, canvasHeight]}
+                    points={[x, gridLines.startY, x, gridLines.endY]}
                     stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
@@ -251,7 +317,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                 {gridLines.h.map((y) => (
                   <Line
                     key={`h-${y}`}
-                    points={[0, y, canvasWidth, y]}
+                    points={[gridLines.startX, y, gridLines.endX, y]}
                     stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
