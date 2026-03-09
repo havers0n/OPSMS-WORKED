@@ -400,6 +400,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                           } else {
                             setSelectedRackIdsRef.current([rack.id]);
                           }
+                        }
                       }}
                       onMouseEnter={() => {
                         if (!isPlacing) setHoveredRackId(rack.id);
