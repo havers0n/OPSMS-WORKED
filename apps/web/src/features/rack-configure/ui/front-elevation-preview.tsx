@@ -7,13 +7,23 @@ const FACE_COLORS: Record<'A' | 'B', { cell: string; border: string; header: str
 
 /**
  * SVG schematic of the front elevation of a rack face.
- * Columns = sections, rows = levels, each cell = one slot.
- * The view is intentionally schematic — not pixel-perfect — just enough
- * to give the user a spatial sense of what they're configuring.
+ * Columns = sections (in address order), rows = levels (L1 at bottom), cells = slots.
+ *
+ * Respects:
+ *  - face.anchor:                 'end' reverses the visual section order so S01 is on the right
+ *  - face.slotNumberingDirection: 'rtl' numbers slots N…1 left-to-right within each section
+ *
+ * This ensures the preview matches the generated cell addresses visible in Address Preview.
  */
-export function FrontElevationPreview({ face, side }: { face: Pick<RackFace, 'sections'>; side: 'A' | 'B' }) {
+export function FrontElevationPreview({
+  face,
+  side,
+}: {
+  face: Pick<RackFace, 'sections' | 'anchor' | 'slotNumberingDirection'>;
+  side: 'A' | 'B';
+}) {
   const colors = FACE_COLORS[side];
-  const sections = face.sections;
+  const { sections, anchor, slotNumberingDirection } = face;
 
   if (sections.length === 0) {
     return (
@@ -23,17 +33,25 @@ export function FrontElevationPreview({ face, side }: { face: Pick<RackFace, 'se
     );
   }
 
-  const maxLevels = Math.max(...sections.map((s) => s.levels.length), 1);
-  const totalSlots = sections.reduce((sum, s) => sum + (s.levels[0]?.slotCount ?? 1), 0);
+  // Apply anchor: 'end' → reverse so the address-ordinal-1 section is shown on the LEFT
+  // (matching the address preview which lists addresses starting from ordinal 1)
+  const orderedSections = anchor === 'end' ? [...sections].reverse() : sections;
+
+  const maxLevels = Math.max(...orderedSections.map((s) => s.levels.length), 1);
+  const totalSlots = orderedSections.reduce((sum, s) => sum + (s.levels[0]?.slotCount ?? 1), 0);
 
   // Layout constants
   const svgHeight = 80;
-  const headerH = 14;
-  const bodyH = svgHeight - headerH;
-  const cellH = bodyH / maxLevels;
+  const headerH   = 14;
+  const bodyH     = svgHeight - headerH;
+  const cellH     = bodyH / maxLevels;
 
   // Build section column widths proportional to their slot count
-  const sectionWidthRatios = sections.map((s) => (s.levels[0]?.slotCount ?? 1) / Math.max(totalSlots, 1));
+  const sectionWidthRatios = orderedSections.map(
+    (s) => (s.levels[0]?.slotCount ?? 1) / Math.max(totalSlots, 1)
+  );
+
+  const isRtl = slotNumberingDirection === 'rtl';
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -44,13 +62,14 @@ export function FrontElevationPreview({ face, side }: { face: Pick<RackFace, 'se
         height={svgHeight}
         aria-label={`Front elevation preview — Face ${side}`}
       >
-        {/* Render each section as a column */}
+        {/* Render each section as a column (left = address ordinal 1) */}
         {(() => {
           let xCursor = 0;
-          return sections.map((section, si) => {
-            const colW = sectionWidthRatios[si] * 100;
+          return orderedSections.map((section, si) => {
+            const addressOrdinal = si + 1; // 1-based, respects anchor reversal above
+            const colW      = sectionWidthRatios[si] * 100;
             const levelCount = section.levels.length;
-            const slotCount = section.levels[0]?.slotCount ?? 1;
+            const slotCount  = section.levels[0]?.slotCount ?? 1;
 
             const col = (
               <g key={section.id}>
@@ -72,36 +91,56 @@ export function FrontElevationPreview({ face, side }: { face: Pick<RackFace, 'se
                   fontFamily="monospace"
                   fontWeight="bold"
                 >
-                  S{String(section.ordinal).padStart(2, '0')}
+                  S{String(addressOrdinal).padStart(2, '0')}
                 </text>
 
                 {/* Level rows — rendered bottom-to-top (L1 at bottom) */}
                 {Array.from({ length: levelCount }, (_, li) => {
                   const rowIndex = levelCount - 1 - li; // flip so L1 is bottom
-                  const y = headerH + rowIndex * cellH;
-                  const slotW = colW / slotCount;
+                  const y        = headerH + rowIndex * cellH;
+                  const slotW    = colW / slotCount;
 
                   return (
                     <g key={li}>
-                      {Array.from({ length: slotCount }, (__, si2) => (
-                        <rect
-                          key={si2}
-                          x={xCursor + si2 * slotW + 0.3}
-                          y={y + 0.3}
-                          width={slotW - 0.6}
-                          height={cellH - 0.6}
-                          fill={colors.cell}
-                          stroke={colors.border}
-                          strokeWidth={0.4}
-                          rx={0.5}
-                        />
-                      ))}
+                      {Array.from({ length: slotCount }, (__, slotIdx) => {
+                        // For RTL: physical position 0 (leftmost) → slot N, rightmost → slot 1
+                        const slotLabel = isRtl ? slotCount - slotIdx : slotIdx + 1;
+
+                        return (
+                          <g key={slotIdx}>
+                            <rect
+                              x={xCursor + slotIdx * slotW + 0.3}
+                              y={y + 0.3}
+                              width={slotW - 0.6}
+                              height={cellH - 0.6}
+                              fill={colors.cell}
+                              stroke={colors.border}
+                              strokeWidth={0.4}
+                              rx={0.5}
+                            />
+                            {/* Show slot number when cells are wide enough */}
+                            {slotW > 8 && cellH > 9 && (
+                              <text
+                                x={xCursor + slotIdx * slotW + slotW / 2}
+                                y={y + cellH / 2 + 2.5}
+                                textAnchor="middle"
+                                fontSize={5}
+                                fill={colors.text}
+                                fontFamily="monospace"
+                                opacity={0.8}
+                              >
+                                {slotLabel}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      })}
                     </g>
                   );
                 })}
 
                 {/* Section right border */}
-                {si < sections.length - 1 && (
+                {si < orderedSections.length - 1 && (
                   <line
                     x1={xCursor + colW}
                     y1={headerH}
@@ -132,6 +171,8 @@ export function FrontElevationPreview({ face, side }: { face: Pick<RackFace, 'se
         <span className="text-[10px] text-slate-400">
           {sections.length} sec · {Math.max(...sections.map((s) => s.levels.length), 0)} lvl ·{' '}
           {sections[0]?.levels[0]?.slotCount ?? 0} slots/lvl
+          {anchor === 'end' && <span className="ml-1 text-amber-500">· ↩ anchor end</span>}
+          {isRtl && <span className="ml-1 text-amber-500">· rtl</span>}
         </span>
       </div>
     </div>

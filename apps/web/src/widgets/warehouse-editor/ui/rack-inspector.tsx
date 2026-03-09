@@ -247,37 +247,55 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, anchor, onUpdate
         Numbering
       </div>
       <div className="flex flex-col gap-3">
-        {/* Slot direction */}
+
+        {/* Section direction — which physical end of the rack is section 1 */}
         <div>
           <div className="mb-1.5 text-xs text-slate-600">
-            Slot direction
-            <span className="ml-1.5 text-slate-400">— слот №1 начинается:</span>
+            Секции
+            <span className="ml-1.5 text-slate-400">— секция №1 с какого конца стеллажа</span>
+          </div>
+          <ToggleGroup
+            value={anchor}
+            options={[
+              {
+                value: 'start',
+                label: '① → N',
+                title: 'Section 1 starts at the near/first end of the rack (default)'
+              },
+              {
+                value: 'end',
+                label: 'N → ①',
+                title: 'Section 1 starts at the far/last end of the rack (reversed)'
+              },
+            ]}
+            onChange={(v) => onUpdate(rackId, side, { anchor: v })}
+          />
+        </div>
+
+        {/* Slot direction — which end of each section is slot 1 */}
+        <div>
+          <div className="mb-1.5 text-xs text-slate-600">
+            Слоты внутри секции
+            <span className="ml-1.5 text-slate-400">— слот №1 с какого края секции</span>
           </div>
           <ToggleGroup
             value={slotNumberingDirection}
             options={[
-              { value: 'ltr', label: '→ Слева (1…N)', title: 'Slot 1 is at the left end of the face' },
-              { value: 'rtl', label: '← Справа (N…1)', title: 'Slot 1 is at the right end of the face' },
+              {
+                value: 'ltr',
+                label: '① → N',
+                title: 'Slot 1 at the near end of the section (same direction as sections)'
+              },
+              {
+                value: 'rtl',
+                label: 'N → ①',
+                title: 'Slot 1 at the far end of the section (opposite direction)'
+              },
             ]}
             onChange={(v) => onUpdate(rackId, side, { slotNumberingDirection: v })}
           />
         </div>
 
-        {/* Section anchor */}
-        <div>
-          <div className="mb-1.5 text-xs text-slate-600">
-            Section anchor
-            <span className="ml-1.5 text-slate-400">— секция №1 начинается:</span>
-          </div>
-          <ToggleGroup
-            value={anchor}
-            options={[
-              { value: 'start', label: 'С начала', title: 'Section 1 starts at the left/near end of the rack' },
-              { value: 'end',   label: 'С конца',  title: 'Section 1 starts at the right/far end of the rack' },
-            ]}
-            onChange={(v) => onUpdate(rackId, side, { anchor: v })}
-          />
-        </div>
       </div>
     </div>
   );
