@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Rack } from '@wos/domain';
-import { clampCanvasPosition, clampCanvasZoom, getRackGeometry, MAX_CANVAS_ZOOM, MIN_CANVAS_ZOOM, RACK_DEPTH_SCALE, RACK_LENGTH_SCALE, ROTATE_HANDLE_SIZE } from './canvas-geometry';
+import { clampCanvasPosition, clampCanvasZoom, getRackGeometry, MAX_CANVAS_ZOOM, MIN_CANVAS_ZOOM, RACK_DEPTH_SCALE, RACK_LENGTH_SCALE } from './canvas-geometry';
 
 const rack: Rack = {
   id: 'rack-1',
@@ -23,8 +23,9 @@ describe('canvas geometry helpers', () => {
     expect(geometry.height).toBe(1.4 * RACK_DEPTH_SCALE);
     expect(geometry.centerX).toBe(geometry.width / 2);
     expect(geometry.centerY).toBe(geometry.height / 2);
-    expect(geometry.rotateHandleX).toBe(geometry.width - ROTATE_HANDLE_SIZE - 8);
-    expect(geometry.rotateHandleY).toBe(8);
+    // faceAWidth and faceBWidth both equal rack.totalLength when no per-face override is set
+    expect(geometry.faceAWidth).toBe(6 * RACK_LENGTH_SCALE);
+    expect(geometry.faceBWidth).toBe(6 * RACK_LENGTH_SCALE);
   });
 
   it('clamps drag coordinates to non-negative values', () => {

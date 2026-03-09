@@ -28,12 +28,15 @@ export function getCanvasLOD(zoom: number): CanvasLOD {
 export type CanvasRackGeometry = {
   x: number;
   y: number;
+  /** Total bounding box width = max(faceAWidth, faceBWidth) */
   width: number;
   height: number;
+  /** Pixel width of Face A zone (may differ from faceBWidth on paired racks) */
+  faceAWidth: number;
+  /** Pixel width of Face B zone (= faceAWidth for single racks) */
+  faceBWidth: number;
   centerX: number;
   centerY: number;
-  rotateHandleX: number;
-  rotateHandleY: number;
   /** True when this rack has two active faces rendered back-to-back */
   isPaired: boolean;
   /** Y coordinate of the spine divider line (only meaningful when isPaired=true) */
@@ -56,22 +59,37 @@ export function clampCanvasZoom(value: number) {
  *  - kind = 'single'  → SINGLE_DEPTH_PX (one face, thin bar)
  *  - kind = 'paired'  → rack.depth * RACK_DEPTH_SCALE (two faces, full block)
  *
+ * Width rules:
+ *  - Single rack: faceAWidth = rack.totalLength * scale
+ *  - Paired rack: each face can have an independent faceLength override.
+ *    The bounding box spans max(faceAWidth, faceBWidth).
+ *
  * The spine divider for paired racks sits at height / 2.
  */
 export function getRackGeometry(rack: Rack): CanvasRackGeometry {
-  const width    = rack.totalLength * RACK_LENGTH_SCALE;
   const isPaired = rack.kind === 'paired';
-  const height   = isPaired ? rack.depth * RACK_DEPTH_SCALE : SINGLE_DEPTH_PX;
+
+  const faceA = rack.faces.find((f) => f.side === 'A');
+  const faceB = rack.faces.find((f) => f.side === 'B');
+
+  const faceALength = faceA?.faceLength ?? rack.totalLength;
+  const faceBLength = isPaired ? (faceB?.faceLength ?? rack.totalLength) : faceALength;
+
+  const faceAWidth = faceALength * RACK_LENGTH_SCALE;
+  const faceBWidth = faceBLength * RACK_LENGTH_SCALE;
+  const width      = Math.max(faceAWidth, faceBWidth);
+
+  const height = isPaired ? rack.depth * RACK_DEPTH_SCALE : SINGLE_DEPTH_PX;
 
   return {
     x: rack.x,
     y: rack.y,
     width,
     height,
+    faceAWidth,
+    faceBWidth,
     centerX: width  / 2,
     centerY: height / 2,
-    rotateHandleX: width - ROTATE_HANDLE_SIZE - 8,
-    rotateHandleY: 8,
     isPaired,
     spineY: height / 2,
   };
