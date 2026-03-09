@@ -259,10 +259,14 @@ export const useEditorStore = create<EditorStore>((set) => ({
       if (!state.draft) return state;
 
       return {
-        draft: updateRackInDraft(state.draft, rackId, (rack) => ({
-          ...rack,
-          rotationDeg: (((rack.rotationDeg + 90) % 360) as 0 | 90 | 180 | 270)
-        })),
+        draft: updateRackInDraft(state.draft, rackId, (rack) => {
+          const newDeg = (((rack.rotationDeg + 90) % 360) as 0 | 90 | 180 | 270);
+          // axis auto-syncs with visual rotation:
+          //   0° / 180° → rack body is horizontal → WE (West–East)
+          //   90° / 270° → rack body is vertical  → NS (North–South)
+          const newAxis: Rack['axis'] = (newDeg === 90 || newDeg === 270) ? 'NS' : 'WE';
+          return { ...rack, rotationDeg: newDeg, axis: newAxis };
+        }),
         isDraftDirty: true
       };
     }),
