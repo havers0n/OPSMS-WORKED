@@ -104,43 +104,57 @@ export function LoginPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4">
+          <form
+            className="mt-6 grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const data = new FormData(e.currentTarget);
+              const emailVal = (data.get('email') as string) ?? email;
+              const passwordVal = (data.get('password') as string) ?? password;
+              if (emailVal) setEmail(emailVal);
+              if (passwordVal) setPassword(passwordVal);
+              void handleSubmit();
+            }}
+          >
             <label className="grid gap-1 text-sm text-slate-700">
               Email
               <input
+                name="email"
                 type="email"
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
                 className="rounded-2xl border border-[var(--border-muted)] px-4 py-3 shadow-sm"
               />
             </label>
             <label className="grid gap-1 text-sm text-slate-700">
               Password
               <input
+                name="password"
                 type="password"
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
+                onInput={(event) => setPassword((event.target as HTMLInputElement).value)}
                 className="rounded-2xl border border-[var(--border-muted)] px-4 py-3 shadow-sm"
               />
             </label>
-          </div>
 
-          {(formError || workspaceError) && (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {formError ?? workspaceError}
-            </div>
-          )}
+            {(formError || workspaceError) && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {formError ?? workspaceError}
+              </div>
+            )}
 
-          <button
-            type="button"
-            disabled={isSubmitting || !email.trim() || !password}
-            onClick={() => void handleSubmit()}
-            className="mt-6 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? 'Working...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
-          </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-2 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? 'Working...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+            </button>
+          </form>
 
           <div className="mt-6 text-xs uppercase tracking-[0.18em] text-slate-400">
             After authentication you will be redirected to <Link to={routes.warehouse} className="text-slate-700 underline underline-offset-4">{routes.warehouse}</Link>.
