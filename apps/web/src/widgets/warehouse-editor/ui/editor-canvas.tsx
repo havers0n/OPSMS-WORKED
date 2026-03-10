@@ -1,49 +1,68 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
+import { PlusCircle } from 'lucide-react';
 import {
   useCanvasZoom,
   useCreateRack,
+  useDeleteRack,
   useEditorMode,
   useHoveredRackId,
   useLayoutDraftState,
-  useRotateRack,
-  useSelectedRackId,
+  useSelectedRackIds,
   useSetCanvasZoom,
   useSetEditorMode,
   useSetHoveredRackId,
-  useSetSelectedRackId,
-  useUpdateRackPosition
+  useSetSelectedRackIds,
+  useToggleRackSelection,
+  useUpdateRackPosition,
+  useMinRackDistance
 } from '@/entities/layout-version/model/editor-selectors';
 import {
   clampCanvasPosition,
   clampCanvasZoom,
   getCanvasLOD,
   getRackGeometry,
-  GRID_SIZE,
-  ROTATE_HANDLE_SIZE
+  GRID_SIZE
 } from '../lib/canvas-geometry';
+import { getSnapPosition } from '../lib/rack-spacing';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
+import { SnapGuides } from './shapes/snap-guides';
 
-export function EditorCanvas() {
+export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const zoom = useCanvasZoom();
   const editorMode = useEditorMode();
   const layoutDraft = useLayoutDraftState();
-  const selectedRackId = useSelectedRackId();
+  const selectedRackIds = useSelectedRackIds();
   const hoveredRackId = useHoveredRackId();
-  const setSelectedRackId = useSetSelectedRackId();
+  const setSelectedRackIds = useSetSelectedRackIds();
+  const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const setCanvasZoom = useSetCanvasZoom();
   const setEditorMode = useSetEditorMode();
   const updateRackPosition = useUpdateRackPosition();
-  const rotateRack = useRotateRack();
   const createRack = useCreateRack();
+  const deleteRack = useDeleteRack();
+  const minRackDistance = useMinRackDistance();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
+
+  // ── Canvas pan (right-click drag) ──────────────────────────────────────────
+  const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
+  const canvasOffsetRef = useRef({ x: 0, y: 0 });
+  canvasOffsetRef.current = canvasOffset;
+
+  const [isPanning, setIsPanning] = useState(false);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
+
+  // ── Snap guides visualization ─────────────────────────────────────────────
+  const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
   const racks = useMemo(
     () => (layoutDraft ? layoutDraft.rackIds.map((id) => layoutDraft.racks[id]) : []),
@@ -52,17 +71,29 @@ export function EditorCanvas() {
   const isPlacing = editorMode === 'place';
   const lod = getCanvasLOD(zoom);
 
+  // Keep refs up to date to avoid stale closures in event handlers
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
-  const setSelectedRackIdRef = useRef(setSelectedRackId);
-  setSelectedRackIdRef.current = setSelectedRackId;
+  const setSelectedRackIdsRef = useRef(setSelectedRackIds);
+  setSelectedRackIdsRef.current = setSelectedRackIds;
+  const toggleRackSelectionRef = useRef(toggleRackSelection);
+  toggleRackSelectionRef.current = toggleRackSelection;
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
   const setCanvasZoomRef = useRef(setCanvasZoom);
   setCanvasZoomRef.current = setCanvasZoom;
+  const selectedRackIdsRef = useRef(selectedRackIds);
+  selectedRackIdsRef.current = selectedRackIds;
+  const deleteRackRef = useRef(deleteRack);
+  deleteRackRef.current = deleteRack;
+  const minRackDistanceRef = useRef(minRackDistance);
+  minRackDistanceRef.current = minRackDistance;
+  const updateRackPositionRef = useRef(updateRackPosition);
+  updateRackPositionRef.current = updateRackPosition;
 
+  // Resize observer
   useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
@@ -73,6 +104,48 @@ export function EditorCanvas() {
     return () => ro.disconnect();
   }, []);
 
+  // Right-click pan handler
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 1) return; // middle mouse button only
+      isPanningRef.current = true;
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+      offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
+      setIsPanning(true);
+      e.preventDefault(); // prevent native auto-scroll mode
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanningRef.current) return;
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      setCanvasOffset({
+        x: offsetAtPanStartRef.current.x + dx,
+        y: offsetAtPanStartRef.current.y + dy
+      });
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      isPanningRef.current = false;
+      setIsPanning(false);
+    };
+
+    container.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      container.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []); // stable refs — no deps needed
+
+  // Canvas click handler
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -82,7 +155,7 @@ export function EditorCanvas() {
       if (isPlacingRef.current) {
         createRackRef.current(Math.round(pos.x / GRID_SIZE) * GRID_SIZE, Math.round(pos.y / GRID_SIZE) * GRID_SIZE);
       } else {
-        setSelectedRackIdRef.current(null);
+        setSelectedRackIdsRef.current([]);
       }
     };
     stage.on('click.canvas', handler);
@@ -91,111 +164,170 @@ export function EditorCanvas() {
     };
   }, [viewport]);
 
+  // Keyboard handlers: Escape cancels placement, Delete removes selected rack
   useEffect(() => {
-    if (!isPlacing) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setEditorMode('select');
+      if (e.key === 'Escape' && isPlacingRef.current) {
+        setEditorMode('select');
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isPlacingRef.current) {
+        const rackId = selectedRackIdsRef.current[0];
+        // Only trigger keyboard delete when focus is not inside a text input/textarea/select
+        const target = e.target as HTMLElement;
+        const isEditing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+        if (rackId && !isEditing) {
+          // We dispatch a custom event to the inspector to trigger the confirm dialog
+          // so we don't delete without user confirmation even on keyboard
+          window.dispatchEvent(new CustomEvent('rack:request-delete', { detail: { rackId } }));
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isPlacing, setEditorMode]);
+  }, [setEditorMode]);
 
+  // Grid lines: generate in world space to fill the visible area, accounting for pan offset
   const gridLines = useMemo(() => {
-    if (!viewport.width || !viewport.height) return { v: [] as number[], h: [] as number[] };
-    const canvasWidth = viewport.width / zoom;
-    const canvasHeight = viewport.height / zoom;
+    if (!viewport.width || !viewport.height) return { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+
+    // Visible area in world coordinates
+    const offsetX = canvasOffset.x / zoom;
+    const offsetY = canvasOffset.y / zoom;
+    const visibleW = viewport.width / zoom;
+    const visibleH = viewport.height / zoom;
+
+    const startX = Math.floor(-offsetX / GRID_SIZE) * GRID_SIZE;
+    const endX   = startX + visibleW + GRID_SIZE * 2;
+    const startY = Math.floor(-offsetY / GRID_SIZE) * GRID_SIZE;
+    const endY   = startY + visibleH + GRID_SIZE * 2;
+
     const vertical: number[] = [];
-    for (let x = 0; x <= canvasWidth + GRID_SIZE; x += GRID_SIZE) vertical.push(x);
+    for (let x = startX; x <= endX; x += GRID_SIZE) vertical.push(x);
     const horizontal: number[] = [];
-    for (let y = 0; y <= canvasHeight + GRID_SIZE; y += GRID_SIZE) horizontal.push(y);
-    return { v: vertical, h: horizontal };
-  }, [zoom, viewport.width, viewport.height]);
+    for (let y = startY; y <= endY; y += GRID_SIZE) horizontal.push(y);
+
+    return { v: vertical, h: horizontal, startX, endX, startY, endY };
+  }, [zoom, viewport.width, viewport.height, canvasOffset]);
 
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
+    if (!layoutDraft) return;
+
     const node = event.target;
-    const x = clampCanvasPosition(node.x() - node.offsetX());
-    const y = clampCanvasPosition(node.y() - node.offsetY());
-    updateRackPosition(rackId, x, y);
+    let x = clampCanvasPosition(node.x() - node.offsetX());
+    let y = clampCanvasPosition(node.y() - node.offsetY());
+
+    // Get snap information from nearby racks
+    const rack = layoutDraft.racks[rackId];
+    const otherRacks = Object.values(layoutDraft.racks).filter(r => r.id !== rackId);
+    const snapInfo = getSnapPosition(rack, x, y, otherRacks, minRackDistanceRef.current, 0.5);
+
+    // Apply snapping if active
+    if (snapInfo.snappedToX || snapInfo.snappedToY) {
+      x = snapInfo.snappedX;
+      y = snapInfo.snappedY;
+      setSnapGuides(
+        [
+          snapInfo.snappedToX && { type: 'x' as const, position: x },
+          snapInfo.snappedToY && { type: 'y' as const, position: y }
+        ].filter(Boolean) as Array<{ type: 'x' | 'y'; position: number }>
+      );
+    } else {
+      setSnapGuides([]);
+    }
+
+    updateRackPositionRef.current(rackId, x, y);
   };
 
-  const selectedRack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
-
   const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
-
-  const canvasWidth = viewport.width / zoom;
-  const canvasHeight = viewport.height / zoom;
 
   return (
     <div
       ref={containerRef}
       className={[
         'relative h-full overflow-hidden',
-        isPlacing ? 'cursor-crosshair bg-cyan-50' : 'bg-slate-100'
+        isPanning ? 'cursor-grabbing' : isPlacing ? 'cursor-crosshair bg-cyan-50' : 'bg-slate-100'
       ].join(' ')}
     >
-      {!layoutDraft && <div className="flex h-full items-center justify-center text-sm text-slate-500">Loading layout draftвЂ¦</div>}
+      {!layoutDraft && (
+        <div className="flex h-full items-center justify-center text-sm text-slate-500">Loading layout…</div>
+      )}
 
       {layoutDraft && (
         <>
+          {/* Placement mode banner */}
           {isPlacing && (
             <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex items-center justify-center">
               <div className="rounded-2xl border border-cyan-400 bg-cyan-950/90 px-5 py-3 text-sm font-medium text-cyan-100 shadow-lg backdrop-blur">
-                Click anywhere on the canvas to place a new rack В· Press <kbd className="mx-1 rounded-md bg-cyan-800 px-2 py-0.5 font-mono text-xs">Esc</kbd> to cancel
+                Click anywhere on the canvas to place a new rack · Press{' '}
+                <kbd className="mx-1 rounded-md bg-cyan-800 px-2 py-0.5 font-mono text-xs">Esc</kbd> to cancel
               </div>
             </div>
           )}
 
+          {/* Top-left controls */}
           <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-sm flex-col gap-3">
             {!isPlacing && (
               <>
+                {/* Viewport / zoom controls */}
                 <div className="pointer-events-auto rounded-2xl border border-[var(--border-muted)] bg-white/92 px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Viewport</div>
                   <div className="mt-2 flex items-center gap-2">
-                    <button type="button" onClick={() => handleZoom(-0.1)} className="h-9 w-9 rounded-xl border border-[var(--border-muted)] text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                      в€’
+                    <button
+                      type="button"
+                      onClick={() => handleZoom(-0.1)}
+                      className="h-9 w-9 rounded-xl border border-[var(--border-muted)] text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      −
                     </button>
-                    <div className="min-w-[82px] rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-center text-sm font-medium text-slate-700">
+                    <div className="min-w-[72px] rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-center text-sm font-medium text-slate-700">
                       {Math.round(zoom * 100)}%
                     </div>
-                    <button type="button" onClick={() => handleZoom(0.1)} className="h-9 w-9 rounded-xl border border-[var(--border-muted)] text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => handleZoom(0.1)}
+                      className="h-9 w-9 rounded-xl border border-[var(--border-muted)] text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
                       +
                     </button>
-                    <button type="button" onClick={() => setCanvasZoom(1)} className="rounded-xl border border-[var(--border-muted)] px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => setCanvasZoom(1)}
+                      className="rounded-xl border border-[var(--border-muted)] px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
                       Reset
                     </button>
-                    <div className="ml-1 rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-500">LOD {lod}</div>
                   </div>
                 </div>
 
-                <div className="pointer-events-auto rounded-2xl border border-[var(--border-muted)] bg-white/92 px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Spatial Context</div>
-                  {selectedRack ? (
-                    <div className="mt-2">
-                      <div className="text-sm font-semibold text-slate-900">Rack {selectedRack.displayCode}</div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        {selectedRack.kind} В· {selectedRack.axis} axis В· {selectedRack.totalLength.toFixed(1)} m Г— {selectedRack.depth.toFixed(1)} m
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500">x={Math.round(selectedRack.x)}, y={Math.round(selectedRack.y)} В· {selectedRack.rotationDeg}В°</div>
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-sm text-slate-500">Select a rack to inspect it.</div>
-                  )}
-                </div>
+                {/* Add Rack button */}
+                <button
+                  type="button"
+                  onClick={onAddRack}
+                  className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-[var(--border-muted)] bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition-colors hover:bg-slate-700"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Add Rack
+                </button>
               </>
             )}
           </div>
 
+          {/* Bottom-right hint */}
           {!isPlacing && (
             <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-2xl border border-[var(--border-muted)] bg-slate-950/90 px-4 py-3 text-xs text-slate-200 shadow-[var(--shadow-soft)]">
-              Drag to move В· Click 90В° to rotate В· Scroll wheel or +/в€’ to zoom
+              Drag racks · MMB to pan · Scroll to zoom · Del to delete
             </div>
           )}
 
+          {/* Konva Stage */}
           {viewport.width > 0 && viewport.height > 0 && (
             <Stage
               ref={stageRef}
               width={viewport.width}
               height={viewport.height}
+              x={canvasOffset.x}
+              y={canvasOffset.y}
               scale={{ x: zoom, y: zoom }}
               onWheel={(e) => {
                 e.evt.preventDefault();
@@ -203,19 +335,38 @@ export function EditorCanvas() {
                 setCanvasZoomRef.current(clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2))));
               }}
             >
+              {/* Grid layer (not interactive) */}
               <Layer listening={false}>
                 {gridLines.v.map((x) => (
-                  <Line key={`v-${x}`} points={[x, 0, x, canvasHeight]} stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'} strokeWidth={1} strokeScaleEnabled={false} opacity={0.6} />
+                  <Line
+                    key={`v-${x}`}
+                    points={[x, gridLines.startY, x, gridLines.endY]}
+                    stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
+                    strokeWidth={1}
+                    strokeScaleEnabled={false}
+                    opacity={0.6}
+                  />
                 ))}
                 {gridLines.h.map((y) => (
-                  <Line key={`h-${y}`} points={[0, y, canvasWidth, y]} stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'} strokeWidth={1} strokeScaleEnabled={false} opacity={0.6} />
+                  <Line
+                    key={`h-${y}`}
+                    points={[gridLines.startX, y, gridLines.endX, y]}
+                    stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
+                    strokeWidth={1}
+                    strokeScaleEnabled={false}
+                    opacity={0.6}
+                  />
                 ))}
               </Layer>
 
+              {/* Snap guides layer (not interactive) */}
+              <SnapGuides guides={snapGuides} gridLines={gridLines} />
+
+              {/* Rack layer */}
               <Layer>
                 {racks.map((rack) => {
                   const geometry = getRackGeometry(rack);
-                  const isSelected = selectedRackId === rack.id;
+                  const isSelected = selectedRackIds.includes(rack.id);
                   const isHovered = hoveredRackId === rack.id;
                   const faceA = rack.faces.find((f) => f.side === 'A') ?? null;
                   const faceB = rack.faces.find((f) => f.side === 'B') ?? null;
@@ -231,11 +382,25 @@ export function EditorCanvas() {
                       draggable={!isPlacing}
                       onClick={(e) => {
                         e.cancelBubble = true;
-                        if (!isPlacing) setSelectedRackId(rack.id);
+                        if (!isPlacing) {
+                          const evt = e.evt as PointerEvent;
+                          if (evt.ctrlKey || evt.metaKey) {
+                            toggleRackSelectionRef.current(rack.id);
+                          } else {
+                            setSelectedRackIdsRef.current([rack.id]);
+                          }
+                        }
                       }}
                       onTap={(e) => {
                         e.cancelBubble = true;
-                        if (!isPlacing) setSelectedRackId(rack.id);
+                        if (!isPlacing) {
+                          const evt = e.evt as PointerEvent;
+                          if (evt.ctrlKey || evt.metaKey) {
+                            toggleRackSelectionRef.current(rack.id);
+                          } else {
+                            setSelectedRackIdsRef.current([rack.id]);
+                          }
+                        }
                       }}
                       onMouseEnter={() => {
                         if (!isPlacing) setHoveredRackId(rack.id);
@@ -243,34 +408,44 @@ export function EditorCanvas() {
                       onMouseLeave={() => {
                         if (!isPlacing) setHoveredRackId(null);
                       }}
-                      onDragStart={() => setSelectedRackId(rack.id)}
+                      onDragStart={() => {
+                        if (!selectedRackIds.includes(rack.id)) {
+                          setSelectedRackIds([rack.id]);
+                        }
+                      }}
                       onDragMove={(e) => handleDragMove(rack.id, e)}
-                      onDragEnd={(e) => handleDragMove(rack.id, e)}
+                      onDragEnd={() => setSnapGuides([])}
                     >
+                      {/* Transparent hit target covers the full bounding box */}
                       <Rect x={0} y={0} width={geometry.width} height={geometry.height} fill="transparent" />
 
-                      {faceA && <RackBody geometry={geometry} displayCode={rack.displayCode} isSelected={isSelected} isHovered={isHovered} />}
-                      {lod >= 1 && faceA && <RackSections geometry={geometry} faceA={faceA} faceB={geometry.isPaired ? faceB : null} isSelected={isSelected} />}
-                      {lod >= 2 && faceA && <RackCells geometry={geometry} faceA={faceA} faceB={geometry.isPaired ? faceB : null} isSelected={isSelected} />}
+                      {/* RackBody always renders — even before faces are configured —
+                          so the code label (e.g. "01-A") is always visible on canvas */}
+                      <RackBody
+                        geometry={geometry}
+                        displayCode={rack.displayCode}
+                        isSelected={isSelected}
+                        isHovered={isHovered}
+                      />
 
-                      {!isPlacing && (
-                        <Group
-                          x={geometry.rotateHandleX}
-                          y={geometry.rotateHandleY}
-                          onClick={(e) => {
-                            e.cancelBubble = true;
-                            rotateRack(rack.id);
-                            setSelectedRackId(rack.id);
-                          }}
-                          onTap={(e) => {
-                            e.cancelBubble = true;
-                            rotateRack(rack.id);
-                            setSelectedRackId(rack.id);
-                          }}
-                        >
-                          <Rect width={ROTATE_HANDLE_SIZE} height={ROTATE_HANDLE_SIZE} cornerRadius={8} fill="#ffffff" stroke={isSelected ? '#0f6a8e' : '#cbd5e1'} shadowColor="#0f172a" shadowBlur={6} shadowOpacity={0.1} />
-                          <Text x={5} y={7} width={ROTATE_HANDLE_SIZE - 10} text="90В°" align="center" fontSize={10} fontStyle="bold" fill="#475569" />
-                        </Group>
+                      {/* LOD 1: section dividers — only when Face A is configured */}
+                      {lod >= 1 && faceA && (
+                        <RackSections
+                          geometry={geometry}
+                          faceA={faceA}
+                          faceB={geometry.isPaired ? faceB : null}
+                          isSelected={isSelected}
+                        />
+                      )}
+
+                      {/* LOD 2: slot columns (top-down view) — only when Face A is configured */}
+                      {lod >= 2 && faceA && (
+                        <RackCells
+                          geometry={geometry}
+                          faceA={faceA}
+                          faceB={geometry.isPaired ? faceB : null}
+                          isSelected={isSelected}
+                        />
                       )}
                     </Group>
                   );

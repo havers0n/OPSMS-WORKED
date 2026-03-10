@@ -12,8 +12,6 @@ export type RackAxis = z.infer<typeof rackAxisSchema>;
 export const rackFaceSideSchema = z.enum(['A', 'B']);
 export type RackFaceSide = z.infer<typeof rackFaceSideSchema>;
 
-export const rackFaceAnchorSchema = z.enum(['start', 'end']);
-export type RackFaceAnchor = z.infer<typeof rackFaceAnchorSchema>;
 
 export const slotNumberingDirectionSchema = z.enum(['ltr', 'rtl']);
 export type SlotNumberingDirection = z.infer<typeof slotNumberingDirectionSchema>;

@@ -25,7 +25,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
             id: faceAId,
             side: 'A',
             enabled: true,
-            anchor: 'start',
+
             slotNumberingDirection: 'ltr',
             isMirrored: false,
             mirrorSourceFaceId: null,
@@ -42,7 +42,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
             id: faceBId,
             side: 'B',
             enabled: false,
-            anchor: 'start',
+
             slotNumberingDirection: 'ltr',
             isMirrored: false,
             mirrorSourceFaceId: null,

@@ -9,17 +9,38 @@ function orderSlots(level: RackLevel, face: RackFace): number[] {
   return face.slotNumberingDirection === 'rtl' ? slots.reverse() : slots;
 }
 
-function resolveSections(face: RackFace, sourceRack: Rack): RackSection[] {
-  if (!face.isMirrored || !face.mirrorSourceFaceId) {
-    return face.sections;
+/**
+ * Returns sections in address-generation order together with the
+ * address ordinal (1-based) to use for each section.
+ *
+ * slotNumberingDirection='ltr' — section 1 is at the left/near end (default)
+ * slotNumberingDirection='rtl' — section 1 is at the right/far end; sections
+ *   are visited in reverse so the rightmost section is address ordinal 1.
+ *
+ * Both section ordering and slot numbering always follow slotNumberingDirection,
+ * keeping addresses consistent across the full rack length.
+ */
+function resolveSections(
+  face: RackFace,
+  sourceRack: Rack
+): Array<{ section: RackSection; addressOrdinal: number }> {
+  let sections: RackSection[];
+
+  if (face.isMirrored && face.mirrorSourceFaceId) {
+    const sourceFace = sourceRack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId);
+    sections = sourceFace ? sourceFace.sections : face.sections;
+  } else {
+    sections = face.sections;
   }
 
-  const sourceFace = sourceRack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId);
-  if (!sourceFace) {
-    return face.sections;
+  if (face.slotNumberingDirection === 'rtl') {
+    // RTL: the far/right end of the rack is address ordinal 1 — reverse section order
+    return [...sections]
+      .reverse()
+      .map((section, i) => ({ section, addressOrdinal: i + 1 }));
   }
 
-  return sourceFace.sections;
+  return sections.map((section, i) => ({ section, addressOrdinal: i + 1 }));
 }
 
 function createCell(args: {
@@ -27,14 +48,16 @@ function createCell(args: {
   rack: Rack;
   face: RackFace;
   section: RackSection;
+  /** Address-level section number (respects anchor direction, may differ from section.ordinal) */
+  sectionAddressOrdinal: number;
   level: RackLevel;
   slotNo: number;
 }): Cell {
-  const { layoutVersionId, rack, face, section, level, slotNo } = args;
+  const { layoutVersionId, rack, face, section, sectionAddressOrdinal, level, slotNo } = args;
   const address = buildCellAddress({
     rackCode: rack.displayCode,
     face: face.side,
-    section: section.ordinal,
+    section: sectionAddressOrdinal,
     level: level.ordinal,
     slot: slotNo
   });
@@ -44,7 +67,7 @@ function createCell(args: {
     cellCode: buildCellCode({
       rackId: rack.id,
       face: face.side,
-      section: section.ordinal,
+      section: sectionAddressOrdinal,
       level: level.ordinal,
       slot: slotNo
     }),
@@ -65,9 +88,9 @@ export function generateRackCells(layoutVersionId: string, rack: Rack): Cell[] {
       return [];
     }
 
-    const sections = resolveSections(face, rack);
+    const orderedSections = resolveSections(face, rack);
 
-    return sections.flatMap((section) =>
+    return orderedSections.flatMap(({ section, addressOrdinal }) =>
       section.levels.flatMap((level) =>
         orderSlots(level, face).map((slotNo) =>
           createCell({
@@ -75,6 +98,7 @@ export function generateRackCells(layoutVersionId: string, rack: Rack): Cell[] {
             rack,
             face,
             section,
+            sectionAddressOrdinal: addressOrdinal,
             level,
             slotNo
           })

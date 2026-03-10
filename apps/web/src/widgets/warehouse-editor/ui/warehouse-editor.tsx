@@ -2,10 +2,12 @@ import { useEffect } from 'react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
 import {
+  useCreatingRackId,
   useInitializeDraft,
   useLayoutDraftState,
   useResetDraft,
   useSelectedRackId,
+  useSetEditorMode,
   useSetSelectedRackId
 } from '@/entities/layout-version/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
@@ -18,7 +20,12 @@ export function WarehouseEditor() {
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
   const selectedRackId = useSelectedRackId();
+  const creatingRackId = useCreatingRackId();
   const setSelectedRackId = useSetSelectedRackId();
+  const setEditorMode = useSetEditorMode();
+
+  // Inspector is visible when a rack is selected OR being created
+  const inspectorOpen = selectedRackId !== null || creatingRackId !== null;
 
   useEffect(() => {
     if (!activeFloorId) {
@@ -46,11 +53,16 @@ export function WarehouseEditor() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="rounded-[22px] border border-[var(--border-muted)] bg-[var(--surface-primary)] px-8 py-6 text-sm text-[var(--text-muted)] shadow-[var(--shadow-soft)]">
-          Loading layout...
+          Loading layout…
         </div>
       </div>
     );
   }
+
+  const handleAddRack = () => {
+    setSelectedRackId(null);
+    setEditorMode('place');
+  };
 
   return (
     <div
@@ -58,15 +70,30 @@ export function WarehouseEditor() {
       aria-label="Warehouse editor"
       className="flex h-full overflow-hidden rounded-[24px] border border-[var(--border-muted)] bg-[var(--surface-primary)] shadow-[var(--shadow-panel)]"
     >
+      {/* Canvas takes all remaining space */}
       <div className="h-full min-w-0 flex-1">
-        <EditorCanvas />
+        <EditorCanvas onAddRack={handleAddRack} />
       </div>
 
-      {selectedRackId && (
-        <div className="w-[460px] shrink-0 border-l border-[var(--border-muted)]">
-          <RackInspector onClose={() => setSelectedRackId(null)} />
+      {/* Inspector panel — slides in from the right when a rack is selected/created */}
+      <div
+        className={[
+          'shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out',
+          inspectorOpen ? 'w-[460px]' : 'w-0'
+        ].join(' ')}
+      >
+        <div
+          className={[
+            'h-full w-[460px] border-l border-[var(--border-muted)] transition-transform duration-300 ease-in-out',
+            inspectorOpen ? 'translate-x-0' : 'translate-x-full'
+          ].join(' ')}
+        >
+          <RackInspector
+            onClose={() => setSelectedRackId(null)}
+            onAddRack={handleAddRack}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }
