@@ -1,3 +1,4 @@
 export const routes = {
-  warehouse: '/warehouse'
+  warehouse: '/warehouse',
+  products: '/products'
 } as const;
