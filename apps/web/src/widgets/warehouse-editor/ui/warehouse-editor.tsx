@@ -60,7 +60,7 @@ export function WarehouseEditor() {
   }
 
   const handleAddRack = () => {
-    setSelectedRackId(null);
+    setSelectedRackId([]);
     setEditorMode('place');
   };
 
@@ -89,7 +89,7 @@ export function WarehouseEditor() {
           ].join(' ')}
         >
           <RackInspector
-            onClose={() => setSelectedRackId(null)}
+            onClose={() => setSelectedRackId([])}
             onAddRack={handleAddRack}
           />
         </div>

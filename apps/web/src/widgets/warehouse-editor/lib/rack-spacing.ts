@@ -1,4 +1,4 @@
-import { Rack } from '@workspace/domain';
+import { Rack } from '@wos/domain';
 import { getRackGeometry } from './canvas-geometry';
 
 /**

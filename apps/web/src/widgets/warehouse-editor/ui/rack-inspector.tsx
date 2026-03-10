@@ -386,7 +386,7 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
   const handleDeleteConfirm = () => {
     deleteRack(rack.id);
     setConfirmingDelete(false);
-    setSelectedRackId(null);
+    setSelectedRackId([]);
     setCreatingRackId(null);
   };
 

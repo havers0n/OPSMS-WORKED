@@ -20,7 +20,7 @@ export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraft
 export const useCreateRack = () => useEditorStore((state) => state.createRack);
 export const useDeleteRack = () => useEditorStore((state) => state.deleteRack);
 export const useDuplicateRack = () => useEditorStore((state) => state.duplicateRack);
-export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackId);
+export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackIds);
 export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
 export const useSetCanvasZoom = () => useEditorStore((state) => state.setZoom);
 export const useUpdateRackPosition = () => useEditorStore((state) => state.updateRackPosition);

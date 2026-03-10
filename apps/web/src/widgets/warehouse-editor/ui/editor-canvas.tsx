@@ -383,7 +383,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                       onClick={(e) => {
                         e.cancelBubble = true;
                         if (!isPlacing) {
-                          const evt = e.evt as PointerEvent;
+                          const evt = e.evt as unknown as PointerEvent;
                           if (evt.ctrlKey || evt.metaKey) {
                             toggleRackSelectionRef.current(rack.id);
                           } else {
@@ -394,7 +394,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                       onTap={(e) => {
                         e.cancelBubble = true;
                         if (!isPlacing) {
-                          const evt = e.evt as PointerEvent;
+                          const evt = e.evt as unknown as PointerEvent;
                           if (evt.ctrlKey || evt.metaKey) {
                             toggleRackSelectionRef.current(rack.id);
                           } else {
