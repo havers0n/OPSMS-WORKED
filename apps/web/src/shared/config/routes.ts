@@ -1,4 +1,6 @@
 export const routes = {
   login: '/login',
-  warehouse: '/warehouse'
+  warehouse: '/warehouse',
+  products: '/products',
+  operations: '/operations'
 } as const;
