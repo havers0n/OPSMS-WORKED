@@ -10,7 +10,7 @@ type NavigationItem =
 const items: NavigationItem[] = [
   { label: 'Warehouse', icon: LayoutGrid, to: routes.warehouse, enabled: true },
   { label: 'Products', icon: Package, to: routes.products, enabled: true },
-  { label: 'Operations', icon: Activity, enabled: false },
+  { label: 'Operations', icon: Activity, to: routes.operations, enabled: true },
   { label: 'Analytics', icon: BarChart3, enabled: false }
 ];
 
