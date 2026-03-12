@@ -14,3 +14,4 @@ apps/supabase/.temp/
 apps/*/.turbo/
 packages/*/.turbo/
 apps/web/test-results/
+apps/web/storybook-static/
