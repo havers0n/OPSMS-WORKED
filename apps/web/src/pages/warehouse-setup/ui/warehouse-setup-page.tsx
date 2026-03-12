@@ -48,7 +48,7 @@ export function WarehouseSetupPage() {
 
   if (setupState === 'draft_loading') {
     return (
-      <div className="flex h-[calc(100vh-11rem)] items-center justify-center">
+      <div className="flex h-full w-full items-center justify-center">
         <div className="w-full max-w-lg rounded-[22px] border border-[var(--border-muted)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
           <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-[var(--accent-soft)]" />
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">Warehouse Setup</div>
@@ -61,7 +61,7 @@ export function WarehouseSetupPage() {
 
   if (setupState === 'error') {
     return (
-      <div className="flex h-[calc(100vh-11rem)] items-center justify-center">
+      <div className="flex h-full w-full items-center justify-center">
         <div className="w-full max-w-lg rounded-[22px] border border-red-200 bg-white p-8 text-center shadow-[var(--shadow-soft)]">
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Warehouse Setup</div>
           <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">Failed to load warehouse setup state.</div>
