@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
-import { PlusCircle } from 'lucide-react';
+import { Copy, Minus, Plus, RotateCcw, SlidersHorizontal, Trash2, RotateCw } from 'lucide-react';
 import {
   useCanvasZoom,
   useCreateRack,
   useDeleteRack,
+  useDuplicateRack,
   useEditorMode,
   useHoveredRackId,
   useLayoutDraftState,
+  useRotateRack,
+  useSelectedRackId,
   useSelectedRackIds,
   useSetCanvasZoom,
   useSetEditorMode,
   useSetHoveredRackId,
+  useSetSelectedRackId,
   useSetSelectedRackIds,
   useToggleRackSelection,
   useUpdateRackPosition,
@@ -31,13 +35,121 @@ import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
 import { SnapGuides } from './shapes/snap-guides';
 
-export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
+// ── Floating contextual toolbar ───────────────────────────────────────────────
+
+type FloatingToolbarProps = {
+  rackId: string;
+  screenX: number;
+  screenY: number;
+  onOpenInspector: () => void;
+};
+
+function FloatingToolbar({ rackId, screenX, screenY, onOpenInspector }: FloatingToolbarProps) {
+  const rotateRack = useRotateRack();
+  const duplicateRack = useDuplicateRack();
+  const deleteRack = useDeleteRack();
+  const setSelectedRackId = useSetSelectedRackId();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleDelete = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    deleteRack(rackId);
+    setSelectedRackId(null);
+    setConfirmDelete(false);
+  };
+
+  return (
+    <div
+      className="pointer-events-auto absolute z-30 flex items-center gap-0.5 rounded-xl px-1.5 py-1 shadow-lg"
+      style={{
+        left: screenX,
+        top: screenY,
+        transform: 'translateX(-50%)',
+        background: 'var(--surface-strong)',
+        border: '1px solid var(--border-muted)',
+        boxShadow: 'var(--shadow-panel)'
+      }}
+    >
+      <ToolbarBtn icon={RotateCcw} title="Rotate 90°" onClick={() => rotateRack(rackId)} />
+      <ToolbarBtn icon={Copy} title="Duplicate" onClick={() => duplicateRack(rackId)} />
+      <ToolbarBtn icon={SlidersHorizontal} title="Inspect" onClick={onOpenInspector} accent />
+
+      <div className="mx-0.5 h-4 w-px" style={{ background: 'var(--border-muted)' }} />
+
+      {confirmDelete ? (
+        <>
+          <span className="px-1 text-[11px] font-medium text-red-600">Delete?</span>
+          <ToolbarBtn
+            icon={Trash2}
+            title="Confirm delete"
+            onClick={handleDelete}
+            danger
+          />
+          <ToolbarBtn
+            icon={RotateCw}
+            title="Cancel"
+            onClick={() => setConfirmDelete(false)}
+          />
+        </>
+      ) : (
+        <ToolbarBtn icon={Trash2} title="Delete rack" onClick={handleDelete} danger />
+      )}
+    </div>
+  );
+}
+
+function ToolbarBtn({
+  icon: Icon,
+  title,
+  onClick,
+  accent,
+  danger
+}: {
+  icon: typeof Copy;
+  title: string;
+  onClick: () => void;
+  accent?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
+      style={
+        accent
+          ? { color: 'var(--accent)' }
+          : danger
+            ? { color: 'var(--danger)' }
+            : { color: 'var(--text-muted)' }
+      }
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+// ── Main canvas component ─────────────────────────────────────────────────────
+
+export function EditorCanvas({
+  onAddRack,
+  onOpenInspector
+}: {
+  onAddRack: () => void;
+  onOpenInspector: () => void;
+}) {
   const zoom = useCanvasZoom();
   const editorMode = useEditorMode();
   const layoutDraft = useLayoutDraftState();
   const selectedRackIds = useSelectedRackIds();
+  const selectedRackId = useSelectedRackId();
   const hoveredRackId = useHoveredRackId();
   const setSelectedRackIds = useSetSelectedRackIds();
+  const setSelectedRackId = useSetSelectedRackId();
   const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const setCanvasZoom = useSetCanvasZoom();
@@ -51,7 +163,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
-  // ── Canvas pan (right-click drag) ──────────────────────────────────────────
+  // ── Canvas pan (middle-mouse drag) ────────────────────────────────────────
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const canvasOffsetRef = useRef({ x: 0, y: 0 });
   canvasOffsetRef.current = canvasOffset;
@@ -61,7 +173,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const panStartRef = useRef({ x: 0, y: 0 });
   const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
 
-  // ── Snap guides visualization ─────────────────────────────────────────────
+  // ── Snap guides ───────────────────────────────────────────────────────────
   const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
   const racks = useMemo(
@@ -71,7 +183,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const isPlacing = editorMode === 'place';
   const lod = getCanvasLOD(zoom);
 
-  // Keep refs up to date to avoid stale closures in event handlers
+  // Keep refs up-to-date to avoid stale closures
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
   const createRackRef = useRef(createRack);
@@ -93,7 +205,22 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
   const updateRackPositionRef = useRef(updateRackPosition);
   updateRackPositionRef.current = updateRackPosition;
 
-  // Resize observer
+  // ── Floating toolbar position ─────────────────────────────────────────────
+  const selectedRack =
+    selectedRackId && !isPlacing && layoutDraft ? layoutDraft.racks[selectedRackId] : null;
+  const selectedRackGeometry = selectedRack ? getRackGeometry(selectedRack) : null;
+
+  // Toolbar sits above the selected rack, centered horizontally
+  const toolbarScreenX = selectedRackGeometry
+    ? (selectedRackGeometry.x + selectedRackGeometry.width / 2) * zoom + canvasOffset.x
+    : 0;
+  const toolbarScreenY = selectedRackGeometry
+    ? selectedRackGeometry.y * zoom + canvasOffset.y - 44
+    : 0;
+  // Clamp toolbar so it doesn't go above the viewport
+  const clampedToolbarY = Math.max(8, toolbarScreenY);
+
+  // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
@@ -104,18 +231,18 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     return () => ro.disconnect();
   }, []);
 
-  // Right-click pan handler
+  // ── Middle-mouse pan ──────────────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 1) return; // middle mouse button only
+      if (e.button !== 1) return;
       isPanningRef.current = true;
       panStartRef.current = { x: e.clientX, y: e.clientY };
       offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
       setIsPanning(true);
-      e.preventDefault(); // prevent native auto-scroll mode
+      e.preventDefault();
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -143,9 +270,9 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []); // stable refs — no deps needed
+  }, []);
 
-  // Canvas click handler
+  // ── Canvas click ──────────────────────────────────────────────────────────
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -153,7 +280,10 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
       const pos = stage.getRelativePointerPosition();
       if (!pos) return;
       if (isPlacingRef.current) {
-        createRackRef.current(Math.round(pos.x / GRID_SIZE) * GRID_SIZE, Math.round(pos.y / GRID_SIZE) * GRID_SIZE);
+        createRackRef.current(
+          Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
+          Math.round(pos.y / GRID_SIZE) * GRID_SIZE
+        );
       } else {
         setSelectedRackIdsRef.current([]);
       }
@@ -164,21 +294,20 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     };
   }, [viewport]);
 
-  // Keyboard handlers: Escape cancels placement, Delete removes selected rack
+  // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isPlacingRef.current) {
         setEditorMode('select');
       }
-
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isPlacingRef.current) {
         const rackId = selectedRackIdsRef.current[0];
-        // Only trigger keyboard delete when focus is not inside a text input/textarea/select
         const target = e.target as HTMLElement;
-        const isEditing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+        const isEditing =
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT';
         if (rackId && !isEditing) {
-          // We dispatch a custom event to the inspector to trigger the confirm dialog
-          // so we don't delete without user confirmation even on keyboard
           window.dispatchEvent(new CustomEvent('rack:request-delete', { detail: { rackId } }));
         }
       }
@@ -187,20 +316,20 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [setEditorMode]);
 
-  // Grid lines: generate in world space to fill the visible area, accounting for pan offset
+  // ── Grid lines ────────────────────────────────────────────────────────────
   const gridLines = useMemo(() => {
-    if (!viewport.width || !viewport.height) return { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+    if (!viewport.width || !viewport.height)
+      return { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
 
-    // Visible area in world coordinates
     const offsetX = canvasOffset.x / zoom;
     const offsetY = canvasOffset.y / zoom;
     const visibleW = viewport.width / zoom;
     const visibleH = viewport.height / zoom;
 
     const startX = Math.floor(-offsetX / GRID_SIZE) * GRID_SIZE;
-    const endX   = startX + visibleW + GRID_SIZE * 2;
+    const endX = startX + visibleW + GRID_SIZE * 2;
     const startY = Math.floor(-offsetY / GRID_SIZE) * GRID_SIZE;
-    const endY   = startY + visibleH + GRID_SIZE * 2;
+    const endY = startY + visibleH + GRID_SIZE * 2;
 
     const vertical: number[] = [];
     for (let x = startX; x <= endX; x += GRID_SIZE) vertical.push(x);
@@ -210,19 +339,17 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     return { v: vertical, h: horizontal, startX, endX, startY, endY };
   }, [zoom, viewport.width, viewport.height, canvasOffset]);
 
+  // ── Drag move ─────────────────────────────────────────────────────────────
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     if (!layoutDraft) return;
-
     const node = event.target;
     let x = clampCanvasPosition(node.x() - node.offsetX());
     let y = clampCanvasPosition(node.y() - node.offsetY());
 
-    // Get snap information from nearby racks
     const rack = layoutDraft.racks[rackId];
-    const otherRacks = Object.values(layoutDraft.racks).filter(r => r.id !== rackId);
+    const otherRacks = Object.values(layoutDraft.racks).filter((r) => r.id !== rackId);
     const snapInfo = getSnapPosition(rack, x, y, otherRacks, minRackDistanceRef.current, 0.5);
 
-    // Apply snapping if active
     if (snapInfo.snappedToX || snapInfo.snappedToY) {
       x = snapInfo.snappedX;
       y = snapInfo.snappedY;
@@ -239,85 +366,58 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
     updateRackPositionRef.current(rackId, x, y);
   };
 
-  const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
+  const handleZoom = (delta: number) =>
+    setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
-      className={[
-        'relative h-full overflow-hidden',
-        isPanning ? 'cursor-grabbing' : isPlacing ? 'cursor-crosshair bg-cyan-50' : 'bg-slate-100'
-      ].join(' ')}
+      className="relative h-full overflow-hidden"
+      style={{
+        cursor: isPanning ? 'grabbing' : isPlacing ? 'crosshair' : 'default',
+        background: isPlacing ? '#f0fdfe' : '#f1f5f9'
+      }}
     >
       {!layoutDraft && (
-        <div className="flex h-full items-center justify-center text-sm text-slate-500">Loading layout…</div>
+        <div
+          className="flex h-full items-center justify-center text-sm"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          Loading layout…
+        </div>
       )}
 
       {layoutDraft && (
         <>
-          {/* Placement mode banner */}
+          {/* Placement mode hint */}
           {isPlacing && (
-            <div className="pointer-events-none absolute inset-x-4 top-4 z-20 flex items-center justify-center">
-              <div className="rounded-2xl border border-cyan-400 bg-cyan-950/90 px-5 py-3 text-sm font-medium text-cyan-100 shadow-lg backdrop-blur">
-                Click anywhere on the canvas to place a new rack · Press{' '}
-                <kbd className="mx-1 rounded-md bg-cyan-800 px-2 py-0.5 font-mono text-xs">Esc</kbd> to cancel
+            <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex items-center justify-center">
+              <div
+                className="rounded-xl px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+                style={{
+                  background: 'rgba(15,24,42,0.88)',
+                  color: '#e2e8f0',
+                  border: '1px solid rgba(6,182,212,0.4)'
+                }}
+              >
+                Click canvas to place rack &middot; Press{' '}
+                <kbd className="mx-1 rounded bg-slate-700 px-1.5 py-0.5 font-mono text-[10px]">
+                  Esc
+                </kbd>{' '}
+                to cancel
               </div>
             </div>
           )}
 
-          {/* Top-left controls */}
-          <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-sm flex-col gap-3">
-            {!isPlacing && (
-              <>
-                {/* Viewport / zoom controls */}
-                <div className="pointer-events-auto rounded-2xl border border-[var(--border-muted)] bg-white/92 px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Viewport</div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleZoom(-0.1)}
-                      className="h-9 w-9 rounded-xl border border-[var(--border-muted)] text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                    >
-                      −
-                    </button>
-                    <div className="min-w-[72px] rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-center text-sm font-medium text-slate-700">
-                      {Math.round(zoom * 100)}%
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleZoom(0.1)}
-                      className="h-9 w-9 rounded-xl border border-[var(--border-muted)] text-base font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCanvasZoom(1)}
-                      className="rounded-xl border border-[var(--border-muted)] px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-
-                {/* Add Rack button */}
-                <button
-                  type="button"
-                  onClick={onAddRack}
-                  className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-[var(--border-muted)] bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition-colors hover:bg-slate-700"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  Add Rack
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Bottom-right hint */}
-          {!isPlacing && (
-            <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-2xl border border-[var(--border-muted)] bg-slate-950/90 px-4 py-3 text-xs text-slate-200 shadow-[var(--shadow-soft)]">
-              Drag racks · MMB to pan · Scroll to zoom · Del to delete
-            </div>
+          {/* Floating contextual toolbar — shows when a single rack is selected */}
+          {selectedRack && selectedRackGeometry && (
+            <FloatingToolbar
+              rackId={selectedRack.id}
+              screenX={toolbarScreenX}
+              screenY={clampedToolbarY}
+              onOpenInspector={onOpenInspector}
+            />
           )}
 
           {/* Konva Stage */}
@@ -332,10 +432,12 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
               onWheel={(e) => {
                 e.evt.preventDefault();
                 const delta = e.evt.deltaY > 0 ? -0.1 : 0.1;
-                setCanvasZoomRef.current(clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2))));
+                setCanvasZoomRef.current(
+                  clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)))
+                );
               }}
             >
-              {/* Grid layer (not interactive) */}
+              {/* Grid layer */}
               <Layer listening={false}>
                 {gridLines.v.map((x) => (
                   <Line
@@ -344,7 +446,7 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                     stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
-                    opacity={0.6}
+                    opacity={0.55}
                   />
                 ))}
                 {gridLines.h.map((y) => (
@@ -354,12 +456,12 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                     stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
-                    opacity={0.6}
+                    opacity={0.55}
                   />
                 ))}
               </Layer>
 
-              {/* Snap guides layer (not interactive) */}
+              {/* Snap guides */}
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
 
               {/* Rack layer */}
@@ -416,11 +518,14 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                       onDragMove={(e) => handleDragMove(rack.id, e)}
                       onDragEnd={() => setSnapGuides([])}
                     >
-                      {/* Transparent hit target covers the full bounding box */}
-                      <Rect x={0} y={0} width={geometry.width} height={geometry.height} fill="transparent" />
+                      <Rect
+                        x={0}
+                        y={0}
+                        width={geometry.width}
+                        height={geometry.height}
+                        fill="transparent"
+                      />
 
-                      {/* RackBody always renders — even before faces are configured —
-                          so the code label (e.g. "01-A") is always visible on canvas */}
                       <RackBody
                         geometry={geometry}
                         displayCode={rack.displayCode}
@@ -428,7 +533,6 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                         isHovered={isHovered}
                       />
 
-                      {/* LOD 1: section dividers — only when Face A is configured */}
                       {lod >= 1 && faceA && (
                         <RackSections
                           geometry={geometry}
@@ -438,7 +542,6 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
                         />
                       )}
 
-                      {/* LOD 2: slot columns (top-down view) — only when Face A is configured */}
                       {lod >= 2 && faceA && (
                         <RackCells
                           geometry={geometry}
@@ -453,6 +556,57 @@ export function EditorCanvas({ onAddRack }: { onAddRack: () => void }) {
               </Layer>
             </Stage>
           )}
+
+          {/* ── Bottom-right: zoom controls + hint ── */}
+          <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
+            {/* Hint */}
+            {!isPlacing && (
+              <div
+                className="rounded-xl px-3 py-2 text-[11px]"
+                style={{
+                  background: 'rgba(15,24,42,0.72)',
+                  color: '#94a3b8',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                Drag · MMB pan · Scroll zoom · Del delete
+              </div>
+            )}
+
+            {/* Zoom controls */}
+            <div
+              className="pointer-events-auto flex items-center gap-1 rounded-xl px-2 py-1.5 shadow-md"
+              style={{
+                background: 'var(--surface-strong)',
+                border: '1px solid var(--border-muted)'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleZoom(-0.1)}
+                className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCanvasZoom(1)}
+                className="min-w-[44px] rounded-lg px-2 py-0.5 text-center text-[11px] font-medium transition-colors hover:bg-slate-100"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={() => handleZoom(0.1)}
+                className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
         </>
       )}
     </div>
