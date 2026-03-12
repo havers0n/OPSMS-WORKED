@@ -50,26 +50,33 @@ type Props = {
   displayCode: string;
   isSelected: boolean;
   isHovered: boolean;
+  /** Canvas LOD: 0 = far (no label), 1 = mid (corner text), 2 = close (corner pill) */
+  lod: 0 | 1 | 2;
 };
 
-export function RackBody({ geometry, displayCode, isSelected, isHovered }: Props) {
+export function RackBody({ geometry, displayCode, isSelected, isHovered, lod }: Props) {
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
 
   const fill   = isSelected ? C.fillSelected   : isHovered ? C.fillHovered   : C.fillDefault;
   const stroke = isSelected ? C.strokeSelected : isHovered ? C.strokeHovered : C.strokeDefault;
   const stripeH = Math.max(4, Math.min(8, height * 0.18));
 
-  // Code pill geometry – sits in the "Face A" half, vertically centred
-  const pillW  = Math.min(faceAWidth - 24, 130);
-  const pillH  = 20;
-  const pillX  = 12;
-  const faceAMidY = isPaired ? spineY / 2 : height / 2;
-  const pillY  = faceAMidY - pillH / 2;
-  const codeFS = 12;
+  // ── Label geometry (bottom-right corner, inside rack body) ──────────────────
+  // LOD 1: compact text — 9 px, no background
+  // LOD 2: pill — 11 px with semi-transparent background
+  const labelPad  = 5;
+  const labelFSA  = lod >= 2 ? 11 : 9;
+  const labelFSB  = lod >= 2 ? 11 : 9;
 
-  // Face B label – centred in the bottom half of paired rack (within faceBWidth)
-  const faceBMidY = spineY + (height - spineY) / 2;
-  const labelBY   = faceBMidY - codeFS / 2;
+  // Face A label: bottom-right of Face A zone
+  const labelAText = isPaired ? `${displayCode}-A` : displayCode;
+  const faceABottom = isPaired ? spineY : height;
+  // pill dimensions (LOD 2 only)
+  const pillH  = 18;
+  const pillW  = Math.min(faceAWidth - 16, 120);
+
+  // Face B label: bottom-right of Face B zone (paired only)
+  const faceBBottom = height;
 
   // Asymmetric overhang — which face is shorter?
   const minFaceW = Math.min(faceAWidth, faceBWidth);
@@ -164,54 +171,88 @@ export function RackBody({ geometry, displayCode, isSelected, isHovered }: Props
         />
       )}
 
-      {/* ── Code pill / label (Face A) ────────────────────────────── */}
-      {pillW > 20 ? (
-        /* Full pill with background — enough horizontal space */
-        <>
-          <Rect
-            x={pillX} y={pillY} width={pillW} height={pillH}
-            cornerRadius={999}
-            fill={C.pillBg}
-            shadowColor="#0f172a"
-            shadowBlur={4}
-            shadowOpacity={0.06}
-          />
+      {/* ── Face-A label (bottom-right corner) ───────────────────── */}
+      {lod >= 1 && faceAWidth > 14 && (
+        lod >= 2 && pillW > 24 ? (
+          /* LOD 2: pill with background */
+          <>
+            <Rect
+              x={faceAWidth - pillW - labelPad}
+              y={faceABottom - pillH - labelPad}
+              width={pillW}
+              height={pillH}
+              cornerRadius={999}
+              fill={C.pillBg}
+              shadowColor="#0f172a"
+              shadowBlur={4}
+              shadowOpacity={0.08}
+            />
+            <Text
+              x={faceAWidth - pillW - labelPad + 7}
+              y={faceABottom - pillH - labelPad + (pillH - labelFSA) / 2}
+              text={labelAText}
+              fontSize={labelFSA}
+              fontStyle="bold"
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              fill={C.codeText}
+            />
+          </>
+        ) : (
+          /* LOD 1: plain text, no background — width needed for align="right" in Konva */
           <Text
-            x={pillX + 8}
-            y={pillY + (pillH - codeFS) / 2}
-            text={`${displayCode}-A`}
-            fontSize={codeFS}
+            x={labelPad}
+            y={faceABottom - labelFSA - labelPad}
+            width={faceAWidth - 2 * labelPad}
+            text={labelAText}
+            fontSize={labelFSA}
             fontStyle="bold"
             fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
             fill={C.codeText}
+            opacity={0.55}
+            align="right"
           />
-        </>
-      ) : faceAWidth > 14 ? (
-        /* Compact label — narrow rack, no room for pill, but text still fits */
-        <Text
-          x={4}
-          y={faceAMidY - 5}
-          text={displayCode}
-          fontSize={9}
-          fontStyle="bold"
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill={C.codeText}
-          opacity={0.8}
-        />
-      ) : null}
+        )
+      )}
 
-      {/* ── Face-B label ──────────────────────────────────────────── */}
-      {isPaired && (
-        <Text
-          x={pillX + 8}
-          y={labelBY}
-          text={`${displayCode}-B`}
-          fontSize={codeFS}
-          fontStyle="bold"
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill={C.codeBText}
-          opacity={0.75}
-        />
+      {/* ── Face-B label (bottom-right corner of B zone) ──────────── */}
+      {isPaired && lod >= 1 && faceBWidth > 14 && (
+        lod >= 2 && pillW > 24 ? (
+          <>
+            <Rect
+              x={faceBWidth - pillW - labelPad}
+              y={faceBBottom - pillH - labelPad}
+              width={pillW}
+              height={pillH}
+              cornerRadius={999}
+              fill={C.pillBg}
+              shadowColor="#0f172a"
+              shadowBlur={4}
+              shadowOpacity={0.08}
+            />
+            <Text
+              x={faceBWidth - pillW - labelPad + 7}
+              y={faceBBottom - pillH - labelPad + (pillH - labelFSB) / 2}
+              text={`${displayCode}-B`}
+              fontSize={labelFSB}
+              fontStyle="bold"
+              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              fill={C.codeBText}
+            />
+          </>
+        ) : (
+          <Text
+            x={labelPad}
+            y={faceBBottom - labelFSB - labelPad}
+            width={faceBWidth - 2 * labelPad}
+            text={`${displayCode}-B`}
+            fontSize={labelFSB}
+            fontStyle="bold"
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+            fill={C.codeBText}
+            opacity={0.55}
+            align="right"
+          />
+        )
       )}
     </Group>
   );

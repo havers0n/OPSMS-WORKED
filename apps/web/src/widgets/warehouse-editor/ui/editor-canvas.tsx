@@ -531,6 +531,7 @@ export function EditorCanvas({
                         displayCode={rack.displayCode}
                         isSelected={isSelected}
                         isHovered={isHovered}
+                        lod={lod}
                       />
 
                       {lod >= 1 && faceA && (
