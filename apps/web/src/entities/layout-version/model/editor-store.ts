@@ -1,6 +1,6 @@
 import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
 import { create } from 'zustand';
-import type { EditorMode } from './editor-types';
+import type { EditorMode, ViewMode } from './editor-types';
 import {
   checkMinimumDistance,
   alignRacksToLine,
@@ -9,6 +9,7 @@ import {
 } from '../../../widgets/warehouse-editor/lib/rack-spacing';
 
 type EditorStore = {
+  viewMode: ViewMode;
   editorMode: EditorMode;
   selectedRackIds: string[];
   hoveredRackId: string | null;
@@ -19,8 +20,10 @@ type EditorStore = {
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
+  setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
   setSelectedRackIds: (rackIds: string[]) => void;
+  setSelectedRackId: (rackId: string | null) => void;
   toggleRackSelection: (rackId: string) => void;
   setHoveredRackId: (rackId: string | null) => void;
   setCreatingRackId: (rackId: string | null) => void;
@@ -54,6 +57,7 @@ type EditorStore = {
 };
 
 const initialEditorState = {
+  viewMode: 'layout' as ViewMode,
   editorMode: 'select' as EditorMode,
   selectedRackIds: [] as string[],
   hoveredRackId: null,
@@ -142,8 +146,10 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
 
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
+  setViewMode: (viewMode) => set({ viewMode, editorMode: 'select' }),
   setEditorMode: (editorMode) => set({ editorMode }),
   setSelectedRackIds: (selectedRackIds) => set({ selectedRackIds }),
+  setSelectedRackId: (rackId) => set({ selectedRackIds: rackId ? [rackId] : [] }),
   toggleRackSelection: (rackId) => set((state) => ({
     selectedRackIds: state.selectedRackIds.includes(rackId)
       ? state.selectedRackIds.filter(id => id !== rackId)
@@ -161,7 +167,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,
-      editorMode: 'select'
+      editorMode: 'select',
+      viewMode: 'layout'
     }),
   initializeDraft: (draft) =>
     set((state) => {

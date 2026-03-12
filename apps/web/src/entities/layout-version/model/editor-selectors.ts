@@ -1,5 +1,7 @@
 import { useEditorStore } from './editor-store';
 
+export const useViewMode = () => useEditorStore((state) => state.viewMode);
+export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
 export const useEditorMode = () => useEditorStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
 export const useSelectedRackIds = () => useEditorStore((state) => state.selectedRackIds);
@@ -20,7 +22,7 @@ export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraft
 export const useCreateRack = () => useEditorStore((state) => state.createRack);
 export const useDeleteRack = () => useEditorStore((state) => state.deleteRack);
 export const useDuplicateRack = () => useEditorStore((state) => state.duplicateRack);
-export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackIds);
+export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackId);
 export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
 export const useSetCanvasZoom = () => useEditorStore((state) => state.setZoom);
 export const useUpdateRackPosition = () => useEditorStore((state) => state.updateRackPosition);
