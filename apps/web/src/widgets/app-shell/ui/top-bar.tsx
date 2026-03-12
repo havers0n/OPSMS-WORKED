@@ -1,16 +1,44 @@
-import { CheckCircle2, FilePlus2, LogOut, PlusSquare, Redo2, Save, SearchCheck, Undo2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronRight,
+  FilePlus2,
+  LogOut,
+  Redo2,
+  Save,
+  SearchCheck,
+  Undo2
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuth } from '@/app/providers/auth-provider';
-import { useActiveFloorId, useActiveSiteId, useSetActiveFloorId, useSetActiveSiteId } from '@/app/store/ui-selectors';
+import {
+  useActiveFloorId,
+  useActiveSiteId,
+  useSetActiveFloorId,
+  useSetActiveSiteId
+} from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
-import { useDraftDirtyState, useEditorMode, useLayoutDraftState, useResetDraft, useSetEditorMode } from '@/entities/layout-version/model/editor-selectors';
+import {
+  useDraftDirtyState,
+  useLayoutDraftState,
+  useResetDraft,
+  useSetViewMode,
+  useViewMode
+} from '@/entities/layout-version/model/editor-selectors';
+import type { ViewMode } from '@/entities/layout-version/model/editor-types';
 import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
 import { usePublishLayout } from '@/features/layout-publish/model/use-publish-layout';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
+
+const VIEW_MODES: { id: ViewMode; label: string; available: boolean }[] = [
+  { id: 'layout', label: 'Layout', available: true },
+  { id: 'semantics', label: 'Semantics', available: false },
+  { id: 'placement', label: 'Placement', available: false },
+  { id: 'flow', label: 'Flow', available: false }
+];
 
 export function TopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -20,8 +48,8 @@ export function TopBar() {
   const setActiveSiteId = useSetActiveSiteId();
   const setActiveFloorId = useSetActiveFloorId();
   const resetDraft = useResetDraft();
-  const editorMode = useEditorMode();
-  const setEditorMode = useSetEditorMode();
+  const viewMode = useViewMode();
+  const setViewMode = useSetViewMode();
   const { data: sites = [] } = useSites();
   const { data: floors = [] } = useFloors(activeSiteId);
   const liveDraftQuery = useActiveLayoutDraft(activeFloorId);
@@ -41,25 +69,28 @@ export function TopBar() {
     localDraft: layoutDraft,
     isDraftDirty
   });
-  const isBusy = createDraft.isPending || saveDraft.isPending || validateLayout.isPending || publishLayout.isPending;
+  const isBusy =
+    createDraft.isPending ||
+    saveDraft.isPending ||
+    validateLayout.isPending ||
+    publishLayout.isPending;
   const currentMembership = memberships.find((membership) => membership.tenantId === currentTenantId) ?? memberships[0] ?? null;
 
   const issueSummary = useMemo(() => {
-    if (isDraftDirty && validateLayout.cachedResult) {
-      return 'Draft changed since last validation';
-    }
-
+    if (isDraftDirty && validateLayout.cachedResult) return 'Draft changed';
     if (!validateLayout.cachedResult) return null;
-    return validateLayout.cachedResult.isValid ? 'Layout is valid' : `${validateLayout.cachedResult.issues.length} issue(s)`;
+    return validateLayout.cachedResult.isValid
+      ? 'Valid'
+      : `${validateLayout.cachedResult.issues.length} issue(s)`;
   }, [isDraftDirty, validateLayout.cachedResult]);
 
   const handleCreateDraft = async () => {
     if (!activeFloorId) return;
     try {
-      const draftId = await createDraft.mutateAsync(activeFloorId);
-      setStatusMessage(`Draft ready: ${draftId}`);
+      await createDraft.mutateAsync(activeFloorId);
+      setStatusMessage('Draft ready');
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : 'Failed to create draft');
+      setStatusMessage(error instanceof Error ? error.message : 'Failed');
     }
   };
 
@@ -67,7 +98,7 @@ export function TopBar() {
     if (!layoutDraft || !activeFloorId) return;
     try {
       await saveDraft.mutateAsync(layoutDraft);
-      setStatusMessage('Draft saved');
+      setStatusMessage('Saved');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Save failed');
     }
@@ -77,7 +108,7 @@ export function TopBar() {
     if (!layoutDraft || !activeFloorId) return;
     try {
       const result = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(result.isValid ? 'Layout is valid' : `${result.issues.length} issue(s) found`);
+      setStatusMessage(result.isValid ? 'Valid' : `${result.issues.length} issue(s)`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Validation failed');
     }
@@ -87,7 +118,7 @@ export function TopBar() {
     if (!layoutDraft || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(`Published with ${result.generatedCells} generated cells`);
+      setStatusMessage(`Published · ${result.generatedCells} cells`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Publish failed');
     }
@@ -95,7 +126,7 @@ export function TopBar() {
 
   const handleSiteChange = (nextSiteId: string) => {
     if (nextSiteId === activeSiteId) return;
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved draft changes. Discard and switch?'))) return;
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?'))) return;
     resetDraft();
     setActiveSiteId(nextSiteId || null);
     setStatusMessage(null);
@@ -103,143 +134,204 @@ export function TopBar() {
 
   const handleFloorChange = (nextFloorId: string) => {
     if (nextFloorId === activeFloorId) return;
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved draft changes. Discard and switch?'))) return;
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?'))) return;
     resetDraft();
     setActiveFloorId(nextFloorId || null);
     setStatusMessage(null);
   };
 
-  const isPlacing = editorMode === 'place';
+  const activeSite = sites.find((s) => s.id === activeSiteId);
+  const activeFloor = floors.find((f) => f.id === activeFloorId);
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border-muted)] bg-[var(--surface-primary)] px-4">
-      <div className="flex items-center gap-2">
-        <label className="sr-only" htmlFor="site-select">
-          Site
-        </label>
+    <header
+      className="flex h-11 shrink-0 items-center gap-0 border-b"
+      style={{
+        borderColor: 'var(--border-strong)',
+        background: 'var(--surface-primary)',
+        backdropFilter: 'blur(8px)'
+      }}
+    >
+      {/* ── Logo ──────────────────────────────────────────── */}
+      <div
+        className="flex h-full w-11 shrink-0 items-center justify-center border-r"
+        style={{ borderColor: 'var(--border-muted)' }}
+      >
+        <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
+          W
+        </span>
+      </div>
+
+      {/* ── Breadcrumb: Site / Floor ───────────────────────── */}
+      <div
+        className="flex h-full items-center gap-1 border-r px-3"
+        style={{ borderColor: 'var(--border-muted)' }}
+      >
         <select
-          id="site-select"
           aria-label="Site"
           value={activeSiteId ?? ''}
           onChange={(e) => handleSiteChange(e.target.value)}
-          className="h-8 rounded-lg border border-[var(--border-muted)] bg-white px-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30"
+          className="h-7 rounded-md border-0 bg-transparent px-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400/40"
+          style={{ maxWidth: '120px' }}
         >
-          <option value="">Site...</option>
+          <option value="">Site…</option>
           {sites.map((site) => (
             <option key={site.id} value={site.id}>
-              {site.code} В· {site.name}
+              {site.code}
             </option>
           ))}
         </select>
 
-        <span className="select-none text-slate-300">/</span>
+        <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" />
 
-        <label className="sr-only" htmlFor="floor-select">
-          Floor
-        </label>
         <select
-          id="floor-select"
           aria-label="Floor"
           value={activeFloorId ?? ''}
           onChange={(e) => handleFloorChange(e.target.value)}
           disabled={!activeSiteId}
-          className="h-8 rounded-lg border border-[var(--border-muted)] bg-white px-2 text-sm text-slate-700 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+          className="h-7 rounded-md border-0 bg-transparent px-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:text-slate-400"
+          style={{ maxWidth: '100px' }}
         >
-          <option value="">Floor...</option>
+          <option value="">Floor…</option>
           {floors.map((floor) => (
             <option key={floor.id} value={floor.id}>
-              {floor.code} В· {floor.name}
+              {floor.code}
             </option>
           ))}
         </select>
 
-        <span
-          className={[
-            'rounded-full px-2 py-0.5 text-[11px] font-medium leading-none',
-            isDraftDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-          ].join(' ')}
+        {activeSite && activeFloor && (
+          <span
+            className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+            style={
+              isDraftDirty
+                ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
+                : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
+            }
+          >
+            {isDraftDirty ? 'Unsaved' : 'Synced'}
+          </span>
+        )}
+      </div>
+
+      {/* ── Mode switcher — center ─────────────────────────── */}
+      <div className="flex flex-1 items-center justify-center px-4">
+        <div
+          className="flex items-center gap-0.5 rounded-lg p-0.5"
+          style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
         >
-          {isDraftDirty ? 'Unsaved draft' : 'Draft synced'}
-        </span>
+          {VIEW_MODES.map((mode) => {
+            const isActive = viewMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                disabled={!mode.available}
+                onClick={() => setViewMode(mode.id)}
+                title={!mode.available ? `${mode.label} — coming soon` : undefined}
+                className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
+                style={
+                  isActive
+                    ? {
+                        background: 'var(--surface-strong)',
+                        color: 'var(--accent)',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                        cursor: 'default'
+                      }
+                    : mode.available
+                      ? { color: 'var(--text-muted)', cursor: 'pointer' }
+                      : { color: 'var(--border-strong)', cursor: 'not-allowed', opacity: 0.5 }
+                }
+              >
+                {mode.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center px-4" aria-live="polite">
-        {(statusMessage || issueSummary) && <span className="text-xs text-slate-400">{statusMessage ?? issueSummary}</span>}
-      </div>
+      {/* ── Right: status + actions ────────────────────────── */}
+      <div
+        className="flex h-full items-center gap-1 border-l px-3"
+        style={{ borderColor: 'var(--border-muted)' }}
+      >
+        {/* Status message */}
+        {(statusMessage || issueSummary) && (
+          <span
+            className="mr-1 text-[11px]"
+            style={{ color: 'var(--text-muted)' }}
+            aria-live="polite"
+          >
+            {statusMessage ?? issueSummary}
+          </span>
+        )}
 
-      <div className="flex items-center gap-1">
+        {/* Undo / Redo */}
         <button
           type="button"
           disabled
           title="Undo (coming soon)"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 disabled:cursor-not-allowed"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
         >
-          <Undo2 className="h-4 w-4" />
+          <Undo2 className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
           disabled
           title="Redo (coming soon)"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 disabled:cursor-not-allowed"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
         >
-          <Redo2 className="h-4 w-4" />
+          <Redo2 className="h-3.5 w-3.5" />
         </button>
 
-        <div className="mx-1.5 h-5 w-px bg-slate-200" />
+        <div className="mx-1 h-4 w-px bg-slate-200" />
 
-        {layoutDraft && (
-          <button
-            type="button"
-            onClick={() => setEditorMode(isPlacing ? 'select' : 'place')}
-            className={[
-              'flex h-8 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors',
-              isPlacing
-                ? 'border-cyan-400 bg-cyan-50 text-cyan-800 ring-1 ring-cyan-400/40'
-                : 'border-[var(--border-muted)] bg-white text-slate-700 shadow-sm hover:bg-slate-50'
-            ].join(' ')}
-          >
-            <PlusSquare className="h-4 w-4" />
-            {isPlacing ? 'Click canvas...' : 'Add Rack'}
-          </button>
-        )}
-
-        <div className="mx-1.5 h-5 w-px bg-slate-200" />
-
-        <button
-          type="button"
-          disabled={!actions.canCreateDraft || isBusy}
-          onClick={handleCreateDraft}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <FilePlus2 className="h-3.5 w-3.5" />
-          Create Draft
-        </button>
-
-        <button
-          type="button"
-          disabled={!actions.canSaveDraft || isBusy}
-          onClick={handleSaveDraft}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Save className="h-3.5 w-3.5" />
-          Save Draft
-        </button>
-
+        {/* Validate */}
         <button
           type="button"
           disabled={!actions.canValidateDraft || isBusy}
           onClick={handleValidate}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          title="Validate layout"
+          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+          style={{ color: 'var(--text-muted)' }}
         >
           <SearchCheck className="h-3.5 w-3.5" />
-          Validate
         </button>
 
+        {/* Create draft (when no draft) */}
+        {actions.canCreateDraft && (
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={handleCreateDraft}
+            className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <FilePlus2 className="h-3.5 w-3.5" />
+            Init
+          </button>
+        )}
+
+        {/* Save */}
+        <button
+          type="button"
+          disabled={!actions.canSaveDraft || isBusy}
+          onClick={handleSaveDraft}
+          title="Save draft"
+          className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          <Save className="h-3.5 w-3.5" />
+          Save
+        </button>
+
+        {/* Publish */}
         <button
           type="button"
           disabled={!actions.canPublishDraft || isBusy}
           onClick={handlePublish}
-          className="flex h-8 items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+          style={{ background: 'var(--accent)' }}
         >
           <CheckCircle2 className="h-3.5 w-3.5" />
           Publish
