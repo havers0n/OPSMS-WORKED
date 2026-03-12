@@ -1,4 +1,4 @@
-import { Activity, BarChart3, ChevronLeft, ChevronRight, LayoutGrid, Package } from 'lucide-react';
+import { Activity, BarChart3, ChevronLeft, ChevronRight, LayoutGrid, Package, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { routes } from '@/shared/config/routes';
@@ -24,7 +24,6 @@ export function LeftDrawer() {
         isCollapsed ? 'w-[60px]' : 'w-56'
       ].join(' ')}
     >
-      {/* Header */}
       <div
         className={[
           'flex items-center border-b border-slate-800 py-4',
@@ -41,7 +40,6 @@ export function LeftDrawer() {
         )}
       </div>
 
-      {/* Nav items */}
       <nav className="flex flex-1 flex-col gap-1 p-2">
         {items.map((item) => {
           const Icon = item.icon;
@@ -111,7 +109,6 @@ export function LeftDrawer() {
         })}
       </nav>
 
-      {/* Collapse toggle */}
       <div className="border-t border-slate-800 p-2">
         <button
           type="button"
