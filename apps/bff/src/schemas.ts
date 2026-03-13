@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  cellOccupancyRowSchema,
   containerSchema,
   containerTypeSchema,
   floorSchema,
@@ -110,6 +111,7 @@ export const floorsResponseSchema = z.array(floorSchema);
 export const containerTypesResponseSchema = z.array(containerTypeSchema);
 export const containersResponseSchema = z.array(containerSchema);
 export const containerResponseSchema = containerSchema;
+export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const validationResponseSchema = layoutValidationResultSchema;

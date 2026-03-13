@@ -742,6 +742,27 @@ Views should expose derived operational read models. They must not replace sourc
 
 ### Recommended views
 
+#### `cell_occupancy_v`
+
+Purpose:
+
+- current physical container occupancy by cell
+
+Possible columns:
+
+- `tenant_id`
+- `cell_id`
+- `container_id`
+- `external_code`
+- `container_type`
+- `container_status`
+- `placed_at`
+
+Notes:
+
+- derived only from active placements where `removed_at is null`
+- placement-centric only; no inventory/content semantics belong here
+
 #### `v_layout_publish_impact`
 
 Purpose:

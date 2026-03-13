@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
+  cellOccupancyResponseSchema,
   containerResponseSchema,
   containersResponseSchema,
   containerTypesResponseSchema,
@@ -25,6 +26,7 @@ import {
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
+  mapCellOccupancyRowToDomain,
   mapContainerRowToDomain,
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
@@ -282,6 +284,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(containersResponseSchema, (data ?? []).map(mapContainerRowToDomain));
+  });
+
+  app.get('/api/cells/:cellId/containers', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('cell_occupancy_v')
+      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at')
+      .eq('cell_id', cellId)
+      .order('placed_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(cellOccupancyResponseSchema, (data ?? []).map(mapCellOccupancyRowToDomain));
   });
 
   app.get('/api/me', async (request, reply) => {

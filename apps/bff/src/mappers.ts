@@ -1,10 +1,12 @@
 import {
+  cellOccupancyRowSchema,
   containerSchema,
   containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
   layoutValidationResultSchema,
   siteSchema,
+  type CellOccupancyRow,
   type Container,
   type ContainerType,
   type Floor,
@@ -102,6 +104,26 @@ export function mapContainerRowToDomain(row: {
     status: row.status,
     createdAt: row.created_at,
     createdBy: row.created_by
+  });
+}
+
+export function mapCellOccupancyRowToDomain(row: {
+  tenant_id: string;
+  cell_id: string;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  placed_at: string;
+}): CellOccupancyRow {
+  return cellOccupancyRowSchema.parse({
+    tenantId: row.tenant_id,
+    cellId: row.cell_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    placedAt: row.placed_at
   });
 }
 

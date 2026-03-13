@@ -50,6 +50,27 @@ const containerRows = [
   }
 ];
 
+const cellOccupancyRows = [
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    external_code: 'PALLET-001',
+    container_type: 'pallet',
+    container_status: 'active',
+    placed_at: '2026-03-13T09:15:00.000Z'
+  },
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    container_id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+    external_code: null,
+    container_type: 'tote',
+    container_status: 'quarantined',
+    placed_at: '2026-03-13T10:15:00.000Z'
+  }
+];
+
 function createSupabaseStub() {
   return {
     from: vi.fn((table: string) => {
@@ -156,6 +177,19 @@ function createSupabaseStub() {
                   created_at: '2026-03-13T12:00:00.000Z',
                   created_by: payload.created_by ?? null
                 },
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'cell_occupancy_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              order: vi.fn(async () => ({
+                data: cellOccupancyRows.filter((row) => row.cell_id === value),
                 error: null
               }))
             }))
@@ -491,6 +525,46 @@ describe('buildApp', () => {
         status: 'active',
         createdAt: '2026-03-13T09:15:00.000Z',
         createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('returns active container occupancy for a cell', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/cells/216f2dd6-8f17-4de4-aaba-657f9e0e1398/containers',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        placedAt: '2026-03-13T09:15:00.000Z'
+      },
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        externalCode: null,
+        containerType: 'tote',
+        containerStatus: 'quarantined',
+        placedAt: '2026-03-13T10:15:00.000Z'
       }
     ]);
 
