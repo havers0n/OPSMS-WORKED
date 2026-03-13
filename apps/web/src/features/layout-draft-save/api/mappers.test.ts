@@ -77,6 +77,7 @@ describe('mapLayoutDraftToSavePayload', () => {
 
     const payload = mapLayoutDraftToSavePayload(useEditorStore.getState().draft ?? draft);
 
+    expect(useEditorStore.getState().draft?.state).toBe('draft');
     expect(payload.racks[0]?.faces[0]).toEqual(
       expect.objectContaining({
         slotNumberingDirection: 'ltr',

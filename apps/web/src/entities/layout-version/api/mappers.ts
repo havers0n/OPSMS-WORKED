@@ -63,6 +63,7 @@ export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): Layo
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
     floorId: bundle.layoutVersion.floor_id,
+    state: bundle.layoutVersion.state,
     rackIds: racks.map((rack) => rack.id),
     racks: Object.fromEntries(racks.map((rack) => [rack.id, rack]))
   });

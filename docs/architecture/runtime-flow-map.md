@@ -134,6 +134,7 @@ Failure points:
 type LayoutDraft = {
   layoutVersionId: string;
   floorId: string;
+  state: 'draft' | 'published' | 'archived';
   rackIds: string[];
   racks: Record<string, Rack>;
 } | null;
@@ -144,7 +145,7 @@ type LayoutDraft = {
 3. BFF reads all layout versions for the floor and picks the newest `state = 'draft'`.
 4. BFF loads racks for that layout version.
 5. If racks exist, BFF loads related `rack_faces`, `rack_sections`, and `rack_levels`.
-6. BFF maps DB rows into the domain `LayoutDraft` DTO and validates it with `layoutDraftSchema`.
+6. BFF maps DB rows into the domain `LayoutDraft` DTO, including explicit lifecycle `state`, and validates it with `layoutDraftSchema`.
 7. `WarehouseEditor` receives the query result and calls `initializeDraft(layoutDraft)` into Zustand.
 8. Canvas and inspector now read from the local editor store, not directly from TanStack Query.
 

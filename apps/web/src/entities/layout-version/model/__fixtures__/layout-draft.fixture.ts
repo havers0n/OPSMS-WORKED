@@ -8,6 +8,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
   return {
     layoutVersionId: 'layout-version-1',
     floorId: 'floor-1',
+    state: 'draft',
     rackIds: [rackId],
     racks: {
       [rackId]: {

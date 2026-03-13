@@ -150,6 +150,119 @@ function createValidSaveLayoutDraftPayload() {
   };
 }
 
+function createActiveDraftSupabaseStub() {
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [
+                {
+                  id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  version_no: 3,
+                  state: 'draft'
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'racks') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [
+                {
+                  id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951',
+                  layout_version_id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+                  display_code: 'R01',
+                  kind: 'single',
+                  axis: 'NS',
+                  x: 10,
+                  y: 20,
+                  total_length: 2700,
+                  depth: 1100,
+                  rotation_deg: 0
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'rack_faces') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [
+                {
+                  id: 'c4873dd5-bb30-48b9-9558-4effcab5cf8d',
+                  rack_id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951',
+                  side: 'A',
+                  enabled: true,
+                  slot_numbering_direction: 'ltr',
+                  is_mirrored: false,
+                  mirror_source_face_id: null,
+                  face_length: null
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'rack_sections') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [
+                {
+                  id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+                  rack_face_id: 'c4873dd5-bb30-48b9-9558-4effcab5cf8d',
+                  ordinal: 1,
+                  length: 2700
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'rack_levels') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [
+                {
+                  id: '342d905f-2a71-4812-828f-4b0d1acc4a53',
+                  rack_section_id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+                  ordinal: 1,
+                  slot_count: 2
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      return {
+        select: vi.fn(() => ({
+          limit: vi.fn(async () => ({ data: [], error: null }))
+        }))
+      };
+    }),
+    rpc: vi.fn()
+  };
+}
+
 describe('buildApp', () => {
   it('exposes liveness metadata', async () => {
     const app = buildApp();
@@ -276,6 +389,74 @@ describe('buildApp', () => {
       cellCount: 8,
       sampleAddresses: ['03-A.01.01.01', '03-A.01.01.02']
     });
+
+    await app.close();
+  });
+
+  it('returns the active draft with explicit lifecycle state', async () => {
+    const supabase = createActiveDraftSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/layout-draft',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      state: 'draft',
+      rackIds: ['f38510b5-d5c5-4657-8d7e-a4154cb74951'],
+      racks: expect.any(Object)
+    });
+
+    await app.close();
+  });
+
+  it('returns null when no active draft exists for the floor', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'layout_versions') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(async () => ({
+                data: [],
+                error: null
+              }))
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            limit: vi.fn(async () => ({ data: [], error: null }))
+          }))
+        };
+      })
+    };
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/layout-draft',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toBeNull();
 
     await app.close();
   });

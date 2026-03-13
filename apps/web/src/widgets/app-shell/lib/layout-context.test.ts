@@ -4,6 +4,7 @@ import { getLayoutActionState, shouldProceedWithContextSwitch } from './layout-c
 const layoutDraft = {
   layoutVersionId: 'draft-1',
   floorId: 'floor-1',
+  state: 'draft' as const,
   rackIds: [],
   racks: {}
 };

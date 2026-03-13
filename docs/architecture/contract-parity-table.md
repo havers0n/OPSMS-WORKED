@@ -23,7 +23,7 @@ Status legend:
 | `LayoutDraft` | `layoutVersionId` | `layout_versions.id`; `save_layout_draft`; `publish_layout_version` | `layoutDraftResponseSchema`; `layoutVersionIdResponseSchema`; `publishResponseSchema` | `layoutDraftSchema`; `layoutPublishResultSchema` | `editor-store.draft.layoutVersionId`; validation cache key | Aligned | Primary identity survives end-to-end. |
 | `LayoutDraft` | `floorId` | `layout_versions.floor_id` | `layoutDraftResponseSchema`; `publishedLayoutSummaryResponseSchema` | `layoutDraftSchema`; `publishedLayoutSummarySchema` | active floor context; editor draft state | Aligned | Stable across read flows. |
 | `LayoutVersion` | `versionNo` | `layout_versions.version_no` | emitted only in published summary | `publishedLayoutSummarySchema`; `layoutVersionSchema` exists separately | published summary consumers only | Partial | Active draft fetch reads `version_no` for selection, but drops it from the editor DTO. |
-| `LayoutVersion` | `state` | `layout_versions.state` | used in BFF lookup only; not emitted in draft DTO | `layoutVersionSchema` exists, not used in draft transport | not stored in editor state | Partial | Important lifecycle flag exists in persistence, but current draft contract hides it. |
+| `LayoutVersion` | `state` | `layout_versions.state` | active draft DTO now carries `state` | `layoutDraftSchema`; `layoutVersionSchema` | carried in editor draft state as explicit lifecycle truth | Aligned | The active draft contract now makes layout lifecycle state explicit instead of relying on route semantics alone. |
 | `LayoutVersion` | `parentPublishedVersionId` / `createdBy` / `publishedBy` / `archivedAt` | `layout_versions.*` | not exposed | not represented in active layout contracts | not used | DB-only | Lifecycle/audit metadata is persisted but absent from current editor/runtime boundary. |
 | `PublishedLayoutSummary` | `publishedAt` | `layout_versions.published_at`; `publish_layout_version` result | `publishedLayoutSummaryResponseSchema`; `publishResponseSchema` | `publishedLayoutSummarySchema`; `layoutPublishResultSchema` | publish status messaging | Aligned | Published timestamp survives the summary/publish flows. |
 | `Rack` | `id` | `racks.id`; `save_layout_draft` payload | response + save request DTO | `rackSchema` | `editor-store`, selection, canvas | Aligned | Stable rack identity. |
@@ -56,9 +56,9 @@ Status legend:
 
 ## Priority Findings
 
-1. Lifecycle metadata exists in persistence but not in the active editor contract.
-   `layout_versions.state`, `version_no`, `parent_published_version_id`, and rack `state` are either hidden or only partially surfaced, which makes editor/runtime decisions depend on out-of-band query logic instead of explicit DTO truth.
+1. Lifecycle metadata still exists in persistence beyond the active editor contract.
+   `version_no`, `parent_published_version_id`, and rack `state` remain hidden or only partially surfaced, which is acceptable for now but leaves future lineage/history decisions open.
 
 ## Immediate Follow-ups
 
-1. Decide whether lifecycle metadata should be surfaced explicitly in the active editor contract.
+1. Decide later whether lineage/history metadata should be surfaced in dedicated summary/history contracts.

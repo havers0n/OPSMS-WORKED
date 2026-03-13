@@ -27,6 +27,7 @@ describe('editor-store', () => {
     useEditorStore.getState().initializeDraft(draft);
 
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
+    expect(useEditorStore.getState().draft?.state).toBe('draft');
     expect(useEditorStore.getState().selectedRackIds[0]).toBe(draft.rackIds[0]);
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
