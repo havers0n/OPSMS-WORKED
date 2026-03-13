@@ -104,6 +104,52 @@ function createSupabaseStub() {
   };
 }
 
+function createValidSaveLayoutDraftPayload() {
+  return {
+    layoutDraft: {
+      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      racks: [
+        {
+          id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951',
+          displayCode: 'R01',
+          kind: 'single',
+          axis: 'NS',
+          x: 10,
+          y: 20,
+          totalLength: 2700,
+          depth: 1100,
+          rotationDeg: 0,
+          faces: [
+            {
+              id: 'c4873dd5-bb30-48b9-9558-4effcab5cf8d',
+              side: 'A',
+              enabled: true,
+              faceLength: 4.5,
+              slotNumberingDirection: 'ltr',
+              isMirrored: false,
+              mirrorSourceFaceId: null,
+              sections: [
+                {
+                  id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+                  ordinal: 1,
+                  length: 2700,
+                  levels: [
+                    {
+                      id: '342d905f-2a71-4812-828f-4b0d1acc4a53',
+                      ordinal: 1,
+                      slotCount: 2
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  };
+}
+
 describe('buildApp', () => {
   it('exposes liveness metadata', async () => {
     const app = buildApp();
@@ -394,49 +440,7 @@ describe('buildApp', () => {
       headers: {
         authorization: 'Bearer token'
       },
-      payload: {
-        layoutDraft: {
-          layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
-          racks: [
-            {
-              id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951',
-              displayCode: 'R01',
-              kind: 'single',
-              axis: 'horizontal',
-              x: 10,
-              y: 20,
-              totalLength: 2700,
-              depth: 1100,
-              rotationDeg: 0,
-              faces: [
-                {
-                  id: 'c4873dd5-bb30-48b9-9558-4effcab5cf8d',
-                  side: 'A',
-                  enabled: true,
-                  faceLength: 4.5,
-                  slotNumberingDirection: 'asc',
-                  isMirrored: false,
-                  mirrorSourceFaceId: null,
-                  sections: [
-                    {
-                      id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
-                      ordinal: 1,
-                      length: 2700,
-                      levels: [
-                        {
-                          id: '342d905f-2a71-4812-828f-4b0d1acc4a53',
-                          ordinal: 1,
-                          slotCount: 2
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      }
+      payload: createValidSaveLayoutDraftPayload()
     });
 
     expect(response.statusCode).toBe(200);
@@ -459,6 +463,40 @@ describe('buildApp', () => {
       },
       actor_uuid: authContext.user.id
     });
+
+    await app.close();
+  });
+
+  it.each([
+    ['kind', (payload: ReturnType<typeof createValidSaveLayoutDraftPayload>) => { payload.layoutDraft.racks[0].kind = 'double'; }],
+    ['axis', (payload: ReturnType<typeof createValidSaveLayoutDraftPayload>) => { payload.layoutDraft.racks[0].axis = 'horizontal'; }],
+    ['rotationDeg', (payload: ReturnType<typeof createValidSaveLayoutDraftPayload>) => { payload.layoutDraft.racks[0].rotationDeg = 45; }],
+    ['side', (payload: ReturnType<typeof createValidSaveLayoutDraftPayload>) => { payload.layoutDraft.racks[0].faces[0].side = 'front'; }],
+    ['slotNumberingDirection', (payload: ReturnType<typeof createValidSaveLayoutDraftPayload>) => { payload.layoutDraft.racks[0].faces[0].slotNumberingDirection = 'left-to-right'; }]
+  ])('rejects invalid save-layout payload %s before RPC', async (_field, mutatePayload) => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const payload = createValidSaveLayoutDraftPayload();
+    mutatePayload(payload);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts/save',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
 
     await app.close();
   });

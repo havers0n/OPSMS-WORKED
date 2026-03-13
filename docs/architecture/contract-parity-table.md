@@ -28,17 +28,17 @@ Status legend:
 | `PublishedLayoutSummary` | `publishedAt` | `layout_versions.published_at`; `publish_layout_version` result | `publishedLayoutSummaryResponseSchema`; `publishResponseSchema` | `publishedLayoutSummarySchema`; `layoutPublishResultSchema` | publish status messaging | Aligned | Published timestamp survives the summary/publish flows. |
 | `Rack` | `id` | `racks.id`; `save_layout_draft` payload | response + save request DTO | `rackSchema` | `editor-store`, selection, canvas | Aligned | Stable rack identity. |
 | `Rack` | `displayCode` | `racks.display_code`; save payload | response + save request DTO | `rackSchema` | inspector, address generation, canvas labels | Aligned | Used as both label and address component. |
-| `Rack` | `kind` | DB check: `single/paired` | save DTO accepts any non-empty string | `rackKindSchema` | store/UI operate on `single/paired` only | Weakened | BFF request validation is looser than DB/domain invariants. |
-| `Rack` | `axis` | DB check: `NS/WE` | save DTO accepts any non-empty string | `rackAxisSchema` | store/UI operate on `NS/WE`; rotation sync mutates it | Weakened | Test fixtures still use stale values like `horizontal`, which would only fail later at DB insertion. |
+| `Rack` | `kind` | DB check: `single/paired` | save DTO now uses `rackKindSchema` | `rackKindSchema` | store/UI operate on `single/paired` only | Aligned | BFF save boundary now rejects non-canonical rack kinds before RPC. |
+| `Rack` | `axis` | DB check: `NS/WE` | save DTO now uses `rackAxisSchema` | `rackAxisSchema` | store/UI operate on `NS/WE`; rotation sync mutates it | Aligned | BFF save boundary now rejects non-canonical rack axes before RPC. |
 | `Rack` | `x` / `y` | `racks.x`, `racks.y` | response + save request DTO | `rackSchema` | canvas placement and spacing tools | Aligned | Stable geometry fields. |
 | `Rack` | `totalLength` / `depth` | `racks.total_length`, `racks.depth` | response + save request DTO | `rackSchema` | inspector, validation, previews | Aligned | Physical dimensions survive correctly. |
-| `Rack` | `rotationDeg` | DB check: `0/90/180/270` | save DTO accepts any number | literal union in `rackSchema` | store rotates in 90 degree steps | Weakened | BFF request contract is looser than DB/domain. |
+| `Rack` | `rotationDeg` | DB check: `0/90/180/270` | save DTO now uses the same literal union | literal union in `rackSchema` | store rotates in 90 degree steps | Aligned | BFF write validation now rejects non-canonical rotations before RPC. |
 | `Rack` | `state` | `racks.state` | not emitted in active draft DTO | not represented | not used | DB-only | Rack-level lifecycle state is persisted but not surfaced to editor clients. |
 | `RackFace` | `id` | `rack_faces.id` | response + save request DTO | `rackFaceSchema` | store, inspector, mirror logic | Aligned | Stable face identity. |
-| `RackFace` | `side` | DB check: `A/B` | save DTO accepts any non-empty string | `rackFaceSideSchema` | UI assumes `A/B` | Weakened | Another loose BFF input boundary. |
+| `RackFace` | `side` | DB check: `A/B` | save DTO now uses `rackFaceSideSchema` | `rackFaceSideSchema` | UI assumes `A/B` | Aligned | BFF save boundary now rejects non-canonical face sides before RPC. |
 | `RackFace` | `enabled` | `rack_faces.enabled` | response + save request DTO | `rackFaceSchema` | inspector, validation, cell generation | Aligned | Correctly preserved across the active flow. |
 | `RackFace` | `anchor` | removed from active persistence/RPC contract | removed from BFF DTOs and save schema | intentionally not modeled | intentionally not carried in store/UI | Removed by design | Field was obsolete in the active layout flow and duplicated semantics already carried by `slotNumberingDirection`. |
-| `RackFace` | `slotNumberingDirection` | DB check: `ltr/rtl` | response present; save DTO accepts any non-empty string | enum in `rackFaceSchema` | numbering controls, previews, cell generation | Weakened | Read path is fine; write validation is still looser than DB/domain. |
+| `RackFace` | `slotNumberingDirection` | DB check: `ltr/rtl` | response present; save DTO now uses `slotNumberingDirectionSchema` | enum in `rackFaceSchema` | numbering controls, previews, cell generation | Aligned | Read and write paths now use the same finite literal set. |
 | `RackFace` | `isMirrored` | `rack_faces.is_mirrored` | response + save request DTO | `rackFaceSchema` | mirror mode and validation | Aligned | Preserved end-to-end. |
 | `RackFace` | `mirrorSourceFaceId` | `rack_faces.mirror_source_face_id` | response + save request DTO | `rackFaceSchema` | mirror mode and validation | Aligned | Preserved end-to-end. |
 | `RackFace` | `faceLength` | `rack_faces.face_length`; `create_layout_draft`; `save_layout_draft`; `validate_layout_version` | BFF read mapper + save DTO | optional field on `rackFaceSchema` | edited and consumed in store/UI validation, presets, and geometry | Aligned | Per-face override length now survives load/save round-trips and participates in DB validation as persisted layout truth. |
@@ -56,16 +56,12 @@ Status legend:
 
 ## Priority Findings
 
-1. BFF write validation is materially weaker than downstream invariants.
-   `kind`, `axis`, `side`, `slotNumberingDirection`, and `rotationDeg` are accepted as generic strings/numbers in the save DTO even though DB/domain are enum-constrained.
-
-2. `cellCode` is not parity-safe today.
+1. `cellCode` is not parity-safe today.
    The DB and `packages/domain` generate different values under the same field name, so local derived cells must not be treated as operational truth.
 
-3. Lifecycle metadata exists in persistence but not in the active editor contract.
+2. Lifecycle metadata exists in persistence but not in the active editor contract.
    `layout_versions.state`, `version_no`, `parent_published_version_id`, and rack `state` are either hidden or only partially surfaced, which makes editor/runtime decisions depend on out-of-band query logic instead of explicit DTO truth.
 
 ## Immediate Follow-ups
 
-1. Tighten BFF save schemas to the same enums/literal sets enforced by DB/domain.
-2. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.
+1. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.

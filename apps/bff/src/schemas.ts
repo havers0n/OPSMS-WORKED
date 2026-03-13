@@ -1,5 +1,16 @@
 import { z } from 'zod';
-import { floorSchema, layoutDraftSchema, layoutPublishResultSchema, layoutValidationResultSchema, publishedLayoutSummarySchema, siteSchema } from '@wos/domain';
+import {
+  floorSchema,
+  layoutDraftSchema,
+  layoutPublishResultSchema,
+  layoutValidationResultSchema,
+  publishedLayoutSummarySchema,
+  rackAxisSchema,
+  rackFaceSideSchema,
+  rackKindSchema,
+  siteSchema,
+  slotNumberingDirectionSchema
+} from '@wos/domain';
 
 export const createSiteBodySchema = z.object({
   code: z.string().trim().min(1),
@@ -33,9 +44,9 @@ const saveRackSectionPayloadSchema = z.object({
 
 const saveRackFacePayloadSchema = z.object({
   id: z.string().uuid(),
-  side: z.string().trim().min(1),
+  side: rackFaceSideSchema,
   enabled: z.boolean(),
-  slotNumberingDirection: z.string().trim().min(1),
+  slotNumberingDirection: slotNumberingDirectionSchema,
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().uuid().nullable(),
   faceLength: z.number().positive().optional(),
@@ -45,13 +56,13 @@ const saveRackFacePayloadSchema = z.object({
 const saveRackPayloadSchema = z.object({
   id: z.string().uuid(),
   displayCode: z.string().trim().min(1),
-  kind: z.string().trim().min(1),
-  axis: z.string().trim().min(1),
+  kind: rackKindSchema,
+  axis: rackAxisSchema,
   x: z.number(),
   y: z.number(),
   totalLength: z.number().positive(),
   depth: z.number().positive(),
-  rotationDeg: z.number(),
+  rotationDeg: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
   faces: z.array(saveRackFacePayloadSchema)
 });
 
