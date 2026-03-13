@@ -359,18 +359,19 @@ Purpose:
 Key fields:
 
 - `id uuid pk`
+- `tenant_id uuid fk -> tenants.id`
 - `container_id uuid fk -> containers.id`
 - `cell_id uuid fk -> cells.id`
 - `placed_at timestamptz`
 - `removed_at timestamptz null`
-- `state text check in ('active','removed')`
-- `source_import_job_id uuid null fk -> import_jobs.id`
-- `created_at timestamptz`
-- `updated_at timestamptz`
+- `placed_by uuid null fk -> profiles.id`
+- `removed_by uuid null fk -> profiles.id`
 
 Constraints:
 
+- active placement = `removed_at is null`
 - at most one active placement per container
+- placement only in published cells
 
 Notes:
 
