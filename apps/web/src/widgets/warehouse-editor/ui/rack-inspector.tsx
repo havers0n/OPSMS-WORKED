@@ -1,4 +1,4 @@
-import { generateLayoutCells, validateLayoutDraft } from '@wos/domain';
+import { generatePreviewCells, validateLayoutDraft } from '@wos/domain';
 import type { LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
 import {
   AlertTriangle,
@@ -299,7 +299,7 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
 
   const rackCells = useMemo(() => {
     if (!layoutDraft || !rack) return [];
-    return generateLayoutCells({
+    return generatePreviewCells({
       ...layoutDraft,
       rackIds: [rack.id],
       racks: { [rack.id]: rack }

@@ -1,6 +1,6 @@
 import type { LayoutValidationIssue, LayoutValidationResult } from './validation';
 import type { LayoutDraft } from './layout-draft';
-import { generateLayoutCells } from './generate-cells';
+import { generatePreviewCells } from './generate-cells';
 import type { Rack, RackFace, RackSection } from './rack';
 
 function compareLength(totalLength: number, sectionLengthSum: number) {
@@ -18,7 +18,7 @@ function resolveSections(face: RackFace, rack: Rack): RackSection[] {
 
 export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutValidationResult {
   const issues: LayoutValidationIssue[] = [];
-  const generatedCells = generateLayoutCells(layoutDraft);
+  const generatedCells = generatePreviewCells(layoutDraft);
   const addressSet = new Set<string>();
 
   for (const rackId of layoutDraft.rackIds) {

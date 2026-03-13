@@ -1,5 +1,5 @@
-import type { Cell } from './cell';
-import { buildCellCode } from './cell';
+import type { PreviewCell } from './cell';
+import { buildPreviewCellKey } from './cell';
 import { buildCellAddress } from './cell';
 import type { LayoutDraft } from './layout-draft';
 import type { Rack, RackFace, RackLevel, RackSection } from './rack';
@@ -52,7 +52,7 @@ function createCell(args: {
   sectionAddressOrdinal: number;
   level: RackLevel;
   slotNo: number;
-}): Cell {
+}): PreviewCell {
   const { layoutVersionId, rack, face, section, sectionAddressOrdinal, level, slotNo } = args;
   const address = buildCellAddress({
     rackCode: rack.displayCode,
@@ -64,7 +64,7 @@ function createCell(args: {
 
   return {
     id: `${rack.id}:${face.id}:${section.id}:${level.id}:${slotNo}`,
-    cellCode: buildCellCode({
+    previewCellKey: buildPreviewCellKey({
       rackId: rack.id,
       face: face.side,
       section: sectionAddressOrdinal,
@@ -82,7 +82,7 @@ function createCell(args: {
   };
 }
 
-export function generateRackCells(layoutVersionId: string, rack: Rack): Cell[] {
+export function generateRackCells(layoutVersionId: string, rack: Rack): PreviewCell[] {
   return rack.faces.flatMap((face) => {
     if (!face.enabled) {
       return [];
@@ -108,6 +108,6 @@ export function generateRackCells(layoutVersionId: string, rack: Rack): Cell[] {
   });
 }
 
-export function generateLayoutCells(layoutDraft: LayoutDraft): Cell[] {
+export function generatePreviewCells(layoutDraft: LayoutDraft): PreviewCell[] {
   return layoutDraft.rackIds.flatMap((rackId) => generateRackCells(layoutDraft.layoutVersionId, layoutDraft.racks[rackId]));
 }

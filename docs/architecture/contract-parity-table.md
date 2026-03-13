@@ -48,20 +48,17 @@ Status legend:
 | `RackLevel` | `id` | `rack_levels.id` | response + save request DTO | `rackLevelSchema` | store/UI row identity | Aligned | Stable end-to-end. |
 | `RackLevel` | `ordinal` | `rack_levels.ordinal` | response + save request DTO | `rackLevelSchema` | validation and address generation | Aligned | Stable end-to-end. |
 | `RackLevel` | `slotCount` | `rack_levels.slot_count` | response + save request DTO | `rackLevelSchema` | previews, validation, cell generation | Aligned | Stable end-to-end. |
-| `Cell` | `address.raw` / `address.sortKey` | `build_cell_address`; `cells.address`; `cells.address_sort_key` | published summary exposes only sample addresses, not full cell DTOs | `cellSchema`; `parseCellAddress`; `generateLayoutCells` mirror the string format | address preview and local validation use generated cells | Partial | Address format is consistent, but the editor relies on locally generated cells rather than persisted cell rows. |
-| `Cell` | `cellCode` | DB `build_cell_code` uses `md5(...):24`; persisted in `cells.cell_code` | no active BFF DTO in editor flow | `cellSchema`; `buildCellCode` uses a different lightweight hash | not surfaced in current UI | Divergent | Same field name, different algorithm. Frontend-generated `cellCode` is not parity-safe with persisted truth. |
+| `Cell` | `address.raw` / `address.sortKey` | `build_cell_address`; `cells.address`; `cells.address_sort_key` | published summary exposes only sample addresses, not full cell DTOs | `cellSchema`; `parseCellAddress`; `generatePreviewCells` mirrors the preview address format | address preview and local validation use generated preview cells | Partial | Address format is consistent, but the editor relies on locally generated preview cells rather than persisted cell rows. |
+| `Cell` | `cellCode` | DB `build_cell_code` uses `md5(...):24`; persisted in `cells.cell_code` | no active BFF DTO in editor flow | persisted `cellSchema` keeps `cellCode`; preview generation now uses `previewCellKey` | not surfaced in current UI | Separated by design | Published `cell_code` remains DB truth, while local preview cells use an explicit preview-only identifier instead of overloading `cellCode`. |
 | `Cell` | `x` / `y` | nullable `cells.x`, `cells.y` | no active layout editor DTO | optional in `cellSchema` | not used | Partial | Persisted shape exists but is not part of the current runtime path. |
 | `Validation` | `isValid` / `issues[*].code` / `severity` / `message` / `entityId` | `validate_layout_version` RPC | `validationResponseSchema` | `layoutValidationResultSchema` | cached validation + inspector/top bar | Aligned | Validation transport itself is coherent. |
 | `PublishResult` | `generatedCells` | `publish_layout_version` RPC result | `publishResponseSchema` | `layoutPublishResultSchema` | publish status messaging | Aligned | Publish impact survives correctly. |
 
 ## Priority Findings
 
-1. `cellCode` is not parity-safe today.
-   The DB and `packages/domain` generate different values under the same field name, so local derived cells must not be treated as operational truth.
-
-2. Lifecycle metadata exists in persistence but not in the active editor contract.
+1. Lifecycle metadata exists in persistence but not in the active editor contract.
    `layout_versions.state`, `version_no`, `parent_published_version_id`, and rack `state` are either hidden or only partially surfaced, which makes editor/runtime decisions depend on out-of-band query logic instead of explicit DTO truth.
 
 ## Immediate Follow-ups
 
-1. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.
+1. Decide whether lifecycle metadata should be surfaced explicitly in the active editor contract.

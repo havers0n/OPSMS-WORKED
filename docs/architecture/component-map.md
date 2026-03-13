@@ -218,7 +218,7 @@
     - draft
     - dirty flag
   - pure domain reads:
-    - `generateLayoutCells(layoutDraft)`
+    - `generatePreviewCells(layoutDraft)`
     - `validateLayoutDraft(layoutDraft)`
   - server validation cache:
     - `useCachedLayoutValidation(layoutVersionId)`
@@ -359,7 +359,7 @@
   - общий transport boundary
 - `@wos/domain`
   - pure domain rules:
-    - `generateLayoutCells`
+    - `generatePreviewCells`
     - `validateLayoutDraft`
     - schema parsing
 

@@ -204,7 +204,7 @@ Current publish flow generates only `active` rows.
 
 | State | Carrier | Meaning | Current Usage |
 | --- | --- | --- | --- |
-| `preview` | Derived UI/domain state | Cell address and geometry preview for a draft | Active in UI only |
+| `preview` | Derived UI/domain state | Cell address and geometry preview for a draft | Active in UI only; uses preview-only identity rather than persisted `cell_code` |
 | `active` | `cells.status = 'active'` | Persisted usable cell generated from published structure | Active |
 | `inactive` | `cells.status = 'inactive'` | Reserved for future deactivation semantics | Placeholder |
 | `historical` | Parent `layout_versions.state = 'archived'` | Persisted cell row kept for historical reference | Implicit |
@@ -213,7 +213,7 @@ Current publish flow generates only `active` rows.
 
 | Transition | Owner | Mechanism | Notes |
 | --- | --- | --- | --- |
-| `none -> preview` | Domain/UI derivation | `generateLayoutCells(...)` and address preview flows | Used during draft editing and validation preview |
+| `none -> preview` | Domain/UI derivation | `generatePreviewCells(...)` and address preview flows | Used during draft editing and validation preview |
 | `preview -> active` | Layout publish RPC | `publish_layout_version(...)` -> `regenerate_layout_cells(...)` | Cells are generated transactionally at publish time |
 | `active -> historical` | Layout publish RPC | parent `LayoutVersion` becomes `archived` | Cell rows stay persisted under archived version |
 | `active -> inactive` | Not owned yet | Not implemented | Reserved future transition only |
@@ -226,11 +226,12 @@ Current publish flow generates only `active` rows.
 - current draft persistence deletes draft cells; draft editing relies on derived preview, not persisted `cells` rows
 - published cells are regenerated from rack/face/section/level structure during publish
 - address uniqueness, tree consistency, and deterministic `cell_code` are enforced in persistence
+- preview cells use an explicit preview-only key and must not be confused with persisted `cell_code`
 
 #### Invalid Transitions
 
 - manual user editing of cell addresses as free text
-- direct business logic that treats draft preview cells as persisted truth
+- direct business logic that treats draft preview cells or their preview identifiers as persisted truth
 - creating a cell outside the rack/face/section/level tree
 - duplicate address within one layout version
 - duplicate `cell_code` within one layout version

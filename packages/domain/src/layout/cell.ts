@@ -16,9 +16,8 @@ export const cellAddressSchema = z.object({
 });
 export type CellAddress = z.infer<typeof cellAddressSchema>;
 
-export const cellSchema = z.object({
+const cellBaseSchema = z.object({
   id: z.string(),
-  cellCode: z.string(),
   layoutVersionId: z.string(),
   rackId: z.string(),
   rackFaceId: z.string(),
@@ -30,12 +29,22 @@ export const cellSchema = z.object({
   y: z.number().optional(),
   status: z.enum(['active', 'inactive'])
 });
+export const cellSchema = cellBaseSchema.extend({
+  cellCode: z.string()
+});
 export type Cell = z.infer<typeof cellSchema>;
+
+// Preview cells reuse the structural slot/address shape but intentionally keep
+// a preview-only identifier separate from persisted cells.cell_code.
+export const previewCellSchema = cellBaseSchema.extend({
+  previewCellKey: z.string()
+});
+export type PreviewCell = z.infer<typeof previewCellSchema>;
 
 const pad2 = (value: number | string) => String(value).padStart(2, '0');
 const pad4 = (value: number | string) => String(value).padStart(4, '0');
 
-export function buildCellCode(args: {
+export function buildPreviewCellKey(args: {
   rackId: string;
   face: 'A' | 'B';
   section: number;
@@ -45,7 +54,7 @@ export function buildCellCode(args: {
   const { rackId, face, section, level, slot } = args;
   const key = `${rackId}:${face}:${section}:${level}:${slot}`;
 
-  // Lightweight deterministic key for frontend-derived cells.
+  // Lightweight deterministic key for frontend-derived preview cells.
   let hash = 0;
   for (let index = 0; index < key.length; index += 1) {
     hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
