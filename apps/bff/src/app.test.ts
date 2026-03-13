@@ -370,7 +370,7 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('accepts save-layout payloads that match the web RPC contract', async () => {
+  it('accepts save-layout payloads without rack-face anchor', async () => {
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'save_layout_draft') {
@@ -413,7 +413,6 @@ describe('buildApp', () => {
                   id: 'c4873dd5-bb30-48b9-9558-4effcab5cf8d',
                   side: 'A',
                   enabled: true,
-                  anchor: 'left',
                   slotNumberingDirection: 'asc',
                   isMirrored: false,
                   mirrorSourceFaceId: null,
@@ -443,6 +442,10 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d'
     });
+    const savePayload = supabase.rpc.mock.calls[0]?.[1]?.layout_payload as {
+      racks: Array<{ faces: Array<Record<string, unknown>> }>;
+    };
+    expect(savePayload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
     expect(supabase.rpc).toHaveBeenCalledWith('save_layout_draft', {
       layout_payload: {
         layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',

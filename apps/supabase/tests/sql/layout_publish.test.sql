@@ -1,6 +1,6 @@
 -- layout_publish.test.sql
 -- Executable verification script for layout hardening.
--- Run after migrations 0001-0009 against a local database.
+-- Run after migrations 0001-0016 against a local database.
 -- The script raises exceptions on failed assertions and rolls back at the end.
 
 begin;
@@ -105,7 +105,6 @@ begin
               'id', '00000000-0000-0000-0000-000000000201',
               'side', 'A',
               'enabled', true,
-              'anchor', 'start',
               'slotNumberingDirection', 'ltr',
               'isMirrored', false,
               'mirrorSourceFaceId', null,
@@ -128,7 +127,6 @@ begin
               'id', '00000000-0000-0000-0000-000000000202',
               'side', 'B',
               'enabled', true,
-              'anchor', 'end',
               'slotNumberingDirection', 'rtl',
               'isMirrored', true,
               'mirrorSourceFaceId', '00000000-0000-0000-0000-000000000201',
@@ -162,7 +160,6 @@ begin
                 'id', '00000000-0000-0000-0000-000000000201',
                 'side', 'A',
                 'enabled', true,
-                'anchor', 'start',
                 'slotNumberingDirection', 'ltr',
                 'isMirrored', true,
                 'mirrorSourceFaceId', '00000000-0000-0000-0000-000000000201',
@@ -236,10 +233,10 @@ begin
     insert into public.racks (id, layout_version_id, display_code, kind, axis, x, y, total_length, depth, rotation_deg, state)
     values ('00000000-0000-0000-0000-000000000112'::uuid, draft_two, '04', 'paired', 'NS', 30, 10, 5, 1.1, 0, 'draft');
 
-    insert into public.rack_faces (id, rack_id, side, enabled, anchor, slot_numbering_direction, is_mirrored, mirror_source_face_id)
+    insert into public.rack_faces (id, rack_id, side, enabled, slot_numbering_direction, is_mirrored, mirror_source_face_id)
     values
-      ('00000000-0000-0000-0000-000000000203'::uuid, '00000000-0000-0000-0000-000000000112'::uuid, 'A', true, 'start', 'ltr', false, null),
-      ('00000000-0000-0000-0000-000000000204'::uuid, '00000000-0000-0000-0000-000000000112'::uuid, 'B', true, 'end', 'rtl', true, '00000000-0000-0000-0000-000000000201'::uuid);
+      ('00000000-0000-0000-0000-000000000203'::uuid, '00000000-0000-0000-0000-000000000112'::uuid, 'A', true, 'ltr', false, null),
+      ('00000000-0000-0000-0000-000000000204'::uuid, '00000000-0000-0000-0000-000000000112'::uuid, 'B', true, 'rtl', true, '00000000-0000-0000-0000-000000000201'::uuid);
 
     raise exception 'Cross-rack mirrored face insert should have failed';
   exception
@@ -289,10 +286,10 @@ begin
   insert into public.racks (id, layout_version_id, display_code, kind, axis, x, y, total_length, depth, rotation_deg, state)
   values ('00000000-0000-0000-0000-000000000113'::uuid, invalid_draft, '09', 'single', 'WE', 5, 5, 5, 1.1, 0, 'draft');
 
-  insert into public.rack_faces (id, rack_id, side, enabled, anchor, slot_numbering_direction, is_mirrored, mirror_source_face_id)
+  insert into public.rack_faces (id, rack_id, side, enabled, slot_numbering_direction, is_mirrored, mirror_source_face_id)
   values
-    ('00000000-0000-0000-0000-000000000205'::uuid, '00000000-0000-0000-0000-000000000113'::uuid, 'A', true, 'start', 'ltr', false, null),
-    ('00000000-0000-0000-0000-000000000206'::uuid, '00000000-0000-0000-0000-000000000113'::uuid, 'B', true, 'end', 'rtl', false, null);
+    ('00000000-0000-0000-0000-000000000205'::uuid, '00000000-0000-0000-0000-000000000113'::uuid, 'A', true, 'ltr', false, null),
+    ('00000000-0000-0000-0000-000000000206'::uuid, '00000000-0000-0000-0000-000000000113'::uuid, 'B', true, 'rtl', false, null);
 
   insert into public.rack_sections (id, rack_face_id, ordinal, length)
   values

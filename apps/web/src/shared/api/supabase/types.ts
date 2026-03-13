@@ -308,7 +308,6 @@ export type Database = {
       }
       rack_faces: {
         Row: {
-          anchor: string
           created_at: string
           enabled: boolean
           id: string
@@ -320,7 +319,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          anchor: string
           created_at?: string
           enabled?: boolean
           id?: string
@@ -332,7 +330,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          anchor?: string
           created_at?: string
           enabled?: boolean
           id?: string
@@ -715,4 +712,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

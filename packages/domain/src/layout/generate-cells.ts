@@ -48,7 +48,7 @@ function createCell(args: {
   rack: Rack;
   face: RackFace;
   section: RackSection;
-  /** Address-level section number (respects anchor direction, may differ from section.ordinal) */
+  /** Address-level section number in effective generation order, which may differ from section.ordinal. */
   sectionAddressOrdinal: number;
   level: RackLevel;
   slotNo: number;

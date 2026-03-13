@@ -326,7 +326,6 @@ RackFace fields:
 
 - `side: A | B`
 - `enabled`
-- `anchor: start | end`
 - `slot_numbering_direction: ltr | rtl`
 
 Rules:
@@ -382,7 +381,6 @@ Rules:
 
 - levels are numbered bottom-to-top
 - slot numbering direction is face-specific
-- anchor is face-specific
 - orientation affects geometry only
 - display address and internal IDs are different things
 

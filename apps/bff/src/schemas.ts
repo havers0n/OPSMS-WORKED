@@ -35,7 +35,6 @@ const saveRackFacePayloadSchema = z.object({
   id: z.string().uuid(),
   side: z.string().trim().min(1),
   enabled: z.boolean(),
-  anchor: z.string().trim().min(1),
   slotNumberingDirection: z.string().trim().min(1),
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().uuid().nullable(),

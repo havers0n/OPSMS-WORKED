@@ -34,7 +34,6 @@ type RackFaceRow = {
   rack_id: string;
   side: 'A' | 'B';
   enabled: boolean;
-  anchor: 'start' | 'end';
   slot_numbering_direction: 'ltr' | 'rtl';
   is_mirrored: boolean;
   mirror_source_face_id: string | null;
@@ -98,7 +97,6 @@ function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevel
     id: row.id,
     side: row.side,
     enabled: row.enabled,
-    anchor: row.anchor,
     slotNumberingDirection: row.slot_numbering_direction,
     isMirrored: row.is_mirrored,
     mirrorSourceFaceId: row.mirror_source_face_id,

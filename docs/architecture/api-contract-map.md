@@ -776,7 +776,6 @@ Request schema:
             "id": "uuid",
             "side": "string",
             "enabled": true,
-            "anchor": "string",
             "slotNumberingDirection": "string",
             "isMirrored": false,
             "mirrorSourceFaceId": "uuid | null",

@@ -153,7 +153,7 @@ Failure points:
 - No active draft is not an error here; the endpoint returns `null`.
 - Missing token, invalid token, or tenant-scoped RLS can block the read path before the editor is initialized.
 - Any select failure or mapper/schema parse failure bubbles as a BFF error and leaves the page in `error` state.
-- `rack_faces.anchor` is loaded from DB rows in the API mapper, but `packages/domain` drops that field from `RackFace`; the round-trip already loses anchor information at load time.
+- `rack_faces.anchor` was removed from the active persistence/RPC contract because it was obsolete and duplicated semantics already carried by `slotNumberingDirection`.
 - If the local draft is dirty and the same draft version is re-fetched, `initializeDraft()` intentionally keeps the dirty local state and ignores the refreshed server payload.
 
 ## Edit Rack Flow
@@ -253,7 +253,7 @@ Failure points:
 - The save button is disabled unless the app has an active floor, a local draft, and a live draft loaded for the same version.
 - BFF request-body validation can fail before any RPC call.
 - `save_layout_draft` rejects payloads for non-draft layout versions and malformed mirrored-face structures.
-- Current implementation mismatch: the web save payload omits `face.anchor`, while BFF Zod schema and the DB schema require it. This can fail the request with `VALIDATION_ERROR` before the RPC runs.
+- `anchor` is no longer part of the save contract; unchanged layout drafts now round-trip without an extra synthetic field.
 - The RPC is a destructive rewrite path: any field not present in the payload is dropped from persisted draft state on the next successful save.
 
 ## Validate Flow

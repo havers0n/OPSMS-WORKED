@@ -189,7 +189,6 @@ Key fields:
 - `rack_id uuid fk -> racks.id`
 - `side text check in ('A','B')`
 - `enabled boolean`
-- `anchor text check in ('start','end')`
 - `slot_numbering_direction text check in ('ltr','rtl')`
 - `mirror_source_face_id uuid null fk -> rack_faces.id`
 - `is_mirrored boolean`

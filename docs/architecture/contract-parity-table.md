@@ -37,7 +37,7 @@ Status legend:
 | `RackFace` | `id` | `rack_faces.id` | response + save request DTO | `rackFaceSchema` | store, inspector, mirror logic | Aligned | Stable face identity. |
 | `RackFace` | `side` | DB check: `A/B` | save DTO accepts any non-empty string | `rackFaceSideSchema` | UI assumes `A/B` | Weakened | Another loose BFF input boundary. |
 | `RackFace` | `enabled` | `rack_faces.enabled` | response + save request DTO | `rackFaceSchema` | inspector, validation, cell generation | Aligned | Correctly preserved across the active flow. |
-| `RackFace` | `anchor` | `rack_faces.anchor`; `create_layout_draft`; `save_layout_draft` payload requires it | BFF read mapper includes it; save DTO requires it | missing from `rackFaceSchema` | not present in store; comments/UI copy still reference anchor semantics | Dropped | Confirmed domain-boundary loss. Frontend save mapper cannot send it back, so current web save contract is broken for real round-trip persistence. |
+| `RackFace` | `anchor` | removed from active persistence/RPC contract | removed from BFF DTOs and save schema | intentionally not modeled | intentionally not carried in store/UI | Removed by design | Field was obsolete in the active layout flow and duplicated semantics already carried by `slotNumberingDirection`. |
 | `RackFace` | `slotNumberingDirection` | DB check: `ltr/rtl` | response present; save DTO accepts any non-empty string | enum in `rackFaceSchema` | numbering controls, previews, cell generation | Weakened | Read path is fine; write validation is still looser than DB/domain. |
 | `RackFace` | `isMirrored` | `rack_faces.is_mirrored` | response + save request DTO | `rackFaceSchema` | mirror mode and validation | Aligned | Preserved end-to-end. |
 | `RackFace` | `mirrorSourceFaceId` | `rack_faces.mirror_source_face_id` | response + save request DTO | `rackFaceSchema` | mirror mode and validation | Aligned | Preserved end-to-end. |
@@ -56,24 +56,20 @@ Status legend:
 
 ## Priority Findings
 
-1. `rack_faces.anchor` is the clearest current parity breach.
-   It is persisted, cloned, selected, and required by the save RPC contract, but it disappears in `packages/domain` and therefore cannot survive a frontend round-trip.
-
-2. `faceLength` is the inverse breach.
+1. `faceLength` is the inverse breach.
    It is modeled and actively used in the frontend/domain layer, but there is no persisted source of truth in the current DB/RPC contract.
 
-3. BFF write validation is materially weaker than downstream invariants.
-   `kind`, `axis`, `side`, `slotNumberingDirection`, `anchor`, and `rotationDeg` are accepted as generic strings/numbers in the save DTO even though DB/domain are enum-constrained.
+2. BFF write validation is materially weaker than downstream invariants.
+   `kind`, `axis`, `side`, `slotNumberingDirection`, and `rotationDeg` are accepted as generic strings/numbers in the save DTO even though DB/domain are enum-constrained.
 
-4. `cellCode` is not parity-safe today.
+3. `cellCode` is not parity-safe today.
    The DB and `packages/domain` generate different values under the same field name, so local derived cells must not be treated as operational truth.
 
-5. Lifecycle metadata exists in persistence but not in the active editor contract.
+4. Lifecycle metadata exists in persistence but not in the active editor contract.
    `layout_versions.state`, `version_no`, `parent_published_version_id`, and rack `state` are either hidden or only partially surfaced, which makes editor/runtime decisions depend on out-of-band query logic instead of explicit DTO truth.
 
 ## Immediate Follow-ups
 
-1. Fix the `RackFace` contract first: either restore `anchor` in `packages/domain` and frontend save mapping, or remove it from persistence/RPC if the field is truly obsolete.
-2. Decide whether `faceLength` is real domain truth or only a UI experiment. If real, add DB/RPC parity before relying on it for validation/publish semantics.
-3. Tighten BFF save schemas to the same enums/literal sets enforced by DB/domain.
-4. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.
+1. Decide whether `faceLength` is real domain truth or only a UI experiment. If real, add DB/RPC parity before relying on it for validation/publish semantics.
+2. Tighten BFF save schemas to the same enums/literal sets enforced by DB/domain.
+3. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.

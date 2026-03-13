@@ -10,7 +10,6 @@ const FACE_COLORS: Record<'A' | 'B', { cell: string; border: string; header: str
  * Columns = sections (in address order), rows = levels (L1 at bottom), cells = slots.
  *
  * Respects:
- *  - face.anchor:                 'end' reverses the visual section order so S01 is on the right
  *  - face.slotNumberingDirection: 'rtl' numbers slots N…1 left-to-right within each section
  *
  * This ensures the preview matches the generated cell addresses visible in Address Preview.
@@ -65,7 +64,7 @@ export function FrontElevationPreview({
         {(() => {
           let xCursor = 0;
           return orderedSections.map((section, si) => {
-            const addressOrdinal = si + 1; // 1-based, respects anchor reversal above
+            const addressOrdinal = si + 1; // 1-based, respects effective section order above
             const colW      = sectionWidthRatios[si] * 100;
             const levelCount = section.levels.length;
             const slotCount  = section.levels[0]?.slotCount ?? 1;

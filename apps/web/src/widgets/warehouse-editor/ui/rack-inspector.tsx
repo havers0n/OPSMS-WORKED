@@ -633,7 +633,7 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
                 /* Mirror mode: show read-only preview of mirrored layout */
                 <div className="flex flex-col gap-4">
                   <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                    Face B is a mirror of Face A. It will use reversed numbering direction and end anchor automatically.
+                    Face B is a mirror of Face A. It will use reversed numbering direction automatically.
                   </div>
                   {faceA && faceA.sections.length > 0 && (
                     <FrontElevationPreview face={faceA} side="B" />
