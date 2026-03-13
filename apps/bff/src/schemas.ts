@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import {
+  containerSchema,
+  containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
   layoutPublishResultSchema,
@@ -23,6 +25,11 @@ export const createFloorBodySchema = z.object({
   code: z.string().trim().min(1),
   name: z.string().trim().min(1),
   sortOrder: z.number().int().min(0)
+});
+
+export const createContainerBodySchema = z.object({
+  containerTypeId: z.string().uuid(),
+  externalCode: z.string().trim().min(1).nullable().optional()
 });
 
 export const createLayoutDraftBodySchema = z.object({
@@ -100,6 +107,9 @@ export const layoutVersionIdResponseSchema = z.object({
 
 export const sitesResponseSchema = z.array(siteSchema);
 export const floorsResponseSchema = z.array(floorSchema);
+export const containerTypesResponseSchema = z.array(containerTypeSchema);
+export const containersResponseSchema = z.array(containerSchema);
+export const containerResponseSchema = containerSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const validationResponseSchema = layoutValidationResultSchema;

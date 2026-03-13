@@ -310,6 +310,25 @@ The schema must encode:
 
 ### Tables
 
+#### `container_types`
+
+Purpose:
+
+- normalized reference set for physical container kinds
+
+Key fields:
+
+- `id uuid pk`
+- `code text unique`
+- `description text`
+
+Recommended initial values:
+
+- `pallet`
+- `carton`
+- `tote`
+- `bin`
+
 #### `containers`
 
 Purpose:
@@ -319,15 +338,17 @@ Purpose:
 Key fields:
 
 - `id uuid pk`
-- `container_code text null`
-- `container_type text`
-- `status text check in ('active','inactive')`
+- `tenant_id uuid fk -> tenants.id`
+- `external_code text null`
+- `container_type_id uuid fk -> container_types.id`
+- `status text check in ('active','quarantined','closed','lost','damaged')`
+- `created_by uuid null fk -> profiles.id`
 - `created_at timestamptz`
-- `updated_at timestamptz`
 
 Constraints:
 
-- unique nullable `container_code` if external IDs exist
+- unique nullable `(tenant_id, external_code)` if scannable external IDs exist
+- container exists independently of placement
 
 #### `container_placements`
 
@@ -931,6 +952,7 @@ Canonical flow through the schema:
 - `cells`
 - `products`
 - `product_location_roles`
+- `container_types`
 - `containers`
 - `container_placements`
 - `inventory_items`

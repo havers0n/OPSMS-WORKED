@@ -5,6 +5,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
+  containerResponseSchema,
+  containersResponseSchema,
+  containerTypesResponseSchema,
+  createContainerBodySchema,
   createFloorBodySchema,
   createLayoutDraftBodySchema,
   createSiteBodySchema,
@@ -20,7 +24,14 @@ import {
   validationResponseSchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
-import { mapFloorRowToDomain, mapLayoutDraftBundleToDomain, mapSiteRowToDomain, mapValidationResult } from './mappers.js';
+import {
+  mapContainerRowToDomain,
+  mapContainerTypeRowToDomain,
+  mapFloorRowToDomain,
+  mapLayoutDraftBundleToDomain,
+  mapSiteRowToDomain,
+  mapValidationResult
+} from './mappers.js';
 import { createAnonClient } from './supabase.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
@@ -239,6 +250,40 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(sitesResponseSchema, (data ?? []).map(mapSiteRowToDomain));
   });
 
+  app.get('/api/container-types', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('container_types')
+      .select('id,code,description')
+      .order('code', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(containerTypesResponseSchema, (data ?? []).map(mapContainerTypeRowToDomain));
+  });
+
+  app.get('/api/containers', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('containers')
+      .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(containersResponseSchema, (data ?? []).map(mapContainerRowToDomain));
+  });
+
   app.get('/api/me', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -277,6 +322,34 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(idResponseSchema, { id: data.id });
   });
 
+  app.post('/api/containers', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(createContainerBodySchema, request.body);
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for container creation.');
+    }
+
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('containers')
+      .insert({
+        tenant_id: auth.currentTenant.tenantId,
+        container_type_id: body.containerTypeId,
+        external_code: body.externalCode ?? null,
+        created_by: auth.user.id
+      })
+      .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(containerResponseSchema, mapContainerRowToDomain(data));
+  });
+
   app.get('/api/sites/:siteId/floors', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -294,6 +367,29 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(floorsResponseSchema, (data ?? []).map(mapFloorRowToDomain));
+  });
+
+  app.get('/api/containers/:containerId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('containers')
+      .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
+      .eq('id', containerId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      throw new ApiError(404, 'NOT_FOUND', 'Container was not found.');
+    }
+
+    return parseOrThrow(containerResponseSchema, mapContainerRowToDomain(data));
   });
 
   app.post('/api/floors', async (request, reply) => {

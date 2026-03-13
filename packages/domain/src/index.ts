@@ -7,6 +7,7 @@ export * from './layout/cell';
 export * from './layout/generate-cells';
 export * from './layout/validation';
 export * from './layout/validate-layout';
+export * from './storage/container';
 export * from './warehouse/site';
 export * from './warehouse/floor';
 export * from './warehouse/setup-state';

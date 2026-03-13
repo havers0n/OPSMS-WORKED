@@ -1,8 +1,8 @@
 param()
 
-$testFile = Join-Path $PSScriptRoot "layout_publish.test.sql"
-if (-not (Test-Path $testFile)) {
-  throw "SQL verification file is missing: $testFile"
+$testFiles = Get-ChildItem -Path $PSScriptRoot -Filter "*.test.sql" | Sort-Object Name
+if ($testFiles.Count -eq 0) {
+  throw "No SQL verification files were found under: $PSScriptRoot"
 }
 
 $supabaseProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
@@ -21,11 +21,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
-Get-Content -Raw -Path $testFile |
-  docker exec -i $containerName psql -v ON_ERROR_STOP=1 -U postgres -d postgres
+foreach ($testFile in $testFiles) {
+  Get-Content -Raw -Path $testFile.FullName |
+    docker exec -i $containerName psql -v ON_ERROR_STOP=1 -U postgres -d postgres
 
-if ($LASTEXITCODE -ne 0) {
-  throw "SQL lifecycle verification failed."
+  if ($LASTEXITCODE -ne 0) {
+    throw "SQL verification failed for file: $($testFile.Name)"
+  }
 }
 
-Write-Host "SQL lifecycle verification passed against local DB container: $containerName"
+Write-Host "SQL verification passed against local DB container: $containerName"

@@ -1,8 +1,12 @@
 import {
+  containerSchema,
+  containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
   layoutValidationResultSchema,
   siteSchema,
+  type Container,
+  type ContainerType,
   type Floor,
   type LayoutDraft,
   type LayoutValidationResult,
@@ -70,6 +74,34 @@ export function mapFloorRowToDomain(row: { id: string; site_id: string; code: st
     code: row.code,
     name: row.name,
     sortOrder: row.sort_order
+  });
+}
+
+export function mapContainerTypeRowToDomain(row: { id: string; code: string; description: string }): ContainerType {
+  return containerTypeSchema.parse({
+    id: row.id,
+    code: row.code,
+    description: row.description
+  });
+}
+
+export function mapContainerRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  external_code: string | null;
+  container_type_id: string;
+  status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  created_at: string;
+  created_by: string | null;
+}): Container {
+  return containerSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    externalCode: row.external_code,
+    containerTypeId: row.container_type_id,
+    status: row.status,
+    createdAt: row.created_at,
+    createdBy: row.created_by
   });
 }
 

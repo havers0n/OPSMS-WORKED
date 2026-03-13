@@ -25,6 +25,31 @@ const authContext = {
   }
 };
 
+const containerTypeRows = [
+  {
+    id: 'a8c1ab0f-2917-4ae0-b332-fd50f39db123',
+    code: 'bin',
+    description: 'Storage bin'
+  },
+  {
+    id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+    code: 'pallet',
+    description: 'Standard pallet'
+  }
+];
+
+const containerRows = [
+  {
+    id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    external_code: 'PALLET-001',
+    container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+    status: 'active',
+    created_at: '2026-03-13T09:15:00.000Z',
+    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+  }
+];
+
 function createSupabaseStub() {
   return {
     from: vi.fn((table: string) => {
@@ -88,6 +113,50 @@ function createSupabaseStub() {
                   count: 8,
                   error: null
                 }))
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'container_types') {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn(async () => ({
+              data: containerTypeRows,
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'containers') {
+        return {
+          select: vi.fn(() => ({
+            order: vi.fn(async () => ({
+              data: containerRows,
+              error: null
+            })),
+            eq: vi.fn((_column: string, value: string) => ({
+              maybeSingle: vi.fn(async () => ({
+                data: containerRows.find((row) => row.id === value) ?? null,
+                error: null
+              }))
+            }))
+          })),
+          insert: vi.fn((payload: Record<string, unknown>) => ({
+            select: vi.fn(() => ({
+              single: vi.fn(async () => ({
+                data: {
+                  id: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
+                  tenant_id: payload.tenant_id,
+                  external_code: payload.external_code ?? null,
+                  container_type_id: payload.container_type_id,
+                  status: 'active',
+                  created_at: '2026-03-13T12:00:00.000Z',
+                  created_by: payload.created_by ?? null
+                },
+                error: null
               }))
             }))
           }))
@@ -365,6 +434,94 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('returns supported container types', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/container-types',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        id: 'a8c1ab0f-2917-4ae0-b332-fd50f39db123',
+        code: 'bin',
+        description: 'Storage bin'
+      },
+      {
+        id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+        code: 'pallet',
+        description: 'Standard pallet'
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('returns tenant-scoped containers', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        externalCode: 'PALLET-001',
+        containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+        status: 'active',
+        createdAt: '2026-03-13T09:15:00.000Z',
+        createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('returns a single container by id', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      externalCode: 'PALLET-001',
+      status: 'active'
+    });
+
+    await app.close();
+  });
+
   it('returns the latest published layout summary for a floor', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
@@ -593,6 +750,75 @@ describe('buildApp', () => {
       name: 'Main Site',
       timezone: 'Asia/Jerusalem'
     });
+
+    await app.close();
+  });
+
+  it('creates a container inside the active tenant workspace', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+        externalCode: 'PALLET-002'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
+      tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      externalCode: 'PALLET-002',
+      containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+      status: 'active',
+      createdAt: '2026-03-13T12:00:00.000Z',
+      createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+    });
+
+    const containerApi = supabase.from.mock.results.find((result) => typeof result.value?.insert === 'function')?.value;
+    expect(containerApi.insert).toHaveBeenCalledWith({
+      tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+      external_code: 'PALLET-002',
+      created_by: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid create-container payloads with a structured error', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerTypeId: 'not-a-uuid',
+        externalCode: ''
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.from).not.toHaveBeenCalledWith('containers');
 
     await app.close();
   });
