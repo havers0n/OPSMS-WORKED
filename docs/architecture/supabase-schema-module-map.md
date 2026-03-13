@@ -841,6 +841,28 @@ Responsibility:
 - move validated staged rows into domain-specific operational tables
 - mark job state transition atomically
 
+#### `place_container(container_id uuid, cell_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- place an unplaced container into a published cell atomically
+- fail if the container already has an active placement
+
+#### `remove_container(container_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- close the active placement timeline row atomically
+- preserve placement history via `removed_at` / `removed_by`
+
+#### `move_container(container_id uuid, target_cell_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- move a currently placed container atomically
+- close the current active placement and open the new placement in one transaction
+- fail explicitly on same-cell moves instead of creating fake history
+
 #### `resolve_order_readiness(import_job_id uuid or order_batch_id uuid)`
 
 Responsibility:

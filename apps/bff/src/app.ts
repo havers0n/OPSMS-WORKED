@@ -12,6 +12,10 @@ import {
   createContainerBodySchema,
   createFloorBodySchema,
   createLayoutDraftBodySchema,
+  moveContainerBodySchema,
+  moveContainerResponseSchema,
+  placeContainerBodySchema,
+  placeContainerResponseSchema,
   createSiteBodySchema,
   currentWorkspaceResponseSchema,
   floorsResponseSchema,
@@ -20,6 +24,7 @@ import {
   layoutVersionIdResponseSchema,
   publishResponseSchema,
   publishedLayoutSummaryResponseSchema,
+  removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
   sitesResponseSchema,
   validationResponseSchema
@@ -411,6 +416,64 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(containerResponseSchema, mapContainerRowToDomain(data));
+  });
+
+  app.post('/api/containers/:containerId/place', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const body = parseOrThrow(placeContainerBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('place_container', {
+      container_uuid: containerId,
+      cell_uuid: body.cellId,
+      actor_uuid: auth.user.id
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(placeContainerResponseSchema, data);
+  });
+
+  app.post('/api/containers/:containerId/remove', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('remove_container', {
+      container_uuid: containerId,
+      actor_uuid: auth.user.id
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(removeContainerResponseSchema, data);
+  });
+
+  app.post('/api/containers/:containerId/move', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const body = parseOrThrow(moveContainerBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase.rpc('move_container', {
+      container_uuid: containerId,
+      target_cell_uuid: body.targetCellId,
+      actor_uuid: auth.user.id
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(moveContainerResponseSchema, data);
   });
 
   app.post('/api/floors', async (request, reply) => {

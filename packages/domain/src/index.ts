@@ -9,6 +9,7 @@ export * from './layout/validation';
 export * from './layout/validate-layout';
 export * from './storage/container';
 export * from './storage/cell-occupancy';
+export * from './storage/container-placement-action';
 export * from './storage/container-placement';
 export * from './warehouse/site';
 export * from './warehouse/floor';

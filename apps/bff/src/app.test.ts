@@ -897,6 +897,282 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('places a container into a published cell', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'place_container') {
+        return {
+          data: {
+            action: 'placed',
+            containerId: args.container_uuid,
+            cellId: args.cell_uuid,
+            placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+            occurredAt: '2026-03-13T12:15:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/place',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      action: 'placed',
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+      occurredAt: '2026-03-13T12:15:00.000Z'
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith('place_container', {
+      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      cell_uuid: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      actor_uuid: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('maps place-container conflicts clearly', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'place_container') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'CONTAINER_ALREADY_PLACED'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/place',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_CONFLICT',
+      message: 'Container is already placed.'
+    });
+
+    await app.close();
+  });
+
+  it('removes a currently placed container', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'remove_container') {
+        return {
+          data: {
+            action: 'removed',
+            containerId: args.container_uuid,
+            cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+            placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+            occurredAt: '2026-03-13T12:30:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/remove',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      action: 'removed',
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+      occurredAt: '2026-03-13T12:30:00.000Z'
+    });
+
+    await app.close();
+  });
+
+  it('maps remove-container not-placed conflicts clearly', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'remove_container') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'CONTAINER_NOT_PLACED'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/remove',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_CONFLICT',
+      message: 'Container is not currently placed.'
+    });
+
+    await app.close();
+  });
+
+  it('moves a container atomically between cells', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'move_container') {
+        return {
+          data: {
+            action: 'moved',
+            containerId: args.container_uuid,
+            fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+            toCellId: args.target_cell_uuid,
+            previousPlacementId: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
+            placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+            occurredAt: '2026-03-13T12:45:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      action: 'moved',
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+      previousPlacementId: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
+      placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+      occurredAt: '2026-03-13T12:45:00.000Z'
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith('move_container', {
+      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      target_cell_uuid: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+      actor_uuid: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it.each([
+    ['not placed', 'CONTAINER_NOT_PLACED', 'PLACEMENT_CONFLICT', 'Container is not currently placed.'],
+    ['invalid cell', 'TARGET_CELL_NOT_PUBLISHED', 'INVALID_TARGET_CELL', 'Target cell is not in a published layout.'],
+    ['same target cell', 'CONTAINER_ALREADY_IN_TARGET_CELL', 'PLACEMENT_CONFLICT', 'Container is already in the target cell.']
+  ])('maps move-container errors clearly when %s', async (_label, dbMessage, apiCode, apiMessage) => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'move_container') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: dbMessage
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: apiCode,
+      message: apiMessage
+    });
+
+    await app.close();
+  });
+
   it('accepts save-layout payloads with optional rack-face faceLength', async () => {
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {

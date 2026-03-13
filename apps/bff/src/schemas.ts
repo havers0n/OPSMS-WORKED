@@ -2,6 +2,9 @@ import { z } from 'zod';
 import {
   cellOccupancyRowSchema,
   containerSchema,
+  moveContainerResultSchema,
+  placeContainerResultSchema,
+  removeContainerResultSchema,
   containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
@@ -31,6 +34,14 @@ export const createFloorBodySchema = z.object({
 export const createContainerBodySchema = z.object({
   containerTypeId: z.string().uuid(),
   externalCode: z.string().trim().min(1).nullable().optional()
+});
+
+export const placeContainerBodySchema = z.object({
+  cellId: z.string().uuid()
+});
+
+export const moveContainerBodySchema = z.object({
+  targetCellId: z.string().uuid()
 });
 
 export const createLayoutDraftBodySchema = z.object({
@@ -112,6 +123,9 @@ export const containerTypesResponseSchema = z.array(containerTypeSchema);
 export const containersResponseSchema = z.array(containerSchema);
 export const containerResponseSchema = containerSchema;
 export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
+export const placeContainerResponseSchema = placeContainerResultSchema;
+export const removeContainerResponseSchema = removeContainerResultSchema;
+export const moveContainerResponseSchema = moveContainerResultSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const validationResponseSchema = layoutValidationResultSchema;
