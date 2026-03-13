@@ -71,6 +71,19 @@ const cellOccupancyRows = [
   }
 ];
 
+const inventoryItemRows = [
+  {
+    id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    item_ref: 'ITEM-001',
+    quantity: 5,
+    uom: 'pcs',
+    created_at: '2026-03-13T11:15:00.000Z',
+    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+  }
+];
+
 function createSupabaseStub() {
   return {
     from: vi.fn((table: string) => {
@@ -190,6 +203,36 @@ function createSupabaseStub() {
             eq: vi.fn((_column: string, value: string) => ({
               order: vi.fn(async () => ({
                 data: cellOccupancyRows.filter((row) => row.cell_id === value),
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'inventory_items') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              order: vi.fn(async () => ({
+                data: inventoryItemRows.filter((row) => row.container_id === value),
+                error: null
+              }))
+            }))
+          })),
+          insert: vi.fn((payload: Record<string, unknown>) => ({
+            select: vi.fn(() => ({
+              single: vi.fn(async () => ({
+                data: {
+                  id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
+                  tenant_id: payload.tenant_id,
+                  container_id: payload.container_id,
+                  item_ref: payload.item_ref,
+                  quantity: payload.quantity,
+                  uom: payload.uom,
+                  created_at: '2026-03-13T12:30:00.000Z',
+                  created_by: payload.created_by ?? null
+                },
                 error: null
               }))
             }))
@@ -567,6 +610,145 @@ describe('buildApp', () => {
         placedAt: '2026-03-13T10:15:00.000Z'
       }
     ]);
+
+    await app.close();
+  });
+
+  it('returns current inventory content for a container', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        itemRef: 'ITEM-001',
+        quantity: 5,
+        uom: 'pcs',
+        createdAt: '2026-03-13T11:15:00.000Z',
+        createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('creates current inventory content inside a container', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        itemRef: 'ITEM-002',
+        quantity: 3,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      itemRef: 'ITEM-002',
+      quantity: 3,
+      uom: 'pcs'
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid current inventory content payloads before insert', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        itemRef: 'ITEM-002',
+        quantity: -1,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+
+    await app.close();
+  });
+
+  it('maps duplicate current inventory content to conflict', async () => {
+    const supabase = createSupabaseStub();
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'inventory_items') {
+        return {
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn(async () => ({
+                data: null,
+                error: {
+                  code: '23505',
+                  message: 'duplicate key value violates unique constraint'
+                }
+              }))
+            }))
+          }))
+        };
+      }
+
+      return createSupabaseStub().from(table);
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        itemRef: 'ITEM-001',
+        quantity: 7,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'CONFLICT'
+    });
 
     await app.close();
   });

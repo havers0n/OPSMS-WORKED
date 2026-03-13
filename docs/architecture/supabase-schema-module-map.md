@@ -20,7 +20,7 @@ The schema must optimize for:
 
 1. authoritative published layout truth
 2. stable address generation
-3. storage truth based on `Cell -> Container -> InventoryItem`
+3. storage truth based on `Cell -> ContainerPlacement -> Container -> InventoryItem`
 4. staging-first imports with lineage
 5. operational readiness derivation
 6. pick task generation and execution history
@@ -306,7 +306,7 @@ This module holds physical storage truth semantics.
 
 The schema must encode:
 
-`Cell -> Container -> InventoryItem`
+`Cell -> ContainerPlacement -> Container -> InventoryItem`
 
 ### Tables
 
@@ -382,29 +382,29 @@ Notes:
 
 Purpose:
 
-- product quantity inside a container
+- current inventory content inside a container
 
 Key fields:
 
 - `id uuid pk`
+- `tenant_id uuid fk -> tenants.id`
 - `container_id uuid fk -> containers.id`
-- `product_id uuid fk -> products.id`
+- `item_ref text`
 - `quantity numeric`
-- `uom text null`
-- `lot_no text null`
-- `expires_at timestamptz null`
-- `state text check in ('active','consumed','adjusted')`
-- `source_import_job_id uuid null fk -> import_jobs.id`
+- `uom text`
 - `created_at timestamptz`
-- `updated_at timestamptz`
+- `created_by uuid null fk -> profiles.id`
 
 Constraints:
 
 - quantity >= 0
+- unique `(container_id, item_ref, uom)`
 
 Notes:
 
-- if operational deltas are later added, they should be reflected here or through event-derived projections
+- current-content truth only, not an event ledger
+- inventory belongs to containers, never directly to cells
+- cell content answers are derived later through active placement joins
 
 ## 4. Product Master and Operational Role Module
 

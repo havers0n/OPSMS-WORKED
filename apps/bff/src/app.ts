@@ -8,6 +8,7 @@ import {
   cellOccupancyResponseSchema,
   containerResponseSchema,
   containersResponseSchema,
+  createInventoryItemBodySchema,
   containerTypesResponseSchema,
   createContainerBodySchema,
   createFloorBodySchema,
@@ -20,6 +21,8 @@ import {
   currentWorkspaceResponseSchema,
   floorsResponseSchema,
   idResponseSchema,
+  inventoryItemResponseSchema,
+  inventoryItemsResponseSchema,
   layoutDraftResponseSchema,
   layoutVersionIdResponseSchema,
   publishResponseSchema,
@@ -35,6 +38,7 @@ import {
   mapContainerRowToDomain,
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
+  mapInventoryItemRowToDomain,
   mapLayoutDraftBundleToDomain,
   mapSiteRowToDomain,
   mapValidationResult
@@ -310,6 +314,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(cellOccupancyResponseSchema, (data ?? []).map(mapCellOccupancyRowToDomain));
   });
 
+  app.get('/api/containers/:containerId/inventory', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('inventory_items')
+      .select('id,tenant_id,container_id,item_ref,quantity,uom,created_at,created_by')
+      .eq('container_id', containerId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(inventoryItemsResponseSchema, (data ?? []).map(mapInventoryItemRowToDomain));
+  });
+
   app.get('/api/me', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -474,6 +497,36 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(moveContainerResponseSchema, data);
+  });
+
+  app.post('/api/containers/:containerId/inventory', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const body = parseOrThrow(createInventoryItemBodySchema, request.body);
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
+    }
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('inventory_items')
+      .insert({
+        tenant_id: auth.currentTenant.tenantId,
+        container_id: containerId,
+        item_ref: body.itemRef,
+        quantity: body.quantity,
+        uom: body.uom,
+        created_by: auth.user.id
+      })
+      .select('id,tenant_id,container_id,item_ref,quantity,uom,created_at,created_by')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(inventoryItemResponseSchema, mapInventoryItemRowToDomain(data));
   });
 
   app.post('/api/floors', async (request, reply) => {

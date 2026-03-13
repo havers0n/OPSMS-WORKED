@@ -184,7 +184,7 @@ Canonical model:
 
 Canonical relationship:
 
-`Cell -> Container -> InventoryItem`
+`Cell -> ContainerPlacement -> Container -> InventoryItem`
 
 Implications:
 

@@ -1,6 +1,7 @@
 import {
   cellOccupancyRowSchema,
   containerSchema,
+  inventoryItemSchema,
   containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
@@ -10,6 +11,7 @@ import {
   type Container,
   type ContainerType,
   type Floor,
+  type InventoryItem,
   type LayoutDraft,
   type LayoutValidationResult,
   type Site
@@ -124,6 +126,28 @@ export function mapCellOccupancyRowToDomain(row: {
     containerType: row.container_type,
     containerStatus: row.container_status,
     placedAt: row.placed_at
+  });
+}
+
+export function mapInventoryItemRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  container_id: string;
+  item_ref: string;
+  quantity: number;
+  uom: string;
+  created_at: string;
+  created_by: string | null;
+}): InventoryItem {
+  return inventoryItemSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    containerId: row.container_id,
+    itemRef: row.item_ref,
+    quantity: row.quantity,
+    uom: row.uom,
+    createdAt: row.created_at,
+    createdBy: row.created_by
   });
 }
 
