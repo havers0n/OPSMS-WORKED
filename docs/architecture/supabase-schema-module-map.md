@@ -763,6 +763,55 @@ Notes:
 - derived only from active placements where `removed_at is null`
 - placement-centric only; no inventory/content semantics belong here
 
+#### `container_storage_snapshot_v`
+
+Purpose:
+
+- inspection-grade current contents of a container
+
+Possible columns:
+
+- `tenant_id`
+- `container_id`
+- `external_code`
+- `container_type`
+- `container_status`
+- `item_ref`
+- `quantity`
+- `uom`
+
+Notes:
+
+- derived only from `containers + inventory_items`
+- empty containers may appear with null content columns
+- no readiness, reservation, or picking semantics belong here
+
+#### `cell_storage_snapshot_v`
+
+Purpose:
+
+- inspection-grade current physical contents of a cell, including container contents
+
+Possible columns:
+
+- `tenant_id`
+- `cell_id`
+- `container_id`
+- `external_code`
+- `container_type`
+- `container_status`
+- `placed_at`
+- `item_ref`
+- `quantity`
+- `uom`
+
+Notes:
+
+- derived only from active placements plus `containers + inventory_items`
+- only placements where `removed_at is null` contribute
+- empty placed containers may appear with null content columns
+- no readiness, reservation, or picking semantics belong here
+
 #### `v_layout_publish_impact`
 
 Purpose:

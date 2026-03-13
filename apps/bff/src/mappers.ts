@@ -1,14 +1,18 @@
 import {
+  cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
+  containerStorageSnapshotRowSchema,
   inventoryItemSchema,
   containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
   layoutValidationResultSchema,
   siteSchema,
+  type CellStorageSnapshotRow,
   type CellOccupancyRow,
   type Container,
+  type ContainerStorageSnapshotRow,
   type ContainerType,
   type Floor,
   type InventoryItem,
@@ -126,6 +130,54 @@ export function mapCellOccupancyRowToDomain(row: {
     containerType: row.container_type,
     containerStatus: row.container_status,
     placedAt: row.placed_at
+  });
+}
+
+export function mapContainerStorageSnapshotRowToDomain(row: {
+  tenant_id: string;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  item_ref: string | null;
+  quantity: number | null;
+  uom: string | null;
+}): ContainerStorageSnapshotRow {
+  return containerStorageSnapshotRowSchema.parse({
+    tenantId: row.tenant_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    itemRef: row.item_ref,
+    quantity: row.quantity,
+    uom: row.uom
+  });
+}
+
+export function mapCellStorageSnapshotRowToDomain(row: {
+  tenant_id: string;
+  cell_id: string;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  placed_at: string;
+  item_ref: string | null;
+  quantity: number | null;
+  uom: string | null;
+}): CellStorageSnapshotRow {
+  return cellStorageSnapshotRowSchema.parse({
+    tenantId: row.tenant_id,
+    cellId: row.cell_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    placedAt: row.placed_at,
+    itemRef: row.item_ref,
+    quantity: row.quantity,
+    uom: row.uom
   });
 }
 

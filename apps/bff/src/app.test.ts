@@ -84,6 +84,66 @@ const inventoryItemRows = [
   }
 ];
 
+const containerStorageSnapshotRows = [
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    external_code: 'PALLET-001',
+    container_type: 'pallet',
+    container_status: 'active',
+    item_ref: 'ITEM-001',
+    quantity: 5,
+    uom: 'pcs'
+  },
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    external_code: 'PALLET-001',
+    container_type: 'pallet',
+    container_status: 'active',
+    item_ref: 'ITEM-002',
+    quantity: 3,
+    uom: 'pcs'
+  },
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+    external_code: null,
+    container_type: 'tote',
+    container_status: 'quarantined',
+    item_ref: null,
+    quantity: null,
+    uom: null
+  }
+];
+
+const cellStorageSnapshotRows = [
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    external_code: 'PALLET-001',
+    container_type: 'pallet',
+    container_status: 'active',
+    placed_at: '2026-03-13T09:15:00.000Z',
+    item_ref: 'ITEM-001',
+    quantity: 5,
+    uom: 'pcs'
+  },
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    container_id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+    external_code: null,
+    container_type: 'tote',
+    container_status: 'quarantined',
+    placed_at: '2026-03-13T10:15:00.000Z',
+    item_ref: null,
+    quantity: null,
+    uom: null
+  }
+];
+
 function createSupabaseStub() {
   return {
     from: vi.fn((table: string) => {
@@ -203,6 +263,30 @@ function createSupabaseStub() {
             eq: vi.fn((_column: string, value: string) => ({
               order: vi.fn(async () => ({
                 data: cellOccupancyRows.filter((row) => row.cell_id === value),
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'container_storage_snapshot_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => Promise.resolve({
+              data: containerStorageSnapshotRows.filter((row) => row.container_id === value),
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'cell_storage_snapshot_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              order: vi.fn(async () => ({
+                data: cellStorageSnapshotRows.filter((row) => row.cell_id === value),
                 error: null
               }))
             }))
@@ -610,6 +694,147 @@ describe('buildApp', () => {
         placedAt: '2026-03-13T10:15:00.000Z'
       }
     ]);
+
+    await app.close();
+  });
+
+  it('returns resolved storage snapshot for a container with multiple items', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        itemRef: 'ITEM-001',
+        quantity: 5,
+        uom: 'pcs'
+      },
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        itemRef: 'ITEM-002',
+        quantity: 3,
+        uom: 'pcs'
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('keeps empty containers representable in the storage snapshot', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers/4f8a33c1-c803-4515-b8d4-0144f788e5d2/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        containerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        externalCode: null,
+        containerType: 'tote',
+        containerStatus: 'quarantined',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('returns resolved storage snapshot for a cell', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/cells/216f2dd6-8f17-4de4-aaba-657f9e0e1398/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        placedAt: '2026-03-13T09:15:00.000Z',
+        itemRef: 'ITEM-001',
+        quantity: 5,
+        uom: 'pcs'
+      },
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        externalCode: null,
+        containerType: 'tote',
+        containerStatus: 'quarantined',
+        placedAt: '2026-03-13T10:15:00.000Z',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('returns [] for a valid empty cell storage snapshot', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/cells/00000000-0000-0000-0000-000000000000/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([]);
 
     await app.close();
   });

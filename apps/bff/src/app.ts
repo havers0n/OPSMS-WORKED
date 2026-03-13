@@ -5,8 +5,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
+  cellStorageSnapshotResponseSchema,
   cellOccupancyResponseSchema,
   containerResponseSchema,
+  containerStorageSnapshotResponseSchema,
   containersResponseSchema,
   createInventoryItemBodySchema,
   containerTypesResponseSchema,
@@ -35,7 +37,9 @@ import {
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
   mapCellOccupancyRowToDomain,
+  mapCellStorageSnapshotRowToDomain,
   mapContainerRowToDomain,
+  mapContainerStorageSnapshotRowToDomain,
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
   mapInventoryItemRowToDomain,
@@ -314,6 +318,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(cellOccupancyResponseSchema, (data ?? []).map(mapCellOccupancyRowToDomain));
   });
 
+  app.get('/api/cells/:cellId/storage', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('cell_storage_snapshot_v')
+      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,quantity,uom')
+      .eq('cell_id', cellId)
+      .order('placed_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(cellStorageSnapshotResponseSchema, (data ?? []).map(mapCellStorageSnapshotRowToDomain));
+  });
+
   app.get('/api/containers/:containerId/inventory', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -331,6 +354,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(inventoryItemsResponseSchema, (data ?? []).map(mapInventoryItemRowToDomain));
+  });
+
+  app.get('/api/containers/:containerId/storage', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('container_storage_snapshot_v')
+      .select('tenant_id,container_id,external_code,container_type,container_status,item_ref,quantity,uom')
+      .eq('container_id', containerId);
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(containerStorageSnapshotResponseSchema, (data ?? []).map(mapContainerStorageSnapshotRowToDomain));
   });
 
   app.get('/api/me', async (request, reply) => {

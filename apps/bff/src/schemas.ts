@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import {
+  cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
+  containerStorageSnapshotRowSchema,
   inventoryItemSchema,
   moveContainerResultSchema,
   placeContainerResultSchema,
@@ -130,6 +132,8 @@ export const containerTypesResponseSchema = z.array(containerTypeSchema);
 export const containersResponseSchema = z.array(containerSchema);
 export const containerResponseSchema = containerSchema;
 export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
+export const containerStorageSnapshotResponseSchema = z.array(containerStorageSnapshotRowSchema);
+export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowSchema);
 export const inventoryItemsResponseSchema = z.array(inventoryItemSchema);
 export const inventoryItemResponseSchema = inventoryItemSchema;
 export const placeContainerResponseSchema = placeContainerResultSchema;
