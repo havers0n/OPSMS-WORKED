@@ -38,6 +38,7 @@ const saveRackFacePayloadSchema = z.object({
   slotNumberingDirection: z.string().trim().min(1),
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().uuid().nullable(),
+  faceLength: z.number().positive().optional(),
   sections: z.array(saveRackSectionPayloadSchema)
 });
 

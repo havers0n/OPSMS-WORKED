@@ -29,6 +29,7 @@ function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevel
     slotNumberingDirection: row.slot_numbering_direction,
     isMirrored: row.is_mirrored,
     mirrorSourceFaceId: row.mirror_source_face_id,
+    faceLength: row.face_length ?? undefined,
     sections: allSections
       .filter((section) => section.rack_face_id === row.id)
       .sort((a, b) => a.ordinal - b.ordinal)

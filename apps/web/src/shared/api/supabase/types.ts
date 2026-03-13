@@ -310,6 +310,7 @@ export type Database = {
         Row: {
           created_at: string
           enabled: boolean
+          face_length: number | null
           id: string
           is_mirrored: boolean
           mirror_source_face_id: string | null
@@ -321,6 +322,7 @@ export type Database = {
         Insert: {
           created_at?: string
           enabled?: boolean
+          face_length?: number | null
           id?: string
           is_mirrored?: boolean
           mirror_source_face_id?: string | null
@@ -332,6 +334,7 @@ export type Database = {
         Update: {
           created_at?: string
           enabled?: boolean
+          face_length?: number | null
           id?: string
           is_mirrored?: boolean
           mirror_source_face_id?: string | null

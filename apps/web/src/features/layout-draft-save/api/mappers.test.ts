@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { mapLayoutDraftBundleToDomain } from '../../../entities/layout-version/api/mappers';
 import type { LayoutDraftRowBundle } from '../../../entities/layout-version/api/types';
+import { useEditorStore } from '../../../entities/layout-version/model/editor-store';
 import { mapLayoutDraftToSavePayload } from './mappers';
 
 describe('mapLayoutDraftToSavePayload', () => {
-  it('keeps the load/save round-trip valid without rack-face anchor', () => {
+  it('keeps rack-face faceLength through load and save round-trips', () => {
     const draft = mapLayoutDraftBundleToDomain({
       layoutVersion: {
         id: '11111111-1111-1111-1111-111111111111',
@@ -43,6 +44,7 @@ describe('mapLayoutDraftToSavePayload', () => {
           created_at: '2026-03-13T00:00:00.000Z',
           side: 'A',
           enabled: true,
+          face_length: 4.5,
           slot_numbering_direction: 'ltr',
           is_mirrored: false,
           mirror_source_face_id: null,
@@ -71,13 +73,16 @@ describe('mapLayoutDraftToSavePayload', () => {
       ]
     } satisfies LayoutDraftRowBundle);
 
-    const payload = mapLayoutDraftToSavePayload(draft);
+    useEditorStore.getState().initializeDraft(draft);
+
+    const payload = mapLayoutDraftToSavePayload(useEditorStore.getState().draft ?? draft);
 
     expect(payload.racks[0]?.faces[0]).toEqual(
       expect.objectContaining({
         slotNumberingDirection: 'ltr',
         isMirrored: false,
-        mirrorSourceFaceId: null
+        mirrorSourceFaceId: null,
+        faceLength: 4.5
       })
     );
     expect(payload.racks[0]?.faces[0]).not.toHaveProperty('anchor');

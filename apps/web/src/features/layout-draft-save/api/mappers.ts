@@ -20,6 +20,7 @@ type SaveRackFacePayload = {
   slotNumberingDirection: string;
   isMirrored: boolean;
   mirrorSourceFaceId: string | null;
+  faceLength?: number;
   sections: SaveRackSectionPayload[];
 };
 
@@ -63,6 +64,7 @@ export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraft
           slotNumberingDirection: face.slotNumberingDirection,
           isMirrored: face.isMirrored,
           mirrorSourceFaceId: face.mirrorSourceFaceId,
+          faceLength: face.faceLength,
           sections: face.sections.map((section) => ({
             id: section.id,
             ordinal: section.ordinal,

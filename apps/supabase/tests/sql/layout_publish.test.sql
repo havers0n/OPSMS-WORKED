@@ -1,6 +1,6 @@
 -- layout_publish.test.sql
 -- Executable verification script for layout hardening.
--- Run after migrations 0001-0016 against a local database.
+-- Run after migrations 0001-0017 against a local database.
 -- The script raises exceptions on failed assertions and rolls back at the end.
 
 begin;
@@ -73,9 +73,12 @@ declare
   invalid_draft uuid;
   validation_result jsonb;
   invalid_validation jsonb;
+  length_override_validation jsonb;
   publish_result jsonb;
   rack_count_after_failed_save integer;
   cell_code_count integer;
+  persisted_face_length_count integer;
+  cloned_face_length_count integer;
   caught boolean;
 begin
   draft_one := public.create_layout_draft('00000000-0000-0000-0000-000000000011'::uuid, null);
@@ -105,6 +108,7 @@ begin
               'id', '00000000-0000-0000-0000-000000000201',
               'side', 'A',
               'enabled', true,
+              'faceLength', 4.5,
               'slotNumberingDirection', 'ltr',
               'isMirrored', false,
               'mirrorSourceFaceId', null,
@@ -112,7 +116,7 @@ begin
                 jsonb_build_object(
                   'id', '00000000-0000-0000-0000-000000000301',
                   'ordinal', 1,
-                  'length', 5,
+                  'length', 4.5,
                   'levels', jsonb_build_array(
                     jsonb_build_object(
                       'id', '00000000-0000-0000-0000-000000000401',
@@ -127,6 +131,7 @@ begin
               'id', '00000000-0000-0000-0000-000000000202',
               'side', 'B',
               'enabled', true,
+              'faceLength', 4.5,
               'slotNumberingDirection', 'rtl',
               'isMirrored', true,
               'mirrorSourceFaceId', '00000000-0000-0000-0000-000000000201',
@@ -138,6 +143,15 @@ begin
     ),
     null
   );
+
+  select count(*) into persisted_face_length_count
+  from public.rack_faces
+  where rack_id = '00000000-0000-0000-0000-000000000111'::uuid
+    and face_length = 4.5;
+
+  if persisted_face_length_count <> 2 then
+    raise exception 'save_layout_draft must persist per-face face_length overrides';
+  end if;
 
   begin
     perform public.save_layout_draft(
@@ -227,6 +241,28 @@ begin
   draft_two := public.create_layout_draft('00000000-0000-0000-0000-000000000011'::uuid, null);
   if draft_two = draft_one then
     raise exception 'A new draft should be created after publishing the previous draft';
+  end if;
+
+  select count(*) into cloned_face_length_count
+  from public.rack_faces rf
+  join public.racks r on r.id = rf.rack_id
+  where r.layout_version_id = draft_two
+    and rf.face_length = 4.5;
+
+  if cloned_face_length_count <> 2 then
+    raise exception 'create_layout_draft must clone persisted face_length overrides from the published layout';
+  end if;
+
+  update public.rack_faces rf
+  set face_length = 4.0
+  from public.racks r
+  where r.id = rf.rack_id
+    and r.layout_version_id = draft_two
+    and rf.side = 'A';
+
+  length_override_validation := public.validate_layout_version(draft_two);
+  if coalesce((length_override_validation ->> 'isValid')::boolean, true) = true then
+    raise exception 'validate_layout_version must reject section sums that disagree with face_length overrides';
   end if;
 
   begin

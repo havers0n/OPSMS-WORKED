@@ -370,7 +370,7 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('accepts save-layout payloads without rack-face anchor', async () => {
+  it('accepts save-layout payloads with optional rack-face faceLength', async () => {
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'save_layout_draft') {
@@ -413,6 +413,7 @@ describe('buildApp', () => {
                   id: 'c4873dd5-bb30-48b9-9558-4effcab5cf8d',
                   side: 'A',
                   enabled: true,
+                  faceLength: 4.5,
                   slotNumberingDirection: 'asc',
                   isMirrored: false,
                   mirrorSourceFaceId: null,
@@ -446,6 +447,7 @@ describe('buildApp', () => {
       racks: Array<{ faces: Array<Record<string, unknown>> }>;
     };
     expect(savePayload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
+    expect(savePayload.racks[0]?.faces[0]).toHaveProperty('faceLength', 4.5);
     expect(supabase.rpc).toHaveBeenCalledWith('save_layout_draft', {
       layout_payload: {
         layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',

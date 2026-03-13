@@ -41,7 +41,7 @@ Status legend:
 | `RackFace` | `slotNumberingDirection` | DB check: `ltr/rtl` | response present; save DTO accepts any non-empty string | enum in `rackFaceSchema` | numbering controls, previews, cell generation | Weakened | Read path is fine; write validation is still looser than DB/domain. |
 | `RackFace` | `isMirrored` | `rack_faces.is_mirrored` | response + save request DTO | `rackFaceSchema` | mirror mode and validation | Aligned | Preserved end-to-end. |
 | `RackFace` | `mirrorSourceFaceId` | `rack_faces.mirror_source_face_id` | response + save request DTO | `rackFaceSchema` | mirror mode and validation | Aligned | Preserved end-to-end. |
-| `RackFace` | `faceLength` | none in current DB schema or RPC payload | not present | optional field on `rackFaceSchema` | edited and consumed in store/UI validation and presets | Frontend-only | Asymmetric face length exists only locally today; save/publish/DB validation cannot persist or verify it. |
+| `RackFace` | `faceLength` | `rack_faces.face_length`; `create_layout_draft`; `save_layout_draft`; `validate_layout_version` | BFF read mapper + save DTO | optional field on `rackFaceSchema` | edited and consumed in store/UI validation, presets, and geometry | Aligned | Per-face override length now survives load/save round-trips and participates in DB validation as persisted layout truth. |
 | `RackSection` | `id` | `rack_sections.id` | response + save request DTO | `rackSectionSchema` | store/UI row identity | Aligned | Stable end-to-end. |
 | `RackSection` | `ordinal` | `rack_sections.ordinal` | response + save request DTO | `rackSectionSchema` | inspector tables and address generation | Aligned | Stable end-to-end. |
 | `RackSection` | `length` | `rack_sections.length` | response + save request DTO | `rackSectionSchema` | inspector, validation, presets | Aligned | Stable end-to-end for persisted sections. |
@@ -56,20 +56,16 @@ Status legend:
 
 ## Priority Findings
 
-1. `faceLength` is the inverse breach.
-   It is modeled and actively used in the frontend/domain layer, but there is no persisted source of truth in the current DB/RPC contract.
-
-2. BFF write validation is materially weaker than downstream invariants.
+1. BFF write validation is materially weaker than downstream invariants.
    `kind`, `axis`, `side`, `slotNumberingDirection`, and `rotationDeg` are accepted as generic strings/numbers in the save DTO even though DB/domain are enum-constrained.
 
-3. `cellCode` is not parity-safe today.
+2. `cellCode` is not parity-safe today.
    The DB and `packages/domain` generate different values under the same field name, so local derived cells must not be treated as operational truth.
 
-4. Lifecycle metadata exists in persistence but not in the active editor contract.
+3. Lifecycle metadata exists in persistence but not in the active editor contract.
    `layout_versions.state`, `version_no`, `parent_published_version_id`, and rack `state` are either hidden or only partially surfaced, which makes editor/runtime decisions depend on out-of-band query logic instead of explicit DTO truth.
 
 ## Immediate Follow-ups
 
-1. Decide whether `faceLength` is real domain truth or only a UI experiment. If real, add DB/RPC parity before relying on it for validation/publish semantics.
-2. Tighten BFF save schemas to the same enums/literal sets enforced by DB/domain.
-3. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.
+1. Tighten BFF save schemas to the same enums/literal sets enforced by DB/domain.
+2. Rename or separate local preview cell identifiers from persisted `cellCode` unless both sides use the same algorithm.

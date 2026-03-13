@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { mapLayoutDraftToSavePayload } from '../../../features/layout-draft-save/api/mappers';
 import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
 import { useEditorStore } from './editor-store';
 
@@ -51,6 +52,16 @@ describe('editor-store', () => {
 
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
+  });
+
+  it('preserves faceLength when initializing and saving an unchanged draft', () => {
+    const draft = createLayoutDraftFixture();
+    draft.racks[draft.rackIds[0]].faces[0].faceLength = 4.5;
+
+    useEditorStore.getState().initializeDraft(draft);
+
+    expect(useEditorStore.getState().draft?.racks[draft.rackIds[0]].faces[0].faceLength).toBe(4.5);
+    expect(mapLayoutDraftToSavePayload(useEditorStore.getState().draft!).racks[0]?.faces[0].faceLength).toBe(4.5);
   });
 
   it('resetDraft clears selected rack and dirty state', () => {

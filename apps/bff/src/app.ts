@@ -74,7 +74,7 @@ async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string)
   const rackIds = racks.map((rack) => rack.id);
   const { data: rackFaces, error: rackFacesError } = await supabase
     .from('rack_faces')
-    .select('id,rack_id,side,enabled,slot_numbering_direction,is_mirrored,mirror_source_face_id')
+    .select('id,rack_id,side,enabled,slot_numbering_direction,is_mirrored,mirror_source_face_id,face_length')
     .in('rack_id', rackIds);
 
   if (rackFacesError) {
