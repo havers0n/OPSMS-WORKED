@@ -9,6 +9,10 @@ const CELL_FILL_A = '#e0f2fe';
 const CELL_FILL_B = '#ede9fe';
 const CELL_STROKE = '#bae6fd';
 const CELL_STROKE_B = '#ddd6fe';
+const CELL_FILL_A_RACK_SELECTED = '#c7e7fb';
+const CELL_FILL_B_RACK_SELECTED = '#ddd0fb';
+const CELL_STROKE_A_RACK_SELECTED = '#38bdf8';
+const CELL_STROKE_B_RACK_SELECTED = '#a78bfa';
 const CELL_FILL_SELECTED = '#fef3c7';
 const CELL_STROKE_SELECTED = '#f59e0b';
 
@@ -20,6 +24,7 @@ type FaceProps = {
   bandH: number;
   cellFill: string;
   cellStroke: string;
+  isRackSelected: boolean;
   isInteractive: boolean;
   selectedCellId: string | null;
   onCellClick: (cellId: string) => void;
@@ -33,6 +38,7 @@ function FaceCells({
   bandH,
   cellFill,
   cellStroke,
+  isRackSelected,
   isInteractive,
   selectedCellId,
   onCellClick
@@ -79,7 +85,8 @@ function FaceCells({
                 cornerRadius={1}
                 fill={fill}
                 stroke={stroke}
-                strokeWidth={isSelected ? 1 : 0.5}
+                strokeWidth={isSelected ? 1.2 : isRackSelected ? 0.9 : 0.5}
+                opacity={isRackSelected ? 0.98 : 0.78}
                 onClick={isInteractive ? (e) => {
                   e.cancelBubble = true;
                   onCellClick(cellId);
@@ -111,7 +118,7 @@ export function RackCells({
   rackId,
   faceA,
   faceB,
-  isSelected: _isSelected,
+  isSelected,
   isInteractive = false,
   selectedCellId = null,
   onCellClick = noop
@@ -127,8 +134,9 @@ export function RackCells({
         totalWidth={faceAWidth}
         bandY={0}
         bandH={faceABandH}
-        cellFill={CELL_FILL_A}
-        cellStroke={CELL_STROKE}
+        cellFill={isSelected ? CELL_FILL_A_RACK_SELECTED : CELL_FILL_A}
+        cellStroke={isSelected ? CELL_STROKE_A_RACK_SELECTED : CELL_STROKE}
+        isRackSelected={isSelected}
         isInteractive={isInteractive}
         selectedCellId={selectedCellId}
         onCellClick={onCellClick}
@@ -140,8 +148,9 @@ export function RackCells({
           totalWidth={faceBWidth}
           bandY={spineY}
           bandH={height - spineY}
-          cellFill={CELL_FILL_B}
-          cellStroke={CELL_STROKE_B}
+          cellFill={isSelected ? CELL_FILL_B_RACK_SELECTED : CELL_FILL_B}
+          cellStroke={isSelected ? CELL_STROKE_B_RACK_SELECTED : CELL_STROKE_B}
+          isRackSelected={isSelected}
           isInteractive={isInteractive}
           selectedCellId={selectedCellId}
           onCellClick={onCellClick}
