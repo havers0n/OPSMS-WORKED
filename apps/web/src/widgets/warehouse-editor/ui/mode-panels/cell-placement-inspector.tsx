@@ -1,4 +1,4 @@
-import { MapPin, Package, AlertCircle, Loader2, Layers } from 'lucide-react';
+import { MapPin, Package, AlertCircle, Loader2, Layers, CloudOff } from 'lucide-react';
 import type { CellStorageSnapshotRow } from '@wos/domain';
 import { generateRackCells } from '@wos/domain';
 import {
@@ -163,12 +163,13 @@ export function CellPlacementInspector() {
     return match?.address ?? null;
   })();
 
-  const { data: storageRows, isPending, isError } = useCellSlotStorage(
+  const { data, isPending, isError } = useCellSlotStorage(
     parsed?.sectionId ?? null,
     parsed?.slotNo ?? null
   );
 
-  const containers = storageRows ? groupByContainer(storageRows) : [];
+  const isPublished = data?.published ?? false;
+  const containers = data ? groupByContainer(data.rows) : [];
 
   return (
     <aside
@@ -217,21 +218,32 @@ export function CellPlacementInspector() {
           </div>
         )}
 
-        {/* Empty — layout not published or genuinely empty cell */}
-        {parsed && !isPending && !isError && containers.length === 0 && (
+        {/* STATE A — layout not published; cells don't exist in DB yet */}
+        {parsed && !isPending && !isError && !isPublished && (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Package className="h-7 w-7 text-slate-300" />
+            <CloudOff className="h-7 w-7 text-slate-300" />
             <div>
-              <p className="text-sm font-medium text-slate-600">No containers</p>
+              <p className="text-sm font-medium text-slate-600">Layout not published</p>
               <p className="mt-1 text-xs text-slate-400">
-                This cell is empty, or the layout has not been published yet.
+                Publish the layout to enable storage placement.
               </p>
             </div>
           </div>
         )}
 
-        {/* Container list */}
-        {parsed && !isPending && !isError && containers.length > 0 && (
+        {/* STATE B — layout published, slot is genuinely empty */}
+        {parsed && !isPending && !isError && isPublished && containers.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <Package className="h-7 w-7 text-slate-300" />
+            <div>
+              <p className="text-sm font-medium text-slate-600">No containers</p>
+              <p className="mt-1 text-xs text-slate-400">This cell is empty.</p>
+            </div>
+          </div>
+        )}
+
+        {/* STATE C — layout published, containers present */}
+        {parsed && !isPending && !isError && isPublished && containers.length > 0 && (
           <>
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
               <Layers className="h-3 w-3" />

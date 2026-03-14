@@ -134,6 +134,19 @@ export const containerResponseSchema = containerSchema;
 export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
 export const containerStorageSnapshotResponseSchema = z.array(containerStorageSnapshotRowSchema);
 export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowSchema);
+
+/**
+ * Response shape for GET /api/rack-sections/:sectionId/slots/:slotNo/storage.
+ * `published` is true when at least one persisted cell UUID was found for this
+ * section+slot (i.e. the layout version has been published at least once).
+ * `rows` contains the storage snapshot rows; an empty array for a published
+ * layout means the slot is genuinely empty.
+ */
+export const cellSlotStorageResponseSchema = z.object({
+  published: z.boolean(),
+  rows: z.array(cellStorageSnapshotRowSchema)
+});
+export type CellSlotStorageResponse = z.infer<typeof cellSlotStorageResponseSchema>;
 export const inventoryItemsResponseSchema = z.array(inventoryItemSchema);
 export const inventoryItemResponseSchema = inventoryItemSchema;
 export const placeContainerResponseSchema = placeContainerResultSchema;

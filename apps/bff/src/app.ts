@@ -6,6 +6,7 @@ import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
   cellStorageSnapshotResponseSchema,
+  cellSlotStorageResponseSchema,
   cellOccupancyResponseSchema,
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
@@ -371,9 +372,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const cellIds = (cells ?? []).map((c) => c.id);
 
-    // If no persisted cells exist (layout not yet published), return empty.
+    // Layout not yet published — no persisted cell UUIDs exist for this slot.
     if (cellIds.length === 0) {
-      return parseOrThrow(cellStorageSnapshotResponseSchema, []);
+      return parseOrThrow(cellSlotStorageResponseSchema, { published: false, rows: [] });
     }
 
     // Step 2: fetch storage snapshot for all cells in this slot.
@@ -387,7 +388,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw error;
     }
 
-    return parseOrThrow(cellStorageSnapshotResponseSchema, (data ?? []).map(mapCellStorageSnapshotRowToDomain));
+    return parseOrThrow(cellSlotStorageResponseSchema, {
+      published: true,
+      rows: (data ?? []).map(mapCellStorageSnapshotRowToDomain)
+    });
   });
 
   app.get('/api/containers/:containerId/inventory', async (request, reply) => {

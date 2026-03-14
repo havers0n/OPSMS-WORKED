@@ -2,6 +2,13 @@ import type { CellStorageSnapshotRow } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
+export type CellSlotStorageData = {
+  /** True when the layout version has been published and persisted cell UUIDs exist. */
+  published: boolean;
+  /** Storage snapshot rows; empty array when cell is published but genuinely empty. */
+  rows: CellStorageSnapshotRow[];
+};
+
 export const cellKeys = {
   all: ['cell'] as const,
   /**
@@ -16,15 +23,18 @@ export const cellKeys = {
 async function fetchCellSlotStorage(
   sectionId: string,
   slotNo: number
-): Promise<CellStorageSnapshotRow[]> {
-  return bffRequest<CellStorageSnapshotRow[]>(
+): Promise<CellSlotStorageData> {
+  return bffRequest<CellSlotStorageData>(
     `/api/rack-sections/${sectionId}/slots/${slotNo}/storage`
   );
 }
 
 /**
- * Returns cell storage snapshot data for all cells at a given section + slot.
- * An empty array means either the layout is unpublished or the slot is empty.
+ * Returns cell storage snapshot data for a given section + slot.
+ * `data.published` distinguishes "layout not published" from "genuinely empty cell":
+ *   - published=false → layout has never been published; cells don't exist in DB yet.
+ *   - published=true, rows=[] → layout published but this slot has no containers.
+ *   - published=true, rows=[...] → containers present.
  */
 export function cellSlotStorageQueryOptions(
   sectionId: string | null,
