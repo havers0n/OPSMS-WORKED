@@ -537,6 +537,7 @@ export function EditorCanvas({
                       <RackBody
                         geometry={geometry}
                         displayCode={rack.displayCode}
+                        rotationDeg={rack.rotationDeg}
                         isSelected={isSelected}
                         isHovered={isHovered}
                         lod={lod}

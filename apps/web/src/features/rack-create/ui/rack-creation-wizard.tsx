@@ -144,7 +144,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
   const handleCancel = () => {
     deleteRack(rack.id);
     setCreatingRackId(null);
-    setSelectedRackId([]);
+    setSelectedRackId(null);
   };
 
   const handleFinish = () => {

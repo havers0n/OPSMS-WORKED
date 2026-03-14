@@ -89,7 +89,7 @@ export function WarehouseEditor() {
   }
 
   const handleAddRack = () => {
-    setSelectedRackId([]);
+    setSelectedRackId(null);
     setEditorMode('place');
   };
 
