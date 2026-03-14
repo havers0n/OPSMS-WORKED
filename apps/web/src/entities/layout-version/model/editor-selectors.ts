@@ -1,13 +1,19 @@
 import { useEditorStore } from './editor-store';
 import type { EditorSelection } from './editor-types';
 
+// Stable empty fallbacks — must live outside selectors so the reference never changes
+// between renders. Returning a new literal (e.g. `[] as string[]`) inside a Zustand
+// selector causes useSyncExternalStore to see a new snapshot on every call, which
+// triggers an infinite re-render loop ("getSnapshot should be cached" warning).
+const EMPTY_RACK_IDS: string[] = [];
+
 export const useViewMode = () => useEditorStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
 export const useEditorMode = () => useEditorStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
 export const useSelectedRackIds = () =>
   useEditorStore((state) =>
-    state.selection.type === 'rack' ? state.selection.rackIds : ([] as string[])
+    state.selection.type === 'rack' ? state.selection.rackIds : EMPTY_RACK_IDS
   );
 export const useSelectedRackId = () =>
   useEditorStore((state) =>
