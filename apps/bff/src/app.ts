@@ -354,8 +354,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
-    const sectionId = parseOrThrow(idResponseSchema, { id: (request.params as { sectionId: string; slotNo: string }).sectionId }).id;
-    const slotNo = z.coerce.number().int().min(1).parse((request.params as { sectionId: string; slotNo: string }).slotNo);
+    const params = request.params as { sectionId: string; slotNo: string };
+    const rawSectionId = params.sectionId.trim();
+    const slotNo = z.coerce.number().int().min(1).parse(params.slotNo);
+
+    // Non-UUID section IDs come from in-memory sections that have never been
+    // published. No persisted cells can exist for them — return the
+    // "unpublished" response immediately without touching the DB.
+    const sectionIdParsed = z.string().uuid().safeParse(rawSectionId);
+    if (!sectionIdParsed.success) {
+      return parseOrThrow(cellSlotStorageResponseSchema, { published: false, rows: [] });
+    }
+    const sectionId = sectionIdParsed.data;
 
     const supabase = getUserSupabase(auth);
 
