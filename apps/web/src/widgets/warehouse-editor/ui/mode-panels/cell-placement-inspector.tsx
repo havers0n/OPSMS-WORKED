@@ -1,13 +1,15 @@
+import type { FloorWorkspace } from '@wos/domain';
 import { MapPin, Package, AlertCircle, Loader2, Layers, CloudOff, ChevronRight } from 'lucide-react';
 import type { CellStorageSnapshotRow } from '@wos/domain';
 import { generateRackCells } from '@wos/domain';
+import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useEditorSelection,
-  useLayoutDraftState,
   useSetSelectedContainerId
 } from '@/entities/layout-version/model/editor-selectors';
 import { useCellSlotStorage } from '@/entities/cell/api/use-cell-slot-storage';
 import { parseCellSelectionKey } from '@/entities/cell/lib/cell-selection-key';
+import { useWorkspaceLayout } from '../../lib/use-workspace-layout';
 
 // ─── container status badge ───────────────────────────────────────────────────
 
@@ -156,9 +158,9 @@ function ContainerCard({ group, onContainerClick }: ContainerCardProps) {
  *
  * B3 TODO: Add place/remove/move actions once mutation UI is approved.
  */
-export function CellPlacementInspector() {
+export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
-  const layoutDraft = useLayoutDraftState();
+  const layoutDraft = useWorkspaceLayout(workspace);
   const setSelectedContainerId = useSetSelectedContainerId();
 
   const cellId = selection.type === 'cell' ? selection.cellId : null;
@@ -176,10 +178,12 @@ export function CellPlacementInspector() {
     return match?.address ?? null;
   })();
 
-  const { data, isPending, isError } = useCellSlotStorage(
+  const { data, error, isPending, isError } = useCellSlotStorage(
     parsed?.sectionId ?? null,
     parsed?.slotNo ?? null
   );
+
+  const bffError = error instanceof BffRequestError ? error : null;
 
   const isPublished = data?.published ?? false;
   const containers = data ? groupByContainer(data.rows) : [];
@@ -227,7 +231,17 @@ export function CellPlacementInspector() {
           >
             <AlertCircle className="mx-auto mb-1.5 h-5 w-5 text-red-400" />
             <p className="text-xs text-slate-500">Could not load placement data.</p>
-            <p className="mt-0.5 text-[11px] text-slate-400">Check your connection and try again.</p>
+            <p className="mt-0.5 text-[11px] text-slate-400">
+              {bffError?.message ?? 'Check your connection and try again.'}
+            </p>
+            <div className="mt-2 space-y-0.5 font-mono text-[10px] text-slate-400">
+              <p>sectionId: {parsed.sectionId}</p>
+              <p>slotNo: {parsed.slotNo}</p>
+              {bffError && <p>status: {bffError.status}</p>}
+              {bffError?.code && <p>code: {bffError.code}</p>}
+              {bffError?.requestId && <p>requestId: {bffError.requestId}</p>}
+              {bffError?.errorId && <p>errorId: {bffError.errorId}</p>}
+            </div>
           </div>
         )}
 

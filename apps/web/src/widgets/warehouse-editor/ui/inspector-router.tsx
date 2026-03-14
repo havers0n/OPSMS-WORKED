@@ -1,10 +1,11 @@
+import type { FloorWorkspace } from '@wos/domain';
 import {
   useCreatingRackId,
   useEditorSelection,
-  useLayoutDraftState,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wizard';
+import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
 import { LayoutEmptyPanel } from './mode-panels/layout-empty-panel';
@@ -22,6 +23,7 @@ export { resolveInspectorKind };
 // ─── router component ─────────────────────────────────────────────────────────
 
 type InspectorRouterProps = {
+  workspace: FloorWorkspace | null;
   /** Called by layout-mode inspectors when the user clicks the close button. */
   onClose: () => void;
   /** Called by LayoutEmptyPanel to trigger rack placement mode. */
@@ -45,11 +47,11 @@ type InspectorRouterProps = {
  *   placement + other          → PlacementModePanel (placeholder)
  *   flow                      → FlowModePanel (placeholder)
  */
-export function InspectorRouter({ onClose, onAddRack }: InspectorRouterProps) {
+export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRouterProps) {
   const viewMode = useViewMode();
   const selection = useEditorSelection();
   const creatingRackId = useCreatingRackId();
-  const layoutDraft = useLayoutDraftState();
+  const layoutDraft = useWorkspaceLayout(workspace);
 
   const kind = resolveInspectorKind(viewMode, selection, creatingRackId);
 
@@ -59,7 +61,7 @@ export function InspectorRouter({ onClose, onAddRack }: InspectorRouterProps) {
       const rack = primaryId && layoutDraft ? layoutDraft.racks[primaryId] ?? null : null;
       // Guard: if the draft doesn't contain the rack yet (transient state), fall
       // back to the empty panel rather than crashing.
-      if (!rack) return <LayoutEmptyPanel onAddRack={onAddRack} />;
+      if (!rack) return <LayoutEmptyPanel workspace={workspace} onAddRack={onAddRack} />;
       return <RackCreationWizard rack={rack} />;
     }
 
@@ -70,13 +72,13 @@ export function InspectorRouter({ onClose, onAddRack }: InspectorRouterProps) {
       return <RackMultiInspector onClose={onClose} />;
 
     case 'layout-empty':
-      return <LayoutEmptyPanel onAddRack={onAddRack} />;
+      return <LayoutEmptyPanel workspace={workspace} onAddRack={onAddRack} />;
 
     case 'semantics-placeholder':
       return <SemanticsModePanel />;
 
     case 'placement-cell':
-      return <CellPlacementInspector />;
+      return <CellPlacementInspector workspace={workspace} />;
 
     case 'placement-container':
       return <ContainerPlacementInspector />;

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FloorWorkspace } from '@wos/domain';
 import { Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
-import { Copy, Minus, Plus, RotateCcw, SlidersHorizontal, Trash2, RotateCw } from 'lucide-react';
+import { Copy, Minus, Plus, RotateCcw, RotateCw, SlidersHorizontal, Trash2 } from 'lucide-react';
 import {
   useCanvasZoom,
   useCreateRack,
@@ -9,7 +10,7 @@ import {
   useDuplicateRack,
   useEditorMode,
   useHoveredRackId,
-  useLayoutDraftState,
+  useIsLayoutEditable,
   useRotateRack,
   useSelectedCellId,
   useSelectedRackId,
@@ -33,12 +34,11 @@ import {
   GRID_SIZE
 } from '../lib/canvas-geometry';
 import { getSnapPosition } from '../lib/rack-spacing';
+import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
 import { SnapGuides } from './shapes/snap-guides';
-
-// ── Floating contextual toolbar ───────────────────────────────────────────────
 
 type FloatingToolbarProps = {
   rackId: string;
@@ -59,6 +59,7 @@ function FloatingToolbar({ rackId, screenX, screenY, onOpenInspector }: Floating
       setConfirmDelete(true);
       return;
     }
+
     deleteRack(rackId);
     setSelectedRackId(null);
     setConfirmDelete(false);
@@ -76,7 +77,7 @@ function FloatingToolbar({ rackId, screenX, screenY, onOpenInspector }: Floating
         boxShadow: 'var(--shadow-panel)'
       }}
     >
-      <ToolbarBtn icon={RotateCcw} title="Rotate 90°" onClick={() => rotateRack(rackId)} />
+      <ToolbarBtn icon={RotateCcw} title="Rotate 90 deg" onClick={() => rotateRack(rackId)} />
       <ToolbarBtn icon={Copy} title="Duplicate" onClick={() => duplicateRack(rackId)} />
       <ToolbarBtn icon={SlidersHorizontal} title="Inspect" onClick={onOpenInspector} accent />
 
@@ -85,17 +86,8 @@ function FloatingToolbar({ rackId, screenX, screenY, onOpenInspector }: Floating
       {confirmDelete ? (
         <>
           <span className="px-1 text-[11px] font-medium text-red-600">Delete?</span>
-          <ToolbarBtn
-            icon={Trash2}
-            title="Confirm delete"
-            onClick={handleDelete}
-            danger
-          />
-          <ToolbarBtn
-            icon={RotateCw}
-            title="Cancel"
-            onClick={() => setConfirmDelete(false)}
-          />
+          <ToolbarBtn icon={Trash2} title="Confirm delete" onClick={handleDelete} danger />
+          <ToolbarBtn icon={RotateCw} title="Cancel" onClick={() => setConfirmDelete(false)} />
         </>
       ) : (
         <ToolbarBtn icon={Trash2} title="Delete rack" onClick={handleDelete} danger />
@@ -136,25 +128,25 @@ function ToolbarBtn({
   );
 }
 
-// ── Main canvas component ─────────────────────────────────────────────────────
-
 export function EditorCanvas({
+  workspace,
   onAddRack,
   onOpenInspector
 }: {
+  workspace: FloorWorkspace | null;
   onAddRack: () => void;
   onOpenInspector: () => void;
 }) {
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
   const editorMode = useEditorMode();
-  const layoutDraft = useLayoutDraftState();
+  const layoutDraft = useWorkspaceLayout(workspace);
+  const isLayoutEditable = useIsLayoutEditable();
   const selectedRackIds = useSelectedRackIds();
   const selectedRackId = useSelectedRackId();
   const selectedCellId = useSelectedCellId();
   const hoveredRackId = useHoveredRackId();
   const setSelectedRackIds = useSetSelectedRackIds();
-  const setSelectedRackId = useSetSelectedRackId();
   const setSelectedCellId = useSetSelectedCellId();
   const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
@@ -162,16 +154,15 @@ export function EditorCanvas({
   const setEditorMode = useSetEditorMode();
   const updateRackPosition = useUpdateRackPosition();
   const createRack = useCreateRack();
-  const deleteRack = useDeleteRack();
   const minRackDistance = useMinRackDistance();
 
   const isPlacementMode = viewMode === 'placement';
+  const isPlacing = editorMode === 'place' && isLayoutEditable;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
-  // ── Canvas pan (middle-mouse drag) ────────────────────────────────────────
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const canvasOffsetRef = useRef({ x: 0, y: 0 });
   canvasOffsetRef.current = canvasOffset;
@@ -181,17 +172,14 @@ export function EditorCanvas({
   const panStartRef = useRef({ x: 0, y: 0 });
   const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
 
-  // ── Snap guides ───────────────────────────────────────────────────────────
   const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
   const racks = useMemo(
     () => (layoutDraft ? layoutDraft.rackIds.map((id) => layoutDraft.racks[id]) : []),
     [layoutDraft]
   );
-  const isPlacing = editorMode === 'place';
   const lod = getCanvasLOD(zoom);
 
-  // Keep refs up-to-date to avoid stale closures
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
   const createRackRef = useRef(createRack);
@@ -206,29 +194,23 @@ export function EditorCanvas({
   setCanvasZoomRef.current = setCanvasZoom;
   const selectedRackIdsRef = useRef(selectedRackIds);
   selectedRackIdsRef.current = selectedRackIds;
-  const deleteRackRef = useRef(deleteRack);
-  deleteRackRef.current = deleteRack;
   const minRackDistanceRef = useRef(minRackDistance);
   minRackDistanceRef.current = minRackDistance;
   const updateRackPositionRef = useRef(updateRackPosition);
   updateRackPositionRef.current = updateRackPosition;
 
-  // ── Floating toolbar position ─────────────────────────────────────────────
   const selectedRack =
     selectedRackId && !isPlacing && layoutDraft ? layoutDraft.racks[selectedRackId] : null;
   const selectedRackGeometry = selectedRack ? getRackGeometry(selectedRack) : null;
 
-  // Toolbar sits above the selected rack, centered horizontally
   const toolbarScreenX = selectedRackGeometry
     ? (selectedRackGeometry.x + selectedRackGeometry.width / 2) * zoom + canvasOffset.x
     : 0;
   const toolbarScreenY = selectedRackGeometry
     ? selectedRackGeometry.y * zoom + canvasOffset.y - 44
     : 0;
-  // Clamp toolbar so it doesn't go above the viewport
   const clampedToolbarY = Math.max(8, toolbarScreenY);
 
-  // ── Resize observer ───────────────────────────────────────────────────────
   useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
@@ -239,32 +221,31 @@ export function EditorCanvas({
     return () => ro.disconnect();
   }, []);
 
-  // ── Middle-mouse pan ──────────────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 1) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button !== 1) return;
       isPanningRef.current = true;
-      panStartRef.current = { x: e.clientX, y: e.clientY };
+      panStartRef.current = { x: event.clientX, y: event.clientY };
       offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
       setIsPanning(true);
-      e.preventDefault();
+      event.preventDefault();
     };
 
-    const onMouseMove = (e: MouseEvent) => {
+    const onMouseMove = (event: MouseEvent) => {
       if (!isPanningRef.current) return;
-      const dx = e.clientX - panStartRef.current.x;
-      const dy = e.clientY - panStartRef.current.y;
+      const dx = event.clientX - panStartRef.current.x;
+      const dy = event.clientY - panStartRef.current.y;
       setCanvasOffset({
         x: offsetAtPanStartRef.current.x + dx,
         y: offsetAtPanStartRef.current.y + dy
       });
     };
 
-    const onMouseUp = (e: MouseEvent) => {
-      if (e.button !== 1) return;
+    const onMouseUp = (event: MouseEvent) => {
+      if (event.button !== 1) return;
       isPanningRef.current = false;
       setIsPanning(false);
     };
@@ -280,13 +261,14 @@ export function EditorCanvas({
     };
   }, []);
 
-  // ── Canvas click ──────────────────────────────────────────────────────────
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
+
     const handler = () => {
       const pos = stage.getRelativePointerPosition();
       if (!pos) return;
+
       if (isPlacingRef.current) {
         createRackRef.current(
           Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
@@ -296,21 +278,22 @@ export function EditorCanvas({
         setSelectedRackIdsRef.current([]);
       }
     };
+
     stage.on('click.canvas', handler);
     return () => {
       stage.off('click.canvas');
     };
   }, [viewport]);
 
-  // ── Keyboard ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isPlacingRef.current) {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isPlacingRef.current) {
         setEditorMode('select');
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !isPlacingRef.current) {
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !isPlacingRef.current && isLayoutEditable) {
         const rackId = selectedRackIdsRef.current[0];
-        const target = e.target as HTMLElement;
+        const target = event.target as HTMLElement;
         const isEditing =
           target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
@@ -320,14 +303,15 @@ export function EditorCanvas({
         }
       }
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [setEditorMode]);
+  }, [isLayoutEditable, setEditorMode]);
 
-  // ── Grid lines ────────────────────────────────────────────────────────────
   const gridLines = useMemo(() => {
-    if (!viewport.width || !viewport.height)
+    if (!viewport.width || !viewport.height) {
       return { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+    }
 
     const offsetX = canvasOffset.x / zoom;
     const offsetY = canvasOffset.y / zoom;
@@ -347,15 +331,15 @@ export function EditorCanvas({
     return { v: vertical, h: horizontal, startX, endX, startY, endY };
   }, [zoom, viewport.width, viewport.height, canvasOffset]);
 
-  // ── Drag move ─────────────────────────────────────────────────────────────
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
-    if (!layoutDraft) return;
+    if (!layoutDraft || !isLayoutEditable) return;
+
     const node = event.target;
     let x = clampCanvasPosition(node.x() - node.offsetX());
     let y = clampCanvasPosition(node.y() - node.offsetY());
 
     const rack = layoutDraft.racks[rackId];
-    const otherRacks = Object.values(layoutDraft.racks).filter((r) => r.id !== rackId);
+    const otherRacks = Object.values(layoutDraft.racks).filter((item) => item.id !== rackId);
     const snapInfo = getSnapPosition(rack, x, y, otherRacks, minRackDistanceRef.current, 0.5);
 
     if (snapInfo.snappedToX || snapInfo.snappedToY) {
@@ -374,10 +358,8 @@ export function EditorCanvas({
     updateRackPositionRef.current(rackId, x, y);
   };
 
-  const handleZoom = (delta: number) =>
-    setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
+  const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
@@ -388,17 +370,13 @@ export function EditorCanvas({
       }}
     >
       {!layoutDraft && (
-        <div
-          className="flex h-full items-center justify-center text-sm"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          Loading layout…
+        <div className="flex h-full items-center justify-center text-sm" style={{ color: 'var(--text-muted)' }}>
+          Loading layout...
         </div>
       )}
 
       {layoutDraft && (
         <>
-          {/* Placement mode hint */}
           {isPlacing && (
             <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex items-center justify-center">
               <div
@@ -409,7 +387,7 @@ export function EditorCanvas({
                   border: '1px solid rgba(6,182,212,0.4)'
                 }}
               >
-                Click canvas to place rack &middot; Press{' '}
+                Click canvas to place rack · Press{' '}
                 <kbd className="mx-1 rounded bg-slate-700 px-1.5 py-0.5 font-mono text-[10px]">
                   Esc
                 </kbd>{' '}
@@ -418,8 +396,7 @@ export function EditorCanvas({
             </div>
           )}
 
-          {/* Floating contextual toolbar — shows when a single rack is selected */}
-          {selectedRack && selectedRackGeometry && (
+          {isLayoutEditable && selectedRack && selectedRackGeometry && (
             <FloatingToolbar
               rackId={selectedRack.id}
               screenX={toolbarScreenX}
@@ -428,7 +405,6 @@ export function EditorCanvas({
             />
           )}
 
-          {/* Konva Stage */}
           {viewport.width > 0 && viewport.height > 0 && (
             <Stage
               ref={stageRef}
@@ -437,15 +413,12 @@ export function EditorCanvas({
               x={canvasOffset.x}
               y={canvasOffset.y}
               scale={{ x: zoom, y: zoom }}
-              onWheel={(e) => {
-                e.evt.preventDefault();
-                const delta = e.evt.deltaY > 0 ? -0.1 : 0.1;
-                setCanvasZoomRef.current(
-                  clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)))
-                );
+              onWheel={(event) => {
+                event.evt.preventDefault();
+                const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
+                setCanvasZoomRef.current(clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2))));
               }}
             >
-              {/* Grid layer */}
               <Layer listening={false}>
                 {gridLines.v.map((x) => (
                   <Line
@@ -469,17 +442,15 @@ export function EditorCanvas({
                 ))}
               </Layer>
 
-              {/* Snap guides */}
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
 
-              {/* Rack layer */}
               <Layer>
                 {racks.map((rack) => {
                   const geometry = getRackGeometry(rack);
                   const isSelected = selectedRackIds.includes(rack.id);
                   const isHovered = hoveredRackId === rack.id;
-                  const faceA = rack.faces.find((f) => f.side === 'A') ?? null;
-                  const faceB = rack.faces.find((f) => f.side === 'B') ?? null;
+                  const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
+                  const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
 
                   return (
                     <Group
@@ -489,27 +460,27 @@ export function EditorCanvas({
                       offsetX={geometry.centerX}
                       offsetY={geometry.centerY}
                       rotation={rack.rotationDeg}
-                      draggable={!isPlacing}
-                      onClick={(e) => {
-                        e.cancelBubble = true;
-                        if (!isPlacing) {
-                          const evt = e.evt as unknown as PointerEvent;
-                          if (evt.ctrlKey || evt.metaKey) {
-                            toggleRackSelectionRef.current(rack.id);
-                          } else {
-                            setSelectedRackIdsRef.current([rack.id]);
-                          }
+                      draggable={isLayoutEditable && !isPlacing}
+                      onClick={(event) => {
+                        event.cancelBubble = true;
+                        if (isPlacing) return;
+
+                        const pointerEvent = event.evt as unknown as PointerEvent;
+                        if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
+                          toggleRackSelectionRef.current(rack.id);
+                        } else {
+                          setSelectedRackIdsRef.current([rack.id]);
                         }
                       }}
-                      onTap={(e) => {
-                        e.cancelBubble = true;
-                        if (!isPlacing) {
-                          const evt = e.evt as unknown as PointerEvent;
-                          if (evt.ctrlKey || evt.metaKey) {
-                            toggleRackSelectionRef.current(rack.id);
-                          } else {
-                            setSelectedRackIdsRef.current([rack.id]);
-                          }
+                      onTap={(event) => {
+                        event.cancelBubble = true;
+                        if (isPlacing) return;
+
+                        const pointerEvent = event.evt as unknown as PointerEvent;
+                        if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
+                          toggleRackSelectionRef.current(rack.id);
+                        } else {
+                          setSelectedRackIdsRef.current([rack.id]);
                         }
                       }}
                       onMouseEnter={() => {
@@ -519,20 +490,14 @@ export function EditorCanvas({
                         if (!isPlacing) setHoveredRackId(null);
                       }}
                       onDragStart={() => {
-                        if (!selectedRackIds.includes(rack.id)) {
+                        if (isLayoutEditable && !selectedRackIds.includes(rack.id)) {
                           setSelectedRackIds([rack.id]);
                         }
                       }}
-                      onDragMove={(e) => handleDragMove(rack.id, e)}
+                      onDragMove={(event) => handleDragMove(rack.id, event)}
                       onDragEnd={() => setSnapGuides([])}
                     >
-                      <Rect
-                        x={0}
-                        y={0}
-                        width={geometry.width}
-                        height={geometry.height}
-                        fill="transparent"
-                      />
+                      <Rect x={0} y={0} width={geometry.width} height={geometry.height} fill="transparent" />
 
                       <RackBody
                         geometry={geometry}
@@ -571,9 +536,7 @@ export function EditorCanvas({
             </Stage>
           )}
 
-          {/* ── Bottom-right: zoom controls + hint ── */}
           <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
-            {/* Hint */}
             {!isPlacing && (
               <div
                 className="rounded-xl px-3 py-2 text-[11px]"
@@ -583,11 +546,10 @@ export function EditorCanvas({
                   backdropFilter: 'blur(4px)'
                 }}
               >
-                Drag · MMB pan · Scroll zoom · Del delete
+                {isLayoutEditable ? 'Drag · MMB pan · Scroll zoom · Del delete' : 'Read-only · MMB pan · Scroll zoom'}
               </div>
             )}
 
-            {/* Zoom controls */}
             <div
               className="pointer-events-auto flex items-center gap-1 rounded-xl px-2 py-1.5 shadow-md"
               style={{
