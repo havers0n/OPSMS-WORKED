@@ -10,6 +10,8 @@ export function useCreateLayoutDraft(floorId: string | null) {
     onSuccess: (_draftId, selectedFloorId) => {
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(selectedFloorId) });
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(floorId) });
+      void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(selectedFloorId) });
+      void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(floorId) });
     }
   });
 }

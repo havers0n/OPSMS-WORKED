@@ -15,6 +15,7 @@ export function useSaveLayoutDraft(floorId: string | null) {
         predicate: (query) => query.queryKey[0] === 'layout-validation' && query.queryKey[1] === layoutVersionId
       });
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(floorId) });
+      void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(floorId) });
     }
   });
 }
