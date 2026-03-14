@@ -1276,16 +1276,17 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        itemRef: 'ITEM-002',
+        sku: 'ITEM-002',
         quantity: 3,
         uom: 'pcs'
       }
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
+    expect(response.json()).toEqual({
+      ok: true,
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      itemRef: 'ITEM-002',
+      sku: 'ITEM-002',
       quantity: 3,
       uom: 'pcs'
     });
@@ -1307,8 +1308,8 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        itemRef: 'ITEM-002',
-        quantity: -1,
+        sku: 'ITEM-002',
+        quantity: 0,
         uom: 'pcs'
       }
     });
@@ -1355,7 +1356,7 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        itemRef: 'ITEM-001',
+        sku: 'ITEM-001',
         quantity: 7,
         uom: 'pcs'
       }
@@ -1363,7 +1364,102 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'CONFLICT'
+      code: 'INVENTORY_ROW_ALREADY_EXISTS'
+    });
+
+    await app.close();
+  });
+
+  it('returns not found when the target container is outside the current tenant scope', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/00000000-0000-0000-0000-000000000000/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        sku: 'ITEM-404',
+        quantity: 1,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      code: 'CONTAINER_NOT_FOUND'
+    });
+
+    await app.close();
+  });
+
+  it('rejects inventory writes when the container status cannot receive inventory', async () => {
+    const base = createSupabaseStub();
+    const supabase = {
+      ...base,
+      from: vi.fn((table: string) => {
+        if (table === 'containers') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn((column: string, value: string) => {
+                const rows =
+                  column === 'tenant_id'
+                    ? [
+                        {
+                          id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+                          tenant_id: value,
+                          external_code: null,
+                          container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+                          status: 'quarantined',
+                          created_at: '2026-03-13T10:15:00.000Z',
+                          created_by: null
+                        }
+                      ]
+                    : [];
+
+                return {
+                  eq: vi.fn((_nestedColumn: string, nestedValue: string) => ({
+                    maybeSingle: vi.fn(async () => ({
+                      data: rows.find((row) => row.id === nestedValue) ?? null,
+                      error: null
+                    }))
+                  }))
+                };
+              })
+            }))
+          };
+        }
+
+        return base.from(table);
+      })
+    };
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/4f8a33c1-c803-4515-b8d4-0144f788e5d2/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        sku: 'ITEM-QA',
+        quantity: 2,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'CONTAINER_NOT_RECEIVABLE'
     });
 
     await app.close();

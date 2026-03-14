@@ -47,9 +47,9 @@ export const createContainerBodySchema = z.object({
   externalCode: z.string().trim().min(1)
 });
 
-export const createInventoryItemBodySchema = z.object({
-  itemRef: z.string().trim().min(1),
-  quantity: z.number().min(0),
+export const addInventoryToContainerBodySchema = z.object({
+  sku: z.string().trim().min(1),
+  quantity: z.number().positive(),
   uom: z.string().trim().min(1)
 });
 
@@ -169,6 +169,13 @@ export const cellSlotStorageResponseSchema = z.object({
 export type CellSlotStorageResponse = z.infer<typeof cellSlotStorageResponseSchema>;
 export const inventoryItemsResponseSchema = z.array(inventoryItemSchema);
 export const inventoryItemResponseSchema = inventoryItemSchema;
+export const addInventoryToContainerResponseSchema = z.object({
+  ok: z.literal(true),
+  containerId: z.string().uuid(),
+  sku: z.string().trim().min(1),
+  quantity: z.number().positive(),
+  uom: z.string().trim().min(1)
+});
 export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerResponseSchema = moveContainerResultSchema;

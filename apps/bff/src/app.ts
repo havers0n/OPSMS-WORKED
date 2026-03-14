@@ -6,6 +6,8 @@ import type { PlacementCommandResponse } from '@wos/domain';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
+  addInventoryToContainerBodySchema,
+  addInventoryToContainerResponseSchema,
   cellsResponseSchema,
   cellStorageSnapshotResponseSchema,
   cellSlotStorageResponseSchema,
@@ -14,7 +16,6 @@ import {
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
-  createInventoryItemBodySchema,
   createContainerResponseSchema,
   containerTypesResponseSchema,
   createContainerBodySchema,
@@ -33,7 +34,6 @@ import {
   floorWorkspaceResponseSchema,
   floorsResponseSchema,
   idResponseSchema,
-  inventoryItemResponseSchema,
   inventoryItemsResponseSchema,
   layoutDraftResponseSchema,
   layoutVersionIdResponseSchema,
@@ -300,6 +300,35 @@ async function containerCodeExists(supabase: SupabaseClient, tenantId: string, e
   }
 
   return Boolean(data);
+}
+
+type InventoryWriteContainerRow = {
+  id: string;
+  tenant_id: string;
+  status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+};
+
+async function fetchInventoryWriteContainer(
+  supabase: SupabaseClient,
+  tenantId: string,
+  containerId: string
+) {
+  const { data, error } = await supabase
+    .from('containers')
+    .select('id,tenant_id,status')
+    .eq('tenant_id', tenantId)
+    .eq('id', containerId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? null) as InventoryWriteContainerRow | null;
+}
+
+function canContainerReceiveInventory(status: InventoryWriteContainerRow['status']) {
+  return status === 'active';
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -937,29 +966,61 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const body = parseOrThrow(createInventoryItemBodySchema, request.body);
+    const body = parseOrThrow(addInventoryToContainerBodySchema, request.body);
     if (!auth.currentTenant) {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
     }
     const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
+    const container = await fetchInventoryWriteContainer(
+      supabase,
+      auth.currentTenant.tenantId,
+      containerId
+    );
+
+    if (!container) {
+      throw new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+    }
+
+    if (!canContainerReceiveInventory(container.status)) {
+      throw new ApiError(
+        409,
+        'CONTAINER_NOT_RECEIVABLE',
+        `Container status ${container.status} does not allow receiving inventory.`
+      );
+    }
+
+    const { error } = await supabase
       .from('inventory_items')
       .insert({
         tenant_id: auth.currentTenant.tenantId,
         container_id: containerId,
-        item_ref: body.itemRef,
+        item_ref: body.sku,
         quantity: body.quantity,
         uom: body.uom,
         created_by: auth.user.id
       })
-      .select('id,tenant_id,container_id,item_ref,quantity,uom,created_at,created_by')
+      .select('id')
       .single();
 
     if (error) {
+      if ('code' in error && error.code === '23505') {
+        throw new ApiError(
+          409,
+          'INVENTORY_ROW_ALREADY_EXISTS',
+          'An inventory row for this SKU and UOM already exists in the container.'
+        );
+      }
+
       throw error;
     }
 
-    return parseOrThrow(inventoryItemResponseSchema, mapInventoryItemRowToDomain(data));
+    return parseOrThrow(addInventoryToContainerResponseSchema, {
+      ok: true,
+      containerId,
+      sku: body.sku,
+      quantity: body.quantity,
+      uom: body.uom
+    });
   });
 
   app.post('/api/floors', async (request, reply) => {

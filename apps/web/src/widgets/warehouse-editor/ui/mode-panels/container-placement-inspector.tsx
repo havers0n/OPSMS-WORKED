@@ -21,6 +21,7 @@ import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerStorage } from '@/entities/container/api/use-container-storage';
 import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
 import { useRemoveContainer } from '@/features/placement-actions/model/use-remove-container';
+import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -52,6 +53,14 @@ function extractInventory(rows: ContainerStorageSnapshotRow[]): InventoryRow[] {
     .map((row) => ({ itemRef: row.itemRef!, quantity: row.quantity!, uom: row.uom! }));
 }
 
+function canReceiveInventory(status: string | null | undefined) {
+  return status === 'active';
+}
+
+function formatMutationError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export function ContainerPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
   const placementInteraction = usePlacementInteraction();
@@ -60,8 +69,13 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   const startPlacementMove = useStartPlacementMove();
   const cancelPlacementInteraction = useCancelPlacementInteraction();
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
+  const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [addInventoryError, setAddInventoryError] = useState<string | null>(null);
+  const [skuInput, setSkuInput] = useState('');
+  const [quantityInput, setQuantityInput] = useState('1');
+  const [uomInput, setUomInput] = useState('ea');
 
   const containerId = selection.type === 'container' ? selection.containerId : null;
   const sourceCellId = selection.type === 'container' ? selection.sourceCellId ?? null : null;
@@ -83,12 +97,18 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     sourceCellId,
     containerId
   });
+  const addInventoryToContainer = useAddInventoryToContainer({
+    floorId: workspace?.floorId ?? null,
+    sourceCellId,
+    containerId
+  });
   const moveContainer = useMoveContainer({
     floorId: workspace?.floorId ?? null,
     sourceCellId,
     targetCellId,
     containerId
   });
+  const isInventoryReceivable = canReceiveInventory(identity?.containerStatus);
 
   const targetValidationMessage =
     !isMoveMode
@@ -130,6 +150,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
 
     setMoveError(null);
     setIsRemoveConfirmOpen(false);
+    setIsAddInventoryOpen(false);
     startPlacementMove(containerId, sourceCellId);
   };
 
@@ -155,6 +176,56 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     } catch (mutationError) {
       setMoveError(
         mutationError instanceof Error ? mutationError.message : 'Could not move the container.'
+      );
+    }
+  };
+
+  const handleToggleAddInventory = () => {
+    setAddInventoryError(null);
+    setIsRemoveConfirmOpen(false);
+    setIsAddInventoryOpen((current) => !current);
+  };
+
+  const handleAddInventory = async () => {
+    if (!containerId) {
+      return;
+    }
+
+    const sku = skuInput.trim();
+    const quantity = Number(quantityInput);
+    const uom = uomInput.trim();
+
+    if (sku.length === 0) {
+      setAddInventoryError('Enter a SKU or item reference.');
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setAddInventoryError('Quantity must be greater than 0.');
+      return;
+    }
+
+    if (uom.length === 0) {
+      setAddInventoryError('Enter a UOM.');
+      return;
+    }
+
+    setAddInventoryError(null);
+
+    try {
+      await addInventoryToContainer.mutateAsync({
+        containerId,
+        sku,
+        quantity,
+        uom
+      });
+      setSkuInput('');
+      setQuantityInput('1');
+      setUomInput('ea');
+      setIsAddInventoryOpen(false);
+    } catch (mutationError) {
+      setAddInventoryError(
+        formatMutationError(mutationError, 'Could not add inventory to the container.')
       );
     }
   };
@@ -198,10 +269,29 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
           <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
+              className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ borderColor: 'var(--border-muted)' }}
+              onClick={handleToggleAddInventory}
+              disabled={
+                isMoveMode ||
+                removeContainer.isPending ||
+                moveContainer.isPending ||
+                addInventoryToContainer.isPending ||
+                !isInventoryReceivable
+              }
+            >
+              {addInventoryToContainer.isPending
+                ? 'Adding inventory...'
+                : isAddInventoryOpen
+                  ? 'Cancel inventory'
+                  : 'Add inventory'}
+            </button>
+            <button
+              type="button"
               className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: 'var(--accent)' }}
               onClick={handleStartMove}
-              disabled={removeContainer.isPending || moveContainer.isPending}
+              disabled={removeContainer.isPending || moveContainer.isPending || addInventoryToContainer.isPending}
             >
               {isMoveMode ? 'Move target active' : 'Move container'}
             </button>
@@ -213,11 +303,16 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                 setRemoveError(null);
                 setIsRemoveConfirmOpen((current) => !current);
               }}
-              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending}
+              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending || addInventoryToContainer.isPending}
             >
               {removeContainer.isPending ? 'Removing...' : 'Remove from cell'}
             </button>
           </div>
+        )}
+        {identity && !isInventoryReceivable && (
+          <p className="mt-2 text-[11px] text-amber-600">
+            Only active containers can receive inventory.
+          </p>
         )}
       </div>
 
@@ -311,6 +406,81 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                   setRemoveError(null);
                 }}
                 disabled={removeContainer.isPending}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isAddInventoryOpen && identity && (
+          <div
+            className="rounded-lg p-3"
+            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent)]">
+              Add inventory
+            </p>
+            <div className="mt-3 grid gap-3">
+              <label className="grid gap-1">
+                <span className="text-[11px] font-medium text-[var(--text-primary)]">SKU / item reference</span>
+                <input
+                  value={skuInput}
+                  onChange={(event) => setSkuInput(event.target.value)}
+                  placeholder="CAMP-CHAIR-01"
+                  className="rounded-md border px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                  disabled={addInventoryToContainer.isPending}
+                />
+              </label>
+              <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
+                <label className="grid gap-1">
+                  <span className="text-[11px] font-medium text-[var(--text-primary)]">Quantity</span>
+                  <input
+                    value={quantityInput}
+                    onChange={(event) => setQuantityInput(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="12"
+                    className="rounded-md border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                    disabled={addInventoryToContainer.isPending}
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-[11px] font-medium text-[var(--text-primary)]">UOM</span>
+                  <input
+                    value={uomInput}
+                    onChange={(event) => setUomInput(event.target.value)}
+                    placeholder="ea"
+                    className="rounded-md border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                    disabled={addInventoryToContainer.isPending}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {addInventoryError && <p className="mt-3 text-xs text-red-500">{addInventoryError}</p>}
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--accent)' }}
+                onClick={() => void handleAddInventory()}
+                disabled={addInventoryToContainer.isPending}
+              >
+                {addInventoryToContainer.isPending ? 'Saving...' : 'Confirm add'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={() => {
+                  setIsAddInventoryOpen(false);
+                  setAddInventoryError(null);
+                }}
+                disabled={addInventoryToContainer.isPending}
               >
                 Cancel
               </button>
