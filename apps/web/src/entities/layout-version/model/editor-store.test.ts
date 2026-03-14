@@ -5,7 +5,7 @@ import { useEditorStore } from './editor-store';
 
 function resetStore() {
   useEditorStore.setState({
-    selectedRackIds: [],
+    selection: { type: 'none' },
     hoveredRackId: null,
     creatingRackId: null,
     zoom: 1,
@@ -28,7 +28,8 @@ describe('editor-store', () => {
 
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
     expect(useEditorStore.getState().draft?.state).toBe('draft');
-    expect(useEditorStore.getState().selectedRackIds[0]).toBe(draft.rackIds[0]);
+    const sel = useEditorStore.getState().selection;
+    expect(sel.type === 'rack' ? sel.rackIds[0] : null).toBe(draft.rackIds[0]);
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 
@@ -73,7 +74,7 @@ describe('editor-store', () => {
     useEditorStore.getState().resetDraft();
 
     expect(useEditorStore.getState().draft).toBeNull();
-    expect(useEditorStore.getState().selectedRackIds).toEqual([]);
+    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 });

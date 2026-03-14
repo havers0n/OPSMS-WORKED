@@ -2,20 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { useEditorStore } from './editor-store';
 import type { EditorSelection } from './editor-types';
 
-/**
- * Mirror of the useEditorSelection selector logic — tested here without React.
- * If the logic in editor-selectors.ts changes, update this too.
- */
-function deriveSelection(selectedRackIds: string[]): EditorSelection {
-  if (selectedRackIds.length > 0) {
-    return { type: 'rack', rackIds: selectedRackIds };
-  }
-  return { type: 'none' };
-}
-
 function resetStore() {
   useEditorStore.setState({
-    selectedRackIds: [],
+    selection: { type: 'none' },
     hoveredRackId: null,
     creatingRackId: null,
     zoom: 1,
@@ -30,60 +19,79 @@ afterEach(() => {
   resetStore();
 });
 
-describe('EditorSelection derivation from store state', () => {
-  it('derives { type: none } when no racks are selected', () => {
-    useEditorStore.setState({ selectedRackIds: [] });
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'none' });
+describe('EditorSelection — canonical store field', () => {
+  it('defaults to { type: none }', () => {
+    const { selection } = useEditorStore.getState();
+    expect(selection).toEqual({ type: 'none' });
   });
 
-  it('derives { type: rack, rackIds } when racks are selected', () => {
-    useEditorStore.setState({ selectedRackIds: ['r1', 'r2'] });
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'rack', rackIds: ['r1', 'r2'] });
+  it('setSelectedRackIds([]) produces { type: none }', () => {
+    useEditorStore.getState().setSelectedRackIds([]);
+    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
   });
 
-  it('derives { type: rack } with a single rack after setSelectedRackId', () => {
+  it('setSelectedRackIds([...]) produces { type: rack, rackIds }', () => {
+    useEditorStore.getState().setSelectedRackIds(['r1', 'r2']);
+    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+      type: 'rack',
+      rackIds: ['r1', 'r2']
+    });
+  });
+
+  it('setSelectedRackId(id) produces a single-rack selection', () => {
     useEditorStore.getState().setSelectedRackId('rack-abc');
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(selectedRackIds).toEqual(['rack-abc']);
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'rack', rackIds: ['rack-abc'] });
+    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+      type: 'rack',
+      rackIds: ['rack-abc']
+    });
   });
 
-  it('derives { type: none } after setSelectedRackId(null)', () => {
+  it('setSelectedRackId(null) clears selection', () => {
     useEditorStore.getState().setSelectedRackId('rack-abc');
     useEditorStore.getState().setSelectedRackId(null);
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(selectedRackIds).toEqual([]);
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'none' });
+    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
+  });
+
+  it('setSelection() accepts any EditorSelection variant', () => {
+    const sel: EditorSelection = { type: 'rack', rackIds: ['x', 'y', 'z'] };
+    useEditorStore.getState().setSelection(sel);
+    expect(useEditorStore.getState().selection).toEqual(sel);
+  });
+
+  it('clearSelection() resets to { type: none }', () => {
+    useEditorStore.getState().setSelectedRackId('r1');
+    useEditorStore.getState().clearSelection();
+    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
   });
 
   it('toggleRackSelection builds a multi-rack selection', () => {
     useEditorStore.getState().toggleRackSelection('r1');
     useEditorStore.getState().toggleRackSelection('r2');
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(selectedRackIds).toEqual(['r1', 'r2']);
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'rack', rackIds: ['r1', 'r2'] });
+    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+      type: 'rack',
+      rackIds: ['r1', 'r2']
+    });
   });
 
   it('toggleRackSelection removes a rack from multi-selection', () => {
     useEditorStore.getState().toggleRackSelection('r1');
     useEditorStore.getState().toggleRackSelection('r2');
     useEditorStore.getState().toggleRackSelection('r1');
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(selectedRackIds).toEqual(['r2']);
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'rack', rackIds: ['r2'] });
+    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+      type: 'rack',
+      rackIds: ['r2']
+    });
   });
 
-  it('selectedRackIds[0] shortcut preserved for backward compatibility', () => {
-    useEditorStore.setState({ selectedRackIds: ['primary', 'secondary'] });
-    expect(useEditorStore.getState().selectedRackIds[0]).toBe('primary');
+  it('toggleRackSelection collapses to { type: none } when last rack is removed', () => {
+    useEditorStore.getState().toggleRackSelection('r1');
+    useEditorStore.getState().toggleRackSelection('r1');
+    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
   });
 
-  it('setSelectedRackIds replaces the full selection array', () => {
-    useEditorStore.getState().setSelectedRackIds(['x', 'y', 'z']);
-    const { selectedRackIds } = useEditorStore.getState();
-    expect(selectedRackIds).toEqual(['x', 'y', 'z']);
-    expect(deriveSelection(selectedRackIds)).toEqual({ type: 'rack', rackIds: ['x', 'y', 'z'] });
+  it('selection rackIds[0] is still the primary rack id', () => {
+    useEditorStore.getState().setSelectedRackIds(['primary', 'secondary']);
+    const sel = useEditorStore.getState().selection;
+    expect(sel.type === 'rack' ? sel.rackIds[0] : null).toBe('primary');
   });
 });

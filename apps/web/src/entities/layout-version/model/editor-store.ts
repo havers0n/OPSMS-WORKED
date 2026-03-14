@@ -1,6 +1,6 @@
 import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
 import { create } from 'zustand';
-import type { EditorMode, ViewMode } from './editor-types';
+import type { EditorMode, EditorSelection, ViewMode } from './editor-types';
 import {
   checkMinimumDistance,
   alignRacksToLine,
@@ -11,7 +11,8 @@ import {
 type EditorStore = {
   viewMode: ViewMode;
   editorMode: EditorMode;
-  selectedRackIds: string[];
+  /** Canonical selection state. Use setSelection / clearSelection to mutate. */
+  selection: EditorSelection;
   hoveredRackId: string | null;
   /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
   creatingRackId: string | null;
@@ -22,7 +23,11 @@ type EditorStore = {
   isDraftDirty: boolean;
   setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
+  setSelection: (selection: EditorSelection) => void;
+  clearSelection: () => void;
+  /** Convenience wrapper — sets a rack-type selection from an id array. */
   setSelectedRackIds: (rackIds: string[]) => void;
+  /** Convenience wrapper — sets a single-rack selection, or clears if null. */
   setSelectedRackId: (rackId: string | null) => void;
   toggleRackSelection: (rackId: string) => void;
   setHoveredRackId: (rackId: string | null) => void;
@@ -59,7 +64,7 @@ type EditorStore = {
 const initialEditorState = {
   viewMode: 'layout' as ViewMode,
   editorMode: 'select' as EditorMode,
-  selectedRackIds: [] as string[],
+  selection: { type: 'none' } as EditorSelection,
   hoveredRackId: null,
   creatingRackId: null,
   zoom: 1,
@@ -68,6 +73,16 @@ const initialEditorState = {
   draftSourceVersionId: null,
   isDraftDirty: false
 };
+
+// ── Selection helpers ──────────────────────────────────────────────────────────
+
+function makeRackSelection(ids: string[]): EditorSelection {
+  return ids.length > 0 ? { type: 'rack', rackIds: ids } : { type: 'none' };
+}
+
+function getSelectedRackIds(selection: EditorSelection): string[] {
+  return selection.type === 'rack' ? selection.rackIds : [];
+}
 
 function cloneDraft(draft: LayoutDraft): LayoutDraft {
   return structuredClone(draft);
@@ -148,13 +163,17 @@ export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
   setViewMode: (viewMode) => set({ viewMode, editorMode: 'select' }),
   setEditorMode: (editorMode) => set({ editorMode }),
-  setSelectedRackIds: (selectedRackIds) => set({ selectedRackIds }),
-  setSelectedRackId: (rackId) => set({ selectedRackIds: rackId ? [rackId] : [] }),
-  toggleRackSelection: (rackId) => set((state) => ({
-    selectedRackIds: state.selectedRackIds.includes(rackId)
-      ? state.selectedRackIds.filter(id => id !== rackId)
-      : [...state.selectedRackIds, rackId]
-  })),
+  setSelection: (selection) => set({ selection }),
+  clearSelection: () => set({ selection: { type: 'none' } }),
+  setSelectedRackIds: (rackIds) => set({ selection: makeRackSelection(rackIds) }),
+  setSelectedRackId: (rackId) => set({ selection: rackId ? { type: 'rack', rackIds: [rackId] } : { type: 'none' } }),
+  toggleRackSelection: (rackId) => set((state) => {
+    const current = getSelectedRackIds(state.selection);
+    const next = current.includes(rackId)
+      ? current.filter(id => id !== rackId)
+      : [...current, rackId];
+    return { selection: makeRackSelection(next) };
+  }),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setZoom: (zoom) => set({ zoom }),
@@ -163,7 +182,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
     set({
       draft: null,
       draftSourceVersionId: null,
-      selectedRackIds: [],
+      selection: { type: 'none' },
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,
@@ -176,15 +195,16 @@ export const useEditorStore = create<EditorStore>((set) => ({
         return state;
       }
 
-      const nextSelectedRackIds =
-        state.selectedRackIds.length > 0 && state.selectedRackIds.every(id => draft.racks[id])
-          ? state.selectedRackIds
+      const currentRackIds = getSelectedRackIds(state.selection);
+      const nextRackIds =
+        currentRackIds.length > 0 && currentRackIds.every(id => draft.racks[id])
+          ? currentRackIds
           : (draft.rackIds[0] ? [draft.rackIds[0]] : []);
 
       return {
         draft: cloneDraft(draft),
         draftSourceVersionId: draft.layoutVersionId,
-        selectedRackIds: nextSelectedRackIds,
+        selection: makeRackSelection(nextRackIds),
         isDraftDirty: false
       };
     }),
@@ -210,7 +230,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selectedRackIds: [newRack.id],
+        selection: { type: 'rack', rackIds: [newRack.id] },
         creatingRackId: newRack.id,
         editorMode: 'select',
         isDraftDirty: true
@@ -226,7 +246,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selectedRackIds: state.selectedRackIds.filter(id => id !== rackId),
+        selection: makeRackSelection(getSelectedRackIds(state.selection).filter(id => id !== rackId)),
         creatingRackId: state.creatingRackId === rackId ? null : state.creatingRackId,
         isDraftDirty: true
       };
@@ -269,7 +289,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selectedRackIds: [newRackId],
+        selection: { type: 'rack', rackIds: [newRackId] },
         isDraftDirty: true
       };
     }),

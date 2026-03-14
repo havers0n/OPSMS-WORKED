@@ -5,8 +5,16 @@ export const useViewMode = () => useEditorStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
 export const useEditorMode = () => useEditorStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
-export const useSelectedRackIds = () => useEditorStore((state) => state.selectedRackIds);
-export const useSelectedRackId = () => useEditorStore((state) => state.selectedRackIds[0] ?? null);
+export const useSelectedRackIds = () =>
+  useEditorStore((state) =>
+    state.selection.type === 'rack' ? state.selection.rackIds : ([] as string[])
+  );
+export const useSelectedRackId = () =>
+  useEditorStore((state) =>
+    state.selection.type === 'rack' ? (state.selection.rackIds[0] ?? null) : null
+  );
+export const useSetSelection = () => useEditorStore((state) => state.setSelection);
+export const useClearSelection = () => useEditorStore((state) => state.clearSelection);
 export const useToggleRackSelection = () => useEditorStore((state) => state.toggleRackSelection);
 export const useSetSelectedRackIds = () => useEditorStore((state) => state.setSelectedRackIds);
 export const useMinRackDistance = () => useEditorStore((state) => state.minRackDistance);
@@ -44,15 +52,6 @@ export const useAlignRacksHorizontal = () => useEditorStore((state) => state.ali
 export const useAlignRacksVertical = () => useEditorStore((state) => state.alignRacksVertical);
 export const useDistributeRacksEqual = () => useEditorStore((state) => state.distributeRacksEqual);
 
-/**
- * Derived typed selection for the current editor state.
- * Cell and container variants are reserved for future modes; only 'rack' is
- * populated today from the existing selectedRackIds store field.
- */
+/** Canonical typed selection. Reads directly from the store's first-class selection field. */
 export const useEditorSelection = (): EditorSelection =>
-  useEditorStore((state): EditorSelection => {
-    if (state.selectedRackIds.length > 0) {
-      return { type: 'rack', rackIds: state.selectedRackIds };
-    }
-    return { type: 'none' };
-  });
+  useEditorStore((state) => state.selection);
