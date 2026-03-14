@@ -10,6 +10,7 @@ import {
   cellStorageSnapshotResponseSchema,
   cellSlotStorageResponseSchema,
   cellOccupancyResponseSchema,
+  floorCellOccupancyRowsResponseSchema,
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
@@ -93,6 +94,11 @@ type LayoutVersionRow = {
   version_no: number;
   state: 'draft' | 'published' | 'archived';
   published_at?: string | null;
+};
+
+type FloorCellOccupancyRow = {
+  cellId: string;
+  containerCount: number;
 };
 
 async function fetchLatestLayoutVersionByState(
@@ -486,6 +492,57 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(cellsResponseSchema, (data ?? []).map(mapCellRowToDomain));
+  });
+
+  app.get('/api/floors/:floorId/cell-occupancy', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const supabase = getUserSupabase(auth);
+    const publishedVersion = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
+
+    if (!publishedVersion) {
+      return parseOrThrow(floorCellOccupancyRowsResponseSchema, []);
+    }
+
+    const { data: cells, error: cellsError } = await supabase
+      .from('cells')
+      .select('id')
+      .eq('layout_version_id', publishedVersion.id);
+
+    if (cellsError) {
+      throw cellsError;
+    }
+
+    const cellIds = (cells ?? []).map((cell) => cell.id);
+    if (cellIds.length === 0) {
+      return parseOrThrow(floorCellOccupancyRowsResponseSchema, []);
+    }
+
+    const { data: occupancyRows, error: occupancyError } = await supabase
+      .from('cell_occupancy_v')
+      .select('cell_id')
+      .in('cell_id', cellIds);
+
+    if (occupancyError) {
+      throw occupancyError;
+    }
+
+    const countsByCellId = new Map<string, number>();
+    for (const row of occupancyRows ?? []) {
+      const nextCount = (countsByCellId.get(row.cell_id) ?? 0) + 1;
+      countsByCellId.set(row.cell_id, nextCount);
+    }
+
+    const response: FloorCellOccupancyRow[] = cellIds.flatMap((cellId) => {
+      const containerCount = countsByCellId.get(cellId);
+      return containerCount ? [{ cellId, containerCount }] : [];
+    });
+
+    return parseOrThrow(floorCellOccupancyRowsResponseSchema, response);
   });
 
   /**

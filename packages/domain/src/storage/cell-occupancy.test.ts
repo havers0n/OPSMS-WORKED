@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { cellOccupancyRowSchema } from './cell-occupancy';
+import {
+  cellOccupancyRowSchema,
+  floorCellOccupancyResponseSchema
+} from './cell-occupancy';
 
 describe('cell occupancy read model contracts', () => {
   it('parses a placement-centric occupancy row', () => {
@@ -35,5 +38,21 @@ describe('cell occupancy read model contracts', () => {
       externalCode: null,
       containerStatus: 'quarantined'
     });
+  });
+
+  it('parses floor-level occupancy summaries for canvas highlighting', () => {
+    expect(
+      floorCellOccupancyResponseSchema.parse([
+        {
+          cellId: '4dfd5836-37be-4333-9139-e9a8e461c5d2',
+          containerCount: 2
+        }
+      ])
+    ).toEqual([
+      {
+        cellId: '4dfd5836-37be-4333-9139-e9a8e461c5d2',
+        containerCount: 2
+      }
+    ]);
   });
 });

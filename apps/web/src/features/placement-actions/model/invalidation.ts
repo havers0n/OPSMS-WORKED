@@ -38,6 +38,11 @@ export async function invalidatePlacementQueries(
   if (args.floorId) {
     jobs.push(
       queryClient.invalidateQueries({
+        queryKey: cellKeys.occupancyByFloor(args.floorId)
+      })
+    );
+    jobs.push(
+      queryClient.invalidateQueries({
         queryKey: layoutVersionKeys.workspace(args.floorId)
       })
     );

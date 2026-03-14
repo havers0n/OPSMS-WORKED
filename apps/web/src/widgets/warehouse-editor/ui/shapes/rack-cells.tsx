@@ -15,6 +15,10 @@ const CELL_STROKE_A_RACK_SELECTED = '#38bdf8';
 const CELL_STROKE_B_RACK_SELECTED = '#a78bfa';
 const CELL_FILL_SELECTED = '#fef3c7';
 const CELL_STROKE_SELECTED = '#f59e0b';
+const CELL_FILL_OCCUPIED_A = '#bbf7d0';
+const CELL_FILL_OCCUPIED_B = '#c4b5fd';
+const CELL_STROKE_OCCUPIED_A = '#22c55e';
+const CELL_STROKE_OCCUPIED_B = '#7c3aed';
 
 type FaceProps = {
   face: RackFace;
@@ -24,8 +28,11 @@ type FaceProps = {
   bandH: number;
   cellFill: string;
   cellStroke: string;
+  occupiedCellFill: string;
+  occupiedCellStroke: string;
   isRackSelected: boolean;
   publishedCellsByStructure: Map<string, Cell>;
+  occupiedCellIds: Set<string>;
   isInteractive: boolean;
   selectedCellId: string | null;
   onCellClick: (cellId: string) => void;
@@ -39,8 +46,11 @@ function FaceCells({
   bandH,
   cellFill,
   cellStroke,
+  occupiedCellFill,
+  occupiedCellStroke,
   isRackSelected,
   publishedCellsByStructure,
+  occupiedCellIds,
   isInteractive,
   selectedCellId,
   onCellClick
@@ -82,13 +92,23 @@ function FaceCells({
                 slotNo: slotLabel
               })
             );
-            const isSelected = isInteractive && selectedCellId === cell?.id;
+            const cellId = cell?.id ?? null;
+            const isSelected = isInteractive && selectedCellId === cellId;
+            const isOccupied = cellId !== null && occupiedCellIds.has(cellId) && !isSelected;
 
             const cellX = secX + slotIndex * slotW;
             const cellY = bandY + inset + levelIndex * levelH;
             const cellW = slotW - 1;
-            const fill = isSelected ? CELL_FILL_SELECTED : cellFill;
-            const stroke = isSelected ? CELL_STROKE_SELECTED : cellStroke;
+            const fill = isSelected
+              ? CELL_FILL_SELECTED
+              : isOccupied
+                ? occupiedCellFill
+                : cellFill;
+            const stroke = isSelected
+              ? CELL_STROKE_SELECTED
+              : isOccupied
+                ? occupiedCellStroke
+                : cellStroke;
 
             return (
               <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
@@ -100,11 +120,11 @@ function FaceCells({
                   cornerRadius={1}
                   fill={fill}
                   stroke={stroke}
-                  strokeWidth={isSelected ? 1.2 : isRackSelected ? 0.9 : 0.5}
-                  opacity={cell ? (isRackSelected ? 0.98 : 0.78) : 0.25}
-                  onClick={isInteractive && cell ? (event) => {
+                  strokeWidth={isSelected ? 1.2 : isOccupied ? 1 : isRackSelected ? 0.9 : 0.5}
+                  opacity={cell ? isSelected || isOccupied ? 0.98 : isRackSelected ? 0.98 : 0.78 : 0.25}
+                  onClick={isInteractive && cellId ? (event) => {
                     event.cancelBubble = true;
-                    onCellClick(cell.id);
+                    onCellClick(cellId);
                   } : undefined}
                 />
               </Group>
@@ -123,6 +143,7 @@ type Props = {
   faceB: RackFace | null;
   isSelected: boolean;
   publishedCellsByStructure: Map<string, Cell>;
+  occupiedCellIds?: Set<string>;
   isInteractive?: boolean;
   selectedCellId?: string | null;
   onCellClick?: (cellId: string) => void;
@@ -137,6 +158,7 @@ export function RackCells({
   faceB,
   isSelected,
   publishedCellsByStructure,
+  occupiedCellIds = new Set<string>(),
   isInteractive = false,
   selectedCellId = null,
   onCellClick = noop
@@ -154,8 +176,11 @@ export function RackCells({
         bandH={faceABandH}
         cellFill={isSelected ? CELL_FILL_A_RACK_SELECTED : CELL_FILL_A}
         cellStroke={isSelected ? CELL_STROKE_A_RACK_SELECTED : CELL_STROKE}
+        occupiedCellFill={CELL_FILL_OCCUPIED_A}
+        occupiedCellStroke={CELL_STROKE_OCCUPIED_A}
         isRackSelected={isSelected}
         publishedCellsByStructure={publishedCellsByStructure}
+        occupiedCellIds={occupiedCellIds}
         isInteractive={isInteractive}
         selectedCellId={selectedCellId}
         onCellClick={onCellClick}
@@ -169,8 +194,11 @@ export function RackCells({
           bandH={height - spineY}
           cellFill={isSelected ? CELL_FILL_B_RACK_SELECTED : CELL_FILL_B}
           cellStroke={isSelected ? CELL_STROKE_B_RACK_SELECTED : CELL_STROKE_B}
+          occupiedCellFill={CELL_FILL_OCCUPIED_B}
+          occupiedCellStroke={CELL_STROKE_OCCUPIED_B}
           isRackSelected={isSelected}
           publishedCellsByStructure={publishedCellsByStructure}
+          occupiedCellIds={occupiedCellIds}
           isInteractive={isInteractive}
           selectedCellId={selectedCellId}
           onCellClick={onCellClick}

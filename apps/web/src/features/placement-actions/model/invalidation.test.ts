@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { invalidatePlacementQueries } from './invalidation';
 
 describe('invalidatePlacementQueries', () => {
-  it('invalidates explicit cell storage, container storage, and floor workspace keys', async () => {
+  it('invalidates explicit cell storage, floor occupancy, container storage, and floor workspace keys', async () => {
     const invalidateQueries = vi.fn(async () => undefined);
 
     await invalidatePlacementQueries(
@@ -15,7 +15,7 @@ describe('invalidatePlacementQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['cell', 'storage', '188ed1eb-c44d-47f8-a8b1-94c7e20db85f']
     });
@@ -24,6 +24,9 @@ describe('invalidatePlacementQueries', () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['container', 'storage', 'container-uuid']
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['cell', 'occupancy-by-floor', 'floor-uuid']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['layout-version', 'workspace', 'floor-uuid']
@@ -43,7 +46,10 @@ describe('invalidatePlacementQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['cell', 'occupancy-by-floor', 'floor-uuid']
+    });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['layout-version', 'workspace', 'floor-uuid']
     });

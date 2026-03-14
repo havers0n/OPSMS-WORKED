@@ -28,7 +28,9 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
+import { useFloorCellOccupancy } from '@/entities/cell/api/use-floor-cell-occupancy';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
+import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
 import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
   clampCanvasPosition,
@@ -167,8 +169,10 @@ export function EditorCanvas({
     placementInteraction.type === 'move-container' ? placementInteraction.targetCellId : null;
   const isPlacementMoveMode = placementInteraction.type === 'move-container';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
+  const placementFloorId = isPlacementMode ? workspace?.floorId ?? null : null;
+  const { data: floorCellOccupancy = [] } = useFloorCellOccupancy(placementFloorId);
   const { data: publishedCells = [] } = usePublishedCells(
-    isPlacementMode ? workspace?.floorId ?? null : null
+    placementFloorId
   );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -193,6 +197,10 @@ export function EditorCanvas({
   const publishedCellsByStructure = useMemo(
     () => indexPublishedCellsByStructure(publishedCells),
     [publishedCells]
+  );
+  const occupiedCellIds = useMemo(
+    () => indexOccupiedCellIds(floorCellOccupancy),
+    [floorCellOccupancy]
   );
   const lod = getCanvasLOD(zoom);
 
@@ -565,6 +573,7 @@ export function EditorCanvas({
                           faceB={geometry.isPaired ? faceB : null}
                           isSelected={isSelected}
                           publishedCellsByStructure={publishedCellsByStructure}
+                          occupiedCellIds={occupiedCellIds}
                           isInteractive={isPlacementMode}
                           selectedCellId={isPlacementMode ? moveTargetCellId ?? selectedCellId : null}
                           onCellClick={handlePlacementCellClick}

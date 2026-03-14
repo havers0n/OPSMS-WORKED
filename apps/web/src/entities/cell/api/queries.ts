@@ -1,4 +1,4 @@
-import type { Cell, CellStorageSnapshotRow } from '@wos/domain';
+import type { Cell, CellStorageSnapshotRow, FloorCellOccupancyRow } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
@@ -13,6 +13,8 @@ export const cellKeys = {
   all: ['cell'] as const,
   storage: (cellId: string | null) =>
     [...cellKeys.all, 'storage', cellId ?? 'none'] as const,
+  occupancyByFloor: (floorId: string | null) =>
+    [...cellKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const,
   publishedByFloor: (floorId: string | null) =>
     [...cellKeys.all, 'published-by-floor', floorId ?? 'none'] as const,
   /**
@@ -35,6 +37,10 @@ async function fetchCellSlotStorage(
 
 async function fetchCellStorage(cellId: string): Promise<CellStorageSnapshotRow[]> {
   return bffRequest<CellStorageSnapshotRow[]>(`/api/cells/${cellId}/storage`);
+}
+
+async function fetchFloorCellOccupancy(floorId: string): Promise<FloorCellOccupancyRow[]> {
+  return bffRequest<FloorCellOccupancyRow[]>(`/api/floors/${floorId}/cell-occupancy`);
 }
 
 async function fetchPublishedCells(floorId: string): Promise<Cell[]> {
@@ -64,6 +70,14 @@ export function cellStorageQueryOptions(cellId: string | null) {
     queryKey: cellKeys.storage(cellId),
     queryFn: () => fetchCellStorage(cellId as string),
     enabled: Boolean(cellId)
+  });
+}
+
+export function floorCellOccupancyQueryOptions(floorId: string | null) {
+  return queryOptions({
+    queryKey: cellKeys.occupancyByFloor(floorId),
+    queryFn: () => fetchFloorCellOccupancy(floorId as string),
+    enabled: Boolean(floorId)
   });
 }
 
