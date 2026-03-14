@@ -3,6 +3,9 @@ import { mapLayoutDraftToSavePayload } from '../../../features/layout-draft-save
 import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
 import { useEditorStore } from './editor-store';
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function resetStore() {
   useEditorStore.setState({
     selection: { type: 'none' },
@@ -14,6 +17,16 @@ function resetStore() {
     draftSourceVersionId: null,
     isDraftDirty: false
   });
+}
+
+function createUuidLayoutDraftFixture() {
+  return {
+    layoutVersionId: crypto.randomUUID(),
+    floorId: crypto.randomUUID(),
+    state: 'draft' as const,
+    rackIds: [],
+    racks: {}
+  };
 }
 
 afterEach(() => {
@@ -76,5 +89,44 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().draft).toBeNull();
     expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
+  });
+
+  it('generates UUID ids for all new entities sent to save', () => {
+    useEditorStore.getState().initializeDraft(createUuidLayoutDraftFixture());
+    useEditorStore.getState().createRack(120, 80);
+
+    const rackId = useEditorStore.getState().draft?.rackIds[0];
+    expect(rackId).toBeTruthy();
+
+    const sectionId = useEditorStore.getState().draft?.racks[rackId!].faces[0]?.sections[0]?.id;
+    expect(sectionId).toBeTruthy();
+
+    useEditorStore.getState().addSection(rackId!, 'A');
+    useEditorStore.getState().addLevel(rackId!, 'A', sectionId!);
+    useEditorStore.getState().updateLevelCount(rackId!, 'A', sectionId!, 3);
+    useEditorStore.getState().applyFacePreset(rackId!, 'A', 2, 2, 4);
+    useEditorStore.getState().setFaceBMode(rackId!, 'copy');
+    useEditorStore.getState().duplicateRack(rackId!);
+
+    const payload = mapLayoutDraftToSavePayload(useEditorStore.getState().draft!);
+
+    expect(payload.layoutVersionId).toMatch(UUID_REGEX);
+
+    for (const rack of payload.racks) {
+      expect(rack.id).toMatch(UUID_REGEX);
+
+      for (const face of rack.faces) {
+        expect(face.id).toMatch(UUID_REGEX);
+        expect(face.mirrorSourceFaceId === null || UUID_REGEX.test(face.mirrorSourceFaceId)).toBe(true);
+
+        for (const section of face.sections) {
+          expect(section.id).toMatch(UUID_REGEX);
+
+          for (const level of section.levels) {
+            expect(level.id).toMatch(UUID_REGEX);
+          }
+        }
+      }
+    }
   });
 });

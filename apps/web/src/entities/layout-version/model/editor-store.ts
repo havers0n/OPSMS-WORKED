@@ -107,12 +107,16 @@ function nextLevelOrdinal(section: RackFace['sections'][number]) {
   return section.levels.length === 0 ? 1 : Math.max(...section.levels.map((level) => level.ordinal)) + 1;
 }
 
+function newEntityId() {
+  return crypto.randomUUID();
+}
+
 function buildEmptySection(side: 'A' | 'B', ordinal: number, slotCount = 3) {
   return {
-    id: `sec-${side.toLowerCase()}-${ordinal}-${crypto.randomUUID()}`,
+    id: newEntityId(),
     ordinal,
     length: 2.5,
-    levels: [{ id: `lvl-${side.toLowerCase()}-${ordinal}-1-${crypto.randomUUID()}`, ordinal: 1, slotCount }]
+    levels: [{ id: newEntityId(), ordinal: 1, slotCount }]
   };
 }
 
@@ -125,9 +129,9 @@ function nextRackDisplayCode(racks: Record<string, Rack>): string {
 }
 
 function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
-  const rackId = crypto.randomUUID();
-  const faceAId = crypto.randomUUID();
-  const faceBId = crypto.randomUUID();
+  const rackId = newEntityId();
+  const faceAId = newEntityId();
+  const faceBId = newEntityId();
   const displayCode = nextRackDisplayCode(racks);
 
   return {
@@ -264,7 +268,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const source = state.draft.racks[rackId];
       if (!source) return state;
 
-      const newRackId = crypto.randomUUID();
+      const newRackId = newEntityId();
       const nextDraft = cloneDraft(state.draft);
       const displayCode = nextRackDisplayCode(nextDraft.racks);
 
@@ -277,14 +281,14 @@ export const useEditorStore = create<EditorStore>((set) => ({
         y: source.y + 80,
         faces: source.faces.map((face) => ({
           ...face,
-          id: crypto.randomUUID(),
+          id: newEntityId(),
           mirrorSourceFaceId: null,
           sections: face.sections.map((section) => ({
             ...section,
-            id: `sec-${face.side.toLowerCase()}-${section.ordinal}-${crypto.randomUUID()}`,
+            id: newEntityId(),
             levels: section.levels.map((level) => ({
               ...level,
-              id: `lvl-${face.side.toLowerCase()}-${section.ordinal}-${level.ordinal}-${crypto.randomUUID()}`
+              id: newEntityId()
             }))
           }))
         }))
@@ -416,7 +420,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
                     const currentSlotCount = section.levels[0]?.slotCount ?? 3;
                     if (target > section.levels.length) {
                       const toAdd = Array.from({ length: target - section.levels.length }, (_, i) => ({
-                        id: `lvl-${side.toLowerCase()}-${section.ordinal}-${nextLevelOrdinal(section) + i}-${crypto.randomUUID()}`,
+                        id: newEntityId(),
                         ordinal: nextLevelOrdinal(section) + i,
                         slotCount: currentSlotCount
                       }));
@@ -484,7 +488,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
                           levels: [
                             ...section.levels,
                             {
-                              id: `lvl-${side.toLowerCase()}-${section.ordinal}-${nextLevelOrdinal(section)}-${crypto.randomUUID()}`,
+                              id: newEntityId(),
                               ordinal: nextLevelOrdinal(section),
                               slotCount: section.levels[0]?.slotCount ?? 3
                             }
@@ -521,11 +525,11 @@ export const useEditorStore = create<EditorStore>((set) => ({
                 const ordinal = i + 1;
                 const length = i === sectionCount - 1 ? lastLength : baseLength;
                 return {
-                  id: `sec-${side.toLowerCase()}-${ordinal}-${crypto.randomUUID()}`,
+                  id: newEntityId(),
                   ordinal,
                   length,
                   levels: Array.from({ length: levelCount }, (__, j) => ({
-                    id: `lvl-${side.toLowerCase()}-${ordinal}-${j + 1}-${crypto.randomUUID()}`,
+                    id: newEntityId(),
                     ordinal: j + 1,
                     slotCount
                   }))
@@ -585,10 +589,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
           const sectionsCopy = faceA.sections.map((section) => ({
             ...section,
-            id: `sec-b-${section.ordinal}-${crypto.randomUUID()}`,
+            id: newEntityId(),
             levels: section.levels.map((level) => ({
               ...level,
-              id: `lvl-b-${section.ordinal}-${level.ordinal}-${crypto.randomUUID()}`
+              id: newEntityId()
             }))
           }));
 
