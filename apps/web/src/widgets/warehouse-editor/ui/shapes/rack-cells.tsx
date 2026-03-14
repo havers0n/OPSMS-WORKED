@@ -109,18 +109,20 @@ function FaceCells({
         const isRtl = face.slotNumberingDirection === 'rtl';
 
         return Array.from({ length: slotCount }, (_, idx) => {
-          // B1 composite cell identifier: stable within a session, contains enough
-          // context for B2 to enrich with storage truth (address, occupancy).
-          const cellId     = `${rackId}:${sec.id}:${idx}`;
+          // Slot number: 1-based, accounts for LTR/RTL face direction.
+          // LTR: slot 1 is leftmost  →  slotNo = idx + 1
+          // RTL: slot 1 is rightmost →  slotNo = slotCount - idx
+          // This matches cells.slot_no in the published layout DB table.
+          const slotLabel = isRtl ? slotCount - idx : idx + 1;
+
+          // Cell selection key: rackId + sectionId + slotNo (1-based, LTR/RTL adjusted).
+          // slotLabel === slotNo used in DB (cells.slot_no) — directly queryable in B2.
+          const cellId     = `${rackId}:${sec.id}:${slotLabel}`;
           const isSelected = isInteractive && selectedCellId === cellId;
 
           const cellX     = secX + idx * slotW;
           const cellW     = slotW - 1; // 1 px gap between adjacent slots
           const showLabel = cellW >= LABEL_MIN_W && cellH >= LABEL_MIN_H;
-          // Physical position idx=0 is leftmost on canvas.
-          // LTR: slot 1 is leftmost  →  label = idx + 1
-          // RTL: slot 1 is rightmost →  label = slotCount - idx
-          const slotLabel = isRtl ? slotCount - idx : idx + 1;
 
           const fill   = isSelected ? CELL_FILL_SELECTED   : cellFill;
           const stroke = isSelected ? CELL_STROKE_SELECTED : cellStroke;

@@ -337,6 +337,59 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(cellStorageSnapshotResponseSchema, (data ?? []).map(mapCellStorageSnapshotRowToDomain));
   });
 
+  /**
+   * GET /api/rack-sections/:sectionId/slots/:slotNo/storage
+   *
+   * Returns cell storage snapshot rows for all cells in a given rack section slot.
+   * This endpoint exists because the web has no direct DB access — it needs a
+   * structural lookup path (sectionId + slotNo) rather than a persisted cell UUID.
+   *
+   * Cells only exist for published layout versions. If the layout has not been
+   * published, the cells table will be empty for the section and an empty array
+   * is returned (not an error — the inspector UI handles this state).
+   */
+  app.get('/api/rack-sections/:sectionId/slots/:slotNo/storage', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const sectionId = parseOrThrow(idResponseSchema, { id: (request.params as { sectionId: string; slotNo: string }).sectionId }).id;
+    const slotNo = z.coerce.number().int().min(1).parse((request.params as { sectionId: string; slotNo: string }).slotNo);
+
+    const supabase = getUserSupabase(auth);
+
+    // Step 1: resolve persisted cell UUIDs for this section + slot.
+    // A slot position spans one cell per level (e.g., 3 levels → 3 cells).
+    const { data: cells, error: cellsError } = await supabase
+      .from('cells')
+      .select('id')
+      .eq('rack_section_id', sectionId)
+      .eq('slot_no', slotNo);
+
+    if (cellsError) {
+      throw cellsError;
+    }
+
+    const cellIds = (cells ?? []).map((c) => c.id);
+
+    // If no persisted cells exist (layout not yet published), return empty.
+    if (cellIds.length === 0) {
+      return parseOrThrow(cellStorageSnapshotResponseSchema, []);
+    }
+
+    // Step 2: fetch storage snapshot for all cells in this slot.
+    const { data, error } = await supabase
+      .from('cell_storage_snapshot_v')
+      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,quantity,uom')
+      .in('cell_id', cellIds)
+      .order('placed_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(cellStorageSnapshotResponseSchema, (data ?? []).map(mapCellStorageSnapshotRowToDomain));
+  });
+
   app.get('/api/containers/:containerId/inventory', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
