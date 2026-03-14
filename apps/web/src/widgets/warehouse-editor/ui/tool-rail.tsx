@@ -1,5 +1,6 @@
-import { MousePointer2, PlusSquare } from 'lucide-react';
+import { Menu, MousePointer2, PlusSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useToggleDrawer } from '@/app/store/ui-selectors';
 import {
   useEditorMode,
   useIsLayoutEditable,
@@ -40,6 +41,7 @@ export function ToolRail() {
   const layoutDraft = useLayoutDraftState();
   const isLayoutEditable = useIsLayoutEditable();
   const hasLayout = !!layoutDraft;
+  const toggleDrawer = useToggleDrawer();
 
   const tools = TOOLS_BY_VIEW[viewMode] ?? TOOLS_BY_VIEW.layout;
 
@@ -54,6 +56,18 @@ export function ToolRail() {
       }}
     >
       <div className="flex flex-col items-center gap-1">
+        <button
+          type="button"
+          title="Navigation menu"
+          onClick={toggleDrawer}
+          className="group relative flex h-9 w-9 flex-col items-center justify-center rounded-lg transition-all"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+
+        <div className="my-1 w-5 border-t" style={{ borderColor: 'var(--border-muted)' }} />
+
         {tools.map((tool) => {
           const Icon = tool.icon;
           const isActive = tool.id === activeToolId;

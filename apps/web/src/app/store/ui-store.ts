@@ -10,7 +10,7 @@ type UiState = {
 };
 
 const initialUiState = {
-  isDrawerCollapsed: false,
+  isDrawerCollapsed: true,
   activeSiteId: null,
   activeFloorId: null
 } satisfies Pick<UiState, 'isDrawerCollapsed' | 'activeSiteId' | 'activeFloorId'>;
