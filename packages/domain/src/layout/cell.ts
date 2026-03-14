@@ -40,6 +40,20 @@ export const previewCellSchema = cellBaseSchema.extend({
   previewCellKey: z.string()
 });
 export type PreviewCell = z.infer<typeof previewCellSchema>;
+export type CellStructureIdentity = Pick<
+  Cell | PreviewCell,
+  'rackId' | 'rackFaceId' | 'rackSectionId' | 'rackLevelId' | 'slotNo'
+>;
+
+export function buildCellStructureKey(identity: CellStructureIdentity): string {
+  return [
+    identity.rackId,
+    identity.rackFaceId,
+    identity.rackSectionId,
+    identity.rackLevelId,
+    identity.slotNo
+  ].join(':');
+}
 
 const pad2 = (value: number | string) => String(value).padStart(2, '0');
 const pad4 = (value: number | string) => String(value).padStart(4, '0');

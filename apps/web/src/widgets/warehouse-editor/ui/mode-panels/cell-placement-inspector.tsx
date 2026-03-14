@@ -1,28 +1,32 @@
-import type { FloorWorkspace } from '@wos/domain';
-import { MapPin, Package, AlertCircle, Loader2, Layers, CloudOff, ChevronRight } from 'lucide-react';
-import type { CellStorageSnapshotRow } from '@wos/domain';
-import { generateRackCells } from '@wos/domain';
+import { useEffect, useState } from 'react';
+import type { CellStorageSnapshotRow, FloorWorkspace } from '@wos/domain';
+import { AlertCircle, ChevronRight, Layers, Loader2, MapPin, Package } from 'lucide-react';
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useEditorSelection,
   useSetSelectedContainerId
 } from '@/entities/layout-version/model/editor-selectors';
-import { useCellSlotStorage } from '@/entities/cell/api/use-cell-slot-storage';
-import { parseCellSelectionKey } from '@/entities/cell/lib/cell-selection-key';
-import { useWorkspaceLayout } from '../../lib/use-workspace-layout';
-
-// ─── container status badge ───────────────────────────────────────────────────
+import { useCellStorage } from '@/entities/cell/api/use-cell-storage';
+import { useContainerTypes } from '@/entities/container/api/use-container-types';
+import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
+import { useCreateContainer } from '@/features/container-create/model/use-create-container';
+import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  active:      { label: 'Active',      className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   quarantined: { label: 'Quarantined', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  closed:      { label: 'Closed',      className: 'bg-slate-100 text-slate-500 border-slate-200' },
-  lost:        { label: 'Lost',        className: 'bg-red-50 text-red-600 border-red-200' },
-  damaged:     { label: 'Damaged',     className: 'bg-orange-50 text-orange-700 border-orange-200' }
+  closed: { label: 'Closed', className: 'bg-slate-100 text-slate-500 border-slate-200' },
+  lost: { label: 'Lost', className: 'bg-red-50 text-red-600 border-red-200' },
+  damaged: { label: 'Damaged', className: 'bg-orange-50 text-orange-700 border-orange-200' }
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? { label: status, className: 'bg-slate-100 text-slate-500 border-slate-200' };
+  const style =
+    STATUS_STYLES[status] ?? {
+      label: status,
+      className: 'bg-slate-100 text-slate-500 border-slate-200'
+    };
+
   return (
     <span
       className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}
@@ -31,8 +35,6 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
-
-// ─── grouping helpers ─────────────────────────────────────────────────────────
 
 type ContainerGroup = {
   containerId: string;
@@ -81,23 +83,24 @@ function formatDate(iso: string): string {
   }
 }
 
-// ─── sub-panels ───────────────────────────────────────────────────────────────
+function formatMutationError(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 type ContainerCardProps = {
   group: ContainerGroup;
-  /** Called when the user clicks to drill into this container. */
-  onContainerClick: (containerId: string) => void;
+  onContainerClick: (containerId: string, sourceCellId: string | null) => void;
+  sourceCellId: string | null;
 };
 
-function ContainerCard({ group, onContainerClick }: ContainerCardProps) {
+function ContainerCard({ group, onContainerClick, sourceCellId }: ContainerCardProps) {
   return (
     <button
       type="button"
       className="w-full rounded-lg text-left transition-shadow hover:ring-1 hover:ring-[var(--accent)]"
       style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
-      onClick={() => onContainerClick(group.containerId)}
+      onClick={() => onContainerClick(group.containerId, sourceCellId)}
     >
-      {/* Container header */}
       <div className="flex items-start justify-between gap-2 px-3 py-2.5">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
@@ -113,15 +116,14 @@ function ContainerCard({ group, onContainerClick }: ContainerCardProps) {
         </div>
       </div>
 
-      {/* Inventory items */}
       {group.items.length > 0 ? (
         <div className="border-t border-[var(--border-muted)] px-3 py-2">
           <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
             Inventory
           </p>
           <div className="flex flex-col gap-1">
-            {group.items.map((item, i) => (
-              <div key={`${item.itemRef}-${i}`} className="flex items-center justify-between gap-2">
+            {group.items.map((item, index) => (
+              <div key={`${item.itemRef}-${index}`} className="flex items-center justify-between gap-2">
                 <span className="truncate font-mono text-xs text-[var(--text-primary)]">
                   {item.itemRef}
                 </span>
@@ -141,59 +143,96 @@ function ContainerCard({ group, onContainerClick }: ContainerCardProps) {
   );
 }
 
-// ─── main component ───────────────────────────────────────────────────────────
-
-/**
- * CellPlacementInspector — read-only placement inspector for a selected cell slot.
- *
- * Shows containers currently placed in this cell (across all levels) and their
- * inventory content. Backed by /api/rack-sections/:sectionId/slots/:slotNo/storage.
- *
- * Empty states:
- *   - Unparseable key          → malformed selection (shouldn't happen in normal flow)
- *   - Query loading            → spinner
- *   - Query error              → error message
- *   - Empty result             → "No containers / layout not published"
- *   - Containers present       → container cards with inventory
- *
- * B3 TODO: Add place/remove/move actions once mutation UI is approved.
- */
 export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
-  const layoutDraft = useWorkspaceLayout(workspace);
   const setSelectedContainerId = useSetSelectedContainerId();
+  const [activeAction, setActiveAction] = useState<'place' | 'create' | null>(null);
+  const [containerIdInput, setContainerIdInput] = useState('');
+  const [placeError, setPlaceError] = useState<string | null>(null);
+  const [containerCodeInput, setContainerCodeInput] = useState('');
+  const [containerTypeIdInput, setContainerTypeIdInput] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const cellId = selection.type === 'cell' ? selection.cellId : null;
-  const parsed = cellId ? parseCellSelectionKey(cellId) : null;
-
-  // Resolve cell address from draft (no extra network call).
-  const cellAddress = (() => {
-    if (!parsed || !layoutDraft) return null;
-    const rack = layoutDraft.racks[parsed.rackId];
-    if (!rack) return null;
-    const cells = generateRackCells(layoutDraft.layoutVersionId, rack);
-    const match = cells.find(
-      (c) => c.rackSectionId === parsed.sectionId && c.slotNo === parsed.slotNo
-    );
-    return match?.address ?? null;
-  })();
-
-  const { data, error, isPending, isError } = useCellSlotStorage(
-    parsed?.sectionId ?? null,
-    parsed?.slotNo ?? null
-  );
-
+  const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
+  const selectedCell = publishedCells.find((cell) => cell.id === cellId) ?? null;
+  const { data = [], error, isPending, isError } = useCellStorage(cellId);
+  const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } = useContainerTypes();
   const bffError = error instanceof BffRequestError ? error : null;
+  const containers = groupByContainer(data);
 
-  const isPublished = data?.published ?? false;
-  const containers = data ? groupByContainer(data.rows) : [];
+  const createContainer = useCreateContainer();
+  const placeContainer = usePlaceContainer({
+    floorId: workspace?.floorId ?? null,
+    cellSelectionId: cellId
+  });
+  const isActionPending = placeContainer.isPending || createContainer.isPending;
+
+  useEffect(() => {
+    if (containerTypeIdInput.length === 0 && containerTypes.length > 0) {
+      setContainerTypeIdInput(containerTypes[0].id);
+    }
+  }, [containerTypeIdInput, containerTypes]);
+
+  const handlePlace = async () => {
+    const nextContainerId = containerIdInput.trim();
+    if (!selectedCell || nextContainerId.length === 0) {
+      return;
+    }
+
+    setPlaceError(null);
+
+    try {
+      await placeContainer.mutateAsync({
+        containerId: nextContainerId,
+        targetCellId: selectedCell.id
+      });
+      setContainerIdInput('');
+      setActiveAction(null);
+    } catch (mutationError) {
+      setPlaceError(formatMutationError(mutationError, 'Could not place the container.'));
+    }
+  };
+
+  const handleCreateAndPlace = async () => {
+    const externalCode = containerCodeInput.trim();
+    if (!selectedCell || externalCode.length === 0 || containerTypeIdInput.length === 0) {
+      return;
+    }
+
+    setCreateError(null);
+
+    try {
+      const container = await createContainer.mutateAsync({
+        externalCode,
+        containerTypeId: containerTypeIdInput
+      });
+
+      try {
+        await placeContainer.mutateAsync({
+          containerId: container.containerId,
+          targetCellId: selectedCell.id
+        });
+      } catch (placementError) {
+        setCreateError(
+          `Container ${container.externalCode} was created, but it could not be placed into this cell and remains unplaced. ${formatMutationError(
+            placementError,
+            'Placement failed.'
+          )}`
+        );
+        return;
+      }
+
+      setContainerCodeInput('');
+      setContainerTypeIdInput(containerTypes[0]?.id ?? '');
+      setActiveAction(null);
+    } catch (mutationError) {
+      setCreateError(formatMutationError(mutationError, 'Could not create the container.'));
+    }
+  };
 
   return (
-    <aside
-      className="flex h-full w-full flex-col"
-      style={{ background: 'var(--surface-primary)' }}
-    >
-      {/* Header */}
+    <aside className="flex h-full w-full flex-col" style={{ background: 'var(--surface-primary)' }}>
       <div className="border-b border-[var(--border-muted)] px-5 py-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
           Placement
@@ -201,30 +240,177 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         <div className="mt-1 flex items-center gap-2">
           <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
           <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">
-            {cellAddress?.raw ?? cellId ?? '—'}
+            {selectedCell?.address.raw ?? cellId ?? '—'}
           </span>
         </div>
+        {selectedCell && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: 'var(--accent)' }}
+              onClick={() => {
+                setPlaceError(null);
+                setActiveAction((current) => (current === 'place' ? null : 'place'));
+              }}
+              disabled={isActionPending}
+            >
+              Place existing container
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-2 text-xs font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
+              onClick={() => {
+                setCreateError(null);
+                setActiveAction((current) => (current === 'create' ? null : 'create'));
+              }}
+              disabled={isActionPending}
+            >
+              + Create container
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Body */}
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {/* Malformed key guard */}
-        {!parsed && (
-          <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <AlertCircle className="h-6 w-6 text-slate-300" />
-            <p className="text-xs text-slate-400">Cell selection could not be resolved.</p>
+        {activeAction === 'place' && selectedCell && (
+          <div
+            className="rounded-lg p-3"
+            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
+              Place existing container
+            </p>
+            <label className="mt-3 block text-xs text-[var(--text-primary)]">
+              Container ID or code
+              <input
+                value={containerIdInput}
+                onChange={(event) => setContainerIdInput(event.target.value)}
+                placeholder="PLT-23901"
+                className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+              />
+            </label>
+            {placeError && <p className="mt-2 text-xs text-red-500">{placeError}</p>}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--accent)' }}
+                onClick={() => void handlePlace()}
+                disabled={isActionPending || containerIdInput.trim().length === 0}
+              >
+                {placeContainer.isPending ? 'Placing...' : 'Confirm place'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={() => {
+                  setActiveAction(null);
+                  setPlaceError(null);
+                }}
+                disabled={isActionPending}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Loading */}
-        {parsed && isPending && (
+        {activeAction === 'create' && selectedCell && (
+          <div
+            className="rounded-lg p-3"
+            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
+              Create new container
+            </p>
+            <label className="mt-3 block text-xs text-[var(--text-primary)]">
+              Container code
+              <input
+                value={containerCodeInput}
+                onChange={(event) => setContainerCodeInput(event.target.value)}
+                placeholder="PLT-23902"
+                className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+              />
+            </label>
+            <label className="mt-3 block text-xs text-[var(--text-primary)]">
+              Container type
+              <select
+                value={containerTypeIdInput}
+                onChange={(event) => setContainerTypeIdInput(event.target.value)}
+                className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                disabled={isContainerTypesPending || isActionPending || containerTypes.length === 0}
+              >
+                {containerTypes.length === 0 && (
+                  <option value="">
+                    {isContainerTypesPending ? 'Loading container types...' : 'No container types available'}
+                  </option>
+                )}
+                {containerTypes.map((containerType) => (
+                  <option key={containerType.id} value={containerType.id}>
+                    {containerType.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isContainerTypesError && (
+              <p className="mt-2 text-xs text-red-500">Could not load container types.</p>
+            )}
+            {createError && <p className="mt-2 text-xs text-red-500">{createError}</p>}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--accent)' }}
+                onClick={() => void handleCreateAndPlace()}
+                disabled={
+                  isActionPending ||
+                  containerCodeInput.trim().length === 0 ||
+                  containerTypeIdInput.length === 0 ||
+                  containerTypes.length === 0
+                }
+              >
+                {createContainer.isPending
+                  ? 'Creating...'
+                  : placeContainer.isPending
+                    ? 'Placing...'
+                    : 'Create and place'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={() => {
+                  setActiveAction(null);
+                  setCreateError(null);
+                }}
+                disabled={isActionPending}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!cellId && (
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <AlertCircle className="h-6 w-6 text-slate-300" />
+            <p className="text-xs text-slate-400">Select a physical cell to inspect placement.</p>
+          </div>
+        )}
+
+        {cellId && isPending && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
           </div>
         )}
 
-        {/* Error */}
-        {parsed && isError && (
+        {cellId && isError && (
           <div
             className="rounded-lg px-3 py-3 text-center"
             style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
@@ -235,8 +421,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
               {bffError?.message ?? 'Check your connection and try again.'}
             </p>
             <div className="mt-2 space-y-0.5 font-mono text-[10px] text-slate-400">
-              <p>sectionId: {parsed.sectionId}</p>
-              <p>slotNo: {parsed.slotNo}</p>
+              <p>cellId: {cellId}</p>
               {bffError && <p>status: {bffError.status}</p>}
               {bffError?.code && <p>code: {bffError.code}</p>}
               {bffError?.requestId && <p>requestId: {bffError.requestId}</p>}
@@ -245,21 +430,19 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           </div>
         )}
 
-        {/* STATE A — layout not published; cells don't exist in DB yet */}
-        {parsed && !isPending && !isError && !isPublished && (
+        {cellId && !selectedCell && !isPending && !isError && (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <CloudOff className="h-7 w-7 text-slate-300" />
+            <AlertCircle className="h-7 w-7 text-slate-300" />
             <div>
-              <p className="text-sm font-medium text-slate-600">Layout not published</p>
+              <p className="text-sm font-medium text-slate-600">Cell is unavailable</p>
               <p className="mt-1 text-xs text-slate-400">
-                Publish the layout to enable storage placement.
+                Placement mode requires a published physical cell selection.
               </p>
             </div>
           </div>
         )}
 
-        {/* STATE B — layout published, slot is genuinely empty */}
-        {parsed && !isPending && !isError && isPublished && containers.length === 0 && (
+        {selectedCell && !isPending && !isError && containers.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <Package className="h-7 w-7 text-slate-300" />
             <div>
@@ -269,18 +452,20 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           </div>
         )}
 
-        {/* STATE C — layout published, containers present */}
-        {parsed && !isPending && !isError && isPublished && containers.length > 0 && (
+        {selectedCell && !isPending && !isError && containers.length > 0 && (
           <>
             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
               <Layers className="h-3 w-3" />
-              <span>{containers.length} container{containers.length !== 1 ? 's' : ''}</span>
+              <span>
+                {containers.length} container{containers.length !== 1 ? 's' : ''}
+              </span>
             </div>
             {containers.map((group) => (
               <ContainerCard
                 key={group.containerId}
                 group={group}
                 onContainerClick={setSelectedContainerId}
+                sourceCellId={selectedCell.id}
               />
             ))}
           </>

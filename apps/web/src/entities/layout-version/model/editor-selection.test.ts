@@ -5,6 +5,7 @@ import type { EditorSelection } from './editor-types';
 function resetStore() {
   useEditorStore.setState({
     selection: { type: 'none' },
+    placementInteraction: { type: 'idle' },
     hoveredRackId: null,
     creatingRackId: null,
     zoom: 1,
@@ -93,5 +94,54 @@ describe('EditorSelection — canonical store field', () => {
     useEditorStore.getState().setSelectedRackIds(['primary', 'secondary']);
     const sel = useEditorStore.getState().selection;
     expect(sel.type === 'rack' ? sel.rackIds[0] : null).toBe('primary');
+  });
+
+  it('setSelectedContainerId can retain the source physical cell context for placement actions', () => {
+    useEditorStore
+      .getState()
+      .setSelectedContainerId('container-uuid', '216f2dd6-8f17-4de4-aaba-657f9e0e1398');
+    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+      type: 'container',
+      containerId: 'container-uuid',
+      sourceCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+    });
+  });
+
+  it('startPlacementMove stores explicit source and pending target state', () => {
+    useEditorStore
+      .getState()
+      .startPlacementMove('container-uuid', '216f2dd6-8f17-4de4-aaba-657f9e0e1398');
+
+    expect(useEditorStore.getState().placementInteraction).toEqual({
+      type: 'move-container',
+      containerId: 'container-uuid',
+      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      targetCellId: null
+    });
+  });
+
+  it('setPlacementMoveTargetCellId updates the explicit move target', () => {
+    useEditorStore
+      .getState()
+      .startPlacementMove('container-uuid', '216f2dd6-8f17-4de4-aaba-657f9e0e1398');
+    useEditorStore
+      .getState()
+      .setPlacementMoveTargetCellId('f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce');
+
+    expect(useEditorStore.getState().placementInteraction).toEqual({
+      type: 'move-container',
+      containerId: 'container-uuid',
+      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      targetCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+    });
+  });
+
+  it('setSelectedCellId clears any active placement interaction', () => {
+    useEditorStore
+      .getState()
+      .startPlacementMove('container-uuid', '216f2dd6-8f17-4de4-aaba-657f9e0e1398');
+    useEditorStore.getState().setSelectedCellId('f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce');
+
+    expect(useEditorStore.getState().placementInteraction).toEqual({ type: 'idle' });
   });
 });

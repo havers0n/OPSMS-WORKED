@@ -129,4 +129,58 @@ describe('editor-store', () => {
       }
     }
   });
+
+  it('normalizes stale invalid drafts on initialize and marks them dirty', () => {
+    const draft = createLayoutDraftFixture();
+    draft.racks[draft.rackIds[0]].faces[0].sections[0].length = 2.5;
+    draft.racks[draft.rackIds[0]].faces[1].enabled = true;
+    draft.racks[draft.rackIds[0]].faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 2.5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    useEditorStore.getState().initializeDraft(draft);
+
+    const normalizedDraft = useEditorStore.getState().draft!;
+    expect(normalizedDraft.racks[draft.rackIds[0]].faces[0].sections[0].length).toBe(5);
+    expect(normalizedDraft.racks[draft.rackIds[0]].faces[1].enabled).toBe(false);
+    expect(normalizedDraft.racks[draft.rackIds[0]].faces[1].sections).toEqual([]);
+    expect(useEditorStore.getState().isDraftDirty).toBe(true);
+  });
+
+  it('rescales sections when total rack length changes', () => {
+    const draft = createLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().updateRackGeneral(draft.rackIds[0], { totalLength: 10 });
+
+    expect(useEditorStore.getState().draft?.racks[draft.rackIds[0]].faces[0].sections[0].length).toBe(10);
+  });
+
+  it('resets Face B when rack kind switches to single', () => {
+    const draft = createLayoutDraftFixture();
+    draft.racks[draft.rackIds[0]].kind = 'paired';
+    draft.racks[draft.rackIds[0]].faces[1].enabled = true;
+    draft.racks[draft.rackIds[0]].faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().updateRackGeneral(draft.rackIds[0], { kind: 'single' });
+
+    const faceB = useEditorStore.getState().draft?.racks[draft.rackIds[0]].faces[1];
+    expect(faceB?.enabled).toBe(false);
+    expect(faceB?.isMirrored).toBe(false);
+    expect(faceB?.mirrorSourceFaceId).toBeNull();
+    expect(faceB?.sections).toEqual([]);
+  });
 });

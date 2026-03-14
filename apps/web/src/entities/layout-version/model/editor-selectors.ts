@@ -1,5 +1,5 @@
 import { useEditorStore } from './editor-store';
-import type { EditorSelection } from './editor-types';
+import type { EditorSelection, PlacementInteraction } from './editor-types';
 
 // Stable empty fallbacks — must live outside selectors so the reference never changes
 // between renders. Returning a new literal (e.g. `[] as string[]`) inside a Zustand
@@ -70,3 +70,10 @@ export const useSelectedCellId = () =>
   );
 export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);
 export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);
+export const usePlacementInteraction = (): PlacementInteraction =>
+  useEditorStore((state) => state.placementInteraction);
+export const useStartPlacementMove = () => useEditorStore((state) => state.startPlacementMove);
+export const useSetPlacementMoveTargetCellId = () =>
+  useEditorStore((state) => state.setPlacementMoveTargetCellId);
+export const useCancelPlacementInteraction = () =>
+  useEditorStore((state) => state.cancelPlacementInteraction);

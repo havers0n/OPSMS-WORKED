@@ -1,9 +1,10 @@
-import type { ContainerStorageSnapshotRow } from '@wos/domain';
+import type { ContainerStorageSnapshotRow, ContainerType } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
 export const containerKeys = {
   all: ['container'] as const,
+  types: () => [...containerKeys.all, 'types'] as const,
   /**
    * Storage snapshot for a single container (identity + inventory rows).
    * containerId = container UUID from the cell storage snapshot.
@@ -20,6 +21,10 @@ async function fetchContainerStorage(
   );
 }
 
+async function fetchContainerTypes(): Promise<ContainerType[]> {
+  return bffRequest<ContainerType[]>('/api/container-types');
+}
+
 /**
  * Returns the storage snapshot rows for a given container.
  * Each row carries container identity fields + one optional inventory line.
@@ -30,5 +35,12 @@ export function containerStorageQueryOptions(containerId: string | null) {
     queryKey: containerKeys.storage(containerId),
     queryFn: () => fetchContainerStorage(containerId as string),
     enabled: Boolean(containerId)
+  });
+}
+
+export function containerTypesQueryOptions() {
+  return queryOptions({
+    queryKey: containerKeys.types(),
+    queryFn: fetchContainerTypes
   });
 }

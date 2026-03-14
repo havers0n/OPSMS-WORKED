@@ -1,4 +1,4 @@
-import type { CellStorageSnapshotRow } from '@wos/domain';
+import type { Cell, CellStorageSnapshotRow } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
@@ -11,6 +11,10 @@ export type CellSlotStorageData = {
 
 export const cellKeys = {
   all: ['cell'] as const,
+  storage: (cellId: string | null) =>
+    [...cellKeys.all, 'storage', cellId ?? 'none'] as const,
+  publishedByFloor: (floorId: string | null) =>
+    [...cellKeys.all, 'published-by-floor', floorId ?? 'none'] as const,
   /**
    * Storage snapshot for all cells in a rack section at a given slot number.
    * sectionId = rack_section UUID (persists from draft to published layout).
@@ -29,6 +33,14 @@ async function fetchCellSlotStorage(
   );
 }
 
+async function fetchCellStorage(cellId: string): Promise<CellStorageSnapshotRow[]> {
+  return bffRequest<CellStorageSnapshotRow[]>(`/api/cells/${cellId}/storage`);
+}
+
+async function fetchPublishedCells(floorId: string): Promise<Cell[]> {
+  return bffRequest<Cell[]>(`/api/floors/${floorId}/published-cells`);
+}
+
 /**
  * Returns cell storage snapshot data for a given section + slot.
  * `data.published` distinguishes "layout not published" from "genuinely empty cell":
@@ -44,5 +56,21 @@ export function cellSlotStorageQueryOptions(
     queryKey: cellKeys.slotStorage(sectionId, slotNo),
     queryFn: () => fetchCellSlotStorage(sectionId as string, slotNo as number),
     enabled: Boolean(sectionId) && typeof slotNo === 'number' && slotNo >= 1
+  });
+}
+
+export function cellStorageQueryOptions(cellId: string | null) {
+  return queryOptions({
+    queryKey: cellKeys.storage(cellId),
+    queryFn: () => fetchCellStorage(cellId as string),
+    enabled: Boolean(cellId)
+  });
+}
+
+export function publishedCellsQueryOptions(floorId: string | null) {
+  return queryOptions({
+    queryKey: cellKeys.publishedByFloor(floorId),
+    queryFn: () => fetchPublishedCells(floorId as string),
+    enabled: Boolean(floorId)
   });
 }

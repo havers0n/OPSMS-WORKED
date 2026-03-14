@@ -34,7 +34,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
               {
                 id: 'section-a-1',
                 ordinal: 1,
-                length: 2.5,
+                length: 5,
                 levels: [{ id: 'level-a-1', ordinal: 1, slotCount: 3 }]
               }
             ]

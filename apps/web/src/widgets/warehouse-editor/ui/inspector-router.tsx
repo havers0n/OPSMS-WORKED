@@ -81,7 +81,7 @@ export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRout
       return <CellPlacementInspector workspace={workspace} />;
 
     case 'placement-container':
-      return <ContainerPlacementInspector />;
+      return <ContainerPlacementInspector workspace={workspace} />;
 
     case 'placement-placeholder':
       return <PlacementModePanel />;
