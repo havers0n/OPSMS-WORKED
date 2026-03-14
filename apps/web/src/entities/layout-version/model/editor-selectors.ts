@@ -55,3 +55,10 @@ export const useDistributeRacksEqual = () => useEditorStore((state) => state.dis
 /** Canonical typed selection. Reads directly from the store's first-class selection field. */
 export const useEditorSelection = (): EditorSelection =>
   useEditorStore((state) => state.selection);
+
+/** Returns the selected cell ID if the current selection is a cell, otherwise null. */
+export const useSelectedCellId = () =>
+  useEditorStore((state) =>
+    state.selection.type === 'cell' ? state.selection.cellId : null
+  );
+export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);

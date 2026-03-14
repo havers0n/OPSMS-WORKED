@@ -30,6 +30,8 @@ type EditorStore = {
   /** Convenience wrapper — sets a single-rack selection, or clears if null. */
   setSelectedRackId: (rackId: string | null) => void;
   toggleRackSelection: (rackId: string) => void;
+  /** Convenience wrapper — sets a cell-type selection, or clears if null. */
+  setSelectedCellId: (cellId: string | null) => void;
   setHoveredRackId: (rackId: string | null) => void;
   setCreatingRackId: (rackId: string | null) => void;
   setZoom: (zoom: number) => void;
@@ -174,6 +176,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       : [...current, rackId];
     return { selection: makeRackSelection(next) };
   }),
+  setSelectedCellId: (cellId) => set({ selection: cellId ? { type: 'cell', cellId } : { type: 'none' } }),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setZoom: (zoom) => set({ zoom }),

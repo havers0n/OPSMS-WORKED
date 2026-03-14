@@ -10,7 +10,8 @@ export type InspectorKind =
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'layout-empty'           // layout + nothing selected
   | 'semantics-placeholder'  // semantics mode (not yet implemented)
-  | 'placement-placeholder'  // placement mode (not yet implemented)
+  | 'placement-placeholder'  // placement mode + no cell selected
+  | 'placement-cell'         // placement mode + cell selected (B1 foundation)
   | 'flow-placeholder';      // flow mode (not yet implemented)
 
 /**
@@ -22,6 +23,10 @@ export type InspectorKind =
  *   layout + rack(1) + creating → rack-creation-wizard
  *   layout + rack(1)            → rack-structure
  *   layout + rack(≥2)           → rack-multi
+ *
+ * Placement routing contract:
+ *   placement + cell            → placement-cell
+ *   placement + anything else   → placement-placeholder
  */
 export function resolveInspectorKind(
   viewMode: ViewMode,
@@ -39,7 +44,12 @@ export function resolveInspectorKind(
   }
 
   if (viewMode === 'semantics') return 'semantics-placeholder';
-  if (viewMode === 'placement') return 'placement-placeholder';
+
+  if (viewMode === 'placement') {
+    if (selection.type === 'cell') return 'placement-cell';
+    return 'placement-placeholder';
+  }
+
   if (viewMode === 'flow') return 'flow-placeholder';
 
   // Unreachable with the current ViewMode union, but exhaustive fallback.

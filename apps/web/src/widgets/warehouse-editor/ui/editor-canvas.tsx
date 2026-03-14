@@ -11,16 +11,19 @@ import {
   useHoveredRackId,
   useLayoutDraftState,
   useRotateRack,
+  useSelectedCellId,
   useSelectedRackId,
   useSelectedRackIds,
   useSetCanvasZoom,
   useSetEditorMode,
   useSetHoveredRackId,
+  useSetSelectedCellId,
   useSetSelectedRackId,
   useSetSelectedRackIds,
   useToggleRackSelection,
   useUpdateRackPosition,
-  useMinRackDistance
+  useMinRackDistance,
+  useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import {
   clampCanvasPosition,
@@ -143,13 +146,16 @@ export function EditorCanvas({
   onOpenInspector: () => void;
 }) {
   const zoom = useCanvasZoom();
+  const viewMode = useViewMode();
   const editorMode = useEditorMode();
   const layoutDraft = useLayoutDraftState();
   const selectedRackIds = useSelectedRackIds();
   const selectedRackId = useSelectedRackId();
+  const selectedCellId = useSelectedCellId();
   const hoveredRackId = useHoveredRackId();
   const setSelectedRackIds = useSetSelectedRackIds();
   const setSelectedRackId = useSetSelectedRackId();
+  const setSelectedCellId = useSetSelectedCellId();
   const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const setCanvasZoom = useSetCanvasZoom();
@@ -158,6 +164,8 @@ export function EditorCanvas({
   const createRack = useCreateRack();
   const deleteRack = useDeleteRack();
   const minRackDistance = useMinRackDistance();
+
+  const isPlacementMode = viewMode === 'placement';
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -546,9 +554,13 @@ export function EditorCanvas({
                       {lod >= 2 && faceA && (
                         <RackCells
                           geometry={geometry}
+                          rackId={rack.id}
                           faceA={faceA}
                           faceB={geometry.isPaired ? faceB : null}
                           isSelected={isSelected}
+                          isInteractive={isPlacementMode}
+                          selectedCellId={isPlacementMode ? selectedCellId : null}
+                          onCellClick={setSelectedCellId}
                         />
                       )}
                     </Group>

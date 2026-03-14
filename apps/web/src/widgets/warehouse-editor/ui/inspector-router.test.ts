@@ -7,6 +7,7 @@ import type { EditorSelection } from '../../../entities/layout-version/model/edi
 
 const noSelection: EditorSelection = { type: 'none' };
 const rackSelection = (ids: string[]): EditorSelection => ({ type: 'rack', rackIds: ids });
+const cellSelection = (cellId: string): EditorSelection => ({ type: 'cell', cellId });
 
 // ─── layout mode — single-rack ────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ describe('resolveInspectorKind — non-layout modes', () => {
     expect(resolveInspectorKind('semantics', rackSelection(['r1']), null)).toBe('semantics-placeholder');
   });
 
-  it('returns placement-placeholder for placement mode regardless of selection', () => {
+  it('returns placement-placeholder for placement mode with no selection or rack selection', () => {
     expect(resolveInspectorKind('placement', noSelection, null)).toBe('placement-placeholder');
     expect(resolveInspectorKind('placement', rackSelection(['r1']), null)).toBe('placement-placeholder');
   });
@@ -79,6 +80,44 @@ describe('resolveInspectorKind — non-layout modes', () => {
     expect(resolveInspectorKind('semantics', rackSelection(['r1']), 'r1')).toBe('semantics-placeholder');
     expect(resolveInspectorKind('placement', rackSelection(['r1']), 'r1')).toBe('placement-placeholder');
     expect(resolveInspectorKind('flow', rackSelection(['r1']), 'r1')).toBe('flow-placeholder');
+  });
+});
+
+// ─── placement mode — cell selection (B1) ────────────────────────────────────
+
+describe('resolveInspectorKind — placement mode, cell selection', () => {
+  it('returns placement-cell when a cell is selected in placement mode', () => {
+    const cellSel = cellSelection('rack-1:sec-abc:0');
+    expect(resolveInspectorKind('placement', cellSel, null)).toBe('placement-cell');
+  });
+
+  it('returns placement-cell regardless of creatingRackId', () => {
+    const cellSel = cellSelection('rack-1:sec-abc:2');
+    expect(resolveInspectorKind('placement', cellSel, 'rack-1')).toBe('placement-cell');
+    expect(resolveInspectorKind('placement', cellSel, null)).toBe('placement-cell');
+  });
+
+  it('returns placement-placeholder when no cell is selected', () => {
+    expect(resolveInspectorKind('placement', noSelection, null)).toBe('placement-placeholder');
+  });
+
+  it('returns placement-placeholder for rack selection in placement mode (not cell)', () => {
+    expect(resolveInspectorKind('placement', rackSelection(['r1']), null)).toBe('placement-placeholder');
+  });
+
+  it('cell selection in layout mode still returns layout-empty (layout ignores cell)', () => {
+    const cellSel = cellSelection('rack-1:sec-abc:0');
+    expect(resolveInspectorKind('layout', cellSel, null)).toBe('layout-empty');
+  });
+
+  it('cell selection in semantics mode is ignored (semantics has own placeholder)', () => {
+    const cellSel = cellSelection('rack-1:sec-abc:0');
+    expect(resolveInspectorKind('semantics', cellSel, null)).toBe('semantics-placeholder');
+  });
+
+  it('cell selection in flow mode is ignored (flow has own placeholder)', () => {
+    const cellSel = cellSelection('rack-1:sec-abc:0');
+    expect(resolveInspectorKind('flow', cellSel, null)).toBe('flow-placeholder');
   });
 });
 
