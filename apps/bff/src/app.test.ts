@@ -1099,6 +1099,72 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('returns an empty active draft when the draft has no racks yet', async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'layout_versions') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(async () => ({
+                data: [
+                  {
+                    id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+                    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                    version_no: 3,
+                    state: 'draft'
+                  }
+                ],
+                error: null
+              }))
+            }))
+          };
+        }
+
+        if (table === 'racks') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(async () => ({
+                data: [],
+                error: null
+              }))
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            limit: vi.fn(async () => ({ data: [], error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/layout-draft',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      state: 'draft',
+      rackIds: [],
+      racks: {}
+    });
+
+    await app.close();
+  });
+
   it('exposes readiness when the db probe succeeds', async () => {
     const healthSupabase = createSupabaseStub();
     const app = buildApp({

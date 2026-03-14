@@ -93,6 +93,7 @@ async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string)
     return {
       layoutVersionId: activeDraft.id,
       floorId: activeDraft.floor_id,
+      state: activeDraft.state,
       rackIds: [],
       racks: {}
     };
