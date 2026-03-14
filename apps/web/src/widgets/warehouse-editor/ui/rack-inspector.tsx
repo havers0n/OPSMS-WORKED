@@ -8,9 +8,7 @@ import {
   RotateCcw,
   Trash2,
   X,
-  XCircle,
-  MousePointer2,
-  PlusCircle
+  XCircle
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
@@ -20,10 +18,8 @@ import { GeneralTab } from '@/features/rack-configure/ui/general-tab';
 import { SpacingTab } from '@/features/rack-configure/ui/spacing-tab';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
-import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wizard';
 import {
   useApplyFacePreset,
-  useCreatingRackId,
   useDeleteRack,
   useDraftDirtyState,
   useDuplicateRack,
@@ -272,14 +268,22 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, onUpdate }: Numb
 
 // ─── main component ───────────────────────────────────────────────────────────
 
-export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onAddRack: () => void }) {
+/**
+ * RackInspector — structural inspector for a single selected rack.
+ *
+ * Rendered only by InspectorRouter when:
+ *   viewMode === 'layout' AND a rack is selected AND it is NOT being created.
+ *
+ * Wizard routing (rack-creation-wizard) and empty-state routing (layout-empty)
+ * are handled by InspectorRouter. This component never renders those states.
+ */
+export function RackInspector({ onClose }: { onClose: () => void }) {
   const [openSections, setOpenSections] = useState<Set<AccordionSection>>(new Set(['geometry', 'faceA']));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const layoutDraft = useLayoutDraftState();
   const isDraftDirty = useDraftDirtyState();
   const selectedRackId = useSelectedRackId();
-  const creatingRackId = useCreatingRackId();
 
   const setFaceBMode = useSetFaceBMode();
   const deleteRack = useDeleteRack();
@@ -324,41 +328,9 @@ export function RackInspector({ onClose, onAddRack }: { onClose: () => void; onA
 
   const previewAddresses = rackCells.slice(0, 6).map((cell) => cell.address.raw);
 
-  // ─── creation wizard ─────────────────────────────────────────────────────────
-  // When the selected rack was just placed, delegate to the guided creation wizard
-  if (rack && selectedRackId === creatingRackId) {
-    return <RackCreationWizard rack={rack} />;
-  }
-
-  // ─── empty state ────────────────────────────────────────────────────────────
-
-  // Show empty state only when no rack is selected at all
-  if (!rack) {
-    return (
-      <aside className="flex h-full w-full flex-col bg-white">
-        <div className="border-b border-[var(--border-muted)] px-5 py-4">
-          <div className="flex items-center justify-between">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Inspector</div>
-          </div>
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-          <MousePointer2 className="h-8 w-8 text-slate-300" />
-          <div>
-            <p className="text-sm font-medium text-slate-700">No rack selected</p>
-            <p className="mt-1 text-xs text-slate-400">Click a rack on the canvas to inspect it</p>
-          </div>
-          <button
-            type="button"
-            onClick={onAddRack}
-            className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700"
-          >
-            <PlusCircle className="h-4 w-4" />
-            Add Rack
-          </button>
-        </div>
-      </aside>
-    );
-  }
+  // InspectorRouter guarantees this component is only rendered when a rack is
+  // selected and is not in creation mode. This guard is a defensive fallback.
+  if (!rack) return null;
 
   // ─── accordion helpers ───────────────────────────────────────────────────────
 

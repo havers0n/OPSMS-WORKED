@@ -1,4 +1,5 @@
 import { useEditorStore } from './editor-store';
+import type { EditorSelection } from './editor-types';
 
 export const useViewMode = () => useEditorStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
@@ -42,3 +43,16 @@ export const useSetFaceLength = () => useEditorStore((state) => state.setFaceLen
 export const useAlignRacksHorizontal = () => useEditorStore((state) => state.alignRacksHorizontal);
 export const useAlignRacksVertical = () => useEditorStore((state) => state.alignRacksVertical);
 export const useDistributeRacksEqual = () => useEditorStore((state) => state.distributeRacksEqual);
+
+/**
+ * Derived typed selection for the current editor state.
+ * Cell and container variants are reserved for future modes; only 'rack' is
+ * populated today from the existing selectedRackIds store field.
+ */
+export const useEditorSelection = (): EditorSelection =>
+  useEditorStore((state): EditorSelection => {
+    if (state.selectedRackIds.length > 0) {
+      return { type: 'rack', rackIds: state.selectedRackIds };
+    }
+    return { type: 'none' };
+  });

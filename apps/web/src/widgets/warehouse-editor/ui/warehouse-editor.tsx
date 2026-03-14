@@ -9,10 +9,11 @@ import {
   useResetDraft,
   useSelectedRackId,
   useSetEditorMode,
-  useSetSelectedRackId
+  useSetSelectedRackId,
+  useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
-import { RackInspector } from './rack-inspector';
+import { InspectorRouter } from './inspector-router';
 import { ToolRail } from './tool-rail';
 
 export function WarehouseEditor() {
@@ -21,6 +22,7 @@ export function WarehouseEditor() {
   const currentDraft = useLayoutDraftState();
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
+  const viewMode = useViewMode();
   const selectedRackId = useSelectedRackId();
   const creatingRackId = useCreatingRackId();
   const setSelectedRackId = useSetSelectedRackId();
@@ -28,19 +30,15 @@ export function WarehouseEditor() {
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
-  // Auto-open inspector when rack is selected or being created
+  // Non-layout modes always show their mode panel — open immediately on switch.
+  // Layout mode follows rack-selection: open on selection, close on deselection.
   useEffect(() => {
-    if (selectedRackId !== null || creatingRackId !== null) {
+    if (viewMode !== 'layout') {
       setInspectorOpen(true);
+    } else {
+      setInspectorOpen(selectedRackId !== null || creatingRackId !== null);
     }
-  }, [selectedRackId, creatingRackId]);
-
-  // Auto-close inspector when selection is cleared
-  useEffect(() => {
-    if (selectedRackId === null && creatingRackId === null) {
-      setInspectorOpen(false);
-    }
-  }, [selectedRackId, creatingRackId]);
+  }, [viewMode, selectedRackId, creatingRackId]);
 
   useEffect(() => {
     if (!activeFloorId) {
@@ -97,7 +95,11 @@ export function WarehouseEditor() {
 
   const handleCloseInspector = () => {
     setInspectorOpen(false);
-    setSelectedRackId(null);
+    // Only clear rack selection in layout mode; other modes have no rack selection
+    // to clear and their panel re-opens automatically on mode entry.
+    if (viewMode === 'layout') {
+      setSelectedRackId(null);
+    }
   };
 
   return (
@@ -143,7 +145,7 @@ export function WarehouseEditor() {
             transform: inspectorOpen ? 'translateX(0)' : 'translateX(100%)'
           }}
         >
-          <RackInspector
+          <InspectorRouter
             onClose={handleCloseInspector}
             onAddRack={handleAddRack}
           />

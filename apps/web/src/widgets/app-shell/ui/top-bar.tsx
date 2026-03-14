@@ -33,11 +33,13 @@ import { usePublishLayout } from '@/features/layout-publish/model/use-publish-la
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
 
-const VIEW_MODES: { id: ViewMode; label: string; available: boolean }[] = [
-  { id: 'layout', label: 'Layout', available: true },
-  { id: 'semantics', label: 'Semantics', available: false },
-  { id: 'placement', label: 'Placement', available: false },
-  { id: 'flow', label: 'Flow', available: false }
+// All modes are enterable. Non-layout modes show truthful placeholder panels
+// via InspectorRouter until their domain models are implemented.
+const VIEW_MODES: { id: ViewMode; label: string }[] = [
+  { id: 'layout', label: 'Layout' },
+  { id: 'semantics', label: 'Semantics' },
+  { id: 'placement', label: 'Placement' },
+  { id: 'flow', label: 'Flow' }
 ];
 
 export function TopBar() {
@@ -226,9 +228,7 @@ export function TopBar() {
               <button
                 key={mode.id}
                 type="button"
-                disabled={!mode.available}
                 onClick={() => setViewMode(mode.id)}
-                title={!mode.available ? `${mode.label} — coming soon` : undefined}
                 className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
                 style={
                   isActive
@@ -238,9 +238,7 @@ export function TopBar() {
                         boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
                         cursor: 'default'
                       }
-                    : mode.available
-                      ? { color: 'var(--text-muted)', cursor: 'pointer' }
-                      : { color: 'var(--border-strong)', cursor: 'not-allowed', opacity: 0.5 }
+                    : { color: 'var(--text-muted)', cursor: 'pointer' }
                 }
               >
                 {mode.label}
