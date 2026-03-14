@@ -68,3 +68,4 @@ export const useSelectedCellId = () =>
     state.selection.type === 'cell' ? state.selection.cellId : null
   );
 export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);
+export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);

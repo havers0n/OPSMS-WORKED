@@ -1,9 +1,10 @@
-import { MapPin, Package, AlertCircle, Loader2, Layers, CloudOff } from 'lucide-react';
+import { MapPin, Package, AlertCircle, Loader2, Layers, CloudOff, ChevronRight } from 'lucide-react';
 import type { CellStorageSnapshotRow } from '@wos/domain';
 import { generateRackCells } from '@wos/domain';
 import {
   useEditorSelection,
-  useLayoutDraftState
+  useLayoutDraftState,
+  useSetSelectedContainerId
 } from '@/entities/layout-version/model/editor-selectors';
 import { useCellSlotStorage } from '@/entities/cell/api/use-cell-slot-storage';
 import { parseCellSelectionKey } from '@/entities/cell/lib/cell-selection-key';
@@ -80,11 +81,19 @@ function formatDate(iso: string): string {
 
 // ─── sub-panels ───────────────────────────────────────────────────────────────
 
-function ContainerCard({ group }: { group: ContainerGroup }) {
+type ContainerCardProps = {
+  group: ContainerGroup;
+  /** Called when the user clicks to drill into this container. */
+  onContainerClick: (containerId: string) => void;
+};
+
+function ContainerCard({ group, onContainerClick }: ContainerCardProps) {
   return (
-    <div
-      className="rounded-lg"
+    <button
+      type="button"
+      className="w-full rounded-lg text-left transition-shadow hover:ring-1 hover:ring-[var(--accent)]"
       style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+      onClick={() => onContainerClick(group.containerId)}
     >
       {/* Container header */}
       <div className="flex items-start justify-between gap-2 px-3 py-2.5">
@@ -96,7 +105,10 @@ function ContainerCard({ group }: { group: ContainerGroup }) {
             {group.containerType} &middot; placed {formatDate(group.placedAt)}
           </p>
         </div>
-        <StatusBadge status={group.containerStatus} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge status={group.containerStatus} />
+          <ChevronRight className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        </div>
       </div>
 
       {/* Inventory items */}
@@ -123,7 +135,7 @@ function ContainerCard({ group }: { group: ContainerGroup }) {
           No inventory items
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -147,6 +159,7 @@ function ContainerCard({ group }: { group: ContainerGroup }) {
 export function CellPlacementInspector() {
   const selection = useEditorSelection();
   const layoutDraft = useLayoutDraftState();
+  const setSelectedContainerId = useSetSelectedContainerId();
 
   const cellId = selection.type === 'cell' ? selection.cellId : null;
   const parsed = cellId ? parseCellSelectionKey(cellId) : null;
@@ -250,7 +263,11 @@ export function CellPlacementInspector() {
               <span>{containers.length} container{containers.length !== 1 ? 's' : ''}</span>
             </div>
             {containers.map((group) => (
-              <ContainerCard key={group.containerId} group={group} />
+              <ContainerCard
+                key={group.containerId}
+                group={group}
+                onContainerClick={setSelectedContainerId}
+              />
             ))}
           </>
         )}

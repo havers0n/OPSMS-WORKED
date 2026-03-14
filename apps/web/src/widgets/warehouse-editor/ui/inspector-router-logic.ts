@@ -10,8 +10,9 @@ export type InspectorKind =
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'layout-empty'           // layout + nothing selected
   | 'semantics-placeholder'  // semantics mode (not yet implemented)
-  | 'placement-placeholder'  // placement mode + no cell selected
-  | 'placement-cell'         // placement mode + cell selected (B1 foundation)
+  | 'placement-placeholder'  // placement mode + no/rack selection
+  | 'placement-cell'         // placement mode + cell selected
+  | 'placement-container'    // placement mode + container selected (B3)
   | 'flow-placeholder';      // flow mode (not yet implemented)
 
 /**
@@ -26,6 +27,7 @@ export type InspectorKind =
  *
  * Placement routing contract:
  *   placement + cell            → placement-cell
+ *   placement + container       → placement-container
  *   placement + anything else   → placement-placeholder
  */
 export function resolveInspectorKind(
@@ -47,6 +49,7 @@ export function resolveInspectorKind(
 
   if (viewMode === 'placement') {
     if (selection.type === 'cell') return 'placement-cell';
+    if (selection.type === 'container') return 'placement-container';
     return 'placement-placeholder';
   }
 

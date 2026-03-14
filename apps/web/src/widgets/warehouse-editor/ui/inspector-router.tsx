@@ -11,6 +11,7 @@ import { LayoutEmptyPanel } from './mode-panels/layout-empty-panel';
 import { SemanticsModePanel } from './mode-panels/semantics-mode-panel';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
 import { CellPlacementInspector } from './mode-panels/cell-placement-inspector';
+import { ContainerPlacementInspector } from './mode-panels/container-placement-inspector';
 import { FlowModePanel } from './mode-panels/flow-mode-panel';
 
 // Pure routing logic lives in inspector-router-logic.ts (no React, testable in isolation).
@@ -40,6 +41,7 @@ type InspectorRouterProps = {
  *   layout  + none             → LayoutEmptyPanel
  *   semantics                 → SemanticsModePanel (placeholder)
  *   placement + cell           → CellPlacementInspector (read-only, B2)
+ *   placement + container      → ContainerPlacementInspector (read-only, B3)
  *   placement + other          → PlacementModePanel (placeholder)
  *   flow                      → FlowModePanel (placeholder)
  */
@@ -75,6 +77,9 @@ export function InspectorRouter({ onClose, onAddRack }: InspectorRouterProps) {
 
     case 'placement-cell':
       return <CellPlacementInspector />;
+
+    case 'placement-container':
+      return <ContainerPlacementInspector />;
 
     case 'placement-placeholder':
       return <PlacementModePanel />;

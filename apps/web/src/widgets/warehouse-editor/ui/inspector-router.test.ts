@@ -8,6 +8,7 @@ import type { EditorSelection } from '../../../entities/layout-version/model/edi
 const noSelection: EditorSelection = { type: 'none' };
 const rackSelection = (ids: string[]): EditorSelection => ({ type: 'rack', rackIds: ids });
 const cellSelection = (cellId: string): EditorSelection => ({ type: 'cell', cellId });
+const containerSelection = (containerId: string): EditorSelection => ({ type: 'container', containerId });
 
 // ─── layout mode — single-rack ────────────────────────────────────────────────
 
@@ -118,6 +119,42 @@ describe('resolveInspectorKind — placement mode, cell selection', () => {
   it('cell selection in flow mode is ignored (flow has own placeholder)', () => {
     const cellSel = cellSelection('rack-1:sec-abc:0');
     expect(resolveInspectorKind('flow', cellSel, null)).toBe('flow-placeholder');
+  });
+});
+
+// ─── placement mode — container selection (B3) ───────────────────────────────
+
+describe('resolveInspectorKind — placement mode, container selection', () => {
+  it('returns placement-container when a container is selected in placement mode', () => {
+    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
+    expect(resolveInspectorKind('placement', sel, null)).toBe('placement-container');
+  });
+
+  it('returns placement-container regardless of creatingRackId', () => {
+    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
+    expect(resolveInspectorKind('placement', sel, 'rack-x')).toBe('placement-container');
+  });
+
+  it('container selection in layout mode returns layout-empty (layout ignores containers)', () => {
+    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
+    expect(resolveInspectorKind('layout', sel, null)).toBe('layout-empty');
+  });
+
+  it('container selection in semantics mode returns semantics-placeholder', () => {
+    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
+    expect(resolveInspectorKind('semantics', sel, null)).toBe('semantics-placeholder');
+  });
+
+  it('container selection in flow mode returns flow-placeholder', () => {
+    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
+    expect(resolveInspectorKind('flow', sel, null)).toBe('flow-placeholder');
+  });
+
+  it('cell and container are distinct routes — cell → placement-cell, container → placement-container', () => {
+    const cell = cellSelection('rack-1:sec-abc:1');
+    const container = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
+    expect(resolveInspectorKind('placement', cell, null)).toBe('placement-cell');
+    expect(resolveInspectorKind('placement', container, null)).toBe('placement-container');
   });
 });
 
