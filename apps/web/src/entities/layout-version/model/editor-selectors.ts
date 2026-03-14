@@ -30,6 +30,7 @@ export const useCreatingRackId = () => useEditorStore((state) => state.creatingR
 export const useSetCreatingRackId = () => useEditorStore((state) => state.setCreatingRackId);
 export const useCanvasZoom = () => useEditorStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
+export const useIsLayoutEditable = () => useEditorStore((state) => state.draft?.state === 'draft');
 export const useDraftDirtyState = () => useEditorStore((state) => state.isDraftDirty);
 export const useResetDraft = () => useEditorStore((state) => state.resetDraft);
 export const useInitializeDraft = () => useEditorStore((state) => state.initializeDraft);

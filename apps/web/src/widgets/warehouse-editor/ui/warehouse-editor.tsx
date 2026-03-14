@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
-import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
+import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
   useCreatingRackId,
   useInitializeDraft,
@@ -18,7 +18,8 @@ import { ToolRail } from './tool-rail';
 
 export function WarehouseEditor() {
   const activeFloorId = useActiveFloorId();
-  const { data: layoutDraft } = useActiveLayoutDraft(activeFloorId);
+  const { data: workspace } = useFloorWorkspace(activeFloorId);
+  const workspaceLayout = workspace?.activeDraft ?? workspace?.latestPublished ?? null;
   const currentDraft = useLayoutDraftState();
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
@@ -30,8 +31,6 @@ export function WarehouseEditor() {
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
-  // Non-layout modes always show their mode panel — open immediately on switch.
-  // Layout mode follows rack-selection: open on selection, close on deselection.
   useEffect(() => {
     if (viewMode !== 'layout') {
       setInspectorOpen(true);
@@ -47,10 +46,10 @@ export function WarehouseEditor() {
   }, [activeFloorId, resetDraft]);
 
   useEffect(() => {
-    if (layoutDraft) {
-      initializeDraft(layoutDraft);
+    if (workspaceLayout) {
+      initializeDraft(workspaceLayout);
     }
-  }, [initializeDraft, layoutDraft]);
+  }, [initializeDraft, workspaceLayout]);
 
   if (!activeFloorId) {
     return (
@@ -70,7 +69,7 @@ export function WarehouseEditor() {
     );
   }
 
-  if (!currentDraft && !layoutDraft) {
+  if (!currentDraft && !workspaceLayout) {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <div
@@ -82,7 +81,7 @@ export function WarehouseEditor() {
             boxShadow: 'var(--shadow-soft)'
           }}
         >
-          Loading layout…
+          Loading workspace...
         </div>
       </div>
     );
@@ -95,8 +94,6 @@ export function WarehouseEditor() {
 
   const handleCloseInspector = () => {
     setInspectorOpen(false);
-    // Only clear rack selection in layout mode; other modes have no rack selection
-    // to clear and their panel re-opens automatically on mode entry.
     if (viewMode === 'layout') {
       setSelectedRackId(null);
     }
@@ -108,17 +105,15 @@ export function WarehouseEditor() {
       aria-label="Warehouse editor"
       className="flex h-full w-full overflow-hidden"
     >
-      {/* Left: context-sensitive tool rail */}
       <ToolRail />
 
-      {/* Center: canvas — takes all remaining space */}
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <EditorCanvas
+          workspace={workspace ?? null}
           onAddRack={handleAddRack}
           onOpenInspector={() => setInspectorOpen(true)}
         />
 
-        {/* Inspector toggle — appears when rack is selected but inspector is hidden */}
         {selectedRackId && !inspectorOpen && (
           <button
             type="button"
@@ -132,7 +127,6 @@ export function WarehouseEditor() {
         )}
       </div>
 
-      {/* Right: collapsible inspector */}
       <div
         className="shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
         style={{ width: inspectorOpen ? '320px' : '0px' }}
@@ -146,6 +140,7 @@ export function WarehouseEditor() {
           }}
         >
           <InspectorRouter
+            workspace={workspace ?? null}
             onClose={handleCloseInspector}
             onAddRack={handleAddRack}
           />

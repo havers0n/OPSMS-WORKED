@@ -27,9 +27,13 @@ describe('layout-context helpers', () => {
   it('disables publish while local draft is dirty', () => {
     const state = getLayoutActionState({
       activeFloorId: 'floor-1',
-      liveDraftIsLoading: false,
-      liveDraftIsError: false,
-      liveDraft: layoutDraft,
+      workspaceIsLoading: false,
+      workspaceIsError: false,
+      workspace: {
+        floorId: 'floor-1',
+        activeDraft: layoutDraft,
+        latestPublished: null
+      },
       localDraft: layoutDraft,
       isDraftDirty: true
     });
@@ -41,9 +45,13 @@ describe('layout-context helpers', () => {
   it('keeps all draft actions disabled when no live draft is loaded', () => {
     const state = getLayoutActionState({
       activeFloorId: 'floor-1',
-      liveDraftIsLoading: false,
-      liveDraftIsError: false,
-      liveDraft: null,
+      workspaceIsLoading: false,
+      workspaceIsError: false,
+      workspace: {
+        floorId: 'floor-1',
+        activeDraft: null,
+        latestPublished: null
+      },
       localDraft: null,
       isDraftDirty: false
     });

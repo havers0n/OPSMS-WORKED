@@ -11,6 +11,7 @@ interface SectionPresetFormProps {
   initialLevelCount: number;
   /** Current slot count (from first level of first section), used as initial value */
   initialSlotCount: number;
+  readOnly?: boolean;
   onApply: (rackId: string, side: 'A' | 'B', sectionCount: number, levelCount: number, slotCount: number) => void;
 }
 
@@ -19,12 +20,14 @@ function Stepper({
   value,
   min,
   max,
+  readOnly,
   onChange
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
+  readOnly?: boolean;
   onChange: (v: number) => void;
 }) {
   return (
@@ -33,13 +36,14 @@ function Stepper({
       <div className="flex items-center gap-1.5">
         <button
           type="button"
+          disabled={readOnly || value <= min}
           onClick={() => onChange(Math.max(min, value - 1))}
-          disabled={value <= min}
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-muted)] text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
         >
           −
         </button>
         <input
+          disabled={readOnly}
           type="number"
           min={min}
           max={max}
@@ -48,12 +52,12 @@ function Stepper({
             const v = parseInt(e.target.value, 10);
             if (!isNaN(v) && v >= min && v <= max) onChange(v);
           }}
-          className="h-8 w-12 rounded-lg border border-[var(--border-muted)] bg-white text-center text-sm font-semibold text-slate-800 shadow-sm"
+          className="h-8 w-12 rounded-lg border border-[var(--border-muted)] bg-white text-center text-sm font-semibold text-slate-800 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         />
         <button
           type="button"
+          disabled={readOnly || value >= max}
           onClick={() => onChange(Math.min(max, value + 1))}
-          disabled={value >= max}
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border-muted)] text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
         >
           +
@@ -75,6 +79,7 @@ export function SectionPresetForm({
   initialSectionCount,
   initialLevelCount,
   initialSlotCount,
+  readOnly = false,
   onApply
 }: SectionPresetFormProps) {
   const [sectionCount, setSectionCount] = useState(Math.max(1, initialSectionCount));
@@ -91,9 +96,9 @@ export function SectionPresetForm({
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
-        <Stepper label="Sections" value={sectionCount} min={1} max={20} onChange={setSectionCount} />
-        <Stepper label="Levels" value={levelCount} min={1} max={20} onChange={setLevelCount} />
-        <Stepper label="Slots / level" value={slotCount} min={1} max={30} onChange={setSlotCount} />
+        <Stepper label="Sections" value={sectionCount} min={1} max={20} readOnly={readOnly} onChange={setSectionCount} />
+        <Stepper label="Levels" value={levelCount} min={1} max={20} readOnly={readOnly} onChange={setLevelCount} />
+        <Stepper label="Slots / level" value={slotCount} min={1} max={30} readOnly={readOnly} onChange={setSlotCount} />
       </div>
 
       <div className="mt-3 flex items-center justify-between">
@@ -106,8 +111,9 @@ export function SectionPresetForm({
 
         <button
           type="button"
+          disabled={readOnly}
           onClick={() => onApply(rackId, side, sectionCount, levelCount, slotCount)}
-          className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:scale-95"
+          className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:active:scale-100"
         >
           <Zap className="h-3.5 w-3.5" />
           Generate

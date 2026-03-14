@@ -10,6 +10,7 @@ import {
   removeContainerResultSchema,
   containerTypeSchema,
   floorSchema,
+  floorWorkspaceSchema,
   layoutDraftSchema,
   layoutPublishResultSchema,
   layoutValidationResultSchema,
@@ -153,6 +154,7 @@ export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerResponseSchema = moveContainerResultSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
+export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const validationResponseSchema = layoutValidationResultSchema;
 export const publishResponseSchema = layoutPublishResultSchema;

@@ -21,6 +21,7 @@ import {
   useApplyFacePreset,
   useDeleteRack,
   useDraftDirtyState,
+  useIsLayoutEditable,
   useDuplicateRack,
   useLayoutDraftState,
   useResetFaceB,
@@ -201,16 +202,19 @@ type NumberingPanelProps = {
   rackId: string;
   side: 'A' | 'B';
   slotNumberingDirection: 'ltr' | 'rtl';
+  disabled?: boolean;
   onUpdate: (rackId: string, side: 'A' | 'B', patch: { slotNumberingDirection?: 'ltr' | 'rtl' }) => void;
 };
 
 function ToggleGroup<T extends string>({
   value,
   options,
+  disabled,
   onChange,
 }: {
   value: T;
   options: { value: T; label: string; title: string }[];
+  disabled?: boolean;
   onChange: (v: T) => void;
 }) {
   return (
@@ -219,10 +223,11 @@ function ToggleGroup<T extends string>({
         <button
           key={opt.value}
           type="button"
+          disabled={disabled}
           title={opt.title}
           onClick={() => onChange(opt.value)}
           className={cn(
-            'flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+            'flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:text-slate-400',
             value === opt.value
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-500 hover:text-slate-700'
@@ -235,7 +240,7 @@ function ToggleGroup<T extends string>({
   );
 }
 
-function NumberingPanel({ rackId, side, slotNumberingDirection, onUpdate }: NumberingPanelProps) {
+function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpdate }: NumberingPanelProps) {
   return (
     <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -247,6 +252,7 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, onUpdate }: Numb
       </div>
       <ToggleGroup
         value={slotNumberingDirection}
+        disabled={disabled}
         options={[
           {
             value: 'ltr',
@@ -281,6 +287,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const layoutDraft = useLayoutDraftState();
+  const isLayoutEditable = useIsLayoutEditable();
   const isDraftDirty = useDraftDirtyState();
   const selectedRackId = useSelectedRackId();
 
@@ -422,18 +429,20 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-2 border-t border-[var(--border-muted)] px-5 py-2.5">
           <button
             type="button"
+            disabled={!isLayoutEditable}
             onClick={handleRotate}
             title="Rotate 90°"
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Rotate
           </button>
           <button
             type="button"
+            disabled={!isLayoutEditable}
             onClick={handleDuplicate}
             title="Duplicate rack"
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
           >
             <Copy className="h-3.5 w-3.5" />
             Duplicate
@@ -442,9 +451,10 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
           {!confirmingDelete ? (
             <button
               type="button"
+              disabled={!isLayoutEditable}
               onClick={() => setConfirmingDelete(true)}
               title="Delete rack"
-              className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100"
+              className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete
@@ -461,8 +471,9 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
               </button>
               <button
                 type="button"
+                disabled={!isLayoutEditable}
                 onClick={handleDeleteConfirm}
-                className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 Delete
               </button>
@@ -487,7 +498,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
           />
           {isOpen('geometry') && (
             <div className="px-5 pb-5">
-              <GeneralTab rack={rack} />
+              <GeneralTab rack={rack} readOnly={!isLayoutEditable} />
             </div>
           )}
         </div>
@@ -512,6 +523,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
                 rackId={rack.id}
                 side="A"
                 slotNumberingDirection={faceA.slotNumberingDirection}
+                disabled={!isLayoutEditable}
                 onUpdate={updateFaceConfig}
               />
 
@@ -523,6 +535,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
                 initialSectionCount={faceA.sections.length || 3}
                 initialLevelCount={faceA.sections[0]?.levels.length || 4}
                 initialSlotCount={faceA.sections[0]?.levels[0]?.slotCount || 3}
+                readOnly={!isLayoutEditable}
                 onApply={applyFacePreset}
               />
 
@@ -532,7 +545,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
               )}
 
               {/* Section table (always visible as override tool) */}
-              <FaceTab title="Face A" rackId={rack.id} face={faceA} />
+              <FaceTab title="Face A" rackId={rack.id} face={faceA} readOnly={!isLayoutEditable} />
             </div>
           )}
         </div>
@@ -574,8 +587,9 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
                   </div>
                   <button
                     type="button"
+                    disabled={!isLayoutEditable}
                     onClick={() => resetFaceB(rack.id)}
-                    className="text-xs font-medium text-red-500 underline-offset-2 hover:text-red-700 hover:underline"
+                    className="text-xs font-medium text-red-500 underline-offset-2 hover:text-red-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
                     title="Reset Face B to unconfigured (converts rack back to single)"
                   >
                     Remove Face B
@@ -584,7 +598,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
               )}
 
               {!faceBConfigured ? (
-                <FaceBEmptyState selectedMode={null} onSelectMode={handleFaceBMode} />
+                <FaceBEmptyState selectedMode={null} onSelectMode={isLayoutEditable ? handleFaceBMode : () => {}} />
               ) : isMirrored ? (
                 /* Mirror mode: show read-only preview of mirrored layout */
                 <div className="flex flex-col gap-4">
@@ -602,6 +616,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
                     rackId={rack.id}
                     side="B"
                     slotNumberingDirection={faceB.slotNumberingDirection}
+                    disabled={!isLayoutEditable}
                     onUpdate={updateFaceConfig}
                   />
                   <SectionPresetForm
@@ -611,12 +626,13 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
                     initialSectionCount={faceB.sections.length || 3}
                     initialLevelCount={faceB.sections[0]?.levels.length || 4}
                     initialSlotCount={faceB.sections[0]?.levels[0]?.slotCount || 3}
+                    readOnly={!isLayoutEditable}
                     onApply={applyFacePreset}
                   />
                   {faceB.sections.length > 0 && (
                     <FrontElevationPreview face={faceB} side="B" />
                   )}
-                  <FaceTab title="Face B" rackId={rack.id} face={faceB} />
+                  <FaceTab title="Face B" rackId={rack.id} face={faceB} readOnly={!isLayoutEditable} />
                 </div>
               )}
             </div>

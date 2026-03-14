@@ -173,22 +173,17 @@ function createSupabaseStub() {
       if (table === 'layout_versions') {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                order: vi.fn(() => ({
-                  limit: vi.fn(async () => ({
-                    data: [
-                      {
-                        id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
-                        floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
-                        version_no: 3,
-                        published_at: '2026-03-07T12:00:00.000Z'
-                      }
-                    ],
-                    error: null
-                  }))
-                }))
-              }))
+            eq: vi.fn(async () => ({
+              data: [
+                {
+                  id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  version_no: 3,
+                  state: 'published',
+                  published_at: '2026-03-07T12:00:00.000Z'
+                }
+              ],
+              error: null
             }))
           }))
         };
@@ -326,6 +321,8 @@ function createSupabaseStub() {
 
       return {
         select: vi.fn(() => ({
+          eq: vi.fn(async () => ({ data: [], error: null })),
+          in: vi.fn(async () => ({ data: [], error: null })),
           limit: vi.fn(async () => ({ data: [], error: null }))
         }))
       };
@@ -485,6 +482,241 @@ function createActiveDraftSupabaseStub() {
 
       return {
         select: vi.fn(() => ({
+          limit: vi.fn(async () => ({ data: [], error: null }))
+        }))
+      };
+    }),
+    rpc: vi.fn()
+  };
+}
+
+function createFloorWorkspaceSupabaseStub() {
+  const draftVersionId = '11111111-1111-4111-8111-111111111111';
+  const publishedVersionId = '22222222-2222-4222-8222-222222222222';
+  const draftRackId = '33333333-3333-4333-8333-333333333333';
+  const publishedRackId = '44444444-4444-4444-8444-444444444444';
+  const draftFaceId = '55555555-5555-4555-8555-555555555555';
+  const publishedFaceId = '66666666-6666-4666-8666-666666666666';
+  const draftSectionId = '77777777-7777-4777-8777-777777777777';
+  const publishedSectionId = '88888888-8888-4888-8888-888888888888';
+
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [
+                {
+                  id: draftVersionId,
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  version_no: 4,
+                  state: 'draft',
+                  published_at: null
+                },
+                {
+                  id: publishedVersionId,
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  version_no: 3,
+                  state: 'published',
+                  published_at: '2026-03-08T12:00:00.000Z'
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'racks') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, layoutVersionId: string) =>
+              Promise.resolve({
+                data:
+                  layoutVersionId === draftVersionId
+                    ? [
+                        {
+                          id: draftRackId,
+                          layout_version_id: draftVersionId,
+                          display_code: 'D01',
+                          kind: 'single',
+                          axis: 'NS',
+                          x: 10,
+                          y: 20,
+                          total_length: 12,
+                          depth: 1.2,
+                          rotation_deg: 0
+                        }
+                      ]
+                    : [
+                        {
+                          id: publishedRackId,
+                          layout_version_id: publishedVersionId,
+                          display_code: 'P01',
+                          kind: 'single',
+                          axis: 'WE',
+                          x: 30,
+                          y: 40,
+                          total_length: 14,
+                          depth: 1.4,
+                          rotation_deg: 90
+                        }
+                      ],
+                error: null
+              })
+            )
+          }))
+        };
+      }
+
+      if (table === 'rack_faces') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn((_column: string, rackIds: string[]) =>
+              Promise.resolve({
+                data: rackIds.includes(draftRackId)
+                  ? [
+                      {
+                        id: draftFaceId,
+                        rack_id: draftRackId,
+                        side: 'A',
+                        enabled: true,
+                        slot_numbering_direction: 'ltr',
+                        is_mirrored: false,
+                        mirror_source_face_id: null,
+                        face_length: null
+                      }
+                    ]
+                  : [
+                      {
+                        id: publishedFaceId,
+                        rack_id: publishedRackId,
+                        side: 'A',
+                        enabled: true,
+                        slot_numbering_direction: 'ltr',
+                        is_mirrored: false,
+                        mirror_source_face_id: null,
+                        face_length: null
+                      }
+                    ],
+                error: null
+              })
+            )
+          }))
+        };
+      }
+
+      if (table === 'rack_sections') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn((_column: string, faceIds: string[]) =>
+              Promise.resolve({
+                data: faceIds.includes(draftFaceId)
+                  ? [
+                      {
+                        id: draftSectionId,
+                        rack_face_id: draftFaceId,
+                        ordinal: 1,
+                        length: 12
+                      }
+                    ]
+                  : [
+                      {
+                        id: publishedSectionId,
+                        rack_face_id: publishedFaceId,
+                        ordinal: 1,
+                        length: 14
+                      }
+                    ],
+                error: null
+              })
+            )
+          }))
+        };
+      }
+
+      if (table === 'rack_levels') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn((_column: string, sectionIds: string[]) =>
+              Promise.resolve({
+                data: sectionIds.includes(draftSectionId)
+                  ? [
+                      {
+                        id: '99999999-9999-4999-8999-999999999999',
+                        rack_section_id: draftSectionId,
+                        ordinal: 1,
+                        slot_count: 2
+                      }
+                    ]
+                  : [
+                      {
+                        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                        rack_section_id: publishedSectionId,
+                        ordinal: 1,
+                        slot_count: 3
+                      }
+                    ],
+                error: null
+              })
+            )
+          }))
+        };
+      }
+
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(async () => ({ data: [], error: null })),
+          in: vi.fn(async () => ({ data: [], error: null })),
+          limit: vi.fn(async () => ({ data: [], error: null }))
+        }))
+      };
+    }),
+    rpc: vi.fn()
+  };
+}
+
+function createRackSectionSlotStorageSupabaseStub() {
+  const cellIds = [
+    '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+  ];
+
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'cells') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              eq: vi.fn((_nextColumn: string, slotNo: number) => Promise.resolve({
+                data: value === 'd208453f-555a-40d0-b4bf-f1e6a93a7752' && slotNo === 1
+                  ? cellIds.map((id) => ({ id }))
+                  : [],
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'cell_storage_snapshot_v') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn((_column: string, ids: string[]) => ({
+              order: vi.fn(async () => ({
+                data: cellStorageSnapshotRows.filter((row) => ids.includes(row.cell_id)),
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(async () => ({ data: [], error: null })),
+          in: vi.fn(async () => ({ data: [], error: null })),
           limit: vi.fn(async () => ({ data: [], error: null }))
         }))
       };
@@ -839,6 +1071,80 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('treats non-uuid rack section ids as unpublished slot storage', async () => {
+    const supabase = createRackSectionSlotStorageSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/rack-sections/sec-a-1-216f2dd6-8f17-4de4-aaba-657f9e0e1398/slots/1/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      published: false,
+      rows: []
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns slot storage rows for a published rack section slot', async () => {
+    const supabase = createRackSectionSlotStorageSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/rack-sections/d208453f-555a-40d0-b4bf-f1e6a93a7752/slots/1/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      published: true,
+      rows: [
+        {
+          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+          cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+          containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+          externalCode: 'PALLET-001',
+          containerType: 'pallet',
+          containerStatus: 'active',
+          placedAt: '2026-03-13T09:15:00.000Z',
+          itemRef: 'ITEM-001',
+          quantity: 5,
+          uom: 'pcs'
+        },
+        {
+          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+          cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+          containerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+          externalCode: null,
+          containerType: 'tote',
+          containerStatus: 'quarantined',
+          placedAt: '2026-03-13T10:15:00.000Z',
+          itemRef: null,
+          quantity: null,
+          uom: null
+        }
+      ]
+    });
+
+    await app.close();
+  });
+
   it('returns current inventory content for a container', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
@@ -1031,6 +1337,43 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('returns a floor workspace with both active draft and latest published layout', async () => {
+    const supabase = createFloorWorkspaceSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/workspace',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      activeDraft: {
+        layoutVersionId: '11111111-1111-4111-8111-111111111111',
+        floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+        state: 'draft',
+        rackIds: ['33333333-3333-4333-8333-333333333333'],
+        racks: expect.any(Object)
+      },
+      latestPublished: {
+        layoutVersionId: '22222222-2222-4222-8222-222222222222',
+        floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+        state: 'published',
+        rackIds: ['44444444-4444-4444-8444-444444444444'],
+        racks: expect.any(Object)
+      }
+    });
+
+    await app.close();
+  });
+
   it('returns the active draft with explicit lifecycle state', async () => {
     const supabase = createActiveDraftSupabaseStub();
     const app = buildApp({
@@ -1053,6 +1396,37 @@ describe('buildApp', () => {
       state: 'draft',
       rackIds: ['f38510b5-d5c5-4657-8d7e-a4154cb74951'],
       racks: expect.any(Object)
+    });
+
+    await app.close();
+  });
+
+  it('returns a floor workspace with null draft when only published layout exists', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/workspace',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      activeDraft: null,
+      latestPublished: {
+        layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+        floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+        state: 'published',
+        rackIds: [],
+        racks: {}
+      }
     });
 
     await app.close();

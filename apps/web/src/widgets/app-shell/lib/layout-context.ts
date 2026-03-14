@@ -1,12 +1,12 @@
-import type { LayoutDraft } from '@wos/domain';
+import type { FloorWorkspace, LayoutDraft } from '@wos/domain';
 
 type ContextSwitchConfirmation = () => boolean;
 
 type LayoutActionStateInput = {
   activeFloorId: string | null;
-  liveDraftIsLoading: boolean;
-  liveDraftIsError: boolean;
-  liveDraft: LayoutDraft | null | undefined;
+  workspaceIsLoading: boolean;
+  workspaceIsError: boolean;
+  workspace: FloorWorkspace | null | undefined;
   localDraft: LayoutDraft | null;
   isDraftDirty: boolean;
 };
@@ -20,18 +20,26 @@ export function shouldProceedWithContextSwitch(isDraftDirty: boolean, confirmDis
 }
 
 export function getLayoutActionState(input: LayoutActionStateInput) {
+  const liveDraft = input.workspace?.activeDraft ?? null;
   const hasLoadedDraft = Boolean(
-    input.liveDraft && input.localDraft && input.liveDraft.layoutVersionId === input.localDraft.layoutVersionId
+    liveDraft &&
+      input.localDraft &&
+      input.localDraft.state === 'draft' &&
+      liveDraft.layoutVersionId === input.localDraft.layoutVersionId
   );
-  const isLiveDraftReady = !input.liveDraftIsLoading && !input.liveDraftIsError;
+  const isWorkspaceReady = !input.workspaceIsLoading && !input.workspaceIsError;
 
   return {
     hasLoadedDraft,
-    canCreateDraft: Boolean(input.activeFloorId) && isLiveDraftReady && !input.liveDraft,
-    canSaveDraft: Boolean(input.activeFloorId && input.localDraft && hasLoadedDraft && isLiveDraftReady),
-    canValidateDraft: Boolean(input.activeFloorId && input.localDraft && hasLoadedDraft && isLiveDraftReady),
+    canCreateDraft: Boolean(input.activeFloorId) && isWorkspaceReady && !liveDraft,
+    canSaveDraft: Boolean(input.activeFloorId && input.localDraft?.state === 'draft' && hasLoadedDraft && isWorkspaceReady),
+    canValidateDraft: Boolean(input.activeFloorId && input.localDraft?.state === 'draft' && hasLoadedDraft && isWorkspaceReady),
     canPublishDraft: Boolean(
-      input.activeFloorId && input.localDraft && hasLoadedDraft && !input.isDraftDirty && isLiveDraftReady
+      input.activeFloorId &&
+        input.localDraft?.state === 'draft' &&
+        hasLoadedDraft &&
+        !input.isDraftDirty &&
+        isWorkspaceReady
     )
   };
 }

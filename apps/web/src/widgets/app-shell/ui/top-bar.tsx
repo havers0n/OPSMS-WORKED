@@ -17,9 +17,10 @@ import {
   useSetActiveSiteId
 } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
-import { useActiveLayoutDraft } from '@/entities/layout-version/api/use-active-layout-draft';
+import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
   useDraftDirtyState,
+  useIsLayoutEditable,
   useLayoutDraftState,
   useResetDraft,
   useSetViewMode,
@@ -31,6 +32,7 @@ import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-cre
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
 import { usePublishLayout } from '@/features/layout-publish/model/use-publish-layout';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
+import { BffRequestError } from '@/shared/api/bff/client';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
 
 // All modes are enterable. Non-layout modes show truthful placeholder panels
@@ -54,9 +56,11 @@ export function TopBar() {
   const setViewMode = useSetViewMode();
   const { data: sites = [] } = useSites();
   const { data: floors = [] } = useFloors(activeSiteId);
-  const liveDraftQuery = useActiveLayoutDraft(activeFloorId);
-  const liveDraft = liveDraftQuery.data;
+  const workspaceQuery = useFloorWorkspace(activeFloorId);
+  const workspace = workspaceQuery.data;
+  const latestPublished = workspace?.latestPublished ?? null;
   const layoutDraft = useLayoutDraftState();
+  const isLayoutEditable = useIsLayoutEditable();
   const isDraftDirty = useDraftDirtyState();
   const createDraft = useCreateLayoutDraft(activeFloorId);
   const saveDraft = useSaveLayoutDraft(activeFloorId);
@@ -65,9 +69,9 @@ export function TopBar() {
 
   const actions = getLayoutActionState({
     activeFloorId,
-    liveDraftIsLoading: liveDraftQuery.isLoading,
-    liveDraftIsError: liveDraftQuery.isError,
-    liveDraft,
+    workspaceIsLoading: workspaceQuery.isLoading,
+    workspaceIsError: workspaceQuery.isError,
+    workspace,
     localDraft: layoutDraft,
     isDraftDirty
   });
@@ -79,12 +83,14 @@ export function TopBar() {
   const currentMembership = memberships.find((membership) => membership.tenantId === currentTenantId) ?? memberships[0] ?? null;
 
   const issueSummary = useMemo(() => {
+    if (!layoutDraft && latestPublished) return 'Published · read-only';
+    if (layoutDraft?.state === 'published') return 'Published · read-only';
     if (isDraftDirty && validateLayout.cachedResult) return 'Draft changed';
     if (!validateLayout.cachedResult) return null;
     return validateLayout.cachedResult.isValid
       ? 'Valid'
       : `${validateLayout.cachedResult.issues.length} issue(s)`;
-  }, [isDraftDirty, validateLayout.cachedResult]);
+  }, [isDraftDirty, latestPublished, layoutDraft, validateLayout.cachedResult]);
 
   const handleCreateDraft = async () => {
     if (!activeFloorId) return;
@@ -97,7 +103,7 @@ export function TopBar() {
   };
 
   const handleSaveDraft = async () => {
-    if (!layoutDraft || !activeFloorId) return;
+    if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
     try {
       await saveDraft.mutateAsync(layoutDraft);
       setStatusMessage('Saved');
@@ -107,7 +113,7 @@ export function TopBar() {
   };
 
   const handleValidate = async () => {
-    if (!layoutDraft || !activeFloorId) return;
+    if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
       setStatusMessage(result.isValid ? 'Valid' : `${result.issues.length} issue(s)`);
@@ -117,11 +123,22 @@ export function TopBar() {
   };
 
   const handlePublish = async () => {
-    if (!layoutDraft || !activeFloorId) return;
+    if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync(layoutDraft.layoutVersionId);
-      setStatusMessage(`Published · ${result.generatedCells} cells`);
+      setStatusMessage(`Published · ${result.generatedCells} cells · new draft ready`);
     } catch (error) {
+      if (error instanceof BffRequestError && error.message.includes('failed validation')) {
+        try {
+          const validation = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
+          const firstError = validation.issues.find((issue) => issue.severity === 'error') ?? validation.issues[0];
+          setStatusMessage(firstError ? firstError.message : `${validation.issues.length} issue(s)`);
+          return;
+        } catch {
+          // Fall through to the original publish error if validation lookup fails.
+        }
+      }
+
       setStatusMessage(error instanceof Error ? error.message : 'Publish failed');
     }
   };
@@ -208,10 +225,12 @@ export function TopBar() {
             style={
               isDraftDirty
                 ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
+                : !isLayoutEditable
+                  ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
                 : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
             }
           >
-            {isDraftDirty ? 'Unsaved' : 'Synced'}
+            {isDraftDirty ? 'Unsaved' : !isLayoutEditable ? 'Published' : 'Synced'}
           </span>
         )}
       </div>
@@ -306,7 +325,7 @@ export function TopBar() {
             style={{ color: 'var(--text-muted)' }}
           >
             <FilePlus2 className="h-3.5 w-3.5" />
-            Init
+            Create Draft
           </button>
         )}
 

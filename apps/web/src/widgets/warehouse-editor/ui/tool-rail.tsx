@@ -2,6 +2,7 @@ import { MousePointer2, PlusSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   useEditorMode,
+  useIsLayoutEditable,
   useLayoutDraftState,
   useSetEditorMode,
   useViewMode
@@ -37,7 +38,8 @@ export function ToolRail() {
   const editorMode = useEditorMode();
   const setEditorMode = useSetEditorMode();
   const layoutDraft = useLayoutDraftState();
-  const hasDraft = !!layoutDraft;
+  const isLayoutEditable = useIsLayoutEditable();
+  const hasLayout = !!layoutDraft;
 
   const tools = TOOLS_BY_VIEW[viewMode] ?? TOOLS_BY_VIEW.layout;
 
@@ -55,7 +57,10 @@ export function ToolRail() {
         {tools.map((tool) => {
           const Icon = tool.icon;
           const isActive = tool.id === activeToolId;
-          const isDisabled = !hasDraft || tool.disabled;
+          const isDisabled =
+            !hasLayout ||
+            tool.disabled ||
+            (tool.editorMode === 'place' && !isLayoutEditable);
 
           return (
             <button
