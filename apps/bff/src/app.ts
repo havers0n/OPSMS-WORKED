@@ -22,6 +22,7 @@ import {
   placeContainerResponseSchema,
   createSiteBodySchema,
   currentWorkspaceResponseSchema,
+  floorWorkspaceResponseSchema,
   floorsResponseSchema,
   idResponseSchema,
   inventoryItemResponseSchema,
@@ -62,28 +63,45 @@ function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unkn
   return schema.parse(payload);
 }
 
-async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string) {
+type LayoutVersionRow = {
+  id: string;
+  floor_id: string;
+  version_no: number;
+  state: 'draft' | 'published' | 'archived';
+  published_at?: string | null;
+};
+
+async function fetchLatestLayoutVersionByState(
+  supabase: SupabaseClient,
+  floorId: string,
+  state: LayoutVersionRow['state']
+) {
   const { data: layoutVersions, error: layoutVersionsError } = await supabase
     .from('layout_versions')
-    .select('id,floor_id,version_no,state')
+    .select('id,floor_id,version_no,state,published_at')
     .eq('floor_id', floorId);
 
   if (layoutVersionsError) {
     throw layoutVersionsError;
   }
 
-  const activeDraft = (layoutVersions ?? [])
-    .filter((row) => row.state === 'draft')
+  return ((layoutVersions ?? []) as LayoutVersionRow[])
+    .filter((row) => row.state === state)
     .sort((a, b) => b.version_no - a.version_no)[0];
+}
 
-  if (!activeDraft) {
+async function fetchLayoutVersionBundle(
+  supabase: SupabaseClient,
+  layoutVersion: LayoutVersionRow | null
+) {
+  if (!layoutVersion) {
     return null;
   }
 
   const { data: racks, error: racksError } = await supabase
     .from('racks')
     .select('id,layout_version_id,display_code,kind,axis,x,y,total_length,depth,rotation_deg')
-    .eq('layout_version_id', activeDraft.id);
+    .eq('layout_version_id', layoutVersion.id);
 
   if (racksError) {
     throw racksError;
@@ -91,9 +109,9 @@ async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string)
 
   if (!racks || racks.length === 0) {
     return {
-      layoutVersionId: activeDraft.id,
-      floorId: activeDraft.floor_id,
-      state: activeDraft.state,
+      layoutVersionId: layoutVersion.id,
+      floorId: layoutVersion.floor_id,
+      state: layoutVersion.state,
       rackIds: [],
       racks: {}
     };
@@ -130,7 +148,7 @@ async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string)
   }
 
   return mapLayoutDraftBundleToDomain({
-    layoutVersion: activeDraft,
+    layoutVersion,
     racks,
     rackFaces: rackFaces ?? [],
     rackSections: rackSections ?? [],
@@ -138,20 +156,18 @@ async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string)
   });
 }
 
+async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string) {
+  const activeDraft = await fetchLatestLayoutVersionByState(supabase, floorId, 'draft');
+  return fetchLayoutVersionBundle(supabase, activeDraft);
+}
+
+async function fetchLatestPublishedLayout(supabase: SupabaseClient, floorId: string) {
+  const latestPublished = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
+  return fetchLayoutVersionBundle(supabase, latestPublished);
+}
+
 async function fetchPublishedLayoutSummary(supabase: SupabaseClient, floorId: string) {
-  const { data: publishedVersions, error: publishedVersionsError } = await supabase
-    .from('layout_versions')
-    .select('id,floor_id,version_no,published_at')
-    .eq('floor_id', floorId)
-    .eq('state', 'published')
-    .order('version_no', { ascending: false })
-    .limit(1);
-
-  if (publishedVersionsError) {
-    throw publishedVersionsError;
-  }
-
-  const publishedVersion = publishedVersions?.[0];
+  const publishedVersion = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
   if (!publishedVersion) {
     return null;
   }
@@ -670,6 +686,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const draft = await fetchActiveLayoutDraft(supabase, floorId);
     return parseOrThrow(layoutDraftResponseSchema, draft);
+  });
+
+  app.get('/api/floors/:floorId/workspace', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
+    const supabase = getUserSupabase(auth);
+    const [activeDraft, latestPublished] = await Promise.all([
+      fetchActiveLayoutDraft(supabase, floorId),
+      fetchLatestPublishedLayout(supabase, floorId)
+    ]);
+
+    return parseOrThrow(floorWorkspaceResponseSchema, {
+      floorId,
+      activeDraft,
+      latestPublished
+    });
   });
 
   app.get('/api/floors/:floorId/published-layout', async (request, reply) => {
