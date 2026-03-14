@@ -12,3 +12,12 @@ export const cellOccupancyRowSchema = z.object({
 });
 
 export type CellOccupancyRow = z.infer<typeof cellOccupancyRowSchema>;
+
+export const floorCellOccupancyRowSchema = z.object({
+  cellId: z.string().uuid(),
+  containerCount: z.number().int().min(1)
+});
+
+export const floorCellOccupancyResponseSchema = z.array(floorCellOccupancyRowSchema);
+
+export type FloorCellOccupancyRow = z.infer<typeof floorCellOccupancyRowSchema>;

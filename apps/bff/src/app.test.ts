@@ -231,6 +231,8 @@ function createSupabaseStub() {
         return {
           select: vi.fn(() => ({
             eq: vi.fn((_column: string, value: string) => ({
+              data: publishedCellRows.filter((row) => row.layout_version_id === value),
+              error: null,
               order: vi.fn(() => {
                 const rows = publishedCellRows.filter((row) => row.layout_version_id === value);
 
@@ -337,7 +339,13 @@ function createSupabaseStub() {
                 data: cellOccupancyRows.filter((row) => row.cell_id === value),
                 error: null
               }))
-            }))
+            })),
+            in: vi.fn((_column: string, values: string[]) =>
+              Promise.resolve({
+                data: cellOccupancyRows.filter((row) => values.includes(row.cell_id)),
+                error: null
+              })
+            )
           }))
         };
       }
@@ -1478,6 +1486,32 @@ describe('buildApp', () => {
         x: 10,
         y: 30,
         status: 'active'
+      }
+    ]);
+
+    await app.close();
+  });
+
+  it('returns floor-level occupancy aggregated by published cell id', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/cell-occupancy',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerCount: 2
       }
     ]);
 
