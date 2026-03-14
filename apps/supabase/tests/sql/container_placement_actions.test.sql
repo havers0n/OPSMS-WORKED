@@ -126,6 +126,17 @@ begin
     raise exception 'Expected place_container to create an active placement.';
   end if;
 
+  if not exists (
+    select 1
+    from public.movement_events
+    where container_id = place_container_uuid
+      and event_type = 'placed'
+      and from_cell_id is null
+      and to_cell_id = cell_a_uuid
+  ) then
+    raise exception 'Expected place_container to write a placed movement event.';
+  end if;
+
   begin
     perform public.place_container(place_container_uuid, cell_b_uuid, actor_uuid);
     raise exception 'Expected place_container to fail when container is already placed.';
@@ -149,6 +160,17 @@ begin
       and removed_at is not null
   ) then
     raise exception 'Expected remove_container to close placement history rather than delete it.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.movement_events
+    where container_id = place_container_uuid
+      and event_type = 'removed'
+      and from_cell_id = cell_a_uuid
+      and to_cell_id is null
+  ) then
+    raise exception 'Expected remove_container to write a removed movement event.';
   end if;
 
   begin
@@ -195,6 +217,17 @@ begin
       and removed_at is null
   ) then
     raise exception 'Expected move_container to create a new active placement in the target cell.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.movement_events
+    where container_id = move_container_uuid
+      and event_type = 'moved'
+      and from_cell_id = cell_a_uuid
+      and to_cell_id = cell_b_uuid
+  ) then
+    raise exception 'Expected move_container to write a moved movement event.';
   end if;
 
   begin

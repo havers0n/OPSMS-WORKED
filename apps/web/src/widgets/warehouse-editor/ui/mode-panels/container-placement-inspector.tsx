@@ -1,23 +1,42 @@
-import { Box, AlertCircle, Loader2, ArrowLeft, PackageOpen } from 'lucide-react';
-import type { ContainerStorageSnapshotRow } from '@wos/domain';
+import { useState } from 'react';
+import type { ContainerStorageSnapshotRow, FloorWorkspace } from '@wos/domain';
 import {
+  AlertCircle,
+  ArrowLeft,
+  Box,
+  Loader2,
+  MoveRight,
+  PackageOpen,
+  X
+} from 'lucide-react';
+import {
+  useCancelPlacementInteraction,
   useEditorSelection,
-  useSetSelectedContainerId
+  usePlacementInteraction,
+  useSetSelectedCellId,
+  useSetSelectedContainerId,
+  useStartPlacementMove
 } from '@/entities/layout-version/model/editor-selectors';
+import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerStorage } from '@/entities/container/api/use-container-storage';
-
-// ─── container status badge (shared style map) ────────────────────────────────
+import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
+import { useRemoveContainer } from '@/features/placement-actions/model/use-remove-container';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  active:      { label: 'Active',      className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   quarantined: { label: 'Quarantined', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  closed:      { label: 'Closed',      className: 'bg-slate-100 text-slate-500 border-slate-200' },
-  lost:        { label: 'Lost',        className: 'bg-red-50 text-red-600 border-red-200' },
-  damaged:     { label: 'Damaged',     className: 'bg-orange-50 text-orange-700 border-orange-200' }
+  closed: { label: 'Closed', className: 'bg-slate-100 text-slate-500 border-slate-200' },
+  lost: { label: 'Lost', className: 'bg-red-50 text-red-600 border-red-200' },
+  damaged: { label: 'Damaged', className: 'bg-orange-50 text-orange-700 border-orange-200' }
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? { label: status, className: 'bg-slate-100 text-slate-500 border-slate-200' };
+  const style =
+    STATUS_STYLES[status] ?? {
+      label: status,
+      className: 'bg-slate-100 text-slate-500 border-slate-200'
+    };
+
   return (
     <span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}>
       {style.label}
@@ -25,61 +44,130 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── inventory row list ───────────────────────────────────────────────────────
-
 type InventoryRow = { itemRef: string; quantity: number; uom: string };
 
 function extractInventory(rows: ContainerStorageSnapshotRow[]): InventoryRow[] {
   return rows
-    .filter((r) => r.itemRef !== null && r.quantity !== null && r.uom !== null)
-    .map((r) => ({ itemRef: r.itemRef!, quantity: r.quantity!, uom: r.uom! }));
+    .filter((row) => row.itemRef !== null && row.quantity !== null && row.uom !== null)
+    .map((row) => ({ itemRef: row.itemRef!, quantity: row.quantity!, uom: row.uom! }));
 }
 
-// ─── main component ───────────────────────────────────────────────────────────
-
-/**
- * ContainerPlacementInspector — read-only container drill-down for Placement mode.
- *
- * Reached by clicking a container entry in CellPlacementInspector.
- * Backed by GET /api/containers/:containerId/storage.
- *
- * Shows:
- *   - container identity: externalCode, containerType, containerStatus
- *   - inventory rows: itemRef, quantity, uom
- *
- * Empty states:
- *   - Loading             → spinner
- *   - Error               → error card
- *   - No rows returned    → container not found or no data
- *   - Rows, no inventory  → container exists but empty
- *   - Rows with inventory → full inventory list
- *
- * "← Back" clears selection, returning user to placement-placeholder (re-select a cell).
- * No mutation UI. No place/remove/move actions (deferred to B4+).
- */
-export function ContainerPlacementInspector() {
+export function ContainerPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
+  const placementInteraction = usePlacementInteraction();
   const setSelectedContainerId = useSetSelectedContainerId();
+  const setSelectedCellId = useSetSelectedCellId();
+  const startPlacementMove = useStartPlacementMove();
+  const cancelPlacementInteraction = useCancelPlacementInteraction();
+  const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   const containerId = selection.type === 'container' ? selection.containerId : null;
+  const sourceCellId = selection.type === 'container' ? selection.sourceCellId ?? null : null;
+  const isMoveMode =
+    placementInteraction.type === 'move-container' &&
+    placementInteraction.containerId === containerId &&
+    placementInteraction.fromCellId === sourceCellId;
+  const targetCellId = isMoveMode ? placementInteraction.targetCellId : null;
 
+  const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
+  const sourceCell = publishedCells.find((cell) => cell.id === sourceCellId) ?? null;
+  const targetCell = publishedCells.find((cell) => cell.id === targetCellId) ?? null;
   const { data: rows, isPending, isError } = useContainerStorage(containerId);
 
-  // All rows share the same identity fields — take the first row as the source of truth.
   const identity = rows && rows.length > 0 ? rows[0] : null;
   const inventory = rows ? extractInventory(rows) : [];
+  const removeContainer = useRemoveContainer({
+    floorId: workspace?.floorId ?? null,
+    sourceCellId,
+    containerId
+  });
+  const moveContainer = useMoveContainer({
+    floorId: workspace?.floorId ?? null,
+    sourceCellId,
+    targetCellId,
+    containerId
+  });
+
+  const targetValidationMessage =
+    !isMoveMode
+      ? null
+      : !targetCellId
+        ? 'Click a destination cell on the canvas.'
+        : targetCellId === sourceCellId
+          ? 'Target cell must differ from the current source cell.'
+          : !targetCell
+            ? 'Selected target cell is not available in the published structure.'
+            : null;
+
+  const handleRemove = async () => {
+    if (!containerId || !sourceCellId) {
+      return;
+    }
+
+    setRemoveError(null);
+
+    try {
+      await removeContainer.mutateAsync({
+        containerId,
+        fromCellId: sourceCellId
+      });
+      setSelectedCellId(sourceCellId);
+    } catch (mutationError) {
+      setRemoveError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Could not remove the container from its cell.'
+      );
+    }
+  };
+
+  const handleStartMove = () => {
+    if (!containerId || !sourceCellId) {
+      return;
+    }
+
+    setMoveError(null);
+    setIsRemoveConfirmOpen(false);
+    startPlacementMove(containerId, sourceCellId);
+  };
+
+  const handleCancelMove = () => {
+    cancelPlacementInteraction();
+    setMoveError(null);
+  };
+
+  const handleConfirmMove = async () => {
+    if (!containerId || !sourceCellId || !targetCellId || targetValidationMessage) {
+      return;
+    }
+
+    setMoveError(null);
+
+    try {
+      await moveContainer.mutateAsync({
+        containerId,
+        fromCellId: sourceCellId,
+        toCellId: targetCellId
+      });
+      setSelectedCellId(targetCellId);
+    } catch (mutationError) {
+      setMoveError(
+        mutationError instanceof Error ? mutationError.message : 'Could not move the container.'
+      );
+    }
+  };
 
   return (
-    <aside
-      className="flex h-full w-full flex-col"
-      style={{ background: 'var(--surface-primary)' }}
-    >
-      {/* Header */}
+    <aside className="flex h-full w-full flex-col" style={{ background: 'var(--surface-primary)' }}>
       <div className="border-b border-[var(--border-muted)] px-5 py-4">
-        {/* Back button */}
         <button
           type="button"
-          onClick={() => setSelectedContainerId(null)}
+          onClick={() => {
+            cancelPlacementInteraction();
+            setSelectedContainerId(null);
+          }}
           className="mb-3 flex items-center gap-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
         >
           <ArrowLeft className="h-3 w-3" />
@@ -101,18 +189,141 @@ export function ContainerPlacementInspector() {
             <StatusBadge status={identity.containerStatus} />
           </div>
         )}
+        {sourceCellId && (
+          <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+            Placed in {sourceCell?.address.raw ?? sourceCellId}
+          </p>
+        )}
+        {sourceCellId && (
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: 'var(--accent)' }}
+              onClick={handleStartMove}
+              disabled={removeContainer.isPending || moveContainer.isPending}
+            >
+              {isMoveMode ? 'Move target active' : 'Move container'}
+            </button>
+            <button
+              type="button"
+              className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: 'var(--danger)' }}
+              onClick={() => {
+                setRemoveError(null);
+                setIsRemoveConfirmOpen((current) => !current);
+              }}
+              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending}
+            >
+              {removeContainer.isPending ? 'Removing...' : 'Remove from cell'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Body */}
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {/* Loading */}
+        {isMoveMode && sourceCellId && (
+          <div
+            className="rounded-lg p-3"
+            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--accent)' }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent)]">
+                  Move target selection active
+                </p>
+                <p className="mt-1 text-xs text-[var(--text-primary)]">
+                  Select an explicit destination cell on the canvas, then confirm the move.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-md border p-1.5 text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={handleCancelMove}
+                disabled={moveContainer.isPending}
+                title="Cancel move"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="mt-3 rounded-md border border-[var(--border-muted)] bg-[var(--surface-primary)] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Target cell</p>
+              <p className="mt-1 font-mono text-sm text-[var(--text-primary)]">
+                {targetCell?.address.raw ?? targetCellId ?? 'No target selected'}
+              </p>
+              {targetValidationMessage && (
+                <p className="mt-1 text-xs text-amber-600">{targetValidationMessage}</p>
+              )}
+              {moveError && <p className="mt-1 text-xs text-red-500">{moveError}</p>}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--accent)' }}
+                onClick={() => void handleConfirmMove()}
+                disabled={moveContainer.isPending || Boolean(targetValidationMessage)}
+              >
+                <MoveRight className="h-3.5 w-3.5" />
+                {moveContainer.isPending ? 'Moving...' : 'Confirm move'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={handleCancelMove}
+                disabled={moveContainer.isPending}
+              >
+                Cancel move
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isRemoveConfirmOpen && sourceCellId && (
+          <div
+            className="rounded-lg p-3"
+            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
+          >
+            <p className="text-xs text-[var(--text-primary)]">
+              Remove this container from the current cell?
+            </p>
+            {removeError && <p className="mt-2 text-xs text-red-500">{removeError}</p>}
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--danger)' }}
+                onClick={() => void handleRemove()}
+                disabled={removeContainer.isPending}
+              >
+                Confirm remove
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={() => {
+                  setIsRemoveConfirmOpen(false);
+                  setRemoveError(null);
+                }}
+                disabled={removeContainer.isPending}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {isPending && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
           </div>
         )}
 
-        {/* Error */}
         {isError && (
           <div
             className="rounded-lg px-3 py-3 text-center"
@@ -124,20 +335,16 @@ export function ContainerPlacementInspector() {
           </div>
         )}
 
-        {/* Not found — BFF returned 0 rows for this containerId */}
         {!isPending && !isError && rows && rows.length === 0 && (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <AlertCircle className="h-7 w-7 text-slate-300" />
             <div>
               <p className="text-sm font-medium text-slate-600">Container not found</p>
-              <p className="mt-1 text-xs text-slate-400">
-                No data is available for this container.
-              </p>
+              <p className="mt-1 text-xs text-slate-400">No data is available for this container.</p>
             </div>
           </div>
         )}
 
-        {/* Inventory section */}
         {!isPending && !isError && identity && (
           <>
             <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
@@ -152,13 +359,16 @@ export function ContainerPlacementInspector() {
             ) : (
               <div
                 className="rounded-lg"
-                style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+                style={{
+                  border: '1px solid var(--border-muted)',
+                  background: 'var(--surface-subtle)'
+                }}
               >
-                {inventory.map((item, i) => (
+                {inventory.map((item, index) => (
                   <div
-                    key={`${item.itemRef}-${i}`}
+                    key={`${item.itemRef}-${index}`}
                     className="flex items-center justify-between gap-2 px-3 py-2"
-                    style={i > 0 ? { borderTop: '1px solid var(--border-muted)' } : undefined}
+                    style={index > 0 ? { borderTop: '1px solid var(--border-muted)' } : undefined}
                   >
                     <span className="truncate font-mono text-xs text-[var(--text-primary)]">
                       {item.itemRef}

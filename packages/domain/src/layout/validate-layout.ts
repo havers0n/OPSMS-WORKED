@@ -24,6 +24,7 @@ export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutValidationR
   for (const rackId of layoutDraft.rackIds) {
     const rack = layoutDraft.racks[rackId];
     const faceA = rack.faces.find((face) => face.side === 'A');
+    const faceB = rack.faces.find((face) => face.side === 'B');
     const enabledFaces = rack.faces.filter((face) => face.enabled);
 
     if (!faceA || !faceA.enabled) {
@@ -40,6 +41,24 @@ export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutValidationR
         code: 'rack.enabled_face_required',
         severity: 'error',
         message: `Rack ${rack.displayCode} must have at least one enabled face.`,
+        entityId: rack.id
+      });
+    }
+
+    if (rack.kind === 'single' && faceB && faceB.enabled && (faceB.isMirrored || faceB.sections.length > 0)) {
+      issues.push({
+        code: 'rack.single_face_b_forbidden',
+        severity: 'error',
+        message: `Rack ${rack.displayCode} is single but Face B is configured.`,
+        entityId: rack.id
+      });
+    }
+
+    if (rack.kind === 'paired' && !faceB) {
+      issues.push({
+        code: 'rack.paired_face_b_required',
+        severity: 'error',
+        message: `Rack ${rack.displayCode} is paired but Face B is missing.`,
         entityId: rack.id
       });
     }

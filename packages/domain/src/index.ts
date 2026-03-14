@@ -11,6 +11,7 @@ export * from './storage/container';
 export * from './storage/cell-occupancy';
 export * from './storage/container-placement-action';
 export * from './storage/container-placement';
+export * from './storage/placement-command';
 export * from './storage/inventory-item';
 export * from './storage/container-storage-snapshot';
 export * from './storage/cell-storage-snapshot';

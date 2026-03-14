@@ -31,4 +31,23 @@ describe('validateLayoutDraft', () => {
     expect(result.isValid).toBe(true);
     expect(result.issues.some((issue) => issue.code === 'rack_face.section_length_mismatch')).toBe(false);
   });
+
+  it('rejects single racks with configured Face B', () => {
+    const draft = createValidLayoutDraftFixture();
+    draft.racks[draft.rackIds[0]].kind = 'single';
+    draft.racks[draft.rackIds[0]].faces[1].enabled = true;
+    draft.racks[draft.rackIds[0]].faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    const result = validateLayoutDraft(draft);
+
+    expect(result.isValid).toBe(false);
+    expect(result.issues.some((issue) => issue.code === 'rack.single_face_b_forbidden')).toBe(true);
+  });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildApp } from './app.js';
+import {
+  ContainerAlreadyPlacedError,
+  PlacementSourceMismatchError,
+  TargetCellSameAsSourceError
+} from './features/placement/errors.js';
 
 const authContext = {
   accessToken: 'token',
@@ -144,6 +149,39 @@ const cellStorageSnapshotRows = [
   }
 ];
 
+const publishedCellRows = [
+  {
+    id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    layout_version_id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+    rack_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    rack_face_id: 'a18c3f84-8b5e-4458-a90f-f7ce15c80110',
+    rack_section_id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+    rack_level_id: '6f684566-01dc-4c36-b1ea-5c795edbd82c',
+    slot_no: 1,
+    address: '03-A.01.01.01',
+    address_sort_key: '0003-A-01-01-01',
+    cell_code: '03-A.01.01.01',
+    x: 10,
+    y: 20,
+    status: 'active' as const
+  },
+  {
+    id: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+    layout_version_id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+    rack_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    rack_face_id: 'a18c3f84-8b5e-4458-a90f-f7ce15c80110',
+    rack_section_id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+    rack_level_id: '7ccdad48-7dc0-4f27-9794-1c7e59d70a40',
+    slot_no: 1,
+    address: '03-A.01.02.01',
+    address_sort_key: '0003-A-01-02-01',
+    cell_code: '03-A.01.02.01',
+    x: 10,
+    y: 30,
+    status: 'active' as const
+  }
+];
+
 function createSupabaseStub() {
   return {
     from: vi.fn((table: string) => {
@@ -192,16 +230,28 @@ function createSupabaseStub() {
       if (table === 'cells') {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              order: vi.fn(() => ({
-                limit: vi.fn(async () => ({
-                  data: [
-                    { address: '03-A.01.01.01', address_sort_key: '0003-A-01-01-01' },
-                    { address: '03-A.01.01.02', address_sort_key: '0003-A-01-01-02' }
-                  ],
-                  count: 8,
-                  error: null
-                }))
+            eq: vi.fn((_column: string, value: string) => ({
+              order: vi.fn(() => {
+                const rows = publishedCellRows.filter((row) => row.layout_version_id === value);
+
+                return {
+                  data: rows,
+                  error: null,
+                  limit: vi.fn(async () => ({
+                    data: rows
+                      .slice(0, 4)
+                      .map((row) => ({
+                        address: row.address,
+                        address_sort_key: row.address_sort_key
+                      })),
+                    count: 8,
+                    error: null
+                  }))
+                };
+              }),
+              maybeSingle: vi.fn(async () => ({
+                data: publishedCellRows.find((row) => row.id === value) ?? null,
+                error: null
               }))
             }))
           }))
@@ -211,6 +261,12 @@ function createSupabaseStub() {
       if (table === 'container_types') {
         return {
           select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              maybeSingle: vi.fn(async () => ({
+                data: containerTypeRows.find((row) => row.id === value) ?? null,
+                error: null
+              }))
+            })),
             order: vi.fn(async () => ({
               data: containerTypeRows,
               error: null
@@ -226,12 +282,33 @@ function createSupabaseStub() {
               data: containerRows,
               error: null
             })),
-            eq: vi.fn((_column: string, value: string) => ({
-              maybeSingle: vi.fn(async () => ({
-                data: containerRows.find((row) => row.id === value) ?? null,
-                error: null
-              }))
-            }))
+            eq: vi.fn((column: string, value: string) => {
+              const firstMatches = containerRows.filter((row) => {
+                if (column === 'id') return row.id === value;
+                if (column === 'tenant_id') return row.tenant_id === value;
+                if (column === 'external_code') return row.external_code === value;
+                return false;
+              });
+
+              return {
+                eq: vi.fn((nestedColumn: string, nestedValue: string) => ({
+                  maybeSingle: vi.fn(async () => ({
+                    data:
+                      firstMatches.find((row) => {
+                        if (nestedColumn === 'id') return row.id === nestedValue;
+                        if (nestedColumn === 'tenant_id') return row.tenant_id === nestedValue;
+                        if (nestedColumn === 'external_code') return row.external_code === nestedValue;
+                        return false;
+                      }) ?? null,
+                    error: null
+                  }))
+                })),
+                maybeSingle: vi.fn(async () => ({
+                  data: firstMatches[0] ?? null,
+                  error: null
+                }))
+              };
+            })
           })),
           insert: vi.fn((payload: Record<string, unknown>) => ({
             select: vi.fn(() => ({
@@ -1331,8 +1408,78 @@ describe('buildApp', () => {
       versionNo: 3,
       publishedAt: '2026-03-07T12:00:00.000Z',
       cellCount: 8,
-      sampleAddresses: ['03-A.01.01.01', '03-A.01.01.02']
+      sampleAddresses: ['03-A.01.01.01', '03-A.01.02.01']
     });
+
+    await app.close();
+  });
+
+  it('returns published physical cells for a floor', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/published-cells',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        cellCode: '03-A.01.01.01',
+        layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+        rackId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        rackFaceId: 'a18c3f84-8b5e-4458-a90f-f7ce15c80110',
+        rackSectionId: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+        rackLevelId: '6f684566-01dc-4c36-b1ea-5c795edbd82c',
+        slotNo: 1,
+        address: {
+          raw: '03-A.01.01.01',
+          parts: {
+            rackCode: '03',
+            face: 'A',
+            section: 1,
+            level: 1,
+            slot: 1
+          },
+          sortKey: '0003-A-01-01-01'
+        },
+        x: 10,
+        y: 20,
+        status: 'active'
+      },
+      {
+        id: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+        cellCode: '03-A.01.02.01',
+        layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+        rackId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        rackFaceId: 'a18c3f84-8b5e-4458-a90f-f7ce15c80110',
+        rackSectionId: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
+        rackLevelId: '7ccdad48-7dc0-4f27-9794-1c7e59d70a40',
+        slotNo: 1,
+        address: {
+          raw: '03-A.01.02.01',
+          parts: {
+            rackCode: '03',
+            face: 'A',
+            section: 1,
+            level: 2,
+            slot: 1
+          },
+          sortKey: '0003-A-01-02-01'
+        },
+        x: 10,
+        y: 30,
+        status: 'active'
+      }
+    ]);
 
     await app.close();
   });
@@ -1696,22 +1843,87 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      id: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
-      tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      containerId: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
       externalCode: 'PALLET-002',
       containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
-      status: 'active',
-      createdAt: '2026-03-13T12:00:00.000Z',
-      createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+      status: 'active'
     });
 
-    const containerApi = supabase.from.mock.results.find((result) => typeof result.value?.insert === 'function')?.value;
+    const containerCallIndex = supabase.from.mock.calls.reduce(
+      (lastIndex, [table], index) => (table === 'containers' ? index : lastIndex),
+      -1
+    );
+    const containerApi = supabase.from.mock.results[containerCallIndex]?.value;
     expect(containerApi.insert).toHaveBeenCalledWith({
       tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
       container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
       external_code: 'PALLET-002',
       created_by: authContext.user.id
     });
+
+    await app.close();
+  });
+
+  it('rejects duplicate container codes with a stable api error', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
+        externalCode: 'PALLET-001'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'CONTAINER_CODE_ALREADY_EXISTS',
+      message: 'Container code already exists in this workspace.'
+    });
+
+    const containerCallIndex = supabase.from.mock.calls.reduce(
+      (lastIndex, [table], index) => (table === 'containers' ? index : lastIndex),
+      -1
+    );
+    const containerApi = supabase.from.mock.results[containerCallIndex]?.value;
+    expect(containerApi.insert).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects unknown container types with a stable api error', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerTypeId: 'c3dddc3e-c486-48d3-b9ac-1cd24d421111',
+        externalCode: 'PALLET-404'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'INVALID_CONTAINER_TYPE',
+      message: 'Container type was not found.'
+    });
+    expect(supabase.from.mock.calls.some(([table]) => table === 'containers')).toBe(false);
 
     await app.close();
   });
@@ -1914,6 +2126,238 @@ describe('buildApp', () => {
     expect(response.json()).toMatchObject({
       code: 'PLACEMENT_CONFLICT',
       message: 'Container is not currently placed.'
+    });
+
+    await app.close();
+  });
+
+  it('places a container through the placement command endpoint', async () => {
+    const targetCellId = '216f2dd6-8f17-4de4-aaba-657f9e0e1398';
+    const placeContainer = vi.fn(async () => ({
+      ok: true as const,
+      containerId: 'PLT-23901',
+      targetCellId
+    }));
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getPlacementService: vi.fn(() => ({
+        placeContainer,
+        removeContainer: vi.fn(),
+        moveContainer: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/place',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: 'PLT-23901',
+        targetCellId
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      containerId: 'PLT-23901',
+      targetCellId
+    });
+    expect(placeContainer).toHaveBeenCalledWith({
+      tenantId: authContext.currentTenant.tenantId,
+      containerId: 'PLT-23901',
+      targetCellId,
+      actorId: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('maps placement place conflicts clearly', async () => {
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getPlacementService: vi.fn(() => ({
+        placeContainer: vi.fn(async () => {
+          throw new ContainerAlreadyPlacedError();
+        }),
+        removeContainer: vi.fn(),
+        moveContainer: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/place',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: 'PLT-23901',
+        targetCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'CONTAINER_ALREADY_PLACED',
+      message: 'Container is already actively placed.'
+    });
+
+    await app.close();
+  });
+
+  it('removes a container through the placement command endpoint', async () => {
+    const fromCellId = '216f2dd6-8f17-4de4-aaba-657f9e0e1398';
+    const removeContainer = vi.fn(async () => ({
+      ok: true as const,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      fromCellId
+    }));
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getPlacementService: vi.fn(() => ({
+        placeContainer: vi.fn(),
+        removeContainer,
+        moveContainer: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/remove',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        fromCellId
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      fromCellId
+    });
+
+    await app.close();
+  });
+
+  it('maps placement remove state mismatches clearly', async () => {
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getPlacementService: vi.fn(() => ({
+        placeContainer: vi.fn(),
+        removeContainer: vi.fn(async () => {
+          throw new PlacementSourceMismatchError();
+        }),
+        moveContainer: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/remove',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_SOURCE_MISMATCH',
+      message: 'Active placement does not match the requested source cell.'
+    });
+
+    await app.close();
+  });
+
+  it('moves a container through the placement command endpoint', async () => {
+    const moveContainer = vi.fn(async () => ({
+      ok: true as const,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+    }));
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getPlacementService: vi.fn(() => ({
+        placeContainer: vi.fn(),
+        removeContainer: vi.fn(),
+        moveContainer
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/move',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+    });
+    expect(moveContainer).toHaveBeenCalledWith({
+      tenantId: authContext.currentTenant.tenantId,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+      actorId: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('maps placement move conflicts clearly', async () => {
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getPlacementService: vi.fn(() => ({
+        placeContainer: vi.fn(),
+        removeContainer: vi.fn(),
+        moveContainer: vi.fn(async () => {
+          throw new TargetCellSameAsSourceError();
+        })
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/move',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'TARGET_CELL_SAME_AS_SOURCE',
+      message: 'Target cell must differ from the current source cell.'
     });
 
     await app.close();

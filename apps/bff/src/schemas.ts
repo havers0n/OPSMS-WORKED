@@ -2,11 +2,17 @@ import { z } from 'zod';
 import {
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
+  cellSchema,
   containerSchema,
+  containerStatusSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
   moveContainerResultSchema,
+  placementCommandResponseSchema,
+  placeContainerRequestSchema,
+  moveContainerRequestSchema,
   placeContainerResultSchema,
+  removeContainerRequestSchema,
   removeContainerResultSchema,
   containerTypeSchema,
   floorSchema,
@@ -37,7 +43,7 @@ export const createFloorBodySchema = z.object({
 
 export const createContainerBodySchema = z.object({
   containerTypeId: z.string().uuid(),
-  externalCode: z.string().trim().min(1).nullable().optional()
+  externalCode: z.string().trim().min(1)
 });
 
 export const createInventoryItemBodySchema = z.object({
@@ -53,6 +59,10 @@ export const placeContainerBodySchema = z.object({
 export const moveContainerBodySchema = z.object({
   targetCellId: z.string().uuid()
 });
+
+export const placementPlaceBodySchema = placeContainerRequestSchema;
+export const placementRemoveBodySchema = removeContainerRequestSchema;
+export const placementMoveBodySchema = moveContainerRequestSchema;
 
 export const createLayoutDraftBodySchema = z.object({
   floorId: z.string().uuid()
@@ -132,6 +142,13 @@ export const floorsResponseSchema = z.array(floorSchema);
 export const containerTypesResponseSchema = z.array(containerTypeSchema);
 export const containersResponseSchema = z.array(containerSchema);
 export const containerResponseSchema = containerSchema;
+export const createContainerResponseSchema = z.object({
+  containerId: z.string().uuid(),
+  externalCode: z.string().trim().min(1),
+  containerTypeId: z.string().uuid(),
+  status: containerStatusSchema
+});
+export const cellsResponseSchema = z.array(cellSchema);
 export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
 export const containerStorageSnapshotResponseSchema = z.array(containerStorageSnapshotRowSchema);
 export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowSchema);
@@ -153,6 +170,7 @@ export const inventoryItemResponseSchema = inventoryItemSchema;
 export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerResponseSchema = moveContainerResultSchema;
+export const placementCommandResponse = placementCommandResponseSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();

@@ -38,9 +38,24 @@ async function buildHeaders(init?: RequestInit) {
   return headers;
 }
 
+export function resolveBffUrl(baseUrl: string, path: string): string {
+  if (/^https?:\/\//.test(path)) {
+    return path;
+  }
+
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (normalizedBase.endsWith('/api') && normalizedPath.startsWith('/api/')) {
+    return `${normalizedBase}${normalizedPath.slice(4)}`;
+  }
+
+  return `${normalizedBase}${normalizedPath}`;
+}
+
 export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = await buildHeaders(init);
-  const response = await fetch(`${env.bffUrl}${path}`, {
+  const response = await fetch(resolveBffUrl(env.bffUrl, path), {
     ...init,
     headers
   });

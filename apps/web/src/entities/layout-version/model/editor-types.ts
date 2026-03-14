@@ -18,4 +18,13 @@ export type EditorSelection =
   | { type: 'none' }
   | { type: 'rack'; rackIds: string[] }
   | { type: 'cell'; cellId: string }
-  | { type: 'container'; containerId: string };
+  | { type: 'container'; containerId: string; sourceCellId?: string | null };
+
+export type PlacementInteraction =
+  | { type: 'idle' }
+  | {
+      type: 'move-container';
+      containerId: string;
+      fromCellId: string;
+      targetCellId: string | null;
+    };

@@ -1,9 +1,11 @@
 import {
+  cellSchema,
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
+  parseCellAddress,
   containerTypeSchema,
   floorSchema,
   layoutDraftSchema,
@@ -11,6 +13,7 @@ import {
   siteSchema,
   type CellStorageSnapshotRow,
   type CellOccupancyRow,
+  type Cell,
   type Container,
   type ContainerStorageSnapshotRow,
   type ContainerType,
@@ -178,6 +181,37 @@ export function mapCellStorageSnapshotRowToDomain(row: {
     itemRef: row.item_ref,
     quantity: row.quantity,
     uom: row.uom
+  });
+}
+
+export function mapCellRowToDomain(row: {
+  id: string;
+  layout_version_id: string;
+  rack_id: string;
+  rack_face_id: string;
+  rack_section_id: string;
+  rack_level_id: string;
+  slot_no: number;
+  address: string;
+  address_sort_key: string;
+  cell_code: string;
+  x: number | null;
+  y: number | null;
+  status: 'active' | 'inactive';
+}): Cell {
+  return cellSchema.parse({
+    id: row.id,
+    cellCode: row.cell_code,
+    layoutVersionId: row.layout_version_id,
+    rackId: row.rack_id,
+    rackFaceId: row.rack_face_id,
+    rackSectionId: row.rack_section_id,
+    rackLevelId: row.rack_level_id,
+    slotNo: row.slot_no,
+    address: parseCellAddress(row.address, row.address_sort_key),
+    x: row.x ?? undefined,
+    y: row.y ?? undefined,
+    status: row.status
   });
 }
 

@@ -2,9 +2,11 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError, z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { PlacementCommandResponse } from '@wos/domain';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
+  cellsResponseSchema,
   cellStorageSnapshotResponseSchema,
   cellSlotStorageResponseSchema,
   cellOccupancyResponseSchema,
@@ -12,12 +14,17 @@ import {
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
   createInventoryItemBodySchema,
+  createContainerResponseSchema,
   containerTypesResponseSchema,
   createContainerBodySchema,
   createFloorBodySchema,
   createLayoutDraftBodySchema,
   moveContainerBodySchema,
   moveContainerResponseSchema,
+  placementCommandResponse,
+  placementMoveBodySchema,
+  placementPlaceBodySchema,
+  placementRemoveBodySchema,
   placeContainerBodySchema,
   placeContainerResponseSchema,
   createSiteBodySchema,
@@ -39,6 +46,7 @@ import {
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
   mapCellOccupancyRowToDomain,
+  mapCellRowToDomain,
   mapCellStorageSnapshotRowToDomain,
   mapContainerRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
@@ -50,13 +58,29 @@ import {
   mapValidationResult
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
+import {
+  ActivePlacementNotFoundError,
+  ContainerAlreadyPlacedError,
+  ContainerNotFoundError,
+  CrossFloorPlacementMoveNotAllowedError,
+  PlacementSourceMismatchError,
+  PublishedLayoutNotFoundError,
+  TargetCellNotFoundError,
+  TargetCellSameAsSourceError
+} from './features/placement/errors.js';
+import {
+  createPlacementCommandService,
+  type PlacementCommandService
+} from './features/placement/service.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
+type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
   getUserSupabase?: UserClientFactory;
   getHealthSupabase?: () => SupabaseClient;
+  getPlacementService?: PlacementServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -193,6 +217,85 @@ async function fetchPublishedLayoutSummary(supabase: SupabaseClient, floorId: st
   };
 }
 
+function mapPlacementError(error: unknown): ApiError | null {
+  if (error instanceof ContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', error.message);
+  }
+
+  if (error instanceof TargetCellNotFoundError) {
+    return new ApiError(404, 'TARGET_CELL_NOT_FOUND', error.message);
+  }
+
+  if (error instanceof ContainerAlreadyPlacedError) {
+    return new ApiError(409, 'CONTAINER_ALREADY_PLACED', error.message);
+  }
+
+  if (error instanceof PublishedLayoutNotFoundError) {
+    return new ApiError(409, 'PUBLISHED_LAYOUT_NOT_FOUND', error.message);
+  }
+
+  if (error instanceof ActivePlacementNotFoundError) {
+    return new ApiError(409, 'ACTIVE_PLACEMENT_NOT_FOUND', error.message);
+  }
+
+  if (error instanceof PlacementSourceMismatchError) {
+    return new ApiError(409, 'PLACEMENT_SOURCE_MISMATCH', error.message);
+  }
+
+  if (error instanceof TargetCellSameAsSourceError) {
+    return new ApiError(409, 'TARGET_CELL_SAME_AS_SOURCE', error.message);
+  }
+
+  if (error instanceof CrossFloorPlacementMoveNotAllowedError) {
+    return new ApiError(409, 'CROSS_FLOOR_MOVE_NOT_ALLOWED', error.message);
+  }
+
+  return null;
+}
+
+function isContainerTypeConstraintError(error: unknown) {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  const details = 'details' in error && typeof error.details === 'string' ? error.details : '';
+  const constraint = 'constraint' in error && typeof error.constraint === 'string' ? error.constraint : '';
+
+  return [message, details, constraint].some((value) =>
+    value.includes('container_type') || value.includes('containers_container_type_id_fkey')
+  );
+}
+
+async function containerTypeExists(supabase: SupabaseClient, containerTypeId: string) {
+  const { data, error } = await supabase
+    .from('container_types')
+    .select('id')
+    .eq('id', containerTypeId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data);
+}
+
+async function containerCodeExists(supabase: SupabaseClient, tenantId: string, externalCode: string) {
+  const { data, error } = await supabase
+    .from('containers')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('external_code', externalCode)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data);
+}
+
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -210,6 +313,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getAuthContext = options.getAuthContext ?? requireAuth;
   const getUserSupabase = options.getUserSupabase ?? getUserClient;
   const getHealthSupabase = options.getHealthSupabase ?? createAnonClient;
+  const getPlacementService =
+    options.getPlacementService ??
+    ((context: AuthenticatedRequestContext) => createPlacementCommandService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -353,6 +459,33 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(cellStorageSnapshotResponseSchema, (data ?? []).map(mapCellStorageSnapshotRowToDomain));
+  });
+
+  app.get('/api/floors/:floorId/published-cells', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const supabase = getUserSupabase(auth);
+    const publishedVersion = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
+
+    if (!publishedVersion) {
+      return parseOrThrow(cellsResponseSchema, []);
+    }
+
+    const { data, error } = await supabase
+      .from('cells')
+      .select('id,layout_version_id,rack_id,rack_face_id,rack_section_id,rack_level_id,slot_no,address,address_sort_key,cell_code,x,y,status')
+      .eq('layout_version_id', publishedVersion.id)
+      .order('address_sort_key', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(cellsResponseSchema, (data ?? []).map(mapCellRowToDomain));
   });
 
   /**
@@ -506,22 +639,49 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     const supabase = getUserSupabase(auth);
+    const typeExists = await containerTypeExists(supabase, body.containerTypeId);
+    if (!typeExists) {
+      throw new ApiError(400, 'INVALID_CONTAINER_TYPE', 'Container type was not found.');
+    }
+
+    const externalCodeExists = await containerCodeExists(
+      supabase,
+      auth.currentTenant.tenantId,
+      body.externalCode
+    );
+    if (externalCodeExists) {
+      throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
+    }
+
     const { data, error } = await supabase
       .from('containers')
       .insert({
         tenant_id: auth.currentTenant.tenantId,
         container_type_id: body.containerTypeId,
-        external_code: body.externalCode ?? null,
+        external_code: body.externalCode,
         created_by: auth.user.id
       })
       .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
       .single();
 
     if (error) {
+      if ('code' in error && error.code === '23505') {
+        throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
+      }
+
+      if ('code' in error && error.code === '23503' && isContainerTypeConstraintError(error)) {
+        throw new ApiError(400, 'INVALID_CONTAINER_TYPE', 'Container type was not found.');
+      }
+
       throw error;
     }
 
-    return parseOrThrow(containerResponseSchema, mapContainerRowToDomain(data));
+    return parseOrThrow(createContainerResponseSchema, {
+      containerId: data.id,
+      externalCode: data.external_code ?? '',
+      containerTypeId: data.container_type_id,
+      status: data.status
+    });
   });
 
   app.get('/api/sites/:siteId/floors', async (request, reply) => {
@@ -602,6 +762,97 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(removeContainerResponseSchema, data);
+  });
+
+  app.post('/api/placement/place', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
+    }
+
+    const body = parseOrThrow(placementPlaceBodySchema, request.body);
+    const service = getPlacementService(auth);
+
+    try {
+      const result: PlacementCommandResponse = await service.placeContainer({
+        tenantId: auth.currentTenant.tenantId,
+        containerId: body.containerId,
+        targetCellId: body.targetCellId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(placementCommandResponse, result);
+    } catch (error) {
+      const apiError = mapPlacementError(error);
+      if (apiError) {
+        throw apiError;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post('/api/placement/remove', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
+    }
+
+    const body = parseOrThrow(placementRemoveBodySchema, request.body);
+    const service = getPlacementService(auth);
+
+    try {
+      const result: PlacementCommandResponse = await service.removeContainer({
+        tenantId: auth.currentTenant.tenantId,
+        containerId: body.containerId,
+        fromCellId: body.fromCellId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(placementCommandResponse, result);
+    } catch (error) {
+      const apiError = mapPlacementError(error);
+      if (apiError) {
+        throw apiError;
+      }
+
+      throw error;
+    }
+  });
+
+  app.post('/api/placement/move', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
+    }
+
+    const body = parseOrThrow(placementMoveBodySchema, request.body);
+    const service = getPlacementService(auth);
+
+    try {
+      const result: PlacementCommandResponse = await service.moveContainer({
+        tenantId: auth.currentTenant.tenantId,
+        containerId: body.containerId,
+        fromCellId: body.fromCellId,
+        toCellId: body.toCellId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(placementCommandResponse, result);
+    } catch (error) {
+      const apiError = mapPlacementError(error);
+      if (apiError) {
+        throw apiError;
+      }
+
+      throw error;
+    }
   });
 
   app.post('/api/containers/:containerId/move', async (request, reply) => {

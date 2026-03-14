@@ -1,6 +1,11 @@
 import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
 import { create } from 'zustand';
-import type { EditorMode, EditorSelection, ViewMode } from './editor-types';
+import type {
+  EditorMode,
+  EditorSelection,
+  PlacementInteraction,
+  ViewMode
+} from './editor-types';
 import {
   checkMinimumDistance,
   alignRacksToLine,
@@ -13,6 +18,7 @@ type EditorStore = {
   editorMode: EditorMode;
   /** Canonical selection state. Use setSelection / clearSelection to mutate. */
   selection: EditorSelection;
+  placementInteraction: PlacementInteraction;
   hoveredRackId: string | null;
   /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
   creatingRackId: string | null;
@@ -33,7 +39,10 @@ type EditorStore = {
   /** Convenience wrapper — sets a cell-type selection, or clears if null. */
   setSelectedCellId: (cellId: string | null) => void;
   /** Convenience wrapper — sets a container-type selection, or clears if null. */
-  setSelectedContainerId: (containerId: string | null) => void;
+  setSelectedContainerId: (containerId: string | null, sourceCellId?: string | null) => void;
+  startPlacementMove: (containerId: string, fromCellId: string) => void;
+  setPlacementMoveTargetCellId: (cellId: string | null) => void;
+  cancelPlacementInteraction: () => void;
   setHoveredRackId: (rackId: string | null) => void;
   setCreatingRackId: (rackId: string | null) => void;
   setZoom: (zoom: number) => void;
@@ -69,6 +78,7 @@ const initialEditorState = {
   viewMode: 'layout' as ViewMode,
   editorMode: 'select' as EditorMode,
   selection: { type: 'none' } as EditorSelection,
+  placementInteraction: { type: 'idle' } as PlacementInteraction,
   hoveredRackId: null,
   creatingRackId: null,
   zoom: 1,
@@ -265,21 +275,61 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
 
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
-  setViewMode: (viewMode) => set({ viewMode, editorMode: 'select' }),
+  setViewMode: (viewMode) =>
+    set({
+      viewMode,
+      editorMode: 'select',
+      placementInteraction: { type: 'idle' }
+    }),
   setEditorMode: (editorMode) => set({ editorMode }),
-  setSelection: (selection) => set({ selection }),
-  clearSelection: () => set({ selection: { type: 'none' } }),
-  setSelectedRackIds: (rackIds) => set({ selection: makeRackSelection(rackIds) }),
-  setSelectedRackId: (rackId) => set({ selection: rackId ? { type: 'rack', rackIds: [rackId] } : { type: 'none' } }),
+  setSelection: (selection) => set({ selection, placementInteraction: { type: 'idle' } }),
+  clearSelection: () => set({ selection: { type: 'none' }, placementInteraction: { type: 'idle' } }),
+  setSelectedRackIds: (rackIds) =>
+    set({ selection: makeRackSelection(rackIds), placementInteraction: { type: 'idle' } }),
+  setSelectedRackId: (rackId) =>
+    set({
+      selection: rackId ? { type: 'rack', rackIds: [rackId] } : { type: 'none' },
+      placementInteraction: { type: 'idle' }
+    }),
   toggleRackSelection: (rackId) => set((state) => {
     const current = getSelectedRackIds(state.selection);
     const next = current.includes(rackId)
       ? current.filter(id => id !== rackId)
       : [...current, rackId];
-    return { selection: makeRackSelection(next) };
+    return {
+      selection: makeRackSelection(next),
+      placementInteraction: { type: 'idle' }
+    };
   }),
-  setSelectedCellId: (cellId) => set({ selection: cellId ? { type: 'cell', cellId } : { type: 'none' } }),
-  setSelectedContainerId: (containerId) => set({ selection: containerId ? { type: 'container', containerId } : { type: 'none' } }),
+  setSelectedCellId: (cellId) =>
+    set({
+      selection: cellId ? { type: 'cell', cellId } : { type: 'none' },
+      placementInteraction: { type: 'idle' }
+    }),
+  setSelectedContainerId: (containerId, sourceCellId = null) =>
+    set({
+      selection: containerId
+        ? { type: 'container', containerId, sourceCellId }
+        : { type: 'none' },
+      placementInteraction: { type: 'idle' }
+    }),
+  startPlacementMove: (containerId, fromCellId) =>
+    set({
+      placementInteraction: {
+        type: 'move-container',
+        containerId,
+        fromCellId,
+        targetCellId: null
+      }
+    }),
+  setPlacementMoveTargetCellId: (cellId) =>
+    set((state) => ({
+      placementInteraction:
+        state.placementInteraction.type === 'move-container'
+          ? { ...state.placementInteraction, targetCellId: cellId }
+          : state.placementInteraction
+    })),
+  cancelPlacementInteraction: () => set({ placementInteraction: { type: 'idle' } }),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setZoom: (zoom) => set({ zoom }),
@@ -289,6 +339,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       draft: null,
       draftSourceVersionId: null,
       selection: { type: 'none' },
+      placementInteraction: { type: 'idle' },
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,

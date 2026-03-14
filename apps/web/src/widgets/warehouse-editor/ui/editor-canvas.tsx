@@ -9,10 +9,12 @@ import {
   useDeleteRack,
   useDuplicateRack,
   useEditorMode,
+  usePlacementInteraction,
   useHoveredRackId,
   useIsLayoutEditable,
   useRotateRack,
   useSelectedCellId,
+  useSetPlacementMoveTargetCellId,
   useSelectedRackId,
   useSelectedRackIds,
   useSetCanvasZoom,
@@ -26,6 +28,8 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
+import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
+import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
   clampCanvasPosition,
   clampCanvasZoom,
@@ -145,9 +149,11 @@ export function EditorCanvas({
   const selectedRackIds = useSelectedRackIds();
   const selectedRackId = useSelectedRackId();
   const selectedCellId = useSelectedCellId();
+  const placementInteraction = usePlacementInteraction();
   const hoveredRackId = useHoveredRackId();
   const setSelectedRackIds = useSetSelectedRackIds();
   const setSelectedCellId = useSetSelectedCellId();
+  const setPlacementMoveTargetCellId = useSetPlacementMoveTargetCellId();
   const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const setCanvasZoom = useSetCanvasZoom();
@@ -157,7 +163,13 @@ export function EditorCanvas({
   const minRackDistance = useMinRackDistance();
 
   const isPlacementMode = viewMode === 'placement';
+  const moveTargetCellId =
+    placementInteraction.type === 'move-container' ? placementInteraction.targetCellId : null;
+  const isPlacementMoveMode = placementInteraction.type === 'move-container';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
+  const { data: publishedCells = [] } = usePublishedCells(
+    isPlacementMode ? workspace?.floorId ?? null : null
+  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -177,6 +189,10 @@ export function EditorCanvas({
   const racks = useMemo(
     () => (layoutDraft ? layoutDraft.rackIds.map((id) => layoutDraft.racks[id]) : []),
     [layoutDraft]
+  );
+  const publishedCellsByStructure = useMemo(
+    () => indexPublishedCellsByStructure(publishedCells),
+    [publishedCells]
   );
   const lod = getCanvasLOD(zoom);
 
@@ -358,6 +374,15 @@ export function EditorCanvas({
     updateRackPositionRef.current(rackId, x, y);
   };
 
+  const handlePlacementCellClick = (cellId: string) => {
+    if (placementInteraction.type === 'move-container') {
+      setPlacementMoveTargetCellId(cellId);
+      return;
+    }
+
+    setSelectedCellId(cellId);
+  };
+
   const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
 
   return (
@@ -392,6 +417,21 @@ export function EditorCanvas({
                   Esc
                 </kbd>{' '}
                 to cancel
+              </div>
+            </div>
+          )}
+
+          {isPlacementMoveMode && (
+            <div className="pointer-events-none absolute inset-x-0 top-16 z-20 flex items-center justify-center">
+              <div
+                className="rounded-xl px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+                style={{
+                  background: 'rgba(15,24,42,0.88)',
+                  color: '#e2e8f0',
+                  border: '1px solid rgba(14,165,233,0.4)'
+                }}
+              >
+                Move target selection active · Click a destination cell
               </div>
             </div>
           )}
@@ -524,9 +564,10 @@ export function EditorCanvas({
                           faceA={faceA}
                           faceB={geometry.isPaired ? faceB : null}
                           isSelected={isSelected}
+                          publishedCellsByStructure={publishedCellsByStructure}
                           isInteractive={isPlacementMode}
-                          selectedCellId={isPlacementMode ? selectedCellId : null}
-                          onCellClick={setSelectedCellId}
+                          selectedCellId={isPlacementMode ? moveTargetCellId ?? selectedCellId : null}
+                          onCellClick={handlePlacementCellClick}
                         />
                       )}
                     </Group>
