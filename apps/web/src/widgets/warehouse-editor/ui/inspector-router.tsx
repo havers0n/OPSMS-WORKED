@@ -6,6 +6,7 @@ import {
 } from '@/entities/layout-version/model/editor-selectors';
 import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wizard';
 import { RackInspector } from './rack-inspector';
+import { RackMultiInspector } from './rack-multi-inspector';
 import { LayoutEmptyPanel } from './mode-panels/layout-empty-panel';
 import { SemanticsModePanel } from './mode-panels/semantics-mode-panel';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
@@ -33,8 +34,9 @@ type InspectorRouterProps = {
  *
  * Current routing table:
  *   layout  + rack (creating) → RackCreationWizard
- *   layout  + rack (existing) → RackInspector (structural)
- *   layout  + none            → LayoutEmptyPanel
+ *   layout  + rack(1, existing) → RackInspector (structural)
+ *   layout  + rack(≥2)         → RackMultiInspector (spacing/alignment)
+ *   layout  + none             → LayoutEmptyPanel
  *   semantics                 → SemanticsModePanel (placeholder)
  *   placement                 → PlacementModePanel (placeholder)
  *   flow                      → FlowModePanel (placeholder)
@@ -59,6 +61,9 @@ export function InspectorRouter({ onClose, onAddRack }: InspectorRouterProps) {
 
     case 'rack-structure':
       return <RackInspector onClose={onClose} />;
+
+    case 'rack-multi':
+      return <RackMultiInspector onClose={onClose} />;
 
     case 'layout-empty':
       return <LayoutEmptyPanel onAddRack={onAddRack} />;

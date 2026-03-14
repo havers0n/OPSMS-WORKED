@@ -5,8 +5,9 @@
 import type { EditorSelection, ViewMode } from '../../../entities/layout-version/model/editor-types';
 
 export type InspectorKind =
-  | 'rack-creation-wizard'   // layout + rack being created
-  | 'rack-structure'         // layout + rack selected (existing)
+  | 'rack-creation-wizard'   // layout + single rack being created
+  | 'rack-structure'         // layout + single rack selected (existing)
+  | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'layout-empty'           // layout + nothing selected
   | 'semantics-placeholder'  // semantics mode (not yet implemented)
   | 'placement-placeholder'  // placement mode (not yet implemented)
@@ -15,6 +16,12 @@ export type InspectorKind =
 /**
  * Maps (viewMode, selection, creatingRackId) → InspectorKind.
  * This is the single source of truth for inspector routing decisions.
+ *
+ * Layout routing contract:
+ *   layout + none               → layout-empty
+ *   layout + rack(1) + creating → rack-creation-wizard
+ *   layout + rack(1)            → rack-structure
+ *   layout + rack(≥2)           → rack-multi
  */
 export function resolveInspectorKind(
   viewMode: ViewMode,
@@ -23,10 +30,9 @@ export function resolveInspectorKind(
 ): InspectorKind {
   if (viewMode === 'layout') {
     if (selection.type === 'rack') {
+      if (selection.rackIds.length >= 2) return 'rack-multi';
       const primaryId = selection.rackIds[0];
-      if (primaryId && primaryId === creatingRackId) {
-        return 'rack-creation-wizard';
-      }
+      if (primaryId && primaryId === creatingRackId) return 'rack-creation-wizard';
       return 'rack-structure';
     }
     return 'layout-empty';

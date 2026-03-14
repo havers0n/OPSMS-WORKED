@@ -8,9 +8,9 @@ import type { EditorSelection } from '../../../entities/layout-version/model/edi
 const noSelection: EditorSelection = { type: 'none' };
 const rackSelection = (ids: string[]): EditorSelection => ({ type: 'rack', rackIds: ids });
 
-// ─── layout mode ──────────────────────────────────────────────────────────────
+// ─── layout mode — single-rack ────────────────────────────────────────────────
 
-describe('resolveInspectorKind — layout mode', () => {
+describe('resolveInspectorKind — layout mode, single-rack', () => {
   it('returns rack-creation-wizard when the selected rack is the creating rack', () => {
     const id = 'rack-1';
     expect(resolveInspectorKind('layout', rackSelection([id]), id)).toBe('rack-creation-wizard');
@@ -20,10 +20,6 @@ describe('resolveInspectorKind — layout mode', () => {
     const id = 'rack-1';
     expect(resolveInspectorKind('layout', rackSelection([id]), null)).toBe('rack-structure');
     expect(resolveInspectorKind('layout', rackSelection([id]), 'rack-other')).toBe('rack-structure');
-  });
-
-  it('returns rack-structure for multi-rack selection (primary id not the creating rack)', () => {
-    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r3')).toBe('rack-structure');
   });
 
   it('returns layout-empty when nothing is selected', () => {
@@ -37,10 +33,27 @@ describe('resolveInspectorKind — layout mode', () => {
     expect(resolveInspectorKind('layout', cellSel, null)).toBe('layout-empty');
     expect(resolveInspectorKind('layout', containerSel, null)).toBe('layout-empty');
   });
+});
 
-  it('returns rack-creation-wizard only when primary rackId matches creatingRackId', () => {
-    // Multi-select: primary is r1, creating is r2 — should not trigger wizard
-    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r2')).toBe('rack-structure');
+// ─── layout mode — multi-rack ────────────────────────────────────────────────
+
+describe('resolveInspectorKind — layout mode, multi-rack', () => {
+  it('returns rack-multi for 2-rack selection', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), null)).toBe('rack-multi');
+  });
+
+  it('returns rack-multi for 3+ rack selection', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2', 'r3']), null)).toBe('rack-multi');
+  });
+
+  it('returns rack-multi even when creatingRackId matches one of the selected racks', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r1')).toBe('rack-multi');
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r2')).toBe('rack-multi');
+  });
+
+  it('returns rack-multi regardless of creatingRackId value', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r3')).toBe('rack-multi');
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), null)).toBe('rack-multi');
   });
 });
 
@@ -80,5 +93,9 @@ describe('resolveInspectorKind — invariants', () => {
 
   it('never returns rack-creation-wizard when creatingRackId is null', () => {
     expect(resolveInspectorKind('layout', rackSelection(['r1']), null)).toBe('rack-structure');
+  });
+
+  it('rack-multi takes precedence over rack-creation-wizard for multi-rack selection', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r1')).toBe('rack-multi');
   });
 });
