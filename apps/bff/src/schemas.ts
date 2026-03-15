@@ -34,7 +34,10 @@ import {
   orderLineSchema,
   pickTaskSchema,
   pickTaskSummarySchema,
-  pickStepSchema
+  pickStepSchema,
+  waveSchema,
+  waveSummarySchema,
+  waveStatusSchema
 } from '@wos/domain';
 
 export const createSiteBodySchema = z.object({
@@ -56,7 +59,7 @@ export const createContainerBodySchema = z.object({
 });
 
 export const addInventoryToContainerBodySchema = z.object({
-  sku: z.string().trim().min(1),
+  productId: z.string().uuid(),
   quantity: z.number().positive(),
   uom: z.string().trim().min(1)
 });
@@ -192,6 +195,13 @@ export const addInventoryToContainerResponseSchema = z.object({
 });
 export const productsResponseSchema = z.array(productSchema);
 export const productResponseSchema = productSchema;
+export const productCatalogResponseSchema = z.object({
+  items: z.array(productSchema),
+  total: z.number().int().min(0),
+  activeTotal: z.number().int().min(0),
+  limit: z.number().int().positive(),
+  offset: z.number().int().min(0)
+});
 export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerResponseSchema = moveContainerResultSchema;
@@ -206,12 +216,12 @@ export const publishResponseSchema = layoutPublishResultSchema;
 
 export const createOrderBodySchema = z.object({
   externalNumber: z.string().trim().min(1),
-  priority: z.number().int().min(0).optional().default(0)
+  priority: z.number().int().min(0).optional().default(0),
+  waveId: z.string().uuid().optional()
 });
 
 export const addOrderLineBodySchema = z.object({
-  sku: z.string().trim().min(1),
-  name: z.string().trim().min(1),
+  productId: z.string().uuid(),
   qtyRequired: z.number().int().positive()
 });
 
@@ -224,6 +234,25 @@ export const orderResponseSchema = orderSchema;
 export const orderLineResponseSchema = orderLineSchema;
 
 export { orderStatusSchema, orderSummarySchema, orderSchema, orderLineSchema };
+
+// Waves
+
+export const createWaveBodySchema = z.object({
+  name: z.string().trim().min(1)
+});
+
+export const transitionWaveStatusBodySchema = z.object({
+  status: waveStatusSchema
+});
+
+export const attachWaveOrderBodySchema = z.object({
+  orderId: z.string().uuid()
+});
+
+export const wavesResponseSchema = z.array(waveSummarySchema);
+export const waveResponseSchema = waveSchema;
+
+export { waveStatusSchema, waveSummarySchema, waveSchema };
 
 // ── Pick tasks ────────────────────────────────────────────────────────────────
 
