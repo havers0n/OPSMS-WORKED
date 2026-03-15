@@ -18,6 +18,8 @@ import {
   pickTaskSchema,
   pickTaskSummarySchema,
   pickStepSchema,
+  waveSchema,
+  waveSummarySchema,
   type CellStorageSnapshotRow,
   type CellOccupancyRow,
   type Cell,
@@ -35,6 +37,8 @@ import {
   type PickTask,
   type PickTaskSummary,
   type PickStep,
+  type Wave,
+  type WaveSummary,
   type Product
 } from '@wos/domain';
 
@@ -382,6 +386,7 @@ export function mapOrderLineRowToDomain(row: {
   id: string;
   order_id: string;
   tenant_id: string;
+  product_id: string | null;
   sku: string;
   name: string;
   qty_required: number;
@@ -392,6 +397,7 @@ export function mapOrderLineRowToDomain(row: {
     id: row.id,
     orderId: row.order_id,
     tenantId: row.tenant_id,
+    productId: row.product_id,
     sku: row.sku,
     name: row.name,
     qtyRequired: row.qty_required,
@@ -408,6 +414,7 @@ export function mapOrderRowToDomain(
     status: string;
     priority: number;
     wave_id: string | null;
+    wave_name: string | null;
     created_at: string;
     released_at: string | null;
     closed_at: string | null;
@@ -421,6 +428,7 @@ export function mapOrderRowToDomain(
     status: row.status,
     priority: row.priority,
     waveId: row.wave_id,
+    waveName: row.wave_name,
     createdAt: row.created_at,
     releasedAt: row.released_at,
     closedAt: row.closed_at,
@@ -435,6 +443,7 @@ export function mapOrderSummaryRowToDomain(row: {
   status: string;
   priority: number;
   wave_id: string | null;
+  wave_name: string | null;
   created_at: string;
   released_at: string | null;
   closed_at: string | null;
@@ -449,12 +458,69 @@ export function mapOrderSummaryRowToDomain(row: {
     status: row.status,
     priority: row.priority,
     waveId: row.wave_id,
+    waveName: row.wave_name,
     createdAt: row.created_at,
     releasedAt: row.released_at,
     closedAt: row.closed_at,
     lineCount: row.line_count,
     unitCount: row.unit_count,
     pickedUnitCount: row.picked_unit_count
+  });
+}
+
+export function mapWaveSummaryRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+  total_orders: number;
+  ready_orders: number;
+  blocking_order_count: number;
+}): WaveSummary {
+  return waveSummarySchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    status: row.status,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    closedAt: row.closed_at,
+    totalOrders: row.total_orders,
+    readyOrders: row.ready_orders,
+    blockingOrderCount: row.blocking_order_count
+  });
+}
+
+export function mapWaveRowToDomain(
+  row: {
+    id: string;
+    tenant_id: string;
+    name: string;
+    status: string;
+    created_at: string;
+    released_at: string | null;
+    closed_at: string | null;
+    total_orders: number;
+    ready_orders: number;
+    blocking_order_count: number;
+  },
+  orders: OrderSummary[]
+): Wave {
+  return waveSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    status: row.status,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    closedAt: row.closed_at,
+    totalOrders: row.total_orders,
+    readyOrders: row.ready_orders,
+    blockingOrderCount: row.blocking_order_count,
+    orders
   });
 }
 

@@ -53,14 +53,14 @@ export function isProblematicOrder(status: OrderStatus): boolean {
 /** UI badge label */
 export function getOrderStatusLabel(status: OrderStatus): string {
   switch (status) {
-    case 'draft':     return 'Черновик';
-    case 'ready':     return 'Готов';
-    case 'released':  return 'Выпущен';
-    case 'picking':   return 'В работе';
-    case 'picked':    return 'Собран';
-    case 'partial':   return 'Частично';
-    case 'closed':    return 'Закрыт';
-    case 'cancelled': return 'Отменён';
+    case 'draft':     return 'Draft';
+    case 'ready':     return 'Ready';
+    case 'released':  return 'Released';
+    case 'picking':   return 'In progress';
+    case 'picked':    return 'Picked';
+    case 'partial':   return 'Partial';
+    case 'closed':    return 'Closed';
+    case 'cancelled': return 'Cancelled';
   }
 }
 
@@ -90,6 +90,6 @@ export function getPrimaryTransitionTarget(status: OrderStatus): OrderStatus | n
 }
 
 export function getProgressLabel(order: OrderSummary): string {
-  if (order.unitCount === 0) return '—';
+  if (order.unitCount === 0) return '-';
   return `${order.pickedUnitCount} / ${order.unitCount}`;
 }

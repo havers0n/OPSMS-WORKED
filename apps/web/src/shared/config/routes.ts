@@ -3,5 +3,6 @@ export const routes = {
   warehouse: '/warehouse',
   products: '/products',
   operations: '/operations',
-  orders: '/orders'
+  orders: '/orders',
+  waves: '/waves'
 } as const;
