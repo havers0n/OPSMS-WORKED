@@ -2,6 +2,5 @@ export const routes = {
   login: '/login',
   warehouse: '/warehouse',
   products: '/products',
-  operations: '/operations',
-  orders: '/orders'
+  operations: '/operations'
 } as const;
