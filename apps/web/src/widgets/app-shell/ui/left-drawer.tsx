@@ -1,18 +1,40 @@
-import { BarChart3, LayoutGrid, Package, Waves, X, type LucideIcon } from 'lucide-react';
+import { BarChart3, Layers, LayoutGrid, Package, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
 
 type NavigationItem =
-  | { label: string; icon: typeof LayoutGrid; enabled: true; to: string }
-  | { label: string; icon: typeof LayoutGrid; enabled: false };
+  | { label: string; description: string; icon: typeof LayoutGrid; enabled: true; to: string }
+  | { label: string; description: string; icon: typeof LayoutGrid; enabled: false };
 
 const items: NavigationItem[] = [
-  { label: 'Warehouse', icon: LayoutGrid, to: routes.warehouse, enabled: true },
-  { label: 'Products', icon: Package, to: routes.products, enabled: true },
-  { label: 'Orders', icon: Package, to: routes.orders, enabled: true },
-  { label: 'Waves', icon: Waves, to: routes.waves, enabled: true },
-  { label: 'Analytics', icon: BarChart3, enabled: false }
+  {
+    label: 'Warehouse',
+    description: 'Floor plan editor',
+    icon: LayoutGrid,
+    to: routes.warehouse,
+    enabled: true
+  },
+  {
+    label: 'Products',
+    description: 'Product catalog',
+    icon: Package,
+    to: routes.products,
+    enabled: true
+  },
+  {
+    label: 'Operations',
+    description: 'Waves & orders',
+    icon: Layers,
+    to: routes.operations,
+    enabled: true
+  },
+  {
+    label: 'Analytics',
+    description: 'Coming soon',
+    icon: BarChart3,
+    enabled: false
+  }
 ];
 
 export function LeftDrawer() {
@@ -25,7 +47,9 @@ export function LeftDrawer() {
     <aside className="flex w-56 shrink-0 flex-col border-r border-slate-900/90 bg-slate-950 text-slate-200">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-4">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">WOS</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
+            WOS
+          </div>
           <div className="mt-0.5 text-sm font-semibold text-white">Warehouse Ops</div>
         </div>
         <button
@@ -54,7 +78,9 @@ export function LeftDrawer() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{item.label}</span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-500">Soon</span>
+                  <span className="mt-0.5 block truncate text-xs text-slate-500">
+                    {item.description}
+                  </span>
                 </span>
               </button>
             );
@@ -86,7 +112,7 @@ export function LeftDrawer() {
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">{item.label}</span>
                     <span className="mt-0.5 block truncate text-xs text-slate-500">
-                      {isActive ? 'Active' : 'Open'}
+                      {item.description}
                     </span>
                   </span>
                 </>
