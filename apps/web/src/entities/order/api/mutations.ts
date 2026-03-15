@@ -8,6 +8,7 @@ import { orderKeys } from './queries';
 type CreateOrderInput = {
   externalNumber: string;
   priority?: number;
+  waveId?: string;
 };
 
 async function createOrder(input: CreateOrderInput): Promise<Order> {
@@ -31,8 +32,7 @@ export function useCreateOrder() {
 
 type AddOrderLineInput = {
   orderId: string;
-  sku: string;
-  name: string;
+  productId: string;
   qtyRequired: number;
 };
 
@@ -48,6 +48,7 @@ export function useAddOrderLine(orderId: string) {
   return useMutation({
     mutationFn: (input: Omit<AddOrderLineInput, 'orderId'>) => addOrderLine({ orderId, ...input }),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
       void queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
     }
   });
@@ -64,6 +65,7 @@ export function useRemoveOrderLine(orderId: string) {
   return useMutation({
     mutationFn: (lineId: string) => removeOrderLine({ orderId, lineId }),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
       void queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
     }
   });
@@ -84,6 +86,7 @@ export function useTransitionOrderStatus() {
     mutationFn: transitionOrderStatus,
     onSuccess: (order) => {
       void queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      void queryClient.invalidateQueries({ queryKey: orderKeys.execution(order.id) });
       queryClient.setQueryData(orderKeys.detail(order.id), order);
     }
   });

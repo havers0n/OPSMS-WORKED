@@ -3,5 +3,11 @@ export const routes = {
   warehouse: '/warehouse',
   products: '/products',
   operations: '/operations',
-  orders: '/orders'
+  waveDetail: '/operations/waves/:id',
+  orders: '/orders',
+  waves: '/waves'
 } as const;
+
+export function waveDetailPath(id: string) {
+  return `/operations/waves/${id}`;
+}

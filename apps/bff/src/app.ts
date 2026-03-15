@@ -35,9 +35,11 @@ import {
   floorsResponseSchema,
   idResponseSchema,
   inventoryItemsResponseSchema,
+  inventoryItemResponseSchema,
   layoutDraftResponseSchema,
   layoutVersionIdResponseSchema,
   publishResponseSchema,
+  productCatalogResponseSchema,
   productResponseSchema,
   productsResponseSchema,
   publishedLayoutSummaryResponseSchema,
@@ -50,6 +52,12 @@ import {
   transitionOrderStatusBodySchema,
   ordersResponseSchema,
   orderResponseSchema,
+  orderLineResponseSchema,
+  createWaveBodySchema,
+  transitionWaveStatusBodySchema,
+  attachWaveOrderBodySchema,
+  wavesResponseSchema,
+  waveResponseSchema,
   pickTaskResponseSchema,
   pickTaskSummaryResponseSchema,
   pickTasksResponseSchema
@@ -71,6 +79,8 @@ import {
   mapOrderLineRowToDomain,
   mapOrderRowToDomain,
   mapOrderSummaryRowToDomain,
+  mapWaveRowToDomain,
+  mapWaveSummaryRowToDomain,
   mapPickStepRowToDomain,
   mapPickTaskRowToDomain,
   mapPickTaskSummaryRowToDomain
@@ -123,6 +133,15 @@ function getAllowedTransitions(currentStatus: string): string[] {
   }
 }
 
+function getAllowedWaveTransitions(currentStatus: string): string[] {
+  switch (currentStatus) {
+    case 'draft': return ['ready'];
+    case 'ready': return ['draft', 'released'];
+    case 'released': return ['closed'];
+    default: return [];
+  }
+}
+
 type LayoutVersionRow = {
   id: string;
   floor_id: string;
@@ -135,6 +154,204 @@ type FloorCellOccupancyRow = {
   cellId: string;
   containerCount: number;
 };
+
+type WaveRelation = { name: string } | Array<{ name: string }> | null | undefined;
+
+type OrderSummaryMetricsRow = {
+  id: string;
+  tenant_id: string;
+  external_number: string;
+  status: string;
+  priority: number;
+  wave_id: string | null;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+  waves?: WaveRelation;
+  order_lines?: Array<{ qty_required: number; qty_picked: number }>;
+};
+
+type OrderRow = {
+  id: string;
+  tenant_id: string;
+  external_number: string;
+  status: string;
+  priority: number;
+  wave_id: string | null;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+  waves?: WaveRelation;
+};
+
+type WaveRow = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+};
+
+const orderSummarySelectColumns = `
+  id,
+  tenant_id,
+  external_number,
+  status,
+  priority,
+  wave_id,
+  created_at,
+  released_at,
+  closed_at,
+  waves(name),
+  order_lines(qty_required, qty_picked)
+`;
+
+const orderSelectColumns = `
+  id,
+  tenant_id,
+  external_number,
+  status,
+  priority,
+  wave_id,
+  created_at,
+  released_at,
+  closed_at,
+  waves(name)
+`;
+
+const orderLineSelectColumns = 'id,order_id,tenant_id,product_id,sku,name,qty_required,qty_picked,status';
+const waveSelectColumns = 'id,tenant_id,name,status,created_at,released_at,closed_at';
+
+function getWaveNameFromRelation(relation: WaveRelation): string | null {
+  if (Array.isArray(relation)) {
+    return relation[0]?.name ?? null;
+  }
+
+  return relation?.name ?? null;
+}
+
+function mapOrderSummaryMetricsRow(row: OrderSummaryMetricsRow) {
+  const lines = row.order_lines ?? [];
+
+  return mapOrderSummaryRowToDomain({
+    id: row.id,
+    tenant_id: row.tenant_id,
+    external_number: row.external_number,
+    status: row.status,
+    priority: row.priority,
+    wave_id: row.wave_id,
+    wave_name: getWaveNameFromRelation(row.waves),
+    created_at: row.created_at,
+    released_at: row.released_at,
+    closed_at: row.closed_at,
+    line_count: lines.length,
+    unit_count: lines.reduce((sum, line) => sum + line.qty_required, 0),
+    picked_unit_count: lines.reduce((sum, line) => sum + line.qty_picked, 0)
+  });
+}
+
+function mapOrderRow(row: OrderRow, lines: ReturnType<typeof mapOrderLineRowToDomain>[]) {
+  return mapOrderRowToDomain(
+    {
+      id: row.id,
+      tenant_id: row.tenant_id,
+      external_number: row.external_number,
+      status: row.status,
+      priority: row.priority,
+      wave_id: row.wave_id,
+      wave_name: getWaveNameFromRelation(row.waves),
+      created_at: row.created_at,
+      released_at: row.released_at,
+      closed_at: row.closed_at
+    },
+    lines
+  );
+}
+
+function buildWaveCounts(orders: Array<{ status: string }>) {
+  const totalOrders = orders.length;
+  const readyOrders = orders.filter((order) => order.status === 'ready').length;
+  const blockingOrderCount = orders.filter((order) => order.status !== 'ready').length;
+
+  return {
+    totalOrders,
+    readyOrders,
+    blockingOrderCount
+  };
+}
+
+function mapWaveSummaryWithCounts(row: WaveRow & { orders?: Array<{ status: string }> }) {
+  const counts = buildWaveCounts(row.orders ?? []);
+
+  return mapWaveSummaryRowToDomain({
+    id: row.id,
+    tenant_id: row.tenant_id,
+    name: row.name,
+    status: row.status,
+    created_at: row.created_at,
+    released_at: row.released_at,
+    closed_at: row.closed_at,
+    total_orders: counts.totalOrders,
+    ready_orders: counts.readyOrders,
+    blocking_order_count: counts.blockingOrderCount
+  });
+}
+
+function mapWaveWithOrders(row: WaveRow, orders: ReturnType<typeof mapOrderSummaryMetricsRow>[]) {
+  const counts = buildWaveCounts(orders);
+
+  return mapWaveRowToDomain(
+    {
+      id: row.id,
+      tenant_id: row.tenant_id,
+      name: row.name,
+      status: row.status,
+      created_at: row.created_at,
+      released_at: row.released_at,
+      closed_at: row.closed_at,
+      total_orders: counts.totalOrders,
+      ready_orders: counts.readyOrders,
+      blocking_order_count: counts.blockingOrderCount
+    },
+    orders
+  );
+}
+
+function mapReleaseOrderRpcError(error: { message?: string } | null) {
+  const message = error?.message ?? 'ORDER_RELEASE_FAILED';
+
+  switch (message) {
+    case 'ORDER_NOT_FOUND':
+      return new ApiError(404, 'ORDER_NOT_FOUND', 'Order was not found.');
+    case 'ORDER_NOT_READY':
+      return new ApiError(409, 'INVALID_TRANSITION', 'Only ready orders can be released.');
+    case 'ORDER_HAS_NO_LINES':
+      return new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot release an order with no lines.');
+    case 'ORDER_ALREADY_RELEASED':
+      return new ApiError(409, 'ORDER_ALREADY_RELEASED', 'Order has already been released.');
+    default:
+      return error;
+  }
+}
+
+function mapReleaseWaveRpcError(error: { message?: string } | null) {
+  const message = error?.message ?? 'WAVE_RELEASE_FAILED';
+
+  switch (message) {
+    case 'WAVE_NOT_FOUND':
+      return new ApiError(404, 'WAVE_NOT_FOUND', 'Wave was not found.');
+    case 'WAVE_NOT_READY':
+      return new ApiError(409, 'INVALID_WAVE_TRANSITION', 'Only ready waves can be released.');
+    case 'WAVE_HAS_NO_ORDERS':
+      return new ApiError(409, 'WAVE_HAS_NO_ORDERS', 'Cannot release an empty wave.');
+    case 'WAVE_HAS_BLOCKING_ORDERS':
+      return new ApiError(409, 'WAVE_HAS_BLOCKING_ORDERS', 'All attached orders must be ready before wave release.');
+    default:
+      return error;
+  }
+}
 
 async function fetchProductById(supabase: SupabaseClient, productId: string) {
   const { data, error } = await supabase
@@ -155,13 +372,150 @@ async function fetchActiveProducts(supabase: SupabaseClient) {
     .from('products')
     .select(productSelectColumns)
     .eq('is_active', true)
-    .order('name', { ascending: true });
+    .order('name', { ascending: true })
+    .limit(20);
 
   if (error) {
     throw error;
   }
 
   return (data ?? []) as ProductRow[];
+}
+
+async function searchActiveProducts(supabase: SupabaseClient, query: string) {
+  const normalizedQuery = query.trim();
+
+  let request = supabase
+    .from('products')
+    .select(productSelectColumns)
+    .eq('is_active', true);
+
+  if (normalizedQuery.length > 0) {
+    request = request.or(
+      `name.ilike.%${normalizedQuery}%,sku.ilike.%${normalizedQuery}%,external_product_id.ilike.%${normalizedQuery}%`
+    );
+  }
+
+  const { data, error } = await request
+    .order('name', { ascending: true })
+    .limit(20);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as ProductRow[];
+}
+
+async function fetchProductCatalog(
+  supabase: SupabaseClient,
+  args: { query: string; limit: number; offset: number; activeOnly: boolean }
+) {
+  const normalizedQuery = args.query.trim();
+
+  let itemsRequest = supabase
+    .from('products')
+    .select(productSelectColumns);
+
+  let totalRequest = supabase
+    .from('products')
+    .select('id', { count: 'exact', head: true });
+
+  let activeTotalRequest = supabase
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_active', true);
+
+  if (args.activeOnly) {
+    itemsRequest = itemsRequest.eq('is_active', true);
+    totalRequest = totalRequest.eq('is_active', true);
+  }
+
+  if (normalizedQuery.length > 0) {
+    const expression = `name.ilike.%${normalizedQuery}%,sku.ilike.%${normalizedQuery}%,external_product_id.ilike.%${normalizedQuery}%`;
+    itemsRequest = itemsRequest.or(expression);
+    totalRequest = totalRequest.or(expression);
+    activeTotalRequest = activeTotalRequest.or(expression);
+  }
+
+  const [
+    { data: itemRows, error: itemsError },
+    { count: total, error: totalError },
+    { count: activeTotal, error: activeTotalError }
+  ] = await Promise.all([
+    itemsRequest
+        .order('name', { ascending: true })
+        .range(args.offset, args.offset + args.limit - 1),
+    totalRequest.limit(1),
+    activeTotalRequest.limit(1)
+  ]);
+
+  if (itemsError) throw itemsError;
+  if (totalError) throw totalError;
+  if (activeTotalError) throw activeTotalError;
+
+  return {
+    items: (itemRows ?? []) as ProductRow[],
+    total: total ?? 0,
+    activeTotal: activeTotal ?? 0,
+    limit: args.limit,
+    offset: args.offset
+  };
+}
+
+async function fetchOrderResponse(supabase: SupabaseClient, orderId: string) {
+  const { data: orderRow, error: orderError } = await supabase
+    .from('orders')
+    .select(orderSelectColumns)
+    .eq('id', orderId)
+    .single();
+
+  if (orderError || !orderRow) {
+    throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+  }
+
+  const { data: lineRows, error: linesError } = await supabase
+    .from('order_lines')
+    .select(orderLineSelectColumns)
+    .eq('order_id', orderId)
+    .order('id', { ascending: true });
+
+  if (linesError) {
+    throw linesError;
+  }
+
+  const lines = (lineRows ?? []).map(mapOrderLineRowToDomain);
+  return mapOrderRow(orderRow as OrderRow, lines);
+}
+
+async function fetchWaveRowById(supabase: SupabaseClient, waveId: string) {
+  const { data, error } = await supabase
+    .from('waves')
+    .select(waveSelectColumns)
+    .eq('id', waveId)
+    .single();
+
+  if (error || !data) {
+    throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
+  }
+
+  return data as WaveRow;
+}
+
+async function fetchWaveResponse(supabase: SupabaseClient, waveId: string) {
+  const waveRow = await fetchWaveRowById(supabase, waveId);
+  const { data: orderRows, error: ordersError } = await supabase
+    .from('orders')
+    .select(orderSummarySelectColumns)
+    .eq('wave_id', waveId)
+    .order('created_at', { ascending: true });
+
+  if (ordersError) {
+    throw ordersError;
+  }
+
+  const orders = ((orderRows ?? []) as OrderSummaryMetricsRow[]).map(mapOrderSummaryMetricsRow);
+  return mapWaveWithOrders(waveRow, orders);
 }
 
 async function fetchLatestLayoutVersionByState(
@@ -510,31 +864,54 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const queryParams = z
       .object({
+        query: z.string().trim().optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        activeOnly: z
+          .union([z.literal('true'), z.literal('false')])
+          .optional()
+      })
+      .parse(request.query);
+
+    const supabase = getUserSupabase(auth);
+    const catalog = await fetchProductCatalog(supabase, {
+      query: queryParams.query ?? '',
+      limit: queryParams.limit ?? 50,
+      offset: queryParams.offset ?? 0,
+      activeOnly: queryParams.activeOnly === 'true'
+    });
+
+    return parseOrThrow(
+      productCatalogResponseSchema,
+      {
+        items: catalog.items.map(mapProductRowToDomain),
+        total: catalog.total,
+        activeTotal: catalog.activeTotal,
+        limit: catalog.limit,
+        offset: catalog.offset
+      }
+    );
+  });
+
+  app.get('/api/products/search', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const queryParams = z
+      .object({
         query: z.string().trim().optional()
       })
       .parse(request.query);
 
     const supabase = getUserSupabase(auth);
-    const products = await fetchActiveProducts(supabase);
-    const normalizedQuery = queryParams.query?.toLocaleLowerCase() ?? '';
-    const filteredProducts =
-      normalizedQuery.length === 0
-        ? products
-        : products.filter((product) => {
-            const sku = product.sku?.toLocaleLowerCase() ?? '';
-            const externalProductId = product.external_product_id.toLocaleLowerCase();
-            const name = product.name.toLocaleLowerCase();
-
-            return (
-              name.includes(normalizedQuery) ||
-              sku.includes(normalizedQuery) ||
-              externalProductId.includes(normalizedQuery)
-            );
-          });
+    const products =
+      queryParams.query && queryParams.query.trim().length > 0
+        ? await searchActiveProducts(supabase, queryParams.query)
+        : await fetchActiveProducts(supabase);
 
     return parseOrThrow(
       productsResponseSchema,
-      filteredProducts.slice(0, 20).map(mapProductRowToDomain)
+      products.map(mapProductRowToDomain)
     );
   });
 
@@ -1135,6 +1512,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
     }
     const supabase = getUserSupabase(auth);
+    const { data: container, error: containerError } = await supabase
+      .from('containers')
+      .select('id,status')
+      .eq('tenant_id', auth.currentTenant.tenantId)
+      .eq('id', containerId)
+      .maybeSingle();
+
+    if (containerError) {
+      throw containerError;
+    }
+
+    if (!container) {
+      throw new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+    }
+
+    if (container.status !== 'active') {
+      throw new ApiError(409, 'CONTAINER_NOT_RECEIVABLE', 'Only active containers can receive inventory.');
+    }
+
     const product = await fetchProductById(supabase, body.productId);
 
     if (!product || !product.is_active) {
@@ -1325,18 +1721,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     let query = supabase
       .from('orders')
-      .select(`
-        id,
-        tenant_id,
-        external_number,
-        status,
-        priority,
-        wave_id,
-        created_at,
-        released_at,
-        closed_at,
-        order_lines(qty_required, qty_picked)
-      `)
+      .select(orderSummarySelectColumns)
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
@@ -1350,23 +1735,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw error;
     }
 
-    const summaries = (data ?? []).map((row) => {
-      const lines = (row.order_lines ?? []) as { qty_required: number; qty_picked: number }[];
-      return mapOrderSummaryRowToDomain({
-        id: row.id,
-        tenant_id: row.tenant_id,
-        external_number: row.external_number,
-        status: row.status,
-        priority: row.priority,
-        wave_id: row.wave_id,
-        created_at: row.created_at,
-        released_at: row.released_at,
-        closed_at: row.closed_at,
-        line_count: lines.length,
-        unit_count: lines.reduce((sum, l) => sum + l.qty_required, 0),
-        picked_unit_count: lines.reduce((sum, l) => sum + l.qty_picked, 0)
-      });
-    });
+    const summaries = ((data ?? []) as OrderSummaryMetricsRow[]).map(mapOrderSummaryMetricsRow);
 
     return parseOrThrow(ordersResponseSchema, summaries);
   });
@@ -1383,22 +1752,35 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const body = parseOrThrow(createOrderBodySchema, request.body);
     const supabase = getUserSupabase(auth);
 
+    if (body.waveId) {
+      const wave = await fetchWaveRowById(supabase, body.waveId);
+
+      if (wave.tenant_id !== tenantId) {
+        throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${body.waveId} not found.`);
+      }
+
+      if (wave.status !== 'draft' && wave.status !== 'ready') {
+        throw new ApiError(409, 'WAVE_NOT_EDITABLE', 'Orders can only be created inside draft or ready waves.');
+      }
+    }
+
     const { data, error } = await supabase
       .from('orders')
       .insert({
         tenant_id: tenantId,
         external_number: body.externalNumber,
         priority: body.priority,
+        wave_id: body.waveId ?? null,
         status: 'draft'
       })
-      .select('id,tenant_id,external_number,status,priority,wave_id,created_at,released_at,closed_at')
+      .select('id')
       .single();
 
     if (error) {
       throw error;
     }
 
-    return parseOrThrow(orderResponseSchema, mapOrderRowToDomain(data, []));
+    return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, data.id));
   });
 
   app.get('/api/orders/:orderId', async (request, reply) => {
@@ -1407,29 +1789,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
     const supabase = getUserSupabase(auth);
-
-    const { data: orderRow, error: orderError } = await supabase
-      .from('orders')
-      .select('id,tenant_id,external_number,status,priority,wave_id,created_at,released_at,closed_at')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderRow) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-    }
-
-    const { data: lineRows, error: linesError } = await supabase
-      .from('order_lines')
-      .select('id,order_id,tenant_id,sku,name,qty_required,qty_picked,status')
-      .eq('order_id', orderId)
-      .order('id', { ascending: true });
-
-    if (linesError) {
-      throw linesError;
-    }
-
-    const lines = (lineRows ?? []).map(mapOrderLineRowToDomain);
-    return parseOrThrow(orderResponseSchema, mapOrderRowToDomain(orderRow, lines));
+    return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, orderId));
   });
 
   app.post('/api/orders/:orderId/lines', async (request, reply) => {
@@ -1445,7 +1805,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const body = parseOrThrow(addOrderLineBodySchema, request.body);
     const supabase = getUserSupabase(auth);
 
-    // Guard: only editable in draft / ready
     const { data: orderRow, error: orderError } = await supabase
       .from('orders')
       .select('id,status')
@@ -1460,17 +1819,27 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot add lines to an order in status '${orderRow.status}'.`);
     }
 
+    const product = await fetchProductById(supabase, body.productId);
+    if (!product) {
+      throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
+    }
+
+    if (!product.is_active) {
+      throw new ApiError(409, 'PRODUCT_INACTIVE', 'Inactive products cannot be added to orders.');
+    }
+
     const { data, error } = await supabase
       .from('order_lines')
       .insert({
         order_id: orderId,
         tenant_id: tenantId,
-        sku: body.sku,
-        name: body.name,
+        product_id: product.id,
+        sku: product.sku ?? product.external_product_id,
+        name: product.name,
         qty_required: body.qtyRequired,
         status: 'pending'
       })
-      .select('id,order_id,tenant_id,sku,name,qty_required,qty_picked,status')
+      .select(orderLineSelectColumns)
       .single();
 
     if (error) {
@@ -1478,7 +1847,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     void reply.code(201);
-    return parseOrThrow(orderResponseSchema.shape.lines.element, mapOrderLineRowToDomain(data));
+    return parseOrThrow(orderLineResponseSchema, mapOrderLineRowToDomain(data));
   });
 
   app.delete('/api/orders/:orderId/lines/:lineId', async (request, reply) => {
@@ -1525,14 +1894,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
     }
 
-    const tenantId = auth.currentTenant.tenantId;
     const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
     const body = parseOrThrow(transitionOrderStatusBodySchema, request.body);
     const supabase = getUserSupabase(auth);
 
     const { data: orderRow, error: orderError } = await supabase
       .from('orders')
-      .select('id,status')
+      .select('id,status,wave_id')
       .eq('id', orderId)
       .single();
 
@@ -1546,69 +1914,50 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(409, 'INVALID_TRANSITION', `Cannot transition order from '${orderRow.status}' to '${body.status}'.`);
     }
 
-    // Real release flow: generate pick_task + pick_steps
-    if (body.status === 'released') {
-      const { data: lineRows, error: linesError } = await supabase
+    if (body.status === 'ready') {
+      const { count, error: linesError } = await supabase
         .from('order_lines')
-        .select('id,sku,name,qty_required')
+        .select('id', { count: 'exact', head: true })
         .eq('order_id', orderId);
 
-      if (linesError) throw linesError;
-
-      const lines = lineRows ?? [];
-      if (lines.length === 0) {
-        throw new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot release an order with no lines.');
+      if (linesError) {
+        throw linesError;
       }
 
-      // Create pick_task
-      const { data: taskRow, error: taskError } = await supabase
-        .from('pick_tasks')
-        .insert({ tenant_id: tenantId, source_type: 'order', source_id: orderId, status: 'ready' })
-        .select('id')
-        .single();
+      if (!count) {
+        throw new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot mark an order as ready until it has at least one line.');
+      }
+    }
 
-      if (taskError || !taskRow) throw taskError ?? new ApiError(500, 'TASK_CREATE_FAILED', 'Failed to create pick task.');
+    if (body.status === 'released') {
+      if (orderRow.wave_id) {
+        throw new ApiError(
+          409,
+          'ORDER_RELEASE_CONTROLLED_BY_WAVE',
+          'This order belongs to a wave. Release is controlled by the wave.'
+        );
+      }
 
-      // Create pick_steps from order_lines
-      const steps = lines.map((line, idx) => ({
-        task_id: taskRow.id,
-        tenant_id: tenantId,
-        order_id: orderId,
-        order_line_id: line.id,
-        sequence_no: idx + 1,
-        sku: line.sku,
-        item_name: line.name,
-        qty_required: line.qty_required,
-        status: 'pending'
-      }));
+      const { error } = await supabase.rpc('release_order', { order_uuid: orderId });
+      if (error) {
+        throw mapReleaseOrderRpcError(error as { message?: string });
+      }
 
-      const { error: stepsError } = await supabase.from('pick_steps').insert(steps);
-      if (stepsError) throw stepsError;
-
-      // Update order_lines to released
-      await supabase.from('order_lines').update({ status: 'released' }).eq('order_id', orderId);
+      return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, orderId));
     }
 
     const patch: Record<string, unknown> = { status: body.status };
-    if (body.status === 'released') patch.released_at = new Date().toISOString();
     if (body.status === 'closed' || body.status === 'cancelled') patch.closed_at = new Date().toISOString();
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('orders')
       .update(patch)
       .eq('id', orderId)
-      .select('id,tenant_id,external_number,status,priority,wave_id,created_at,released_at,closed_at')
+      .select('id')
       .single();
 
     if (error) throw error;
-
-    const { data: updatedLineRows } = await supabase
-      .from('order_lines')
-      .select('id,order_id,tenant_id,sku,name,qty_required,qty_picked,status')
-      .eq('order_id', orderId);
-
-    const lines = (updatedLineRows ?? []).map(mapOrderLineRowToDomain);
-    return parseOrThrow(orderResponseSchema, mapOrderRowToDomain(data, lines));
+    return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, orderId));
   });
 
   app.get('/api/orders/:orderId/execution', async (request, reply) => {
@@ -1656,6 +2005,218 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         exception_steps: exceptionSteps
       })
     ]);
+  });
+
+  app.get('/api/waves', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
+    }
+
+    const tenantId = auth.currentTenant.tenantId;
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('waves')
+      .select(`${waveSelectColumns},orders(status)`)
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(
+      wavesResponseSchema,
+      ((data ?? []) as Array<WaveRow & { orders?: Array<{ status: string }> }>).map(mapWaveSummaryWithCounts)
+    );
+  });
+
+  app.post('/api/waves', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
+    }
+
+    const tenantId = auth.currentTenant.tenantId;
+    const body = parseOrThrow(createWaveBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const { data, error } = await supabase
+      .from('waves')
+      .insert({
+        tenant_id: tenantId,
+        name: body.name,
+        status: 'draft'
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, data.id));
+  });
+
+  app.get('/api/waves/:waveId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
+    const supabase = getUserSupabase(auth);
+    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+  });
+
+  app.patch('/api/waves/:waveId/status', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
+    const body = parseOrThrow(transitionWaveStatusBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const wave = await fetchWaveResponse(supabase, waveId);
+    const allowed = getAllowedWaveTransitions(wave.status);
+
+    if (!allowed.includes(body.status)) {
+      throw new ApiError(409, 'INVALID_WAVE_TRANSITION', `Cannot transition wave from '${wave.status}' to '${body.status}'.`);
+    }
+
+    if (body.status === 'ready' && wave.totalOrders === 0) {
+      throw new ApiError(409, 'WAVE_HAS_NO_ORDERS', 'Cannot mark an empty wave as ready.');
+    }
+
+    if (body.status === 'released') {
+      if (wave.totalOrders === 0) {
+        throw new ApiError(409, 'WAVE_HAS_NO_ORDERS', 'Cannot release an empty wave.');
+      }
+
+      if (wave.blockingOrderCount > 0) {
+        throw new ApiError(409, 'WAVE_HAS_BLOCKING_ORDERS', 'All attached orders must be ready before wave release.');
+      }
+
+      const { error } = await supabase.rpc('release_wave', { wave_uuid: waveId });
+      if (error) {
+        throw mapReleaseWaveRpcError(error as { message?: string });
+      }
+
+      return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+    }
+
+    const patch: Record<string, unknown> = { status: body.status };
+    if (body.status === 'closed') {
+      patch.closed_at = new Date().toISOString();
+    }
+
+    const { error } = await supabase
+      .from('waves')
+      .update(patch)
+      .eq('id', waveId)
+      .select('id')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+  });
+
+  app.post('/api/waves/:waveId/orders', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
+    const body = parseOrThrow(attachWaveOrderBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const wave = await fetchWaveRowById(supabase, waveId);
+
+    if (wave.status !== 'draft' && wave.status !== 'ready') {
+      throw new ApiError(409, 'WAVE_MEMBERSHIP_LOCKED', 'Released waves have immutable membership.');
+    }
+
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .select('id,status,wave_id')
+      .eq('id', body.orderId)
+      .single();
+
+    if (orderError || !orderRow) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${body.orderId} not found.`);
+    }
+
+    if (orderRow.wave_id === waveId) {
+      throw new ApiError(409, 'ORDER_ALREADY_IN_WAVE', 'Order is already attached to this wave.');
+    }
+
+    if (orderRow.wave_id) {
+      throw new ApiError(409, 'ORDER_ALREADY_IN_WAVE', 'Order already belongs to another wave.');
+    }
+
+    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
+      throw new ApiError(409, 'ORDER_NOT_ATTACHABLE', 'Only draft or ready orders can be attached to a wave.');
+    }
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ wave_id: waveId })
+      .eq('id', body.orderId)
+      .select('id')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+  });
+
+  app.delete('/api/waves/:waveId/orders/:orderId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const params = request.params as { waveId: string; orderId: string };
+    const waveId = parseOrThrow(idResponseSchema, { id: params.waveId }).id;
+    const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
+    const supabase = getUserSupabase(auth);
+    const wave = await fetchWaveRowById(supabase, waveId);
+
+    if (wave.status !== 'draft' && wave.status !== 'ready') {
+      throw new ApiError(409, 'WAVE_MEMBERSHIP_LOCKED', 'Released waves have immutable membership.');
+    }
+
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .select('id,status,wave_id')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !orderRow) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+    }
+
+    if (orderRow.wave_id !== waveId) {
+      throw new ApiError(409, 'ORDER_NOT_IN_WAVE', 'Order is not attached to this wave.');
+    }
+
+    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
+      throw new ApiError(409, 'ORDER_NOT_DETACHABLE', 'Only draft or ready orders can be detached from a wave.');
+    }
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ wave_id: null })
+      .eq('id', orderId)
+      .select('id')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
   });
 
   app.setErrorHandler((error, request, reply) => {

@@ -26,7 +26,6 @@ import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/
 import { useAddInventoryItem } from '@/features/inventory-add/model/use-add-inventory-item';
 import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
 import { useRemoveContainer } from '@/features/placement-actions/model/use-remove-container';
-import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -128,12 +127,8 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     selectedProduct ??
     productResults.find((product) => product.id === selectedProductId) ??
     null;
+  const isInventoryReceivable = canReceiveInventory(identity?.containerStatus);
   const removeContainer = useRemoveContainer({
-    floorId: workspace?.floorId ?? null,
-    sourceCellId,
-    containerId
-  });
-  const addInventoryToContainer = useAddInventoryToContainer({
     floorId: workspace?.floorId ?? null,
     sourceCellId,
     containerId
@@ -246,6 +241,12 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     }
   };
 
+  const handleToggleAddInventory = () => {
+    setInventoryError(null);
+    setIsRemoveConfirmOpen(false);
+    setIsAddInventoryOpen((current) => !current);
+  };
+
   return (
     <aside className="flex h-full w-full flex-col" style={{ background: 'var(--surface-primary)' }}>
       <div className="border-b border-[var(--border-muted)] px-5 py-4">
@@ -267,7 +268,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
         <div className="mt-1 flex items-center gap-2">
           <Box className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
           <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">
-            {identity?.externalCode ?? containerId ?? 'вЂ”'}
+            {identity?.externalCode ?? containerId ?? '-'}
           </span>
         </div>
         {identity && (
@@ -292,11 +293,10 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                 isMoveMode ||
                 removeContainer.isPending ||
                 moveContainer.isPending ||
-                addInventoryToContainer.isPending ||
                 !isInventoryReceivable
               }
             >
-              {addInventoryToContainer.isPending
+              {addInventoryItem.isPending
                 ? 'Adding inventory...'
                 : isAddInventoryOpen
                   ? 'Cancel inventory'
@@ -333,7 +333,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                 setIsAddInventoryOpen(false);
                 setIsRemoveConfirmOpen((current) => !current);
               }}
-              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending || addInventoryToContainer.isPending}
+              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending || addInventoryItem.isPending}
             >
               {removeContainer.isPending ? 'Removing...' : 'Remove from cell'}
             </button>
@@ -615,81 +615,6 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                   setRemoveError(null);
                 }}
                 disabled={removeContainer.isPending}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isAddInventoryOpen && identity && (
-          <div
-            className="rounded-lg p-3"
-            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent)]">
-              Add inventory
-            </p>
-            <div className="mt-3 grid gap-3">
-              <label className="grid gap-1">
-                <span className="text-[11px] font-medium text-[var(--text-primary)]">SKU / item reference</span>
-                <input
-                  value={skuInput}
-                  onChange={(event) => setSkuInput(event.target.value)}
-                  placeholder="CAMP-CHAIR-01"
-                  className="rounded-md border px-3 py-2 text-sm outline-none"
-                  style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                  disabled={addInventoryToContainer.isPending}
-                />
-              </label>
-              <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
-                <label className="grid gap-1">
-                  <span className="text-[11px] font-medium text-[var(--text-primary)]">Quantity</span>
-                  <input
-                    value={quantityInput}
-                    onChange={(event) => setQuantityInput(event.target.value)}
-                    inputMode="decimal"
-                    placeholder="12"
-                    className="rounded-md border px-3 py-2 text-sm outline-none"
-                    style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                    disabled={addInventoryToContainer.isPending}
-                  />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-[11px] font-medium text-[var(--text-primary)]">UOM</span>
-                  <input
-                    value={uomInput}
-                    onChange={(event) => setUomInput(event.target.value)}
-                    placeholder="ea"
-                    className="rounded-md border px-3 py-2 text-sm outline-none"
-                    style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                    disabled={addInventoryToContainer.isPending}
-                  />
-                </label>
-              </div>
-            </div>
-
-            {addInventoryError && <p className="mt-3 text-xs text-red-500">{addInventoryError}</p>}
-
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: 'var(--accent)' }}
-                onClick={() => void handleAddInventory()}
-                disabled={addInventoryToContainer.isPending}
-              >
-                {addInventoryToContainer.isPending ? 'Saving...' : 'Confirm add'}
-              </button>
-              <button
-                type="button"
-                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
-                style={{ borderColor: 'var(--border-muted)' }}
-                onClick={() => {
-                  setIsAddInventoryOpen(false);
-                  setAddInventoryError(null);
-                }}
-                disabled={addInventoryToContainer.isPending}
               >
                 Cancel
               </button>
