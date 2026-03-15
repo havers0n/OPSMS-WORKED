@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/app/router/protected-route';
 import { LoginPage } from '@/pages/login/ui/login-page';
 import { OperationsPage } from '@/pages/operations/ui/operations-page';
 import { ProductsPage } from '@/pages/products/ui/products-page';
+import { WaveDetailPage } from '@/pages/wave-detail/ui/wave-detail-page';
 import { WarehouseSetupPage } from '@/pages/warehouse-setup/ui/warehouse-setup-page';
 import { routes } from '@/shared/config/routes';
 
@@ -22,6 +23,7 @@ export function AppRouter() {
           <Route path={routes.warehouse} element={<WarehouseSetupPage />} />
           <Route path={routes.products} element={<ProductsPage />} />
           <Route path={routes.operations} element={<OperationsPage />} />
+          <Route path={routes.waveDetail} element={<WaveDetailPage />} />
           {/* Legacy redirects */}
           <Route path={routes.orders} element={<Navigate to={routes.operations} replace />} />
           <Route path={routes.waves} element={<Navigate to={routes.operations} replace />} />
