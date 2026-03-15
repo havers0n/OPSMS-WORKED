@@ -154,10 +154,12 @@ function WaveOrderCard({ order, waveId }: { order: OrderSummary; waveId: string 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       {/* Card header */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-4 p-4 text-left transition hover:bg-slate-50"
+        onKeyDown={(e) => e.key === 'Enter' || e.key === ' ' ? setExpanded((v) => !v) : undefined}
+        className="flex w-full cursor-pointer items-center gap-4 p-4 text-left transition hover:bg-slate-50"
       >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -204,7 +206,7 @@ function WaveOrderCard({ order, waveId }: { order: OrderSummary; waveId: string 
             Remove
           </button>
         </div>
-      </button>
+      </div>
 
       {/* Expanded: inline order detail */}
       {expanded && (
