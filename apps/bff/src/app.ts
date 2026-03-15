@@ -42,7 +42,15 @@ import {
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
   sitesResponseSchema,
-  validationResponseSchema
+  validationResponseSchema,
+  createOrderBodySchema,
+  addOrderLineBodySchema,
+  transitionOrderStatusBodySchema,
+  ordersResponseSchema,
+  orderResponseSchema,
+  pickTaskResponseSchema,
+  pickTaskSummaryResponseSchema,
+  pickTasksResponseSchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
@@ -56,7 +64,13 @@ import {
   mapInventoryItemRowToDomain,
   mapLayoutDraftBundleToDomain,
   mapSiteRowToDomain,
-  mapValidationResult
+  mapValidationResult,
+  mapOrderLineRowToDomain,
+  mapOrderRowToDomain,
+  mapOrderSummaryRowToDomain,
+  mapPickStepRowToDomain,
+  mapPickTaskRowToDomain,
+  mapPickTaskSummaryRowToDomain
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
 import {
@@ -86,6 +100,18 @@ type BuildAppOptions = {
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
+}
+
+function getAllowedTransitions(currentStatus: string): string[] {
+  switch (currentStatus) {
+    case 'draft':     return ['ready', 'cancelled'];
+    case 'ready':     return ['draft', 'released', 'cancelled'];
+    case 'released':  return ['picking', 'cancelled'];
+    case 'picking':   return ['picked', 'partial'];
+    case 'picked':    return ['closed'];
+    case 'partial':   return ['closed'];
+    default:          return [];
+  }
 }
 
 type LayoutVersionRow = {
@@ -1154,6 +1180,355 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return parseOrThrow(publishResponseSchema, data);
+  });
+
+  // ── Orders ───────────────────────────────────────────────────────────────────
+
+  app.get('/api/orders', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
+    }
+
+    const tenantId = auth.currentTenant.tenantId;
+    const statusFilter = (request.query as { status?: string }).status ?? null;
+    const supabase = getUserSupabase(auth);
+
+    let query = supabase
+      .from('orders')
+      .select(`
+        id,
+        tenant_id,
+        external_number,
+        status,
+        priority,
+        wave_id,
+        created_at,
+        released_at,
+        closed_at,
+        order_lines(qty_required, qty_picked)
+      `)
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
+    if (statusFilter) {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const summaries = (data ?? []).map((row) => {
+      const lines = (row.order_lines ?? []) as { qty_required: number; qty_picked: number }[];
+      return mapOrderSummaryRowToDomain({
+        id: row.id,
+        tenant_id: row.tenant_id,
+        external_number: row.external_number,
+        status: row.status,
+        priority: row.priority,
+        wave_id: row.wave_id,
+        created_at: row.created_at,
+        released_at: row.released_at,
+        closed_at: row.closed_at,
+        line_count: lines.length,
+        unit_count: lines.reduce((sum, l) => sum + l.qty_required, 0),
+        picked_unit_count: lines.reduce((sum, l) => sum + l.qty_picked, 0)
+      });
+    });
+
+    return parseOrThrow(ordersResponseSchema, summaries);
+  });
+
+  app.post('/api/orders', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
+    }
+
+    const tenantId = auth.currentTenant.tenantId;
+    const body = parseOrThrow(createOrderBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+
+    const { data, error } = await supabase
+      .from('orders')
+      .insert({
+        tenant_id: tenantId,
+        external_number: body.externalNumber,
+        priority: body.priority,
+        status: 'draft'
+      })
+      .select('id,tenant_id,external_number,status,priority,wave_id,created_at,released_at,closed_at')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return parseOrThrow(orderResponseSchema, mapOrderRowToDomain(data, []));
+  });
+
+  app.get('/api/orders/:orderId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
+    const supabase = getUserSupabase(auth);
+
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .select('id,tenant_id,external_number,status,priority,wave_id,created_at,released_at,closed_at')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !orderRow) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+    }
+
+    const { data: lineRows, error: linesError } = await supabase
+      .from('order_lines')
+      .select('id,order_id,tenant_id,sku,name,qty_required,qty_picked,status')
+      .eq('order_id', orderId)
+      .order('id', { ascending: true });
+
+    if (linesError) {
+      throw linesError;
+    }
+
+    const lines = (lineRows ?? []).map(mapOrderLineRowToDomain);
+    return parseOrThrow(orderResponseSchema, mapOrderRowToDomain(orderRow, lines));
+  });
+
+  app.post('/api/orders/:orderId/lines', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
+    }
+
+    const tenantId = auth.currentTenant.tenantId;
+    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
+    const body = parseOrThrow(addOrderLineBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+
+    // Guard: only editable in draft / ready
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .select('id,status')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !orderRow) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+    }
+
+    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
+      throw new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot add lines to an order in status '${orderRow.status}'.`);
+    }
+
+    const { data, error } = await supabase
+      .from('order_lines')
+      .insert({
+        order_id: orderId,
+        tenant_id: tenantId,
+        sku: body.sku,
+        name: body.name,
+        qty_required: body.qtyRequired,
+        status: 'pending'
+      })
+      .select('id,order_id,tenant_id,sku,name,qty_required,qty_picked,status')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    void reply.code(201);
+    return parseOrThrow(orderResponseSchema.shape.lines.element, mapOrderLineRowToDomain(data));
+  });
+
+  app.delete('/api/orders/:orderId/lines/:lineId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const params = request.params as { orderId: string; lineId: string };
+    const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
+    const lineId = parseOrThrow(idResponseSchema, { id: params.lineId }).id;
+    const supabase = getUserSupabase(auth);
+
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .select('id,status')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !orderRow) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+    }
+
+    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
+      throw new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot remove lines from an order in status '${orderRow.status}'.`);
+    }
+
+    const { error } = await supabase
+      .from('order_lines')
+      .delete()
+      .eq('id', lineId)
+      .eq('order_id', orderId);
+
+    if (error) {
+      throw error;
+    }
+
+    void reply.code(204);
+  });
+
+  app.patch('/api/orders/:orderId/status', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
+    }
+
+    const tenantId = auth.currentTenant.tenantId;
+    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
+    const body = parseOrThrow(transitionOrderStatusBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .select('id,status')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError || !orderRow) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+    }
+
+    // Validate transition
+    const allowed = getAllowedTransitions(orderRow.status);
+    if (!allowed.includes(body.status)) {
+      throw new ApiError(409, 'INVALID_TRANSITION', `Cannot transition order from '${orderRow.status}' to '${body.status}'.`);
+    }
+
+    // Real release flow: generate pick_task + pick_steps
+    if (body.status === 'released') {
+      const { data: lineRows, error: linesError } = await supabase
+        .from('order_lines')
+        .select('id,sku,name,qty_required')
+        .eq('order_id', orderId);
+
+      if (linesError) throw linesError;
+
+      const lines = lineRows ?? [];
+      if (lines.length === 0) {
+        throw new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot release an order with no lines.');
+      }
+
+      // Create pick_task
+      const { data: taskRow, error: taskError } = await supabase
+        .from('pick_tasks')
+        .insert({ tenant_id: tenantId, source_type: 'order', source_id: orderId, status: 'ready' })
+        .select('id')
+        .single();
+
+      if (taskError || !taskRow) throw taskError ?? new ApiError(500, 'TASK_CREATE_FAILED', 'Failed to create pick task.');
+
+      // Create pick_steps from order_lines
+      const steps = lines.map((line, idx) => ({
+        task_id: taskRow.id,
+        tenant_id: tenantId,
+        order_id: orderId,
+        order_line_id: line.id,
+        sequence_no: idx + 1,
+        sku: line.sku,
+        item_name: line.name,
+        qty_required: line.qty_required,
+        status: 'pending'
+      }));
+
+      const { error: stepsError } = await supabase.from('pick_steps').insert(steps);
+      if (stepsError) throw stepsError;
+
+      // Update order_lines to released
+      await supabase.from('order_lines').update({ status: 'released' }).eq('order_id', orderId);
+    }
+
+    const patch: Record<string, unknown> = { status: body.status };
+    if (body.status === 'released') patch.released_at = new Date().toISOString();
+    if (body.status === 'closed' || body.status === 'cancelled') patch.closed_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('orders')
+      .update(patch)
+      .eq('id', orderId)
+      .select('id,tenant_id,external_number,status,priority,wave_id,created_at,released_at,closed_at')
+      .single();
+
+    if (error) throw error;
+
+    const { data: updatedLineRows } = await supabase
+      .from('order_lines')
+      .select('id,order_id,tenant_id,sku,name,qty_required,qty_picked,status')
+      .eq('order_id', orderId);
+
+    const lines = (updatedLineRows ?? []).map(mapOrderLineRowToDomain);
+    return parseOrThrow(orderResponseSchema, mapOrderRowToDomain(data, lines));
+  });
+
+  app.get('/api/orders/:orderId/execution', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
+    const supabase = getUserSupabase(auth);
+
+    // Find pick task for this order
+    const { data: taskRows, error: taskError } = await supabase
+      .from('pick_tasks')
+      .select('id,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at')
+      .eq('source_type', 'order')
+      .eq('source_id', orderId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (taskError) throw taskError;
+
+    if (!taskRows || taskRows.length === 0) {
+      return parseOrThrow(pickTasksResponseSchema, []);
+    }
+
+    const taskRow = taskRows[0];
+
+    // Aggregate step counts
+    const { data: stepRows, error: stepsError } = await supabase
+      .from('pick_steps')
+      .select('id,status')
+      .eq('task_id', taskRow.id);
+
+    if (stepsError) throw stepsError;
+
+    const steps = stepRows ?? [];
+    const totalSteps = steps.length;
+    const completedSteps = steps.filter((s) => s.status === 'picked').length;
+    const exceptionSteps = steps.filter((s) => s.status === 'skipped' || s.status === 'exception' || s.status === 'partial').length;
+
+    return parseOrThrow(pickTasksResponseSchema, [
+      mapPickTaskSummaryRowToDomain({
+        ...taskRow,
+        total_steps: totalSteps,
+        completed_steps: completedSteps,
+        exception_steps: exceptionSteps
+      })
+    ]);
   });
 
   app.setErrorHandler((error, request, reply) => {
