@@ -2,14 +2,12 @@ import {
   CheckCircle2,
   ChevronRight,
   FilePlus2,
-  LogOut,
   Redo2,
   Save,
   SearchCheck,
   Undo2
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useAuth } from '@/app/providers/auth-provider';
 import {
   useActiveFloorId,
   useActiveSiteId,
@@ -35,8 +33,6 @@ import { useLayoutValidation } from '@/features/layout-validate/model/use-layout
 import { BffRequestError } from '@/shared/api/bff/client';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
 
-// All modes are enterable. Non-layout modes show truthful placeholder panels
-// via InspectorRouter until their domain models are implemented.
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'layout', label: 'Layout' },
   { id: 'semantics', label: 'Semantics' },
@@ -46,7 +42,6 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
 
 export function TopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const { user, memberships, currentTenantId, signOut } = useAuth();
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
@@ -80,7 +75,6 @@ export function TopBar() {
     saveDraft.isPending ||
     validateLayout.isPending ||
     publishLayout.isPending;
-  const currentMembership = memberships.find((membership) => membership.tenantId === currentTenantId) ?? memberships[0] ?? null;
 
   const issueSummary = useMemo(() => {
     if (!layoutDraft && latestPublished) return 'Published · read-only';
@@ -131,21 +125,22 @@ export function TopBar() {
       if (error instanceof BffRequestError && error.message.includes('failed validation')) {
         try {
           const validation = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
-          const firstError = validation.issues.find((issue) => issue.severity === 'error') ?? validation.issues[0];
+          const firstError =
+            validation.issues.find((issue) => issue.severity === 'error') ?? validation.issues[0];
           setStatusMessage(firstError ? firstError.message : `${validation.issues.length} issue(s)`);
           return;
         } catch {
           // Fall through to the original publish error if validation lookup fails.
         }
       }
-
       setStatusMessage(error instanceof Error ? error.message : 'Publish failed');
     }
   };
 
   const handleSiteChange = (nextSiteId: string) => {
     if (nextSiteId === activeSiteId) return;
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?'))) return;
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?')))
+      return;
     resetDraft();
     setActiveSiteId(nextSiteId || null);
     setStatusMessage(null);
@@ -153,7 +148,8 @@ export function TopBar() {
 
   const handleFloorChange = (nextFloorId: string) => {
     if (nextFloorId === activeFloorId) return;
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?'))) return;
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?')))
+      return;
     resetDraft();
     setActiveFloorId(nextFloorId || null);
     setStatusMessage(null);
@@ -167,20 +163,9 @@ export function TopBar() {
       className="flex h-11 shrink-0 items-center gap-0 border-b"
       style={{
         borderColor: 'var(--border-strong)',
-        background: 'var(--surface-primary)',
-        backdropFilter: 'blur(8px)'
+        background: 'var(--surface-primary)'
       }}
     >
-      {/* ── Logo ──────────────────────────────────────────── */}
-      <div
-        className="flex h-full w-11 shrink-0 items-center justify-center border-r"
-        style={{ borderColor: 'var(--border-muted)' }}
-      >
-        <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
-          W
-        </span>
-      </div>
-
       {/* ── Breadcrumb: Site / Floor ───────────────────────── */}
       <div
         className="flex h-full items-center gap-1 border-r px-3"
@@ -227,7 +212,7 @@ export function TopBar() {
                 ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
                 : !isLayoutEditable
                   ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
-                : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
+                  : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
             }
           >
             {isDraftDirty ? 'Unsaved' : !isLayoutEditable ? 'Published' : 'Synced'}
@@ -353,25 +338,6 @@ export function TopBar() {
           <CheckCircle2 className="h-3.5 w-3.5" />
           Publish
         </button>
-
-        <div className="mx-1.5 h-5 w-px bg-slate-200" />
-
-        <div className="hidden items-center gap-2 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 shadow-sm xl:flex">
-          <div className="text-right">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {currentMembership?.role ?? 'user'}
-            </div>
-            <div className="text-xs text-slate-700">{user?.email ?? 'unknown user'}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Sign Out
-          </button>
-        </div>
       </div>
     </header>
   );
