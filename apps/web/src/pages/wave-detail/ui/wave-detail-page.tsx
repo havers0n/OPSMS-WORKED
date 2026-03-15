@@ -238,7 +238,7 @@ export function WaveDetailPage() {
   const action = getWaveNextAction(wave.status, wave.totalOrders, wave.blockingOrderCount);
 
   return (
-    <div className="flex h-full flex-col overflow-auto">
+    <div className="flex h-full w-full flex-col overflow-auto">
       <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
 
         {/* ── Back link ───────────────────────────────────────── */}
