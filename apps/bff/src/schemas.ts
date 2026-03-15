@@ -26,7 +26,14 @@ import {
   rackFaceSideSchema,
   rackKindSchema,
   siteSchema,
-  slotNumberingDirectionSchema
+  slotNumberingDirectionSchema,
+  orderSchema,
+  orderSummarySchema,
+  orderStatusSchema,
+  orderLineSchema,
+  pickTaskSchema,
+  pickTaskSummarySchema,
+  pickStepSchema
 } from '@wos/domain';
 
 export const createSiteBodySchema = z.object({
@@ -185,6 +192,39 @@ export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const validationResponseSchema = layoutValidationResultSchema;
 export const publishResponseSchema = layoutPublishResultSchema;
+
+// ── Orders ────────────────────────────────────────────────────────────────────
+
+export const createOrderBodySchema = z.object({
+  externalNumber: z.string().trim().min(1),
+  priority: z.number().int().min(0).optional().default(0)
+});
+
+export const addOrderLineBodySchema = z.object({
+  sku: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  qtyRequired: z.number().int().positive()
+});
+
+export const transitionOrderStatusBodySchema = z.object({
+  status: orderStatusSchema
+});
+
+export const ordersResponseSchema = z.array(orderSummarySchema);
+export const orderResponseSchema = orderSchema;
+export const orderLineResponseSchema = orderLineSchema;
+
+export { orderStatusSchema, orderSummarySchema, orderSchema, orderLineSchema };
+
+// ── Pick tasks ────────────────────────────────────────────────────────────────
+
+export const pickTaskResponseSchema = pickTaskSchema;
+export const pickTaskSummaryResponseSchema = pickTaskSummarySchema;
+export const pickTasksResponseSchema = z.array(pickTaskSummarySchema);
+
+export { pickTaskSchema, pickTaskSummarySchema, pickStepSchema };
+
+// ── Error ─────────────────────────────────────────────────────────────────────
 
 export const errorResponseSchema = z.object({
   code: z.string(),

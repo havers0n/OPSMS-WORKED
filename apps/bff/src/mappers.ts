@@ -11,6 +11,12 @@ import {
   layoutDraftSchema,
   layoutValidationResultSchema,
   siteSchema,
+  orderSchema,
+  orderSummarySchema,
+  orderLineSchema,
+  pickTaskSchema,
+  pickTaskSummarySchema,
+  pickStepSchema,
   type CellStorageSnapshotRow,
   type CellOccupancyRow,
   type Cell,
@@ -21,7 +27,13 @@ import {
   type InventoryItem,
   type LayoutDraft,
   type LayoutValidationResult,
-  type Site
+  type Site,
+  type Order,
+  type OrderSummary,
+  type OrderLine,
+  type PickTask,
+  type PickTaskSummary,
+  type PickStep
 } from '@wos/domain';
 
 type LayoutVersionRow = {
@@ -313,4 +325,178 @@ export function mapLayoutDraftBundleToDomain(bundle: {
 
 export function mapValidationResult(input: unknown): LayoutValidationResult {
   return layoutValidationResultSchema.parse(input);
+}
+
+// ── Orders ────────────────────────────────────────────────────────────────────
+
+export function mapOrderLineRowToDomain(row: {
+  id: string;
+  order_id: string;
+  tenant_id: string;
+  sku: string;
+  name: string;
+  qty_required: number;
+  qty_picked: number;
+  status: string;
+}): OrderLine {
+  return orderLineSchema.parse({
+    id: row.id,
+    orderId: row.order_id,
+    tenantId: row.tenant_id,
+    sku: row.sku,
+    name: row.name,
+    qtyRequired: row.qty_required,
+    qtyPicked: row.qty_picked,
+    status: row.status
+  });
+}
+
+export function mapOrderRowToDomain(
+  row: {
+    id: string;
+    tenant_id: string;
+    external_number: string;
+    status: string;
+    priority: number;
+    wave_id: string | null;
+    created_at: string;
+    released_at: string | null;
+    closed_at: string | null;
+  },
+  lines: OrderLine[]
+): Order {
+  return orderSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    externalNumber: row.external_number,
+    status: row.status,
+    priority: row.priority,
+    waveId: row.wave_id,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    closedAt: row.closed_at,
+    lines
+  });
+}
+
+export function mapOrderSummaryRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  external_number: string;
+  status: string;
+  priority: number;
+  wave_id: string | null;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+  line_count: number;
+  unit_count: number;
+  picked_unit_count: number;
+}): OrderSummary {
+  return orderSummarySchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    externalNumber: row.external_number,
+    status: row.status,
+    priority: row.priority,
+    waveId: row.wave_id,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    closedAt: row.closed_at,
+    lineCount: row.line_count,
+    unitCount: row.unit_count,
+    pickedUnitCount: row.picked_unit_count
+  });
+}
+
+// ── Pick tasks ────────────────────────────────────────────────────────────────
+
+export function mapPickStepRowToDomain(row: {
+  id: string;
+  task_id: string;
+  tenant_id: string;
+  order_id: string | null;
+  order_line_id: string | null;
+  sequence_no: number;
+  sku: string;
+  item_name: string;
+  qty_required: number;
+  qty_picked: number;
+  status: string;
+  source_cell_id: string | null;
+  source_container_id: string | null;
+}): PickStep {
+  return pickStepSchema.parse({
+    id: row.id,
+    taskId: row.task_id,
+    tenantId: row.tenant_id,
+    orderId: row.order_id,
+    orderLineId: row.order_line_id,
+    sequenceNo: row.sequence_no,
+    sku: row.sku,
+    itemName: row.item_name,
+    qtyRequired: row.qty_required,
+    qtyPicked: row.qty_picked,
+    status: row.status,
+    sourceCellId: row.source_cell_id,
+    sourceContainerId: row.source_container_id
+  });
+}
+
+export function mapPickTaskRowToDomain(
+  row: {
+    id: string;
+    tenant_id: string;
+    source_type: 'order' | 'wave';
+    source_id: string;
+    status: string;
+    assigned_to: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string;
+  },
+  steps: PickStep[]
+): PickTask {
+  return pickTaskSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    status: row.status,
+    assignedTo: row.assigned_to,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    steps
+  });
+}
+
+export function mapPickTaskSummaryRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  source_type: 'order' | 'wave';
+  source_id: string;
+  status: string;
+  assigned_to: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  total_steps: number;
+  completed_steps: number;
+  exception_steps: number;
+}): PickTaskSummary {
+  return pickTaskSummarySchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    status: row.status,
+    assignedTo: row.assigned_to,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    totalSteps: row.total_steps,
+    completedSteps: row.completed_steps,
+    exceptionSteps: row.exception_steps
+  });
 }

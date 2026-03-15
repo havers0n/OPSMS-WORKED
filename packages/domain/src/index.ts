@@ -20,3 +20,5 @@ export * from './warehouse/floor';
 export * from './warehouse/floor-workspace';
 export * from './warehouse/setup-state';
 export * from './contracts/readiness';
+export * from './operations/order';
+export * from './operations/pick-task';
