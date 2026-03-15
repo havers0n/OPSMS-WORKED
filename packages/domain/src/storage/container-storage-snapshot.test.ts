@@ -11,6 +11,7 @@ describe('container storage snapshot contracts', () => {
         containerType: 'pallet',
         containerStatus: 'active',
         itemRef: 'ITEM-001',
+        product: null,
         quantity: 5,
         uom: 'pcs'
       })
@@ -29,6 +30,7 @@ describe('container storage snapshot contracts', () => {
         containerType: 'pallet',
         containerStatus: 'active',
         itemRef: null,
+        product: null,
         quantity: null,
         uom: null
       })

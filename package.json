@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "npm run test:e2e --workspace @wos/web",
+    "products:generate-seed": "node apps/supabase/scripts/generate-products-catalog-seed.mjs",
     "gen:types": "supabase gen types typescript --workdir apps/supabase --local --schema public 2>/dev/null > apps/web/src/shared/api/supabase/types.ts"
   },
   "devDependencies": {

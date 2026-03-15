@@ -13,6 +13,7 @@ import {
   placeContainerRequestSchema,
   moveContainerRequestSchema,
   placeContainerResultSchema,
+  productSchema,
   removeContainerRequestSchema,
   removeContainerResultSchema,
   containerTypeSchema,
@@ -57,6 +58,12 @@ export const createContainerBodySchema = z.object({
 export const addInventoryToContainerBodySchema = z.object({
   sku: z.string().trim().min(1),
   quantity: z.number().positive(),
+  uom: z.string().trim().min(1)
+});
+
+export const createInventoryItemBodySchema = z.object({
+  productId: z.string().uuid(),
+  quantity: z.number().min(0),
   uom: z.string().trim().min(1)
 });
 
@@ -183,6 +190,8 @@ export const addInventoryToContainerResponseSchema = z.object({
   quantity: z.number().positive(),
   uom: z.string().trim().min(1)
 });
+export const productsResponseSchema = z.array(productSchema);
+export const productResponseSchema = productSchema;
 export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerResponseSchema = moveContainerResultSchema;

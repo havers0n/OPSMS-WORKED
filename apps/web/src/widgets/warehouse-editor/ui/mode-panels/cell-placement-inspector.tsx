@@ -8,6 +8,7 @@ import {
 } from '@/entities/layout-version/model/editor-selectors';
 import { useCellStorage } from '@/entities/cell/api/use-cell-storage';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
+import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useCreateContainer } from '@/features/container-create/model/use-create-container';
 import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
@@ -42,7 +43,7 @@ type ContainerGroup = {
   containerType: string;
   containerStatus: string;
   placedAt: string;
-  items: Array<{ itemRef: string; quantity: number; uom: string }>;
+  items: Array<{ itemRef: string; product: CellStorageSnapshotRow['product']; quantity: number; uom: string }>;
 };
 
 function groupByContainer(rows: CellStorageSnapshotRow[]): ContainerGroup[] {
@@ -63,6 +64,7 @@ function groupByContainer(rows: CellStorageSnapshotRow[]): ContainerGroup[] {
     if (row.itemRef !== null && row.quantity !== null && row.uom !== null) {
       map.get(row.containerId)!.items.push({
         itemRef: row.itemRef,
+        product: row.product,
         quantity: row.quantity,
         uom: row.uom
       });
@@ -124,9 +126,30 @@ function ContainerCard({ group, onContainerClick, sourceCellId }: ContainerCardP
           <div className="flex flex-col gap-1">
             {group.items.map((item, index) => (
               <div key={`${item.itemRef}-${index}`} className="flex items-center justify-between gap-2">
-                <span className="truncate font-mono text-xs text-[var(--text-primary)]">
-                  {item.itemRef}
-                </span>
+                <div className="flex min-w-0 items-center gap-2">
+                  {getProductImageUrl(item.product) ? (
+                    <img
+                      src={getProductImageUrl(item.product)!}
+                      alt={getProductLabel(item.itemRef, item.product)}
+                      className="h-8 w-8 rounded-md object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-[10px] text-[var(--text-muted)]"
+                      style={{ background: 'var(--surface-primary)' }}
+                    >
+                      Item
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-xs text-[var(--text-primary)]">
+                      {getProductLabel(item.itemRef, item.product)}
+                    </p>
+                    <p className="truncate text-[10px] text-[var(--text-muted)]">
+                      {getProductMeta(item.itemRef, item.product)}
+                    </p>
+                  </div>
+                </div>
                 <span className="shrink-0 text-xs text-[var(--text-muted)]">
                   {item.quantity} {item.uom}
                 </span>

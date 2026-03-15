@@ -13,6 +13,7 @@ describe('cell storage snapshot contracts', () => {
         containerStatus: 'active',
         placedAt: '2026-03-13T10:00:00.000Z',
         itemRef: 'ITEM-001',
+        product: null,
         quantity: 5,
         uom: 'pcs'
       })
@@ -33,6 +34,7 @@ describe('cell storage snapshot contracts', () => {
         containerStatus: 'active',
         placedAt: '2026-03-13T10:00:00.000Z',
         itemRef: null,
+        product: null,
         quantity: null,
         uom: null
       })

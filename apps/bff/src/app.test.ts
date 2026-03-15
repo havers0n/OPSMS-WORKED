@@ -76,15 +76,72 @@ const cellOccupancyRows = [
   }
 ];
 
+const productRows = [
+  {
+    id: '8c393d26-d4d8-4e84-b772-c1f7b9d8c111',
+    source: 'artos.co.il',
+    external_product_id: '19917',
+    sku: '7290122461749',
+    name: 'USB-C Wired Earbuds',
+    permalink: 'https://artos.co.il/product/19917',
+    image_urls: ['https://artos.co.il/wp-content/uploads/2026/01/in-ear-soumd-pic@4x-8-scaled.png'],
+    image_files: ['artos_assets/images/19917_00_07a809fd58.png'],
+    is_active: true,
+    created_at: '2026-01-16T16:19:05.000Z',
+    updated_at: '2026-01-16T16:19:05.000Z'
+  },
+  {
+    id: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
+    source: 'artos.co.il',
+    external_product_id: '19898',
+    sku: '7290122462302',
+    name: 'Poker Set 300 Chips',
+    permalink: 'https://artos.co.il/product/19898',
+    image_urls: ['https://artos.co.il/wp-content/uploads/2026/01/poker-set-1.png'],
+    image_files: ['artos_assets/images/19898_00_72ebdbaba2.png'],
+    is_active: true,
+    created_at: '2026-01-16T16:19:05.000Z',
+    updated_at: '2026-01-16T16:19:05.000Z'
+  }
+];
+
+const productResponses = productRows.map((row) => ({
+  id: row.id,
+  source: row.source,
+  externalProductId: row.external_product_id,
+  sku: row.sku,
+  name: row.name,
+  permalink: row.permalink,
+  imageUrls: row.image_urls,
+  imageFiles: row.image_files,
+  isActive: row.is_active,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+}));
+
+const sortedProductResponses = [...productResponses].sort((left, right) => left.name.localeCompare(right.name));
+
 const inventoryItemRows = [
   {
     id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
     container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-    item_ref: 'ITEM-001',
+    item_ref: `product:${productRows[0].id}`,
+    product_id: productRows[0].id,
     quantity: 5,
     uom: 'pcs',
     created_at: '2026-03-13T11:15:00.000Z',
+    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+  },
+  {
+    id: '2d230fa0-f02e-418b-88cb-7558422f7ec1',
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    item_ref: 'LEGACY-REF-42',
+    product_id: null,
+    quantity: 2,
+    uom: 'pcs',
+    created_at: '2026-03-13T11:20:00.000Z',
     created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
   }
 ];
@@ -96,7 +153,8 @@ const containerStorageSnapshotRows = [
     external_code: 'PALLET-001',
     container_type: 'pallet',
     container_status: 'active',
-    item_ref: 'ITEM-001',
+    item_ref: `product:${productRows[0].id}`,
+    product_id: productRows[0].id,
     quantity: 5,
     uom: 'pcs'
   },
@@ -106,8 +164,20 @@ const containerStorageSnapshotRows = [
     external_code: 'PALLET-001',
     container_type: 'pallet',
     container_status: 'active',
-    item_ref: 'ITEM-002',
+    item_ref: `product:${productRows[1].id}`,
+    product_id: productRows[1].id,
     quantity: 3,
+    uom: 'pcs'
+  },
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    external_code: 'PALLET-001',
+    container_type: 'pallet',
+    container_status: 'active',
+    item_ref: 'LEGACY-REF-42',
+    product_id: null,
+    quantity: 2,
     uom: 'pcs'
   },
   {
@@ -117,6 +187,7 @@ const containerStorageSnapshotRows = [
     container_type: 'tote',
     container_status: 'quarantined',
     item_ref: null,
+    product_id: null,
     quantity: null,
     uom: null
   }
@@ -131,8 +202,22 @@ const cellStorageSnapshotRows = [
     container_type: 'pallet',
     container_status: 'active',
     placed_at: '2026-03-13T09:15:00.000Z',
-    item_ref: 'ITEM-001',
+    item_ref: `product:${productRows[0].id}`,
+    product_id: productRows[0].id,
     quantity: 5,
+    uom: 'pcs'
+  },
+  {
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    external_code: 'PALLET-001',
+    container_type: 'pallet',
+    container_status: 'active',
+    placed_at: '2026-03-13T09:15:00.000Z',
+    item_ref: 'LEGACY-REF-42',
+    product_id: null,
+    quantity: 2,
     uom: 'pcs'
   },
   {
@@ -144,6 +229,7 @@ const cellStorageSnapshotRows = [
     container_status: 'quarantined',
     placed_at: '2026-03-13T10:15:00.000Z',
     item_ref: null,
+    product_id: null,
     quantity: null,
     uom: null
   }
@@ -374,6 +460,37 @@ function createSupabaseStub() {
         };
       }
 
+      if (table === 'products') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((column: string, value: string | boolean) => {
+              const matches = productRows.filter((row) => {
+                if (column === 'id') return row.id === value;
+                if (column === 'is_active') return row.is_active === value;
+                return false;
+              });
+
+              return {
+                maybeSingle: vi.fn(async () => ({
+                  data: matches[0] ?? null,
+                  error: null
+                })),
+                order: vi.fn(async () => ({
+                  data: [...matches].sort((left, right) => left.name.localeCompare(right.name)),
+                  error: null
+                }))
+              };
+            }),
+            in: vi.fn((_column: string, values: string[]) =>
+              Promise.resolve({
+                data: productRows.filter((row) => values.includes(row.id)),
+                error: null
+              })
+            )
+          }))
+        };
+      }
+
       if (table === 'inventory_items') {
         return {
           select: vi.fn(() => ({
@@ -392,6 +509,7 @@ function createSupabaseStub() {
                   tenant_id: payload.tenant_id,
                   container_id: payload.container_id,
                   item_ref: payload.item_ref,
+                  product_id: payload.product_id ?? null,
                   quantity: payload.quantity,
                   uom: payload.uom,
                   created_at: '2026-03-13T12:30:00.000Z',
@@ -798,6 +916,10 @@ function createRackSectionSlotStorageSupabaseStub() {
         };
       }
 
+      if (table === 'products') {
+        return createSupabaseStub().from(table);
+      }
+
       return {
         select: vi.fn(() => ({
           eq: vi.fn(async () => ({ data: [], error: null })),
@@ -944,6 +1066,80 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('returns active catalog products', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/products',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(sortedProductResponses);
+
+    await app.close();
+  });
+
+  it('filters catalog products by name, sku, or external id', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const bySku = await app.inject({
+      method: 'GET',
+      url: `/api/products?query=${productRows[0].sku}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(bySku.statusCode).toBe(200);
+    expect(bySku.json()).toEqual([productResponses[0]]);
+
+    const byExternalId = await app.inject({
+      method: 'GET',
+      url: `/api/products?query=${productRows[1].external_product_id}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(byExternalId.statusCode).toBe(200);
+    expect(byExternalId.json()).toEqual([productResponses[1]]);
+
+    await app.close();
+  });
+
+  it('returns a single catalog product by id', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/products/${productRows[0].id}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(productResponses[0]);
+
+    await app.close();
+  });
+
   it('returns tenant-scoped containers', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
@@ -1038,7 +1234,8 @@ describe('buildApp', () => {
         externalCode: 'PALLET-001',
         containerType: 'pallet',
         containerStatus: 'active',
-        itemRef: 'ITEM-001',
+        itemRef: `product:${productRows[0].id}`,
+        product: productResponses[0],
         quantity: 5,
         uom: 'pcs'
       },
@@ -1048,8 +1245,20 @@ describe('buildApp', () => {
         externalCode: 'PALLET-001',
         containerType: 'pallet',
         containerStatus: 'active',
-        itemRef: 'ITEM-002',
+        itemRef: `product:${productRows[1].id}`,
+        product: productResponses[1],
         quantity: 3,
+        uom: 'pcs'
+      },
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        itemRef: 'LEGACY-REF-42',
+        product: null,
+        quantity: 2,
         uom: 'pcs'
       }
     ]);
@@ -1081,6 +1290,7 @@ describe('buildApp', () => {
         containerType: 'tote',
         containerStatus: 'quarantined',
         itemRef: null,
+        product: null,
         quantity: null,
         uom: null
       }
@@ -1114,8 +1324,22 @@ describe('buildApp', () => {
         containerType: 'pallet',
         containerStatus: 'active',
         placedAt: '2026-03-13T09:15:00.000Z',
-        itemRef: 'ITEM-001',
+        itemRef: `product:${productRows[0].id}`,
+        product: productResponses[0],
         quantity: 5,
+        uom: 'pcs'
+      },
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        placedAt: '2026-03-13T09:15:00.000Z',
+        itemRef: 'LEGACY-REF-42',
+        product: null,
+        quantity: 2,
         uom: 'pcs'
       },
       {
@@ -1127,6 +1351,7 @@ describe('buildApp', () => {
         containerStatus: 'quarantined',
         placedAt: '2026-03-13T10:15:00.000Z',
         itemRef: null,
+        product: null,
         quantity: null,
         uom: null
       }
@@ -1208,8 +1433,22 @@ describe('buildApp', () => {
           containerType: 'pallet',
           containerStatus: 'active',
           placedAt: '2026-03-13T09:15:00.000Z',
-          itemRef: 'ITEM-001',
+          itemRef: `product:${productRows[0].id}`,
+          product: productResponses[0],
           quantity: 5,
+          uom: 'pcs'
+        },
+        {
+          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+          cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+          containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+          externalCode: 'PALLET-001',
+          containerType: 'pallet',
+          containerStatus: 'active',
+          placedAt: '2026-03-13T09:15:00.000Z',
+          itemRef: 'LEGACY-REF-42',
+          product: null,
+          quantity: 2,
           uom: 'pcs'
         },
         {
@@ -1221,6 +1460,7 @@ describe('buildApp', () => {
           containerStatus: 'quarantined',
           placedAt: '2026-03-13T10:15:00.000Z',
           itemRef: null,
+          product: null,
           quantity: null,
           uom: null
         }
@@ -1251,10 +1491,22 @@ describe('buildApp', () => {
         id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
         tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
         containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-        itemRef: 'ITEM-001',
+        itemRef: `product:${productRows[0].id}`,
+        product: productResponses[0],
         quantity: 5,
         uom: 'pcs',
         createdAt: '2026-03-13T11:15:00.000Z',
+        createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+      },
+      {
+        id: '2d230fa0-f02e-418b-88cb-7558422f7ec1',
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        itemRef: 'LEGACY-REF-42',
+        product: null,
+        quantity: 2,
+        uom: 'pcs',
+        createdAt: '2026-03-13T11:20:00.000Z',
         createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
       }
     ]);
@@ -1276,7 +1528,7 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        sku: 'ITEM-002',
+        productId: productRows[1].id,
         quantity: 3,
         uom: 'pcs'
       }
@@ -1286,10 +1538,12 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       ok: true,
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      sku: 'ITEM-002',
+      itemRef: `product:${productRows[1].id}`,
+      product: productResponses[1],
       quantity: 3,
       uom: 'pcs'
     });
+    expect(supabase.from).toHaveBeenCalledWith('inventory_items');
 
     await app.close();
   });
@@ -1308,8 +1562,8 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        sku: 'ITEM-002',
-        quantity: 0,
+        productId: 'not-a-uuid',
+        quantity: -1,
         uom: 'pcs'
       }
     });
@@ -1356,7 +1610,7 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        sku: 'ITEM-001',
+        productId: productRows[0].id,
         quantity: 7,
         uom: 'pcs'
       }

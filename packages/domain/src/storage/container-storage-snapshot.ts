@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { containerStatusSchema } from './container';
+import { productSchema } from '../catalog/product';
 
 export const containerStorageSnapshotRowSchema = z.object({
   tenantId: z.string().uuid(),
@@ -8,6 +9,7 @@ export const containerStorageSnapshotRowSchema = z.object({
   containerType: z.string().trim().min(1),
   containerStatus: containerStatusSchema,
   itemRef: z.string().trim().min(1).nullable(),
+  product: productSchema.nullable(),
   quantity: z.number().min(0).nullable(),
   uom: z.string().trim().min(1).nullable()
 });

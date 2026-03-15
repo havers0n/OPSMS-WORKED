@@ -1,5 +1,6 @@
 export * from './enums/layout';
 export * from './enums/picking';
+export * from './catalog/product';
 export * from './layout/rack';
 export * from './layout/layout-version';
 export * from './layout/layout-draft';
@@ -13,6 +14,7 @@ export * from './storage/container-placement-action';
 export * from './storage/container-placement';
 export * from './storage/placement-command';
 export * from './storage/inventory-item';
+export * from './storage/inventory-item-ref';
 export * from './storage/container-storage-snapshot';
 export * from './storage/cell-storage-snapshot';
 export * from './warehouse/site';

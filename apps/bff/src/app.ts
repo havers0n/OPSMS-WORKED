@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError, z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PlacementCommandResponse } from '@wos/domain';
+import { buildCatalogProductItemRef, type PlacementCommandResponse } from '@wos/domain';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
@@ -38,6 +38,8 @@ import {
   layoutDraftResponseSchema,
   layoutVersionIdResponseSchema,
   publishResponseSchema,
+  productResponseSchema,
+  productsResponseSchema,
   publishedLayoutSummaryResponseSchema,
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
@@ -63,6 +65,7 @@ import {
   mapFloorRowToDomain,
   mapInventoryItemRowToDomain,
   mapLayoutDraftBundleToDomain,
+  mapProductRowToDomain,
   mapSiteRowToDomain,
   mapValidationResult,
   mapOrderLineRowToDomain,
@@ -87,6 +90,12 @@ import {
   createPlacementCommandService,
   type PlacementCommandService
 } from './features/placement/service.js';
+import {
+  attachProductsToRows,
+  productSelectColumns,
+  type ProductAwareRow,
+  type ProductRow
+} from './inventory-product-resolution.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
@@ -126,6 +135,34 @@ type FloorCellOccupancyRow = {
   cellId: string;
   containerCount: number;
 };
+
+async function fetchProductById(supabase: SupabaseClient, productId: string) {
+  const { data, error } = await supabase
+    .from('products')
+    .select(productSelectColumns)
+    .eq('id', productId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as ProductRow | null) ?? null;
+}
+
+async function fetchActiveProducts(supabase: SupabaseClient) {
+  const { data, error } = await supabase
+    .from('products')
+    .select(productSelectColumns)
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as ProductRow[];
+}
 
 async function fetchLatestLayoutVersionByState(
   supabase: SupabaseClient,
@@ -467,6 +504,58 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(containerTypesResponseSchema, (data ?? []).map(mapContainerTypeRowToDomain));
   });
 
+  app.get('/api/products', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const queryParams = z
+      .object({
+        query: z.string().trim().optional()
+      })
+      .parse(request.query);
+
+    const supabase = getUserSupabase(auth);
+    const products = await fetchActiveProducts(supabase);
+    const normalizedQuery = queryParams.query?.toLocaleLowerCase() ?? '';
+    const filteredProducts =
+      normalizedQuery.length === 0
+        ? products
+        : products.filter((product) => {
+            const sku = product.sku?.toLocaleLowerCase() ?? '';
+            const externalProductId = product.external_product_id.toLocaleLowerCase();
+            const name = product.name.toLocaleLowerCase();
+
+            return (
+              name.includes(normalizedQuery) ||
+              sku.includes(normalizedQuery) ||
+              externalProductId.includes(normalizedQuery)
+            );
+          });
+
+    return parseOrThrow(
+      productsResponseSchema,
+      filteredProducts.slice(0, 20).map(mapProductRowToDomain)
+    );
+  });
+
+  app.get('/api/products/:productId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const productId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { productId: string }).productId
+    }).id;
+
+    const supabase = getUserSupabase(auth);
+    const product = await fetchProductById(supabase, productId);
+
+    if (!product) {
+      throw new ApiError(404, 'NOT_FOUND', 'Product was not found.');
+    }
+
+    return parseOrThrow(productResponseSchema, mapProductRowToDomain(product));
+  });
+
   app.get('/api/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -511,7 +600,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('cell_storage_snapshot_v')
-      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,quantity,uom')
+      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
       .eq('cell_id', cellId)
       .order('placed_at', { ascending: true });
 
@@ -519,7 +608,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw error;
     }
 
-    return parseOrThrow(cellStorageSnapshotResponseSchema, (data ?? []).map(mapCellStorageSnapshotRowToDomain));
+    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+      tenant_id: string;
+      cell_id: string;
+      container_id: string;
+      external_code: string | null;
+      container_type: string;
+      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+      placed_at: string;
+      product_id?: string | null;
+      quantity: number | null;
+      uom: string | null;
+    }>);
+
+    return parseOrThrow(cellStorageSnapshotResponseSchema, rows.map(mapCellStorageSnapshotRowToDomain));
   });
 
   app.get('/api/floors/:floorId/published-cells', async (request, reply) => {
@@ -652,7 +754,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     // Step 2: fetch storage snapshot for all cells in this slot.
     const { data, error } = await supabase
       .from('cell_storage_snapshot_v')
-      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,quantity,uom')
+      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
       .in('cell_id', cellIds)
       .order('placed_at', { ascending: true });
 
@@ -660,9 +762,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw error;
     }
 
+    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+      tenant_id: string;
+      cell_id: string;
+      container_id: string;
+      external_code: string | null;
+      container_type: string;
+      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+      placed_at: string;
+      product_id?: string | null;
+      quantity: number | null;
+      uom: string | null;
+    }>);
+
     return parseOrThrow(cellSlotStorageResponseSchema, {
       published: true,
-      rows: (data ?? []).map(mapCellStorageSnapshotRowToDomain)
+      rows: rows.map(mapCellStorageSnapshotRowToDomain)
     });
   });
 
@@ -674,7 +789,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('inventory_items')
-      .select('id,tenant_id,container_id,item_ref,quantity,uom,created_at,created_by')
+      .select('id,tenant_id,container_id,item_ref,product_id,quantity,uom,created_at,created_by')
       .eq('container_id', containerId)
       .order('created_at', { ascending: true });
 
@@ -682,7 +797,19 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw error;
     }
 
-    return parseOrThrow(inventoryItemsResponseSchema, (data ?? []).map(mapInventoryItemRowToDomain));
+    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+      id: string;
+      tenant_id: string;
+      container_id: string;
+      item_ref: string;
+      product_id?: string | null;
+      quantity: number;
+      uom: string;
+      created_at: string;
+      created_by: string | null;
+    }>);
+
+    return parseOrThrow(inventoryItemsResponseSchema, rows.map(mapInventoryItemRowToDomain));
   });
 
   app.get('/api/containers/:containerId/storage', async (request, reply) => {
@@ -693,14 +820,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_snapshot_v')
-      .select('tenant_id,container_id,external_code,container_type,container_status,item_ref,quantity,uom')
+      .select('tenant_id,container_id,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
       .eq('container_id', containerId);
 
     if (error) {
       throw error;
     }
 
-    return parseOrThrow(containerStorageSnapshotResponseSchema, (data ?? []).map(mapContainerStorageSnapshotRowToDomain));
+    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+      tenant_id: string;
+      container_id: string;
+      external_code: string | null;
+      container_type: string;
+      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+      product_id?: string | null;
+      quantity: number | null;
+      uom: string | null;
+    }>);
+
+    return parseOrThrow(containerStorageSnapshotResponseSchema, rows.map(mapContainerStorageSnapshotRowToDomain));
   });
 
   app.get('/api/me', async (request, reply) => {
@@ -997,35 +1135,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
     }
     const supabase = getUserSupabase(auth);
-    const container = await fetchInventoryWriteContainer(
-      supabase,
-      auth.currentTenant.tenantId,
-      containerId
-    );
+    const product = await fetchProductById(supabase, body.productId);
 
-    if (!container) {
-      throw new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+    if (!product || !product.is_active) {
+      throw new ApiError(404, 'NOT_FOUND', 'Product was not found.');
     }
 
-    if (!canContainerReceiveInventory(container.status)) {
-      throw new ApiError(
-        409,
-        'CONTAINER_NOT_RECEIVABLE',
-        `Container status ${container.status} does not allow receiving inventory.`
-      );
-    }
-
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('inventory_items')
       .insert({
         tenant_id: auth.currentTenant.tenantId,
         container_id: containerId,
-        item_ref: body.sku,
+        product_id: product.id,
+        item_ref: buildCatalogProductItemRef(product.id),
         quantity: body.quantity,
         uom: body.uom,
         created_by: auth.user.id
       })
-      .select('id')
+      .select('id,tenant_id,container_id,item_ref,product_id,quantity,uom,created_at,created_by')
       .single();
 
     if (error) {
@@ -1040,13 +1167,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw error;
     }
 
-    return parseOrThrow(addInventoryToContainerResponseSchema, {
-      ok: true,
-      containerId,
-      sku: body.sku,
-      quantity: body.quantity,
-      uom: body.uom
-    });
+    return parseOrThrow(
+      inventoryItemResponseSchema,
+      mapInventoryItemRowToDomain({
+        ...data,
+        product
+      })
+    );
   });
 
   app.post('/api/floors', async (request, reply) => {

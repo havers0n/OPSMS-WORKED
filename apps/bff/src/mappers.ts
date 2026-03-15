@@ -10,6 +10,7 @@ import {
   floorSchema,
   layoutDraftSchema,
   layoutValidationResultSchema,
+  productSchema,
   siteSchema,
   orderSchema,
   orderSummarySchema,
@@ -33,7 +34,8 @@ import {
   type OrderLine,
   type PickTask,
   type PickTaskSummary,
-  type PickStep
+  type PickStep,
+  type Product
 } from '@wos/domain';
 
 type LayoutVersionRow = {
@@ -80,6 +82,44 @@ type RackLevelRow = {
   ordinal: number;
   slot_count: number;
 };
+
+type ProductRow = {
+  id: string;
+  source: string;
+  external_product_id: string;
+  sku: string | null;
+  name: string;
+  permalink: string | null;
+  image_urls: unknown;
+  image_files: unknown;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+}
+
+export function mapProductRowToDomain(row: ProductRow): Product {
+  return productSchema.parse({
+    id: row.id,
+    source: row.source,
+    externalProductId: row.external_product_id,
+    sku: row.sku,
+    name: row.name,
+    permalink: row.permalink,
+    imageUrls: normalizeStringArray(row.image_urls),
+    imageFiles: normalizeStringArray(row.image_files),
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+}
 
 export function mapSiteRowToDomain(row: { id: string; code: string; name: string; timezone: string }): Site {
   return siteSchema.parse({
@@ -155,6 +195,8 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   item_ref: string | null;
+  product_id?: string | null;
+  product?: ProductRow | null;
   quantity: number | null;
   uom: string | null;
 }): ContainerStorageSnapshotRow {
@@ -165,6 +207,7 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
     containerType: row.container_type,
     containerStatus: row.container_status,
     itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
     uom: row.uom
   });
@@ -179,6 +222,8 @@ export function mapCellStorageSnapshotRowToDomain(row: {
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   placed_at: string;
   item_ref: string | null;
+  product_id?: string | null;
+  product?: ProductRow | null;
   quantity: number | null;
   uom: string | null;
 }): CellStorageSnapshotRow {
@@ -191,6 +236,7 @@ export function mapCellStorageSnapshotRowToDomain(row: {
     containerStatus: row.container_status,
     placedAt: row.placed_at,
     itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
     uom: row.uom
   });
@@ -232,6 +278,8 @@ export function mapInventoryItemRowToDomain(row: {
   tenant_id: string;
   container_id: string;
   item_ref: string;
+  product_id?: string | null;
+  product?: ProductRow | null;
   quantity: number;
   uom: string;
   created_at: string;
@@ -242,6 +290,7 @@ export function mapInventoryItemRowToDomain(row: {
     tenantId: row.tenant_id,
     containerId: row.container_id,
     itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
     uom: row.uom,
     createdAt: row.created_at,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 import type { ContainerStorageSnapshotRow, FloorWorkspace } from '@wos/domain';
 import {
   AlertCircle,
@@ -7,6 +7,7 @@ import {
   Loader2,
   MoveRight,
   PackageOpen,
+  Search,
   X
 } from 'lucide-react';
 import {
@@ -19,6 +20,10 @@ import {
 } from '@/entities/layout-version/model/editor-selectors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerStorage } from '@/entities/container/api/use-container-storage';
+import { useProduct } from '@/entities/product/api/use-product';
+import { useProductsSearch } from '@/entities/product/api/use-products-search';
+import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';
+import { useAddInventoryItem } from '@/features/inventory-add/model/use-add-inventory-item';
 import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
 import { useRemoveContainer } from '@/features/placement-actions/model/use-remove-container';
 import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
@@ -45,12 +50,30 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-type InventoryRow = { itemRef: string; quantity: number; uom: string };
+type InventoryRow = Pick<ContainerStorageSnapshotRow, 'product'> & {
+  itemRef: string;
+  quantity: number;
+  uom: string;
+};
 
 function extractInventory(rows: ContainerStorageSnapshotRow[]): InventoryRow[] {
   return rows
     .filter((row) => row.itemRef !== null && row.quantity !== null && row.uom !== null)
-    .map((row) => ({ itemRef: row.itemRef!, quantity: row.quantity!, uom: row.uom! }));
+    .map((row) => ({
+      itemRef: row.itemRef!,
+      product: row.product,
+      quantity: row.quantity!,
+      uom: row.uom!
+    }));
+}
+
+function formatQuantityInput(value: string) {
+  if (value.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function canReceiveInventory(status: string | null | undefined) {
@@ -72,10 +95,11 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [addInventoryError, setAddInventoryError] = useState<string | null>(null);
-  const [skuInput, setSkuInput] = useState('');
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [quantityInput, setQuantityInput] = useState('1');
-  const [uomInput, setUomInput] = useState('ea');
+  const [uomInput, setUomInput] = useState('pcs');
 
   const containerId = selection.type === 'container' ? selection.containerId : null;
   const sourceCellId = selection.type === 'container' ? selection.sourceCellId ?? null : null;
@@ -85,13 +109,25 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     placementInteraction.fromCellId === sourceCellId;
   const targetCellId = isMoveMode ? placementInteraction.targetCellId : null;
 
+  const deferredProductSearch = useDeferredValue(productSearch);
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const sourceCell = publishedCells.find((cell) => cell.id === sourceCellId) ?? null;
   const targetCell = publishedCells.find((cell) => cell.id === targetCellId) ?? null;
   const { data: rows, isPending, isError } = useContainerStorage(containerId);
+  const {
+    data: productResults = [],
+    isPending: isProductsPending,
+    isError: isProductsError
+  } = useProductsSearch(isAddInventoryOpen ? deferredProductSearch : null);
+  const { data: selectedProduct } = useProduct(selectedProductId);
 
   const identity = rows && rows.length > 0 ? rows[0] : null;
   const inventory = rows ? extractInventory(rows) : [];
+  const quantityValue = formatQuantityInput(quantityInput);
+  const activeProduct =
+    selectedProduct ??
+    productResults.find((product) => product.id === selectedProductId) ??
+    null;
   const removeContainer = useRemoveContainer({
     floorId: workspace?.floorId ?? null,
     sourceCellId,
@@ -108,7 +144,11 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     targetCellId,
     containerId
   });
-  const isInventoryReceivable = canReceiveInventory(identity?.containerStatus);
+  const addInventoryItem = useAddInventoryItem({
+    floorId: workspace?.floorId ?? null,
+    sourceCellId,
+    containerId
+  });
 
   const targetValidationMessage =
     !isMoveMode
@@ -180,52 +220,28 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     }
   };
 
-  const handleToggleAddInventory = () => {
-    setAddInventoryError(null);
-    setIsRemoveConfirmOpen(false);
-    setIsAddInventoryOpen((current) => !current);
-  };
-
   const handleAddInventory = async () => {
-    if (!containerId) {
+    if (!containerId || !activeProduct || quantityValue === null || uomInput.trim().length === 0) {
       return;
     }
 
-    const sku = skuInput.trim();
-    const quantity = Number(quantityInput);
-    const uom = uomInput.trim();
-
-    if (sku.length === 0) {
-      setAddInventoryError('Enter a SKU or item reference.');
-      return;
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setAddInventoryError('Quantity must be greater than 0.');
-      return;
-    }
-
-    if (uom.length === 0) {
-      setAddInventoryError('Enter a UOM.');
-      return;
-    }
-
-    setAddInventoryError(null);
+    setInventoryError(null);
 
     try {
-      await addInventoryToContainer.mutateAsync({
+      await addInventoryItem.mutateAsync({
         containerId,
-        sku,
-        quantity,
-        uom
+        productId: activeProduct.id,
+        quantity: quantityValue,
+        uom: uomInput.trim()
       });
-      setSkuInput('');
-      setQuantityInput('1');
-      setUomInput('ea');
       setIsAddInventoryOpen(false);
+      setProductSearch('');
+      setSelectedProductId(null);
+      setQuantityInput('1');
+      setUomInput('pcs');
     } catch (mutationError) {
-      setAddInventoryError(
-        formatMutationError(mutationError, 'Could not add inventory to the container.')
+      setInventoryError(
+        mutationError instanceof Error ? mutationError.message : 'Could not add inventory.'
       );
     }
   };
@@ -251,7 +267,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
         <div className="mt-1 flex items-center gap-2">
           <Box className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
           <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">
-            {identity?.externalCode ?? containerId ?? '—'}
+            {identity?.externalCode ?? containerId ?? 'вЂ”'}
           </span>
         </div>
         {identity && (
@@ -266,7 +282,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
           </p>
         )}
         {sourceCellId && (
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-primary)] transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
@@ -291,9 +307,22 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
               className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: 'var(--accent)' }}
               onClick={handleStartMove}
-              disabled={removeContainer.isPending || moveContainer.isPending || addInventoryToContainer.isPending}
+              disabled={removeContainer.isPending || moveContainer.isPending || addInventoryItem.isPending}
             >
               {isMoveMode ? 'Move target active' : 'Move container'}
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-2 text-xs font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
+              onClick={() => {
+                setInventoryError(null);
+                setIsRemoveConfirmOpen(false);
+                setIsAddInventoryOpen((current) => !current);
+              }}
+              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending}
+            >
+              Add inventory
             </button>
             <button
               type="button"
@@ -301,6 +330,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
               style={{ background: 'var(--danger)' }}
               onClick={() => {
                 setRemoveError(null);
+                setIsAddInventoryOpen(false);
                 setIsRemoveConfirmOpen((current) => !current);
               }}
               disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending || addInventoryToContainer.isPending}
@@ -373,6 +403,185 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                 disabled={moveContainer.isPending}
               >
                 Cancel move
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isAddInventoryOpen && containerId && (
+          <div
+            className="rounded-lg p-3"
+            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
+              Add inventory
+            </p>
+
+            <label className="mt-3 block text-xs text-[var(--text-primary)]">
+              Search products
+              <div className="relative mt-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
+                <input
+                  value={productSearch}
+                  onChange={(event) => {
+                    setProductSearch(event.target.value);
+                    setInventoryError(null);
+                  }}
+                  placeholder="Search by name or SKU"
+                  className="w-full rounded-md border py-2 pl-8 pr-2.5 text-sm outline-none"
+                  style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                />
+              </div>
+            </label>
+
+            <div
+              className="mt-3 rounded-md border"
+              style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+            >
+              {isProductsPending ? (
+                <div className="flex items-center justify-center px-3 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-300" />
+                </div>
+              ) : productResults.length === 0 ? (
+                <div className="px-3 py-4 text-xs text-[var(--text-muted)]">
+                  {isProductsError
+                    ? 'Could not load product results.'
+                    : 'No catalog products match the current search.'}
+                </div>
+              ) : (
+                <div className="max-h-52 overflow-y-auto">
+                  {productResults.map((product, index) => {
+                    const imageUrl = getProductImageUrl(product);
+                    const meta = getProductMeta(product.id, product);
+                    const isSelected = product.id === selectedProductId;
+
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+                        style={
+                          index > 0
+                            ? {
+                                borderTop: '1px solid var(--border-muted)',
+                                background: isSelected ? 'var(--surface-subtle)' : 'transparent'
+                              }
+                            : { background: isSelected ? 'var(--surface-subtle)' : 'transparent' }
+                        }
+                        onClick={() => {
+                          setSelectedProductId(product.id);
+                          setInventoryError(null);
+                        }}
+                      >
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={product.name}
+                            className="h-10 w-10 rounded-md object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-md text-[10px] text-[var(--text-muted)]"
+                            style={{ background: 'var(--surface-subtle)' }}
+                          >
+                            No img
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                            {product.name}
+                          </p>
+                          <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">
+                            {meta ?? product.externalProductId}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {activeProduct && (
+              <div
+                className="mt-3 flex items-center gap-3 rounded-md border px-3 py-2"
+                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+              >
+                {getProductImageUrl(activeProduct) ? (
+                  <img
+                    src={getProductImageUrl(activeProduct)!}
+                    alt={activeProduct.name}
+                    className="h-12 w-12 rounded-md object-cover"
+                  />
+                ) : (
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-md text-[10px] text-[var(--text-muted)]"
+                    style={{ background: 'var(--surface-subtle)' }}
+                  >
+                    No img
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                    {activeProduct.name}
+                  </p>
+                  <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">
+                    {getProductMeta(activeProduct.id, activeProduct)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs text-[var(--text-primary)]">
+                Quantity
+                <input
+                  value={quantityInput}
+                  onChange={(event) => setQuantityInput(event.target.value)}
+                  inputMode="decimal"
+                  className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                  style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                />
+              </label>
+              <label className="block text-xs text-[var(--text-primary)]">
+                UOM
+                <input
+                  value={uomInput}
+                  onChange={(event) => setUomInput(event.target.value)}
+                  className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                  style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                />
+              </label>
+            </div>
+
+            {inventoryError && <p className="mt-2 text-xs text-red-500">{inventoryError}</p>}
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--accent)' }}
+                onClick={() => void handleAddInventory()}
+                disabled={
+                  addInventoryItem.isPending ||
+                  !activeProduct ||
+                  quantityValue === null ||
+                  uomInput.trim().length === 0
+                }
+              >
+                {addInventoryItem.isPending ? 'Saving...' : 'Confirm inventory'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={() => {
+                  setIsAddInventoryOpen(false);
+                  setInventoryError(null);
+                }}
+                disabled={addInventoryItem.isPending}
+              >
+                Cancel
               </button>
             </div>
           </div>
@@ -534,20 +743,46 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                   background: 'var(--surface-subtle)'
                 }}
               >
-                {inventory.map((item, index) => (
-                  <div
-                    key={`${item.itemRef}-${index}`}
-                    className="flex items-center justify-between gap-2 px-3 py-2"
-                    style={index > 0 ? { borderTop: '1px solid var(--border-muted)' } : undefined}
-                  >
-                    <span className="truncate font-mono text-xs text-[var(--text-primary)]">
-                      {item.itemRef}
-                    </span>
-                    <span className="shrink-0 text-xs text-[var(--text-muted)]">
-                      {item.quantity} {item.uom}
-                    </span>
-                  </div>
-                ))}
+                {inventory.map((item, index) => {
+                  const imageUrl = getProductImageUrl(item.product);
+                  const meta = getProductMeta(item.itemRef, item.product);
+
+                  return (
+                    <div
+                      key={`${item.itemRef}-${index}`}
+                      className="flex items-center justify-between gap-3 px-3 py-2"
+                      style={index > 0 ? { borderTop: '1px solid var(--border-muted)' } : undefined}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={getProductLabel(item.itemRef, item.product)}
+                            className="h-10 w-10 rounded-md object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-md text-[10px] text-[var(--text-muted)]"
+                            style={{ background: 'var(--surface-primary)' }}
+                          >
+                            Item
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                            {getProductLabel(item.itemRef, item.product)}
+                          </p>
+                          <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">
+                            {meta}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-xs text-[var(--text-muted)]">
+                        {item.quantity} {item.uom}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>
