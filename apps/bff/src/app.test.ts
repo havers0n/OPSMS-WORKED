@@ -462,32 +462,86 @@ function createSupabaseStub() {
 
       if (table === 'products') {
         return {
-          select: vi.fn(() => ({
-            eq: vi.fn((column: string, value: string | boolean) => {
-              const matches = productRows.filter((row) => {
-                if (column === 'id') return row.id === value;
-                if (column === 'is_active') return row.is_active === value;
-                return false;
-              });
+          select: vi.fn((_columns?: string, options?: { count?: string; head?: boolean }) => {
+            let matches = [...productRows];
 
-              return {
-                maybeSingle: vi.fn(async () => ({
-                  data: matches[0] ?? null,
+            const builder = {
+              eq: vi.fn((column: string, value: string | boolean) => {
+                matches = matches.filter((row) => {
+                  if (column === 'id') return row.id === value;
+                  if (column === 'is_active') return row.is_active === value;
+                  return false;
+                });
+
+                return builder;
+              }),
+              or: vi.fn((expression: string) => {
+                const needle = expression.match(/%([^%]+)%/)?.[1]?.toLowerCase() ?? '';
+                matches = matches.filter((row) => {
+                  const name = row.name.toLowerCase();
+                  const sku = row.sku?.toLowerCase() ?? '';
+                  const externalProductId = row.external_product_id.toLowerCase();
+                  return (
+                    name.includes(needle) ||
+                    sku.includes(needle) ||
+                    externalProductId.includes(needle)
+                  );
+                });
+
+                return builder;
+              }),
+              order: vi.fn(() => ({
+                range: vi.fn(async (from: number, to: number) => ({
+                  data: options?.head
+                    ? null
+                    : [...matches]
+                        .sort((left, right) => left.name.localeCompare(right.name))
+                        .slice(from, to + 1),
+                  count: options?.count === 'exact' ? matches.length : null,
                   error: null
                 })),
-                order: vi.fn(async () => ({
-                  data: [...matches].sort((left, right) => left.name.localeCompare(right.name)),
+                limit: vi.fn(async (count: number) => ({
+                  data: options?.head
+                    ? null
+                    : [...matches]
+                        .sort((left, right) => left.name.localeCompare(right.name))
+                        .slice(0, count),
+                  count: options?.count === 'exact' ? matches.length : null,
                   error: null
                 }))
-              };
-            }),
-            in: vi.fn((_column: string, values: string[]) =>
-              Promise.resolve({
-                data: productRows.filter((row) => values.includes(row.id)),
+              })),
+              range: vi.fn(async (from: number, to: number) => ({
+                data: options?.head
+                  ? null
+                  : [...matches]
+                      .sort((left, right) => left.name.localeCompare(right.name))
+                      .slice(from, to + 1),
+                count: options?.count === 'exact' ? matches.length : null,
                 error: null
-              })
-            )
-          }))
+              })),
+              limit: vi.fn(async (count: number) => ({
+                data: options?.head
+                  ? null
+                  : [...matches]
+                      .sort((left, right) => left.name.localeCompare(right.name))
+                      .slice(0, count),
+                count: options?.count === 'exact' ? matches.length : null,
+                error: null
+              })),
+              maybeSingle: vi.fn(async () => ({
+                data: matches[0] ?? null,
+                error: null
+              })),
+              in: vi.fn((_column: string, values: string[]) =>
+                Promise.resolve({
+                  data: productRows.filter((row) => values.includes(row.id)),
+                  error: null
+                })
+              )
+            };
+
+            return builder;
+          })
         };
       }
 
@@ -1082,12 +1136,45 @@ describe('buildApp', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(sortedProductResponses);
+    expect(response.json()).toEqual({
+      items: sortedProductResponses,
+      total: productRows.length,
+      activeTotal: productRows.filter((row) => row.is_active).length,
+      limit: 50,
+      offset: 0
+    });
 
     await app.close();
   });
 
-  it('filters catalog products by name, sku, or external id', async () => {
+  it('returns paginated catalog products with counts', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/products?limit=1&offset=1',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [sortedProductResponses[1]],
+      total: productRows.length,
+      activeTotal: productRows.filter((row) => row.is_active).length,
+      limit: 1,
+      offset: 1
+    });
+
+    await app.close();
+  });
+
+  it('filters active product search by name, sku, or external id', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -1096,7 +1183,7 @@ describe('buildApp', () => {
 
     const bySku = await app.inject({
       method: 'GET',
-      url: `/api/products?query=${productRows[0].sku}`,
+      url: `/api/products/search?query=${productRows[0].sku}`,
       headers: {
         authorization: 'Bearer token'
       }
@@ -1107,7 +1194,7 @@ describe('buildApp', () => {
 
     const byExternalId = await app.inject({
       method: 'GET',
-      url: `/api/products?query=${productRows[1].external_product_id}`,
+      url: `/api/products/search?query=${productRows[1].external_product_id}`,
       headers: {
         authorization: 'Bearer token'
       }
@@ -1536,12 +1623,15 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      ok: true,
+      id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
+      tenantId: authContext.currentTenant.tenantId,
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
       itemRef: `product:${productRows[1].id}`,
       product: productResponses[1],
       quantity: 3,
-      uom: 'pcs'
+      uom: 'pcs',
+      createdAt: '2026-03-13T12:30:00.000Z',
+      createdBy: authContext.user.id
     });
     expect(supabase.from).toHaveBeenCalledWith('inventory_items');
 
@@ -1638,7 +1728,7 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        sku: 'ITEM-404',
+        productId: productRows[0].id,
         quantity: 1,
         uom: 'pcs'
       }
@@ -1705,7 +1795,7 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        sku: 'ITEM-QA',
+        productId: productRows[0].id,
         quantity: 2,
         uom: 'pcs'
       }

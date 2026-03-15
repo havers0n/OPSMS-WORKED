@@ -1,4 +1,4 @@
-import { Activity, BarChart3, LayoutGrid, Package, X, type LucideIcon } from 'lucide-react';
+import { BarChart3, LayoutGrid, Package, Waves, X, type LucideIcon } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
@@ -10,7 +10,8 @@ type NavigationItem =
 const items: NavigationItem[] = [
   { label: 'Warehouse', icon: LayoutGrid, to: routes.warehouse, enabled: true },
   { label: 'Products', icon: Package, to: routes.products, enabled: true },
-  { label: 'Operations', icon: Activity, to: routes.operations, enabled: true },
+  { label: 'Orders', icon: Package, to: routes.orders, enabled: true },
+  { label: 'Waves', icon: Waves, to: routes.waves, enabled: true },
   { label: 'Analytics', icon: BarChart3, enabled: false }
 ];
 

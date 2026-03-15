@@ -191,7 +191,7 @@ function faceSummaryText(face: RackFace): string {
   if (face.isMirrored) return 'Mirrored from Face A';
   if (face.sections.length === 0) return 'Not configured';
   const cells = face.sections.reduce((sum, s) => sum + s.levels.reduce((l, lv) => l + lv.slotCount, 0), 0);
-  return `${face.sections.length} sec · ${face.sections[0]?.levels.length ?? 0} lvl · ${cells} cells`;
+  return `${face.sections.length} sec | ${face.sections[0]?.levels.length ?? 0} lvl | ${cells} cells`;
 }
 
 // ─── NumberingPanel ───────────────────────────────────────────────────────────
@@ -247,8 +247,8 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpda
         Numbering
       </div>
       <div className="mb-1.5 text-xs text-slate-600">
-        Направление нумерации
-        <span className="ml-1.5 text-slate-400">— с какого края начинается слот №1 (и секция №1)</span>
+        Numbering direction
+        <span className="ml-1.5 text-slate-400">- defines which rack edge starts slot 1 and section 1</span>
       </div>
       <ToggleGroup
         value={slotNumberingDirection}
@@ -256,12 +256,12 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpda
         options={[
           {
             value: 'ltr',
-            label: '① → N',
+            label: '1 -> N',
             title: 'Slot 1 (and section 1) at the left/near end of the rack'
           },
           {
             value: 'rtl',
-            label: 'N → ①',
+            label: 'N -> 1',
             title: 'Slot 1 (and section 1) at the right/far end of the rack'
           },
         ]}
@@ -405,7 +405,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
           <div className="min-w-0">
             <div className="text-xl font-semibold text-slate-900">Rack {rack.displayCode}</div>
             <div className="mt-0.5 text-xs text-slate-500">
-              {rack.kind === 'paired' ? 'Paired' : 'Single'} · {rack.totalLength.toFixed(1)} m × {rack.depth.toFixed(1)} m · {rack.rotationDeg}°
+              {rack.kind === 'paired' ? 'Paired' : 'Single'} | {rack.totalLength.toFixed(1)} m x {rack.depth.toFixed(1)} m | {rack.rotationDeg} deg
             </div>
           </div>
           <StatusBadge rack={rack} issues={rackIssues} />
@@ -431,7 +431,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
             type="button"
             disabled={!isLayoutEditable}
             onClick={handleRotate}
-            title="Rotate 90°"
+            title="Rotate 90 deg"
             className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
           >
             <RotateCcw className="h-3.5 w-3.5" />
@@ -492,7 +492,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
         <div className="border-b border-[var(--border-muted)]">
           <AccordionHeader
             title="Geometry"
-            subtitle={`${rack.totalLength.toFixed(1)} m × ${rack.depth.toFixed(1)} m · ${rack.kind}`}
+            subtitle={`${rack.totalLength.toFixed(1)} m x ${rack.depth.toFixed(1)} m | ${rack.kind}`}
             isOpen={isOpen('geometry')}
             onToggle={() => toggleSection('geometry')}
           />
@@ -556,7 +556,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
             title="Face B"
             subtitle={
               !faceBConfigured
-                ? 'Not configured — single-face rack'
+                ? 'Not configured - single-face rack'
                 : isMirrored
                   ? 'Mirrored from Face A'
                   : faceSummaryText(faceB)
@@ -643,7 +643,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
         <div>
           <AccordionHeader
             title="Address Preview"
-            subtitle={previewAddresses.length > 0 ? previewAddresses[0] + ' …' : 'No addresses generated'}
+            subtitle={previewAddresses.length > 0 ? previewAddresses[0] + ' ...' : 'No addresses generated'}
             isOpen={isOpen('address')}
             onToggle={() => toggleSection('address')}
           />
