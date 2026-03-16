@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Lock,
   RotateCcw,
   Trash2,
   X,
@@ -384,6 +385,21 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden bg-white">
+
+      {/* ── Published lock strip ── */}
+      {!isLayoutEditable && (
+        <div
+          className="flex shrink-0 items-center gap-2 border-b px-5 py-2"
+          style={{
+            background: 'rgba(37,99,235,0.08)',
+            borderColor: 'rgba(37,99,235,0.2)',
+            color: '#1d4ed8'
+          }}
+        >
+          <Lock className="h-3.5 w-3.5 shrink-0" />
+          <span className="text-xs font-medium">Structure locked · published</span>
+        </div>
+      )}
 
       {/* ── Sticky header ── */}
       <div className="shrink-0 border-b border-[var(--border-muted)] bg-[var(--surface-secondary)]">
