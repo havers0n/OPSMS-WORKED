@@ -6,7 +6,7 @@ export const layoutDraftSchema = z.object({
   layoutVersionId: z.string(),
   floorId: z.string(),
   state: layoutVersionStateSchema,
-  versionNo: z.number().int().min(1),
+  versionNo: z.number().int().min(1).optional().nullable(),
   rackIds: z.array(z.string()),
   racks: z.record(z.string(), rackSchema)
 });

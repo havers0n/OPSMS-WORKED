@@ -279,6 +279,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
     set({
       viewMode,
       editorMode: 'select',
+      // Clear selection on every mode switch — stale rack/cell selections from
+      // the previous mode should never bleed into the new one.
+      selection: { type: 'none' },
       placementInteraction: { type: 'idle' }
     }),
   setEditorMode: (editorMode) => set({ editorMode }),
@@ -362,11 +365,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const normalized = normalizeDraft(draft);
       const nextDraftState = normalized.draft;
 
+      // Preserve the current rack selection only if it's still valid in the new draft.
+      // Never auto-select the first rack — it overwrites cell/container selections that
+      // happen to be live when a layout-version switch occurs (e.g. draft creation while
+      // the user is in placement mode).
       const currentRackIds = getSelectedRackIds(state.selection);
       const nextRackIds =
         currentRackIds.length > 0 && currentRackIds.every(id => nextDraftState.racks[id])
           ? currentRackIds
-          : (nextDraftState.rackIds[0] ? [nextDraftState.rackIds[0]] : []);
+          : [];
 
       return {
         draft: nextDraftState,

@@ -270,9 +270,8 @@ export function EditorCanvas({
     if (viewMode !== 'placement' || prevMode === 'placement') return;
     if (viewport.width === 0) return;
 
-    // Clear rack selection so the inspector switches to placement panel immediately.
-    setSelectedRackIdsRef.current([]);
-
+    // Selection is already cleared by setViewMode() in the store.
+    // This effect only handles the auto-zoom to cell-visible level.
     const racks = layoutDraft ? Object.values(layoutDraft.racks) : [];
 
     if (racks.length === 0) {
