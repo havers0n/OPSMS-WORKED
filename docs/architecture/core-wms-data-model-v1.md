@@ -15,6 +15,7 @@ Current implementation note:
 - the repo already has container placement and inventory content concepts
 - Stage 1 has introduced first-class `locations` and backfilled published rack slots into executable location rows
 - Stage 2 now routes storage reads through location-backed compatibility views while placement writes still remain cell-centric
+- Stage 3 now introduces canonical `inventory_unit` stock rows while `inventory_items` remains a compatibility surface for legacy reads and migration safety
 - this document defines the target v1 storage core that must become the stable reference for future schema, API, and UX work
 
 ## Goal

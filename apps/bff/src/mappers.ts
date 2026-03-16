@@ -1,10 +1,12 @@
 import {
+  buildCatalogProductItemRef,
   cellSchema,
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
+  inventoryUnitSchema,
   locationOccupancyRowSchema,
   locationStorageSnapshotRowSchema,
   parseCellAddress,
@@ -30,6 +32,7 @@ import {
   type ContainerType,
   type Floor,
   type InventoryItem,
+  type InventoryUnit,
   type LayoutDraft,
   type LayoutValidationResult,
   type LocationOccupancyRow,
@@ -363,6 +366,62 @@ export function mapInventoryItemRowToDomain(row: {
     tenantId: row.tenant_id,
     containerId: row.container_id,
     itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
+    quantity: row.quantity,
+    uom: row.uom,
+    createdAt: row.created_at,
+    createdBy: row.created_by
+  });
+}
+
+export function mapInventoryUnitRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  container_id: string;
+  product_id: string;
+  quantity: number;
+  uom: string;
+  lot_code: string | null;
+  serial_no: string | null;
+  expiry_date: string | null;
+  status: 'available' | 'reserved' | 'damaged' | 'hold';
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}): InventoryUnit {
+  return inventoryUnitSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    containerId: row.container_id,
+    productId: row.product_id,
+    quantity: row.quantity,
+    uom: row.uom,
+    lotCode: row.lot_code,
+    serialNo: row.serial_no,
+    expiryDate: row.expiry_date,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    createdBy: row.created_by
+  });
+}
+
+export function mapInventoryUnitRowToLegacyInventoryItemDomain(row: {
+  id: string;
+  tenant_id: string;
+  container_id: string;
+  product_id: string;
+  quantity: number;
+  uom: string;
+  created_at: string;
+  created_by: string | null;
+  product?: ProductRow | null;
+}): InventoryItem {
+  return inventoryItemSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    containerId: row.container_id,
+    itemRef: buildCatalogProductItemRef(row.product_id),
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
     uom: row.uom,

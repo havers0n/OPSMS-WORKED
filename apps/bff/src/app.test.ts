@@ -158,6 +158,24 @@ const inventoryItemRows = [
   }
 ];
 
+const inventoryUnitRows = [
+  {
+    id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    product_id: productRows[0].id,
+    quantity: 5,
+    uom: 'pcs',
+    lot_code: null,
+    serial_no: null,
+    expiry_date: null,
+    status: 'available' as const,
+    created_at: '2026-03-13T11:15:00.000Z',
+    updated_at: '2026-03-13T11:15:00.000Z',
+    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+  }
+];
+
 const containerStorageSnapshotRows = [
   {
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
@@ -620,16 +638,21 @@ function createSupabaseStub() {
         };
       }
 
-      if (table === 'inventory_items') {
+      if (table === 'inventory_item_compat_v') {
         return {
           select: vi.fn(() => ({
             eq: vi.fn((_column: string, value: string) => ({
               order: vi.fn(async () => ({
                 data: inventoryItemRows.filter((row) => row.container_id === value),
                 error: null
-              }))
             }))
-          })),
+          }))
+          }))
+        };
+      }
+
+      if (table === 'inventory_unit') {
+        return {
           insert: vi.fn((payload: Record<string, unknown>) => ({
             select: vi.fn(() => ({
               single: vi.fn(async () => ({
@@ -637,13 +660,25 @@ function createSupabaseStub() {
                   id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
                   tenant_id: payload.tenant_id,
                   container_id: payload.container_id,
-                  item_ref: payload.item_ref,
-                  product_id: payload.product_id ?? null,
+                  product_id: payload.product_id,
                   quantity: payload.quantity,
                   uom: payload.uom,
+                  lot_code: null,
+                  serial_no: null,
+                  expiry_date: null,
+                  status: 'available',
                   created_at: '2026-03-13T12:30:00.000Z',
+                  updated_at: '2026-03-13T12:30:00.000Z',
                   created_by: payload.created_by ?? null
                 },
+                error: null
+              }))
+            }))
+          })),
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              order: vi.fn(async () => ({
+                data: inventoryUnitRows.filter((row) => row.container_id === value),
                 error: null
               }))
             }))
@@ -1708,7 +1743,7 @@ describe('buildApp', () => {
       createdAt: '2026-03-13T12:30:00.000Z',
       createdBy: authContext.user.id
     });
-    expect(supabase.from).toHaveBeenCalledWith('inventory_items');
+    expect(supabase.from).toHaveBeenCalledWith('inventory_unit');
 
     await app.close();
   });
@@ -1741,28 +1776,8 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('maps duplicate current inventory content to conflict', async () => {
+  it('allows multiple canonical inventory rows for the same product and container', async () => {
     const supabase = createSupabaseStub();
-    supabase.from = vi.fn((table: string) => {
-      if (table === 'inventory_items') {
-        return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(async () => ({
-                data: null,
-                error: {
-                  code: '23505',
-                  message: 'duplicate key value violates unique constraint'
-                }
-              }))
-            }))
-          }))
-        };
-      }
-
-      return createSupabaseStub().from(table);
-    });
-
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -1781,10 +1796,19 @@ describe('buildApp', () => {
       }
     });
 
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      code: 'INVENTORY_ROW_ALREADY_EXISTS'
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
+      tenantId: authContext.currentTenant.tenantId,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      itemRef: `product:${productRows[0].id}`,
+      product: productResponses[0],
+      quantity: 7,
+      uom: 'pcs',
+      createdAt: '2026-03-13T12:30:00.000Z',
+      createdBy: authContext.user.id
     });
+    expect(supabase.from).toHaveBeenCalledWith('inventory_unit');
 
     await app.close();
   });

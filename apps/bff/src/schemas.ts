@@ -186,13 +186,7 @@ export const cellSlotStorageResponseSchema = z.object({
 export type CellSlotStorageResponse = z.infer<typeof cellSlotStorageResponseSchema>;
 export const inventoryItemsResponseSchema = z.array(inventoryItemSchema);
 export const inventoryItemResponseSchema = inventoryItemSchema;
-export const addInventoryToContainerResponseSchema = z.object({
-  ok: z.literal(true),
-  containerId: z.string().uuid(),
-  sku: z.string().trim().min(1),
-  quantity: z.number().positive(),
-  uom: z.string().trim().min(1)
-});
+export const addInventoryToContainerResponseSchema = inventoryItemSchema;
 export const productsResponseSchema = z.array(productSchema);
 export const productResponseSchema = productSchema;
 export const productCatalogResponseSchema = z.object({

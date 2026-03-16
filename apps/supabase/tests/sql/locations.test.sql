@@ -9,10 +9,14 @@ declare
   other_floor_uuid uuid := gen_random_uuid();
   published_layout_uuid uuid := gen_random_uuid();
   draft_layout_uuid uuid := gen_random_uuid();
-  rack_uuid uuid := gen_random_uuid();
-  rack_face_uuid uuid := gen_random_uuid();
-  rack_section_uuid uuid := gen_random_uuid();
-  rack_level_uuid uuid := gen_random_uuid();
+  published_rack_uuid uuid := gen_random_uuid();
+  published_rack_face_uuid uuid := gen_random_uuid();
+  published_rack_section_uuid uuid := gen_random_uuid();
+  published_rack_level_uuid uuid := gen_random_uuid();
+  draft_rack_uuid uuid := gen_random_uuid();
+  draft_rack_face_uuid uuid := gen_random_uuid();
+  draft_rack_section_uuid uuid := gen_random_uuid();
+  draft_rack_level_uuid uuid := gen_random_uuid();
   published_cell_uuid uuid := gen_random_uuid();
   draft_cell_uuid uuid := gen_random_uuid();
   inserted_before integer;
@@ -43,24 +47,28 @@ begin
 
   insert into public.racks (id, layout_version_id, display_code, kind, axis, x, y, total_length, depth, rotation_deg, state)
   values
-    (rack_uuid, published_layout_uuid, 'LR1', 'single', 'NS', 0, 0, 1000, 800, 0, 'published');
+    (published_rack_uuid, published_layout_uuid, 'LR1', 'single', 'NS', 0, 0, 1000, 800, 0, 'published'),
+    (draft_rack_uuid, draft_layout_uuid, 'LR1-DRAFT', 'single', 'NS', 0, 0, 1000, 800, 0, 'draft');
 
   insert into public.rack_faces (id, rack_id, side, enabled, slot_numbering_direction, is_mirrored, mirror_source_face_id, face_length)
   values
-    (rack_face_uuid, rack_uuid, 'A', true, 'ltr', false, null, null);
+    (published_rack_face_uuid, published_rack_uuid, 'A', true, 'ltr', false, null, null),
+    (draft_rack_face_uuid, draft_rack_uuid, 'A', true, 'ltr', false, null, null);
 
   insert into public.rack_sections (id, rack_face_id, ordinal, length)
   values
-    (rack_section_uuid, rack_face_uuid, 1, 1000);
+    (published_rack_section_uuid, published_rack_face_uuid, 1, 1000),
+    (draft_rack_section_uuid, draft_rack_face_uuid, 1, 1000);
 
   insert into public.rack_levels (id, rack_section_id, ordinal, slot_count)
   values
-    (rack_level_uuid, rack_section_uuid, 1, 2);
+    (published_rack_level_uuid, published_rack_section_uuid, 1, 2),
+    (draft_rack_level_uuid, draft_rack_section_uuid, 1, 2);
 
   insert into public.cells (id, layout_version_id, rack_id, rack_face_id, rack_section_id, rack_level_id, slot_no, address, address_sort_key, cell_code)
   values
-    (published_cell_uuid, published_layout_uuid, rack_uuid, rack_face_uuid, rack_section_uuid, rack_level_uuid, 1, 'LR1-A.01.01.01', 'LR1-A-01-01-01', 'loc-pub-001'),
-    (draft_cell_uuid, draft_layout_uuid, rack_uuid, rack_face_uuid, rack_section_uuid, rack_level_uuid, 2, 'LR1-A.01.01.02', 'LR1-A-01-01-02', 'loc-draft-002');
+    (published_cell_uuid, published_layout_uuid, published_rack_uuid, published_rack_face_uuid, published_rack_section_uuid, published_rack_level_uuid, 1, 'LR1-A.01.01.01', 'LR1-A-01-01-01', 'loc-pub-001'),
+    (draft_cell_uuid, draft_layout_uuid, draft_rack_uuid, draft_rack_face_uuid, draft_rack_section_uuid, draft_rack_level_uuid, 2, 'LR1-A.01.01.02', 'LR1-A-01-01-02', 'loc-draft-002');
 
   select count(*) into inserted_before
   from public.locations

@@ -72,6 +72,7 @@ import {
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
   mapInventoryItemRowToDomain,
+  mapInventoryUnitRowToLegacyInventoryItemDomain,
   mapLayoutDraftBundleToDomain,
   mapProductRowToDomain,
   mapSiteRowToDomain,
@@ -1148,7 +1149,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
-      .from('inventory_items')
+      .from('inventory_item_compat_v')
       .select('id,tenant_id,container_id,item_ref,product_id,quantity,uom,created_at,created_by')
       .eq('container_id', containerId)
       .order('created_at', { ascending: true });
@@ -1521,34 +1522,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     const { data, error } = await supabase
-      .from('inventory_items')
+      .from('inventory_unit')
       .insert({
         tenant_id: auth.currentTenant.tenantId,
         container_id: containerId,
         product_id: product.id,
-        item_ref: buildCatalogProductItemRef(product.id),
         quantity: body.quantity,
         uom: body.uom,
         created_by: auth.user.id
       })
-      .select('id,tenant_id,container_id,item_ref,product_id,quantity,uom,created_at,created_by')
+      .select('id,tenant_id,container_id,product_id,quantity,uom,lot_code,serial_no,expiry_date,status,created_at,updated_at,created_by')
       .single();
 
     if (error) {
-      if ('code' in error && error.code === '23505') {
-        throw new ApiError(
-          409,
-          'INVENTORY_ROW_ALREADY_EXISTS',
-          'An inventory row for this SKU and UOM already exists in the container.'
-        );
-      }
-
       throw error;
     }
 
     return parseOrThrow(
       inventoryItemResponseSchema,
-      mapInventoryItemRowToDomain({
+      mapInventoryUnitRowToLegacyInventoryItemDomain({
         ...data,
         product
       })

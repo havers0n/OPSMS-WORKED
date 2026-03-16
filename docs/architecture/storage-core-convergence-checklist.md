@@ -186,32 +186,39 @@ Goal:
 
 - make the stock unit explicit and container-bound
 
+Implementation status snapshot:
+
+- canonical `inventory_unit` now exists as the target stock table
+- product-backed legacy `inventory_items` rows are backfilled and synchronized into canonical stock units
+- public inventory endpoints remain compatibility-stable while writing canonical rows
+- `inventory_items` now remains explicit compatibility debt rather than the preferred storage-core model
+
 Schema checklist:
 
-- [ ] introduce `inventory_unit` shape with `product_id`, `container_id`, `quantity`, `uom`, `lot_code`, `serial_no`, `expiry_date`, and `status`
-- [ ] backfill existing `inventory_items` into the new shape or evolve the table in place with a documented compatibility strategy
-- [ ] ensure inventory location is derived through `container.current_location_id` or equivalent location-backed state, not duplicated as a second truth
+- [x] introduce `inventory_unit` shape with `product_id`, `container_id`, `quantity`, `uom`, `lot_code`, `serial_no`, `expiry_date`, and `status`
+- [x] backfill existing `inventory_items` into the new shape or evolve the table in place with a documented compatibility strategy
+- [x] ensure inventory location is derived through `container.current_location_id` or equivalent location-backed state, not duplicated as a second truth
 
 Domain checklist:
 
-- [ ] add `inventory-unit` domain model
-- [ ] deprecate `inventory-item` naming from storage-core concepts
-- [ ] preserve a clean distinction between product master and stock instance
+- [x] add `inventory-unit` domain model
+- [x] deprecate `inventory-item` naming from storage-core concepts
+- [x] preserve a clean distinction between product master and stock instance
 
 BFF checklist:
 
-- [ ] update `inventory-product-resolution.ts` and related mappers to consume the new stock-unit shape
-- [ ] update validation rules for lot, serial, expiry, and per-unit status
+- [x] update `inventory-product-resolution.ts` and related mappers to consume the new stock-unit shape
+- [x] update validation rules for lot, serial, expiry, and per-unit status
 
 Web checklist:
 
-- [ ] update `container-inventory` and `inventory-add` flows to stop treating inventory as a loose product attachment
-- [ ] ensure container views show stock contents as inventory units, not ambiguous item rows
+- [x] update `container-inventory` and `inventory-add` flows to stop treating inventory as a loose product attachment
+- [x] ensure container views show stock contents as inventory units, not ambiguous item rows
 
 Tests and docs:
 
-- [ ] add tests for multiple inventory units per container
-- [ ] add tests for lot/serial/expiry constraints if enabled by product tracking mode
+- [x] add tests for multiple inventory units per container
+- [x] add tests for lot/serial/expiry constraints if enabled by product tracking mode
 
 Exit criteria:
 

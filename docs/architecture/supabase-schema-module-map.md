@@ -26,7 +26,7 @@ The schema must optimize for:
 
 1. authoritative published layout truth
 2. stable address generation
-3. storage truth based on `Cell -> ContainerPlacement -> Container -> InventoryItem`
+3. storage truth converging from `Cell -> ContainerPlacement -> Container -> InventoryItem` toward `GeometrySlot -> Location -> Container -> InventoryUnit`
 4. staging-first imports with lineage
 5. operational readiness derivation
 6. pick task generation and execution history
@@ -106,7 +106,8 @@ When reading this file:
 
 Until the schema is converged:
 
-- `container_placements` and `inventory_items` remain the current persisted execution truth in the repo
+- `container_placements` remain the current placement write truth in the repo
+- canonical product-backed stock now lives in `inventory_unit`, while `inventory_items` remains compatibility debt
 - `cells` remain the structural base for current placement features
 - `locations` are now the introduced execution entity for published rack slots, but not yet the primary write target
 - new work should avoid deepening the assumption that `cell = executable location`
@@ -169,6 +170,10 @@ Target outcome:
 Constraint:
 
 - do not create a second direct `product -> cell` or `product -> location` execution path
+
+Current status:
+
+- baseline implemented: canonical `inventory_unit` now exists, product-backed legacy inventory is backfilled and synchronized, and public inventory APIs remain compatibility-stable
 
 #### Stage 4. Introduce first-class `movement`
 
@@ -498,13 +503,18 @@ Important note:
 
 - this section below describes the current implemented or near-term schema shape
 - it should now be read together with the `Current Implementation vs Target Model` section above
+- Stage 3 means stock truth is now split intentionally:
+  - canonical product-backed stock lives in `inventory_unit`
+  - `inventory_items` remains a legacy compatibility surface for old reads and unmigrated free-text rows
 - it is not the final canonical storage-core design
 
 ### Core rule
 
-The schema must encode:
+The schema must currently encode:
 
-`Cell -> ContainerPlacement -> Container -> InventoryItem`
+`Cell -> ContainerPlacement -> Container -> InventoryUnit`
+
+with a temporary compatibility layer that still exposes legacy `InventoryItem`-shaped reads.
 
 ### Tables
 
@@ -603,6 +613,42 @@ Notes:
 - current-content truth only, not an event ledger
 - inventory belongs to containers, never directly to cells
 - cell content answers are derived later through active placement joins
+- Stage 3: this table is now a frozen compatibility surface for legacy and free-text rows, not the preferred canonical stock model
+
+#### `inventory_unit`
+
+Purpose:
+
+- canonical product-backed stock unit inside a container
+
+Key fields:
+
+- `id uuid pk`
+- `tenant_id uuid fk -> tenants.id`
+- `container_id uuid fk -> containers.id`
+- `product_id uuid fk -> products.id`
+- `legacy_inventory_item_id uuid null fk -> inventory_items.id`
+- `quantity numeric`
+- `uom text`
+- `lot_code text null`
+- `serial_no text null`
+- `expiry_date date null`
+- `status text check in ('available','reserved','damaged','hold')`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+- `created_by uuid null fk -> profiles.id`
+
+Constraints:
+
+- quantity >= 0
+- `serial_no` uniqueness when present
+- no uniqueness on `(container_id, product_id)` so partial-pick and lot-split evolution stays possible
+
+Notes:
+
+- Stage 3 canonical stock truth lives here
+- inventory location is derived through container placement / active location, not duplicated on the stock row
+- legacy compatibility reads may still project this data back into `InventoryItem`-shaped rows
 
 ## 4. Product Master and Operational Role Module
 
@@ -1018,6 +1064,7 @@ Possible columns:
 Notes:
 
 - target-facing Stage 2 storage snapshot view
+- Stage 3: product-backed inventory content now resolves from canonical `inventory_unit`, with legacy free-text rows projected through a compatibility layer
 - legacy cell storage should project from this view instead of owning its own execution logic
 
 #### `cell_occupancy_v`
@@ -1060,7 +1107,7 @@ Possible columns:
 
 Notes:
 
-- derived only from `containers + inventory_items`
+- derived from `containers + inventory_unit`, with compatibility projection for legacy free-text-only rows
 - empty containers may appear with null content columns
 - no readiness, reservation, or picking semantics belong here
 
@@ -1325,7 +1372,8 @@ Canonical flow through the schema:
 - `container_types`
 - `containers`
 - `container_placements`
-- `inventory_items`
+- `inventory_items` (legacy compatibility surface)
+- `inventory_unit` (canonical product-backed stock truth)
 - `stock_snapshots`
 - `stock_snapshot_lines`
 - `orders`
