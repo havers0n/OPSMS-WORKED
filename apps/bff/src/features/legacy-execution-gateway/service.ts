@@ -16,15 +16,15 @@ import type {
 import {
   ExecutionContainerNotFoundError,
   ExecutionContainerNotPlacedError,
-  ExecutionDimensionOverflowError,
-  ExecutionDimensionUnknownError,
-  ExecutionSameLocationError,
+  ExecutionTargetLocationDimensionOverflowError,
+  ExecutionTargetLocationDimensionUnknownError,
+  ExecutionTargetLocationSameAsSourceError,
   ExecutionTargetLocationNotActiveError,
   ExecutionTargetLocationNotFoundError,
   ExecutionTargetLocationOccupiedError,
   ExecutionTargetLocationTenantMismatchError,
-  ExecutionWeightOverflowError,
-  ExecutionWeightUnknownError
+  ExecutionTargetLocationWeightOverflowError,
+  ExecutionTargetLocationWeightUnknownError
 } from '../execution/errors.js';
 import type {
   LocationReadRepo,
@@ -107,7 +107,7 @@ function mapLegacyCellMoveError(error: unknown): ApiError | null {
     return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell is not currently writable.');
   }
 
-  if (error instanceof ExecutionSameLocationError) {
+  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
     return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is already in the target cell.');
   }
 
@@ -115,19 +115,19 @@ function mapLegacyCellMoveError(error: unknown): ApiError | null {
     return new ApiError(409, 'PLACEMENT_CONFLICT', 'Target cell already contains another active container.');
   }
 
-  if (error instanceof ExecutionDimensionUnknownError) {
+  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
     return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell fit cannot be verified because container dimensions are missing.');
   }
 
-  if (error instanceof ExecutionDimensionOverflowError) {
+  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
     return new ApiError(409, 'INVALID_TARGET_CELL', 'Container dimensions exceed the target cell capacity.');
   }
 
-  if (error instanceof ExecutionWeightUnknownError) {
+  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
     return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell load cannot be verified because weight data is incomplete.');
   }
 
-  if (error instanceof ExecutionWeightOverflowError) {
+  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
     return new ApiError(409, 'INVALID_TARGET_CELL', 'Container load exceeds the target cell capacity.');
   }
 
