@@ -29,6 +29,13 @@ Not included here:
 
 ## Common Contract Rules
 
+### Stage 6 API Boundary
+
+- Stage 6 introduces the first public location-native execution contracts.
+- New execution-facing routes must start from `location`, `container`, `inventory_unit`, or `stock_movements`, never from raw `cell`.
+- Legacy cell-centric routes remain available, but they are now frozen compatibility facades.
+- Frozen compatibility routes must not receive new semantics, fields, or behavioral extensions in Stage 6+.
+
 ### Transport
 
 - Transport is JSON over HTTP.
@@ -85,6 +92,480 @@ Domain owners below use the bounded-context names from [`docs/architecture/syste
 - BFF request schemas validate transport shape.
 - Several semantic constraints are enforced only in Postgres, not in Zod.
 - Example: `save_layout_draft` accepts strings at the BFF layer, but DB checks/RPC validation still enforce valid rack kinds, axes, face rules, uniqueness, and address-generation invariants.
+
+## Stage 6 Execution Endpoints
+
+These contracts are the canonical public execution surface after Stage 6.
+
+### `GET /api/locations/:locationId/containers`
+
+Purpose:
+
+- read current container occupancy for one executable location
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with read access to the target location
+
+Request schema:
+
+- path param `locationId: uuid`
+
+Response schema:
+
+- `locationOccupancyRowsResponseSchema`
+- array of `LocationOccupancyRow`
+
+```json
+[
+  {
+    "tenantId": "uuid",
+    "floorId": "uuid",
+    "locationId": "uuid",
+    "locationCode": "string",
+    "locationType": "rack_slot | floor | staging | dock | buffer",
+    "cellId": "uuid | null",
+    "containerId": "uuid",
+    "externalCode": "string | null",
+    "containerType": "string",
+    "containerStatus": "active | quarantined | closed | lost | damaged",
+    "placedAt": "ISO timestamp"
+  }
+]
+```
+
+Source of truth:
+
+- `location_occupancy_v`
+
+Related RPC/tables:
+
+- `public.locations`
+- `public.containers`
+- `public.location_occupancy_v`
+
+Side effects:
+
+- none
+
+Idempotency:
+
+- idempotent
+
+Failure cases:
+
+- invalid `locationId`
+- location not found
+- location read access denied
+
+### `GET /api/locations/:locationId/storage`
+
+Purpose:
+
+- read current storage contents for one executable location
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with read access to the target location
+
+Request schema:
+
+- path param `locationId: uuid`
+
+Response schema:
+
+- `locationStorageSnapshotRowsResponseSchema`
+- array of `LocationStorageSnapshotRow`
+
+```json
+[
+  {
+    "tenantId": "uuid",
+    "floorId": "uuid",
+    "locationId": "uuid",
+    "locationCode": "string",
+    "locationType": "rack_slot | floor | staging | dock | buffer",
+    "cellId": "uuid | null",
+    "containerId": "uuid",
+    "externalCode": "string | null",
+    "containerType": "string",
+    "containerStatus": "active | quarantined | closed | lost | damaged",
+    "placedAt": "ISO timestamp",
+    "itemRef": "string | null",
+    "product": {
+      "id": "uuid",
+      "sku": "string",
+      "name": "string",
+      "barcode": "string | null",
+      "trackingMode": "none | lot | serial | expiry"
+    },
+    "quantity": 1,
+    "uom": "string | null"
+  }
+]
+```
+
+Source of truth:
+
+- `location_storage_snapshot_v`
+
+Related RPC/tables:
+
+- `public.location_storage_snapshot_v`
+- canonical product-backed rows derive from `public.inventory_unit`
+- legacy compatibility rows may still project from frozen `inventory_items`
+
+Side effects:
+
+- none
+
+Idempotency:
+
+- idempotent
+
+Failure cases:
+
+- invalid `locationId`
+- location not found
+- location read access denied
+
+### `GET /api/floors/:floorId/location-occupancy`
+
+Purpose:
+
+- read current location-native occupancy across one floor
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with read access to the target floor
+
+Request schema:
+
+- path param `floorId: uuid`
+
+Response schema:
+
+- `locationOccupancyRowsResponseSchema`
+
+Source of truth:
+
+- `location_occupancy_v`
+
+Related RPC/tables:
+
+- `public.locations`
+- `public.containers`
+- `public.location_occupancy_v`
+
+Side effects:
+
+- none
+
+Idempotency:
+
+- idempotent
+
+Failure cases:
+
+- invalid `floorId`
+- floor access denied
+
+### `GET /api/containers/:containerId/location`
+
+Purpose:
+
+- explicitly read the canonical current location of one container
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with read access to the target container
+
+Request schema:
+
+- path param `containerId: uuid`
+
+Response schema:
+
+- `containerCurrentLocationResponseSchema`
+
+```json
+{
+  "containerId": "uuid",
+  "currentLocationId": "uuid | null",
+  "locationCode": "string | null",
+  "locationType": "rack_slot | floor | staging | dock | buffer | null",
+  "cellId": "uuid | null"
+}
+```
+
+Source of truth:
+
+- `containers.current_location_id`
+
+Related RPC/tables:
+
+- `public.containers`
+- `public.locations`
+- `public.active_container_locations_v` for compatibility-shaped resolution
+
+Side effects:
+
+- none
+
+Idempotency:
+
+- idempotent
+
+Failure cases:
+
+- invalid `containerId`
+- container not found
+- container access denied
+
+Notes:
+
+- returns explicit `null` location fields when the container exists but currently has no canonical location
+- this endpoint is the preferred public read for current container location after Stage 6
+
+### `POST /api/containers/:containerId/move-to-location`
+
+Purpose:
+
+- execute a canonical container move to a target location
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with execution write access
+
+Request schema:
+
+- path param `containerId: uuid`
+- body `moveContainerToLocationRequestBodySchema`
+
+```json
+{
+  "targetLocationId": "uuid"
+}
+```
+
+Response schema:
+
+- `moveContainerToLocationResponseSchema`
+
+```json
+{
+  "containerId": "uuid",
+  "sourceLocationId": "uuid | null",
+  "targetLocationId": "uuid",
+  "movementId": "uuid",
+  "occurredAt": "ISO timestamp"
+}
+```
+
+Source of truth:
+
+- RPC `public.move_container_canonical`
+
+Related RPC/tables:
+
+- `public.containers.current_location_id`
+- `public.locations`
+- `public.stock_movements`
+- rack compatibility sync through `public.container_placements` when the target location is geometry-backed
+
+Side effects:
+
+- updates canonical current location
+- may update rack placement projection
+- writes one canonical `stock_movements` row
+
+Idempotency:
+
+- non-idempotent
+
+Failure cases:
+
+- `CONTAINER_NOT_FOUND`
+- `LOCATION_NOT_FOUND`
+- `LOCATION_NOT_WRITABLE`
+- `SAME_LOCATION`
+- `LOCATION_OCCUPIED`
+- `LOCATION_DIMENSION_UNKNOWN`
+- `LOCATION_DIMENSION_OVERFLOW`
+- `LOCATION_WEIGHT_UNKNOWN`
+- `LOCATION_WEIGHT_OVERFLOW`
+
+### `POST /api/inventory/:inventoryUnitId/transfer`
+
+Purpose:
+
+- transfer part of one inventory unit into another container through canonical execution semantics
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with execution write access
+
+Request schema:
+
+- path param `inventoryUnitId: uuid`
+- body `transferInventoryUnitRequestBodySchema`
+
+```json
+{
+  "targetContainerId": "uuid",
+  "quantity": 1
+}
+```
+
+Response schema:
+
+- `transferInventoryUnitResponseSchema`
+
+```json
+{
+  "sourceInventoryUnitId": "uuid",
+  "targetInventoryUnitId": "uuid",
+  "sourceContainerId": "uuid",
+  "targetContainerId": "uuid",
+  "sourceLocationId": "uuid | null",
+  "targetLocationId": "uuid | null",
+  "quantity": 1,
+  "uom": "string",
+  "mergeApplied": false,
+  "sourceQuantity": 9,
+  "targetQuantity": 1,
+  "movementId": "uuid",
+  "splitMovementId": "uuid",
+  "transferMovementId": "uuid",
+  "occurredAt": "ISO timestamp"
+}
+```
+
+Source of truth:
+
+- RPC `public.transfer_inventory_unit`
+
+Related RPC/tables:
+
+- `public.inventory_unit`
+- `public.containers`
+- `public.stock_movements`
+
+Side effects:
+
+- splits or merges canonical stock rows
+- writes canonical `split_stock` and `transfer_stock` movement history
+
+Idempotency:
+
+- non-idempotent
+
+Failure cases:
+
+- `INVENTORY_UNIT_NOT_FOUND`
+- `INVALID_SPLIT_QUANTITY`
+- `SERIAL_SPLIT_NOT_ALLOWED`
+- `TARGET_CONTAINER_NOT_FOUND`
+- `TARGET_CONTAINER_TENANT_MISMATCH`
+- `TARGET_CONTAINER_CONFLICT`
+
+### `POST /api/inventory/:inventoryUnitId/pick-partial`
+
+Purpose:
+
+- perform a canonical partial-pick into a pick container
+
+Domain owner:
+
+- `Warehouse Topology`
+
+Auth requirement:
+
+- authenticated tenant member with execution write access
+
+Request schema:
+
+- path param `inventoryUnitId: uuid`
+- body `pickPartialInventoryUnitRequestBodySchema`
+
+```json
+{
+  "pickContainerId": "uuid",
+  "quantity": 1
+}
+```
+
+Response schema:
+
+- `pickPartialInventoryUnitResponseSchema`
+
+Source of truth:
+
+- RPC `public.pick_partial_inventory_unit`
+
+Related RPC/tables:
+
+- `public.inventory_unit`
+- `public.containers`
+- `public.stock_movements`
+
+Side effects:
+
+- splits or merges canonical stock rows
+- writes canonical `split_stock` and `pick_partial` movement history
+
+Idempotency:
+
+- non-idempotent
+
+Failure cases:
+
+- `INVENTORY_UNIT_NOT_FOUND`
+- `INVALID_SPLIT_QUANTITY`
+- `SERIAL_SPLIT_NOT_ALLOWED`
+- `TARGET_CONTAINER_NOT_FOUND`
+- `TARGET_CONTAINER_TENANT_MISMATCH`
+- `TARGET_CONTAINER_CONFLICT`
+
+## Deprecated Compatibility Endpoints
+
+These routes remain public for compatibility, but Stage 6 freezes them.
+
+- `GET /api/cells/:cellId/containers`
+- `GET /api/cells/:cellId/storage`
+- `GET /api/floors/:floorId/cell-occupancy`
+- `GET /api/rack-sections/:sectionId/slots/:slotNo/storage`
+- `POST /api/containers/:containerId/move`
+
+Rules:
+
+- they retain their existing payload shapes
+- they resolve through the canonical location-native model internally
+- they are deprecated compatibility routes, not the target contract for new client work
 
 ## Operational Endpoints
 
@@ -1013,6 +1494,13 @@ Failure cases:
 | `POST /api/floors` | Warehouse Topology | authenticated write | `public.floors` | insert floor | non-idempotent |
 | `GET /api/floors/:floorId/layout-draft` | Layout Lifecycle | authenticated read | `layout_versions` + rack tree | none | idempotent |
 | `GET /api/floors/:floorId/published-layout` | Layout Lifecycle | authenticated read | `layout_versions` + `cells` | none | idempotent |
+| `GET /api/locations/:locationId/containers` | Warehouse Topology | authenticated read | `location_occupancy_v` | none | idempotent |
+| `GET /api/locations/:locationId/storage` | Warehouse Topology | authenticated read | `location_storage_snapshot_v` | none | idempotent |
+| `GET /api/floors/:floorId/location-occupancy` | Warehouse Topology | authenticated read | `location_occupancy_v` | none | idempotent |
+| `GET /api/containers/:containerId/location` | Warehouse Topology | authenticated read | `containers.current_location_id` + `locations` | none | idempotent |
+| `POST /api/containers/:containerId/move-to-location` | Warehouse Topology | authenticated write | `move_container_canonical` RPC | update current location + movement history | non-idempotent |
+| `POST /api/inventory/:inventoryUnitId/transfer` | Warehouse Topology | authenticated write | `transfer_inventory_unit` RPC | split/merge stock + movement history | non-idempotent |
+| `POST /api/inventory/:inventoryUnitId/pick-partial` | Warehouse Topology | authenticated write | `pick_partial_inventory_unit` RPC | split/merge stock + movement history | non-idempotent |
 | `POST /api/layout-drafts` | Layout Lifecycle | authenticated write | `create_layout_draft` RPC | create/clone draft + audit | conditionally idempotent |
 | `POST /api/layout-drafts/save` | Layout Lifecycle + Rack Configuration & Addressing | authenticated write | `save_layout_draft` RPC | destructive rewrite + audit | operationally non-idempotent |
 | `POST /api/layout-drafts/:layoutVersionId/validate` | Layout Lifecycle + Rack Configuration & Addressing | authenticated read | `validate_layout_version` RPC | failed-validation audit only | state-idempotent, operationally non-idempotent when invalid |

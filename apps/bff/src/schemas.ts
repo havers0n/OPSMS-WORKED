@@ -4,11 +4,18 @@ import {
   cellOccupancyRowSchema,
   floorCellOccupancyResponseSchema,
   cellSchema,
+  containerCurrentLocationSchema,
   containerSchema,
   containerStatusSchema,
   containerStorageSnapshotRowSchema,
+  canonicalMoveContainerResultSchema,
+  canonicalTransferInventoryResultSchema,
   inventoryItemSchema,
+  locationOccupancyResponseSchema,
+  locationStorageSnapshotResponseSchema,
   moveContainerResultSchema,
+  moveContainerToLocationBodySchema,
+  pickPartialInventoryUnitBodySchema,
   placementCommandResponseSchema,
   placeContainerRequestSchema,
   moveContainerRequestSchema,
@@ -16,6 +23,7 @@ import {
   productSchema,
   removeContainerRequestSchema,
   removeContainerResultSchema,
+  transferInventoryUnitBodySchema,
   containerTypeSchema,
   floorSchema,
   floorWorkspaceSchema,
@@ -77,6 +85,10 @@ export const placeContainerBodySchema = z.object({
 export const moveContainerBodySchema = z.object({
   targetCellId: z.string().uuid()
 });
+
+export const moveContainerToLocationRequestBodySchema = moveContainerToLocationBodySchema;
+export const transferInventoryUnitRequestBodySchema = transferInventoryUnitBodySchema;
+export const pickPartialInventoryUnitRequestBodySchema = pickPartialInventoryUnitBodySchema;
 
 export const placementPlaceBodySchema = placeContainerRequestSchema;
 export const placementRemoveBodySchema = removeContainerRequestSchema;
@@ -171,6 +183,9 @@ export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
 export const floorCellOccupancyRowsResponseSchema = floorCellOccupancyResponseSchema;
 export const containerStorageSnapshotResponseSchema = z.array(containerStorageSnapshotRowSchema);
 export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowSchema);
+export const locationOccupancyRowsResponseSchema = locationOccupancyResponseSchema;
+export const locationStorageSnapshotRowsResponseSchema = locationStorageSnapshotResponseSchema;
+export const containerCurrentLocationResponseSchema = containerCurrentLocationSchema;
 
 /**
  * Response shape for GET /api/rack-sections/:sectionId/slots/:slotNo/storage.
@@ -199,6 +214,9 @@ export const productCatalogResponseSchema = z.object({
 export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerResponseSchema = moveContainerResultSchema;
+export const moveContainerToLocationResponseSchema = canonicalMoveContainerResultSchema;
+export const transferInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
+export const pickPartialInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const placementCommandResponse = placementCommandResponseSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const floorWorkspaceResponseSchema = floorWorkspaceSchema;

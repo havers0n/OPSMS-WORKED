@@ -18,6 +18,7 @@ Current implementation note:
 - Stage 3 now introduces canonical `inventory_unit` stock rows while `inventory_items` remains a compatibility surface for legacy reads and migration safety
 - Stage 4 now adds canonical split/merge semantics on `inventory_unit` plus `stock_movements` for new execution flows, while physical placement persistence still bridges through geometry-backed placement rows
 - Stage 5 now makes `containers.current_location_id` the canonical current-state truth, rebases current-state reads onto location-native state, and demotes `container_placements` to a geometry compatibility projection
+- Stage 6 now exposes public location-native execution contracts, including explicit container current-location reads, while old cell-centric routes remain deprecated compatibility facades
 - this document defines the target v1 storage core that must become the stable reference for future schema, API, and UX work
 
 ## Goal
@@ -273,6 +274,7 @@ Current implementation note:
 - current canonical rows distinguish `move_container`, `split_stock`, `transfer_stock`, and `pick_partial`
 - the current Stage 4 table intentionally does not duplicate `productId`; product identity is derived through referenced `inventory_unit` rows
 - Stage 5 now updates `containers.current_location_id` directly during canonical moves and uses `container_placements` only as a rack/canvas compatibility projection
+- Stage 6 now exposes public location-native execution endpoints and treats older cell-centric execution APIs as compatibility-only surfaces
 
 ## ERD Logic
 
@@ -578,6 +580,12 @@ Where:
 - `Container` answers handling-unit state
 - `InventoryUnit` answers stock content
 - `Movement` answers operational transition history
+
+Current public API note:
+
+- new public execution contracts should now start from `location`
+- explicit current container location is readable through a container-location contract
+- `cell` remains geometry vocabulary and compatibility input only
 
 ## Documentation Rule
 

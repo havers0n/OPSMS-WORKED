@@ -21,4 +21,6 @@ export const locationStorageSnapshotRowSchema = z.object({
   uom: z.string().trim().min(1).nullable()
 });
 
+export const locationStorageSnapshotResponseSchema = z.array(locationStorageSnapshotRowSchema);
+
 export type LocationStorageSnapshotRow = z.infer<typeof locationStorageSnapshotRowSchema>;

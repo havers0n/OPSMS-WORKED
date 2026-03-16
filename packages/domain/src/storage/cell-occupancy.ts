@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { containerStatusSchema } from './container';
 
+/**
+ * Legacy compatibility DTO for geometry-backed occupancy reads.
+ * New execution-facing APIs should prefer LocationOccupancyRow.
+ */
 export const cellOccupancyRowSchema = z.object({
   tenantId: z.string().uuid(),
   cellId: z.string().uuid(),

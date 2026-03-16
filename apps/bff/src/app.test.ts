@@ -512,6 +512,19 @@ function createSupabaseStub() {
         };
       }
 
+      if (table === 'active_container_locations_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              maybeSingle: vi.fn(async () => ({
+                data: cellOccupancyRows.find((row) => row.container_id === value) ?? null,
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
       if (table === 'container_placements') {
         return {
           select: vi.fn(() => ({
@@ -557,16 +570,12 @@ function createSupabaseStub() {
         return {
           select: vi.fn(() => ({
             eq: vi.fn((column: string, value: string) => {
-              const filtered = cellOccupancyRows.filter((row) =>
-                column === 'floor_id' ? row.floor_id === value : row.cell_id === value
-              );
-
-              if (column === 'floor_id') {
-                return Promise.resolve({
-                  data: filtered.map((row) => ({ cell_id: row.cell_id })),
-                  error: null
-                });
-              }
+              const filtered = cellOccupancyRows.filter((row) => {
+                if (column === 'floor_id') return row.floor_id === value;
+                if (column === 'cell_id') return row.cell_id === value;
+                if (column === 'location_id') return row.location_id === value;
+                return false;
+              });
 
               return {
                 order: vi.fn(async () => ({
@@ -606,9 +615,13 @@ function createSupabaseStub() {
       if (table === 'location_storage_snapshot_v') {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn((_column: string, value: string) => ({
+            eq: vi.fn((column: string, value: string) => ({
               order: vi.fn(async () => ({
-                data: cellStorageSnapshotRows.filter((row) => row.cell_id === value),
+                data: cellStorageSnapshotRows.filter((row) => {
+                  if (column === 'cell_id') return row.cell_id === value;
+                  if (column === 'location_id') return row.location_id === value;
+                  return false;
+                }),
                 error: null
               }))
             })),
@@ -1437,6 +1450,127 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('returns canonical current location for a container', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/location',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      currentLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      locationCode: '03-A.01.02.01',
+      locationType: 'rack_slot',
+      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+    });
+
+    await app.close();
+  });
+
+  it('returns null canonical location fields for an existing container without active location', async () => {
+    const supabase = createSupabaseStub();
+    const baseFrom = supabase.from;
+
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'active_container_locations_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: null,
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return baseFrom(table);
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/location',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      currentLocationId: null,
+      locationCode: null,
+      locationType: null,
+      cellId: null
+    });
+
+    await app.close();
+  });
+
+  it('returns location-native occupancy rows for a location', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/locations/f932d7de-7350-42b9-9dd6-df11e34b3ea1/containers',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+        locationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+        locationCode: '03-A.01.02.01',
+        locationType: 'rack_slot',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        externalCode: 'PALLET-001',
+        containerType: 'pallet',
+        containerStatus: 'active',
+        placedAt: '2026-03-13T09:15:00.000Z'
+      },
+      {
+        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+        floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+        locationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+        locationCode: '03-A.01.02.01',
+        locationType: 'rack_slot',
+        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+        containerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        externalCode: null,
+        containerType: 'tote',
+        containerStatus: 'quarantined',
+        placedAt: '2026-03-13T10:15:00.000Z'
+      }
+    ]);
+
+    await app.close();
+  });
+
   it('returns active container occupancy for a cell', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
@@ -1622,6 +1756,39 @@ describe('buildApp', () => {
         uom: null
       }
     ]);
+
+    await app.close();
+  });
+
+  it('returns resolved storage snapshot for a location', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/locations/f932d7de-7350-42b9-9dd6-df11e34b3ea1/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()[0]).toMatchObject({
+      tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      locationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      locationCode: '03-A.01.02.01',
+      locationType: 'rack_slot',
+      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      itemRef: `product:${productRows[0].id}`,
+      product: productResponses[0],
+      quantity: 5,
+      uom: 'pcs'
+    });
 
     await app.close();
   });
@@ -2122,6 +2289,33 @@ describe('buildApp', () => {
         containerCount: 2
       }
     ]);
+
+    await app.close();
+  });
+
+  it('returns floor-level occupancy rows by location', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/location-occupancy',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toHaveLength(2);
+    expect(response.json()[0]).toMatchObject({
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      locationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      locationCode: '03-A.01.02.01',
+      locationType: 'rack_slot'
+    });
 
     await app.close();
   });
@@ -3090,6 +3284,189 @@ describe('buildApp', () => {
       container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
       target_location_uuid: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
       actor_uuid: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('moves a container through the location-native public endpoint', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'move_container_canonical') {
+        return {
+          data: {
+            containerId: args.container_uuid,
+            sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+            targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+            movementId: 'c1411420-4f31-4427-9d8d-e6c779d6cc0f',
+            occurredAt: '2026-03-13T12:45:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move-to-location',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+      movementId: 'c1411420-4f31-4427-9d8d-e6c779d6cc0f',
+      occurredAt: '2026-03-13T12:45:00.000Z'
+    });
+
+    await app.close();
+  });
+
+  it('transfers stock through the canonical public endpoint', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'transfer_inventory_unit') {
+        return {
+          data: {
+            sourceInventoryUnitId: args.source_inventory_unit_uuid,
+            targetInventoryUnitId: '4173ae09-8e9d-4bb3-bb15-d32a8f95b041',
+            sourceContainerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+            targetContainerId: args.target_container_uuid,
+            sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+            targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+            quantity: args.quantity,
+            uom: 'pcs',
+            mergeApplied: false,
+            sourceQuantity: 3,
+            targetQuantity: 2,
+            movementId: 'a3c0ab55-7711-4d03-b6f0-efdf66dffbc3',
+            splitMovementId: 'a3c0ab55-7711-4d03-b6f0-efdf66dffbc3',
+            transferMovementId: '4cf433cc-d771-4fd6-9042-b23e848f5225',
+            occurredAt: '2026-03-13T13:00:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/inventory/e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c/transfer',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetContainerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        quantity: 2
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      sourceInventoryUnitId: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
+      targetInventoryUnitId: '4173ae09-8e9d-4bb3-bb15-d32a8f95b041',
+      sourceContainerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      targetContainerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+      sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+      quantity: 2,
+      uom: 'pcs',
+      mergeApplied: false,
+      sourceQuantity: 3,
+      targetQuantity: 2,
+      movementId: 'a3c0ab55-7711-4d03-b6f0-efdf66dffbc3',
+      splitMovementId: 'a3c0ab55-7711-4d03-b6f0-efdf66dffbc3',
+      transferMovementId: '4cf433cc-d771-4fd6-9042-b23e848f5225',
+      occurredAt: '2026-03-13T13:00:00.000Z'
+    });
+
+    await app.close();
+  });
+
+  it('picks partial stock through the canonical public endpoint', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'pick_partial_inventory_unit') {
+        return {
+          data: {
+            sourceInventoryUnitId: args.source_inventory_unit_uuid,
+            targetInventoryUnitId: '9f818a19-f1a3-4a18-82b5-87c0a38da459',
+            sourceContainerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+            targetContainerId: args.pick_container_uuid,
+            sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+            targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+            quantity: args.quantity,
+            uom: 'pcs',
+            mergeApplied: false,
+            sourceQuantity: 4,
+            targetQuantity: 1,
+            movementId: '7f2d5362-bcc7-4d30-b67d-d8cb154b2fd6',
+            splitMovementId: '7f2d5362-bcc7-4d30-b67d-d8cb154b2fd6',
+            transferMovementId: '9d35f4c2-184b-4a07-b011-0caec48ba1f9',
+            occurredAt: '2026-03-13T13:10:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/inventory/e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c/pick-partial',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        pickContainerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        quantity: 1
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      sourceInventoryUnitId: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
+      targetInventoryUnitId: '9f818a19-f1a3-4a18-82b5-87c0a38da459',
+      sourceContainerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      targetContainerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+      sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+      quantity: 1,
+      uom: 'pcs',
+      mergeApplied: false,
+      sourceQuantity: 4,
+      targetQuantity: 1,
+      movementId: '7f2d5362-bcc7-4d30-b67d-d8cb154b2fd6',
+      splitMovementId: '7f2d5362-bcc7-4d30-b67d-d8cb154b2fd6',
+      transferMovementId: '9d35f4c2-184b-4a07-b011-0caec48ba1f9',
+      occurredAt: '2026-03-13T13:10:00.000Z'
     });
 
     await app.close();

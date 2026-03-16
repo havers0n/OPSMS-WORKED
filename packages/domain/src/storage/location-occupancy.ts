@@ -16,4 +16,6 @@ export const locationOccupancyRowSchema = z.object({
   placedAt: z.string()
 });
 
+export const locationOccupancyResponseSchema = z.array(locationOccupancyRowSchema);
+
 export type LocationOccupancyRow = z.infer<typeof locationOccupancyRowSchema>;

@@ -111,6 +111,7 @@ Until the schema is converged:
 
 - `container_placements` no longer answer current-state truth; they remain rack/canvas compatibility projection
 - canonical product-backed stock now lives in `inventory_unit`, while `inventory_items` remains compatibility debt
+- `movement_events` remains frozen legacy audit debt beside canonical `stock_movements`
 - `cells` remain the structural base for current placement-facing compatibility features
 - `locations` and `containers.current_location_id` now own current execution state
 - new work should avoid deepening the assumption that `cell = executable location`
@@ -213,17 +214,26 @@ Constraint:
 
 #### Stage 6. Retire cell-centric execution assumptions
 
-Once the bridge is stable, remove the idea that published `cells` are themselves the executable storage truth.
+Once the bridge is stable, expose location-native public contracts and freeze the remaining legacy execution shell.
 
 Target outcome:
 
 - `location` becomes the only execution anchor
-- `container_placements` becomes either a compatibility layer or is reduced to a geometry-facing concern
+- `container_placements` becomes a geometry-facing compatibility layer only
+- public location-native routes exist for new execution work
+- old cell-centric routes remain deprecated compatibility aliases
 - read models and invariants stop encoding `cell = storage location`
+
+Current status:
+
+- implemented for public API vocabulary: BFF now exposes location-native occupancy, storage, move, transfer, and pick-partial routes
+- implemented: `GET /api/containers/:containerId/location` now exposes canonical current location explicitly
+- implemented: legacy `/api/cells/*` and old move routes still work, but are now compatibility/deprecated surfaces
+- implemented in docs/code policy: `inventory_items`, `movement_events`, and `container_placements` are frozen legacy surfaces and must not be extended for new execution behavior
 
 Constraint:
 
-- deprecation should happen only after location-based reads, writes, and movement history are all production-safe
+- hard removal should happen only after location-based reads, writes, and movement history are all production-safe and all clients migrate off compatibility routes
 
 #### Stage 7. Clean up naming and invariants
 
@@ -603,6 +613,7 @@ Notes:
 - multiple containers in the same cell are allowed
 - after Stage 5 this table is no longer execution truth
 - it now exists to preserve rack/canvas compatibility for geometry-backed locations
+- Stage 6 freezes this table as a compatibility projection; new execution behavior must not use it as a source of truth
 
 #### `inventory_items`
 
@@ -632,6 +643,7 @@ Notes:
 - inventory belongs to containers, never directly to cells
 - cell content answers are derived later through active placement joins
 - Stage 3: this table is now a frozen compatibility surface for legacy and free-text rows, not the preferred canonical stock model
+- Stage 6 keeps it readable for compatibility only; new product-backed execution work must start from `inventory_unit`
 
 #### `inventory_unit`
 
@@ -699,6 +711,7 @@ Notes:
 - `product_id` is intentionally not duplicated on the movement row
 - product identity is derived through referenced `inventory_unit` rows
 - legacy `movement_events` still exists as compatibility debt for older placement flows
+- Stage 6 treats `movement_events` as frozen legacy audit surface, not canonical execution history
 
 ## 4. Product Master and Operational Role Module
 
@@ -1139,6 +1152,7 @@ Notes:
 
 - derived from `location_occupancy_v`
 - maintained for compatibility with current `/cells/*` and floor/slot read contracts
+- frozen in Stage 6; new execution-facing consumers must use location-native routes instead
 
 #### `container_storage_snapshot_v`
 
@@ -1197,6 +1211,7 @@ Notes:
 - derived from `location_storage_snapshot_v`
 - empty placed containers may appear with null content columns
 - maintained only to avoid breaking current public contracts during the bridge phase
+- frozen in Stage 6; not a target-facing storage API for new work
 
 #### `v_layout_publish_impact`
 

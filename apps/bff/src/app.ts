@@ -9,13 +9,22 @@ import {
   addInventoryToContainerBodySchema,
   addInventoryToContainerResponseSchema,
   cellsResponseSchema,
+  containerCurrentLocationResponseSchema,
   cellStorageSnapshotResponseSchema,
   cellSlotStorageResponseSchema,
   cellOccupancyResponseSchema,
+  locationOccupancyRowsResponseSchema,
+  locationStorageSnapshotRowsResponseSchema,
   floorCellOccupancyRowsResponseSchema,
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
+  moveContainerToLocationRequestBodySchema,
+  moveContainerToLocationResponseSchema,
+  transferInventoryUnitRequestBodySchema,
+  transferInventoryUnitResponseSchema,
+  pickPartialInventoryUnitRequestBodySchema,
+  pickPartialInventoryUnitResponseSchema,
   createContainerResponseSchema,
   containerTypesResponseSchema,
   createContainerBodySchema,
@@ -68,6 +77,8 @@ import {
   mapCellRowToDomain,
   mapCellStorageSnapshotRowToDomain,
   mapContainerRowToDomain,
+  mapLocationOccupancyRowToDomain,
+  mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
@@ -106,6 +117,12 @@ import { createExecutionService } from './features/execution/service.js';
 import {
   ExecutionContainerNotFoundError,
   ExecutionContainerNotPlacedError,
+  ExecutionInventoryUnitNotFoundError,
+  ExecutionInvalidSplitQuantityError,
+  ExecutionSerialSplitNotAllowedError,
+  ExecutionTargetContainerNotFoundError,
+  ExecutionTargetContainerSameAsSourceError,
+  ExecutionTargetContainerTenantMismatchError,
   ExecutionTargetLocationDimensionOverflowError,
   ExecutionTargetLocationDimensionUnknownError,
   ExecutionTargetLocationNotActiveError,
@@ -122,6 +139,7 @@ import {
   type ProductAwareRow,
   type ProductRow
 } from './inventory-product-resolution.js';
+import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
@@ -740,6 +758,90 @@ function mapExecutionMoveError(error: unknown): ApiError | null {
   return null;
 }
 
+function mapExecutionLocationMoveError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Container does not have a current execution location.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotFoundError) {
+    return new ApiError(404, 'LOCATION_NOT_FOUND', 'Target location was not found.');
+  }
+
+  if (error instanceof ExecutionTargetLocationTenantMismatchError) {
+    return new ApiError(409, 'LOCATION_TENANT_MISMATCH', 'Target location belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotActiveError) {
+    return new ApiError(409, 'LOCATION_NOT_WRITABLE', 'Target location is not active.');
+  }
+
+  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
+    return new ApiError(409, 'SAME_LOCATION', 'Container is already at the target location.');
+  }
+
+  if (error instanceof ExecutionTargetLocationOccupiedError) {
+    return new ApiError(409, 'LOCATION_OCCUPIED', 'Target location already has an active container.');
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
+    return new ApiError(409, 'LOCATION_DIMENSION_UNKNOWN', 'Target location enforces dimensions that are missing on this container type.');
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
+    return new ApiError(409, 'LOCATION_DIMENSION_OVERFLOW', 'Container dimensions exceed the target location limits.');
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
+    return new ApiError(409, 'LOCATION_WEIGHT_UNKNOWN', 'Target location enforces weight, but the container gross weight cannot be computed.');
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
+    return new ApiError(409, 'LOCATION_WEIGHT_OVERFLOW', 'Container gross weight exceeds the target location weight limit.');
+  }
+
+  return null;
+}
+
+function mapExecutionTransferError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionInventoryUnitNotFoundError) {
+    return new ApiError(404, 'INVENTORY_UNIT_NOT_FOUND', 'Inventory unit was not found.');
+  }
+
+  if (error instanceof ExecutionInvalidSplitQuantityError) {
+    return new ApiError(409, 'INVALID_SPLIT_QUANTITY', 'Split quantity must be greater than zero and less than the source quantity.');
+  }
+
+  if (error instanceof ExecutionSerialSplitNotAllowedError) {
+    return new ApiError(409, 'SERIAL_SPLIT_NOT_ALLOWED', 'Serial-tracked inventory units cannot be split.');
+  }
+
+  if (error instanceof ExecutionTargetContainerNotFoundError) {
+    return new ApiError(404, 'TARGET_CONTAINER_NOT_FOUND', 'Target container was not found.');
+  }
+
+  if (error instanceof ExecutionTargetContainerTenantMismatchError) {
+    return new ApiError(409, 'TARGET_CONTAINER_TENANT_MISMATCH', 'Target container belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionTargetContainerSameAsSourceError) {
+    return new ApiError(409, 'TARGET_CONTAINER_CONFLICT', 'Target container cannot be the same as the source container.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Source container does not have a current execution location.');
+  }
+
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Source container was not found.');
+  }
+
+  return null;
+}
+
 function isContainerTypeConstraintError(error: unknown) {
   if (typeof error !== 'object' || error === null) {
     return false;
@@ -1014,23 +1116,88 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(containersResponseSchema, (data ?? []).map(mapContainerRowToDomain));
   });
 
+  app.get('/api/locations/:locationId/containers', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const locationId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { locationId: string }).locationId
+    }).id;
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+
+    if (!(await locationReadRepo.locationExists(locationId))) {
+      throw new ApiError(404, 'LOCATION_NOT_FOUND', 'Location was not found.');
+    }
+
+    const rows = await locationReadRepo.listLocationContainers(locationId);
+    return parseOrThrow(locationOccupancyRowsResponseSchema, rows.map(mapLocationOccupancyRowToDomain));
+  });
+
+  app.get('/api/locations/:locationId/storage', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const locationId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { locationId: string }).locationId
+    }).id;
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+
+    if (!(await locationReadRepo.locationExists(locationId))) {
+      throw new ApiError(404, 'LOCATION_NOT_FOUND', 'Location was not found.');
+    }
+
+    const data = await locationReadRepo.listLocationStorage(locationId);
+    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+      tenant_id: string;
+      floor_id: string;
+      location_id: string;
+      location_code: string;
+      location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+      cell_id: string | null;
+      container_id: string;
+      external_code: string | null;
+      container_type: string;
+      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+      placed_at: string;
+      product_id?: string | null;
+      quantity: number | null;
+      uom: string | null;
+    }>);
+
+    return parseOrThrow(locationStorageSnapshotRowsResponseSchema, rows.map(mapLocationStorageSnapshotRowToDomain));
+  });
+
+  app.get('/api/floors/:floorId/location-occupancy', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const rows = await locationReadRepo.listFloorLocationOccupancy(floorId);
+
+    return parseOrThrow(locationOccupancyRowsResponseSchema, rows.map(mapLocationOccupancyRowToDomain));
+  });
+
   app.get('/api/cells/:cellId/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
     const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
     const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('location_occupancy_v')
-      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at')
-      .eq('cell_id', cellId)
-      .order('placed_at', { ascending: true });
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const rows = await locationReadRepo.listCellContainers(cellId);
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(cellOccupancyResponseSchema, (data ?? []).map(mapCellOccupancyRowToDomain));
+    return parseOrThrow(
+      cellOccupancyResponseSchema,
+      rows
+        .filter((row): row is typeof row & { cell_id: string } => row.cell_id !== null)
+        .map(mapCellOccupancyRowToDomain)
+    );
   });
 
   app.get('/api/cells/:cellId/storage', async (request, reply) => {
@@ -1039,18 +1206,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
     const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('location_storage_snapshot_v')
-      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
-      .eq('cell_id', cellId)
-      .order('placed_at', { ascending: true });
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const data = await locationReadRepo.listCellStorage(cellId);
 
-    if (error) {
-      throw error;
-    }
-
-    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+    const rows = await attachProductsToRows(supabase, data as Array<ProductAwareRow & {
       tenant_id: string;
+      floor_id: string;
+      location_id: string;
+      location_code: string;
+      location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
       cell_id: string;
       container_id: string;
       external_code: string | null;
@@ -1100,14 +1264,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       id: (request.params as { floorId: string }).floorId
     }).id;
     const supabase = getUserSupabase(auth);
-    const { data: occupancyRows, error: occupancyError } = await supabase
-      .from('location_occupancy_v')
-      .select('cell_id')
-      .eq('floor_id', floorId);
-
-    if (occupancyError) {
-      throw occupancyError;
-    }
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const occupancyRows = await locationReadRepo.listFloorLocationOccupancy(floorId);
 
     const countsByCellId = new Map<string, number>();
     for (const row of occupancyRows ?? []) {
@@ -1400,6 +1558,32 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(containerResponseSchema, mapContainerRowToDomain(data));
   });
 
+  app.get('/api/containers/:containerId/location', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const currentLocation = await locationReadRepo.getContainerCurrentLocation(containerId);
+
+    if (!currentLocation) {
+      if (!(await locationReadRepo.containerExists(containerId))) {
+        throw new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+      }
+
+      return parseOrThrow(containerCurrentLocationResponseSchema, {
+        containerId,
+        currentLocationId: null,
+        locationCode: null,
+        locationType: null,
+        cellId: null
+      });
+    }
+
+    return parseOrThrow(containerCurrentLocationResponseSchema, currentLocation);
+  });
+
   app.post('/api/containers/:containerId/place', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -1585,6 +1769,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
   });
 
+  app.post('/api/containers/:containerId/move-to-location', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const body = parseOrThrow(moveContainerToLocationRequestBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const executionService = createExecutionService(supabase);
+
+    try {
+      const result = await executionService.moveContainerCanonical({
+        containerId,
+        targetLocationId: body.targetLocationId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(moveContainerToLocationResponseSchema, result);
+    } catch (error) {
+      throw mapExecutionLocationMoveError(error) ?? error;
+    }
+  });
+
   app.post('/api/containers/:containerId/inventory', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -1644,6 +1850,52 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         product
       })
     );
+  });
+
+  app.post('/api/inventory/:inventoryUnitId/transfer', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const inventoryUnitId = parseOrThrow(idResponseSchema, { id: (request.params as { inventoryUnitId: string }).inventoryUnitId }).id;
+    const body = parseOrThrow(transferInventoryUnitRequestBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const executionService = createExecutionService(supabase);
+
+    try {
+      const result = await executionService.transferStock({
+        inventoryUnitId,
+        quantity: body.quantity,
+        targetContainerId: body.targetContainerId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(transferInventoryUnitResponseSchema, result);
+    } catch (error) {
+      throw mapExecutionTransferError(error) ?? error;
+    }
+  });
+
+  app.post('/api/inventory/:inventoryUnitId/pick-partial', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const inventoryUnitId = parseOrThrow(idResponseSchema, { id: (request.params as { inventoryUnitId: string }).inventoryUnitId }).id;
+    const body = parseOrThrow(pickPartialInventoryUnitRequestBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const executionService = createExecutionService(supabase);
+
+    try {
+      const result = await executionService.pickPartial({
+        inventoryUnitId,
+        quantity: body.quantity,
+        pickContainerId: body.pickContainerId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(pickPartialInventoryUnitResponseSchema, result);
+    } catch (error) {
+      throw mapExecutionTransferError(error) ?? error;
+    }
   });
 
   app.post('/api/floors', async (request, reply) => {

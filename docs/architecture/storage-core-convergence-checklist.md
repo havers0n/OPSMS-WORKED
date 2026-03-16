@@ -341,41 +341,60 @@ Exit criteria:
 - hard location constraints are enforced by canonical move
 - public contracts remain compatibility-stable
 
-## Stage 6. Retire Cell-Centric Execution Assumptions
+## Stage 6. Public Location-Native API Pivot + Legacy Surface Freeze
 
 Goal:
 
-- remove the dangerous idea that geometry objects are themselves execution truth
+- finish the public vocabulary pivot without breaking existing clients
+
+Implementation status snapshot:
+
+- location-native public execution endpoints now exist for occupancy, storage, canonical move, transfer, and pick-partial
+- `GET /api/containers/:containerId/location` now exposes canonical current location explicitly
+- old cell-centric routes remain supported, but they are now deprecated compatibility facades
+- `inventory_items`, `movement_events`, and `container_placements` are now documented as frozen legacy surfaces
+- web now has additive location-native query modules without forcing an immediate UI rewrite
 
 Schema checklist:
 
-- [ ] mark legacy cell-centric views as deprecated
-- [ ] reduce `container_placements` to a compatibility or geometry-linked concern if it still exists
-- [ ] ensure current container location can be resolved without treating `cell_id` as the primary execution key
+- [x] mark legacy cell-centric views as deprecated compatibility projections
+- [x] keep `container_placements` reduced to rack/canvas projection only
+- [x] ensure current container location can be resolved directly without treating `cell_id` as the primary execution key
+- [x] freeze `inventory_items` and `movement_events` as non-canonical execution surfaces
 
 Domain checklist:
 
-- [ ] remove storage-core naming that implies cells own inventory
-- [ ] keep cell logic only where geometry and visualization need it
+- [x] add public location-native DTOs for occupancy, storage, and current container location
+- [x] keep `InventoryItem` and `cell-*` types as compatibility-only exports
+- [x] keep cell logic only where geometry and visualization need it
 
 BFF checklist:
 
-- [ ] remove new code paths that depend on direct `cell_id` execution writes
-- [ ] collapse bridge logic once all consumers use `location`
+- [x] add new public location-native routes for read and write execution flows
+- [x] add explicit `GET /api/containers/:containerId/location`
+- [x] keep legacy cell routes stable while resolving them through canonical location-backed reads
+- [x] stop adding new public execution paths that start from `cell_id`
+- [ ] collapse compatibility bridge logic only after all consumers migrate to location-native routes
 
 Web checklist:
 
+- [x] add location-native query modules and hooks alongside existing cell-facing entities
 - [ ] reduce `entities/cell` to geometry-facing concerns plus temporary compatibility reads
-- [ ] move storage-oriented reads toward location-aware entities when the UI model is ready
+- [ ] migrate storage-oriented UI reads toward location-aware entities as product scope allows
 
 Tests and docs:
 
-- [ ] remove or rewrite tests that encode `cell = executable location`
-- [ ] explicitly document which legacy APIs are removed or frozen
+- [x] add BFF/domain/web coverage for new location-native public contracts
+- [x] rewrite compatibility tests so they no longer assume `cell = executable location`
+- [x] explicitly document which APIs and schema surfaces are frozen legacy compatibility
+- [ ] remove deprecated compatibility routes only in a later cleanup stage after client migration
 
 Exit criteria:
 
-- the execution model no longer depends conceptually on published cells
+- there is a public location-native execution API
+- container current location is explicitly readable through public API
+- old cell-centric routes are clearly deprecated but still functional
+- new execution work no longer starts from `cell`, `item_ref`, or `movement_events`
 - geometry can evolve without threatening storage identity
 
 ## Stage 7. Align Naming, Contracts, and Invariants
