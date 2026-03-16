@@ -1,9 +1,11 @@
-import type { LocationOccupancyRow, LocationStorageSnapshotRow } from '@wos/domain';
+import type { LocationOccupancyRow, LocationReference, LocationStorageSnapshotRow } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
 export const locationKeys = {
   all: ['location'] as const,
+  byCell: (cellId: string | null) =>
+    [...locationKeys.all, 'by-cell', cellId ?? 'none'] as const,
   containers: (locationId: string | null) =>
     [...locationKeys.all, 'containers', locationId ?? 'none'] as const,
   storage: (locationId: string | null) =>
@@ -11,6 +13,10 @@ export const locationKeys = {
   occupancyByFloor: (floorId: string | null) =>
     [...locationKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const
 };
+
+async function fetchLocationByCell(cellId: string): Promise<LocationReference> {
+  return bffRequest<LocationReference>(`/api/locations/by-cell/${cellId}`);
+}
 
 async function fetchLocationContainers(locationId: string): Promise<LocationOccupancyRow[]> {
   return bffRequest<LocationOccupancyRow[]>(`/api/locations/${locationId}/containers`);
@@ -22,6 +28,14 @@ async function fetchLocationStorage(locationId: string): Promise<LocationStorage
 
 async function fetchFloorLocationOccupancy(floorId: string): Promise<LocationOccupancyRow[]> {
   return bffRequest<LocationOccupancyRow[]>(`/api/floors/${floorId}/location-occupancy`);
+}
+
+export function locationByCellQueryOptions(cellId: string | null) {
+  return queryOptions({
+    queryKey: locationKeys.byCell(cellId),
+    queryFn: () => fetchLocationByCell(cellId as string),
+    enabled: Boolean(cellId)
+  });
 }
 
 export function locationContainersQueryOptions(locationId: string | null) {

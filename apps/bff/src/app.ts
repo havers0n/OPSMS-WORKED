@@ -13,6 +13,7 @@ import {
   cellStorageSnapshotResponseSchema,
   cellSlotStorageResponseSchema,
   cellOccupancyResponseSchema,
+  locationReferenceResponseSchema,
   locationOccupancyRowsResponseSchema,
   locationStorageSnapshotRowsResponseSchema,
   floorCellOccupancyRowsResponseSchema,
@@ -73,9 +74,7 @@ import {
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
-  mapCellOccupancyRowToDomain,
   mapCellRowToDomain,
-  mapCellStorageSnapshotRowToDomain,
   mapContainerRowToDomain,
   mapLocationOccupancyRowToDomain,
   mapLocationStorageSnapshotRowToDomain,
@@ -114,6 +113,7 @@ import {
 } from './features/placement/service.js';
 import { createPlacementRepo } from './features/placement/placement-repo.js';
 import { createExecutionService } from './features/execution/service.js';
+import { createLegacyExecutionGateway } from './features/legacy-execution-gateway/service.js';
 import {
   ExecutionContainerNotFoundError,
   ExecutionContainerNotPlacedError,
@@ -1169,6 +1169,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(locationStorageSnapshotRowsResponseSchema, rows.map(mapLocationStorageSnapshotRowToDomain));
   });
 
+  app.get('/api/locations/by-cell/:cellId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const ref = await locationReadRepo.getLocationByCell(cellId);
+
+    if (!ref) {
+      throw new ApiError(404, 'LOCATION_NOT_FOUND', 'No active location found for this cell.');
+    }
+
+    return parseOrThrow(locationReferenceResponseSchema, ref);
+  });
+
   app.get('/api/floors/:floorId/location-occupancy', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -1190,14 +1206,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
     const supabase = getUserSupabase(auth);
     const locationReadRepo = createLocationReadRepo(supabase);
-    const rows = await locationReadRepo.listCellContainers(cellId);
-
-    return parseOrThrow(
-      cellOccupancyResponseSchema,
-      rows
-        .filter((row): row is typeof row & { cell_id: string } => row.cell_id !== null)
-        .map(mapCellOccupancyRowToDomain)
-    );
+    const placementRepo = createPlacementRepo(supabase);
+    const executionService = createExecutionService(supabase);
+    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
+    gateway.applyDeprecationHeaders(reply, 'cellContainers');
+    return parseOrThrow(cellOccupancyResponseSchema, await gateway.listCellContainers(cellId));
   });
 
   app.get('/api/cells/:cellId/storage', async (request, reply) => {
@@ -1207,26 +1220,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
     const supabase = getUserSupabase(auth);
     const locationReadRepo = createLocationReadRepo(supabase);
-    const data = await locationReadRepo.listCellStorage(cellId);
-
-    const rows = await attachProductsToRows(supabase, data as Array<ProductAwareRow & {
-      tenant_id: string;
-      floor_id: string;
-      location_id: string;
-      location_code: string;
-      location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
-      cell_id: string;
-      container_id: string;
-      external_code: string | null;
-      container_type: string;
-      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
-      placed_at: string;
-      product_id?: string | null;
-      quantity: number | null;
-      uom: string | null;
-    }>);
-
-    return parseOrThrow(cellStorageSnapshotResponseSchema, rows.map(mapCellStorageSnapshotRowToDomain));
+    const placementRepo = createPlacementRepo(supabase);
+    const executionService = createExecutionService(supabase);
+    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
+    gateway.applyDeprecationHeaders(reply, 'cellStorage');
+    return parseOrThrow(cellStorageSnapshotResponseSchema, await gateway.listCellStorage(cellId));
   });
 
   app.get('/api/floors/:floorId/published-cells', async (request, reply) => {
@@ -1265,35 +1263,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }).id;
     const supabase = getUserSupabase(auth);
     const locationReadRepo = createLocationReadRepo(supabase);
-    const occupancyRows = await locationReadRepo.listFloorLocationOccupancy(floorId);
-
-    const countsByCellId = new Map<string, number>();
-    for (const row of occupancyRows ?? []) {
-      if (!row.cell_id) {
-        continue;
-      }
-
-      const nextCount = (countsByCellId.get(row.cell_id) ?? 0) + 1;
-      countsByCellId.set(row.cell_id, nextCount);
-    }
-
-    const response: FloorCellOccupancyRow[] = Array.from(countsByCellId.entries())
-      .sort(([leftCellId], [rightCellId]) => leftCellId.localeCompare(rightCellId))
-      .map(([cellId, containerCount]) => ({ cellId, containerCount }));
-
-    return parseOrThrow(floorCellOccupancyRowsResponseSchema, response);
+    const placementRepo = createPlacementRepo(supabase);
+    const executionService = createExecutionService(supabase);
+    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
+    gateway.applyDeprecationHeaders(reply, 'floorCellOccupancy');
+    return parseOrThrow(floorCellOccupancyRowsResponseSchema, await gateway.listFloorCellOccupancy(floorId));
   });
 
   /**
    * GET /api/rack-sections/:sectionId/slots/:slotNo/storage
    *
-   * Returns cell storage snapshot rows for all cells in a given rack section slot.
-   * This endpoint exists because the web has no direct DB access — it needs a
-   * structural lookup path (sectionId + slotNo) rather than a persisted cell UUID.
-   *
-   * Cells only exist for published layout versions. If the layout has not been
-   * published, the cells table will be empty for the section and an empty array
-   * is returned (not an error — the inspector UI handles this state).
+   * Legacy compatibility route. Translation is centralized in LegacyExecutionGateway.
+   * Non-UUID sectionIds are short-circuited before the gateway (no DB query needed).
    */
   app.get('/api/rack-sections/:sectionId/slots/:slotNo/storage', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -1304,8 +1285,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const slotNo = z.coerce.number().int().min(1).parse(params.slotNo);
 
     // Non-UUID section IDs come from in-memory sections that have never been
-    // published. No persisted cells can exist for them — return the
-    // "unpublished" response immediately without touching the DB.
+    // published — return the "unpublished" response immediately without touching the DB.
     const sectionIdParsed = z.string().uuid().safeParse(rawSectionId);
     if (!sectionIdParsed.success) {
       return parseOrThrow(cellSlotStorageResponseSchema, { published: false, rows: [] });
@@ -1313,54 +1293,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const sectionId = sectionIdParsed.data;
 
     const supabase = getUserSupabase(auth);
-
-    // Step 1: resolve persisted cell UUIDs for this section + slot.
-    // A slot position spans one cell per level (e.g., 3 levels → 3 cells).
-    const { data: cells, error: cellsError } = await supabase
-      .from('cells')
-      .select('id')
-      .eq('rack_section_id', sectionId)
-      .eq('slot_no', slotNo);
-
-    if (cellsError) {
-      throw cellsError;
-    }
-
-    const cellIds = (cells ?? []).map((c) => c.id);
-
-    // Layout not yet published — no persisted cell UUIDs exist for this slot.
-    if (cellIds.length === 0) {
-      return parseOrThrow(cellSlotStorageResponseSchema, { published: false, rows: [] });
-    }
-
-    // Step 2: fetch storage snapshot for all cells in this slot.
-    const { data, error } = await supabase
-      .from('location_storage_snapshot_v')
-      .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
-      .in('cell_id', cellIds)
-      .order('placed_at', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
-      tenant_id: string;
-      cell_id: string;
-      container_id: string;
-      external_code: string | null;
-      container_type: string;
-      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
-      placed_at: string;
-      product_id?: string | null;
-      quantity: number | null;
-      uom: string | null;
-    }>);
-
-    return parseOrThrow(cellSlotStorageResponseSchema, {
-      published: true,
-      rows: rows.map(mapCellStorageSnapshotRowToDomain)
-    });
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const placementRepo = createPlacementRepo(supabase);
+    const executionService = createExecutionService(supabase);
+    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
+    gateway.applyDeprecationHeaders(reply, 'rackSectionSlotStorage');
+    return parseOrThrow(cellSlotStorageResponseSchema, await gateway.getRackSectionSlotStorage(sectionId, slotNo));
   });
 
   app.get('/api/containers/:containerId/inventory', async (request, reply) => {
@@ -1720,53 +1658,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
     const body = parseOrThrow(moveContainerBodySchema, request.body);
     const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
     const placementRepo = createPlacementRepo(supabase);
     const executionService = createExecutionService(supabase);
-    const targetLocation = await placementRepo.resolveExecutableLocationForCell(body.targetCellId);
-
-    if (!targetLocation) {
-      const targetCell = await placementRepo.resolvePlaceTarget(body.targetCellId);
-
-      throw new ApiError(
-        409,
-        'INVALID_TARGET_CELL',
-        targetCell ? 'Target cell is not in a published layout.' : 'Target cell was not found.'
-      );
-    }
-
-    const previousPlacement = await placementRepo.getActivePlacement(containerId);
-
-    if (!previousPlacement) {
-      throw new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is not currently placed.');
-    }
-
-    let moveResult;
-
-    try {
-      moveResult = await executionService.moveContainerCanonical({
-        containerId,
-        targetLocationId: targetLocation.locationId,
-        actorId: auth.user.id
-      });
-    } catch (error) {
-      throw mapExecutionMoveError(error) ?? error;
-    }
-
-    const activePlacement = await placementRepo.getActivePlacement(containerId);
-
-    if (!activePlacement) {
-      throw new ApiError(409, 'PLACEMENT_CONFLICT', 'Container move did not create a rack placement projection.');
-    }
-
-    return parseOrThrow(moveContainerResponseSchema, {
-      action: 'moved',
+    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
+    gateway.applyDeprecationHeaders(reply, 'containerMoveByCell');
+    return parseOrThrow(moveContainerResponseSchema, await gateway.moveContainerByCell({
       containerId,
-      fromCellId: previousPlacement.cellId,
-      toCellId: activePlacement.cellId,
-      previousPlacementId: previousPlacement.placementId,
-      placementId: activePlacement.placementId,
-      occurredAt: moveResult.occurredAt
-    });
+      targetCellId: body.targetCellId,
+      actorId: auth.user.id
+    }));
   });
 
   app.post('/api/containers/:containerId/move-to-location', async (request, reply) => {

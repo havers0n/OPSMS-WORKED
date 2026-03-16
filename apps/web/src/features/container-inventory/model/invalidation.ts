@@ -1,7 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { cellKeys } from '@/entities/cell/api/queries';
+import { locationKeys } from '@/entities/location/api/queries';
 import { containerKeys } from '@/entities/container/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
+import { cellKeys } from '@/entities/cell/api/queries';
 
 export async function invalidateContainerInventoryQueries(
   queryClient: QueryClient,
@@ -21,14 +22,14 @@ export async function invalidateContainerInventoryQueries(
     );
   }
 
-  if (args.sourceCellId) {
-    jobs.push(
-      queryClient.invalidateQueries({
-        queryKey: cellKeys.storage(args.sourceCellId)
-      })
-    );
-  }
+  // Invalidate all location storage queries (cellId -> locationId mapping not available here).
+  jobs.push(
+    queryClient.invalidateQueries({
+      queryKey: [...locationKeys.all, 'storage']
+    })
+  );
 
+  // Keep slot-storage invalidation for the placement-mode rack inspector (geometry/editor concern).
   jobs.push(
     queryClient.invalidateQueries({
       queryKey: [...cellKeys.all, 'slot-storage']
@@ -38,7 +39,7 @@ export async function invalidateContainerInventoryQueries(
   if (args.floorId) {
     jobs.push(
       queryClient.invalidateQueries({
-        queryKey: cellKeys.occupancyByFloor(args.floorId)
+        queryKey: locationKeys.occupancyByFloor(args.floorId)
       })
     );
     jobs.push(

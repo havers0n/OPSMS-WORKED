@@ -30,13 +30,22 @@ export type ContainerCurrentLocationRecord = {
   cellId: string | null;
 };
 
+export type LocationReferenceRecord = {
+  locationId: string;
+  locationCode: string;
+  locationType: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+  cellId: string | null;
+};
+
 export type LocationReadRepo = {
   locationExists(locationId: string): Promise<boolean>;
+  getLocationByCell(cellId: string): Promise<LocationReferenceRecord | null>;
   listLocationContainers(locationId: string): Promise<LocationOccupancyRowRecord[]>;
   listCellContainers(cellId: string): Promise<LocationOccupancyRowRecord[]>;
   listFloorLocationOccupancy(floorId: string): Promise<LocationOccupancyRowRecord[]>;
   listLocationStorage(locationId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorage(cellId: string): Promise<LocationStorageSnapshotRowRecord[]>;
+  listCellStorageByIds(cellIds: string[]): Promise<LocationStorageSnapshotRowRecord[]>;
   getContainerCurrentLocation(containerId: string): Promise<ContainerCurrentLocationRecord | null>;
   containerExists(containerId: string): Promise<boolean>;
 };
@@ -59,6 +68,33 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
       }
 
       return Boolean(data);
+    },
+
+    async getLocationByCell(cellId) {
+      if (!isUuid(cellId)) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id,code,location_type,geometry_slot_id')
+        .eq('geometry_slot_id', cellId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        return null;
+      }
+
+      return {
+        locationId: data.id,
+        locationCode: data.code,
+        locationType: data.location_type,
+        cellId: data.geometry_slot_id
+      };
     },
 
     async listLocationContainers(locationId) {
@@ -122,6 +158,24 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
         .from('location_storage_snapshot_v')
         .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
         .eq('cell_id', cellId)
+        .order('placed_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as LocationStorageSnapshotRowRecord[];
+    },
+
+    async listCellStorageByIds(cellIds) {
+      if (cellIds.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('location_storage_snapshot_v')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
+        .in('cell_id', cellIds)
         .order('placed_at', { ascending: true });
 
       if (error) {

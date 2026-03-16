@@ -15,6 +15,7 @@ export * from './storage/location-occupancy';
 export * from './storage/location-storage-snapshot';
 export * from './storage/container-current-location';
 export * from './storage/location-execution';
+export * from './storage/location-reference';
 export * from './storage/cell-occupancy';
 export * from './storage/container-placement-action';
 export * from './storage/container-placement';

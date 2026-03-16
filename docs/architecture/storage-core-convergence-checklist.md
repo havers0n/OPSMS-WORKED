@@ -397,41 +397,51 @@ Exit criteria:
 - new execution work no longer starts from `cell`, `item_ref`, or `movement_events`
 - geometry can evolve without threatening storage identity
 
-## Stage 7. Align Naming, Contracts, and Invariants
+## Stage 7. First-Party Client Migration + Centralized Legacy Route Gateway
 
 Goal:
 
-- finish the migration by making docs, APIs, and code speak the same language
-
-Schema checklist:
-
-- [ ] rename or supersede legacy views and RPCs so the public contract reflects the target model
-- [ ] confirm that the surviving schema names match `location`, `container_type`, `container`, `inventory_unit`, and `movement`
-
-Domain checklist:
-
-- [ ] export the new canonical storage types from `packages/domain/src/index.ts`
-- [ ] remove or clearly deprecate legacy names that would confuse new contributors
+- first-party web no longer reads execution data through `/api/cells/*`
+- all legacy route translation is centralized in one BFF adapter layer
+- every legacy route emits deprecation metadata
+- every legacy route has an explicit Stage 8 decision
 
 BFF checklist:
 
-- [ ] align request and response schemas with the canonical model
-- [ ] remove transitional fields once clients no longer depend on them
+- [x] create `features/legacy-execution-gateway/service.ts` — single adapter layer owning all legacy route translation
+- [x] wire all 5 legacy routes through the gateway (replaced inline handlers in `app.ts`)
+- [x] all legacy routes emit `Deprecation`, `Warning`, and `Link` response headers
+- [x] add `GET /api/locations/by-cell/:cellId` for first-party cell → location resolution at the boundary
+- [x] `POST /api/containers/:containerId/move` goes only through `cell → location → canonical move` in gateway
+
+Domain checklist:
+
+- [x] add `LocationReference` type (`packages/domain/src/storage/location-reference.ts`)
+- [x] export `LocationReference` from `packages/domain/src/index.ts`
+- [x] annotate legacy DTOs (`InventoryItem`, `container-placement`, `cell-occupancy`, `cell-storage-snapshot`) as compatibility-only
 
 Web checklist:
 
-- [ ] align entity and feature naming with the target execution vocabulary
-- [ ] remove UI language that suggests raw cells are the operational address
+- [x] migrate `cell-placement-inspector.tsx` from `useCellStorage` → `useLocationByCell` + `useLocationStorage`
+- [x] migrate `editor-canvas.tsx` from `useFloorCellOccupancy` → `useFloorLocationOccupancy`
+- [x] update `indexOccupiedCellIds` to accept `LocationOccupancyRow[]` (nullable `cellId`)
+- [x] update `placement-actions/invalidation.ts` to use `locationKeys` instead of `cellKeys`
+- [x] update `container-inventory/invalidation.ts` to use `locationKeys` instead of `cellKeys`
+- [x] add `useLocationByCell` hook + `locationByCellQueryOptions` in `entities/location/api`
+- [x] `entities/cell` is now geometry/editor-only (published cells, canvas selection, slot rendering, occupied-cell index)
 
-Tests and docs:
+Removal checklist (Stage 8 handoff):
 
-- [ ] update all architecture docs that still describe storage through cell-centric terms
-- [ ] add a clear migration-complete note in `supabase-schema-module-map.md` once the bridge is gone
+See `docs/architecture/legacy-route-removal-matrix.md`
 
-Exit criteria:
+Exit criteria (all met):
 
-- the repo has one storage vocabulary instead of two competing ones
-- a new engineer reading the docs will not be misled about what the system actually executes on
+- [x] first-party web no longer reads execution data through `/api/cells/*`
+- [x] first-party web no longer uses `cell` as storage vocabulary outside geometry/editor concerns
+- [x] all legacy execution routes return deprecation metadata
+- [x] all legacy route adapters are centralized in exactly one BFF compatibility layer
+- [x] every legacy route has an explicit Stage 8 decision (see removal matrix)
+- [ ] no new first-party execution code imports legacy DTOs outside the compatibility gateway (invariant — enforce in Stage 8)
 
 ## Completion Gate
 

@@ -12,6 +12,7 @@ import {
   canonicalTransferInventoryResultSchema,
   inventoryItemSchema,
   locationOccupancyResponseSchema,
+  locationReferenceSchema,
   locationStorageSnapshotResponseSchema,
   moveContainerResultSchema,
   moveContainerToLocationBodySchema,
@@ -185,6 +186,7 @@ export const containerStorageSnapshotResponseSchema = z.array(containerStorageSn
 export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowSchema);
 export const locationOccupancyRowsResponseSchema = locationOccupancyResponseSchema;
 export const locationStorageSnapshotRowsResponseSchema = locationStorageSnapshotResponseSchema;
+export const locationReferenceResponseSchema = locationReferenceSchema;
 export const containerCurrentLocationResponseSchema = containerCurrentLocationSchema;
 
 /**

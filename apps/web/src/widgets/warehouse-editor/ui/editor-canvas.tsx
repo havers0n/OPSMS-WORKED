@@ -28,7 +28,7 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import { useFloorCellOccupancy } from '@/entities/cell/api/use-floor-cell-occupancy';
+import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
 import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
@@ -171,7 +171,7 @@ export function EditorCanvas({
   const isPlacementMoveMode = placementInteraction.type === 'move-container';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
   const placementFloorId = isPlacementMode ? workspace?.floorId ?? null : null;
-  const { data: floorCellOccupancy = [] } = useFloorCellOccupancy(placementFloorId);
+  const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
   const { data: publishedCells = [] } = usePublishedCells(
     placementFloorId
   );
