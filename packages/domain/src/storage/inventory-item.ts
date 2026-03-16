@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { productSchema } from '../catalog/product';
 
+/**
+ * Compatibility DTO for current public inventory APIs.
+ * Canonical execution stock is represented by InventoryUnit.
+ */
 export const inventoryItemSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

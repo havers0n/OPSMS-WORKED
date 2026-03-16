@@ -1,10 +1,14 @@
 import {
+  buildCatalogProductItemRef,
   cellSchema,
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
+  inventoryUnitSchema,
+  locationOccupancyRowSchema,
+  locationStorageSnapshotRowSchema,
   parseCellAddress,
   containerTypeSchema,
   floorSchema,
@@ -28,8 +32,11 @@ import {
   type ContainerType,
   type Floor,
   type InventoryItem,
+  type InventoryUnit,
   type LayoutDraft,
   type LayoutValidationResult,
+  type LocationOccupancyRow,
+  type LocationStorageSnapshotRow,
   type Site,
   type Order,
   type OrderSummary,
@@ -246,6 +253,71 @@ export function mapCellStorageSnapshotRowToDomain(row: {
   });
 }
 
+export function mapLocationOccupancyRowToDomain(row: {
+  tenant_id: string;
+  floor_id: string;
+  location_id: string;
+  location_code: string;
+  location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+  cell_id: string | null;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  placed_at: string;
+}): LocationOccupancyRow {
+  return locationOccupancyRowSchema.parse({
+    tenantId: row.tenant_id,
+    floorId: row.floor_id,
+    locationId: row.location_id,
+    locationCode: row.location_code,
+    locationType: row.location_type,
+    cellId: row.cell_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    placedAt: row.placed_at
+  });
+}
+
+export function mapLocationStorageSnapshotRowToDomain(row: {
+  tenant_id: string;
+  floor_id: string;
+  location_id: string;
+  location_code: string;
+  location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+  cell_id: string | null;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  placed_at: string;
+  item_ref: string | null;
+  product_id?: string | null;
+  product?: ProductRow | null;
+  quantity: number | null;
+  uom: string | null;
+}): LocationStorageSnapshotRow {
+  return locationStorageSnapshotRowSchema.parse({
+    tenantId: row.tenant_id,
+    floorId: row.floor_id,
+    locationId: row.location_id,
+    locationCode: row.location_code,
+    locationType: row.location_type,
+    cellId: row.cell_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    placedAt: row.placed_at,
+    itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
+    quantity: row.quantity,
+    uom: row.uom
+  });
+}
+
 export function mapCellRowToDomain(row: {
   id: string;
   layout_version_id: string;
@@ -294,6 +366,66 @@ export function mapInventoryItemRowToDomain(row: {
     tenantId: row.tenant_id,
     containerId: row.container_id,
     itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
+    quantity: row.quantity,
+    uom: row.uom,
+    createdAt: row.created_at,
+    createdBy: row.created_by
+  });
+}
+
+export function mapInventoryUnitRowToDomain(row: {
+  id: string;
+  tenant_id: string;
+  container_id: string;
+  product_id: string;
+  quantity: number;
+  uom: string;
+  lot_code: string | null;
+  serial_no: string | null;
+  expiry_date: string | null;
+  status: 'available' | 'reserved' | 'damaged' | 'hold';
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by?: string | null;
+  source_inventory_unit_id?: string | null;
+}): InventoryUnit {
+  return inventoryUnitSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    containerId: row.container_id,
+    productId: row.product_id,
+    quantity: row.quantity,
+    uom: row.uom,
+    lotCode: row.lot_code,
+    serialNo: row.serial_no,
+    expiryDate: row.expiry_date,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by ?? null,
+    sourceInventoryUnitId: row.source_inventory_unit_id ?? null
+  });
+}
+
+export function mapInventoryUnitRowToLegacyInventoryItemDomain(row: {
+  id: string;
+  tenant_id: string;
+  container_id: string;
+  product_id: string;
+  quantity: number;
+  uom: string;
+  created_at: string;
+  created_by: string | null;
+  product?: ProductRow | null;
+}): InventoryItem {
+  return inventoryItemSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    containerId: row.container_id,
+    itemRef: buildCatalogProductItemRef(row.product_id),
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
     uom: row.uom,
@@ -371,8 +503,90 @@ export function mapLayoutDraftBundleToDomain(bundle: {
     layoutVersionId: bundle.layoutVersion.id,
     floorId: bundle.layoutVersion.floor_id,
     state: bundle.layoutVersion.state,
+    versionNo: bundle.layoutVersion.version_no,
     rackIds: racks.map((rack) => rack.id),
     racks: Object.fromEntries(racks.map((rack) => [rack.id, rack]))
+  });
+}
+
+// Maps the JSON returned by the get_layout_bundle(uuid) SECURITY DEFINER RPC
+// to the domain LayoutDraft type.  The RPC returns a single JSON object with
+// the full rack hierarchy already assembled, so no post-processing joins are
+// needed here.
+export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
+  if (json === null || json === undefined) return null;
+
+  const bundle = json as {
+    layoutVersionId: string;
+    floorId: string;
+    state: string;
+    versionNo: number;
+    racks: Array<{
+      id: string;
+      displayCode: string;
+      kind: string;
+      axis: string;
+      x: number;
+      y: number;
+      totalLength: number;
+      depth: number;
+      rotationDeg: number;
+      faces: Array<{
+        id: string;
+        side: string;
+        enabled: boolean;
+        slotNumberingDirection: string;
+        faceLength: number | null;
+        isMirrored: boolean;
+        mirrorSourceFaceId: string | null;
+        sections: Array<{
+          id: string;
+          ordinal: number;
+          length: number;
+          levels: Array<{ id: string; ordinal: number; slotCount: number }>;
+        }>;
+      }>;
+    }>;
+  };
+
+  const racks = bundle.racks.map((r) => ({
+    id: r.id,
+    displayCode: r.displayCode,
+    kind: r.kind,
+    axis: r.axis,
+    x: r.x,
+    y: r.y,
+    totalLength: r.totalLength,
+    depth: r.depth,
+    rotationDeg: r.rotationDeg,
+    faces: r.faces.map((f) => ({
+      id: f.id,
+      side: f.side,
+      enabled: f.enabled,
+      slotNumberingDirection: f.slotNumberingDirection,
+      isMirrored: f.isMirrored,
+      mirrorSourceFaceId: f.mirrorSourceFaceId,
+      faceLength: f.faceLength ?? undefined,
+      sections: f.sections.map((s) => ({
+        id: s.id,
+        ordinal: s.ordinal,
+        length: s.length,
+        levels: s.levels.map((l) => ({
+          id: l.id,
+          ordinal: l.ordinal,
+          slotCount: l.slotCount
+        }))
+      }))
+    }))
+  }));
+
+  return layoutDraftSchema.parse({
+    layoutVersionId: bundle.layoutVersionId,
+    floorId: bundle.floorId,
+    state: bundle.state,
+    versionNo: bundle.versionNo,
+    rackIds: racks.map((r) => r.id),
+    racks: Object.fromEntries(racks.map((r) => [r.id, r]))
   });
 }
 

@@ -5,6 +5,7 @@ const layoutDraft = {
   layoutVersionId: 'draft-1',
   floorId: 'floor-1',
   state: 'draft' as const,
+  versionNo: 1,
   rackIds: [],
   racks: {}
 };

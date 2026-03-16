@@ -56,6 +56,8 @@ begin
     (cell_uuid, layout_uuid, rack_uuid, rack_face_uuid, rack_section_uuid, rack_level_uuid, 1, 'R1-A.01.01.01', 'R1-A-01-01-01', 'view-cell-001'),
     (second_cell_uuid, layout_uuid, rack_uuid, rack_face_uuid, rack_section_uuid, rack_level_uuid, 2, 'R1-A.01.01.02', 'R1-A-01-01-02', 'view-cell-002');
 
+  perform public.backfill_locations_from_published_cells();
+
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'PALLET-101', pallet_type_uuid, 'active')
   returning id into first_container_uuid;
@@ -75,6 +77,8 @@ begin
 
   insert into public.container_placements (tenant_id, container_id, cell_id, placed_at, removed_at)
   values (default_tenant_uuid, third_container_uuid, second_cell_uuid, '2026-03-13T09:00:00.000Z', '2026-03-13T09:30:00.000Z');
+
+  perform public.backfill_container_current_locations();
 
   if (
     select count(*)

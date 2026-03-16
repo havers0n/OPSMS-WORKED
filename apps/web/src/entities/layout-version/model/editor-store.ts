@@ -348,7 +348,14 @@ export const useEditorStore = create<EditorStore>((set) => ({
     }),
   initializeDraft: (draft) =>
     set((state) => {
-      if (state.isDraftDirty && state.draft?.layoutVersionId === draft.layoutVersionId) {
+      // Once a version is loaded into the editor it owns that state for the
+      // lifetime of the session.  Only reinitialise when the layout version
+      // itself changes (e.g. switching floor, creating a new draft, or
+      // publishing).  This prevents background workspace re-fetches (or
+      // fetch errors that fall back to latestPublished) from silently
+      // overwriting in-memory edits or flipping the canvas between the draft
+      // and the published layout when switching between Layout / Storage modes.
+      if (state.draft?.layoutVersionId === draft.layoutVersionId) {
         return state;
       }
 

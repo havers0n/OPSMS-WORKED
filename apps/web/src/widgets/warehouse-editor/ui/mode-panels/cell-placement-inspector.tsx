@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { CellStorageSnapshotRow, FloorWorkspace } from '@wos/domain';
+import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
 import { AlertCircle, ChevronRight, Layers, Loader2, MapPin, Package } from 'lucide-react';
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useEditorSelection,
   useSetSelectedContainerId
 } from '@/entities/layout-version/model/editor-selectors';
-import { useCellStorage } from '@/entities/cell/api/use-cell-storage';
+import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
+import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
 import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
@@ -43,10 +44,10 @@ type ContainerGroup = {
   containerType: string;
   containerStatus: string;
   placedAt: string;
-  items: Array<{ itemRef: string; product: CellStorageSnapshotRow['product']; quantity: number; uom: string }>;
+  items: Array<{ itemRef: string; product: LocationStorageSnapshotRow['product']; quantity: number; uom: string }>;
 };
 
-function groupByContainer(rows: CellStorageSnapshotRow[]): ContainerGroup[] {
+function groupByContainer(rows: LocationStorageSnapshotRow[]): ContainerGroup[] {
   const map = new Map<string, ContainerGroup>();
 
   for (const row of rows) {
@@ -179,7 +180,9 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const cellId = selection.type === 'cell' ? selection.cellId : null;
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const selectedCell = publishedCells.find((cell) => cell.id === cellId) ?? null;
-  const { data = [], error, isPending, isError } = useCellStorage(cellId);
+  const { data: locationRef } = useLocationByCell(cellId);
+  const locationId = locationRef?.locationId ?? null;
+  const { data = [], error, isPending, isError } = useLocationStorage(locationId);
   const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } = useContainerTypes();
   const bffError = error instanceof BffRequestError ? error : null;
   const containers = groupByContainer(data);

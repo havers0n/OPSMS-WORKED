@@ -43,6 +43,7 @@ function mapPlacementRpcError(error: SupabaseLikeError): Error | null {
     case 'TARGET_CELL_NOT_FOUND':
       return new TargetCellNotFoundError();
     case 'TARGET_CELL_NOT_PUBLISHED':
+    case 'TARGET_CELL_LOCATION_NOT_FOUND':
       return new PublishedLayoutNotFoundError();
     case 'CONTAINER_NOT_PLACED':
       return new ActivePlacementNotFoundError();
@@ -73,10 +74,18 @@ export type ActivePlacement = {
   cellId: string;
 };
 
+export type ResolvedExecutableLocation = {
+  locationId: string;
+  code: string;
+  floorId: string;
+  cellId: string;
+};
+
 export type PlacementRepo = {
   resolveContainer(containerRef: string, tenantId: string): Promise<ResolvedContainer | null>;
   resolvePlaceTarget(targetCellRef: string): Promise<ResolvedCell | null>;
   resolveSourceCells(sourceCellRef: string): Promise<ResolvedCell[]>;
+  resolveExecutableLocationForCell(cellId: string): Promise<ResolvedExecutableLocation | null>;
   getActivePlacement(containerId: string): Promise<ActivePlacement | null>;
   placeContainer(containerId: string, cellId: string, actorId?: string | null): Promise<void>;
   removeContainerFromCells(containerId: string, sourceCellIds: string[], actorId?: string | null): Promise<void>;
@@ -182,6 +191,31 @@ export function createPlacementRepo(supabase: SupabaseClient): PlacementRepo {
             floorId: floorId ?? ''
           }]
         : [];
+    },
+
+    async resolveExecutableLocationForCell(cellId) {
+      if (!isUuid(cellId)) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id,code,floor_id,geometry_slot_id')
+        .eq('geometry_slot_id', cellId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data
+        ? {
+            locationId: data.id,
+            code: data.code,
+            floorId: data.floor_id,
+            cellId: data.geometry_slot_id
+          }
+        : null;
     },
 
     async getActivePlacement(containerId) {
