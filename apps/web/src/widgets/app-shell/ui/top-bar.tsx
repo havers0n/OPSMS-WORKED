@@ -35,9 +35,7 @@ import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/lay
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'layout', label: 'Layout' },
-  { id: 'semantics', label: 'Semantics' },
-  { id: 'placement', label: 'Placement' },
-  { id: 'flow', label: 'Flow' }
+  { id: 'placement', label: 'Storage' }
 ];
 
 export function TopBar() {
