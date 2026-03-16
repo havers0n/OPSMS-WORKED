@@ -43,6 +43,7 @@ function mapPlacementRpcError(error: SupabaseLikeError): Error | null {
     case 'TARGET_CELL_NOT_FOUND':
       return new TargetCellNotFoundError();
     case 'TARGET_CELL_NOT_PUBLISHED':
+    case 'TARGET_CELL_LOCATION_NOT_FOUND':
       return new PublishedLayoutNotFoundError();
     case 'CONTAINER_NOT_PLACED':
       return new ActivePlacementNotFoundError();

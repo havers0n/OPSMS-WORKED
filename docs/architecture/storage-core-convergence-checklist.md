@@ -282,43 +282,64 @@ Exit criteria:
 - whole-container move and partial-stock transfer are separate execution paths
 - the system can answer “what moved, when, and from where to where” without reconstructing state from ad hoc joins
 
-## Stage 5. Move Operational APIs Onto the Target Model
+## Stage 5. Canonical Current Location Pivot + Location Constraint Enforcement
 
 Goal:
 
-- shift the write path from cell-centric placement operations to location-centered execution semantics
+- make `containers.current_location_id` the canonical current-state truth
+- rebase current-state reads on location-native state
+- keep public API/UI stable while operational writes stop executing through geometry
+
+Implementation status snapshot:
+
+- `containers.current_location_id` now exists and is backfilled from the old placement bridge
+- current-state read views now derive from canonical container location instead of active placements
+- `container_placements` now acts only as a geometry/rack compatibility projection
+- canonical move now supports non-rack targets and explicitly syncs rack projection only when needed
+- Stage 5 now enforces location status, same-location rejection, single-container occupancy, dimension fit, and weight fit
 
 Schema checklist:
 
-- [ ] add or update RPCs so operational writes validate against `location`
-- [ ] enforce single-container capacity, disabled-location rejection, dimensional fit, and weight fit at execution boundaries
+- [x] add `containers.current_location_id`
+- [x] add idempotent backfill from the active location bridge
+- [x] pivot `active_container_locations_v`, `location_occupancy_v`, and `location_storage_snapshot_v` to canonical current location
+- [x] keep `cell_*` views only as compatibility projections for geometry-backed locations
+- [x] update canonical move to write `current_location_id` directly
+- [x] sync rack placement projection explicitly instead of treating it as execution truth
+- [x] support non-rack canonical move targets
+- [x] enforce active-only, same-location, single-container, dimension-fit, and weight-fit rules in canonical move
 
 Domain checklist:
 
-- [ ] move core execution validations into location-aware storage rules
-- [ ] keep geometry validation separate from storage execution validation
+- [x] add location-aware fit/capacity helpers and explicit failure reasons
+- [x] keep geometry validation separate from storage execution validation
 
 BFF checklist:
 
-- [ ] evolve placement service into a broader location-execution service or add a new service boundary beside it
-- [ ] make `move-container` validate source and destination as executable locations
-- [ ] add `receive`, `putaway`, `pick`, and `ship` endpoints or commands on top of the target model
+- [x] pivot internal move execution to `locationId`
+- [x] keep the existing cell-based move route as a compatibility facade
+- [x] preserve current public payload shapes while resolving `cell -> location` internally
+- [ ] add broader receive / putaway / ship wrappers only when product scope needs them
 
 Web checklist:
 
-- [ ] stop binding all operational actions to cell-only selectors
-- [ ] introduce UI concepts for non-rack locations where needed
-- [ ] ensure placement inspectors can display executable location identity and constraints
+- [x] keep public web hooks and payload shapes unchanged
+- [x] avoid any new visible state or UI concepts in Stage 5
+- [ ] expose location-native operational controls in a later UX stage
 
 Tests and docs:
 
-- [ ] add end-to-end tests for receive, putaway, transfer, partial pick, and ship
-- [ ] update API docs to expose location-centered contracts
+- [x] add SQL acceptance coverage for current-location pivot and enforced constraints
+- [x] update docs to state that `containers.current_location_id` is canonical truth
+- [ ] add end-to-end receive / putaway / ship coverage only when those flows are promoted beyond thin wrappers
 
 Exit criteria:
 
-- operational commands use `location` as the execution target
-- rack slots are just one category of location, not the only possible one
+- current-state storage truth is container-location-native
+- `container_placements` no longer answers “where is the container now?”
+- non-rack locations are valid canonical write targets
+- hard location constraints are enforced by canonical move
+- public contracts remain compatibility-stable
 
 ## Stage 6. Retire Cell-Centric Execution Assumptions
 

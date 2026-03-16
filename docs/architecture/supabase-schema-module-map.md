@@ -59,7 +59,7 @@ They are related, but they are not identical.
 
 | Concern | Current implementation | Target model | Status |
 |---|---|---|---|
-| Executable storage anchor | storage reads and new canonical execution flows now pivot around `locations`, but compatibility placement persistence still bridges through `cells` | `locations` become the executable storage entity; geometry slot is only the spatial anchor | partial |
+| Executable storage anchor | canonical execution reads and writes now pivot around `locations`, with `containers.current_location_id` as current-state truth | `locations` become the executable storage entity; geometry slot is only the spatial anchor | partial |
 | Geometry to execution relationship | placement points directly to `cells.id` | `geometry_slot -> location -> container -> inventory_unit` | diverged |
 | Handling unit model | `containers` already exist | `containers` remain core | aligned |
 | Container classification | `container_types` already exist in a minimal form | `container_type` remains core, with dimensional and load semantics becoming first-class | partial |
@@ -72,12 +72,13 @@ They are related, but they are not identical.
 
 Today the implemented storage path is effectively:
 
-`GeometrySlot -> Location -> ContainerPlacement -> Container -> InventoryUnit`
+`GeometrySlot -> Location -> Container(current_location_id) -> InventoryUnit`
 
 This means:
 
-- published cells remain the structural base for compatibility placement persistence
-- new canonical execution moves now accept `location` as input and bridge to geometry only internally
+- published cells remain the structural base for rack/canvas compatibility only
+- current-state execution truth now lives on `containers.current_location_id`
+- new canonical execution moves accept `location` as input and sync geometry projection only when needed
 - storage reads are now routed through location-backed compatibility views
 - Stage 1 now also persists first-class `locations` for published rack slots
 - canonical product-backed stock lives in `inventory_unit`
@@ -108,10 +109,10 @@ When reading this file:
 
 Until the schema is converged:
 
-- `container_placements` remain the current placement write truth in the repo
+- `container_placements` no longer answer current-state truth; they remain rack/canvas compatibility projection
 - canonical product-backed stock now lives in `inventory_unit`, while `inventory_items` remains compatibility debt
-- `cells` remain the structural base for current placement features
-- `locations` are now the introduced execution entity for published rack slots, but not yet the primary write target
+- `cells` remain the structural base for current placement-facing compatibility features
+- `locations` and `containers.current_location_id` now own current execution state
 - new work should avoid deepening the assumption that `cell = executable location`
 
 ### Convergence plan
@@ -195,22 +196,20 @@ Current status:
 
 - implemented for new canonical flows: `stock_movements` now records `move_container`, `split_stock`, `transfer_stock`, and `pick_partial`
 - `move_container_canonical` now accepts `target_location_uuid`, not `target_cell_uuid`
-- current physical placement persistence still bridges through `locations.geometry_slot_id -> cells.id`
-- full fit, capacity, and weight enforcement remains deferred to Stage 5
+- current physical rack projection still syncs through `locations.geometry_slot_id -> cells.id`
+- Stage 5 now owns fit, capacity, and weight enforcement on the canonical move path
 
-#### Stage 5. Move operational APIs onto the target model
+#### Stage 5. Canonical current-location pivot and constraint enforcement
 
-Shift write paths and read paths from cell-centric internals to location-centered execution semantics.
+Current status:
 
-Target outcome:
-
-- `receive`, `move`, `pick`, and `ship` APIs validate against `location`
-- fit and capacity rules execute against `location` constraints
-- warehouse operations can target non-rack locations without schema workarounds
+- implemented: `containers.current_location_id` now owns canonical current-state truth
+- implemented: current-state reads now derive from container location instead of placement history
+- implemented: canonical move supports non-rack targets and enforces active-only, same-location, occupancy, dimension, and weight constraints
 
 Constraint:
 
-- draft and published layout flows must remain geometry concerns; operational execution must not depend on draft-only structures
+- public web-visible contracts remain compatibility-stable even though execution no longer writes through raw `cell` state
 
 #### Stage 6. Retire cell-centric execution assumptions
 
@@ -558,14 +557,23 @@ Key fields:
 - `tenant_id uuid fk -> tenants.id`
 - `external_code text null`
 - `container_type_id uuid fk -> container_types.id`
+- `current_location_id uuid null fk -> locations.id`
+- `current_location_entered_at timestamptz null`
 - `status text check in ('active','quarantined','closed','lost','damaged')`
 - `created_by uuid null fk -> profiles.id`
 - `created_at timestamptz`
+- `updated_at timestamptz`
+- `updated_by uuid null fk -> profiles.id`
 
 Constraints:
 
 - unique nullable `(tenant_id, external_code)` if scannable external IDs exist
 - container exists independently of placement
+
+Notes:
+
+- `current_location_id` is the canonical current-state execution truth
+- rack placement projection is derived and synchronized separately
 
 #### `container_placements`
 
@@ -593,7 +601,8 @@ Constraints:
 Notes:
 
 - multiple containers in the same cell are allowed
-- placement is physical relationship, not role mapping
+- after Stage 5 this table is no longer execution truth
+- it now exists to preserve rack/canvas compatibility for geometry-backed locations
 
 #### `inventory_items`
 
@@ -1031,7 +1040,7 @@ Views should expose derived operational read models. They must not replace sourc
 
 Purpose:
 
-- canonical active execution read for container placements resolved through executable locations
+- canonical active execution read derived from `containers.current_location_id`
 
 Possible columns:
 
@@ -1051,8 +1060,9 @@ Possible columns:
 
 Notes:
 
-- derived from active `container_placements` joined to `locations`
-- target-facing Stage 2 bridge view
+- derived from `containers.current_location_id` joined to `locations`
+- active placement rows are no longer required for current-state reconstruction
+- `cell_id` now exists only as a geometry compatibility field when `location.geometry_slot_id` is present
 
 #### `location_occupancy_v`
 
@@ -1293,8 +1303,10 @@ Responsibility:
 Responsibility:
 
 - accept `location` as the execution-facing target
-- bridge internally to `geometry_slot_id -> cell_id` while current placement persistence remains cell-backed
-- reject non-writable locations and occupied target locations in Stage 4
+- update `containers.current_location_id` directly
+- sync `container_placements` only as a geometry projection when the target location is rack-backed
+- support non-rack targets without inventing fake cell placements
+- enforce active-only, same-location, occupancy, dimension-fit, and weight-fit constraints
 - write canonical `stock_movements(type='move_container')`
 
 #### `split_inventory_unit(source_inventory_unit_id uuid, quantity numeric, target_container_id uuid, actor_id uuid)`
@@ -1457,7 +1469,7 @@ Canonical flow through the schema:
 - `product_location_roles`
 - `container_types`
 - `containers`
-- `container_placements`
+- `container_placements` (compatibility projection only)
 - `inventory_items` (legacy compatibility surface)
 - `inventory_unit` (canonical product-backed stock truth)
 - `stock_movements` (canonical execution history for Stage 4+ execution flows)

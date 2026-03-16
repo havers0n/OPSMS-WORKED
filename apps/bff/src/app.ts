@@ -101,6 +101,21 @@ import {
   createPlacementCommandService,
   type PlacementCommandService
 } from './features/placement/service.js';
+import { createPlacementRepo } from './features/placement/placement-repo.js';
+import { createExecutionService } from './features/execution/service.js';
+import {
+  ExecutionContainerNotFoundError,
+  ExecutionContainerNotPlacedError,
+  ExecutionTargetLocationDimensionOverflowError,
+  ExecutionTargetLocationDimensionUnknownError,
+  ExecutionTargetLocationNotActiveError,
+  ExecutionTargetLocationNotFoundError,
+  ExecutionTargetLocationOccupiedError,
+  ExecutionTargetLocationSameAsSourceError,
+  ExecutionTargetLocationTenantMismatchError,
+  ExecutionTargetLocationWeightOverflowError,
+  ExecutionTargetLocationWeightUnknownError
+} from './features/execution/errors.js';
 import {
   attachProductsToRows,
   productSelectColumns,
@@ -672,6 +687,54 @@ function mapPlacementError(error: unknown): ApiError | null {
 
   if (error instanceof CrossFloorPlacementMoveNotAllowedError) {
     return new ApiError(409, 'CROSS_FLOOR_MOVE_NOT_ALLOWED', error.message);
+  }
+
+  return null;
+}
+
+function mapExecutionMoveError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is not currently placed.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotFoundError) {
+    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell was not found.');
+  }
+
+  if (error instanceof ExecutionTargetLocationTenantMismatchError) {
+    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotActiveError) {
+    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell is not currently writable.');
+  }
+
+  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is already in the target cell.');
+  }
+
+  if (error instanceof ExecutionTargetLocationOccupiedError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Target cell is already occupied.');
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
+    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Target cell enforces dimensions that are missing on this container type.');
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
+    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Container dimensions exceed the target cell limits.');
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
+    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Target cell enforces weight, but the container gross weight cannot be computed.');
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
+    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Container gross weight exceeds the target cell limit.');
   }
 
   return null;
@@ -1473,17 +1536,53 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
     const body = parseOrThrow(moveContainerBodySchema, request.body);
     const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('move_container', {
-      container_uuid: containerId,
-      target_cell_uuid: body.targetCellId,
-      actor_uuid: auth.user.id
-    });
+    const placementRepo = createPlacementRepo(supabase);
+    const executionService = createExecutionService(supabase);
+    const targetLocation = await placementRepo.resolveExecutableLocationForCell(body.targetCellId);
 
-    if (error) {
-      throw error;
+    if (!targetLocation) {
+      const targetCell = await placementRepo.resolvePlaceTarget(body.targetCellId);
+
+      throw new ApiError(
+        409,
+        'INVALID_TARGET_CELL',
+        targetCell ? 'Target cell is not in a published layout.' : 'Target cell was not found.'
+      );
     }
 
-    return parseOrThrow(moveContainerResponseSchema, data);
+    const previousPlacement = await placementRepo.getActivePlacement(containerId);
+
+    if (!previousPlacement) {
+      throw new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is not currently placed.');
+    }
+
+    let moveResult;
+
+    try {
+      moveResult = await executionService.moveContainerCanonical({
+        containerId,
+        targetLocationId: targetLocation.locationId,
+        actorId: auth.user.id
+      });
+    } catch (error) {
+      throw mapExecutionMoveError(error) ?? error;
+    }
+
+    const activePlacement = await placementRepo.getActivePlacement(containerId);
+
+    if (!activePlacement) {
+      throw new ApiError(409, 'PLACEMENT_CONFLICT', 'Container move did not create a rack placement projection.');
+    }
+
+    return parseOrThrow(moveContainerResponseSchema, {
+      action: 'moved',
+      containerId,
+      fromCellId: previousPlacement.cellId,
+      toCellId: activePlacement.cellId,
+      previousPlacementId: previousPlacement.placementId,
+      placementId: activePlacement.placementId,
+      occurredAt: moveResult.occurredAt
+    });
   });
 
   app.post('/api/containers/:containerId/inventory', async (request, reply) => {

@@ -98,6 +98,8 @@ begin
   insert into public.cells (id, layout_version_id, rack_id, rack_face_id, rack_section_id, rack_level_id, slot_no, address, address_sort_key, cell_code)
   values (other_cell_uuid, other_layout_uuid, other_rack_uuid, other_face_uuid, other_section_uuid, other_level_uuid, 1, 'R1-A.01.01.01', 'R1-A-01-01-01', 'snap-other-cell-001');
 
+  perform public.backfill_locations_from_published_cells();
+
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'SNAP-PALLET', pallet_type_uuid, 'active')
   returning id into pallet_uuid;
@@ -134,6 +136,8 @@ begin
 
   insert into public.container_placements (tenant_id, container_id, cell_id, placed_at, removed_at)
   values (default_tenant_uuid, removed_uuid, cell_a_uuid, '2026-03-13T08:00:00.000Z', '2026-03-13T09:00:00.000Z');
+
+  perform public.backfill_container_current_locations();
 
   if (
     select count(*)

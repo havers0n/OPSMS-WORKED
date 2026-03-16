@@ -158,6 +158,35 @@ const inventoryItemRows = [
   }
 ];
 
+const locationRows = [
+  {
+    id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+    code: '03-A.01.02.01',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    geometry_slot_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    status: 'active'
+  },
+  {
+    id: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+    code: '03-A.01.02.02',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    geometry_slot_id: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    status: 'active'
+  }
+];
+
+const activePlacementRows = [
+  {
+    id: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
+    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+    cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+  }
+];
+
 const inventoryUnitRows = [
   {
     id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
@@ -459,6 +488,46 @@ function createSupabaseStub() {
                   created_by: payload.created_by ?? null
                 },
                 error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'locations') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((column: string, value: string) => ({
+              maybeSingle: vi.fn(async () => ({
+                data:
+                  locationRows.find((row) => {
+                    if (column === 'geometry_slot_id') return row.geometry_slot_id === value;
+                    if (column === 'id') return row.id === value;
+                    return false;
+                  }) ?? null,
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'container_placements') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((column: string, value: string) => ({
+              is: vi.fn((_removedColumn: string, _removedValue: null) => ({
+                maybeSingle: vi.fn(async () => ({
+                  data:
+                    activePlacementRows.find((row) => {
+                      if (column === 'container_id') {
+                        return row.container_id === value;
+                      }
+
+                      return false;
+                    }) ?? null,
+                  error: null
+                }))
               }))
             }))
           }))
@@ -2938,16 +3007,50 @@ describe('buildApp', () => {
 
   it('moves a container atomically between cells', async () => {
     const supabase = createSupabaseStub();
+    const baseFrom = supabase.from;
+    let currentPlacement = {
+      placementId: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
+      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+    };
+
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'container_placements') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              is: vi.fn((_removedColumn: string, _removedValue: null) => ({
+                maybeSingle: vi.fn(async () => ({
+                  data:
+                    value === '188ed1eb-c44d-47f8-a8b1-94c7e20db85f'
+                      ? {
+                          id: currentPlacement.placementId,
+                          cell_id: currentPlacement.cellId
+                        }
+                      : null,
+                  error: null
+                }))
+              }))
+            }))
+          }))
+        };
+      }
+
+      return baseFrom(table);
+    });
+
     supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
-      if (fn === 'move_container') {
+      if (fn === 'move_container_canonical') {
+        currentPlacement = {
+          placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+          cellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+        };
+
         return {
           data: {
-            action: 'moved',
             containerId: args.container_uuid,
-            fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-            toCellId: args.target_cell_uuid,
-            previousPlacementId: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
-            placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
+            sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+            targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+            movementId: 'c1411420-4f31-4427-9d8d-e6c779d6cc0f',
             occurredAt: '2026-03-13T12:45:00.000Z'
           },
           error: null
@@ -2983,33 +3086,36 @@ describe('buildApp', () => {
       placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
       occurredAt: '2026-03-13T12:45:00.000Z'
     });
-    expect(supabase.rpc).toHaveBeenCalledWith('move_container', {
+    expect(supabase.rpc).toHaveBeenCalledWith('move_container_canonical', {
       container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      target_cell_uuid: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
+      target_location_uuid: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
       actor_uuid: authContext.user.id
     });
 
     await app.close();
   });
 
-  it.each([
-    ['not placed', 'CONTAINER_NOT_PLACED', 'PLACEMENT_CONFLICT', 'Container is not currently placed.'],
-    ['invalid cell', 'TARGET_CELL_NOT_PUBLISHED', 'INVALID_TARGET_CELL', 'Target cell is not in a published layout.'],
-    ['same target cell', 'CONTAINER_ALREADY_IN_TARGET_CELL', 'PLACEMENT_CONFLICT', 'Container is already in the target cell.']
-  ])('maps move-container errors clearly when %s', async (_label, dbMessage, apiCode, apiMessage) => {
+  it('maps move-container errors clearly when the container is not currently placed', async () => {
     const supabase = createSupabaseStub();
-    supabase.rpc = vi.fn(async (fn: string) => {
-      if (fn === 'move_container') {
+    const baseFrom = supabase.from;
+
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'container_placements') {
         return {
-          data: null,
-          error: {
-            code: 'P0001',
-            message: dbMessage
-          }
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              is: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: null,
+                  error: null
+                }))
+              }))
+            }))
+          }))
         };
       }
 
-      return { data: null, error: null };
+      return baseFrom(table);
     });
 
     const app = buildApp({
@@ -3030,8 +3136,97 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: apiCode,
-      message: apiMessage
+      code: 'PLACEMENT_CONFLICT',
+      message: 'Container is not currently placed.'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('maps move-container errors clearly when the target cell is not in a published layout', async () => {
+    const supabase = createSupabaseStub();
+    const baseFrom = supabase.from;
+
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'locations') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: null,
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return baseFrom(table);
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'INVALID_TARGET_CELL',
+      message: 'Target cell is not in a published layout.'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('maps move-container errors clearly when the target cell is the current cell', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'move_container_canonical') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'SAME_LOCATION'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_CONFLICT',
+      message: 'Container is already in the target cell.'
     });
 
     await app.close();

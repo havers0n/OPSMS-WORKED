@@ -17,6 +17,7 @@ Current implementation note:
 - Stage 2 now routes storage reads through location-backed compatibility views while placement writes still remain cell-centric
 - Stage 3 now introduces canonical `inventory_unit` stock rows while `inventory_items` remains a compatibility surface for legacy reads and migration safety
 - Stage 4 now adds canonical split/merge semantics on `inventory_unit` plus `stock_movements` for new execution flows, while physical placement persistence still bridges through geometry-backed placement rows
+- Stage 5 now makes `containers.current_location_id` the canonical current-state truth, rebases current-state reads onto location-native state, and demotes `container_placements` to a geometry compatibility projection
 - this document defines the target v1 storage core that must become the stable reference for future schema, API, and UX work
 
 ## Goal
@@ -178,7 +179,7 @@ Rules:
 
 - `code` is globally unique
 - `parentContainerId` supports nesting, such as a carton on a pallet
-- `currentLocationId` is the current physical location
+- `currentLocationId` is the current physical location and the canonical answer to current-state execution
 
 ### 4. `Product`
 
@@ -271,6 +272,7 @@ Current implementation note:
 - Stage 4 writes canonical execution history to `stock_movements`
 - current canonical rows distinguish `move_container`, `split_stock`, `transfer_stock`, and `pick_partial`
 - the current Stage 4 table intentionally does not duplicate `productId`; product identity is derived through referenced `inventory_unit` rows
+- Stage 5 now updates `containers.current_location_id` directly during canonical moves and uses `container_placements` only as a rack/canvas compatibility projection
 
 ## ERD Logic
 
@@ -304,6 +306,7 @@ These invariants are the hard line. If they are not documented, the model will d
 
 - active container must have `current_location_id`
 - the only normal exception is short-lived `in_transit`
+- current-state reads must derive from `current_location_id`, not from placement history
 
 ### I3. Slot and location are not the same thing
 
@@ -318,6 +321,10 @@ These invariants are the hard line. If they are not documented, the model will d
 
 - new containers cannot be placed into `disabled` locations
 
+### I5a. Non-active locations are never canonical write targets
+
+- `draft` and `disabled` locations are rejected by canonical execution writes
+
 ### I6. Weight fit
 
 - combined container and content weight must not exceed the location limit
@@ -325,6 +332,10 @@ These invariants are the hard line. If they are not documented, the model will d
 ### I7. Container fit
 
 - container dimensions must fit inside the target location
+
+### I7a. Unknown required fit data is treated as a hard failure
+
+- if a location enforces a dimension or weight limit and required data is missing, canonical move rejects
 
 ### I8. Archived container
 
@@ -373,6 +384,7 @@ Actions:
 
 - validate destination
 - change `current_location_id`
+- sync rack placement projection only when the target location is geometry-backed
 - write `Movement(type='transfer')`
 
 ### 4. Partial pick

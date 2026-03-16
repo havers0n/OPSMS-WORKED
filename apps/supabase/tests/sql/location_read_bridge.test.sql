@@ -96,6 +96,8 @@ begin
   insert into public.container_placements (tenant_id, container_id, cell_id, placed_at, removed_at)
   values (default_tenant_uuid, removed_uuid, cell_a_uuid, '2026-03-14T08:00:00.000Z', '2026-03-14T09:00:00.000Z');
 
+  perform public.backfill_container_current_locations();
+
   if (
     select count(*)
     from public.active_container_locations_v
@@ -146,15 +148,17 @@ begin
     raise exception 'Expected cell_storage_snapshot_v to remain a parity projection of location_storage_snapshot_v.';
   end if;
 
-  delete from public.locations
-  where id = location_a_uuid;
+  update public.containers
+  set current_location_id = null,
+      current_location_entered_at = null
+  where id in (pallet_uuid, tote_uuid);
 
   if exists (
     select 1
     from public.location_occupancy_v
     where cell_id = cell_a_uuid
   ) then
-    raise exception 'Expected location views to hide placements that lost their executable location mapping.';
+    raise exception 'Expected location views to hide placements that lost canonical current location truth.';
   end if;
 
   if exists (
@@ -162,7 +166,7 @@ begin
     from public.cell_storage_snapshot_v
     where cell_id = cell_a_uuid
   ) then
-    raise exception 'Expected compatibility cell views to hide placements without a location bridge row.';
+    raise exception 'Expected compatibility cell views to hide placements without canonical current location truth.';
   end if;
 end
 $$;
