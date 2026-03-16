@@ -1,17 +1,23 @@
 -- Migration 0042: rewrite save_layout_draft as set-based bulk INSERT
 --
--- Problem: the original function in 0009_layout_hardening.sql used four
--- nested PL/pgSQL FOR-LOOP cursors (racks → faces → sections → levels),
--- executing one INSERT per row.  On layouts with many racks this causes a
--- statement timeout.  Additionally the function referenced the `anchor`
--- column in rack_faces which was dropped in a later migration.
+-- Problem 1 (loops): the original function in 0009_layout_hardening.sql
+-- used four nested PL/pgSQL FOR-LOOP cursors (racks → faces → sections →
+-- levels), executing one INSERT per row.  On large layouts this times out.
 --
--- Fix: replace the loop body with four flat INSERT … SELECT statements
--- that expand the JSON array hierarchy with jsonb_array_elements.
--- The DELETE path was already set-based and is left unchanged.
--- Mirror consistency: all faces are first inserted with is_mirrored=false /
--- mirror_source_face_id=null so that mirror-source rows are guaranteed to
--- exist when the trigger fires, then a single UPDATE restores mirroring.
+-- Problem 2 (RLS per-row): even after converting to bulk INSERT…SELECT,
+-- every inserted row triggers the WITH CHECK policy:
+--   rack_levels  → can_manage_rack → can_manage_layout_version → can_manage_floor
+-- That is 5-6 DB round-trips per row.  With 100 racks × 2 faces × 5 sections
+-- × 5 levels = 5 000 levels → ~30 000 extra lookups just for levels.
+--
+-- Problem 3 (anchor): the old function referenced the `anchor` column in
+-- rack_faces which was dropped in a later migration.
+--
+-- Fix:
+--   • SECURITY DEFINER skips per-row RLS checks entirely.
+--   • Explicit can_manage_layout_version() guard at entry preserves authz.
+--   • Four flat INSERT…SELECT replace the nested cursor loops.
+--   • Mirror consistency: insert all faces flat first, then one bulk UPDATE.
 
 create or replace function public.save_layout_draft(
   layout_payload jsonb,
@@ -19,6 +25,8 @@ create or replace function public.save_layout_draft(
 )
 returns uuid
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   layout_version_uuid uuid := (layout_payload ->> 'layoutVersionId')::uuid;
@@ -33,6 +41,11 @@ begin
     where id = layout_version_uuid and state = 'draft'
   ) then
     raise exception 'Layout version % is not an active draft.', layout_version_uuid;
+  end if;
+
+  -- Explicit authz check (replaces per-row RLS since we run SECURITY DEFINER)
+  if not public.can_manage_layout_version(layout_version_uuid) then
+    raise exception 'Permission denied for layout version %', layout_version_uuid;
   end if;
 
   perform public.validate_layout_payload(layout_payload);
