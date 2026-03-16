@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  Lock,
   RotateCcw,
   Trash2,
   X,
@@ -386,21 +385,6 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden bg-white">
 
-      {/* ── Published lock strip ── */}
-      {!isLayoutEditable && (
-        <div
-          className="flex shrink-0 items-center gap-2 border-b px-5 py-2"
-          style={{
-            background: 'rgba(37,99,235,0.08)',
-            borderColor: 'rgba(37,99,235,0.2)',
-            color: '#1d4ed8'
-          }}
-        >
-          <Lock className="h-3.5 w-3.5 shrink-0" />
-          <span className="text-xs font-medium">Structure locked · published</span>
-        </div>
-      )}
-
       {/* ── Sticky header ── */}
       <div className="shrink-0 border-b border-[var(--border-muted)] bg-[var(--surface-secondary)]">
         {/* top row */}
@@ -441,61 +425,59 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        {/* quick actions */}
-        <div className="flex items-center gap-2 border-t border-[var(--border-muted)] px-5 py-2.5">
-          <button
-            type="button"
-            disabled={!isLayoutEditable}
-            onClick={handleRotate}
-            title="Rotate 90 deg"
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Rotate
-          </button>
-          <button
-            type="button"
-            disabled={!isLayoutEditable}
-            onClick={handleDuplicate}
-            title="Duplicate rack"
-            className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Duplicate
-          </button>
-          <div className="flex-1" />
-          {!confirmingDelete ? (
+        {/* quick actions — only visible in editable (draft) mode */}
+        {isLayoutEditable && (
+          <div className="flex items-center gap-2 border-t border-[var(--border-muted)] px-5 py-2.5">
             <button
               type="button"
-              disabled={!isLayoutEditable}
-              onClick={() => setConfirmingDelete(true)}
-              title="Delete rack"
-              className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+              onClick={handleRotate}
+              title="Rotate 90 deg"
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
+              <RotateCcw className="h-3.5 w-3.5" />
+              Rotate
             </button>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-red-600">Sure?</span>
+            <button
+              type="button"
+              onClick={handleDuplicate}
+              title="Duplicate rack"
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Duplicate
+            </button>
+            <div className="flex-1" />
+            {!confirmingDelete ? (
               <button
                 type="button"
-                onClick={() => setConfirmingDelete(false)}
-                className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                onClick={() => setConfirmingDelete(true)}
+                title="Delete rack"
+                className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!isLayoutEditable}
-                onClick={handleDeleteConfirm}
-                className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-              >
+                <Trash2 className="h-3.5 w-3.5" />
                 Delete
               </button>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-red-600">Sure?</span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Validation strip (only when issues exist) ── */}

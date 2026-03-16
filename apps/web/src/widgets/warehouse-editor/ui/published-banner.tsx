@@ -17,7 +17,7 @@ export function PublishedBanner({ onCreateDraft, isCreating }: PublishedBannerPr
     >
       <div className="flex items-center gap-2" style={{ color: '#1d4ed8' }}>
         <Lock className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-xs font-medium">Published layout · Structure locked</span>
+        <span className="text-xs font-medium">Structure locked</span>
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-medium"
           style={{ background: 'rgba(37,99,235,0.15)', color: '#1d4ed8' }}

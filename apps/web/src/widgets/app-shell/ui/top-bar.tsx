@@ -1,7 +1,6 @@
 import {
   CheckCircle2,
   ChevronRight,
-  FilePlus2,
   Redo2,
   Save,
   SearchCheck,
@@ -79,8 +78,10 @@ export function TopBar() {
     publishLayout.isPending;
 
   const issueSummary = useMemo(() => {
-    if (!layoutDraft && latestPublished) return 'Published · read-only';
-    if (layoutDraft?.state === 'published') return 'Published · read-only';
+    // Published state is already communicated by the breadcrumb badge and
+    // the PublishedBanner below the TopBar — no need to repeat it here.
+    if (!layoutDraft && latestPublished) return null;
+    if (layoutDraft?.state === 'published') return null;
     if (isDraftDirty && validateLayout.cachedResult) return 'Draft changed';
     if (!validateLayout.cachedResult) return null;
     return validateLayout.cachedResult.isValid
@@ -223,44 +224,38 @@ export function TopBar() {
       </div>
 
       {/* ── Mode switcher — center ─────────────────────────── */}
+      {/* Always shown — in published mode Layout tab is read-only, Storage tab
+          opens placement view. The PublishedBanner below communicates the
+          lock status so we don't duplicate it here. */}
       <div className="flex flex-1 items-center justify-center px-4">
-        {isPublishedMode ? (
-          <span
-            className="rounded-full px-3 py-1 text-xs font-medium"
-            style={{ background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }}
-          >
-            Published layout · read-only
-          </span>
-        ) : (
-          <div
-            className="flex items-center gap-0.5 rounded-lg p-0.5"
-            style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
-          >
-            {VIEW_MODES.map((mode) => {
-              const isActive = viewMode === mode.id;
-              return (
-                <button
-                  key={mode.id}
-                  type="button"
-                  onClick={() => setViewMode(mode.id)}
-                  className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
-                  style={
-                    isActive
-                      ? {
-                          background: 'var(--surface-strong)',
-                          color: 'var(--accent)',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-                          cursor: 'default'
-                        }
-                      : { color: 'var(--text-muted)', cursor: 'pointer' }
-                  }
-                >
-                  {mode.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <div
+          className="flex items-center gap-0.5 rounded-lg p-0.5"
+          style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
+        >
+          {VIEW_MODES.map((mode) => {
+            const isActive = viewMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setViewMode(mode.id)}
+                className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
+                style={
+                  isActive
+                    ? {
+                        background: 'var(--surface-strong)',
+                        color: 'var(--accent)',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                        cursor: 'default'
+                      }
+                    : { color: 'var(--text-muted)', cursor: 'pointer' }
+                }
+              >
+                {mode.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Right: status + actions ────────────────────────── */}
@@ -279,19 +274,7 @@ export function TopBar() {
           </span>
         )}
 
-        {isPublishedMode ? (
-          /* Published mode: single prominent CTA */
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={handleCreateDraft}
-            className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ background: 'var(--accent)' }}
-          >
-            <FilePlus2 className="h-3.5 w-3.5" />
-            {createDraft.isPending ? 'Creating…' : 'Create Draft'}
-          </button>
-        ) : (
+        {isPublishedMode ? null : (
           /* Draft mode: full toolbar */
           <>
             {/* Undo / Redo */}
