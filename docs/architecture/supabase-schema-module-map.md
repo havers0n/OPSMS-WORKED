@@ -14,6 +14,12 @@ It translates the product and architecture baseline into a concrete backend modu
 
 This document complements [architecture-baseline.md](./architecture-baseline.md).
 
+Important scope note:
+
+- this document is still primarily a schema-oriented map of the current or near-term Supabase implementation
+- the canonical target storage-core model now lives in [core-wms-data-model-v1.md](./core-wms-data-model-v1.md)
+- if this file and the core WMS data model disagree, treat the difference as `current implementation vs target model`, not as an unresolved naming preference
+
 ## Design Goals
 
 The schema must optimize for:
@@ -33,6 +39,188 @@ The schema must not be optimized around:
 - free-form CAD editing
 - live warehouse omniscience
 - direct Excel mirroring into operational tables
+
+## Current Implementation vs Target Model
+
+This section exists to prevent one of the most dangerous documentation failures:
+
+- describing the current schema as if it already matches the target WMS core
+
+Right now the repo contains a real implementation and a newer canonical target model.
+They are related, but they are not identical.
+
+### Canonical references
+
+- current implementation and storage reads in this repo: this document
+- canonical target execution model: [core-wms-data-model-v1.md](./core-wms-data-model-v1.md)
+- architectural decision adopting that target: [ADR-007.md](./ADR-007.md)
+
+### Summary
+
+| Concern | Current implementation | Target model | Status |
+|---|---|---|---|
+| Executable storage anchor | `cells` from published layout are used directly as operational placement targets | `locations` become the executable storage entity; geometry slot is only the spatial anchor | diverged |
+| Geometry to execution relationship | placement points directly to `cells.id` | `geometry_slot -> location -> container -> inventory_unit` | diverged |
+| Handling unit model | `containers` already exist | `containers` remain core | aligned |
+| Container classification | `container_types` already exist in a minimal form | `container_type` remains core, with dimensional and load semantics becoming first-class | partial |
+| Inventory content model | `inventory_items` hold current container content, currently closer to item-ref aggregation | `inventory_unit` becomes the canonical stock unit with lot, serial, expiry, and explicit stock status | partial |
+| Movement history | placement lifecycle is represented through placement rows and movement events are only roadmap-level or partial | `movement` becomes a first-class execution journal for receive, putaway, pick, transfer, ship, adjust | diverged |
+| Non-rack operational locations | `locations` table now exists, but current Stage 1 implementation only backfills published rack slots | `location` supports `rack_slot`, `floor`, `staging`, `dock`, `buffer` | partial |
+| Primary execution reads | `cell_storage_snapshot_v`, `container_storage_snapshot_v`, with additive `locations` bridge rows available for published slots | location-centered read models such as `inventory_by_location_v`, plus container reads | partial |
+
+### What is true today
+
+Today the implemented storage path is still effectively:
+
+`Cell -> ContainerPlacement -> Container -> InventoryItem`
+
+This means:
+
+- published cells are the structural base for placement
+- execution semantics are still partially cell-centric
+- storage reads are derived from active placement joins against published cells
+- Stage 1 now also persists first-class `locations` for published rack slots, but placement writes still execute through `cell_id`
+
+### What the target model says
+
+The target v1 storage core is:
+
+`GeometrySlot -> Location -> Container -> InventoryUnit`
+
+with:
+
+- `Location` as the executable storage point
+- `Container` as the handling unit
+- `InventoryUnit` as the stock unit inside the container
+- `Movement` as the execution log
+
+### Practical rule for engineers
+
+When reading this file:
+
+- use it to understand what the current Supabase schema actually does
+- do not assume every table here matches the canonical future execution model
+- if designing new storage behavior, validate it against `core-wms-data-model-v1.md` before extending the current cell-centric schema
+
+### Migration implication
+
+Until the schema is converged:
+
+- `container_placements` and `inventory_items` remain the current persisted execution truth in the repo
+- `cells` remain the structural base for current placement features
+- `locations` are now the introduced execution entity for published rack slots, but not yet the primary write target
+- new work should avoid deepening the assumption that `cell = executable location`
+
+### Convergence plan
+
+The repo should not jump from the current schema to the target model in one rewrite.
+The safer path is a staged convergence that preserves current placement behavior while introducing the execution model that future WMS workflows need.
+
+Detailed migration checklist:
+
+- see [storage-core-convergence-checklist.md](./storage-core-convergence-checklist.md) for the concrete tables, views, RPCs, code modules, tests, and completion gates per stage
+
+#### Stage 1. Introduce executable `locations`
+
+Add a first-class `locations` table without deleting or renaming the current placement path.
+
+Target outcome:
+
+- every executable rack slot gets a `location` row
+- non-rack operational addresses such as `staging`, `dock`, `buffer`, and `floor` become first-class
+- `locations.geometry_slot_id` becomes the bridge from geometry to execution
+
+Current status:
+
+- baseline implemented: `locations` exists, published rack slots are backfilled, and compatibility placement still runs through `cells`
+
+Constraint:
+
+- do not treat `locations` as a denormalized alias for `cells`; it must become the execution entity with its own lifecycle and constraints
+
+#### Stage 2. Dual-read bridge from cells to locations
+
+Keep current placement features working, but introduce read models that can resolve a placement through `location`.
+
+Target outcome:
+
+- existing placement flows can still resolve visible storage state
+- new reads and APIs can ask for `location`-centered truth
+- the system can support a temporary `cell -> location` compatibility bridge during migration
+
+Constraint:
+
+- all new execution-facing code should prefer `location_id` over direct `cell_id` assumptions where feasible
+
+#### Stage 3. Promote `inventory_items` into `inventory_unit`
+
+Evolve inventory content from the current item-centric shape into a canonical stock unit bound to a container.
+
+Target outcome:
+
+- each stock row belongs to `container_id`
+- lot, serial, expiry, and stock status become first-class fields
+- inventory location is derived through the container, not stored as a parallel source of truth
+
+Constraint:
+
+- do not create a second direct `product -> cell` or `product -> location` execution path
+
+#### Stage 4. Introduce first-class `movement`
+
+Add an execution journal that records how stock and containers move through the warehouse.
+
+Target outcome:
+
+- receive, putaway, transfer, pick, ship, and adjust become explicit movement records
+- container moves and partial product moves are both representable
+- placement changes stop being the only recoverable evidence of execution history
+
+Constraint:
+
+- movement must be an execution log, not a replacement for current-state tables
+
+#### Stage 5. Move operational APIs onto the target model
+
+Shift write paths and read paths from cell-centric internals to location-centered execution semantics.
+
+Target outcome:
+
+- `receive`, `move`, `pick`, and `ship` APIs validate against `location`
+- fit and capacity rules execute against `location` constraints
+- warehouse operations can target non-rack locations without schema workarounds
+
+Constraint:
+
+- draft and published layout flows must remain geometry concerns; operational execution must not depend on draft-only structures
+
+#### Stage 6. Retire cell-centric execution assumptions
+
+Once the bridge is stable, remove the idea that published `cells` are themselves the executable storage truth.
+
+Target outcome:
+
+- `location` becomes the only execution anchor
+- `container_placements` becomes either a compatibility layer or is reduced to a geometry-facing concern
+- read models and invariants stop encoding `cell = storage location`
+
+Constraint:
+
+- deprecation should happen only after location-based reads, writes, and movement history are all production-safe
+
+#### Stage 7. Clean up naming and invariants
+
+After convergence, align schema names, views, RPCs, and docs with the target model.
+
+Target outcome:
+
+- docs, SQL, and API names consistently use `location`, `inventory_unit`, and `movement`
+- invariants are enforced in one model instead of split across legacy and target terms
+- product and UX language can map to a stable execution vocabulary
+
+Constraint:
+
+- do not rename current tables early if that creates false confidence about implementation completeness
 
 ## Schema Modules
 
@@ -301,6 +489,12 @@ Use only if admin-review workflow must persist formally in V1.
 ## 3. Storage Truth Module
 
 This module holds physical storage truth semantics.
+
+Important note:
+
+- this section below describes the current implemented or near-term schema shape
+- it should now be read together with the `Current Implementation vs Target Model` section above
+- it is not the final canonical storage-core design
 
 ### Core rule
 

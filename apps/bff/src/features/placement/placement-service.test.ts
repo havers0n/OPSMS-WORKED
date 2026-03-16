@@ -27,6 +27,12 @@ function createRepoStub(): PlacementRepo {
       address: '07-A.01.01.03',
       floorId: 'floor-uuid'
     }]),
+    resolveExecutableLocationForCell: vi.fn(async () => ({
+      locationId: 'location-uuid',
+      code: '07-A.01.01.03',
+      floorId: 'floor-uuid',
+      cellId: 'cell-uuid'
+    })),
     getActivePlacement: vi.fn(async () => ({ placementId: 'placement-uuid', cellId: 'cell-uuid' })),
     placeContainer: vi.fn(async () => undefined),
     removeContainerFromCells: vi.fn(async () => undefined),

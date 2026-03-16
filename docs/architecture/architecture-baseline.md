@@ -149,9 +149,11 @@ It is not guaranteed to be full live warehouse truth.
 
 ### Storage layer
 
+- `Location`
+- `ContainerType`
 - `Container`
-- `ContainerPlacement`
-- `InventoryItem`
+- `InventoryUnit`
+- `Movement`
 
 ### Master layer
 
@@ -176,21 +178,41 @@ It is not guaranteed to be full live warehouse truth.
 
 The model must never collapse into `SKU -> Cell`.
 
+The model must also never collapse into `GeometrySlot = operational storage truth`.
+
 Canonical model:
 
-- `Cell = address`
-- `Container = physical storage unit in a cell`
-- `InventoryItem = product quantity inside container`
+- `GeometrySlot` or `Cell` = spatial slot or address anchor
+- `Location` = executable storage point
+- `Container` = physical handling unit in a location
+- `InventoryUnit` = product quantity inside a container
+- `Movement` = execution history of container or product movement
 
 Canonical relationship:
 
-`Cell -> ContainerPlacement -> Container -> InventoryItem`
+`GeometrySlot -> Location -> Container -> InventoryUnit`
 
 Implications:
 
-- one cell may contain multiple containers
-- one cell may contain multiple SKUs
-- picker still navigates to the cell address
+- geometry and execution must stay separate
+- a location may map to a geometry slot, but it is not the same entity
+- non-rack operational locations may have no geometry slot at all
+- inventory belongs to containers, never directly to a slot
+- movement records must support both whole-container and partial-product transitions
+- picker or putaway operator still navigates by executable location code
+
+V1 execution entities:
+
+- `Location`
+- `ContainerType`
+- `Container`
+- `Product`
+- `InventoryUnit`
+- `Movement`
+
+For the canonical v1 storage-core definition, see:
+
+- `core-wms-data-model-v1.md`
 
 ## Product Location Role Baseline
 
