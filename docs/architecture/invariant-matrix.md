@@ -34,7 +34,7 @@ Snapshot date: `2026-03-13`
 | Canvas owns spatial manipulation only; structural editing belongs to inspector/forms | frontend | component split, store/actions split, UI affordances | manual + E2E happy path only | important; partial: architecture is clear, but this is not sealed by a hard runtime guard |
 | Generated Supabase row types stay inside `api/` boundaries | frontend | ESLint `no-restricted-imports` rules + API mapper convention | lint | important; implemented in static checks only |
 | Publish/save/validation lifecycle emits audit events | DB | `operation_events` writes inside layout RPC flow | SQL | important; implemented |
-| Storage truth is `Cell -> Container -> InventoryItem`, never `SKU -> Cell` | domain + DB | architecture baseline only | none | critical; declared: storage module not implemented yet |
+| Storage truth is container-first and location-based, never `SKU -> Cell` and never `GeometrySlot = execution truth` | domain + DB | architecture baseline + ADR-007 + core WMS data model doc | none | critical; declared: canonical target model is now documented, but schema/API convergence is still pending |
 | Product-location role is an operational mapping, not physical storage truth | domain + DB | architecture baseline only | none | critical; declared: role/storage separation is documented, not yet enforced in runtime modules |
 | Raw import data must not write directly into operational truth tables | DB + import pipeline | architecture baseline only | none | critical; declared: import pipeline is not implemented yet |
 | `primary_pick` and `reserve` remain distinct semantics; `reserve` is not a default pick target | domain + DB | architecture baseline only | none | important; declared/planned |

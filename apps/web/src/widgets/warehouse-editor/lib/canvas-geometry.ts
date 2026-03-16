@@ -6,8 +6,8 @@ export const RACK_DEPTH_SCALE  = 44;   // px per metre for a PAIRED rack (two fa
 export const SINGLE_DEPTH_PX   = 22;   // fixed visual depth for a SINGLE-face rack
 export const GRID_SIZE         = 40;
 export const ROTATE_HANDLE_SIZE = 28;
-export const MIN_CANVAS_ZOOM = 0.75;
-export const MAX_CANVAS_ZOOM = 1.75;
+export const MIN_CANVAS_ZOOM = 0.5;
+export const MAX_CANVAS_ZOOM = 3.0;
 
 // ─── Level-of-Detail thresholds ─────────────────────────────────────────────
 // LOD 0  zoom < 0.9  → plain block + code label only

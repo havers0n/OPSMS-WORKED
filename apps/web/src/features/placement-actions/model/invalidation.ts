@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { cellKeys } from '@/entities/cell/api/queries';
+import { locationKeys } from '@/entities/location/api/queries';
 import { containerKeys } from '@/entities/container/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
 
@@ -13,19 +13,14 @@ export async function invalidatePlacementQueries(
   }
 ) {
   const jobs: Array<Promise<unknown>> = [];
-  const cellIds = new Set(
-    [args.sourceCellId, args.targetCellId].filter(
-      (cellId): cellId is string => typeof cellId === 'string' && cellId.length > 0
-    )
-  );
 
-  for (const cellId of cellIds) {
-    jobs.push(
-      queryClient.invalidateQueries({
-        queryKey: cellKeys.storage(cellId)
-      })
-    );
-  }
+  // Invalidate all location storage queries — we can't map cellId -> locationId here,
+  // so we use a broad prefix invalidation to cover the affected cells.
+  jobs.push(
+    queryClient.invalidateQueries({
+      queryKey: [...locationKeys.all, 'storage']
+    })
+  );
 
   if (args.containerId) {
     jobs.push(
@@ -38,7 +33,7 @@ export async function invalidatePlacementQueries(
   if (args.floorId) {
     jobs.push(
       queryClient.invalidateQueries({
-        queryKey: cellKeys.occupancyByFloor(args.floorId)
+        queryKey: locationKeys.occupancyByFloor(args.floorId)
       })
     );
     jobs.push(

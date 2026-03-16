@@ -7,9 +7,18 @@ import { useSites } from '@/entities/site/api/use-sites';
 import { TopBar } from '@/widgets/app-shell/ui/top-bar';
 import { BootstrapWizard } from '@/widgets/warehouse-bootstrap/ui/bootstrap-wizard';
 import { SiteFloorSetupState } from '@/widgets/warehouse-bootstrap/ui/site-floor-setup-state';
+import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
 import { WarehouseEditor } from '@/widgets/warehouse-editor/ui/warehouse-editor';
 
-function WarehouseContent({ setupState, hasDraft }: { setupState: WarehouseSetupState; hasDraft: boolean }) {
+function WarehouseContent({
+  setupState,
+  hasDraft,
+  hasPublished
+}: {
+  setupState: WarehouseSetupState;
+  hasDraft: boolean;
+  hasPublished: boolean;
+}) {
   if (setupState === 'workspace_loading') {
     return (
       <div className="flex h-full w-full items-center justify-center">
@@ -41,6 +50,10 @@ function WarehouseContent({ setupState, hasDraft }: { setupState: WarehouseSetup
 
   if (setupState === 'floor_selection_required') {
     return <SiteFloorSetupState hasDraft={hasDraft} />;
+  }
+
+  if (!hasDraft && hasPublished) {
+    return <PublishedViewer />;
   }
 
   return <WarehouseEditor />;
@@ -107,6 +120,7 @@ export function WarehouseSetupPage() {
         <WarehouseContent
           setupState={setupState}
           hasDraft={Boolean(workspaceQuery.data?.activeDraft)}
+          hasPublished={Boolean(workspaceQuery.data?.latestPublished)}
         />
       </div>
     </div>

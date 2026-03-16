@@ -35,9 +35,7 @@ import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/lay
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'layout', label: 'Layout' },
-  { id: 'semantics', label: 'Semantics' },
-  { id: 'placement', label: 'Placement' },
-  { id: 'flow', label: 'Flow' }
+  { id: 'placement', label: 'Storage' }
 ];
 
 export function TopBar() {
@@ -70,6 +68,10 @@ export function TopBar() {
     localDraft: layoutDraft,
     isDraftDirty
   });
+
+  // True when viewing a published layout with no active draft — the editor is
+  // in read-only mode and the primary action is to create a new draft.
+  const isPublishedMode = actions.canCreateDraft && latestPublished !== null;
   const isBusy =
     createDraft.isPending ||
     saveDraft.isPending ||
@@ -222,34 +224,43 @@ export function TopBar() {
 
       {/* ── Mode switcher — center ─────────────────────────── */}
       <div className="flex flex-1 items-center justify-center px-4">
-        <div
-          className="flex items-center gap-0.5 rounded-lg p-0.5"
-          style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
-        >
-          {VIEW_MODES.map((mode) => {
-            const isActive = viewMode === mode.id;
-            return (
-              <button
-                key={mode.id}
-                type="button"
-                onClick={() => setViewMode(mode.id)}
-                className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
-                style={
-                  isActive
-                    ? {
-                        background: 'var(--surface-strong)',
-                        color: 'var(--accent)',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-                        cursor: 'default'
-                      }
-                    : { color: 'var(--text-muted)', cursor: 'pointer' }
-                }
-              >
-                {mode.label}
-              </button>
-            );
-          })}
-        </div>
+        {isPublishedMode ? (
+          <span
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{ background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }}
+          >
+            Published layout · read-only
+          </span>
+        ) : (
+          <div
+            className="flex items-center gap-0.5 rounded-lg p-0.5"
+            style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
+          >
+            {VIEW_MODES.map((mode) => {
+              const isActive = viewMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => setViewMode(mode.id)}
+                  className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
+                  style={
+                    isActive
+                      ? {
+                          background: 'var(--surface-strong)',
+                          color: 'var(--accent)',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                          cursor: 'default'
+                        }
+                      : { color: 'var(--text-muted)', cursor: 'pointer' }
+                  }
+                >
+                  {mode.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Right: status + actions ────────────────────────── */}
@@ -257,7 +268,7 @@ export function TopBar() {
         className="flex h-full items-center gap-1 border-l px-3"
         style={{ borderColor: 'var(--border-muted)' }}
       >
-        {/* Status message */}
+        {/* Status message — visible in both modes */}
         {(statusMessage || issueSummary) && (
           <span
             className="mr-1 text-[11px]"
@@ -268,76 +279,79 @@ export function TopBar() {
           </span>
         )}
 
-        {/* Undo / Redo */}
-        <button
-          type="button"
-          disabled
-          title="Undo (coming soon)"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
-        >
-          <Undo2 className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Redo (coming soon)"
-          className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
-        >
-          <Redo2 className="h-3.5 w-3.5" />
-        </button>
-
-        <div className="mx-1 h-4 w-px bg-slate-200" />
-
-        {/* Validate */}
-        <button
-          type="button"
-          disabled={!actions.canValidateDraft || isBusy}
-          onClick={handleValidate}
-          title="Validate layout"
-          className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <SearchCheck className="h-3.5 w-3.5" />
-        </button>
-
-        {/* Create draft (when no draft) */}
-        {actions.canCreateDraft && (
+        {isPublishedMode ? (
+          /* Published mode: single prominent CTA */
           <button
             type="button"
             disabled={isBusy}
             onClick={handleCreateDraft}
-            className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
-            style={{ color: 'var(--text-muted)' }}
+            className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: 'var(--accent)' }}
           >
             <FilePlus2 className="h-3.5 w-3.5" />
-            Create Draft
+            {createDraft.isPending ? 'Creating…' : 'Create Draft'}
           </button>
+        ) : (
+          /* Draft mode: full toolbar */
+          <>
+            {/* Undo / Redo */}
+            <button
+              type="button"
+              disabled
+              title="Undo (coming soon)"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Redo (coming soon)"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </button>
+
+            <div className="mx-1 h-4 w-px bg-slate-200" />
+
+            {/* Validate */}
+            <button
+              type="button"
+              disabled={!actions.canValidateDraft || isBusy}
+              onClick={handleValidate}
+              title="Validate layout"
+              className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <SearchCheck className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Save */}
+            <button
+              type="button"
+              disabled={!actions.canSaveDraft || isBusy}
+              onClick={handleSaveDraft}
+              title="Save draft"
+              className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <Save className="h-3.5 w-3.5" />
+              Save
+            </button>
+
+            {/* Publish */}
+            <button
+              type="button"
+              disabled={!actions.canPublishDraft || isBusy}
+              onClick={handlePublish}
+              className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+              style={{ background: 'var(--accent)' }}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Publish
+            </button>
+          </>
         )}
-
-        {/* Save */}
-        <button
-          type="button"
-          disabled={!actions.canSaveDraft || isBusy}
-          onClick={handleSaveDraft}
-          title="Save draft"
-          className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <Save className="h-3.5 w-3.5" />
-          Save
-        </button>
-
-        {/* Publish */}
-        <button
-          type="button"
-          disabled={!actions.canPublishDraft || isBusy}
-          onClick={handlePublish}
-          className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
-          style={{ background: 'var(--accent)' }}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Publish
-        </button>
       </div>
     </header>
   );

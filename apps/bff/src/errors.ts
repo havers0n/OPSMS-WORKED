@@ -40,6 +40,8 @@ export function mapSupabaseError(error: unknown) {
         return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell was not found.');
       case 'TARGET_CELL_NOT_PUBLISHED':
         return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell is not in a published layout.');
+      case 'TARGET_CELL_LOCATION_NOT_FOUND':
+        return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell is not configured as an executable location.');
       case 'TARGET_CELL_TENANT_MISMATCH':
         return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell belongs to a different tenant.');
       case 'CONTAINER_ALREADY_IN_TARGET_CELL':

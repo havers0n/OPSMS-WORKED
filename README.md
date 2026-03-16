@@ -176,6 +176,7 @@ Workspace-specific examples:
 ## Architecture docs
 
 - [architecture-baseline.md](./docs/architecture/architecture-baseline.md)
+- [core-wms-data-model-v1.md](./docs/architecture/core-wms-data-model-v1.md)
 - [frontend-folder-file-plan.md](./docs/architecture/frontend-folder-file-plan.md)
 - [supabase-schema-module-map.md](./docs/architecture/supabase-schema-module-map.md)
 
@@ -183,9 +184,25 @@ These documents define the main rules for:
 
 - canvas vs inspector boundaries
 - draft/publish lifecycle
-- storage truth model `Cell -> Container -> InventoryItem`
+- storage truth model and the target execution core
 - frontend layering
 - Supabase type boundaries vs domain types
+
+## Current editor and storage-core status
+
+Important current truths:
+
+- published layout is the authoritative spatial truth
+- layout editing happens only in draft
+- warehouse editor UX still has known mode-clarity and precision-editing limitations
+- the execution/storage core is not fully converged yet
+- the canonical target storage model is documented in `docs/architecture/core-wms-data-model-v1.md`
+
+Practical meaning:
+
+- current placement flows still rely on published structural cells
+- future WMS execution flows should converge on `Location -> Container -> InventoryUnit -> Movement`
+- geometry and execution semantics must not be collapsed into one model
 
 ## Notes
 

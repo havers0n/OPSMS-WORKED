@@ -13,16 +13,16 @@ describe('addInventoryToContainer', () => {
 
   it('posts the add-inventory payload to the container inventory endpoint', async () => {
     vi.mocked(bffRequest).mockResolvedValue({
-      ok: true,
+      id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      sku: 'CAMP-CHAIR-01',
+      itemRef: 'product:9f4d6839-c1a9-4820-b057-f0da8e92c222',
       quantity: 12,
       uom: 'ea'
     } as never);
 
     await addInventoryToContainer({
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      sku: 'CAMP-CHAIR-01',
+      productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
       quantity: 12,
       uom: 'ea'
     });
@@ -30,7 +30,7 @@ describe('addInventoryToContainer', () => {
     expect(bffRequest).toHaveBeenCalledWith('/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory', {
       method: 'POST',
       body: JSON.stringify({
-        sku: 'CAMP-CHAIR-01',
+        productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
         quantity: 12,
         uom: 'ea'
       })

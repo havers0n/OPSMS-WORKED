@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+/**
+ * Legacy compatibility DTO for rack/canvas placement projection.
+ * Canonical current execution location is represented through Container.currentLocationId.
+ */
 export const containerPlacementSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

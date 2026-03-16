@@ -21,7 +21,7 @@ type Tool = {
 const TOOLS_BY_VIEW: Record<ViewMode, Tool[]> = {
   layout: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' },
-    { id: 'rack', icon: PlusSquare, label: 'Rack', editorMode: 'place' }
+    { id: 'rack', icon: PlusSquare, label: 'Add Rack', editorMode: 'place' }
   ],
   semantics: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
@@ -128,7 +128,7 @@ export function ToolRail() {
           className="block text-center text-[9px] font-semibold uppercase tracking-widest"
           style={{ color: 'var(--border-strong)', writingMode: 'vertical-rl' }}
         >
-          {viewMode}
+          {viewMode === 'placement' ? 'Storage' : viewMode}
         </span>
       </div>
     </aside>
