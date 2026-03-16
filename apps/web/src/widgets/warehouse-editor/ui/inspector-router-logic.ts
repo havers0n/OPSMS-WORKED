@@ -9,11 +9,9 @@ export type InspectorKind =
   | 'rack-structure'         // layout + single rack selected (existing)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'layout-empty'           // layout + nothing selected
-  | 'semantics-placeholder'  // semantics mode (not yet implemented)
   | 'placement-placeholder'  // placement mode + no/rack selection
   | 'placement-cell'         // placement mode + cell selected
-  | 'placement-container'    // placement mode + container selected (B3)
-  | 'flow-placeholder';      // flow mode (not yet implemented)
+  | 'placement-container';   // placement mode + container selected
 
 /**
  * Maps (viewMode, selection, creatingRackId) → InspectorKind.
@@ -45,16 +43,8 @@ export function resolveInspectorKind(
     return 'layout-empty';
   }
 
-  if (viewMode === 'semantics') return 'semantics-placeholder';
-
-  if (viewMode === 'placement') {
-    if (selection.type === 'cell') return 'placement-cell';
-    if (selection.type === 'container') return 'placement-container';
-    return 'placement-placeholder';
-  }
-
-  if (viewMode === 'flow') return 'flow-placeholder';
-
-  // Unreachable with the current ViewMode union, but exhaustive fallback.
-  return 'layout-empty';
+  // viewMode === 'placement'
+  if (selection.type === 'cell') return 'placement-cell';
+  if (selection.type === 'container') return 'placement-container';
+  return 'placement-placeholder';
 }

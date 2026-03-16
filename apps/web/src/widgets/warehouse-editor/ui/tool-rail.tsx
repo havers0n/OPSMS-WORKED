@@ -23,13 +23,7 @@ const TOOLS_BY_VIEW: Record<ViewMode, Tool[]> = {
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' },
     { id: 'rack', icon: PlusSquare, label: 'Add Rack', editorMode: 'place' }
   ],
-  semantics: [
-    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
-  ],
   placement: [
-    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
-  ],
-  flow: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
   ]
 };

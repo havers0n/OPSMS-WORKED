@@ -59,28 +59,19 @@ describe('resolveInspectorKind — layout mode, multi-rack', () => {
   });
 });
 
-// ─── placeholder modes ────────────────────────────────────────────────────────
+// ─── placement mode — placeholder ────────────────────────────────────────────
 
-describe('resolveInspectorKind — non-layout modes', () => {
-  it('returns semantics-placeholder for semantics mode regardless of selection', () => {
-    expect(resolveInspectorKind('semantics', noSelection, null)).toBe('semantics-placeholder');
-    expect(resolveInspectorKind('semantics', rackSelection(['r1']), null)).toBe('semantics-placeholder');
+describe('resolveInspectorKind — placement mode, placeholder', () => {
+  it('returns placement-placeholder for placement mode with no selection', () => {
+    expect(resolveInspectorKind('placement', noSelection, null)).toBe('placement-placeholder');
   });
 
-  it('returns placement-placeholder for placement mode with no selection or rack selection', () => {
-    expect(resolveInspectorKind('placement', noSelection, null)).toBe('placement-placeholder');
+  it('returns placement-placeholder for rack selection in placement mode', () => {
     expect(resolveInspectorKind('placement', rackSelection(['r1']), null)).toBe('placement-placeholder');
   });
 
-  it('returns flow-placeholder for flow mode regardless of selection', () => {
-    expect(resolveInspectorKind('flow', noSelection, null)).toBe('flow-placeholder');
-    expect(resolveInspectorKind('flow', rackSelection(['r1']), null)).toBe('flow-placeholder');
-  });
-
-  it('non-layout modes are unaffected by creatingRackId', () => {
-    expect(resolveInspectorKind('semantics', rackSelection(['r1']), 'r1')).toBe('semantics-placeholder');
+  it('placement-placeholder is unaffected by creatingRackId', () => {
     expect(resolveInspectorKind('placement', rackSelection(['r1']), 'r1')).toBe('placement-placeholder');
-    expect(resolveInspectorKind('flow', rackSelection(['r1']), 'r1')).toBe('flow-placeholder');
   });
 });
 
@@ -111,15 +102,6 @@ describe('resolveInspectorKind — placement mode, cell selection', () => {
     expect(resolveInspectorKind('layout', cellSel, null)).toBe('layout-empty');
   });
 
-  it('cell selection in semantics mode is ignored (semantics has own placeholder)', () => {
-    const cellSel = cellSelection('rack-1:sec-abc:0');
-    expect(resolveInspectorKind('semantics', cellSel, null)).toBe('semantics-placeholder');
-  });
-
-  it('cell selection in flow mode is ignored (flow has own placeholder)', () => {
-    const cellSel = cellSelection('rack-1:sec-abc:0');
-    expect(resolveInspectorKind('flow', cellSel, null)).toBe('flow-placeholder');
-  });
 });
 
 // ─── placement mode — container selection (B3) ───────────────────────────────
@@ -138,16 +120,6 @@ describe('resolveInspectorKind — placement mode, container selection', () => {
   it('container selection in layout mode returns layout-empty (layout ignores containers)', () => {
     const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
     expect(resolveInspectorKind('layout', sel, null)).toBe('layout-empty');
-  });
-
-  it('container selection in semantics mode returns semantics-placeholder', () => {
-    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
-    expect(resolveInspectorKind('semantics', sel, null)).toBe('semantics-placeholder');
-  });
-
-  it('container selection in flow mode returns flow-placeholder', () => {
-    const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
-    expect(resolveInspectorKind('flow', sel, null)).toBe('flow-placeholder');
   });
 
   it('cell and container are distinct routes — cell → placement-cell, container → placement-container', () => {

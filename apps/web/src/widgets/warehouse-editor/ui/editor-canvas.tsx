@@ -219,6 +219,8 @@ export function EditorCanvas({
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
+  const isPlacementModeRef = useRef(isPlacementMode);
+  isPlacementModeRef.current = isPlacementMode;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
   const setSelectedRackIdsRef = useRef(setSelectedRackIds);
@@ -267,6 +269,9 @@ export function EditorCanvas({
     // Only fire on the transition → 'placement', not on every render.
     if (viewMode !== 'placement' || prevMode === 'placement') return;
     if (viewport.width === 0) return;
+
+    // Clear rack selection so the inspector switches to placement panel immediately.
+    setSelectedRackIdsRef.current([]);
 
     const racks = layoutDraft ? Object.values(layoutDraft.racks) : [];
 
@@ -361,6 +366,9 @@ export function EditorCanvas({
           Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
           Math.round(pos.y / GRID_SIZE) * GRID_SIZE
         );
+      } else if (isPlacementModeRef.current) {
+        // In storage mode, empty-canvas click deselects the current cell.
+        setSelectedCellId(null);
       } else {
         setSelectedRackIdsRef.current([]);
       }
@@ -507,7 +515,7 @@ export function EditorCanvas({
             </div>
           )}
 
-          {isLayoutEditable && selectedRack && selectedRackGeometry && selectedRackIds.length === 1 && (
+          {isLayoutEditable && !isPlacementMode && selectedRack && selectedRackGeometry && selectedRackIds.length === 1 && (
             <FloatingToolbar
               rackId={selectedRack.id}
               screenX={toolbarScreenX}
@@ -612,14 +620,14 @@ export function EditorCanvas({
                       offsetX={geometry.centerX}
                       offsetY={geometry.centerY}
                       rotation={rack.rotationDeg}
-                      draggable={isLayoutEditable && !isPlacing}
+                      draggable={isLayoutEditable && !isPlacing && !isPlacementMode}
                       onMouseDown={(event) => {
                         // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
                         event.cancelBubble = true;
                       }}
                       onClick={(event) => {
                         event.cancelBubble = true;
-                        if (isPlacing) return;
+                        if (isPlacing || isPlacementMode) return;
 
                         const pointerEvent = event.evt as unknown as PointerEvent;
                         if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
@@ -630,7 +638,7 @@ export function EditorCanvas({
                       }}
                       onTap={(event) => {
                         event.cancelBubble = true;
-                        if (isPlacing) return;
+                        if (isPlacing || isPlacementMode) return;
 
                         const pointerEvent = event.evt as unknown as PointerEvent;
                         if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
@@ -640,10 +648,10 @@ export function EditorCanvas({
                         }
                       }}
                       onMouseEnter={() => {
-                        if (!isPlacing) setHoveredRackId(rack.id);
+                        if (!isPlacing && !isPlacementMode) setHoveredRackId(rack.id);
                       }}
                       onMouseLeave={() => {
-                        if (!isPlacing) setHoveredRackId(null);
+                        if (!isPlacing && !isPlacementMode) setHoveredRackId(null);
                       }}
                       onDragStart={() => {
                         if (isLayoutEditable && !selectedRackIds.includes(rack.id)) {
@@ -721,7 +729,11 @@ export function EditorCanvas({
                   backdropFilter: 'blur(4px)'
                 }}
               >
-                {isLayoutEditable ? 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del' : 'Read-only · MMB pan · Scroll zoom'}
+                {isPlacementMode
+                ? 'Click cell to select · MMB pan · Scroll zoom'
+                : isLayoutEditable
+                  ? 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del'
+                  : 'Read-only · MMB pan · Scroll zoom'}
               </div>
             )}
 

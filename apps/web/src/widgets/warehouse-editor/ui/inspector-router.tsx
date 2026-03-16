@@ -9,11 +9,9 @@ import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
 import { LayoutEmptyPanel } from './mode-panels/layout-empty-panel';
-import { SemanticsModePanel } from './mode-panels/semantics-mode-panel';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
 import { CellPlacementInspector } from './mode-panels/cell-placement-inspector';
 import { ContainerPlacementInspector } from './mode-panels/container-placement-inspector';
-import { FlowModePanel } from './mode-panels/flow-mode-panel';
 
 // Pure routing logic lives in inspector-router-logic.ts (no React, testable in isolation).
 import { resolveInspectorKind } from './inspector-router-logic';
@@ -41,11 +39,9 @@ type InspectorRouterProps = {
  *   layout  + rack(1, existing) → RackInspector (structural)
  *   layout  + rack(≥2)         → RackMultiInspector (spacing/alignment)
  *   layout  + none             → LayoutEmptyPanel
- *   semantics                 → SemanticsModePanel (placeholder)
- *   placement + cell           → CellPlacementInspector (read-only, B2)
- *   placement + container      → ContainerPlacementInspector (read-only, B3)
- *   placement + other          → PlacementModePanel (placeholder)
- *   flow                      → FlowModePanel (placeholder)
+ *   placement + cell           → CellPlacementInspector
+ *   placement + container      → ContainerPlacementInspector
+ *   placement + other          → PlacementModePanel (select a cell prompt)
  */
 export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRouterProps) {
   const viewMode = useViewMode();
@@ -74,9 +70,6 @@ export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRout
     case 'layout-empty':
       return <LayoutEmptyPanel workspace={workspace} onAddRack={onAddRack} />;
 
-    case 'semantics-placeholder':
-      return <SemanticsModePanel />;
-
     case 'placement-cell':
       return <CellPlacementInspector workspace={workspace} />;
 
@@ -85,8 +78,5 @@ export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRout
 
     case 'placement-placeholder':
       return <PlacementModePanel />;
-
-    case 'flow-placeholder':
-      return <FlowModePanel />;
   }
 }
