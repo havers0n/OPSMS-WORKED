@@ -37,9 +37,10 @@ import {
   clampCanvasZoom,
   getCanvasLOD,
   getRackGeometry,
-  GRID_SIZE
+  GRID_SIZE,
+  LOD_CELL_THRESHOLD
 } from '../lib/canvas-geometry';
-import { getSnapPosition } from '../lib/rack-spacing';
+import { getRackBoundingBox, getSnapPosition } from '../lib/rack-spacing';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
@@ -188,6 +189,9 @@ export function EditorCanvas({
   const panStartRef = useRef({ x: 0, y: 0 });
   const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
 
+  // Track previous viewMode so we can detect the transition TO placement.
+  const prevViewModeRef = useRef(viewMode);
+
   const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
   const racks = useMemo(
@@ -244,6 +248,49 @@ export function EditorCanvas({
     ro.observe(node);
     return () => ro.disconnect();
   }, []);
+
+  // Auto-zoom to cell-visible level when entering Storage (placement) mode.
+  // Ensures cells are always visible on mode entry without requiring manual zoom.
+  useEffect(() => {
+    const prevMode = prevViewModeRef.current;
+    prevViewModeRef.current = viewMode;
+
+    // Only fire on the transition → 'placement', not on every render.
+    if (viewMode !== 'placement' || prevMode === 'placement') return;
+    if (viewport.width === 0) return;
+
+    const racks = layoutDraft ? Object.values(layoutDraft.racks) : [];
+
+    if (racks.length === 0) {
+      // No racks yet — just ensure cells would be visible if any appear.
+      setCanvasZoom(clampCanvasZoom(Math.max(zoom, LOD_CELL_THRESHOLD)));
+      return;
+    }
+
+    const boxes = racks.map(getRackBoundingBox);
+    const minX = Math.min(...boxes.map((b) => b.minX));
+    const maxX = Math.max(...boxes.map((b) => b.maxX));
+    const minY = Math.min(...boxes.map((b) => b.minY));
+    const maxY = Math.max(...boxes.map((b) => b.maxY));
+
+    const PADDING = 80; // px on each side
+    const bboxW = maxX - minX;
+    const bboxH = maxY - minY;
+
+    const scaleX = bboxW > 0 ? (viewport.width  - PADDING * 2) / bboxW : LOD_CELL_THRESHOLD;
+    const scaleY = bboxH > 0 ? (viewport.height - PADDING * 2) / bboxH : LOD_CELL_THRESHOLD;
+
+    // Never go below LOD_CELL_THRESHOLD — cells must be visible in this mode.
+    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_THRESHOLD));
+
+    const offsetX = (viewport.width  - bboxW * targetZoom) / 2 - minX * targetZoom;
+    const offsetY = (viewport.height - bboxH * targetZoom) / 2 - minY * targetZoom;
+
+    setCanvasZoom(targetZoom);
+    setCanvasOffset({ x: offsetX, y: offsetY });
+  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Intentionally reads viewport/layoutDraft/zoom via closure at transition time —
+  // re-running on their changes would fight the user's manual zoom adjustments.
 
   useEffect(() => {
     const container = containerRef.current;
