@@ -114,7 +114,7 @@ export function WarehouseSetupPage() {
   ]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       <TopBar />
       <div className="flex-1 overflow-hidden">
         <WarehouseContent

@@ -1,17 +1,24 @@
 import {
   CheckCircle2,
   ChevronRight,
+  FilePlus2,
+  Lock,
+  LogOut,
+  Menu,
   Redo2,
   Save,
   SearchCheck,
   Undo2
 } from 'lucide-react';
+import { useAuth } from '@/app/providers/auth-provider';
 import { useMemo, useState } from 'react';
 import {
   useActiveFloorId,
   useActiveSiteId,
+  useIsDrawerCollapsed,
   useSetActiveFloorId,
-  useSetActiveSiteId
+  useSetActiveSiteId,
+  useToggleDrawer
 } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
@@ -39,6 +46,12 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
 
 export function TopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const toggle = useToggleDrawer();
+  const isCollapsed = useIsDrawerCollapsed();
+  const { user, memberships, currentTenantId, signOut } = useAuth();
+  const currentMembership =
+    memberships.find((m) => m.tenantId === currentTenantId) ?? memberships[0] ?? null;
+
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
@@ -163,17 +176,37 @@ export function TopBar() {
 
   return (
     <header
-      className="flex h-11 shrink-0 items-center gap-0 border-b"
+      className="flex h-11 shrink-0 items-center justify-between border-b"
       style={{
         borderColor: 'var(--border-strong)',
         background: 'var(--surface-primary)'
       }}
     >
-      {/* ── Breadcrumb: Site / Floor ───────────────────────── */}
-      <div
-        className="flex h-full items-center gap-1 border-r px-3"
-        style={{ borderColor: 'var(--border-muted)' }}
-      >
+      <div className="flex h-full items-center">
+        {/* ── Block 1: Global Nav ───────────────────────── */}
+        <div
+          className="flex h-full items-center gap-2 border-r px-3"
+          style={{ borderColor: 'var(--border-muted)' }}
+        >
+          <button
+            type="button"
+            onClick={toggle}
+            title={isCollapsed ? 'Open navigation' : 'Close navigation'}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+          <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
+            W
+          </span>
+          <span className="text-sm font-semibold text-slate-700">Warehouse Ops</span>
+        </div>
+
+        {/* ── Block 2: Context: Site / Floor / Version ───────────────────────── */}
+        <div
+          className="flex h-full items-center gap-1 border-r px-3"
+          style={{ borderColor: 'var(--border-muted)' }}
+        >
         <select
           aria-label="Site"
           value={activeSiteId ?? ''}
@@ -208,22 +241,41 @@ export function TopBar() {
         </select>
 
         {activeSite && activeFloor && (
-          <span
-            className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-            style={
-              isDraftDirty
-                ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
-                : !isLayoutEditable
-                  ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
-                  : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
-            }
-          >
-            {isDraftDirty ? 'Unsaved' : !isLayoutEditable ? 'Published' : 'Synced'}
-          </span>
+          <>
+            {(layoutDraft?.versionNo ?? latestPublished?.versionNo) && (
+              <span className="ml-1 text-xs font-semibold text-slate-500">
+                v{layoutDraft?.versionNo ?? latestPublished?.versionNo}
+              </span>
+            )}
+            
+            <div className="mx-2 h-4 w-px bg-slate-200" />
+            
+            {/* ── Block 3: Status ───────────────────────── */}
+            <span
+              className="group relative flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium cursor-help"
+              style={
+                isDraftDirty
+                  ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
+                  : !isLayoutEditable
+                    ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
+                    : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
+              }
+            >
+              {!isLayoutEditable ? <Lock className="h-3 w-3" /> : null}
+              {isDraftDirty ? 'Unsaved' : !isLayoutEditable ? 'Published' : 'Synced'}
+              
+              {!isLayoutEditable && (
+                <div className="absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-white group-hover:block">
+                  Structure locked • Placement available
+                </div>
+              )}
+            </span>
+          </>
         )}
       </div>
+    </div>
 
-      {/* ── Mode switcher — center ─────────────────────────── */}
+      {/* ── Block 5: Mode switcher — center ─────────────────────────── */}
       {/* Always shown — in published mode Layout tab is read-only, Storage tab
           opens placement view. The PublishedBanner below communicates the
           lock status so we don't duplicate it here. */}
@@ -258,23 +310,36 @@ export function TopBar() {
         </div>
       </div>
 
-      {/* ── Right: status + actions ────────────────────────── */}
-      <div
-        className="flex h-full items-center gap-1 border-l px-3"
-        style={{ borderColor: 'var(--border-muted)' }}
-      >
-        {/* Status message — visible in both modes */}
-        {(statusMessage || issueSummary) && (
-          <span
-            className="mr-1 text-[11px]"
-            style={{ color: 'var(--text-muted)' }}
-            aria-live="polite"
-          >
+      {/* ── Block 4: Actions & Block 6: User Settings ────────────────────────── */}
+      <div className="flex h-full items-center">
+        <div
+          className="flex h-full items-center gap-1 border-l px-3"
+          style={{ borderColor: 'var(--border-muted)' }}
+        >
+          {/* Status message — visible in both modes */}
+          {(statusMessage || issueSummary) && (
+            <span
+              className="mr-2 text-[11px]"
+              style={{ color: 'var(--text-muted)' }}
+              aria-live="polite"
+            >
             {statusMessage ?? issueSummary}
           </span>
         )}
 
-        {isPublishedMode ? null : (
+        {isPublishedMode ? (
+          /* Published mode: Create Draft action */
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={handleCreateDraft}
+            className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: 'var(--accent)' }}
+          >
+            <FilePlus2 className="h-3.5 w-3.5" />
+            {createDraft.isPending ? 'Creating…' : 'Create Draft'}
+          </button>
+        ) : (
           /* Draft mode: full toolbar */
           <>
             {/* Undo / Redo */}
@@ -336,6 +401,28 @@ export function TopBar() {
           </>
         )}
       </div>
+
+      {/* ── Block 6: User Settings ────────────────────────── */}
+      <div
+        className="flex h-full items-center gap-3 border-l px-3"
+        style={{ borderColor: 'var(--border-muted)' }}
+      >
+        <div className="hidden flex-col items-end xl:flex">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            {currentMembership?.role ?? 'user'}
+          </div>
+          <div className="text-xs text-slate-700">{user?.email ?? ''}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Sign Out
+        </button>
+      </div>
+    </div>
     </header>
   );
 }

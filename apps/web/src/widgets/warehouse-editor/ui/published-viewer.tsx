@@ -10,10 +10,8 @@ import {
   useSetSelectedRackId,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { EditorCanvas } from './editor-canvas';
 import { InspectorRouter } from './inspector-router';
-import { PublishedBanner } from './published-banner';
 import { ToolRail } from './tool-rail';
 
 /**
@@ -36,7 +34,6 @@ export function PublishedViewer() {
   const viewMode = useViewMode();
   const selectedRackId = useSelectedRackId();
   const setSelectedRackId = useSetSelectedRackId();
-  const createDraft = useCreateLayoutDraft(activeFloorId);
   const setEditorMode = useSetEditorMode();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -67,11 +64,6 @@ export function PublishedViewer() {
     }
   }, [viewMode, selectedRackId]);
 
-  const handleCreateDraft = async () => {
-    if (!activeFloorId) return;
-    await createDraft.mutateAsync(activeFloorId);
-  };
-
   const handleCloseInspector = () => {
     setInspectorOpen(false);
     if (viewMode === 'layout') {
@@ -88,11 +80,6 @@ export function PublishedViewer() {
       aria-label="Published warehouse layout"
       className="flex h-full w-full flex-col overflow-hidden"
     >
-      <PublishedBanner
-        onCreateDraft={handleCreateDraft}
-        isCreating={createDraft.isPending}
-      />
-
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ToolRail />
 
