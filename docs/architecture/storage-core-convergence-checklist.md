@@ -4,7 +4,7 @@
 
 Working migration checklist for converging the current storage implementation toward the canonical target model defined in [core-wms-data-model-v1.md](./core-wms-data-model-v1.md).
 
-Snapshot date: `2026-03-15`
+Snapshot date: `2026-03-16`
 
 This document is intentionally operational.
 It is not another conceptual architecture note.
@@ -225,41 +225,61 @@ Exit criteria:
 - stock is represented as container-bound execution units
 - the repo no longer encourages `product -> cell` mental models
 
-## Stage 4. Introduce First-Class `movement`
+## Stage 4. Canonical Split Semantics and Execution Movements
 
 Goal:
 
-- make execution history explicit instead of inferring it from placement side effects
+- make partial-stock semantics and execution history explicit without changing public UI or API contracts
+
+Implementation status snapshot:
+
+- `inventory_unit` now carries Stage 4 execution metadata through `updated_by` and `source_inventory_unit_id`
+- canonical split rules now exist in domain and SQL
+- `stock_movements` now exists as canonical execution history for new flows
+- canonical execution RPCs now operate on `location` as the input boundary, not `cell`
+- current physical placement persistence still bridges through `container_placements` and `geometry_slot_id`
+- full fit, weight, and capacity enforcement is intentionally deferred to Stage 5
 
 Schema checklist:
 
-- [ ] add `movement` table or converge `movement_events` into the canonical shape
-- [ ] support `receive`, `putaway`, `pick`, `replenishment`, `transfer`, `ship`, and `adjust`
-- [ ] support both container movement and partial product movement
-- [ ] capture `from_location_id`, `to_location_id`, `container_id`, `product_id`, quantity, status, and timestamps
+- [x] extend `inventory_unit` with split-lineage metadata needed for canonical execution semantics
+- [x] add canonical `stock_movements` instead of overloading legacy `movement_events`
+- [x] support `move_container`, `split_stock`, `transfer_stock`, and `pick_partial` as first-class execution operations
+- [x] capture source/target `location`, `container`, `inventory_unit`, quantity, status, and timestamps in canonical movement rows
+- [x] keep `product_id` out of canonical movement rows and derive product identity through referenced inventory units
+- [x] keep legacy `movement_events` untouched as compatibility debt
 
 Domain checklist:
 
-- [ ] add `movement` domain model and movement-type enum
-- [ ] separate current-state aggregates from movement log semantics
+- [x] add `stock-movement` domain model and execution movement-type enum
+- [x] add explicit split/merge helpers for `inventory_unit`
+- [x] separate current-state stock rows from movement-log semantics
 
 BFF checklist:
 
-- [ ] add movement write paths for receive, move, pick, and ship
-- [ ] stop treating placement row mutation as sufficient execution history
+- [x] add internal execution repo/service for canonical move, split, transfer, and pick-partial flows
+- [x] keep public web-visible inventory and storage endpoints unchanged
+- [x] stop treating placement row mutation as sufficient execution history for new canonical flows
 
 Web checklist:
 
-- [ ] prepare operations screens and placement feedback to reference movement outcomes
+- [x] keep web behavior intentionally unchanged in Stage 4
+- [x] avoid exposing fake history derived only from placement state; canonical history now exists below the API boundary
+- [ ] prepare future operations UX to consume canonical execution outcomes in a later stage
 - [ ] do not expose fake “history” derived only from current placement state
 
 Tests and docs:
 
-- [ ] verify container move, partial pick, and ship each produce movement records
-- [ ] document status model: `pending`, `done`, `cancelled`
+- [x] verify canonical move, split, transfer, and pick-partial flows write `stock_movements`
+- [x] document status model: `pending`, `done`, `cancelled`
+- [x] document that Stage 4 canonical move accepts `targetLocationId`, not `targetCellId`
+- [x] document that full fit/capacity enforcement remains deferred to Stage 5
 
 Exit criteria:
 
+- canonical stock can be split without hacks
+- exact-match merge is deterministic instead of accidental row duplication
+- whole-container move and partial-stock transfer are separate execution paths
 - the system can answer “what moved, when, and from where to where” without reconstructing state from ad hoc joins
 
 ## Stage 5. Move Operational APIs Onto the Target Model

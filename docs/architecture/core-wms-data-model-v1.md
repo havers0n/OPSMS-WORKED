@@ -16,6 +16,7 @@ Current implementation note:
 - Stage 1 has introduced first-class `locations` and backfilled published rack slots into executable location rows
 - Stage 2 now routes storage reads through location-backed compatibility views while placement writes still remain cell-centric
 - Stage 3 now introduces canonical `inventory_unit` stock rows while `inventory_items` remains a compatibility surface for legacy reads and migration safety
+- Stage 4 now adds canonical split/merge semantics on `inventory_unit` plus `stock_movements` for new execution flows, while physical placement persistence still bridges through geometry-backed placement rows
 - this document defines the target v1 storage core that must become the stable reference for future schema, API, and UX work
 
 ## Goal
@@ -227,6 +228,7 @@ type InventoryUnit = {
   status: 'available' | 'reserved' | 'damaged' | 'hold'
   createdAt: string
   updatedAt: string
+  sourceInventoryUnitId: string | null
 }
 ```
 
@@ -235,6 +237,9 @@ Rules:
 - inventory always belongs to a container
 - location is derived through `container.currentLocationId`
 - one container may hold many inventory units
+- split never reduces the source row to zero; full-row relocation is not modeled as split in Stage 4
+- merge is allowed only for exact tracking identity in the same container
+- serial-tracked units cannot be split and are not merge candidates
 
 ### 6. `Movement`
 
@@ -260,6 +265,12 @@ Meaning:
 
 - supports whole-container movement
 - supports partial product movement
+
+Current implementation note:
+
+- Stage 4 writes canonical execution history to `stock_movements`
+- current canonical rows distinguish `move_container`, `split_stock`, `transfer_stock`, and `pick_partial`
+- the current Stage 4 table intentionally does not duplicate `productId`; product identity is derived through referenced `inventory_unit` rows
 
 ## ERD Logic
 
@@ -318,6 +329,12 @@ These invariants are the hard line. If they are not documented, the model will d
 ### I8. Archived container
 
 - archived containers cannot move
+
+### I9. Split and merge semantics are explicit
+
+- partial-stock transfer is modeled through controlled split semantics
+- exact-match merge is deterministic, not accidental duplicate-row cleanup
+- whole-container move and partial-stock move are separate execution operations
 
 ## v1 Behavioral Scenarios
 

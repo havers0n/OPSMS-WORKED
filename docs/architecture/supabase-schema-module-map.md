@@ -59,27 +59,29 @@ They are related, but they are not identical.
 
 | Concern | Current implementation | Target model | Status |
 |---|---|---|---|
-| Executable storage anchor | `cells` from published layout are used directly as operational placement targets | `locations` become the executable storage entity; geometry slot is only the spatial anchor | diverged |
+| Executable storage anchor | storage reads and new canonical execution flows now pivot around `locations`, but compatibility placement persistence still bridges through `cells` | `locations` become the executable storage entity; geometry slot is only the spatial anchor | partial |
 | Geometry to execution relationship | placement points directly to `cells.id` | `geometry_slot -> location -> container -> inventory_unit` | diverged |
 | Handling unit model | `containers` already exist | `containers` remain core | aligned |
 | Container classification | `container_types` already exist in a minimal form | `container_type` remains core, with dimensional and load semantics becoming first-class | partial |
 | Inventory content model | `inventory_items` hold current container content, currently closer to item-ref aggregation | `inventory_unit` becomes the canonical stock unit with lot, serial, expiry, and explicit stock status | partial |
-| Movement history | placement lifecycle is represented through placement rows and movement events are only roadmap-level or partial | `movement` becomes a first-class execution journal for receive, putaway, pick, transfer, ship, adjust | diverged |
+| Movement history | legacy placement lifecycle still exists, but new canonical execution flows now write `stock_movements` with `move_container`, `split_stock`, `transfer_stock`, and `pick_partial` semantics | `movement` becomes a first-class execution journal for receive, putaway, pick, transfer, ship, adjust | partial |
 | Non-rack operational locations | `locations` table now exists, but current Stage 1 implementation only backfills published rack slots | `location` supports `rack_slot`, `floor`, `staging`, `dock`, `buffer` | partial |
 | Primary execution reads | location-centered views now exist, while `cell_storage_snapshot_v` and `cell_occupancy_v` remain legacy compatibility projections | location-centered read models such as `inventory_by_location_v`, plus container reads | partial |
 
 ### What is true today
 
-Today the implemented storage path is still effectively:
+Today the implemented storage path is effectively:
 
-`Cell -> ContainerPlacement -> Container -> InventoryItem`
+`GeometrySlot -> Location -> ContainerPlacement -> Container -> InventoryUnit`
 
 This means:
 
-- published cells are the structural base for placement
-- execution writes are still cell-centric
+- published cells remain the structural base for compatibility placement persistence
+- new canonical execution moves now accept `location` as input and bridge to geometry only internally
 - storage reads are now routed through location-backed compatibility views
-- Stage 1 now also persists first-class `locations` for published rack slots, but placement writes still execute through `cell_id`
+- Stage 1 now also persists first-class `locations` for published rack slots
+- canonical product-backed stock lives in `inventory_unit`
+- new canonical execution history lives in `stock_movements`
 
 ### What the target model says
 
@@ -188,6 +190,13 @@ Target outcome:
 Constraint:
 
 - movement must be an execution log, not a replacement for current-state tables
+
+Current status:
+
+- implemented for new canonical flows: `stock_movements` now records `move_container`, `split_stock`, `transfer_stock`, and `pick_partial`
+- `move_container_canonical` now accepts `target_location_uuid`, not `target_cell_uuid`
+- current physical placement persistence still bridges through `locations.geometry_slot_id -> cells.id`
+- full fit, capacity, and weight enforcement remains deferred to Stage 5
 
 #### Stage 5. Move operational APIs onto the target model
 
@@ -649,6 +658,38 @@ Notes:
 - Stage 3 canonical stock truth lives here
 - inventory location is derived through container placement / active location, not duplicated on the stock row
 - legacy compatibility reads may still project this data back into `InventoryItem`-shaped rows
+- Stage 4 adds `updated_by` and `source_inventory_unit_id` so canonical split lineage is explicit
+
+#### `stock_movements`
+
+Purpose:
+
+- canonical execution history for new movement flows
+
+Key fields:
+
+- `id uuid pk`
+- `tenant_id uuid fk -> tenants.id`
+- `movement_type text check in ('receive','putaway','move_container','split_stock','transfer_stock','pick_partial','ship','adjust')`
+- `source_location_id uuid null fk -> locations.id`
+- `target_location_id uuid null fk -> locations.id`
+- `source_container_id uuid null fk -> containers.id`
+- `target_container_id uuid null fk -> containers.id`
+- `source_inventory_unit_id uuid null fk -> inventory_unit.id`
+- `target_inventory_unit_id uuid null fk -> inventory_unit.id`
+- `quantity numeric null`
+- `uom text null`
+- `status text check in ('pending','done','cancelled')`
+- `created_at timestamptz`
+- `completed_at timestamptz null`
+- `created_by uuid null fk -> profiles.id`
+
+Notes:
+
+- Stage 4 canonical execution history lives here
+- `product_id` is intentionally not duplicated on the movement row
+- product identity is derived through referenced `inventory_unit` rows
+- legacy `movement_events` still exists as compatibility debt for older placement flows
 
 ## 4. Product Master and Operational Role Module
 
@@ -1065,6 +1106,7 @@ Notes:
 
 - target-facing Stage 2 storage snapshot view
 - Stage 3: product-backed inventory content now resolves from canonical `inventory_unit`, with legacy free-text rows projected through a compatibility layer
+- Stage 4: this remains a current-state read; execution history is now tracked separately in `stock_movements`
 - legacy cell storage should project from this view instead of owning its own execution logic
 
 #### `cell_occupancy_v`
@@ -1110,6 +1152,16 @@ Notes:
 - derived from `containers + inventory_unit`, with compatibility projection for legacy free-text-only rows
 - empty containers may appear with null content columns
 - no readiness, reservation, or picking semantics belong here
+
+#### `stock_movements_v`
+
+Purpose:
+
+- optional direct read model for canonical execution history if operations UI or integrations need it later
+
+Notes:
+
+- Stage 4 does not require a dedicated view yet because canonical SQL functions write directly to `stock_movements`
 
 #### `cell_storage_snapshot_v`
 
@@ -1235,6 +1287,40 @@ Responsibility:
 - move a currently placed container atomically
 - close the current active placement and open the new placement in one transaction
 - fail explicitly on same-cell moves instead of creating fake history
+
+#### `move_container_canonical(container_id uuid, target_location_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- accept `location` as the execution-facing target
+- bridge internally to `geometry_slot_id -> cell_id` while current placement persistence remains cell-backed
+- reject non-writable locations and occupied target locations in Stage 4
+- write canonical `stock_movements(type='move_container')`
+
+#### `split_inventory_unit(source_inventory_unit_id uuid, quantity numeric, target_container_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- apply controlled partial-stock split semantics
+- reject serial splits and full-row relocation
+- auto-merge only exact-match non-serial target rows
+- write canonical `stock_movements(type='split_stock')`
+
+#### `transfer_inventory_unit(source_inventory_unit_id uuid, quantity numeric, target_container_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- split stock into a target container
+- preserve source and target execution identity
+- write canonical `split_stock` plus `transfer_stock`
+
+#### `pick_partial_inventory_unit(source_inventory_unit_id uuid, quantity numeric, pick_container_id uuid, actor_id uuid)`
+
+Responsibility:
+
+- model partial pick as a canonical stock split into a pick container
+- keep pick semantics separate from generic transfer semantics
+- write canonical `split_stock` plus `pick_partial`
 
 #### `resolve_order_readiness(import_job_id uuid or order_batch_id uuid)`
 
@@ -1374,6 +1460,7 @@ Canonical flow through the schema:
 - `container_placements`
 - `inventory_items` (legacy compatibility surface)
 - `inventory_unit` (canonical product-backed stock truth)
+- `stock_movements` (canonical execution history for Stage 4+ execution flows)
 - `stock_snapshots`
 - `stock_snapshot_lines`
 - `orders`
@@ -1393,6 +1480,7 @@ Canonical flow through the schema:
 - `v_product_role_quantities`
 - `v_order_line_readiness`
 - `v_pick_task_progress`
+- optional `stock_movements_v`
 
 ### RPC actions
 
@@ -1400,6 +1488,10 @@ Canonical flow through the schema:
 - validate layout
 - publish layout
 - publish import
+- move container canonically
+- split stock canonically
+- transfer stock canonically
+- pick stock canonically
 - resolve readiness
 - generate tasks
 - advance pick item

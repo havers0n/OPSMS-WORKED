@@ -388,6 +388,8 @@ export function mapInventoryUnitRowToDomain(row: {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  updated_by?: string | null;
+  source_inventory_unit_id?: string | null;
 }): InventoryUnit {
   return inventoryUnitSchema.parse({
     id: row.id,
@@ -402,7 +404,9 @@ export function mapInventoryUnitRowToDomain(row: {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    createdBy: row.created_by
+    createdBy: row.created_by,
+    updatedBy: row.updated_by ?? null,
+    sourceInventoryUnitId: row.source_inventory_unit_id ?? null
   });
 }
 

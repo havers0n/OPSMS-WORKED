@@ -15,7 +15,9 @@ export const inventoryUnitSchema = z.object({
   status: inventoryUnitStatusSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
-  createdBy: z.string().uuid().nullable()
+  createdBy: z.string().uuid().nullable(),
+  updatedBy: z.string().uuid().nullable(),
+  sourceInventoryUnitId: z.string().uuid().nullable()
 });
 
 export type InventoryUnitStatus = z.infer<typeof inventoryUnitStatusSchema>;
