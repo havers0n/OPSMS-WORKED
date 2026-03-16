@@ -14,7 +14,7 @@ Current implementation note:
 - the repo already has strong spatial truth and a draft/publish lifecycle
 - the repo already has container placement and inventory content concepts
 - Stage 1 has introduced first-class `locations` and backfilled published rack slots into executable location rows
-- current placement writes and storage reads still remain partially cell-centric for compatibility
+- Stage 2 now routes storage reads through location-backed compatibility views while placement writes still remain cell-centric
 - this document defines the target v1 storage core that must become the stable reference for future schema, API, and UX work
 
 ## Goal

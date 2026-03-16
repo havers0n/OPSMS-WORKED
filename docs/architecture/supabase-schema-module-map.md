@@ -66,7 +66,7 @@ They are related, but they are not identical.
 | Inventory content model | `inventory_items` hold current container content, currently closer to item-ref aggregation | `inventory_unit` becomes the canonical stock unit with lot, serial, expiry, and explicit stock status | partial |
 | Movement history | placement lifecycle is represented through placement rows and movement events are only roadmap-level or partial | `movement` becomes a first-class execution journal for receive, putaway, pick, transfer, ship, adjust | diverged |
 | Non-rack operational locations | `locations` table now exists, but current Stage 1 implementation only backfills published rack slots | `location` supports `rack_slot`, `floor`, `staging`, `dock`, `buffer` | partial |
-| Primary execution reads | `cell_storage_snapshot_v`, `container_storage_snapshot_v`, with additive `locations` bridge rows available for published slots | location-centered read models such as `inventory_by_location_v`, plus container reads | partial |
+| Primary execution reads | location-centered views now exist, while `cell_storage_snapshot_v` and `cell_occupancy_v` remain legacy compatibility projections | location-centered read models such as `inventory_by_location_v`, plus container reads | partial |
 
 ### What is true today
 
@@ -77,8 +77,8 @@ Today the implemented storage path is still effectively:
 This means:
 
 - published cells are the structural base for placement
-- execution semantics are still partially cell-centric
-- storage reads are derived from active placement joins against published cells
+- execution writes are still cell-centric
+- storage reads are now routed through location-backed compatibility views
 - Stage 1 now also persists first-class `locations` for published rack slots, but placement writes still execute through `cell_id`
 
 ### What the target model says
@@ -147,6 +147,10 @@ Target outcome:
 - existing placement flows can still resolve visible storage state
 - new reads and APIs can ask for `location`-centered truth
 - the system can support a temporary `cell -> location` compatibility bridge during migration
+
+Current status:
+
+- implemented for read models: `location_*` views are target-facing, while `cell_*` views remain legacy projections over the same bridge layer
 
 Constraint:
 
@@ -936,11 +940,91 @@ Views should expose derived operational read models. They must not replace sourc
 
 ### Recommended views
 
+#### `active_container_locations_v`
+
+Purpose:
+
+- canonical active execution read for container placements resolved through executable locations
+
+Possible columns:
+
+- `tenant_id`
+- `floor_id`
+- `location_id`
+- `location_code`
+- `location_type`
+- `capacity_mode`
+- `location_status`
+- `cell_id`
+- `container_id`
+- `external_code`
+- `container_type`
+- `container_status`
+- `placed_at`
+
+Notes:
+
+- derived from active `container_placements` joined to `locations`
+- target-facing Stage 2 bridge view
+
+#### `location_occupancy_v`
+
+Purpose:
+
+- current physical container occupancy by executable location
+
+Possible columns:
+
+- `tenant_id`
+- `floor_id`
+- `location_id`
+- `location_code`
+- `location_type`
+- `cell_id`
+- `container_id`
+- `external_code`
+- `container_type`
+- `container_status`
+- `placed_at`
+
+Notes:
+
+- target-facing occupancy view for future location-native reads
+- `cell_id` remains only as a compatibility bridge to geometry
+
+#### `location_storage_snapshot_v`
+
+Purpose:
+
+- inspection-grade current physical contents of an executable location, including container contents
+
+Possible columns:
+
+- `tenant_id`
+- `floor_id`
+- `location_id`
+- `location_code`
+- `location_type`
+- `cell_id`
+- `container_id`
+- `external_code`
+- `container_type`
+- `container_status`
+- `placed_at`
+- `item_ref`
+- `quantity`
+- `uom`
+
+Notes:
+
+- target-facing Stage 2 storage snapshot view
+- legacy cell storage should project from this view instead of owning its own execution logic
+
 #### `cell_occupancy_v`
 
 Purpose:
 
-- current physical container occupancy by cell
+- legacy compatibility projection of current occupancy by cell
 
 Possible columns:
 
@@ -954,8 +1038,8 @@ Possible columns:
 
 Notes:
 
-- derived only from active placements where `removed_at is null`
-- placement-centric only; no inventory/content semantics belong here
+- derived from `location_occupancy_v`
+- maintained for compatibility with current `/cells/*` and floor/slot read contracts
 
 #### `container_storage_snapshot_v`
 
@@ -984,7 +1068,7 @@ Notes:
 
 Purpose:
 
-- inspection-grade current physical contents of a cell, including container contents
+- legacy compatibility projection of current physical contents of a cell, including container contents
 
 Possible columns:
 
@@ -1001,10 +1085,9 @@ Possible columns:
 
 Notes:
 
-- derived only from active placements plus `containers + inventory_items`
-- only placements where `removed_at is null` contribute
+- derived from `location_storage_snapshot_v`
 - empty placed containers may appear with null content columns
-- no readiness, reservation, or picking semantics belong here
+- maintained only to avoid breaking current public contracts during the bridge phase
 
 #### `v_layout_publish_impact`
 

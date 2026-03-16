@@ -142,31 +142,38 @@ Goal:
 
 - keep current placement working while allowing new reads to pivot around `location`
 
+Implementation status snapshot:
+
+- location-centered read views now exist
+- legacy `cell_*` views remain supported as compatibility projections
+- BFF storage reads are location-backed internally while public responses remain unchanged
+- web remains intentionally unchanged in this stage
+
 Schema checklist:
 
-- [ ] add compatibility views or joins that resolve active placement through `location`
-- [ ] introduce location-centered read views alongside existing cell-centered views
-- [ ] keep existing views operational until all consumers move off them
+- [x] add compatibility views or joins that resolve active placement through `location`
+- [x] introduce location-centered read views alongside existing cell-centered views
+- [x] keep existing views operational until all consumers move off them
 
 Domain checklist:
 
-- [ ] add snapshot models that can describe storage by `location`
-- [ ] avoid expanding `cell-storage-snapshot` semantics any further
+- [x] add snapshot models that can describe storage by `location`
+- [x] avoid expanding `cell-storage-snapshot` semantics any further
 
 BFF checklist:
 
-- [ ] update placement repositories to resolve both current placement state and target location identity
-- [ ] introduce response shapes that can expose `locationId` without breaking old clients
+- [x] keep current placement repository support for target location identity
+- [x] switch internal storage reads to location-backed sources without changing public response shapes
 
 Web checklist:
 
-- [ ] update `apps/web/src/entities/cell/api/` hooks to tolerate location-backed reads
-- [ ] add invalidation paths that refresh both legacy and new storage queries during the bridge
+- [x] keep existing web hooks stable while BFF responses remain unchanged
+- [x] avoid any UX or invalidation changes in this stage
 
 Tests and docs:
 
-- [ ] verify that placement reads remain stable after the bridge
-- [ ] document which views are legacy and which are target-facing
+- [x] verify that placement and storage reads remain stable after the bridge
+- [x] document which views are legacy and which are target-facing
 
 Exit criteria:
 

@@ -957,7 +957,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
-      .from('cell_occupancy_v')
+      .from('location_occupancy_v')
       .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at')
       .eq('cell_id', cellId)
       .order('placed_at', { ascending: true });
@@ -976,7 +976,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
-      .from('cell_storage_snapshot_v')
+      .from('location_storage_snapshot_v')
       .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
       .eq('cell_id', cellId)
       .order('placed_at', { ascending: true });
@@ -1036,30 +1036,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       id: (request.params as { floorId: string }).floorId
     }).id;
     const supabase = getUserSupabase(auth);
-    const publishedVersion = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
-
-    if (!publishedVersion) {
-      return parseOrThrow(floorCellOccupancyRowsResponseSchema, []);
-    }
-
-    const { data: cells, error: cellsError } = await supabase
-      .from('cells')
-      .select('id')
-      .eq('layout_version_id', publishedVersion.id);
-
-    if (cellsError) {
-      throw cellsError;
-    }
-
-    const cellIds = (cells ?? []).map((cell) => cell.id);
-    if (cellIds.length === 0) {
-      return parseOrThrow(floorCellOccupancyRowsResponseSchema, []);
-    }
-
     const { data: occupancyRows, error: occupancyError } = await supabase
-      .from('cell_occupancy_v')
+      .from('location_occupancy_v')
       .select('cell_id')
-      .in('cell_id', cellIds);
+      .eq('floor_id', floorId);
 
     if (occupancyError) {
       throw occupancyError;
@@ -1067,14 +1047,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const countsByCellId = new Map<string, number>();
     for (const row of occupancyRows ?? []) {
+      if (!row.cell_id) {
+        continue;
+      }
+
       const nextCount = (countsByCellId.get(row.cell_id) ?? 0) + 1;
       countsByCellId.set(row.cell_id, nextCount);
     }
 
-    const response: FloorCellOccupancyRow[] = cellIds.flatMap((cellId) => {
-      const containerCount = countsByCellId.get(cellId);
-      return containerCount ? [{ cellId, containerCount }] : [];
-    });
+    const response: FloorCellOccupancyRow[] = Array.from(countsByCellId.entries())
+      .sort(([leftCellId], [rightCellId]) => leftCellId.localeCompare(rightCellId))
+      .map(([cellId, containerCount]) => ({ cellId, containerCount }));
 
     return parseOrThrow(floorCellOccupancyRowsResponseSchema, response);
   });
@@ -1130,7 +1113,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     // Step 2: fetch storage snapshot for all cells in this slot.
     const { data, error } = await supabase
-      .from('cell_storage_snapshot_v')
+      .from('location_storage_snapshot_v')
       .select('tenant_id,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
       .in('cell_id', cellIds)
       .order('placed_at', { ascending: true });

@@ -5,6 +5,8 @@ import {
   containerSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
+  locationOccupancyRowSchema,
+  locationStorageSnapshotRowSchema,
   parseCellAddress,
   containerTypeSchema,
   floorSchema,
@@ -30,6 +32,8 @@ import {
   type InventoryItem,
   type LayoutDraft,
   type LayoutValidationResult,
+  type LocationOccupancyRow,
+  type LocationStorageSnapshotRow,
   type Site,
   type Order,
   type OrderSummary,
@@ -233,6 +237,71 @@ export function mapCellStorageSnapshotRowToDomain(row: {
 }): CellStorageSnapshotRow {
   return cellStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
+    cellId: row.cell_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    placedAt: row.placed_at,
+    itemRef: row.item_ref,
+    product: row.product ? mapProductRowToDomain(row.product) : null,
+    quantity: row.quantity,
+    uom: row.uom
+  });
+}
+
+export function mapLocationOccupancyRowToDomain(row: {
+  tenant_id: string;
+  floor_id: string;
+  location_id: string;
+  location_code: string;
+  location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+  cell_id: string | null;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  placed_at: string;
+}): LocationOccupancyRow {
+  return locationOccupancyRowSchema.parse({
+    tenantId: row.tenant_id,
+    floorId: row.floor_id,
+    locationId: row.location_id,
+    locationCode: row.location_code,
+    locationType: row.location_type,
+    cellId: row.cell_id,
+    containerId: row.container_id,
+    externalCode: row.external_code,
+    containerType: row.container_type,
+    containerStatus: row.container_status,
+    placedAt: row.placed_at
+  });
+}
+
+export function mapLocationStorageSnapshotRowToDomain(row: {
+  tenant_id: string;
+  floor_id: string;
+  location_id: string;
+  location_code: string;
+  location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+  cell_id: string | null;
+  container_id: string;
+  external_code: string | null;
+  container_type: string;
+  container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  placed_at: string;
+  item_ref: string | null;
+  product_id?: string | null;
+  product?: ProductRow | null;
+  quantity: number | null;
+  uom: string | null;
+}): LocationStorageSnapshotRow {
+  return locationStorageSnapshotRowSchema.parse({
+    tenantId: row.tenant_id,
+    floorId: row.floor_id,
+    locationId: row.location_id,
+    locationCode: row.location_code,
+    locationType: row.location_type,
     cellId: row.cell_id,
     containerId: row.container_id,
     externalCode: row.external_code,

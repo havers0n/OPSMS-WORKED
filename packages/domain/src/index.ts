@@ -10,6 +10,8 @@ export * from './layout/validation';
 export * from './layout/validate-layout';
 export * from './storage/container';
 export * from './storage/location';
+export * from './storage/location-occupancy';
+export * from './storage/location-storage-snapshot';
 export * from './storage/cell-occupancy';
 export * from './storage/container-placement-action';
 export * from './storage/container-placement';

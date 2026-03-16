@@ -58,6 +58,12 @@ const containerRows = [
 const cellOccupancyRows = [
   {
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    location_id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+    location_code: '03-A.01.02.01',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    location_status: 'active',
     cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
     container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
     external_code: 'PALLET-001',
@@ -67,6 +73,12 @@ const cellOccupancyRows = [
   },
   {
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    location_id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+    location_code: '03-A.01.02.01',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    location_status: 'active',
     cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
     container_id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
     external_code: null,
@@ -196,6 +208,12 @@ const containerStorageSnapshotRows = [
 const cellStorageSnapshotRows = [
   {
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    location_id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+    location_code: '03-A.01.02.01',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    location_status: 'active',
     cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
     container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
     external_code: 'PALLET-001',
@@ -209,6 +227,12 @@ const cellStorageSnapshotRows = [
   },
   {
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    location_id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+    location_code: '03-A.01.02.01',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    location_status: 'active',
     cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
     container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
     external_code: 'PALLET-001',
@@ -222,6 +246,12 @@ const cellStorageSnapshotRows = [
   },
   {
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+    location_id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+    location_code: '03-A.01.02.01',
+    location_type: 'rack_slot',
+    capacity_mode: 'single_container',
+    location_status: 'active',
     cell_id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
     container_id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
     external_code: null,
@@ -436,6 +466,32 @@ function createSupabaseStub() {
         };
       }
 
+      if (table === 'location_occupancy_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((column: string, value: string) => {
+              const filtered = cellOccupancyRows.filter((row) =>
+                column === 'floor_id' ? row.floor_id === value : row.cell_id === value
+              );
+
+              if (column === 'floor_id') {
+                return Promise.resolve({
+                  data: filtered.map((row) => ({ cell_id: row.cell_id })),
+                  error: null
+                });
+              }
+
+              return {
+                order: vi.fn(async () => ({
+                  data: filtered,
+                  error: null
+                }))
+              };
+            })
+          }))
+        };
+      }
+
       if (table === 'container_storage_snapshot_v') {
         return {
           select: vi.fn(() => ({
@@ -453,6 +509,25 @@ function createSupabaseStub() {
             eq: vi.fn((_column: string, value: string) => ({
               order: vi.fn(async () => ({
                 data: cellStorageSnapshotRows.filter((row) => row.cell_id === value),
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      if (table === 'location_storage_snapshot_v') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((_column: string, value: string) => ({
+              order: vi.fn(async () => ({
+                data: cellStorageSnapshotRows.filter((row) => row.cell_id === value),
+                error: null
+              }))
+            })),
+            in: vi.fn((_column: string, values: string[]) => ({
+              order: vi.fn(async () => ({
+                data: cellStorageSnapshotRows.filter((row) => values.includes(row.cell_id)),
                 error: null
               }))
             }))
@@ -957,7 +1032,7 @@ function createRackSectionSlotStorageSupabaseStub() {
         };
       }
 
-      if (table === 'cell_storage_snapshot_v') {
+      if (table === 'location_storage_snapshot_v') {
         return {
           select: vi.fn(() => ({
             in: vi.fn((_column: string, ids: string[]) => ({
