@@ -503,8 +503,90 @@ export function mapLayoutDraftBundleToDomain(bundle: {
     layoutVersionId: bundle.layoutVersion.id,
     floorId: bundle.layoutVersion.floor_id,
     state: bundle.layoutVersion.state,
+    versionNo: bundle.layoutVersion.version_no,
     rackIds: racks.map((rack) => rack.id),
     racks: Object.fromEntries(racks.map((rack) => [rack.id, rack]))
+  });
+}
+
+// Maps the JSON returned by the get_layout_bundle(uuid) SECURITY DEFINER RPC
+// to the domain LayoutDraft type.  The RPC returns a single JSON object with
+// the full rack hierarchy already assembled, so no post-processing joins are
+// needed here.
+export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
+  if (json === null || json === undefined) return null;
+
+  const bundle = json as {
+    layoutVersionId: string;
+    floorId: string;
+    state: string;
+    versionNo: number;
+    racks: Array<{
+      id: string;
+      displayCode: string;
+      kind: string;
+      axis: string;
+      x: number;
+      y: number;
+      totalLength: number;
+      depth: number;
+      rotationDeg: number;
+      faces: Array<{
+        id: string;
+        side: string;
+        enabled: boolean;
+        slotNumberingDirection: string;
+        faceLength: number | null;
+        isMirrored: boolean;
+        mirrorSourceFaceId: string | null;
+        sections: Array<{
+          id: string;
+          ordinal: number;
+          length: number;
+          levels: Array<{ id: string; ordinal: number; slotCount: number }>;
+        }>;
+      }>;
+    }>;
+  };
+
+  const racks = bundle.racks.map((r) => ({
+    id: r.id,
+    displayCode: r.displayCode,
+    kind: r.kind,
+    axis: r.axis,
+    x: r.x,
+    y: r.y,
+    totalLength: r.totalLength,
+    depth: r.depth,
+    rotationDeg: r.rotationDeg,
+    faces: r.faces.map((f) => ({
+      id: f.id,
+      side: f.side,
+      enabled: f.enabled,
+      slotNumberingDirection: f.slotNumberingDirection,
+      isMirrored: f.isMirrored,
+      mirrorSourceFaceId: f.mirrorSourceFaceId,
+      faceLength: f.faceLength ?? undefined,
+      sections: f.sections.map((s) => ({
+        id: s.id,
+        ordinal: s.ordinal,
+        length: s.length,
+        levels: s.levels.map((l) => ({
+          id: l.id,
+          ordinal: l.ordinal,
+          slotCount: l.slotCount
+        }))
+      }))
+    }))
+  }));
+
+  return layoutDraftSchema.parse({
+    layoutVersionId: bundle.layoutVersionId,
+    floorId: bundle.floorId,
+    state: bundle.state,
+    versionNo: bundle.versionNo,
+    rackIds: racks.map((r) => r.id),
+    racks: Object.fromEntries(racks.map((r) => [r.id, r]))
   });
 }
 

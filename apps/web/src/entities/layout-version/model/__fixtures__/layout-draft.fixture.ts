@@ -9,6 +9,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
     layoutVersionId: 'layout-version-1',
     floorId: 'floor-1',
     state: 'draft',
+    versionNo: 1,
     rackIds: [rackId],
     racks: {
       [rackId]: {

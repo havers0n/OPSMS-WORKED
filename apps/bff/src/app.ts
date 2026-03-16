@@ -84,6 +84,7 @@ import {
   mapInventoryItemRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
   mapLayoutDraftBundleToDomain,
+  mapLayoutBundleJsonToDomain,
   mapProductRowToDomain,
   mapSiteRowToDomain,
   mapValidationResult,
@@ -579,62 +580,16 @@ async function fetchLayoutVersionBundle(
     return null;
   }
 
-  const { data: racks, error: racksError } = await supabase
-    .from('racks')
-    .select('id,layout_version_id,display_code,kind,axis,x,y,total_length,depth,rotation_deg')
-    .eq('layout_version_id', layoutVersion.id);
-
-  if (racksError) {
-    throw racksError;
-  }
-
-  if (!racks || racks.length === 0) {
-    return {
-      layoutVersionId: layoutVersion.id,
-      floorId: layoutVersion.floor_id,
-      state: layoutVersion.state,
-      rackIds: [],
-      racks: {}
-    };
-  }
-
-  const rackIds = racks.map((rack) => rack.id);
-  const { data: rackFaces, error: rackFacesError } = await supabase
-    .from('rack_faces')
-    .select('id,rack_id,side,enabled,slot_numbering_direction,is_mirrored,mirror_source_face_id,face_length')
-    .in('rack_id', rackIds);
-
-  if (rackFacesError) {
-    throw rackFacesError;
-  }
-
-  const faceIds = (rackFaces ?? []).map((face) => face.id);
-  const { data: rackSections, error: rackSectionsError } =
-    faceIds.length > 0
-      ? await supabase.from('rack_sections').select('id,rack_face_id,ordinal,length').in('rack_face_id', faceIds)
-      : { data: [], error: null };
-
-  if (rackSectionsError) {
-    throw rackSectionsError;
-  }
-
-  const sectionIds = (rackSections ?? []).map((section) => section.id);
-  const { data: rackLevels, error: rackLevelsError } =
-    sectionIds.length > 0
-      ? await supabase.from('rack_levels').select('id,rack_section_id,ordinal,slot_count').in('rack_section_id', sectionIds)
-      : { data: [], error: null };
-
-  if (rackLevelsError) {
-    throw rackLevelsError;
-  }
-
-  return mapLayoutDraftBundleToDomain({
-    layoutVersion,
-    racks,
-    rackFaces: rackFaces ?? [],
-    rackSections: rackSections ?? [],
-    rackLevels: rackLevels ?? []
+  // Single SECURITY DEFINER RPC call replaces 4 sequential queries that each
+  // triggered per-row RLS checks (can_access_rack → can_manage_layout_version
+  // → can_manage_floor) causing statement timeouts on large layouts.
+  const { data, error } = await supabase.rpc('get_layout_bundle', {
+    layout_version_uuid: layoutVersion.id
   });
+
+  if (error) throw error;
+
+  return mapLayoutBundleJsonToDomain(data);
 }
 
 async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string) {
