@@ -192,6 +192,15 @@ export function EditorCanvas({
   // Track previous viewMode so we can detect the transition TO placement.
   const prevViewModeRef = useRef(viewMode);
 
+  // ── Marquee (box) selection ──────────────────────────────────────────────
+  // marquee drives the Konva Rect visual; marqueeRef is readable in event handlers
+  // without stale closure issues.
+  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Set to true on the first mousemove past threshold; cleared by click.canvas handler.
+  const dragDidHappenRef = useRef(false);
+
   const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
   const racks = useMemo(
@@ -337,6 +346,13 @@ export function EditorCanvas({
     if (!stage) return;
 
     const handler = () => {
+      // A marquee drag just completed — mouseup already applied the selection.
+      // Suppress this click so we don't immediately clear it.
+      if (dragDidHappenRef.current) {
+        dragDidHappenRef.current = false;
+        return;
+      }
+
       const pos = stage.getRelativePointerPosition();
       if (!pos) return;
 
@@ -491,7 +507,7 @@ export function EditorCanvas({
             </div>
           )}
 
-          {isLayoutEditable && selectedRack && selectedRackGeometry && (
+          {isLayoutEditable && selectedRack && selectedRackGeometry && selectedRackIds.length === 1 && (
             <FloatingToolbar
               rackId={selectedRack.id}
               screenX={toolbarScreenX}
@@ -512,6 +528,47 @@ export function EditorCanvas({
                 event.evt.preventDefault();
                 const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
                 setCanvasZoomRef.current(clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2))));
+              }}
+              onMouseDown={(event) => {
+                // Marquee starts on LMB on empty canvas (not while placing or in storage mode).
+                // Rack Groups suppress this via cancelBubble on their own onMouseDown.
+                if (event.evt.button !== 0 || isPlacing || isPlacementMode) return;
+                const pos = stageRef.current?.getRelativePointerPosition();
+                if (!pos) return;
+                marqueeStartRef.current = { x: pos.x, y: pos.y };
+                dragDidHappenRef.current = false;
+              }}
+              onMouseMove={() => {
+                if (!marqueeStartRef.current) return;
+                const pos = stageRef.current?.getRelativePointerPosition();
+                if (!pos) return;
+                const dx = pos.x - marqueeStartRef.current.x;
+                const dy = pos.y - marqueeStartRef.current.y;
+                if (!dragDidHappenRef.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+                dragDidHappenRef.current = true;
+                const next = { x1: marqueeStartRef.current.x, y1: marqueeStartRef.current.y, x2: pos.x, y2: pos.y };
+                marqueeRef.current = next;
+                setMarquee(next);
+              }}
+              onMouseUp={() => {
+                if (!marqueeStartRef.current) return;
+                marqueeStartRef.current = null;
+                const current = marqueeRef.current;
+                marqueeRef.current = null;
+                setMarquee(null);
+                if (!dragDidHappenRef.current || !current || !layoutDraft) return;
+                const nx = Math.min(current.x1, current.x2);
+                const ny = Math.min(current.y1, current.y2);
+                const nw = Math.abs(current.x2 - current.x1);
+                const nh = Math.abs(current.y2 - current.y1);
+                if (nw < 4 || nh < 4) return;
+                const matched = Object.values(layoutDraft.racks)
+                  .filter((rack) => {
+                    const g = getRackGeometry(rack);
+                    return g.x < nx + nw && g.x + g.width > nx && g.y < ny + nh && g.y + g.height > ny;
+                  })
+                  .map((rack) => rack.id);
+                setSelectedRackIdsRef.current(matched);
               }}
             >
               <Layer listening={false}>
@@ -556,6 +613,10 @@ export function EditorCanvas({
                       offsetY={geometry.centerY}
                       rotation={rack.rotationDeg}
                       draggable={isLayoutEditable && !isPlacing}
+                      onMouseDown={(event) => {
+                        // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
+                        event.cancelBubble = true;
+                      }}
                       onClick={(event) => {
                         event.cancelBubble = true;
                         if (isPlacing) return;
@@ -630,6 +691,23 @@ export function EditorCanvas({
                   );
                 })}
               </Layer>
+
+              {/* ── Marquee selection overlay (topmost, non-interactive) ── */}
+              <Layer listening={false}>
+                {marquee && (
+                  <Rect
+                    x={Math.min(marquee.x1, marquee.x2)}
+                    y={Math.min(marquee.y1, marquee.y2)}
+                    width={Math.abs(marquee.x2 - marquee.x1)}
+                    height={Math.abs(marquee.y2 - marquee.y1)}
+                    fill="rgba(59,130,246,0.08)"
+                    stroke="#3b82f6"
+                    strokeWidth={1}
+                    strokeScaleEnabled={false}
+                    dash={[4, 3]}
+                  />
+                )}
+              </Layer>
             </Stage>
           )}
 
@@ -643,7 +721,7 @@ export function EditorCanvas({
                   backdropFilter: 'blur(4px)'
                 }}
               >
-                {isLayoutEditable ? 'Drag · MMB pan · Scroll zoom · Del delete' : 'Read-only · MMB pan · Scroll zoom'}
+                {isLayoutEditable ? 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del' : 'Read-only · MMB pan · Scroll zoom'}
               </div>
             )}
 
