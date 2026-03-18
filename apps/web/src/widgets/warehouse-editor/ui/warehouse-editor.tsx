@@ -47,6 +47,11 @@ export function WarehouseEditor() {
 
   useEffect(() => {
     if (workspaceLayout) {
+      console.log(
+        '[BUG-B] WarehouseEditor workspaceLayout changed →',
+        workspaceLayout.layoutVersionId, workspaceLayout.state,
+        workspaceLayout.rackIds.map((id) => ({ id, x: workspaceLayout.racks[id]?.x, y: workspaceLayout.racks[id]?.y }))
+      );
       initializeDraft(workspaceLayout);
     }
   }, [initializeDraft, workspaceLayout]);

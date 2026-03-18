@@ -9,10 +9,13 @@ export function usePublishLayout(floorId: string | null) {
 
   return useMutation({
     mutationFn: async (layoutVersionId: string) => {
+      console.log('[BUG-B] publish start — layoutVersionId:', layoutVersionId);
       const published = await publishLayoutVersion(layoutVersionId);
+      console.log('[BUG-B] publishLayoutVersion done:', published);
 
       if (floorId) {
-        await createLayoutDraft(floorId);
+        const newDraftId = await createLayoutDraft(floorId);
+        console.log('[BUG-B] createLayoutDraft done — new draft id:', newDraftId);
       }
 
       return published;

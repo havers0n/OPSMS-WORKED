@@ -358,7 +358,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // fetch errors that fall back to latestPublished) from silently
       // overwriting in-memory edits or flipping the canvas between the draft
       // and the published layout when switching between Layout / Storage modes.
+      const rackPositions = (d: typeof draft) =>
+        d.rackIds.map((id) => ({ id, x: d.racks[id]?.x, y: d.racks[id]?.y }));
+      console.log(
+        '[BUG-B] initializeDraft called — incoming:', draft.layoutVersionId, draft.state, rackPositions(draft),
+        '| current:', state.draft?.layoutVersionId, state.draft?.state,
+        state.draft ? rackPositions(state.draft) : null
+      );
       if (state.draft?.layoutVersionId === draft.layoutVersionId) {
+        console.log('[BUG-B] initializeDraft → GUARD PREVENTED (same layoutVersionId)');
         return state;
       }
 
