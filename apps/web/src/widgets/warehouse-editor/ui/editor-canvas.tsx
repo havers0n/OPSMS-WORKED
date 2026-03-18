@@ -166,6 +166,13 @@ export function EditorCanvas({
   const minRackDistance = useMinRackDistance();
 
   const isPlacementMode = viewMode === 'placement';
+  // In Storage (placement) mode the published rack tree must be used as the
+  // source for RackCells so that rackId/faceId/sectionId/levelId in the lookup
+  // key match the keys in publishedCellsByStructure.
+  // publishedCells is always fetched from the published layout version; the
+  // active draft always has fresh UUIDs after create_layout_draft(), causing a
+  // permanent identity mismatch when the draft layout is used instead.
+  const placementLayout = isPlacementMode ? (workspace?.latestPublished ?? null) : null;
   const moveTargetCellId =
     placementInteraction.type === 'move-container' ? placementInteraction.targetCellId : null;
   const isPlacementMoveMode = placementInteraction.type === 'move-container';
@@ -203,10 +210,10 @@ export function EditorCanvas({
 
   const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
-  const racks = useMemo(
-    () => (layoutDraft ? layoutDraft.rackIds.map((id) => layoutDraft.racks[id]) : []),
-    [layoutDraft]
-  );
+  const racks = useMemo(() => {
+    const layout = placementLayout ?? layoutDraft;
+    return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
+  }, [placementLayout, layoutDraft]);
   const publishedCellsByStructure = useMemo(
     () => indexPublishedCellsByStructure(publishedCells),
     [publishedCells]
