@@ -12,7 +12,7 @@ It exists to separate:
 
 If an invariant is not backed by a real enforcement point and real tests, it should not be described as protected.
 
-Snapshot date: `2026-03-13`
+Snapshot date: `2026-03-18` (updated for Stage 7.1 security hardening + Stage 7.2 occupancy enforcement + Stage 7.3 place_container_at_location + Stage 8B execution history convergence + Stage 8C canonical snapshot cleanup + Stage 8D legacy surface removal + Stage 9 PR1 placement caller repoint + Stage 9 PR2 facade route removal + Stage 9 PR3 SQL/RPC wrapper fate decision)
 
 ## How to read this
 
@@ -40,6 +40,20 @@ Snapshot date: `2026-03-13`
 | `primary_pick` and `reserve` remain distinct semantics; `reserve` is not a default pick target | domain + DB | architecture baseline only | none | important; declared/planned |
 | Same-cell multi-SKU picks must remain separate confirmation steps | domain + ops | architecture baseline only | none | critical; planned: picking execution flow is not implemented yet |
 | BFF stays thin; transactional business rules live in Postgres RPC/domain logic | BFF + DB + domain | current route shape and RPC usage pattern | BFF tests indirectly | important; partial: respected in current layout flow, but not mechanically enforced repo-wide |
+| Caller-supplied `actor_uuid` cannot influence execution audit identity; `auth.uid()` is the only valid identity source inside execution RPCs | DB | `actor_uuid := auth.uid()` as first executable statement in `move_container_canonical`, `split_inventory_unit`, `transfer_inventory_unit`, `pick_partial_inventory_unit`; `updated_by := auth.uid()` in `remove_container` | SQL: `0044_security_hardening.test.sql` SP-1, SP-2, SP-3 | critical; implemented (migration 0044) |
+| Authenticated role cannot call `insert_stock_movement` or `sync_container_placement_projection` directly | DB | `REVOKE EXECUTE … FROM authenticated` in migration 0044 | SQL: `0044_security_hardening.test.sql` DH-1, DH-2 | critical; implemented (migration 0044) |
+| Cross-tenant UUID attacks are indistinguishable from non-existent UUID lookups (UUID oracle closed) | DB | inline `can_manage_tenant` inside `SELECT … FOR UPDATE`; oracle-masking for `TARGET_LOCATION_NOT_FOUND` and `TARGET_CONTAINER_NOT_FOUND` | SQL: `0044_security_hardening.test.sql` CT-1 through CT-5, NF-1 | critical; implemented (migration 0044) |
+| `remove_container` derives placement decision from `containers.current_location_id`, not from `container_placements` rows | DB | rewritten `remove_container` body in migration 0044; hard guard `CURRENT_LOCATION_NOT_FOUND` if location row is missing | SQL: `0044_security_hardening.test.sql` CR-1, CR-2, CR-3; `container_placement_actions.test.sql` | critical; implemented (migration 0044) |
+| `place_container` enforces canonical location constraints before writing any row; rejects occupied or inactive locations | DB | `location_can_accept_container()` gate inserted after target location resolution, before first `INSERT`; no row is written on rejection | SQL: `0045_place_container_location_enforcement.test.sql` OC-1, OC-2, OC-3 | critical; implemented (migration 0045) |
+| `place_container_at_location` accepts a location UUID directly; enforces `can_manage_tenant` inline; masks cross-tenant location UUID as `LOCATION_NOT_FOUND` | DB | SECURITY DEFINER (from migration 0047); `actor_uuid := auth.uid()` override; inline `can_manage_tenant` inside `SELECT … FOR UPDATE`; explicit tenant check on location row | SQL: `0046_place_container_at_location.test.sql` PL-1 through PL-6 | critical; implemented (migration 0046, hardened in 0047) |
+| Full container lifecycle (place → move → remove) is readable from `stock_movements` alone; `movement_events` is compatibility-only for place and remove operations | DB | `place_container`, `place_container_at_location`, `remove_container` all write `stock_movements` rows (`movement_type IN ('place_container','remove_container')`); `move_container_canonical` already wrote `stock_movements` since Stage 4 | SQL: `0047_execution_history_convergence.test.sql` EH-1 through EH-5 | critical; implemented (migration 0047) |
+| `place_container` determines "container already placed" from `containers.current_location_id IS NOT NULL`, not from `container_placements` rows | DB | `place_container` body in migration 0047; fixes gap where containers at non-rack locations had no `container_placements` row and could be double-placed via `place_container` | SQL: `0047_execution_history_convergence.test.sql` EH-1 (regression); `0046_place_container_at_location.test.sql` PL-3 | critical; implemented (migration 0047) |
+| Trusted storage snapshot reads never return legacy-only inventory rows (`product_id IS NULL`); canonical views read exclusively from `inventory_unit` | DB + BFF | `container_storage_canonical_v` and `location_storage_canonical_v` join only `inventory_unit`, never `inventory_item_compat_v`; BFF trusted consumers (`listLocationStorage`, `listCellStorage`, `listCellStorageByIds`, `GET /api/containers/:id/storage`) repointed to canonical views | SQL: `0048_canonical_snapshot_views.test.sql` T1, T2, T3 | critical; implemented (migration 0048) |
+| Old mixed snapshot views (`container_storage_snapshot_v`, `location_storage_snapshot_v`) are compatibility-only surfaces; they are not the trusted canonical read path | DB | `container_storage_canonical_v` and `location_storage_canonical_v` are the trusted views; old views retained but not used by internal trusted consumers | SQL: `0048_canonical_snapshot_views.test.sql` T4 (compat views still functional); Stage 8C checklist in `storage-core-convergence-checklist.md` | important; implemented (migration 0048) |
+| `GET /api/cells/:cellId/containers` and `GET /api/cells/:cellId/storage` are no longer reachable surfaces; no first-party callers exist | BFF | route handlers deleted from `app.ts`; `listCellContainers` and `listCellStorage` removed from `LegacyExecutionGateway` | BFF test coverage (dead test cases removed); Stage 8D audit in `storage-core-convergence-checklist.md` | important; implemented (Stage 8D) |
+| `POST /api/placement/place`, `POST /api/placement/remove`, `POST /api/placement/move` are no longer reachable surfaces; no callers exist | BFF | route handlers deleted from `app.ts`; entire cell-based command handler chain deleted (`place-container.ts`, `remove-container.ts`, `move-container.ts`); domain types deleted from `@wos/domain` | BFF test coverage (6 facade tests removed); Stage 9 PR2 audit in `storage-core-convergence-checklist.md` | important; implemented (Stage 9 PR2) |
+| Every retained compatibility-only BFF route emits `Deprecation: true`, `Warning: 299`, and `Link` response headers | BFF | `LEGACY_ROUTE_METADATA` in `legacy-execution-gateway/service.ts`; `gateway.applyDeprecationHeaders()` called in each compatibility-only route handler; `containerPlaceByCell` registered in Stage 9 PR3 | static code review (uniform header pattern) | important; implemented (Stage 9 PR3) |
+| Dead SQL placement wrappers (`remove_container_if_in_cells`, `move_container_from_cell`, `move_container`) carry `COMMENT ON FUNCTION` deprecation markers documenting their compatibility-only status and removal target | DB | migration 0049; comments visible via `\df+` in psql and in Supabase dashboard | migration applied | informational; implemented (Stage 9 PR3) |
 
 ## Current evidence for this snapshot
 
@@ -47,7 +61,17 @@ Snapshot date: `2026-03-13`
 - `apps/supabase/migrations/0007_layout_draft_lifecycle.sql`
 - `apps/supabase/migrations/0009_layout_hardening.sql`
 - `apps/supabase/migrations/0010_auth_and_rls.sql`
+- `apps/supabase/migrations/0044_security_definer_hardening.sql`
+- `apps/supabase/migrations/0045_place_container_location_enforcement.sql`
+- `apps/supabase/migrations/0046_place_container_at_location.sql`
 - `apps/supabase/tests/sql/layout_publish.test.sql`
+- `apps/supabase/tests/sql/0044_security_hardening.test.sql`
+- `apps/supabase/tests/sql/0045_place_container_location_enforcement.test.sql`
+- `apps/supabase/tests/sql/0046_place_container_at_location.test.sql`
+- `apps/supabase/migrations/0048_canonical_snapshot_views.sql`
+- `apps/supabase/tests/sql/0047_execution_history_convergence.test.sql`
+- `apps/supabase/tests/sql/0048_canonical_snapshot_views.test.sql`
+- `apps/supabase/tests/sql/container_placement_actions.test.sql`
 - `packages/domain/src/layout/generate-cells.ts`
 - `packages/domain/src/layout/generate-cells.test.ts`
 - `packages/domain/src/layout/validate-layout.ts`

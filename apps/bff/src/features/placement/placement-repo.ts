@@ -1,13 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  ActivePlacementNotFoundError,
-  ContainerAlreadyPlacedError,
   ContainerNotFoundError,
-  CrossFloorPlacementMoveNotAllowedError,
-  PlacementSourceMismatchError,
-  PublishedLayoutNotFoundError,
-  TargetCellNotFoundError,
-  TargetCellSameAsSourceError
+  LocationNotActiveError,
+  LocationNotFoundError,
+  LocationOccupiedError
 } from './errors.js';
 import { isUuid } from './placement-validators.js';
 
@@ -38,21 +34,12 @@ function mapPlacementRpcError(error: SupabaseLikeError): Error | null {
   switch (error.message) {
     case 'CONTAINER_NOT_FOUND':
       return new ContainerNotFoundError();
-    case 'CONTAINER_ALREADY_PLACED':
-      return new ContainerAlreadyPlacedError();
-    case 'TARGET_CELL_NOT_FOUND':
-      return new TargetCellNotFoundError();
-    case 'TARGET_CELL_NOT_PUBLISHED':
-    case 'TARGET_CELL_LOCATION_NOT_FOUND':
-      return new PublishedLayoutNotFoundError();
-    case 'CONTAINER_NOT_PLACED':
-      return new ActivePlacementNotFoundError();
-    case 'PLACEMENT_SOURCE_MISMATCH':
-      return new PlacementSourceMismatchError();
-    case 'CONTAINER_ALREADY_IN_TARGET_CELL':
-      return new TargetCellSameAsSourceError();
-    case 'TARGET_CELL_CROSS_FLOOR_MOVE_NOT_ALLOWED':
-      return new CrossFloorPlacementMoveNotAllowedError();
+    case 'LOCATION_OCCUPIED':
+      return new LocationOccupiedError();
+    case 'LOCATION_NOT_ACTIVE':
+      return new LocationNotActiveError();
+    case 'LOCATION_NOT_FOUND':
+      return new LocationNotFoundError();
     default:
       return null;
   }
@@ -84,17 +71,9 @@ export type ResolvedExecutableLocation = {
 export type PlacementRepo = {
   resolveContainer(containerRef: string, tenantId: string): Promise<ResolvedContainer | null>;
   resolvePlaceTarget(targetCellRef: string): Promise<ResolvedCell | null>;
-  resolveSourceCells(sourceCellRef: string): Promise<ResolvedCell[]>;
   resolveExecutableLocationForCell(cellId: string): Promise<ResolvedExecutableLocation | null>;
   getActivePlacement(containerId: string): Promise<ActivePlacement | null>;
-  placeContainer(containerId: string, cellId: string, actorId?: string | null): Promise<void>;
-  removeContainerFromCells(containerId: string, sourceCellIds: string[], actorId?: string | null): Promise<void>;
-  moveContainerFromCell(
-    containerId: string,
-    sourceCellId: string,
-    targetCellId: string,
-    actorId?: string | null
-  ): Promise<void>;
+  placeContainerAtLocation(containerId: string, locationId: string, actorId?: string | null): Promise<void>;
 };
 
 export function createPlacementRepo(supabase: SupabaseClient): PlacementRepo {
@@ -167,32 +146,6 @@ export function createPlacementRepo(supabase: SupabaseClient): PlacementRepo {
         : null;
     },
 
-    async resolveSourceCells(sourceCellRef) {
-      if (!isUuid(sourceCellRef)) {
-        return [];
-      }
-
-      const { data, error } = await supabase
-        .from('cells')
-        .select('id,address,layout_versions!inner(floor_id)')
-        .eq('id', sourceCellRef)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      const floorId = data ? extractFloorId(data.layout_versions as CellLayoutVersionRelation) : null;
-
-      return data
-        ? [{
-            id: data.id,
-            address: data.address,
-            floorId: floorId ?? ''
-          }]
-        : [];
-    },
-
     async resolveExecutableLocationForCell(cellId) {
       if (!isUuid(cellId)) {
         return null;
@@ -238,35 +191,10 @@ export function createPlacementRepo(supabase: SupabaseClient): PlacementRepo {
         : null;
     },
 
-    async placeContainer(containerId, cellId, actorId) {
-      const { error } = await supabase.rpc('place_container', {
+    async placeContainerAtLocation(containerId, locationId, actorId) {
+      const { error } = await supabase.rpc('place_container_at_location', {
         container_uuid: containerId,
-        cell_uuid: cellId,
-        actor_uuid: actorId ?? null
-      });
-
-      if (error) {
-        throw mapPlacementRpcError(error) ?? error;
-      }
-    },
-
-    async removeContainerFromCells(containerId, sourceCellIds, actorId) {
-      const { error } = await supabase.rpc('remove_container_if_in_cells', {
-        container_uuid: containerId,
-        source_cell_uuids: sourceCellIds,
-        actor_uuid: actorId ?? null
-      });
-
-      if (error) {
-        throw mapPlacementRpcError(error) ?? error;
-      }
-    },
-
-    async moveContainerFromCell(containerId, sourceCellId, targetCellId, actorId) {
-      const { error } = await supabase.rpc('move_container_from_cell', {
-        container_uuid: containerId,
-        source_cell_uuid: sourceCellId,
-        target_cell_uuid: targetCellId,
+        location_uuid: locationId,
         actor_uuid: actorId ?? null
       });
 

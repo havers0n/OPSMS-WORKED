@@ -553,19 +553,36 @@ Failure cases:
 
 ## Deprecated Compatibility Endpoints
 
-These routes remain public for compatibility, but Stage 6 freezes them.
+These routes are retained for external-caller compatibility only. They are not supported
+first-party paths. No first-party web-app caller uses any of these routes as of Stage 9 PR1.
 
-- `GET /api/cells/:cellId/containers`
-- `GET /api/cells/:cellId/storage`
-- `GET /api/floors/:floorId/cell-occupancy`
-- `GET /api/rack-sections/:sectionId/slots/:slotNo/storage`
-- `POST /api/containers/:containerId/move`
+All three emit `Deprecation: true`, `Warning: 299`, and `Link` response headers via the
+`LEGACY_ROUTE_METADATA` pattern in `legacy-execution-gateway/service.ts`.
+
+| Route | Canonical replacement | Backed by |
+|---|---|---|
+| `GET /api/floors/:floorId/cell-occupancy` | `GET /api/floors/:floorId/location-occupancy` | `location_occupancy_v` via gateway; returns legacy cell-shaped response |
+| `POST /api/containers/:containerId/place` | `POST /api/placement/place-at-location` | `place_container(cell_uuid)` SQL RPC (cell-based compat wrapper) |
+| `POST /api/containers/:containerId/move` | `POST /api/containers/:containerId/move-to-location` | `move_container_canonical` via legacy-execution-gateway (already location-native at SQL level) |
+
+**Routes previously listed here that have been removed:**
+
+- `GET /api/cells/:cellId/containers` — deleted in Stage 8D (no callers; route handler removed from `app.ts`)
+- `GET /api/cells/:cellId/storage` — deleted in Stage 8D (no callers; route handler removed from `app.ts`)
+
+**Route previously listed here that is NOT a compatibility surface:**
+
+- `GET /api/rack-sections/:sectionId/slots/:slotNo/storage` — has an **active first-party caller**
+  (`useCellSlotStorage` → placement-mode rack inspector). This is not a deprecated route.
+  It was incorrectly listed here in the Stage 6 freeze; corrected in Stage 10 PR1.
 
 Rules:
 
-- they retain their existing payload shapes
-- they resolve through the canonical location-native model internally
-- they are deprecated compatibility routes, not the target contract for new client work
+- compatibility-only routes retain their existing payload shapes and must not receive new semantics
+- they resolve through the canonical location-native model internally where possible
+- they are not the target contract for new client work
+- external usage status is unknown; they are retained only because absence of external callers
+  cannot be proven without runtime log evidence
 
 ## Operational Endpoints
 

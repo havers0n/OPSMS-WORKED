@@ -190,7 +190,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const createContainer = useCreateContainer();
   const placeContainer = usePlaceContainer({
     floorId: workspace?.floorId ?? null,
-    cellSelectionId: cellId
+    locationId
   });
   const isActionPending = placeContainer.isPending || createContainer.isPending;
 
@@ -202,7 +202,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
   const handlePlace = async () => {
     const nextContainerId = containerIdInput.trim();
-    if (!selectedCell || nextContainerId.length === 0) {
+    if (!selectedCell || !locationId || nextContainerId.length === 0) {
       return;
     }
 
@@ -211,7 +211,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     try {
       await placeContainer.mutateAsync({
         containerId: nextContainerId,
-        targetCellId: selectedCell.id
+        locationId
       });
       setContainerIdInput('');
       setActiveAction(null);
@@ -222,7 +222,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
   const handleCreateAndPlace = async () => {
     const externalCode = containerCodeInput.trim();
-    if (!selectedCell || externalCode.length === 0 || containerTypeIdInput.length === 0) {
+    if (!selectedCell || !locationId || externalCode.length === 0 || containerTypeIdInput.length === 0) {
       return;
     }
 
@@ -237,7 +237,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
       try {
         await placeContainer.mutateAsync({
           containerId: container.containerId,
-          targetCellId: selectedCell.id
+          locationId
         });
       } catch (placementError) {
         setCreateError(

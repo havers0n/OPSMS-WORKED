@@ -8,7 +8,7 @@ function isUuid(value: string) {
 
 export function usePlaceContainer(args: {
   floorId: string | null;
-  cellSelectionId: string | null;
+  locationId: string | null;
 }) {
   const queryClient = useQueryClient();
 
@@ -17,7 +17,6 @@ export function usePlaceContainer(args: {
     onSuccess: async (_result, variables) => {
       await invalidatePlacementQueries(queryClient, {
         floorId: args.floorId,
-        targetCellId: args.cellSelectionId ?? variables.targetCellId,
         containerId: isUuid(variables.containerId) ? variables.containerId : null
       });
     }

@@ -1,28 +1,22 @@
-import type {
-  MoveContainerRequest,
-  PlacementCommandResponse,
-  PlaceContainerRequest,
-  RemoveContainerRequest
-} from '@wos/domain';
+import type { CanonicalMoveContainerResult, RemoveContainerResult } from '@wos/domain';
 import { bffRequest } from '@/shared/api/bff/client';
 
-export async function placeContainer(input: PlaceContainerRequest) {
-  return bffRequest<PlacementCommandResponse>('/api/placement/place', {
-    method: 'POST',
-    body: JSON.stringify(input)
+export async function placeContainer(input: { containerId: string; locationId: string }) {
+  return bffRequest<{ ok: boolean; containerId: string; locationId: string }>(
+    '/api/placement/place-at-location',
+    { method: 'POST', body: JSON.stringify(input) }
+  );
+}
+
+export async function removeContainer(input: { containerId: string }) {
+  return bffRequest<RemoveContainerResult>(`/api/containers/${input.containerId}/remove`, {
+    method: 'POST'
   });
 }
 
-export async function removeContainer(input: RemoveContainerRequest) {
-  return bffRequest<PlacementCommandResponse>('/api/placement/remove', {
-    method: 'POST',
-    body: JSON.stringify(input)
-  });
-}
-
-export async function moveContainer(input: MoveContainerRequest) {
-  return bffRequest<PlacementCommandResponse>('/api/placement/move', {
-    method: 'POST',
-    body: JSON.stringify(input)
-  });
+export async function moveContainer(input: { containerId: string; targetLocationId: string }) {
+  return bffRequest<CanonicalMoveContainerResult>(
+    `/api/containers/${input.containerId}/move-to-location`,
+    { method: 'POST', body: JSON.stringify({ targetLocationId: input.targetLocationId }) }
+  );
 }

@@ -2,7 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError, z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildCatalogProductItemRef, type PlacementCommandResponse } from '@wos/domain';
+import { buildCatalogProductItemRef } from '@wos/domain';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
@@ -10,9 +10,7 @@ import {
   addInventoryToContainerResponseSchema,
   cellsResponseSchema,
   containerCurrentLocationResponseSchema,
-  cellStorageSnapshotResponseSchema,
   cellSlotStorageResponseSchema,
-  cellOccupancyResponseSchema,
   locationReferenceResponseSchema,
   locationOccupancyRowsResponseSchema,
   locationStorageSnapshotRowsResponseSchema,
@@ -33,10 +31,7 @@ import {
   createLayoutDraftBodySchema,
   moveContainerBodySchema,
   moveContainerResponseSchema,
-  placementCommandResponse,
-  placementMoveBodySchema,
-  placementPlaceBodySchema,
-  placementRemoveBodySchema,
+  placementPlaceAtLocationBodySchema,
   placeContainerBodySchema,
   placeContainerResponseSchema,
   createSiteBodySchema,
@@ -99,14 +94,10 @@ import {
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
 import {
-  ActivePlacementNotFoundError,
-  ContainerAlreadyPlacedError,
   ContainerNotFoundError,
-  CrossFloorPlacementMoveNotAllowedError,
-  PlacementSourceMismatchError,
-  PublishedLayoutNotFoundError,
-  TargetCellNotFoundError,
-  TargetCellSameAsSourceError
+  LocationNotActiveError,
+  LocationNotFoundError,
+  LocationOccupiedError
 } from './features/placement/errors.js';
 import {
   createPlacementCommandService,
@@ -634,32 +625,16 @@ function mapPlacementError(error: unknown): ApiError | null {
     return new ApiError(404, 'CONTAINER_NOT_FOUND', error.message);
   }
 
-  if (error instanceof TargetCellNotFoundError) {
-    return new ApiError(404, 'TARGET_CELL_NOT_FOUND', error.message);
+  if (error instanceof LocationNotFoundError) {
+    return new ApiError(404, 'LOCATION_NOT_FOUND', error.message);
   }
 
-  if (error instanceof ContainerAlreadyPlacedError) {
-    return new ApiError(409, 'CONTAINER_ALREADY_PLACED', error.message);
+  if (error instanceof LocationOccupiedError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', error.message);
   }
 
-  if (error instanceof PublishedLayoutNotFoundError) {
-    return new ApiError(409, 'PUBLISHED_LAYOUT_NOT_FOUND', error.message);
-  }
-
-  if (error instanceof ActivePlacementNotFoundError) {
-    return new ApiError(409, 'ACTIVE_PLACEMENT_NOT_FOUND', error.message);
-  }
-
-  if (error instanceof PlacementSourceMismatchError) {
-    return new ApiError(409, 'PLACEMENT_SOURCE_MISMATCH', error.message);
-  }
-
-  if (error instanceof TargetCellSameAsSourceError) {
-    return new ApiError(409, 'TARGET_CELL_SAME_AS_SOURCE', error.message);
-  }
-
-  if (error instanceof CrossFloorPlacementMoveNotAllowedError) {
-    return new ApiError(409, 'CROSS_FLOOR_MOVE_NOT_ALLOWED', error.message);
+  if (error instanceof LocationNotActiveError) {
+    return new ApiError(409, 'LOCATION_NOT_WRITABLE', error.message);
   }
 
   return null;
@@ -1154,34 +1129,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(locationOccupancyRowsResponseSchema, rows.map(mapLocationOccupancyRowToDomain));
   });
 
-  app.get('/api/cells/:cellId/containers', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
-    const supabase = getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const placementRepo = createPlacementRepo(supabase);
-    const executionService = createExecutionService(supabase);
-    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
-    gateway.applyDeprecationHeaders(reply, 'cellContainers');
-    return parseOrThrow(cellOccupancyResponseSchema, await gateway.listCellContainers(cellId));
-  });
-
-  app.get('/api/cells/:cellId/storage', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const cellId = parseOrThrow(idResponseSchema, { id: (request.params as { cellId: string }).cellId }).id;
-    const supabase = getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const placementRepo = createPlacementRepo(supabase);
-    const executionService = createExecutionService(supabase);
-    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
-    gateway.applyDeprecationHeaders(reply, 'cellStorage');
-    return parseOrThrow(cellStorageSnapshotResponseSchema, await gateway.listCellStorage(cellId));
-  });
-
   app.get('/api/floors/:floorId/published-cells', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -1222,6 +1169,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const executionService = createExecutionService(supabase);
     const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
     gateway.applyDeprecationHeaders(reply, 'floorCellOccupancy');
+    request.log.warn({ compatRoute: 'floorCellOccupancy', path: request.url }, 'compat route accessed — no first-party callers since Stage 8D; pending removal pending log-evidence review');
     return parseOrThrow(floorCellOccupancyRowsResponseSchema, await gateway.listFloorCellOccupancy(floorId));
   });
 
@@ -1294,7 +1242,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
-      .from('container_storage_snapshot_v')
+      .from('container_storage_canonical_v')
       .select('tenant_id,container_id,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
       .eq('container_id', containerId);
 
@@ -1484,6 +1432,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
     const body = parseOrThrow(placeContainerBodySchema, request.body);
     const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const placementRepo = createPlacementRepo(supabase);
+    const executionService = createExecutionService(supabase);
+    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
+    gateway.applyDeprecationHeaders(reply, 'containerPlaceByCell');
+    request.log.warn({ compatRoute: 'containerPlaceByCell', path: request.url }, 'compat route accessed — no first-party callers since Stage 9 PR1; pending removal pending log-evidence review');
     const { data, error } = await supabase.rpc('place_container', {
       container_uuid: containerId,
       cell_uuid: body.cellId,
@@ -1515,7 +1469,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(removeContainerResponseSchema, data);
   });
 
-  app.post('/api/placement/place', async (request, reply) => {
+  app.post('/api/placement/place-at-location', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
@@ -1523,79 +1477,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
     }
 
-    const body = parseOrThrow(placementPlaceBodySchema, request.body);
+    const body = parseOrThrow(placementPlaceAtLocationBodySchema, request.body);
     const service = getPlacementService(auth);
 
     try {
-      const result: PlacementCommandResponse = await service.placeContainer({
+      const result = await service.placeContainerAtLocation({
         tenantId: auth.currentTenant.tenantId,
         containerId: body.containerId,
-        targetCellId: body.targetCellId,
+        locationId: body.locationId,
         actorId: auth.user.id
       });
 
-      return parseOrThrow(placementCommandResponse, result);
-    } catch (error) {
-      const apiError = mapPlacementError(error);
-      if (apiError) {
-        throw apiError;
-      }
-
-      throw error;
-    }
-  });
-
-  app.post('/api/placement/remove', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
-    }
-
-    const body = parseOrThrow(placementRemoveBodySchema, request.body);
-    const service = getPlacementService(auth);
-
-    try {
-      const result: PlacementCommandResponse = await service.removeContainer({
-        tenantId: auth.currentTenant.tenantId,
-        containerId: body.containerId,
-        fromCellId: body.fromCellId,
-        actorId: auth.user.id
-      });
-
-      return parseOrThrow(placementCommandResponse, result);
-    } catch (error) {
-      const apiError = mapPlacementError(error);
-      if (apiError) {
-        throw apiError;
-      }
-
-      throw error;
-    }
-  });
-
-  app.post('/api/placement/move', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
-    }
-
-    const body = parseOrThrow(placementMoveBodySchema, request.body);
-    const service = getPlacementService(auth);
-
-    try {
-      const result: PlacementCommandResponse = await service.moveContainer({
-        tenantId: auth.currentTenant.tenantId,
-        containerId: body.containerId,
-        fromCellId: body.fromCellId,
-        toCellId: body.toCellId,
-        actorId: auth.user.id
-      });
-
-      return parseOrThrow(placementCommandResponse, result);
+      return result;
     } catch (error) {
       const apiError = mapPlacementError(error);
       if (apiError) {
@@ -1618,6 +1511,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const executionService = createExecutionService(supabase);
     const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
     gateway.applyDeprecationHeaders(reply, 'containerMoveByCell');
+    request.log.warn({ compatRoute: 'containerMoveByCell', path: request.url }, 'compat route accessed — no first-party callers since Stage 9 PR1; pending removal pending log-evidence review');
     return parseOrThrow(moveContainerResponseSchema, await gateway.moveContainerByCell({
       containerId,
       targetCellId: body.targetCellId,

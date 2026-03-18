@@ -19,7 +19,6 @@ export * from './storage/location-reference';
 export * from './storage/cell-occupancy';
 export * from './storage/container-placement-action';
 export * from './storage/container-placement';
-export * from './storage/placement-command';
 export * from './storage/inventory-item';
 export * from './storage/inventory-unit';
 export * from './storage/inventory-unit-rules';

@@ -4,44 +4,20 @@ export class ContainerNotFoundError extends Error {
   }
 }
 
-export class PublishedLayoutNotFoundError extends Error {
+export class LocationOccupiedError extends Error {
   constructor() {
-    super('Placement is allowed only against a published structure.');
+    super('Target cell is already occupied by another container.');
   }
 }
 
-export class TargetCellNotFoundError extends Error {
+export class LocationNotActiveError extends Error {
   constructor() {
-    super('Target cell was not found.');
+    super('Target cell is not currently available for placement.');
   }
 }
 
-export class ContainerAlreadyPlacedError extends Error {
+export class LocationNotFoundError extends Error {
   constructor() {
-    super('Container is already actively placed.');
-  }
-}
-
-export class ActivePlacementNotFoundError extends Error {
-  constructor() {
-    super('Container has no active placement.');
-  }
-}
-
-export class PlacementSourceMismatchError extends Error {
-  constructor() {
-    super('Active placement does not match the requested source cell.');
-  }
-}
-
-export class TargetCellSameAsSourceError extends Error {
-  constructor() {
-    super('Target cell must differ from the current source cell.');
-  }
-}
-
-export class CrossFloorPlacementMoveNotAllowedError extends Error {
-  constructor() {
-    super('Container moves must stay within the same floor.');
+    super('Location was not found.');
   }
 }

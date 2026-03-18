@@ -4,7 +4,6 @@ import { invalidatePlacementQueries } from './invalidation';
 
 export function useRemoveContainer(args: {
   floorId: string | null;
-  sourceCellId: string | null;
   containerId: string | null;
 }) {
   const queryClient = useQueryClient();
@@ -14,7 +13,6 @@ export function useRemoveContainer(args: {
     onSuccess: async () => {
       await invalidatePlacementQueries(queryClient, {
         floorId: args.floorId,
-        sourceCellId: args.sourceCellId,
         containerId: args.containerId
       });
     }

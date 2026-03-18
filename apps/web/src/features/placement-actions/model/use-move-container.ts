@@ -5,7 +5,6 @@ import { invalidatePlacementQueries } from './invalidation';
 export function useMoveContainer(args: {
   floorId: string | null;
   sourceCellId: string | null;
-  targetCellId: string | null;
   containerId: string | null;
 }) {
   const queryClient = useQueryClient();
@@ -16,7 +15,6 @@ export function useMoveContainer(args: {
       await invalidatePlacementQueries(queryClient, {
         floorId: args.floorId,
         sourceCellId: args.sourceCellId,
-        targetCellId: args.targetCellId,
         containerId: args.containerId
       });
     }

@@ -4,6 +4,7 @@ do $$
 declare
   default_tenant_uuid uuid;
   pallet_type_uuid uuid;
+  test_actor_uuid uuid;
   site_uuid uuid := gen_random_uuid();
   floor_uuid uuid := gen_random_uuid();
   layout_uuid uuid := gen_random_uuid();
@@ -34,6 +35,30 @@ begin
   if default_tenant_uuid is null then
     raise exception 'Expected default tenant to exist for current-location pivot test.';
   end if;
+
+  -- 0044: move_container_canonical is now SECURITY DEFINER with inline
+  -- can_manage_tenant() gate. Set up a platform_admin test actor and JWT
+  -- so auth.uid() resolves correctly for the duration of this transaction.
+  test_actor_uuid := gen_random_uuid();
+  insert into auth.users (
+    id, email, email_confirmed_at, created_at, updated_at,
+    is_sso_user, raw_app_meta_data, raw_user_meta_data
+  )
+  values (
+    test_actor_uuid, 'test-actor-s5@wos.test', now(), now(), now(),
+    false, '{}', '{}'
+  );
+  -- handle_auth_user_profile() trigger creates the profiles row automatically.
+  -- provision_default_tenant_membership trigger may have already inserted
+  -- 'operator'; upsert to platform_admin so can_manage_tenant() returns true.
+  insert into public.tenant_members (tenant_id, profile_id, role)
+  values (default_tenant_uuid, test_actor_uuid, 'platform_admin')
+  on conflict (tenant_id, profile_id) do update set role = excluded.role;
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', test_actor_uuid::text)::text,
+    true
+  );
 
   select id into pallet_type_uuid
   from public.container_types

@@ -17,12 +17,8 @@ import {
   moveContainerResultSchema,
   moveContainerToLocationBodySchema,
   pickPartialInventoryUnitBodySchema,
-  placementCommandResponseSchema,
-  placeContainerRequestSchema,
-  moveContainerRequestSchema,
   placeContainerResultSchema,
   productSchema,
-  removeContainerRequestSchema,
   removeContainerResultSchema,
   transferInventoryUnitBodySchema,
   containerTypeSchema,
@@ -91,9 +87,10 @@ export const moveContainerToLocationRequestBodySchema = moveContainerToLocationB
 export const transferInventoryUnitRequestBodySchema = transferInventoryUnitBodySchema;
 export const pickPartialInventoryUnitRequestBodySchema = pickPartialInventoryUnitBodySchema;
 
-export const placementPlaceBodySchema = placeContainerRequestSchema;
-export const placementRemoveBodySchema = removeContainerRequestSchema;
-export const placementMoveBodySchema = moveContainerRequestSchema;
+export const placementPlaceAtLocationBodySchema = z.object({
+  containerId: z.string().uuid(),
+  locationId: z.string().uuid()
+});
 
 export const createLayoutDraftBodySchema = z.object({
   floorId: z.string().uuid()
@@ -219,7 +216,6 @@ export const moveContainerResponseSchema = moveContainerResultSchema;
 export const moveContainerToLocationResponseSchema = canonicalMoveContainerResultSchema;
 export const transferInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const pickPartialInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
-export const placementCommandResponse = placementCommandResponseSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();

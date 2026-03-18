@@ -19,6 +19,7 @@ import {
   useStartPlacementMove
 } from '@/entities/layout-version/model/editor-selectors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
+import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useContainerStorage } from '@/entities/container/api/use-container-storage';
 import { useProduct } from '@/entities/product/api/use-product';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
@@ -112,6 +113,8 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const sourceCell = publishedCells.find((cell) => cell.id === sourceCellId) ?? null;
   const targetCell = publishedCells.find((cell) => cell.id === targetCellId) ?? null;
+  const { data: targetLocationRef } = useLocationByCell(targetCellId);
+  const targetLocationId = targetLocationRef?.locationId ?? null;
   const { data: rows, isPending, isError } = useContainerStorage(containerId);
   const {
     data: productResults = [],
@@ -130,13 +133,11 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   const isInventoryReceivable = canReceiveInventory(identity?.containerStatus);
   const removeContainer = useRemoveContainer({
     floorId: workspace?.floorId ?? null,
-    sourceCellId,
     containerId
   });
   const moveContainer = useMoveContainer({
     floorId: workspace?.floorId ?? null,
     sourceCellId,
-    targetCellId,
     containerId
   });
   const addInventoryItem = useAddInventoryItem({
@@ -164,10 +165,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     setRemoveError(null);
 
     try {
-      await removeContainer.mutateAsync({
-        containerId,
-        fromCellId: sourceCellId
-      });
+      await removeContainer.mutateAsync({ containerId });
       setSelectedCellId(sourceCellId);
     } catch (mutationError) {
       setRemoveError(
@@ -195,18 +193,14 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   };
 
   const handleConfirmMove = async () => {
-    if (!containerId || !sourceCellId || !targetCellId || targetValidationMessage) {
+    if (!containerId || !sourceCellId || !targetCellId || !targetLocationId || targetValidationMessage) {
       return;
     }
 
     setMoveError(null);
 
     try {
-      await moveContainer.mutateAsync({
-        containerId,
-        fromCellId: sourceCellId,
-        toCellId: targetCellId
-      });
+      await moveContainer.mutateAsync({ containerId, targetLocationId });
       setSelectedCellId(targetCellId);
     } catch (mutationError) {
       setMoveError(

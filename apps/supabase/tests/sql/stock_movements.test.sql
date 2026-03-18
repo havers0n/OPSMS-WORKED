@@ -6,6 +6,7 @@ declare
   other_tenant_uuid uuid := gen_random_uuid();
   pallet_type_uuid uuid;
   actor_uuid uuid := null;
+  test_actor_uuid uuid;
   site_uuid uuid := gen_random_uuid();
   floor_uuid uuid := gen_random_uuid();
   layout_uuid uuid := gen_random_uuid();
@@ -44,6 +45,30 @@ begin
   if default_tenant_uuid is null then
     raise exception 'Expected default tenant to exist for stock movement test.';
   end if;
+
+  -- 0044: functions now require can_manage_tenant() to return true.
+  -- can_manage_tenant() reads auth.uid() from request.jwt.claims.
+  -- Insert a minimal test actor and set JWT claims for this transaction.
+  test_actor_uuid := gen_random_uuid();
+  insert into auth.users (
+    id, email, email_confirmed_at, created_at, updated_at,
+    is_sso_user, raw_app_meta_data, raw_user_meta_data
+  )
+  values (
+    test_actor_uuid, 'test-actor-s4@wos.test', now(), now(), now(),
+    false, '{}', '{}'
+  );
+  -- handle_auth_user_profile() trigger creates the profiles row automatically.
+  -- provision_default_tenant_membership trigger may have already inserted
+  -- 'operator'; upsert to platform_admin so can_manage_tenant() returns true.
+  insert into public.tenant_members (tenant_id, profile_id, role)
+  values (default_tenant_uuid, test_actor_uuid, 'platform_admin')
+  on conflict (tenant_id, profile_id) do update set role = excluded.role;
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', test_actor_uuid::text)::text,
+    true
+  );
 
   insert into public.tenants (id, code, name)
   values (other_tenant_uuid, 'stage4-other', 'Stage 4 Other Tenant');
@@ -316,7 +341,9 @@ begin
     raise exception 'Expected cross-tenant split to fail.';
   exception
     when others then
-      if sqlerrm <> 'TARGET_CONTAINER_TENANT_MISMATCH' then
+      -- 0044: TARGET_CONTAINER_TENANT_MISMATCH is now masked as
+      -- TARGET_CONTAINER_NOT_FOUND to prevent cross-tenant existence oracle.
+      if sqlerrm <> 'TARGET_CONTAINER_NOT_FOUND' then
         raise;
       end if;
   end;

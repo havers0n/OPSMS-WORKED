@@ -1,13 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { FastifyReply } from 'fastify';
-import type { CellOccupancyRow, CellStorageSnapshotRow, FloorCellOccupancyRow } from '@wos/domain';
+import type { CellStorageSnapshotRow, FloorCellOccupancyRow } from '@wos/domain';
 import { ApiError } from '../../errors.js';
 import {
   attachProductsToRows,
   type ProductAwareRow
 } from '../../inventory-product-resolution.js';
 import {
-  mapCellOccupancyRowToDomain,
   mapCellStorageSnapshotRowToDomain
 } from '../../mappers.js';
 import type {
@@ -33,14 +32,6 @@ import type {
 import type { PlacementRepo } from '../placement/placement-repo.js';
 
 const LEGACY_ROUTE_METADATA = {
-  cellContainers: {
-    routeId: 'GET /api/cells/:cellId/containers',
-    replacement: '/api/locations/:locationId/containers'
-  },
-  cellStorage: {
-    routeId: 'GET /api/cells/:cellId/storage',
-    replacement: '/api/locations/:locationId/storage'
-  },
   floorCellOccupancy: {
     routeId: 'GET /api/floors/:floorId/cell-occupancy',
     replacement: '/api/floors/:floorId/location-occupancy'
@@ -48,6 +39,10 @@ const LEGACY_ROUTE_METADATA = {
   rackSectionSlotStorage: {
     routeId: 'GET /api/rack-sections/:sectionId/slots/:slotNo/storage',
     replacement: '/api/locations/by-cell/:cellId + /api/locations/:locationId/storage'
+  },
+  containerPlaceByCell: {
+    routeId: 'POST /api/containers/:containerId/place',
+    replacement: '/api/placement/place-at-location'
   },
   containerMoveByCell: {
     routeId: 'POST /api/containers/:containerId/move',
@@ -162,8 +157,6 @@ async function attachProductsToCellStorageRows(
 
 export type LegacyExecutionGateway = {
   applyDeprecationHeaders(reply: FastifyReply, routeKey: LegacyRouteKey): void;
-  listCellContainers(cellId: string): Promise<CellOccupancyRow[]>;
-  listCellStorage(cellId: string): Promise<CellStorageSnapshotRow[]>;
   listFloorCellOccupancy(floorId: string): Promise<FloorCellOccupancyRow[]>;
   getRackSectionSlotStorage(sectionId: string, slotNo: number): Promise<CellSlotStorageData>;
   moveContainerByCell(command: {
@@ -179,21 +172,6 @@ export function createLegacyExecutionGateway(
   return {
     applyDeprecationHeaders(reply, routeKey) {
       setDeprecatedHeaders(reply, routeKey);
-    },
-
-    async listCellContainers(cellId) {
-      const rows = await deps.locationReadRepo.listCellContainers(cellId);
-      return rows
-        .filter((row): row is typeof row & { cell_id: string } => row.cell_id !== null)
-        .map(mapCellOccupancyRowToDomain);
-    },
-
-    async listCellStorage(cellId) {
-      const data = await deps.locationReadRepo.listCellStorage(cellId);
-      const rows = await attachProductsToCellStorageRows(deps.supabase, data);
-      return rows
-        .filter((row): row is typeof row & { cell_id: string } => row.cell_id !== null)
-        .map(mapCellStorageSnapshotRowToDomain);
     },
 
     async listFloorCellOccupancy(floorId) {
