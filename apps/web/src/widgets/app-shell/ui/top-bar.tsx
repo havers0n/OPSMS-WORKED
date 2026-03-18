@@ -135,6 +135,13 @@ export function TopBar() {
   const handlePublish = async () => {
     if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
     try {
+      // Always persist unsaved edits before publishing.
+      // publishLayoutVersion reads rack positions from DB; if the user moved
+      // racks after the last save the DB state lags behind Zustand, causing the
+      // new draft (created from published) to roll back to pre-move positions.
+      if (isDraftDirty) {
+        await saveDraft.mutateAsync(layoutDraft);
+      }
       const result = await publishLayout.mutateAsync(layoutDraft.layoutVersionId);
       setStatusMessage(`Published · ${result.generatedCells} cells · new draft ready`);
     } catch (error) {

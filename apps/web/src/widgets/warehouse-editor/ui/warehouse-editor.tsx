@@ -47,12 +47,6 @@ export function WarehouseEditor() {
 
   useEffect(() => {
     if (workspaceLayout) {
-      const pos = workspaceLayout.rackIds
-        .map((id) => `${id.slice(0,8)} x=${workspaceLayout.racks[id]?.x} y=${workspaceLayout.racks[id]?.y}`)
-        .join(' | ');
-      console.log(
-        '[BUG-B] workspaceLayout changed →', workspaceLayout.layoutVersionId, workspaceLayout.state, '\n  ', pos
-      );
       initializeDraft(workspaceLayout);
     }
   }, [initializeDraft, workspaceLayout]);
