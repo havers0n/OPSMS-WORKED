@@ -351,23 +351,16 @@ export const useEditorStore = create<EditorStore>((set) => ({
     }),
   initializeDraft: (draft) =>
     set((state) => {
-      // Once a version is loaded into the editor it owns that state for the
-      // lifetime of the session.  Only reinitialise when the layout version
-      // itself changes (e.g. switching floor, creating a new draft, or
-      // publishing).  This prevents background workspace re-fetches (or
-      // fetch errors that fall back to latestPublished) from silently
-      // overwriting in-memory edits or flipping the canvas between the draft
-      // and the published layout when switching between Layout / Storage modes.
-      const rackPos = (d: typeof draft) =>
-        d.rackIds.map((id) => `${d.racks[id]?.id?.slice(0,8)} x=${d.racks[id]?.x} y=${d.racks[id]?.y}`).join(' | ');
-      console.log(
-        '[BUG-B] initializeDraft called\n',
-        '  incoming:', draft.layoutVersionId, draft.state, '\n  ', rackPos(draft),
-        '\n  current:', state.draft?.layoutVersionId, state.draft?.state,
-        '\n  ', state.draft ? rackPos(state.draft) : '(none)'
-      );
-      if (state.draft?.layoutVersionId === draft.layoutVersionId) {
-        console.log('[BUG-B] initializeDraft → GUARD PREVENTED (same layoutVersionId)');
+      // Guard: only block rehydration when the user has unsaved local edits for the
+      // same layout version.  Blocking on layoutVersionId alone is too broad — the
+      // same version UUID can carry updated rack positions after a confirmed
+      // save+refetch, and those updates must be accepted when the draft is clean.
+      //
+      // Rules:
+      //   dirty  + same id  → protect local edits from background refetch
+      //   clean  + same id  → accept server update (e.g. post-save refetch)
+      //   any    + diff id  → always reinit (publish, floor switch, new draft)
+      if (state.draft?.layoutVersionId === draft.layoutVersionId && state.isDraftDirty) {
         return state;
       }
 
