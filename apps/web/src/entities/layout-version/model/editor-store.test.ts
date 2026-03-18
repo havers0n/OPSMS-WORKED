@@ -15,7 +15,8 @@ function resetStore() {
     minRackDistance: 0,
     draft: null,
     draftSourceVersionId: null,
-    isDraftDirty: false
+    isDraftDirty: false,
+    draftSavedSinceInit: false
   });
 }
 
@@ -74,6 +75,21 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().draft?.racks[rackId]?.x).toBe(99);
     expect(useEditorStore.getState().draft?.racks[rackId]?.y).toBe(88);
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
+  });
+
+  it('blocks stale duplicate refetch for newly initialized draft (no save since init)', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+    // No markDraftSaved — simulates auto-refetch after publish/createDraft with no user save yet
+
+    const staleDraft = createLayoutDraftFixture(); // same layoutVersionId
+    staleDraft.racks[rackId] = { ...staleDraft.racks[rackId], x: 5, y: 5 };
+    useEditorStore.getState().initializeDraft(staleDraft);
+
+    // Store must not accept the stale duplicate
+    expect(useEditorStore.getState().draft?.racks[rackId]?.x).toBe(20);
+    expect(useEditorStore.getState().draft?.racks[rackId]?.y).toBe(30);
   });
 
   it('markDraftSaved clears dirty state for the active draft version', () => {

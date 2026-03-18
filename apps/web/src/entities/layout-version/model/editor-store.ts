@@ -27,6 +27,13 @@ type EditorStore = {
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
+  /**
+   * True once markDraftSaved has been called after the current draft was
+   * initialized.  Used by initializeDraft to distinguish:
+   *   – post-save refetches  (saved=true)  → accept server update
+   *   – post-publish/init duplicate refetches (saved=false) → block (stale)
+   */
+  draftSavedSinceInit: boolean;
   setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
   setSelection: (selection: EditorSelection) => void;
@@ -85,7 +92,8 @@ const initialEditorState = {
   minRackDistance: 0,
   draft: null,
   draftSourceVersionId: null,
-  isDraftDirty: false
+  isDraftDirty: false,
+  draftSavedSinceInit: false
 };
 
 // ── Selection helpers ──────────────────────────────────────────────────────────
@@ -346,21 +354,25 @@ export const useEditorStore = create<EditorStore>((set) => ({
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,
+      draftSavedSinceInit: false,
       editorMode: 'select',
       viewMode: 'layout'
     }),
   initializeDraft: (draft) =>
     set((state) => {
-      // Guard: only block rehydration when the user has unsaved local edits for the
-      // same layout version.  Blocking on layoutVersionId alone is too broad — the
-      // same version UUID can carry updated rack positions after a confirmed
-      // save+refetch, and those updates must be accepted when the draft is clean.
+      // Guard: block same-id rehydration unless a confirmed save has occurred
+      // since this draft was last initialized.
       //
       // Rules:
-      //   dirty  + same id  → protect local edits from background refetch
-      //   clean  + same id  → accept server update (e.g. post-save refetch)
-      //   any    + diff id  → always reinit (publish, floor switch, new draft)
-      if (state.draft?.layoutVersionId === draft.layoutVersionId && state.isDraftDirty) {
+      //   dirty  + same id               → protect local edits (no overwrite)
+      //   clean  + same id + saved=false → block stale duplicate refetch
+      //     (e.g. auto-refetch after publish/createDraft before any user save)
+      //   clean  + same id + saved=true  → accept post-save server update
+      //   any    + different id          → always reinit (publish, floor switch)
+      if (
+        state.draft?.layoutVersionId === draft.layoutVersionId &&
+        (state.isDraftDirty || !state.draftSavedSinceInit)
+      ) {
         return state;
       }
 
@@ -381,7 +393,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
         draft: nextDraftState,
         draftSourceVersionId: nextDraftState.layoutVersionId,
         selection: makeRackSelection(nextRackIds),
-        isDraftDirty: normalized.changed
+        isDraftDirty: normalized.changed,
+        draftSavedSinceInit: false
       };
     }),
   markDraftSaved: (layoutVersionId) =>
@@ -392,7 +405,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draftSourceVersionId: layoutVersionId,
-        isDraftDirty: false
+        isDraftDirty: false,
+        draftSavedSinceInit: true
       };
     }),
   createRack: (x, y) =>
