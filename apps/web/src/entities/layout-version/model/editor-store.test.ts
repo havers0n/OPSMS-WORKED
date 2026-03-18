@@ -58,6 +58,24 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().isDraftDirty).toBe(true);
   });
 
+  it('accepts updated rack positions from server when draft is clean (same layoutVersionId)', () => {
+    const draft = createLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().markDraftSaved(draft.layoutVersionId);
+
+    expect(useEditorStore.getState().isDraftDirty).toBe(false);
+
+    // Server refetch returns same layoutVersionId but rack has moved
+    const serverDraft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    serverDraft.racks[rackId] = { ...serverDraft.racks[rackId], x: 99, y: 88 };
+    useEditorStore.getState().initializeDraft(serverDraft);
+
+    expect(useEditorStore.getState().draft?.racks[rackId]?.x).toBe(99);
+    expect(useEditorStore.getState().draft?.racks[rackId]?.y).toBe(88);
+    expect(useEditorStore.getState().isDraftDirty).toBe(false);
+  });
+
   it('markDraftSaved clears dirty state for the active draft version', () => {
     const draft = createLayoutDraftFixture();
     useEditorStore.getState().initializeDraft(draft);
