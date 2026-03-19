@@ -665,7 +665,17 @@ export function EditorCanvas({
                         }
                       }}
                       onDragMove={(event) => handleDragMove(rack.id, event)}
-                      onDragEnd={() => setSnapGuides([])}
+                      onDragEnd={(e) => {
+                        setSnapGuides([]);
+                        const node = e.target;
+                        if (layoutDraft && layoutDraft.racks[rack.id]) {
+                          const geometry = getRackGeometry(layoutDraft.racks[rack.id]);
+                          node.position({
+                            x: geometry.x + geometry.centerX,
+                            y: geometry.y + geometry.centerY
+                          });
+                        }
+                      }}
                     >
                       <Rect x={0} y={0} width={geometry.width} height={geometry.height} fill="transparent" />
 

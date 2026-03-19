@@ -31,6 +31,7 @@ import {
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import type { ViewMode } from '@/entities/layout-version/model/editor-types';
+import type { LayoutDraft } from '@wos/domain';
 import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
@@ -38,11 +39,33 @@ import { usePublishLayout } from '@/features/layout-publish/model/use-publish-la
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
+import { useEditorStore } from '@/entities/layout-version/model/editor-store';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'layout', label: 'Layout' },
   { id: 'placement', label: 'Storage' }
 ];
+
+const TRACE = import.meta.env.DEV;
+
+function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
+  if (!draft) return null;
+  const sample = draft.rackIds
+    .slice(0, 10)
+    .map((id) => {
+      const rack = draft.racks[id];
+      if (!rack) return null;
+      return { id: rack.id, x: rack.x, y: rack.y };
+    })
+    .filter(Boolean);
+
+  return {
+    layoutVersionId: draft.layoutVersionId,
+    state: draft.state,
+    rackCount: draft.rackIds.length,
+    sample
+  };
+}
 
 export function TopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -113,9 +136,10 @@ export function TopBar() {
   };
 
   const handleSaveDraft = async () => {
-    if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
+    const latestDraft = useEditorStore.getState().draft;
+    if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
-      await saveDraft.mutateAsync(layoutDraft);
+      await saveDraft.mutateAsync(latestDraft);
       setStatusMessage('Saved');
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Save failed');
@@ -123,9 +147,10 @@ export function TopBar() {
   };
 
   const handleValidate = async () => {
-    if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
+    const latestDraft = useEditorStore.getState().draft;
+    if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
-      const result = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
+      const result = await validateLayout.mutateAsync(latestDraft.layoutVersionId);
       setStatusMessage(result.isValid ? 'Valid' : `${result.issues.length} issue(s)`);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : 'Validation failed');
@@ -133,21 +158,59 @@ export function TopBar() {
   };
 
   const handlePublish = async () => {
-    if (!layoutDraft || layoutDraft.state !== 'draft' || !activeFloorId) return;
+    const latestDraft = useEditorStore.getState().draft;
+    if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
+      if (TRACE) {
+        // Snapshot what the user currently sees: rack ids + x/y for the current local draft.
+        // If we later see old coordinates in initializeDraft()/workspace refetch,
+        // we will know that publish or subsequent rehydration uses stale data.
+        // eslint-disable-next-line no-console
+        console.debug('[WOS TRACE]', {
+          t: Date.now(),
+          op: 'publish:before-save',
+          latestDraft: summarizeDraftForLogs(latestDraft),
+          isDraftDirty,
+          activeFloorId
+        });
+      }
+
       // Always persist unsaved edits before publishing.
       // publishLayoutVersion reads rack positions from DB; if the user moved
       // racks after the last save the DB state lags behind Zustand, causing the
       // new draft (created from published) to roll back to pre-move positions.
-      if (isDraftDirty) {
-        await saveDraft.mutateAsync(layoutDraft);
+      // Save/Publish clicked quickly (or component variables captured stale snapshot)
+      // can otherwise publish a rack tree that doesn't match what's currently shown.
+      await saveDraft.mutateAsync(latestDraft);
+
+      if (TRACE) {
+        // eslint-disable-next-line no-console
+        console.debug('[WOS TRACE]', {
+          t: Date.now(),
+          op: 'publish:after-save-before-publish',
+          latestDraft: summarizeDraftForLogs(latestDraft),
+          publishLayoutVersionId: latestDraft.layoutVersionId
+        });
       }
-      const result = await publishLayout.mutateAsync(layoutDraft.layoutVersionId);
+
+      const result = await publishLayout.mutateAsync(latestDraft.layoutVersionId);
       setStatusMessage(`Published · ${result.generatedCells} cells · new draft ready`);
+
+      if (TRACE) {
+        // eslint-disable-next-line no-console
+        console.debug('[WOS TRACE]', {
+          t: Date.now(),
+          op: 'publish:success',
+          publishLayoutVersionId: result.layoutVersionId,
+          publishedAt: result.publishedAt,
+          generatedCells: result.generatedCells,
+          validation: result.validation
+        });
+      }
     } catch (error) {
       if (error instanceof BffRequestError && error.message.includes('failed validation')) {
         try {
-          const validation = await validateLayout.mutateAsync(layoutDraft.layoutVersionId);
+          const validation = await validateLayout.mutateAsync(latestDraft.layoutVersionId);
           const firstError =
             validation.issues.find((issue) => issue.severity === 'error') ?? validation.issues[0];
           setStatusMessage(firstError ? firstError.message : `${validation.issues.length} issue(s)`);

@@ -13,6 +13,27 @@ import {
   getRackBoundingBox
 } from '../../../widgets/warehouse-editor/lib/rack-spacing';
 
+const TRACE = import.meta.env.DEV;
+
+function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
+  if (!draft) return null;
+  const sample = draft.rackIds
+    .slice(0, 10)
+    .map((id) => {
+      const rack = draft.racks[id];
+      if (!rack) return null;
+      return { id: rack.id, x: rack.x, y: rack.y };
+    })
+    .filter(Boolean);
+
+  return {
+    layoutVersionId: draft.layoutVersionId,
+    state: draft.state,
+    rackCount: draft.rackIds.length,
+    sample
+  };
+}
+
 type EditorStore = {
   viewMode: ViewMode;
   editorMode: EditorMode;
@@ -338,7 +359,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setZoom: (zoom) => set({ zoom }),
   setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
   resetDraft: () =>
-    set({
+    set(() => {
+      if (TRACE) {
+        // eslint-disable-next-line no-console
+        console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
+      }
+      return {
       draft: null,
       draftSourceVersionId: null,
       selection: { type: 'none' },
@@ -348,9 +374,26 @@ export const useEditorStore = create<EditorStore>((set) => ({
       isDraftDirty: false,
       editorMode: 'select',
       viewMode: 'layout'
+      };
     }),
   initializeDraft: (draft) =>
     set((state) => {
+      if (TRACE) {
+        const incoming = summarizeDraftForLogs(draft);
+        const sameId = state.draft?.layoutVersionId === draft.layoutVersionId;
+        // eslint-disable-next-line no-console
+        console.debug('[WOS TRACE]', {
+          t: Date.now(),
+          op: 'initializeDraft:call',
+          incoming,
+          store: {
+            existingLayoutVersionId: state.draft?.layoutVersionId ?? null,
+            isDraftDirty: state.isDraftDirty
+          },
+          guard: { sameId, wouldBlock: sameId }
+        });
+      }
+
       // Guard: block same-id rehydration unconditionally.
       //
       // The server stores positions exactly as sent — there is no server-side
@@ -361,7 +404,24 @@ export const useEditorStore = create<EditorStore>((set) => ({
       //
       // Different-id calls (after publish creates a new draft) are always allowed.
       if (state.draft?.layoutVersionId === draft.layoutVersionId) {
+        if (TRACE) {
+          // eslint-disable-next-line no-console
+          console.debug('[WOS TRACE]', {
+            t: Date.now(),
+            op: 'initializeDraft:guard-blocked',
+            layoutVersionId: draft.layoutVersionId
+          });
+        }
         return state;
+      }
+
+      if (TRACE) {
+        // eslint-disable-next-line no-console
+        console.debug('[WOS TRACE]', {
+          t: Date.now(),
+          op: 'initializeDraft:accepted',
+          incoming: summarizeDraftForLogs(draft)
+        });
       }
 
       const normalized = normalizeDraft(draft);
