@@ -215,10 +215,15 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   // Debug: storageQuery state
   const storageQueryEnabled = Boolean(locationId);
   const storageQueryError = locationQueryError;
-  const { data = [], error, isPending, isError } = useLocationStorage(locationId);
+  const { data = [], error, isPending: isStoragePending, isError } = useLocationStorage(locationId);
+  // Spinner should only show while actively loading storage (locationId known, storage fetching).
+  // When locationQueryError is set, locationId is null → storage query is disabled → isPending is
+  // React Query's initial-pending state, not a real load. Gate on locationId to avoid infinite spinner.
+  const isPending = isStoragePending && locationId !== null;
 
   const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } = useContainerTypes();
   const bffError = error instanceof BffRequestError ? error : null;
+  const locationBffError = locationQueryError instanceof BffRequestError ? locationQueryError : null;
   const containers = groupByContainer(data);
 
   const createContainer = useCreateContainer();
@@ -488,11 +493,12 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
             {/* Debug instrumentation (dev-only) */}
             {import.meta.env.DEV && (() => {
-              const createAndPlaceDisabledReason = !isActionPending &&
-                containerCodeInput.trim().length === 0 &&
-                containerTypeIdInput.length === 0 &&
-                containerTypes.length === 0
-                ? ['missing code', 'missing type', 'no types loaded'].join(' + ')
+              const createAndPlaceDisabledReason = !isActionPending && !locationId ? 'no active location'
+                : !isActionPending &&
+                  containerCodeInput.trim().length === 0 &&
+                  containerTypeIdInput.length === 0 &&
+                  containerTypes.length === 0
+                  ? ['missing code', 'missing type', 'no types loaded'].join(' + ')
                 : !isActionPending && containerCodeInput.trim().length === 0 ? 'missing code'
                 : !isActionPending && containerTypeIdInput.length === 0 ? 'missing type'
                 : !isActionPending && containerTypes.length === 0 ? 'no types loaded'
@@ -518,11 +524,13 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             <div className="mt-3 flex items-center gap-2">
               {(() => {
                 const buttonDisabled = isActionPending ||
+                  !locationId ||
                   containerCodeInput.trim().length === 0 ||
                   containerTypeIdInput.length === 0 ||
                   containerTypes.length === 0;
                 const disabledReasons = [];
                 if (isActionPending) disabledReasons.push('action pending');
+                if (!locationId) disabledReasons.push('no active location');
                 if (containerCodeInput.trim().length === 0) disabledReasons.push('missing code');
                 if (containerTypeIdInput.length === 0) disabledReasons.push('missing type');
                 if (containerTypes.length === 0) disabledReasons.push('no types loaded');
@@ -589,7 +597,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           </div>
         )}
 
-        {cellId && isError && (
+        {cellId && (isError || !!locationQueryError) && (
           <div
             className="rounded-lg px-3 py-3 text-center"
             style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
@@ -597,14 +605,12 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             <AlertCircle className="mx-auto mb-1.5 h-5 w-5 text-red-400" />
             <p className="text-xs text-slate-500">Could not load placement data.</p>
             <p className="mt-0.5 text-[11px] text-slate-400">
-              {bffError?.message ?? 'Check your connection and try again.'}
+              {locationBffError?.message ?? bffError?.message ?? 'Check your connection and try again.'}
             </p>
             <div className="mt-2 space-y-0.5 font-mono text-[10px] text-slate-400">
               <p>cellId: {cellId}</p>
-              {bffError && <p>status: {bffError.status}</p>}
-              {bffError?.code && <p>code: {bffError.code}</p>}
-              {bffError?.requestId && <p>requestId: {bffError.requestId}</p>}
-              {bffError?.errorId && <p>errorId: {bffError.errorId}</p>}
+              {(locationBffError ?? bffError) && <p>status: {(locationBffError ?? bffError)!.status}</p>}
+              {(locationBffError?.code ?? bffError?.code) && <p>code: {locationBffError?.code ?? bffError?.code}</p>}
             </div>
           </div>
         )}
