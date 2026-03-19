@@ -208,14 +208,26 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
     setPlaceError(null);
 
+    // Debug instrumentation
+    // eslint-disable-next-line no-console
+    console.debug('[PLACEMENT] before placeContainer.mutateAsync', {
+      containerId: nextContainerId,
+      locationId,
+      selectedCellId: cellId
+    });
+
     try {
       await placeContainer.mutateAsync({
         containerId: nextContainerId,
         locationId
       });
+      // eslint-disable-next-line no-console
+      console.debug('[PLACEMENT] placeContainer success');
       setContainerIdInput('');
       setActiveAction(null);
     } catch (mutationError) {
+      // eslint-disable-next-line no-console
+      console.error('[PLACEMENT] placeContainer error', mutationError);
       setPlaceError(formatMutationError(mutationError, 'Could not place the container.'));
     }
   };
@@ -223,10 +235,26 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const handleCreateAndPlace = async () => {
     const externalCode = containerCodeInput.trim();
     if (!selectedCell || !locationId || externalCode.length === 0 || containerTypeIdInput.length === 0) {
+      // eslint-disable-next-line no-console
+      console.debug('[PLACEMENT] handleCreateAndPlace guard failed', {
+        hasSelectedCell: !!selectedCell,
+        hasLocationId: !!locationId,
+        codeLength: externalCode.length,
+        typeLength: containerTypeIdInput.length
+      });
       return;
     }
 
     setCreateError(null);
+
+    // Debug instrumentation
+    // eslint-disable-next-line no-console
+    console.debug('[PLACEMENT] before createContainer.mutateAsync', {
+      externalCode,
+      containerTypeId: containerTypeIdInput,
+      locationId,
+      selectedCellId: cellId
+    });
 
     try {
       const container = await createContainer.mutateAsync({
@@ -234,12 +262,28 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         containerTypeId: containerTypeIdInput
       });
 
+      // eslint-disable-next-line no-console
+      console.debug('[PLACEMENT] createContainer success', {
+        containerId: container.containerId,
+        externalCode: container.externalCode
+      });
+
+      // eslint-disable-next-line no-console
+      console.debug('[PLACEMENT] before placeContainer.mutateAsync (after create)', {
+        containerId: container.containerId,
+        locationId
+      });
+
       try {
         await placeContainer.mutateAsync({
           containerId: container.containerId,
           locationId
         });
+        // eslint-disable-next-line no-console
+        console.debug('[PLACEMENT] placeContainer success (after create)');
       } catch (placementError) {
+        // eslint-disable-next-line no-console
+        console.error('[PLACEMENT] placeContainer error (after create)', placementError);
         setCreateError(
           `Container ${container.externalCode} was created, but it could not be placed into this cell and remains unplaced. ${formatMutationError(
             placementError,
@@ -253,6 +297,8 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
       setContainerTypeIdInput(containerTypes[0]?.id ?? '');
       setActiveAction(null);
     } catch (mutationError) {
+      // eslint-disable-next-line no-console
+      console.error('[PLACEMENT] createContainer error', mutationError);
       setCreateError(formatMutationError(mutationError, 'Could not create the container.'));
     }
   };
@@ -300,6 +346,20 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
       </div>
 
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+        {/* Debug instrumentation (dev-only) - top level state */}
+        {import.meta.env.DEV && cellId && (
+          <div
+            className="rounded border border-blue-200 bg-blue-50 p-2 font-mono text-[10px] text-blue-800"
+          >
+            <p className="font-semibold">🔍 DEBUG: Placement Panel State</p>
+            <p>cellId: {cellId}</p>
+            <p>locationQuery: {locationRef ? 'resolved' : 'pending'} → locationId: {locationId || '(none)'}</p>
+            <p>storageQuery: {isPending ? 'pending' : 'done'} | isFetching: {data ? 'no' : 'yes'}</p>
+            <p>containerTypesQuery: {isContainerTypesPending ? 'pending' : 'done'} | count: {containerTypes.length}</p>
+            <p>selectedCell: {selectedCell ? '✓ found' : '✗ not found'}</p>
+          </div>
+        )}
+
         {activeAction === 'place' && selectedCell && (
           <div
             className="rounded-lg p-3"
@@ -388,25 +448,58 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
               <p className="mt-2 text-xs text-red-500">Could not load container types.</p>
             )}
             {createError && <p className="mt-2 text-xs text-red-500">{createError}</p>}
+
+            {/* Debug instrumentation (dev-only) */}
+            {import.meta.env.DEV && (
+              <div
+                className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 font-mono text-[10px] text-amber-800"
+              >
+                <p className="font-semibold">🔍 DEBUG: Create & Place State</p>
+                <p>code: {containerCodeInput.trim().length > 0 ? '✓' : '✗'} ({containerCodeInput.length})</p>
+                <p>type: {containerTypeIdInput.length > 0 ? '✓' : '✗'}</p>
+                <p>containerTypes: {containerTypes.length} loaded {isContainerTypesPending ? '(loading...)' : ''}</p>
+                <p>createMutation: {createContainer.status} {createContainer.error ? `[ERROR: ${createContainer.error.message}]` : ''}</p>
+                <p>placeMutation: {placeContainer.status} {placeContainer.error ? `[ERROR: ${placeContainer.error.message}]` : ''}</p>
+                <p>isActionPending: {isActionPending ? 'YES' : 'NO'}</p>
+              </div>
+            )}
+
             <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: 'var(--accent)' }}
-                onClick={() => void handleCreateAndPlace()}
-                disabled={
-                  isActionPending ||
+              {(() => {
+                const buttonDisabled = isActionPending ||
                   containerCodeInput.trim().length === 0 ||
                   containerTypeIdInput.length === 0 ||
-                  containerTypes.length === 0
-                }
-              >
-                {createContainer.isPending
-                  ? 'Creating...'
-                  : placeContainer.isPending
-                    ? 'Placing...'
-                    : 'Create and place'}
-              </button>
+                  containerTypes.length === 0;
+                const disabledReasons = [];
+                if (isActionPending) disabledReasons.push('action pending');
+                if (containerCodeInput.trim().length === 0) disabledReasons.push('missing code');
+                if (containerTypeIdInput.length === 0) disabledReasons.push('missing type');
+                if (containerTypes.length === 0) disabledReasons.push('no types loaded');
+
+                return (
+                  <>
+                    <button
+                      type="button"
+                      className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ background: 'var(--accent)' }}
+                      onClick={() => void handleCreateAndPlace()}
+                      disabled={buttonDisabled}
+                      title={buttonDisabled ? `Disabled: ${disabledReasons.join(', ')}` : ''}
+                    >
+                      {createContainer.isPending
+                        ? 'Creating...'
+                        : placeContainer.isPending
+                          ? 'Placing...'
+                          : 'Create and place'}
+                    </button>
+                    {buttonDisabled && import.meta.env.DEV && (
+                      <span className="text-[10px] text-amber-600">
+                        {disabledReasons.join(', ')}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
               <button
                 type="button"
                 className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
@@ -431,8 +524,17 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         )}
 
         {cellId && isPending && (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-col items-center justify-center gap-4 py-8">
             <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
+            {import.meta.env.DEV && (
+              <div
+                className="rounded border border-orange-200 bg-orange-50 p-2 font-mono text-[10px] text-orange-800 max-w-xs text-center"
+              >
+                <p className="font-semibold">⏳ Loading placement data...</p>
+                <p>locationId: {locationId || '(waiting...)'}</p>
+                <p>fetching storage: {isPending ? '⏳' : '✓'}</p>
+              </div>
+            )}
           </div>
         )}
 
