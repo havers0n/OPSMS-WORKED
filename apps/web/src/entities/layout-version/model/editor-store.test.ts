@@ -15,8 +15,7 @@ function resetStore() {
     minRackDistance: 0,
     draft: null,
     draftSourceVersionId: null,
-    isDraftDirty: false,
-    draftSavedSinceInit: false
+    isDraftDirty: false
   });
 }
 
@@ -42,8 +41,7 @@ describe('editor-store', () => {
 
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
     expect(useEditorStore.getState().draft?.state).toBe('draft');
-    const sel = useEditorStore.getState().selection;
-    expect(sel.type === 'rack' ? sel.rackIds[0] : null).toBe(draft.rackIds[0]);
+    expect(useEditorStore.getState().selection.type).toBe('none');
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 
@@ -59,31 +57,32 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().isDraftDirty).toBe(true);
   });
 
-  it('accepts updated rack positions from server when draft is clean (same layoutVersionId)', () => {
+  it('blocks same-layoutVersionId refetch even after markDraftSaved (no stale overwrite)', () => {
     const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
     useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().updateRackPosition(rackId, 50, 60);
     useEditorStore.getState().markDraftSaved(draft.layoutVersionId);
 
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
 
-    // Server refetch returns same layoutVersionId but rack has moved
-    const serverDraft = createLayoutDraftFixture();
-    const rackId = draft.rackIds[0];
-    serverDraft.racks[rackId] = { ...serverDraft.racks[rackId], x: 99, y: 88 };
-    useEditorStore.getState().initializeDraft(serverDraft);
+    // A stale workspace refetch (with pre-save positions) must be blocked
+    const staleDraft = createLayoutDraftFixture(); // same layoutVersionId, old positions
+    staleDraft.racks[rackId] = { ...staleDraft.racks[rackId], x: 20, y: 30 };
+    useEditorStore.getState().initializeDraft(staleDraft);
 
-    expect(useEditorStore.getState().draft?.racks[rackId]?.x).toBe(99);
-    expect(useEditorStore.getState().draft?.racks[rackId]?.y).toBe(88);
+    // Positions must stay at the saved values, not revert to pre-save
+    expect(useEditorStore.getState().draft?.racks[rackId]?.x).toBe(50);
+    expect(useEditorStore.getState().draft?.racks[rackId]?.y).toBe(60);
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 
-  it('blocks stale duplicate refetch for newly initialized draft (no save since init)', () => {
+  it('blocks stale duplicate refetch for newly initialized draft', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0];
     useEditorStore.getState().initializeDraft(draft);
-    // No markDraftSaved — simulates auto-refetch after publish/createDraft with no user save yet
 
-    const staleDraft = createLayoutDraftFixture(); // same layoutVersionId
+    const staleDraft = createLayoutDraftFixture(); // same layoutVersionId, different positions
     staleDraft.racks[rackId] = { ...staleDraft.racks[rackId], x: 5, y: 5 };
     useEditorStore.getState().initializeDraft(staleDraft);
 

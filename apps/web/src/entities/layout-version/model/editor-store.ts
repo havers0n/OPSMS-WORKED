@@ -27,13 +27,6 @@ type EditorStore = {
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
-  /**
-   * True once markDraftSaved has been called after the current draft was
-   * initialized.  Used by initializeDraft to distinguish:
-   *   – post-save refetches  (saved=true)  → accept server update
-   *   – post-publish/init duplicate refetches (saved=false) → block (stale)
-   */
-  draftSavedSinceInit: boolean;
   setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
   setSelection: (selection: EditorSelection) => void;
@@ -92,8 +85,7 @@ const initialEditorState = {
   minRackDistance: 0,
   draft: null,
   draftSourceVersionId: null,
-  isDraftDirty: false,
-  draftSavedSinceInit: false
+  isDraftDirty: false
 };
 
 // ── Selection helpers ──────────────────────────────────────────────────────────
@@ -354,25 +346,21 @@ export const useEditorStore = create<EditorStore>((set) => ({
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,
-      draftSavedSinceInit: false,
       editorMode: 'select',
       viewMode: 'layout'
     }),
   initializeDraft: (draft) =>
     set((state) => {
-      // Guard: block same-id rehydration unless a confirmed save has occurred
-      // since this draft was last initialized.
+      // Guard: block same-id rehydration unconditionally.
       //
-      // Rules:
-      //   dirty  + same id               → protect local edits (no overwrite)
-      //   clean  + same id + saved=false → block stale duplicate refetch
-      //     (e.g. auto-refetch after publish/createDraft before any user save)
-      //   clean  + same id + saved=true  → accept post-save server update
-      //   any    + different id          → always reinit (publish, floor switch)
-      if (
-        state.draft?.layoutVersionId === draft.layoutVersionId &&
-        (state.isDraftDirty || !state.draftSavedSinceInit)
-      ) {
+      // The server stores positions exactly as sent — there is no server-side
+      // normalization that would require re-initializing Zustand from a
+      // post-save refetch.  Allowing same-id reinits creates a race window:
+      // a stale workspace refetch (started before save committed) can arrive
+      // after markDraftSaved and overwrite Zustand with pre-save positions.
+      //
+      // Different-id calls (after publish creates a new draft) are always allowed.
+      if (state.draft?.layoutVersionId === draft.layoutVersionId) {
         return state;
       }
 
@@ -393,8 +381,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         draft: nextDraftState,
         draftSourceVersionId: nextDraftState.layoutVersionId,
         selection: makeRackSelection(nextRackIds),
-        isDraftDirty: normalized.changed,
-        draftSavedSinceInit: false
+        isDraftDirty: normalized.changed
       };
     }),
   markDraftSaved: (layoutVersionId) =>
@@ -405,8 +392,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draftSourceVersionId: layoutVersionId,
-        isDraftDirty: false,
-        draftSavedSinceInit: true
+        isDraftDirty: false
       };
     }),
   createRack: (x, y) =>
