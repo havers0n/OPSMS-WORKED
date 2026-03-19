@@ -180,9 +180,43 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const cellId = selection.type === 'cell' ? selection.cellId : null;
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const selectedCell = publishedCells.find((cell) => cell.id === cellId) ?? null;
-  const { data: locationRef } = useLocationByCell(cellId);
+
+  // Debug: locationQuery inputs
+  const locationQueryEnabled = Boolean(cellId);
+  const locationQueryKey = cellId ? `location-by-cell:${cellId}` : null;
+  const { data: locationRef, error: locationQueryError } = useLocationByCell(cellId);
+
+  // Debug: log location query state
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.debug('[placement] location query input', {
+        cellId,
+        selectedCell: selectedCell ? { id: selectedCell.id, address: selectedCell.address } : null,
+        enabled: locationQueryEnabled,
+        queryKey: locationQueryKey
+      });
+    }
+  }, [cellId, selectedCell, locationQueryEnabled, locationQueryKey]);
+
+  useEffect(() => {
+    if (import.meta.env.DEV && locationRef) {
+      // eslint-disable-next-line no-console
+      console.debug('[placement] location query success', locationRef);
+    }
+    if (import.meta.env.DEV && locationQueryError) {
+      // eslint-disable-next-line no-console
+      console.error('[placement] location query error', locationQueryError);
+    }
+  }, [locationRef, locationQueryError]);
+
   const locationId = locationRef?.locationId ?? null;
+
+  // Debug: storageQuery state
+  const storageQueryEnabled = Boolean(locationId);
+  const storageQueryError = locationQueryError;
   const { data = [], error, isPending, isError } = useLocationStorage(locationId);
+
   const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } = useContainerTypes();
   const bffError = error instanceof BffRequestError ? error : null;
   const containers = groupByContainer(data);
@@ -353,10 +387,13 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           >
             <p className="font-semibold">🔍 DEBUG: Placement Panel State</p>
             <p>cellId: {cellId}</p>
-            <p>locationQuery: {locationRef ? 'resolved' : 'pending'} → locationId: {locationId || '(none)'}</p>
-            <p>storageQuery: {isPending ? 'pending' : 'done'} | isFetching: {data ? 'no' : 'yes'}</p>
-            <p>containerTypesQuery: {isContainerTypesPending ? 'pending' : 'done'} | count: {containerTypes.length}</p>
             <p>selectedCell: {selectedCell ? '✓ found' : '✗ not found'}</p>
+            <p>locationQueryEnabled: {locationQueryEnabled ? 'YES' : 'NO'} | queryKey: {locationQueryKey}</p>
+            <p>locationQueryError: {locationQueryError ? `ERROR: ${locationQueryError.message}` : 'none'}</p>
+            <p>locationRef: {locationRef ? '✓ resolved' : 'pending'} → locationId: {locationId || '(none)'}</p>
+            <p>storageQueryEnabled: {storageQueryEnabled ? 'YES' : 'NO'} | error: {storageQueryError ? 'YES' : 'NO'}</p>
+            <p>storageQuery: {isPending ? 'pending' : 'done'} | isError: {isError ? 'YES' : 'NO'}</p>
+            <p>containerTypesQuery: {isContainerTypesPending ? 'pending' : 'done'} | count: {containerTypes.length}</p>
           </div>
         )}
 
@@ -450,19 +487,33 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             {createError && <p className="mt-2 text-xs text-red-500">{createError}</p>}
 
             {/* Debug instrumentation (dev-only) */}
-            {import.meta.env.DEV && (
-              <div
-                className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 font-mono text-[10px] text-amber-800"
-              >
-                <p className="font-semibold">🔍 DEBUG: Create & Place State</p>
-                <p>code: {containerCodeInput.trim().length > 0 ? '✓' : '✗'} ({containerCodeInput.length})</p>
-                <p>type: {containerTypeIdInput.length > 0 ? '✓' : '✗'}</p>
-                <p>containerTypes: {containerTypes.length} loaded {isContainerTypesPending ? '(loading...)' : ''}</p>
-                <p>createMutation: {createContainer.status} {createContainer.error ? `[ERROR: ${createContainer.error.message}]` : ''}</p>
-                <p>placeMutation: {placeContainer.status} {placeContainer.error ? `[ERROR: ${placeContainer.error.message}]` : ''}</p>
-                <p>isActionPending: {isActionPending ? 'YES' : 'NO'}</p>
-              </div>
-            )}
+            {import.meta.env.DEV && (() => {
+              const createAndPlaceDisabledReason = !isActionPending &&
+                containerCodeInput.trim().length === 0 &&
+                containerTypeIdInput.length === 0 &&
+                containerTypes.length === 0
+                ? ['missing code', 'missing type', 'no types loaded'].join(' + ')
+                : !isActionPending && containerCodeInput.trim().length === 0 ? 'missing code'
+                : !isActionPending && containerTypeIdInput.length === 0 ? 'missing type'
+                : !isActionPending && containerTypes.length === 0 ? 'no types loaded'
+                : isActionPending ? 'action pending'
+                : null;
+
+              return (
+                <div
+                  className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 font-mono text-[10px] text-amber-800"
+                >
+                  <p className="font-semibold">🔍 DEBUG: Create & Place State</p>
+                  <p>code: {containerCodeInput.trim().length > 0 ? '✓' : '✗'} ({containerCodeInput.length})</p>
+                  <p>type: {containerTypeIdInput.length > 0 ? '✓' : '✗'}</p>
+                  <p>containerTypes: {containerTypes.length} loaded {isContainerTypesPending ? '(loading...)' : ''}</p>
+                  <p>createMutation: {createContainer.status} {createContainer.error ? `[ERROR: ${createContainer.error.message}]` : ''}</p>
+                  <p>placeMutation: {placeContainer.status} {placeContainer.error ? `[ERROR: ${placeContainer.error.message}]` : ''}</p>
+                  <p>isActionPending: {isActionPending ? 'YES' : 'NO'}</p>
+                  <p>createAndPlaceDisabledReason: {createAndPlaceDisabledReason || 'none'}</p>
+                </div>
+              );
+            })()}
 
             <div className="mt-3 flex items-center gap-2">
               {(() => {
