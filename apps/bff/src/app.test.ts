@@ -2803,6 +2803,50 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('removes a container from a non-rack location (null cellId and placementId)', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+      if (fn === 'remove_container') {
+        return {
+          data: {
+            action: 'removed',
+            containerId: args.container_uuid,
+            cellId: null,
+            placementId: null,
+            occurredAt: '2026-03-13T12:30:00.000Z'
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/remove',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      action: 'removed',
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      cellId: null,
+      placementId: null,
+      occurredAt: '2026-03-13T12:30:00.000Z'
+    });
+
+    await app.close();
+  });
+
   it('maps remove-container not-placed conflicts clearly', async () => {
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {

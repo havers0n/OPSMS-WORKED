@@ -34,6 +34,22 @@ describe('container placement action contracts', () => {
     });
   });
 
+  it('parses remove_container result for non-rack location (null cellId and placementId)', () => {
+    expect(
+      removeContainerResultSchema.parse({
+        action: 'removed',
+        containerId: '1e4a2d96-cd70-4881-a73e-aa0c086a9bc8',
+        cellId: null,
+        placementId: null,
+        occurredAt: '2026-03-13T10:30:00.000Z'
+      })
+    ).toMatchObject({
+      action: 'removed',
+      cellId: null,
+      placementId: null
+    });
+  });
+
   it('parses move_container result', () => {
     expect(
       moveContainerResultSchema.parse({

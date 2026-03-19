@@ -11,8 +11,8 @@ export const placeContainerResultSchema = z.object({
 export const removeContainerResultSchema = z.object({
   action: z.literal('removed'),
   containerId: z.string().uuid(),
-  cellId: z.string().uuid(),
-  placementId: z.string().uuid(),
+  cellId: z.string().uuid().nullable(),
+  placementId: z.string().uuid().nullable(),
   occurredAt: z.string()
 });
 
