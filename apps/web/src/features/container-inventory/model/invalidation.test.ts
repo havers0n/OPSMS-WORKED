@@ -19,13 +19,13 @@ describe('invalidateContainerInventoryQueries', () => {
       queryKey: ['container', 'storage', '188ed1eb-c44d-47f8-a8b1-94c7e20db85f']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['cell', 'storage', '216f2dd6-8f17-4de4-aaba-657f9e0e1398']
+      queryKey: ['location', 'storage']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['cell', 'slot-storage']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['cell', 'occupancy-by-floor', 'floor-uuid']
+      queryKey: ['location', 'occupancy-by-floor', 'floor-uuid']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['layout-version', 'workspace', 'floor-uuid']
@@ -44,7 +44,10 @@ describe('invalidateContainerInventoryQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['location', 'storage']
+    });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['cell', 'slot-storage']
     });

@@ -1,16 +1,9 @@
 import { Package } from 'lucide-react';
 
 /**
- * Placement mode — placeholder panel.
- *
- * Placement shows physical cell occupancy: which containers are stored in which
- * cells. It reads storage truth (CellStorageSnapshot, ContainerPlacement) and
- * does not edit rack geometry.
- *
- * This panel is a truthful scaffold. The storage domain types exist in
- * @wos/domain but no UI query layer has been wired yet.
- * Replace with CellPlacementInspector / RackPlacementSummaryInspector once
- * the storage query layer is connected.
+ * Placement mode — empty-state panel shown when no cell or container is selected.
+ * Selecting a cell routes to CellPlacementInspector; selecting a container routes
+ * to ContainerPlacementInspector.
  */
 export function PlacementModePanel() {
   return (
@@ -32,8 +25,6 @@ export function PlacementModePanel() {
           </p>
           <p className="mt-3 text-[11px] text-slate-300">
             Select a cell or rack to see occupancy.
-            <br />
-            Storage data is not yet connected.
           </p>
         </div>
       </div>
