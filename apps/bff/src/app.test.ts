@@ -128,31 +128,6 @@ const productResponses = productRows.map((row) => ({
 
 const sortedProductResponses = [...productResponses].sort((left, right) => left.name.localeCompare(right.name));
 
-const inventoryItemRows = [
-  {
-    id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
-    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-    item_ref: `product:${productRows[0].id}`,
-    product_id: productRows[0].id,
-    quantity: 5,
-    uom: 'pcs',
-    created_at: '2026-03-13T11:15:00.000Z',
-    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
-  },
-  {
-    id: '2d230fa0-f02e-418b-88cb-7558422f7ec1',
-    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-    container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-    item_ref: 'LEGACY-REF-42',
-    product_id: null,
-    quantity: 2,
-    uom: 'pcs',
-    created_at: '2026-03-13T11:20:00.000Z',
-    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
-  }
-];
-
 const locationRows = [
   {
     id: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
@@ -583,7 +558,7 @@ function createSupabaseStub() {
         };
       }
 
-      if (table === 'container_storage_snapshot_v') {
+      if (table === 'container_storage_snapshot_v' || table === 'container_storage_canonical_v') {
         return {
           select: vi.fn(() => ({
             eq: vi.fn((_column: string, value: string) => Promise.resolve({
@@ -712,19 +687,6 @@ function createSupabaseStub() {
 
             return builder;
           })
-        };
-      }
-
-      if (table === 'inventory_item_compat_v') {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn((_column: string, value: string) => ({
-              order: vi.fn(async () => ({
-                data: inventoryItemRows.filter((row) => row.container_id === value),
-                error: null
-            }))
-          }))
-          }))
         };
       }
 
@@ -1107,58 +1069,6 @@ function createFloorWorkspaceSupabaseStub() {
             )
           }))
         };
-      }
-
-      return {
-        select: vi.fn(() => ({
-          eq: vi.fn(async () => ({ data: [], error: null })),
-          in: vi.fn(async () => ({ data: [], error: null })),
-          limit: vi.fn(async () => ({ data: [], error: null }))
-        }))
-      };
-    }),
-    rpc: vi.fn()
-  };
-}
-
-function createRackSectionSlotStorageSupabaseStub() {
-  const cellIds = [
-    '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-    'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
-  ];
-
-  return {
-    from: vi.fn((table: string) => {
-      if (table === 'cells') {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn((_column: string, value: string) => ({
-              eq: vi.fn((_nextColumn: string, slotNo: number) => Promise.resolve({
-                data: value === 'd208453f-555a-40d0-b4bf-f1e6a93a7752' && slotNo === 1
-                  ? cellIds.map((id) => ({ id }))
-                  : [],
-                error: null
-              }))
-            }))
-          }))
-        };
-      }
-
-      if (table === 'location_storage_snapshot_v') {
-        return {
-          select: vi.fn(() => ({
-            in: vi.fn((_column: string, ids: string[]) => ({
-              order: vi.fn(async () => ({
-                data: cellStorageSnapshotRows.filter((row) => ids.includes(row.cell_id)),
-                error: null
-              }))
-            }))
-          }))
-        };
-      }
-
-      if (table === 'products') {
-        return createSupabaseStub().from(table);
       }
 
       return {
@@ -1688,33 +1598,8 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('treats non-uuid rack section ids as unpublished slot storage', async () => {
-    const supabase = createRackSectionSlotStorageSupabaseStub();
-    const app = buildApp({
-      getAuthContext: vi.fn(async () => authContext as never),
-      getUserSupabase: vi.fn(() => supabase as never)
-    });
-
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/rack-sections/sec-a-1-216f2dd6-8f17-4de4-aaba-657f9e0e1398/slots/1/storage',
-      headers: {
-        authorization: 'Bearer token'
-      }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      published: false,
-      rows: []
-    });
-    expect(supabase.from).not.toHaveBeenCalled();
-
-    await app.close();
-  });
-
-  it('returns slot storage rows for a published rack section slot', async () => {
-    const supabase = createRackSectionSlotStorageSupabaseStub();
+  it('returns not found for the removed legacy rack-section slot-storage route', async () => {
+    const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -1728,56 +1613,12 @@ describe('buildApp', () => {
       }
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      published: true,
-      rows: [
-        {
-          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-          cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-          containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-          externalCode: 'PALLET-001',
-          containerType: 'pallet',
-          containerStatus: 'active',
-          placedAt: '2026-03-13T09:15:00.000Z',
-          itemRef: `product:${productRows[0].id}`,
-          product: productResponses[0],
-          quantity: 5,
-          uom: 'pcs'
-        },
-        {
-          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-          cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-          containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-          externalCode: 'PALLET-001',
-          containerType: 'pallet',
-          containerStatus: 'active',
-          placedAt: '2026-03-13T09:15:00.000Z',
-          itemRef: 'LEGACY-REF-42',
-          product: null,
-          quantity: 2,
-          uom: 'pcs'
-        },
-        {
-          tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-          cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-          containerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
-          externalCode: null,
-          containerType: 'tote',
-          containerStatus: 'quarantined',
-          placedAt: '2026-03-13T10:15:00.000Z',
-          itemRef: null,
-          product: null,
-          quantity: null,
-          uom: null
-        }
-      ]
-    });
+    expect(response.statusCode).toBe(404);
 
     await app.close();
   });
 
-  it('returns current inventory content for a container', async () => {
+  it('returns not found for the removed legacy container-inventory route', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -1792,31 +1633,7 @@ describe('buildApp', () => {
       }
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual([
-      {
-        id: 'e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c',
-        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-        itemRef: `product:${productRows[0].id}`,
-        product: productResponses[0],
-        quantity: 5,
-        uom: 'pcs',
-        createdAt: '2026-03-13T11:15:00.000Z',
-        createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
-      },
-      {
-        id: '2d230fa0-f02e-418b-88cb-7558422f7ec1',
-        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-        itemRef: 'LEGACY-REF-42',
-        product: null,
-        quantity: 2,
-        uom: 'pcs',
-        createdAt: '2026-03-13T11:20:00.000Z',
-        createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
-      }
-    ]);
+    expect(response.statusCode).toBe(404);
 
     await app.close();
   });
@@ -2141,7 +1958,7 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('returns floor-level occupancy aggregated by published cell id', async () => {
+  it('returns not found for the removed legacy floor cell-occupancy route', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -2156,13 +1973,7 @@ describe('buildApp', () => {
       }
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual([
-      {
-        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-        containerCount: 2
-      }
-    ]);
+    expect(response.statusCode).toBe(404);
 
     await app.close();
   });
@@ -2666,25 +2477,8 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('places a container into a published cell', async () => {
+  it('returns not found for the removed legacy place-by-cell route', async () => {
     const supabase = createSupabaseStub();
-    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
-      if (fn === 'place_container') {
-        return {
-          data: {
-            action: 'placed',
-            containerId: args.container_uuid,
-            cellId: args.cell_uuid,
-            placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
-            occurredAt: '2026-03-13T12:15:00.000Z'
-          },
-          error: null
-        };
-      }
-
-      return { data: null, error: null };
-    });
-
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -2698,62 +2492,54 @@ describe('buildApp', () => {
       },
       payload: {
         cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('places a container through the location-native public endpoint', async () => {
+    const supabase = createSupabaseStub();
+    const placementService = {
+      placeContainerAtLocation: vi.fn(async () => ({
+        ok: true,
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        locationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64'
+      }))
+    };
+    const getPlacementService = vi.fn(() => placementService as never);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never),
+      getPlacementService
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/place-at-location',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        locationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64'
       }
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      action: 'placed',
+      ok: true,
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-      placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
-      occurredAt: '2026-03-13T12:15:00.000Z'
+      locationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64'
     });
-    expect(supabase.rpc).toHaveBeenCalledWith('place_container', {
-      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      cell_uuid: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-      actor_uuid: authContext.user.id
-    });
-
-    await app.close();
-  });
-
-  it('maps place-container conflicts clearly', async () => {
-    const supabase = createSupabaseStub();
-    supabase.rpc = vi.fn(async (fn: string) => {
-      if (fn === 'place_container') {
-        return {
-          data: null,
-          error: {
-            code: 'P0001',
-            message: 'CONTAINER_ALREADY_PLACED'
-          }
-        };
-      }
-
-      return { data: null, error: null };
-    });
-
-    const app = buildApp({
-      getAuthContext: vi.fn(async () => authContext as never),
-      getUserSupabase: vi.fn(() => supabase as never)
-    });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/place',
-      headers: {
-        authorization: 'Bearer token'
-      },
-      payload: {
-        cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
-      }
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      code: 'PLACEMENT_CONFLICT',
-      message: 'Container is already placed.'
+    expect(getPlacementService).toHaveBeenCalledTimes(1);
+    expect(placementService.placeContainerAtLocation).toHaveBeenCalledWith({
+      tenantId: authContext.currentTenant.tenantId,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      locationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
+      actorId: authContext.user.id
     });
 
     await app.close();
@@ -2886,61 +2672,8 @@ describe('buildApp', () => {
   });
 
 
-  it('moves a container atomically between cells', async () => {
+  it('returns not found for the removed legacy move-by-cell route', async () => {
     const supabase = createSupabaseStub();
-    const baseFrom = supabase.from;
-    let currentPlacement = {
-      placementId: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
-      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
-    };
-
-    supabase.from = vi.fn((table: string) => {
-      if (table === 'container_placements') {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn((_column: string, value: string) => ({
-              is: vi.fn((_removedColumn: string, _removedValue: null) => ({
-                maybeSingle: vi.fn(async () => ({
-                  data:
-                    value === '188ed1eb-c44d-47f8-a8b1-94c7e20db85f'
-                      ? {
-                          id: currentPlacement.placementId,
-                          cell_id: currentPlacement.cellId
-                        }
-                      : null,
-                  error: null
-                }))
-              }))
-            }))
-          }))
-        };
-      }
-
-      return baseFrom(table);
-    });
-
-    supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
-      if (fn === 'move_container_canonical') {
-        currentPlacement = {
-          placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
-          cellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
-        };
-
-        return {
-          data: {
-            containerId: args.container_uuid,
-            sourceLocationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
-            targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
-            movementId: 'c1411420-4f31-4427-9d8d-e6c779d6cc0f',
-            occurredAt: '2026-03-13T12:45:00.000Z'
-          },
-          error: null
-        };
-      }
-
-      return { data: null, error: null };
-    });
-
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -2957,21 +2690,7 @@ describe('buildApp', () => {
       }
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      action: 'moved',
-      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      fromCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
-      toCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce',
-      previousPlacementId: '7f43dfa8-6691-4477-8c30-e53452df8f5f',
-      placementId: '2c6f2861-9e5c-4ef8-abfa-c17709cf9194',
-      occurredAt: '2026-03-13T12:45:00.000Z'
-    });
-    expect(supabase.rpc).toHaveBeenCalledWith('move_container_canonical', {
-      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-      target_location_uuid: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
-      actor_uuid: authContext.user.id
-    });
+    expect(response.statusCode).toBe(404);
 
     await app.close();
   });
@@ -3154,143 +2873,6 @@ describe('buildApp', () => {
       splitMovementId: '7f2d5362-bcc7-4d30-b67d-d8cb154b2fd6',
       transferMovementId: '9d35f4c2-184b-4a07-b011-0caec48ba1f9',
       occurredAt: '2026-03-13T13:10:00.000Z'
-    });
-
-    await app.close();
-  });
-
-  it('maps move-container errors clearly when the container is not currently placed', async () => {
-    const supabase = createSupabaseStub();
-    const baseFrom = supabase.from;
-
-    supabase.from = vi.fn((table: string) => {
-      if (table === 'container_placements') {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              is: vi.fn(() => ({
-                maybeSingle: vi.fn(async () => ({
-                  data: null,
-                  error: null
-                }))
-              }))
-            }))
-          }))
-        };
-      }
-
-      return baseFrom(table);
-    });
-
-    const app = buildApp({
-      getAuthContext: vi.fn(async () => authContext as never),
-      getUserSupabase: vi.fn(() => supabase as never)
-    });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
-      headers: {
-        authorization: 'Bearer token'
-      },
-      payload: {
-        targetCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
-      }
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      code: 'PLACEMENT_CONFLICT',
-      message: 'Container is not currently placed.'
-    });
-    expect(supabase.rpc).not.toHaveBeenCalled();
-
-    await app.close();
-  });
-
-  it('maps move-container errors clearly when the target cell is not in a published layout', async () => {
-    const supabase = createSupabaseStub();
-    const baseFrom = supabase.from;
-
-    supabase.from = vi.fn((table: string) => {
-      if (table === 'locations') {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              maybeSingle: vi.fn(async () => ({
-                data: null,
-                error: null
-              }))
-            }))
-          }))
-        };
-      }
-
-      return baseFrom(table);
-    });
-
-    const app = buildApp({
-      getAuthContext: vi.fn(async () => authContext as never),
-      getUserSupabase: vi.fn(() => supabase as never)
-    });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
-      headers: {
-        authorization: 'Bearer token'
-      },
-      payload: {
-        targetCellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
-      }
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      code: 'INVALID_TARGET_CELL',
-      message: 'Target cell is not in a published layout.'
-    });
-    expect(supabase.rpc).not.toHaveBeenCalled();
-
-    await app.close();
-  });
-
-  it('maps move-container errors clearly when the target cell is the current cell', async () => {
-    const supabase = createSupabaseStub();
-    supabase.rpc = vi.fn(async (fn: string) => {
-      if (fn === 'move_container_canonical') {
-        return {
-          data: null,
-          error: {
-            code: 'P0001',
-            message: 'SAME_LOCATION'
-          }
-        };
-      }
-
-      return { data: null, error: null };
-    });
-
-    const app = buildApp({
-      getAuthContext: vi.fn(async () => authContext as never),
-      getUserSupabase: vi.fn(() => supabase as never)
-    });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move',
-      headers: {
-        authorization: 'Bearer token'
-      },
-      payload: {
-        targetCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
-      }
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({
-      code: 'PLACEMENT_CONFLICT',
-      message: 'Container is already in the target cell.'
     });
 
     await app.close();

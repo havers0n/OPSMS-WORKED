@@ -10,11 +10,9 @@ import {
   addInventoryToContainerResponseSchema,
   cellsResponseSchema,
   containerCurrentLocationResponseSchema,
-  cellSlotStorageResponseSchema,
   locationReferenceResponseSchema,
   locationOccupancyRowsResponseSchema,
   locationStorageSnapshotRowsResponseSchema,
-  floorCellOccupancyRowsResponseSchema,
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
@@ -29,17 +27,12 @@ import {
   createContainerBodySchema,
   createFloorBodySchema,
   createLayoutDraftBodySchema,
-  moveContainerBodySchema,
-  moveContainerResponseSchema,
   placementPlaceAtLocationBodySchema,
-  placeContainerBodySchema,
-  placeContainerResponseSchema,
   createSiteBodySchema,
   currentWorkspaceResponseSchema,
   floorWorkspaceResponseSchema,
   floorsResponseSchema,
   idResponseSchema,
-  inventoryItemsResponseSchema,
   inventoryItemResponseSchema,
   layoutDraftResponseSchema,
   layoutVersionIdResponseSchema,
@@ -76,7 +69,6 @@ import {
   mapContainerStorageSnapshotRowToDomain,
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
-  mapInventoryItemRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
   mapLayoutDraftBundleToDomain,
   mapLayoutBundleJsonToDomain,
@@ -103,9 +95,7 @@ import {
   createPlacementCommandService,
   type PlacementCommandService
 } from './features/placement/service.js';
-import { createPlacementRepo } from './features/placement/placement-repo.js';
 import { createExecutionService } from './features/execution/service.js';
-import { createLegacyExecutionGateway } from './features/legacy-execution-gateway/service.js';
 import {
   ExecutionContainerNotFoundError,
   ExecutionContainerNotPlacedError,
@@ -174,11 +164,6 @@ type LayoutVersionRow = {
   version_no: number;
   state: 'draft' | 'published' | 'archived';
   published_at?: string | null;
-};
-
-type FloorCellOccupancyRow = {
-  cellId: string;
-  containerCount: number;
 };
 
 type WaveRelation = { name: string } | Array<{ name: string }> | null | undefined;
@@ -1156,85 +1141,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(cellsResponseSchema, (data ?? []).map(mapCellRowToDomain));
   });
 
-  app.get('/api/floors/:floorId/cell-occupancy', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const floorId = parseOrThrow(idResponseSchema, {
-      id: (request.params as { floorId: string }).floorId
-    }).id;
-    const supabase = getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const placementRepo = createPlacementRepo(supabase);
-    const executionService = createExecutionService(supabase);
-    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
-    gateway.applyDeprecationHeaders(reply, 'floorCellOccupancy');
-    request.log.warn({ compatRoute: 'floorCellOccupancy', path: request.url }, 'compat route accessed — no first-party callers since Stage 8D; pending removal pending log-evidence review');
-    return parseOrThrow(floorCellOccupancyRowsResponseSchema, await gateway.listFloorCellOccupancy(floorId));
-  });
-
-  /**
-   * GET /api/rack-sections/:sectionId/slots/:slotNo/storage
-   *
-   * Legacy compatibility route. Translation is centralized in LegacyExecutionGateway.
-   * Non-UUID sectionIds are short-circuited before the gateway (no DB query needed).
-   */
-  app.get('/api/rack-sections/:sectionId/slots/:slotNo/storage', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const params = request.params as { sectionId: string; slotNo: string };
-    const rawSectionId = params.sectionId.trim();
-    const slotNo = z.coerce.number().int().min(1).parse(params.slotNo);
-
-    // Non-UUID section IDs come from in-memory sections that have never been
-    // published — return the "unpublished" response immediately without touching the DB.
-    const sectionIdParsed = z.string().uuid().safeParse(rawSectionId);
-    if (!sectionIdParsed.success) {
-      return parseOrThrow(cellSlotStorageResponseSchema, { published: false, rows: [] });
-    }
-    const sectionId = sectionIdParsed.data;
-
-    const supabase = getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const placementRepo = createPlacementRepo(supabase);
-    const executionService = createExecutionService(supabase);
-    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
-    gateway.applyDeprecationHeaders(reply, 'rackSectionSlotStorage');
-    return parseOrThrow(cellSlotStorageResponseSchema, await gateway.getRackSectionSlotStorage(sectionId, slotNo));
-  });
-
-  app.get('/api/containers/:containerId/inventory', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('inventory_item_compat_v')
-      .select('id,tenant_id,container_id,item_ref,product_id,quantity,uom,created_at,created_by')
-      .eq('container_id', containerId)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
-      id: string;
-      tenant_id: string;
-      container_id: string;
-      item_ref: string;
-      product_id?: string | null;
-      quantity: number;
-      uom: string;
-      created_at: string;
-      created_by: string | null;
-    }>);
-
-    return parseOrThrow(inventoryItemsResponseSchema, rows.map(mapInventoryItemRowToDomain));
-  });
-
   app.get('/api/containers/:containerId/storage', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -1425,32 +1331,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(containerCurrentLocationResponseSchema, currentLocation);
   });
 
-  app.post('/api/containers/:containerId/place', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const body = parseOrThrow(placeContainerBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const placementRepo = createPlacementRepo(supabase);
-    const executionService = createExecutionService(supabase);
-    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
-    gateway.applyDeprecationHeaders(reply, 'containerPlaceByCell');
-    request.log.warn({ compatRoute: 'containerPlaceByCell', path: request.url }, 'compat route accessed — no first-party callers since Stage 9 PR1; pending removal pending log-evidence review');
-    const { data, error } = await supabase.rpc('place_container', {
-      container_uuid: containerId,
-      cell_uuid: body.cellId,
-      actor_uuid: auth.user.id
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(placeContainerResponseSchema, data);
-  });
-
   app.post('/api/containers/:containerId/remove', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -1497,26 +1377,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
       throw error;
     }
-  });
-
-  app.post('/api/containers/:containerId/move', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const body = parseOrThrow(moveContainerBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const placementRepo = createPlacementRepo(supabase);
-    const executionService = createExecutionService(supabase);
-    const gateway = createLegacyExecutionGateway({ supabase, locationReadRepo, placementRepo, executionService });
-    gateway.applyDeprecationHeaders(reply, 'containerMoveByCell');
-    request.log.warn({ compatRoute: 'containerMoveByCell', path: request.url }, 'compat route accessed — no first-party callers since Stage 9 PR1; pending removal pending log-evidence review');
-    return parseOrThrow(moveContainerResponseSchema, await gateway.moveContainerByCell({
-      containerId,
-      targetCellId: body.targetCellId,
-      actorId: auth.user.id
-    }));
   });
 
   app.post('/api/containers/:containerId/move-to-location', async (request, reply) => {
