@@ -5,6 +5,8 @@ declare
   default_tenant_uuid uuid;
   pallet_type_uuid uuid;
   tote_type_uuid uuid;
+  pallet_product_a_uuid uuid := gen_random_uuid();
+  pallet_product_b_uuid uuid := gen_random_uuid();
   site_uuid uuid := gen_random_uuid();
   floor_uuid uuid := gen_random_uuid();
   layout_uuid uuid := gen_random_uuid();
@@ -16,7 +18,6 @@ declare
   cell_b_uuid uuid := gen_random_uuid();
   pallet_uuid uuid;
   tote_uuid uuid;
-  removed_uuid uuid;
   location_a_uuid uuid;
 begin
   select id into default_tenant_uuid
@@ -79,24 +80,20 @@ begin
   values (default_tenant_uuid, 'BRIDGE-TOTE', tote_type_uuid, 'quarantined')
   returning id into tote_uuid;
 
-  insert into public.containers (tenant_id, external_code, container_type_id, status)
-  values (default_tenant_uuid, 'BRIDGE-REMOVED', pallet_type_uuid, 'active')
-  returning id into removed_uuid;
-
-  insert into public.inventory_items (tenant_id, container_id, item_ref, quantity, uom)
+  insert into public.products (id, source, external_product_id, sku, name)
   values
-    (default_tenant_uuid, pallet_uuid, 'ITEM-001', 5, 'pcs'),
-    (default_tenant_uuid, pallet_uuid, 'ITEM-002', 2, 'pcs');
+    (pallet_product_a_uuid, 'test-suite', 'bridge-product-001', 'BRIDGE-SKU-001', 'Bridge Product 1'),
+    (pallet_product_b_uuid, 'test-suite', 'bridge-product-002', 'BRIDGE-SKU-002', 'Bridge Product 2');
 
-  insert into public.container_placements (tenant_id, container_id, cell_id, placed_at)
+  insert into public.inventory_unit (tenant_id, container_id, product_id, quantity, uom, status)
   values
-    (default_tenant_uuid, pallet_uuid, cell_a_uuid, '2026-03-14T10:00:00.000Z'),
-    (default_tenant_uuid, tote_uuid, cell_a_uuid, '2026-03-14T11:00:00.000Z');
+    (default_tenant_uuid, pallet_uuid, pallet_product_a_uuid, 5, 'pcs', 'available'),
+    (default_tenant_uuid, pallet_uuid, pallet_product_b_uuid, 2, 'pcs', 'available');
 
-  insert into public.container_placements (tenant_id, container_id, cell_id, placed_at, removed_at)
-  values (default_tenant_uuid, removed_uuid, cell_a_uuid, '2026-03-14T08:00:00.000Z', '2026-03-14T09:00:00.000Z');
-
-  perform public.backfill_container_current_locations();
+  update public.containers
+  set current_location_id = location_a_uuid,
+      current_location_entered_at = timezone('utc', now())
+  where id in (pallet_uuid, tote_uuid);
 
   if (
     select count(*)

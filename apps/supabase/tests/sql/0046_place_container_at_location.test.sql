@@ -2,9 +2,9 @@
 --
 -- Tests for place_container_at_location(container_uuid, location_uuid, actor_uuid).
 --
--- PL-1  Rack-backed location   → success: action=placed, container_placements row
---                                written, current_location_id set, stock_movement written
--- PL-2  Non-rack location      → success: action=placed, NO container_placements row,
+-- PL-1  Rack-backed location   → success: action=placed, current_location_id set,
+--                                stock_movement written
+-- PL-2  Non-rack location      → success: action=placed,
 --                                current_location_id set, stock_movement with non-rack target location
 -- PL-3  CONTAINER_ALREADY_PLACED  → rejected after PL-1 places the container
 -- PL-4  LOCATION_OCCUPIED         → single_container location already holds container_a
@@ -175,8 +175,8 @@ begin
     raise exception 'PL-1 FAIL: expected cellId=cell_a, got: %', result ->> 'cellId';
   end if;
 
-  if result ->> 'placementId' is null then
-    raise exception 'PL-1 FAIL: expected non-null placementId for rack-backed placement.';
+  if result ->> 'placementId' is not null then
+    raise exception 'PL-1 FAIL: expected placementId=null during Stage 1 write cutoff.';
   end if;
 
   if not exists (
@@ -185,15 +185,6 @@ begin
       and current_location_id = location_a_uuid
   ) then
     raise exception 'PL-1 FAIL: expected containers.current_location_id = location_a.';
-  end if;
-
-  if not exists (
-    select 1 from public.container_placements
-    where container_id = container_a_uuid
-      and cell_id = cell_a_uuid
-      and removed_at is null
-  ) then
-    raise exception 'PL-1 FAIL: expected active container_placements row for rack-backed placement.';
   end if;
 
   if not exists (
@@ -210,7 +201,7 @@ begin
 
 
   -- ══════════════════════════════════════════════════════════════════════════
-  -- PL-2  Non-rack placement → success; no container_placements row
+  -- PL-2  Non-rack placement → success
   -- ══════════════════════════════════════════════════════════════════════════
 
   result := public.place_container_at_location(container_b_uuid, staging_location_uuid, null);
@@ -237,13 +228,6 @@ begin
       and current_location_id = staging_location_uuid
   ) then
     raise exception 'PL-2 FAIL: expected containers.current_location_id = staging_location.';
-  end if;
-
-  if exists (
-    select 1 from public.container_placements
-    where container_id = container_b_uuid
-  ) then
-    raise exception 'PL-2 FAIL: non-rack placement must not write a container_placements row.';
   end if;
 
   if not exists (
@@ -295,13 +279,6 @@ begin
       and current_location_id is not null
   ) then
     raise exception 'PL-4 FAIL: failed placement must not mutate containers.current_location_id.';
-  end if;
-
-  if exists (
-    select 1 from public.container_placements
-    where container_id = container_c_uuid
-  ) then
-    raise exception 'PL-4 FAIL: failed placement must not write a container_placements row.';
   end if;
 
 
