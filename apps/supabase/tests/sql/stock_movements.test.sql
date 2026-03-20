@@ -162,8 +162,8 @@ begin
   select id into pick_container_uuid from public.containers where external_code = 'S4-PICK';
   select id into cross_tenant_container_uuid from public.containers where external_code = 'S4-OTH';
 
-  perform public.place_container(source_container_uuid, source_cell_uuid, actor_uuid);
-  perform public.place_container(occupied_container_uuid, occupied_cell_uuid, actor_uuid);
+  perform public.place_container_at_location(source_container_uuid, source_location_uuid, actor_uuid);
+  perform public.place_container_at_location(occupied_container_uuid, occupied_location_uuid, actor_uuid);
 
   insert into public.inventory_unit (
     tenant_id,
@@ -253,15 +253,6 @@ begin
 
   if move_result ->> 'targetLocationId' <> staging_location_uuid::text then
     raise exception 'Expected move_container_canonical to support non-rack target locations in Stage 5.';
-  end if;
-
-  if exists (
-    select 1
-    from public.container_placements cp
-    where cp.container_id = source_container_uuid
-      and cp.removed_at is null
-  ) then
-    raise exception 'Expected canonical move to non-rack location to close active rack placement projection.';
   end if;
 
   split_result := public.split_inventory_unit(source_inventory_unit_uuid, 2, split_target_container_uuid, actor_uuid);

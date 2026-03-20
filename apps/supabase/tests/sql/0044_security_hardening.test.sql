@@ -215,7 +215,7 @@ begin
   values (default_tenant_uuid, src_container_uuid, product_uuid, 20, 'pcs', 'available')
   returning id into src_iu_uuid;
 
-  -- place_container is now SECURITY DEFINER (migration 0047): auth.uid() must
+  -- place_container_at_location is SECURITY DEFINER: auth.uid() must
   -- return a valid tenant_admin UUID for can_manage_tenant() to pass.
   -- Set actor_a as the JWT subject before the fixture placements.
   perform set_config(
@@ -227,10 +227,10 @@ begin
   -- Place containers for tests that need a placed container.
   -- cell_a: src (LC-1 source), cell_b: spoof (SP-1 source),
   -- cell_c: remove (SP-3 source), cell_d: cr1 (CR-1 dedicated rack remove test)
-  perform public.place_container(src_container_uuid,    cell_a_uuid, null);
-  perform public.place_container(spoof_container_uuid,  cell_b_uuid, null);
-  perform public.place_container(remove_container_uuid, cell_c_uuid, null);
-  perform public.place_container(cr1_container_uuid,    cell_d_uuid, null);
+  perform public.place_container_at_location(src_container_uuid,    location_a_uuid, null);
+  perform public.place_container_at_location(spoof_container_uuid,  location_b_uuid, null);
+  perform public.place_container_at_location(remove_container_uuid, location_c_uuid, null);
+  perform public.place_container_at_location(cr1_container_uuid,    location_d_uuid, null);
 
   -- other_tenant: minimal non-rack fixtures
   insert into public.sites (id, tenant_id, code, name, timezone)
@@ -258,8 +258,7 @@ begin
       current_location_entered_at = now()
   where id = oth_container_uuid;
 
-  -- Place nonrack_container directly in the staging location
-  -- (bypasses place_container so no container_placements row is created)
+  -- Place nonrack_container directly in the staging location.
   update public.containers
   set current_location_id         = staging_loc_uuid,
       current_location_entered_at = now()
@@ -608,7 +607,6 @@ begin
 
   -- ══════════════════════════════════════════════════════════════════════
   -- DH-1  Direct call to insert_stock_movement as authenticated → denied
-  -- DH-2  Direct call to sync_container_placement_projection as authenticated → denied
   --
   -- SET LOCAL ROLE switches the effective role within this transaction.
   -- Subsequent PERFORM statements execute with authenticated's privileges.
@@ -635,23 +633,13 @@ begin
       raise exception 'DH-1 FAIL: expected insufficient_privilege, got: %', sqlerrm;
   end;
 
-  begin
-    perform public.sync_container_placement_projection(src_container_uuid, null);
-    raise exception 'DH-2 FAIL: expected permission denied for sync_container_placement_projection.';
-  exception
-    when insufficient_privilege then
-      null; -- expected — test passes
-    when others then
-      raise exception 'DH-2 FAIL: expected insufficient_privilege, got: %', sqlerrm;
-  end;
-
   execute 'reset role';
 
 
   -- ══════════════════════════════════════════════════════════════════════
   -- CR-1  Canonical remove — rack-backed location
   --       The new remove_container derives placement from
-  --       containers.current_location_id, closes container_placements row.
+  --       containers.current_location_id without projection coupling.
   -- ══════════════════════════════════════════════════════════════════════
 
   -- Restore actor_a JWT (reset role above cleared it for DH tests context)
@@ -662,7 +650,7 @@ begin
   );
 
   -- cr1_container_uuid was placed at cell_d during fixture setup and has not
-  -- been touched since. It is rack-backed with an active container_placements row.
+  -- been touched since.
   result := public.remove_container(cr1_container_uuid, null);
 
   if result ->> 'action' <> 'removed' then
@@ -683,29 +671,18 @@ begin
     raise exception 'CR-1 FAIL: containers.current_location_id was not cleared by remove_container.';
   end if;
 
-  if not exists (
-    select 1 from public.container_placements cp
-    where cp.container_id = cr1_container_uuid
-      and cp.removed_at is not null
-  ) then
-    raise exception 'CR-1 FAIL: container_placements row was not closed by remove_container.';
+  if result ->> 'placementId' is not null then
+    raise exception
+      'CR-1 FAIL: expected placementId=null during Stage 1 write cutoff, got: %',
+      result ->> 'placementId';
   end if;
 
 
   -- ══════════════════════════════════════════════════════════════════════
-  -- CR-2  Canonical remove — non-rack location (no container_placements row)
-  --       containers.current_location_id is set, no container_placements row.
+  -- CR-2  Canonical remove — non-rack location
+  --       containers.current_location_id is set.
   --       remove_container must succeed and emit movement event.
   -- ══════════════════════════════════════════════════════════════════════
-
-  if exists (
-    select 1 from public.container_placements cp
-    where cp.container_id = nonrack_container_uuid
-      and cp.removed_at is null
-  ) then
-    raise exception
-      'CR-2 setup FAIL: nonrack_container unexpectedly has an active placement row.';
-  end if;
 
   result := public.remove_container(nonrack_container_uuid, null);
 
@@ -749,7 +726,7 @@ begin
 
   -- ══════════════════════════════════════════════════════════════════════
   -- CR-3  Canonical remove — CONTAINER_NOT_PLACED when current_location_id
-  --       is null (even if a stale container_placements row existed)
+  --       is null.
   -- ══════════════════════════════════════════════════════════════════════
 
   -- nonrack_container was just removed. current_location_id is null.

@@ -15,6 +15,8 @@ declare
   rack_level_uuid uuid := gen_random_uuid();
   cell_a_uuid uuid := gen_random_uuid();
   cell_b_uuid uuid := gen_random_uuid();
+  location_a_uuid uuid;
+  location_b_uuid uuid;
   place_container_uuid uuid;
   place_result jsonb;
   remove_result jsonb;
@@ -76,24 +78,19 @@ begin
     (cell_a_uuid, layout_uuid, rack_uuid, rack_face_uuid, rack_section_uuid, rack_level_uuid, 1, 'R1-A.01.01.01', 'R1-A-01-01-01', 'act-cell-001'),
     (cell_b_uuid, layout_uuid, rack_uuid, rack_face_uuid, rack_section_uuid, rack_level_uuid, 2, 'R1-A.01.01.02', 'R1-A-01-01-02', 'act-cell-002');
 
+  perform public.backfill_locations_from_published_cells();
+
+  select id into location_a_uuid from public.locations where geometry_slot_id = cell_a_uuid;
+  select id into location_b_uuid from public.locations where geometry_slot_id = cell_b_uuid;
+
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'ACT-PLACE', pallet_type_uuid, 'active')
   returning id into place_container_uuid;
 
-  place_result := public.place_container(place_container_uuid, cell_a_uuid, actor_uuid);
+  place_result := public.place_container_at_location(place_container_uuid, location_a_uuid, actor_uuid);
 
   if place_result ->> 'action' <> 'placed' then
-    raise exception 'Expected place_container action=placed.';
-  end if;
-
-  if not exists (
-    select 1
-    from public.container_placements
-    where container_id = place_container_uuid
-      and cell_id = cell_a_uuid
-      and removed_at is null
-  ) then
-    raise exception 'Expected place_container to create an active placement.';
+    raise exception 'Expected place_container_at_location action=placed.';
   end if;
 
   if not exists (
@@ -107,12 +104,12 @@ begin
       and l.geometry_slot_id = cell_a_uuid
       and sm.status = 'done'
   ) then
-    raise exception 'Expected place_container to write a canonical place_container stock movement.';
+    raise exception 'Expected place_container_at_location to write a canonical place_container stock movement.';
   end if;
 
   begin
-    perform public.place_container(place_container_uuid, cell_b_uuid, actor_uuid);
-    raise exception 'Expected place_container to fail when container is already placed.';
+    perform public.place_container_at_location(place_container_uuid, location_b_uuid, actor_uuid);
+    raise exception 'Expected place_container_at_location to fail when container is already placed.';
   exception
     when others then
       if sqlerrm <> 'CONTAINER_ALREADY_PLACED' then
@@ -126,13 +123,10 @@ begin
     raise exception 'Expected remove_container action=removed.';
   end if;
 
-  if not exists (
-    select 1
-    from public.container_placements
-    where container_id = place_container_uuid
-      and removed_at is not null
-  ) then
-    raise exception 'Expected remove_container to close placement history rather than delete it.';
+  if remove_result ->> 'placementId' is not null then
+    raise exception
+      'Expected remove_container placementId=null during Stage 1 write cutoff, got: %',
+      remove_result ->> 'placementId';
   end if;
 
   if not exists (

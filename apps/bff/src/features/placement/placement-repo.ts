@@ -56,11 +56,6 @@ export type ResolvedCell = {
   floorId: string;
 };
 
-export type ActivePlacement = {
-  placementId: string;
-  cellId: string;
-};
-
 export type ResolvedExecutableLocation = {
   locationId: string;
   code: string;
@@ -72,7 +67,6 @@ export type PlacementRepo = {
   resolveContainer(containerRef: string, tenantId: string): Promise<ResolvedContainer | null>;
   resolvePlaceTarget(targetCellRef: string): Promise<ResolvedCell | null>;
   resolveExecutableLocationForCell(cellId: string): Promise<ResolvedExecutableLocation | null>;
-  getActivePlacement(containerId: string): Promise<ActivePlacement | null>;
   placeContainerAtLocation(containerId: string, locationId: string, actorId?: string | null): Promise<void>;
 };
 
@@ -167,26 +161,6 @@ export function createPlacementRepo(supabase: SupabaseClient): PlacementRepo {
             code: data.code,
             floorId: data.floor_id,
             cellId: data.geometry_slot_id
-          }
-        : null;
-    },
-
-    async getActivePlacement(containerId) {
-      const { data, error } = await supabase
-        .from('container_placements')
-        .select('id,cell_id')
-        .eq('container_id', containerId)
-        .is('removed_at', null)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      return data
-        ? {
-            placementId: data.id,
-            cellId: data.cell_id
           }
         : null;
     },

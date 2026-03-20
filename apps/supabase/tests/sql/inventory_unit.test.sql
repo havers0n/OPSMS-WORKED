@@ -9,8 +9,8 @@ declare
   second_container_uuid uuid;
   product_uuid uuid := gen_random_uuid();
   second_product_uuid uuid := gen_random_uuid();
-  catalog_item_uuid uuid;
   first_unit_uuid uuid;
+  second_unit_uuid uuid;
 begin
   select id into default_tenant_uuid
   from public.tenants
@@ -40,38 +40,29 @@ begin
   values (other_tenant_uuid, 'IU-CONT-OTH', pallet_type_uuid, 'active')
   returning id into second_container_uuid;
 
-  insert into public.inventory_items (tenant_id, container_id, item_ref, quantity, uom)
-  values (default_tenant_uuid, first_container_uuid, 'product:' || product_uuid::text, 4, 'pcs')
-  returning id into catalog_item_uuid;
-
-  if not exists (
-    select 1
-    from public.inventory_unit
-    where legacy_inventory_item_id = catalog_item_uuid
-      and container_id = first_container_uuid
-      and product_id = product_uuid
-      and quantity = 4
-      and status = 'available'
-  ) then
-    raise exception 'Expected product-backed inventory_items rows to sync into canonical inventory_unit.';
-  end if;
-
   if exists (
     select 1
     from public.inventory_unit
-    where legacy_inventory_item_id is null
-      and container_id = first_container_uuid
-      and product_id = second_product_uuid
+    where container_id = first_container_uuid
+      and product_id in (product_uuid, second_product_uuid)
   ) then
-    raise exception 'Did not expect unrelated canonical rows to exist before direct insert.';
+    raise exception 'Did not expect canonical rows to exist before direct insert.';
+  end if;
+
+  insert into public.inventory_unit (tenant_id, container_id, product_id, quantity, uom, status)
+  values (default_tenant_uuid, first_container_uuid, product_uuid, 4, 'pcs', 'available')
+  returning id into first_unit_uuid;
+
+  if first_unit_uuid is null then
+    raise exception 'Expected direct inventory_unit insert for first product to return an id.';
   end if;
 
   insert into public.inventory_unit (tenant_id, container_id, product_id, quantity, uom, status)
   values (default_tenant_uuid, first_container_uuid, second_product_uuid, 3, 'pcs', 'available')
-  returning id into first_unit_uuid;
+  returning id into second_unit_uuid;
 
-  if first_unit_uuid is null then
-    raise exception 'Expected direct inventory_unit insert to return an id.';
+  if second_unit_uuid is null then
+    raise exception 'Expected direct inventory_unit insert for second product to return an id.';
   end if;
 
   insert into public.inventory_unit (tenant_id, container_id, product_id, quantity, uom, lot_code, status)
@@ -120,12 +111,14 @@ begin
 
   if not exists (
     select 1
-    from public.inventory_item_compat_v
+    from public.container_storage_snapshot_v
     where container_id = first_container_uuid
       and item_ref = 'product:' || product_uuid::text
       and product_id = product_uuid
+      and quantity = 4
+      and uom = 'pcs'
   ) then
-    raise exception 'Expected compatibility inventory view to expose canonical product-backed rows.';
+    raise exception 'Expected canonical product-backed rows to appear in container storage snapshot.';
   end if;
 end
 $$;

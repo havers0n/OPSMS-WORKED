@@ -159,12 +159,8 @@ begin
   select id into source_container_uuid from public.containers where external_code = 'S5-SOURCE';
   select id into occupying_container_uuid from public.containers where external_code = 'S5-OCCUPIED';
 
-  perform public.place_container(source_container_uuid, source_cell_uuid, null);
-  perform public.place_container(occupying_container_uuid, occupied_cell_uuid, null);
-
-  if public.backfill_container_current_locations() <> 0 then
-    raise exception 'Expected current-location backfill to be idempotent once canonical current locations are already set.';
-  end if;
+  perform public.place_container_at_location(source_container_uuid, source_location_uuid, null);
+  perform public.place_container_at_location(occupying_container_uuid, occupied_location_uuid, null);
 
   insert into public.inventory_unit (
     tenant_id,
@@ -183,11 +179,6 @@ begin
     'available'
   );
 
-  update public.container_placements
-  set removed_at = timezone('utc', now())
-  where container_id = source_container_uuid
-    and removed_at is null;
-
   if not exists (
     select 1
     from public.active_container_locations_v acl
@@ -195,7 +186,7 @@ begin
       and acl.location_id = source_location_uuid
       and acl.cell_id = source_cell_uuid
   ) then
-    raise exception 'Expected active_container_locations_v to derive current state from containers.current_location_id even without an active placement row.';
+    raise exception 'Expected active_container_locations_v to derive current state from containers.current_location_id.';
   end if;
 
   if not exists (
@@ -329,15 +320,6 @@ begin
 
   if exists (
     select 1
-    from public.container_placements cp
-    where cp.container_id = source_container_uuid
-      and cp.removed_at is null
-  ) then
-    raise exception 'Expected non-rack canonical move to close rack placement projection.';
-  end if;
-
-  if exists (
-    select 1
     from public.cell_occupancy_v cov
     where cov.container_id = source_container_uuid
   ) then
@@ -348,16 +330,6 @@ begin
 
   if move_result ->> 'targetLocationId' <> rack_target_location_uuid::text then
     raise exception 'Expected canonical move to return rack-backed target location id.';
-  end if;
-
-  if not exists (
-    select 1
-    from public.container_placements cp
-    where cp.container_id = source_container_uuid
-      and cp.cell_id = rack_target_cell_uuid
-      and cp.removed_at is null
-  ) then
-    raise exception 'Expected canonical move back into a rack location to recreate placement projection.';
   end if;
 
   if not exists (

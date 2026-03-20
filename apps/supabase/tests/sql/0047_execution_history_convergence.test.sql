@@ -1,10 +1,10 @@
 -- 0047_execution_history_convergence.test.sql
 --
--- Verifies that place_container, place_container_at_location, and
+-- Verifies that place_container_at_location and
 -- remove_container now write canonical stock_movements records, enabling
 -- the full container lifecycle to be read from a single history table.
 --
--- EH-1  place_container (rack-backed)
+-- EH-1  place_container_at_location (rack-backed)
 --         → stock_movements row: movement_type='place_container',
 --           source_location=null, target_location=location_a
 --
@@ -21,7 +21,7 @@
 --           source_location=location_a, target_location=null
 --
 -- EH-5  Full lifecycle readable from stock_movements alone
---         place_container → move_container_canonical → remove_container
+--         place_container_at_location → move_container_canonical → remove_container
 --         Yields three consecutive stock_movements rows for the container.
 
 begin;
@@ -165,10 +165,10 @@ begin
 
 
   -- ══════════════════════════════════════════════════════════════════════════
-  -- EH-1  place_container writes stock_movements (canonical)
+  -- EH-1  place_container_at_location writes stock_movements (canonical)
   -- ══════════════════════════════════════════════════════════════════════════
 
-  result := public.place_container(container_a_uuid, cell_a_uuid, null);
+  result := public.place_container_at_location(container_a_uuid, location_a_uuid, null);
 
   if result ->> 'action' <> 'placed' then
     raise exception 'EH-1 FAIL: expected action=placed, got: %', result ->> 'action';
@@ -254,7 +254,7 @@ begin
   -- ══════════════════════════════════════════════════════════════════════════
   -- EH-5  Full lifecycle from stock_movements alone
   --
-  --   place_container(container_lc, cell_c)
+  --   place_container_at_location(container_lc, location_c)
   --     → stock_movements: place_container, source=null, target=location_c
   --
   --   move_container_canonical(container_lc, location_d)
@@ -266,7 +266,7 @@ begin
   -- All three rows must be readable from stock_movements for container_lc.
   -- ══════════════════════════════════════════════════════════════════════════
 
-  perform public.place_container(container_lc_uuid, cell_c_uuid, null);
+  perform public.place_container_at_location(container_lc_uuid, location_c_uuid, null);
 
   perform public.move_container_canonical(container_lc_uuid, location_d_uuid, null);
 

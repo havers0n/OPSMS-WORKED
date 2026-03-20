@@ -14,6 +14,7 @@ declare
   rack_level_uuid uuid := gen_random_uuid();
   cell_uuid uuid := gen_random_uuid();
   second_cell_uuid uuid := gen_random_uuid();
+  location_uuid uuid;
   first_container_uuid uuid;
   second_container_uuid uuid;
   third_container_uuid uuid;
@@ -58,6 +59,10 @@ begin
 
   perform public.backfill_locations_from_published_cells();
 
+  select id into location_uuid
+  from public.locations
+  where geometry_slot_id = cell_uuid;
+
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'PALLET-101', pallet_type_uuid, 'active')
   returning id into first_container_uuid;
@@ -70,15 +75,14 @@ begin
   values (default_tenant_uuid, 'PALLET-OLD', pallet_type_uuid, 'active')
   returning id into third_container_uuid;
 
-  insert into public.container_placements (tenant_id, container_id, cell_id, placed_at)
-  values
-    (default_tenant_uuid, first_container_uuid, cell_uuid, '2026-03-13T10:00:00.000Z'),
-    (default_tenant_uuid, second_container_uuid, cell_uuid, '2026-03-13T11:00:00.000Z');
-
-  insert into public.container_placements (tenant_id, container_id, cell_id, placed_at, removed_at)
-  values (default_tenant_uuid, third_container_uuid, second_cell_uuid, '2026-03-13T09:00:00.000Z', '2026-03-13T09:30:00.000Z');
-
-  perform public.backfill_container_current_locations();
+  update public.containers
+  set current_location_id = location_uuid,
+      current_location_entered_at = case
+        when id = first_container_uuid then '2026-03-13T10:00:00.000Z'::timestamptz
+        when id = second_container_uuid then '2026-03-13T11:00:00.000Z'::timestamptz
+        else timezone('utc', now())
+      end
+  where id in (first_container_uuid, second_container_uuid);
 
   if (
     select count(*)
@@ -93,7 +97,7 @@ begin
     from public.cell_occupancy_v
     where container_id = third_container_uuid
   ) then
-    raise exception 'Expected removed placements to be excluded from occupancy view.';
+    raise exception 'Expected unplaced containers to be excluded from occupancy view.';
   end if;
 
   if not exists (

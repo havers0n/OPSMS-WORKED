@@ -23,11 +23,18 @@ declare
   other_section_uuid uuid := gen_random_uuid();
   other_level_uuid uuid := gen_random_uuid();
   other_cell_uuid uuid := gen_random_uuid();
+  pallet_product_a_uuid uuid := gen_random_uuid();
+  pallet_product_b_uuid uuid := gen_random_uuid();
+  tote_product_uuid uuid := gen_random_uuid();
+  other_tenant_product_uuid uuid := gen_random_uuid();
   pallet_uuid uuid;
   tote_uuid uuid;
   empty_uuid uuid;
   removed_uuid uuid;
   other_tenant_container_uuid uuid;
+  location_a_uuid uuid;
+  location_b_uuid uuid;
+  other_location_uuid uuid;
 begin
   select id into default_tenant_uuid
   from public.tenants
@@ -100,6 +107,18 @@ begin
 
   perform public.backfill_locations_from_published_cells();
 
+  select id into location_a_uuid
+  from public.locations
+  where geometry_slot_id = cell_a_uuid;
+
+  select id into location_b_uuid
+  from public.locations
+  where geometry_slot_id = cell_b_uuid;
+
+  select id into other_location_uuid
+  from public.locations
+  where geometry_slot_id = other_cell_uuid;
+
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'SNAP-PALLET', pallet_type_uuid, 'active')
   returning id into pallet_uuid;
@@ -120,24 +139,34 @@ begin
   values (other_tenant_uuid, 'SNAP-OTHER', pallet_type_uuid, 'active')
   returning id into other_tenant_container_uuid;
 
-  insert into public.inventory_items (tenant_id, container_id, item_ref, quantity, uom)
+  insert into public.products (id, source, external_product_id, sku, name)
   values
-    (default_tenant_uuid, pallet_uuid, 'ITEM-001', 5, 'pcs'),
-    (default_tenant_uuid, pallet_uuid, 'ITEM-002', 2, 'pcs'),
-    (default_tenant_uuid, tote_uuid, 'ITEM-003', 1, 'box'),
-    (other_tenant_uuid, other_tenant_container_uuid, 'ITEM-900', 9, 'pcs');
+    (pallet_product_a_uuid, 'test-suite', 'snapshot-product-001', 'SNAP-SKU-001', 'Snapshot Product 1'),
+    (pallet_product_b_uuid, 'test-suite', 'snapshot-product-002', 'SNAP-SKU-002', 'Snapshot Product 2'),
+    (tote_product_uuid, 'test-suite', 'snapshot-product-003', 'SNAP-SKU-003', 'Snapshot Product 3'),
+    (other_tenant_product_uuid, 'test-suite', 'snapshot-product-900', 'SNAP-SKU-900', 'Snapshot Product 900');
 
-  insert into public.container_placements (tenant_id, container_id, cell_id, placed_at)
+  insert into public.inventory_unit (tenant_id, container_id, product_id, quantity, uom, status)
   values
-    (default_tenant_uuid, pallet_uuid, cell_a_uuid, '2026-03-13T10:00:00.000Z'),
-    (default_tenant_uuid, tote_uuid, cell_a_uuid, '2026-03-13T11:00:00.000Z'),
-    (default_tenant_uuid, empty_uuid, cell_b_uuid, '2026-03-13T12:00:00.000Z'),
-    (other_tenant_uuid, other_tenant_container_uuid, other_cell_uuid, '2026-03-13T13:00:00.000Z');
+    (default_tenant_uuid, pallet_uuid, pallet_product_a_uuid, 5, 'pcs', 'available'),
+    (default_tenant_uuid, pallet_uuid, pallet_product_b_uuid, 2, 'pcs', 'available'),
+    (default_tenant_uuid, tote_uuid, tote_product_uuid, 1, 'box', 'available'),
+    (other_tenant_uuid, other_tenant_container_uuid, other_tenant_product_uuid, 9, 'pcs', 'available');
 
-  insert into public.container_placements (tenant_id, container_id, cell_id, placed_at, removed_at)
-  values (default_tenant_uuid, removed_uuid, cell_a_uuid, '2026-03-13T08:00:00.000Z', '2026-03-13T09:00:00.000Z');
+  update public.containers
+  set current_location_id = location_a_uuid,
+      current_location_entered_at = timezone('utc', now())
+  where id in (pallet_uuid, tote_uuid);
 
-  perform public.backfill_container_current_locations();
+  update public.containers
+  set current_location_id = location_b_uuid,
+      current_location_entered_at = timezone('utc', now())
+  where id = empty_uuid;
+
+  update public.containers
+  set current_location_id = other_location_uuid,
+      current_location_entered_at = timezone('utc', now())
+  where id = other_tenant_container_uuid;
 
   if (
     select count(*)
