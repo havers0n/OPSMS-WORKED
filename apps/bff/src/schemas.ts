@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
-  floorCellOccupancyResponseSchema,
   cellSchema,
   containerCurrentLocationSchema,
   containerSchema,
@@ -14,10 +13,8 @@ import {
   locationOccupancyResponseSchema,
   locationReferenceSchema,
   locationStorageSnapshotResponseSchema,
-  moveContainerResultSchema,
   moveContainerToLocationBodySchema,
   pickPartialInventoryUnitBodySchema,
-  placeContainerResultSchema,
   productSchema,
   removeContainerResultSchema,
   transferInventoryUnitBodySchema,
@@ -73,14 +70,6 @@ export const createInventoryItemBodySchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().min(0),
   uom: z.string().trim().min(1)
-});
-
-export const placeContainerBodySchema = z.object({
-  cellId: z.string().uuid()
-});
-
-export const moveContainerBodySchema = z.object({
-  targetCellId: z.string().uuid()
 });
 
 export const moveContainerToLocationRequestBodySchema = moveContainerToLocationBodySchema;
@@ -178,7 +167,6 @@ export const createContainerResponseSchema = z.object({
 });
 export const cellsResponseSchema = z.array(cellSchema);
 export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
-export const floorCellOccupancyRowsResponseSchema = floorCellOccupancyResponseSchema;
 export const containerStorageSnapshotResponseSchema = z.array(containerStorageSnapshotRowSchema);
 export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowSchema);
 export const locationOccupancyRowsResponseSchema = locationOccupancyResponseSchema;
@@ -186,19 +174,6 @@ export const locationStorageSnapshotRowsResponseSchema = locationStorageSnapshot
 export const locationReferenceResponseSchema = locationReferenceSchema;
 export const containerCurrentLocationResponseSchema = containerCurrentLocationSchema;
 
-/**
- * Response shape for GET /api/rack-sections/:sectionId/slots/:slotNo/storage.
- * `published` is true when at least one persisted cell UUID was found for this
- * section+slot (i.e. the layout version has been published at least once).
- * `rows` contains the storage snapshot rows; an empty array for a published
- * layout means the slot is genuinely empty.
- */
-export const cellSlotStorageResponseSchema = z.object({
-  published: z.boolean(),
-  rows: z.array(cellStorageSnapshotRowSchema)
-});
-export type CellSlotStorageResponse = z.infer<typeof cellSlotStorageResponseSchema>;
-export const inventoryItemsResponseSchema = z.array(inventoryItemSchema);
 export const inventoryItemResponseSchema = inventoryItemSchema;
 export const addInventoryToContainerResponseSchema = inventoryItemSchema;
 export const productsResponseSchema = z.array(productSchema);
@@ -210,9 +185,7 @@ export const productCatalogResponseSchema = z.object({
   limit: z.number().int().positive(),
   offset: z.number().int().min(0)
 });
-export const placeContainerResponseSchema = placeContainerResultSchema;
 export const removeContainerResponseSchema = removeContainerResultSchema;
-export const moveContainerResponseSchema = moveContainerResultSchema;
 export const moveContainerToLocationResponseSchema = canonicalMoveContainerResultSchema;
 export const transferInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const pickPartialInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;

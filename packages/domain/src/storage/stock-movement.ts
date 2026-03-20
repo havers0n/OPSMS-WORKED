@@ -8,7 +8,9 @@ export const stockMovementTypeSchema = z.enum([
   'transfer_stock',
   'pick_partial',
   'ship',
-  'adjust'
+  'adjust',
+  'place_container',
+  'remove_container'
 ]);
 
 export const stockMovementStatusSchema = z.enum(['pending', 'done', 'cancelled']);

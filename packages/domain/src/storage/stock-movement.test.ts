@@ -9,6 +9,11 @@ describe('stock movement execution contracts', () => {
     expect(stockMovementTypeSchema.parse('pick_partial')).toBe('pick_partial');
   });
 
+  it('accepts placement movement types (place_container, remove_container)', () => {
+    expect(stockMovementTypeSchema.parse('place_container')).toBe('place_container');
+    expect(stockMovementTypeSchema.parse('remove_container')).toBe('remove_container');
+  });
+
   it('parses canonical stock movement rows without product duplication', () => {
     expect(
       stockMovementSchema.parse({

@@ -12,6 +12,7 @@ describe('mapLayoutDraftToSavePayload', () => {
         archived_at: null,
         created_at: '2026-03-13T00:00:00.000Z',
         created_by: null,
+        draft_version: 1,
         floor_id: '22222222-2222-2222-2222-222222222222',
         parent_published_version_id: null,
         published_at: null,
