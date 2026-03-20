@@ -98,13 +98,16 @@ begin
 
   if not exists (
     select 1
-    from public.movement_events
-    where container_id = place_container_uuid
-      and event_type = 'placed'
-      and from_cell_id is null
-      and to_cell_id = cell_a_uuid
+    from public.stock_movements sm
+    join public.locations l on l.id = sm.target_location_id
+    where sm.source_container_id = place_container_uuid
+      and sm.target_container_id = place_container_uuid
+      and sm.movement_type = 'place_container'
+      and sm.source_location_id is null
+      and l.geometry_slot_id = cell_a_uuid
+      and sm.status = 'done'
   ) then
-    raise exception 'Expected place_container to write a placed movement event.';
+    raise exception 'Expected place_container to write a canonical place_container stock movement.';
   end if;
 
   begin
@@ -134,13 +137,16 @@ begin
 
   if not exists (
     select 1
-    from public.movement_events
-    where container_id = place_container_uuid
-      and event_type = 'removed'
-      and from_cell_id = cell_a_uuid
-      and to_cell_id is null
+    from public.stock_movements sm
+    join public.locations l on l.id = sm.source_location_id
+    where sm.source_container_id = place_container_uuid
+      and sm.target_container_id = place_container_uuid
+      and sm.movement_type = 'remove_container'
+      and l.geometry_slot_id = cell_a_uuid
+      and sm.target_location_id is null
+      and sm.status = 'done'
   ) then
-    raise exception 'Expected remove_container to write a removed movement event.';
+    raise exception 'Expected remove_container to write a canonical remove_container stock movement.';
   end if;
 
   begin
