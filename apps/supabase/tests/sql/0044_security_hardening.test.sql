@@ -734,15 +734,16 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.movement_events me
-    where me.container_id = nonrack_container_uuid
-      and me.event_type = 'removed'
-      and me.from_cell_id is null
-      and me.floor_id = floor_uuid
+    select 1 from public.stock_movements sm
+    where sm.source_container_id = nonrack_container_uuid
+      and sm.target_container_id = nonrack_container_uuid
+      and sm.movement_type = 'remove_container'
+      and sm.source_location_id = staging_loc_uuid
+      and sm.target_location_id is null
+      and sm.status = 'done'
   ) then
     raise exception
-      'CR-2 FAIL: expected movement_event with event_type=removed, from_cell_id=null, '
-      'floor_id=floor_uuid for non-rack remove.';
+      'CR-2 FAIL: expected stock_movement remove_container from staging_loc to null target.';
   end if;
 
 

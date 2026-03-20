@@ -7,7 +7,6 @@
 -- EH-1  place_container (rack-backed)
 --         → stock_movements row: movement_type='place_container',
 --           source_location=null, target_location=location_a
---         → movement_events compat row still written (dual-write)
 --
 -- EH-2  place_container_at_location (rack-backed)
 --         → stock_movements row: movement_type='place_container',
@@ -20,7 +19,6 @@
 -- EH-4  remove_container (removes the container placed in EH-1)
 --         → stock_movements row: movement_type='remove_container',
 --           source_location=location_a, target_location=null
---         → movement_events compat row still written (dual-write)
 --
 -- EH-5  Full lifecycle readable from stock_movements alone
 --         place_container → move_container_canonical → remove_container
@@ -167,7 +165,7 @@ begin
 
 
   -- ══════════════════════════════════════════════════════════════════════════
-  -- EH-1  place_container writes stock_movements (canonical) + movement_events (compat)
+  -- EH-1  place_container writes stock_movements (canonical)
   -- ══════════════════════════════════════════════════════════════════════════
 
   result := public.place_container(container_a_uuid, cell_a_uuid, null);
@@ -186,18 +184,6 @@ begin
   ) then
     raise exception 'EH-1 FAIL: expected stock_movements row with movement_type=place_container.';
   end if;
-
-  -- Verify compat dual-write: movement_events still written.
-  if not exists (
-    select 1 from public.movement_events
-    where container_id = container_a_uuid
-      and event_type = 'placed'
-      and from_cell_id is null
-      and to_cell_id = cell_a_uuid
-  ) then
-    raise exception 'EH-1 FAIL: movement_events compat row missing after place_container.';
-  end if;
-
 
   -- ══════════════════════════════════════════════════════════════════════════
   -- EH-2  place_container_at_location (rack-backed) writes stock_movements
@@ -244,7 +230,7 @@ begin
 
 
   -- ══════════════════════════════════════════════════════════════════════════
-  -- EH-4  remove_container writes stock_movements (canonical) + movement_events (compat)
+  -- EH-4  remove_container writes stock_movements (canonical)
   --       Uses container_a placed in EH-1.
   -- ══════════════════════════════════════════════════════════════════════════
 
@@ -264,18 +250,6 @@ begin
   ) then
     raise exception 'EH-4 FAIL: expected stock_movements row with movement_type=remove_container.';
   end if;
-
-  -- Verify compat dual-write: movement_events still written.
-  if not exists (
-    select 1 from public.movement_events
-    where container_id = container_a_uuid
-      and event_type = 'removed'
-      and from_cell_id = cell_a_uuid
-      and to_cell_id is null
-  ) then
-    raise exception 'EH-4 FAIL: movement_events compat row missing after remove_container.';
-  end if;
-
 
   -- ══════════════════════════════════════════════════════════════════════════
   -- EH-5  Full lifecycle from stock_movements alone

@@ -3,9 +3,9 @@
 -- Tests for place_container_at_location(container_uuid, location_uuid, actor_uuid).
 --
 -- PL-1  Rack-backed location   → success: action=placed, container_placements row
---                                written, current_location_id set, movement_event written
+--                                written, current_location_id set, stock_movement written
 -- PL-2  Non-rack location      → success: action=placed, NO container_placements row,
---                                current_location_id set, movement_event with null to_cell_id
+--                                current_location_id set, stock_movement with non-rack target location
 -- PL-3  CONTAINER_ALREADY_PLACED  → rejected after PL-1 places the container
 -- PL-4  LOCATION_OCCUPIED         → single_container location already holds container_a
 -- PL-5  LOCATION_NOT_ACTIVE       → disabled location rejects placement
@@ -197,13 +197,15 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.movement_events
-    where container_id = container_a_uuid
-      and event_type = 'placed'
-      and from_cell_id is null
-      and to_cell_id = cell_a_uuid
+    select 1 from public.stock_movements sm
+    where sm.source_container_id = container_a_uuid
+      and sm.target_container_id = container_a_uuid
+      and sm.movement_type = 'place_container'
+      and sm.source_location_id is null
+      and sm.target_location_id = location_a_uuid
+      and sm.status = 'done'
   ) then
-    raise exception 'PL-1 FAIL: expected movement_event with event_type=placed and to_cell_id=cell_a.';
+    raise exception 'PL-1 FAIL: expected stock_movement place_container to location_a.';
   end if;
 
 
@@ -245,13 +247,15 @@ begin
   end if;
 
   if not exists (
-    select 1 from public.movement_events
-    where container_id = container_b_uuid
-      and event_type = 'placed'
-      and from_cell_id is null
-      and to_cell_id is null
+    select 1 from public.stock_movements sm
+    where sm.source_container_id = container_b_uuid
+      and sm.target_container_id = container_b_uuid
+      and sm.movement_type = 'place_container'
+      and sm.source_location_id is null
+      and sm.target_location_id = staging_location_uuid
+      and sm.status = 'done'
   ) then
-    raise exception 'PL-2 FAIL: expected movement_event with event_type=placed and to_cell_id=null.';
+    raise exception 'PL-2 FAIL: expected stock_movement place_container to staging_location.';
   end if;
 
 
