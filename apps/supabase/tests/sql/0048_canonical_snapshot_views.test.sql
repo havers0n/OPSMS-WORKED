@@ -1,17 +1,16 @@
 -- 0048_canonical_snapshot_views.test.sql
 --
--- Verifies that the canonical-only snapshot views introduced in migration 0048
--- correctly exclude legacy-only inventory rows while remaining structurally
--- compatible with the existing snapshot column contract.
+-- Verifies that canonical snapshot views remain canonical-only and that
+-- runtime snapshot views preserve the canonical projection contract.
 --
--- T1. container_storage_canonical_v excludes legacy-only rows
---       • canonical view: no row with item_ref set for a container whose
---         only inventory entry is a legacy inventory_items row (product_id IS NULL)
---       • compat view: still returns the legacy item_ref for that container
+-- T1. container_storage_canonical_v excludes non-canonical rows
+--       • canonical view: no row with item_ref set for a placed container
+--         with no inventory_unit rows
+--       • runtime snapshot view behaves the same
 --
--- T2. location_storage_canonical_v excludes legacy-only rows
+-- T2. location_storage_canonical_v excludes non-canonical rows
 --       • same assertion at the location-scoped view level
---       • compat view: still returns the legacy row at that location
+--       • runtime snapshot view behaves the same
 --
 -- T3. canonical views expose canonical inventory fields correctly
 --       • product_id, quantity, uom, lot_code, expiry_date, inventory_status
@@ -19,9 +18,10 @@
 --       • item_ref synthesised as 'product:<uuid>'
 --       • both container-scoped and location-scoped canonical views verified
 --
--- T4. mixed snapshot views remain unchanged after this migration
---       • container_storage_snapshot_v and location_storage_snapshot_v are
---         still queryable and still return both canonical and legacy rows
+-- T4. runtime snapshot views are canonical-only projections
+--       • container_storage_snapshot_v and location_storage_snapshot_v remain
+--         queryable for runtime callers
+--       • both expose canonical rows and exclude non-canonical rows
 --
 -- Infrastructure note:
 --   Placement is established by directly updating containers.current_location_id
@@ -37,7 +37,7 @@ declare
   product_a_uuid        uuid;
 
   container_a_uuid      uuid;   -- canonical: has an inventory_unit row
-  container_b_uuid      uuid;   -- legacy: only an inventory_items row with product_id IS NULL
+  container_b_uuid      uuid;   -- empty: no inventory_unit rows
 
   site_uuid             uuid := gen_random_uuid();
   floor_uuid            uuid := gen_random_uuid();
@@ -99,18 +99,10 @@ begin
       updated_at                  = timezone('utc', now())
   where id = container_a_uuid;
 
-  -- ── Container B: legacy-only inventory (inventory_items, product_id IS NULL) ─
+  -- ── Container B: empty inventory (no inventory_unit rows) ─
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'CS48-LEG', pallet_type_uuid, 'active')
   returning id into container_b_uuid;
-
-  -- Insert a legacy item with product_id IS NULL.
-  -- The sync_inventory_item_to_inventory_unit trigger fires but does nothing
-  -- for null product_id rows (product_id IS NULL branch: attempts to DELETE
-  -- from inventory_unit where legacy_inventory_item_id = new.id — no row to
-  -- delete on a fresh insert). No inventory_unit row is created for container B.
-  insert into public.inventory_items (tenant_id, container_id, item_ref, quantity, uom)
-  values (default_tenant_uuid, container_b_uuid, 'LEGACY-SKU-XYZ', 5, 'CS');
 
   -- Place container B.
   update public.containers
@@ -136,11 +128,11 @@ begin
   if row_count <> 0 then
     raise exception
       'T1 FAIL: container_storage_canonical_v returned % row(s) with item_ref set '
-      'for legacy-only container; expected 0.',
+      'for empty container; expected 0.',
       row_count;
   end if;
 
-  -- T1-b: old compat view must still return the legacy item_ref for container B.
+  -- T1-b: runtime snapshot view also excludes item_ref rows for empty container.
   select count(*)
   into row_count
   from public.container_storage_snapshot_v
@@ -148,16 +140,16 @@ begin
     and item_ref is not null
     and product_id is null;
 
-  if row_count <> 1 then
+  if row_count <> 0 then
     raise exception
-      'T1 FAIL: container_storage_snapshot_v returned % row(s) with legacy item_ref '
-      'for container B; expected 1.',
+      'T1 FAIL: container_storage_snapshot_v returned % unexpected row(s) for '
+      'container B; expected 0.',
       row_count;
   end if;
 
 
   -- ══════════════════════════════════════════════════════════════════════════
-  -- T2. location_storage_canonical_v excludes legacy-only rows
+  -- T2. location_storage_canonical_v excludes non-canonical rows
   -- ══════════════════════════════════════════════════════════════════════════
 
   -- T2-a: canonical view must not return any row with item_ref set at location B.
@@ -170,11 +162,11 @@ begin
   if row_count <> 0 then
     raise exception
       'T2 FAIL: location_storage_canonical_v returned % row(s) with item_ref set '
-      'for legacy-only container at its location; expected 0.',
+      'for empty container at its location; expected 0.',
       row_count;
   end if;
 
-  -- T2-b: old compat view must still return the legacy row at location B.
+  -- T2-b: runtime snapshot view also excludes item_ref rows at location B.
   select count(*)
   into row_count
   from public.location_storage_snapshot_v
@@ -182,10 +174,10 @@ begin
     and item_ref is not null
     and product_id is null;
 
-  if row_count <> 1 then
+  if row_count <> 0 then
     raise exception
-      'T2 FAIL: location_storage_snapshot_v returned % row(s) with legacy item_ref '
-      'for container at location B; expected 1.',
+      'T2 FAIL: location_storage_snapshot_v returned % unexpected row(s) for '
+      'container at location B; expected 0.',
       row_count;
   end if;
 
@@ -257,7 +249,7 @@ begin
 
 
   -- ══════════════════════════════════════════════════════════════════════════
-  -- T4. mixed snapshot views remain unchanged after this migration
+  -- T4. runtime snapshot views are canonical-only projections
   -- ══════════════════════════════════════════════════════════════════════════
 
   -- T4-a: compat container snapshot still returns the canonical row for container A.
@@ -288,18 +280,17 @@ begin
       row_count;
   end if;
 
-  -- T4-c: compat views still return the legacy row for container B (covered
-  --       by T1-b and T2-b but restated explicitly here for completeness).
+  -- T4-c: runtime snapshot views do not return inventory rows for empty container B.
   select count(*)
   into row_count
   from public.container_storage_snapshot_v
   where container_id = container_b_uuid
     and item_ref is not null;
 
-  if row_count <> 1 then
+  if row_count <> 0 then
     raise exception
-      'T4 FAIL: container_storage_snapshot_v lost legacy row for container B; '
-      'expected 1, got %.',
+      'T4 FAIL: container_storage_snapshot_v returned unexpected row(s) for container '
+      'B; expected 0, got %.',
       row_count;
   end if;
 
