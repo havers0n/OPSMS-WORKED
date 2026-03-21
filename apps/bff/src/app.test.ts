@@ -734,7 +734,53 @@ function createSupabaseStub() {
         }))
       };
     }),
-    rpc: vi.fn()
+    rpc: vi.fn(async (fn: string, args?: Record<string, unknown>) => {
+      if (fn === 'receive_inventory_unit') {
+        const tenantId = typeof args?.tenant_uuid === 'string' ? args.tenant_uuid : '';
+        const containerId = typeof args?.container_uuid === 'string' ? args.container_uuid : '';
+        const productId = typeof args?.product_uuid === 'string' ? args.product_uuid : '';
+        const quantity = typeof args?.quantity === 'number' ? args.quantity : Number.NaN;
+        const uom = typeof args?.uom === 'string' ? args.uom : '';
+        const actorId = typeof args?.actor_uuid === 'string' ? args.actor_uuid : null;
+
+        const container = containerRows.find((row) => row.id === containerId && row.tenant_id === tenantId);
+        if (!container) {
+          return { data: null, error: { code: 'P0001', message: 'CONTAINER_NOT_FOUND' } };
+        }
+
+        if (container.status !== 'active') {
+          return { data: null, error: { code: 'P0001', message: 'CONTAINER_NOT_RECEIVABLE' } };
+        }
+
+        const product = productRows.find((row) => row.id === productId);
+        if (!product) {
+          return { data: null, error: { code: 'P0001', message: 'PRODUCT_NOT_FOUND' } };
+        }
+
+        if (!product.is_active) {
+          return { data: null, error: { code: 'P0001', message: 'PRODUCT_INACTIVE' } };
+        }
+
+        return {
+          data: {
+            inventoryUnit: {
+              id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
+              tenant_id: tenantId,
+              container_id: containerId,
+              product_id: product.id,
+              quantity,
+              uom,
+              created_at: '2026-03-13T12:30:00.000Z',
+              created_by: actorId
+            },
+            product
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    }) as any
   };
 }
 
@@ -1671,12 +1717,22 @@ describe('buildApp', () => {
       createdAt: '2026-03-13T12:30:00.000Z',
       createdBy: authContext.user.id
     });
-    expect(supabase.from).toHaveBeenCalledWith('inventory_unit');
+    expect(supabase.rpc).toHaveBeenCalledWith('receive_inventory_unit', {
+      tenant_uuid: authContext.currentTenant.tenantId,
+      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      product_uuid: productRows[1].id,
+      quantity: 3,
+      uom: 'pcs',
+      actor_uuid: authContext.user.id
+    });
+    expect(
+      supabase.from.mock.calls.some(([table]) => table === 'containers' || table === 'products' || table === 'inventory_unit')
+    ).toBe(false);
 
     await app.close();
   });
 
-  it('rejects invalid current inventory content payloads before insert', async () => {
+  it('rejects invalid current inventory content payloads before RPC invocation', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -1700,6 +1756,7 @@ describe('buildApp', () => {
     expect(response.json()).toMatchObject({
       code: 'VALIDATION_ERROR'
     });
+    expect(supabase.rpc).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -1736,7 +1793,15 @@ describe('buildApp', () => {
       createdAt: '2026-03-13T12:30:00.000Z',
       createdBy: authContext.user.id
     });
-    expect(supabase.from).toHaveBeenCalledWith('inventory_unit');
+    expect(supabase.rpc).toHaveBeenCalledWith('receive_inventory_unit', {
+      tenant_uuid: authContext.currentTenant.tenantId,
+      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      product_uuid: productRows[0].id,
+      quantity: 7,
+      uom: 'pcs',
+      actor_uuid: authContext.user.id
+    });
+    expect(supabase.from.mock.calls.some(([table]) => table === 'inventory_unit')).toBe(false);
 
     await app.close();
   });
@@ -1767,36 +1832,33 @@ describe('buildApp', () => {
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
+    expect(supabase.rpc).toHaveBeenCalledWith('receive_inventory_unit', {
+      tenant_uuid: authContext.currentTenant.tenantId,
+      container_uuid: '00000000-0000-0000-0000-000000000000',
+      product_uuid: productRows[0].id,
+      quantity: 1,
+      uom: 'pcs',
+      actor_uuid: authContext.user.id
+    });
 
     await app.close();
   });
 
   it('maps inactive inventory products to the current not-found contract', async () => {
-    const inactiveProduct = {
-      ...productRows[0],
-      id: 'ac4f86de-c7f8-4357-9fa2-7e6c2bbaeeee',
-      is_active: false
-    };
-    const base = createSupabaseStub();
-    const supabase = {
-      ...base,
-      from: vi.fn((table: string) => {
-        if (table === 'products') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn((_column: string, value: string) => ({
-                maybeSingle: vi.fn(async () => ({
-                  data: value === inactiveProduct.id ? inactiveProduct : null,
-                  error: null
-                }))
-              }))
-            }))
-          };
-        }
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'receive_inventory_unit') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'PRODUCT_INACTIVE'
+          }
+        };
+      }
 
-        return base.from(table);
-      })
-    };
+      return { data: null, error: null };
+    });
 
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -1810,7 +1872,7 @@ describe('buildApp', () => {
         authorization: 'Bearer token'
       },
       payload: {
-        productId: inactiveProduct.id,
+        productId: productRows[0].id,
         quantity: 1,
         uom: 'pcs'
       }
@@ -1824,50 +1886,33 @@ describe('buildApp', () => {
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
     expect(supabase.from.mock.calls.some(([table]) => table === 'inventory_unit')).toBe(false);
+    expect(supabase.rpc).toHaveBeenCalledWith('receive_inventory_unit', {
+      tenant_uuid: authContext.currentTenant.tenantId,
+      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      product_uuid: productRows[0].id,
+      quantity: 1,
+      uom: 'pcs',
+      actor_uuid: authContext.user.id
+    });
 
     await app.close();
   });
 
   it('rejects inventory writes when the container status cannot receive inventory', async () => {
-    const base = createSupabaseStub();
-    const supabase = {
-      ...base,
-      from: vi.fn((table: string) => {
-        if (table === 'containers') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn((column: string, value: string) => {
-                const rows =
-                  column === 'tenant_id'
-                    ? [
-                        {
-                          id: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
-                          tenant_id: value,
-                          external_code: null,
-                          container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
-                          status: 'quarantined',
-                          created_at: '2026-03-13T10:15:00.000Z',
-                          created_by: null
-                        }
-                      ]
-                    : [];
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'receive_inventory_unit') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'CONTAINER_NOT_RECEIVABLE'
+          }
+        };
+      }
 
-                return {
-                  eq: vi.fn((_nestedColumn: string, nestedValue: string) => ({
-                    maybeSingle: vi.fn(async () => ({
-                      data: rows.find((row) => row.id === nestedValue) ?? null,
-                      error: null
-                    }))
-                  }))
-                };
-              })
-            }))
-          };
-        }
-
-        return base.from(table);
-      })
-    };
+      return { data: null, error: null };
+    });
 
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -1893,6 +1938,17 @@ describe('buildApp', () => {
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
+    expect(supabase.rpc).toHaveBeenCalledWith('receive_inventory_unit', {
+      tenant_uuid: authContext.currentTenant.tenantId,
+      container_uuid: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+      product_uuid: productRows[0].id,
+      quantity: 2,
+      uom: 'pcs',
+      actor_uuid: authContext.user.id
+    });
+    expect(
+      supabase.from.mock.calls.some(([table]) => table === 'containers' || table === 'products' || table === 'inventory_unit')
+    ).toBe(false);
 
     await app.close();
   });

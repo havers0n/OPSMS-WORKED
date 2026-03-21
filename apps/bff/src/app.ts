@@ -390,6 +390,46 @@ function mapWaveMembershipRpcError(
   }
 }
 
+const receiveInventoryUnitRpcResultSchema = z.object({
+  inventoryUnit: z.object({
+    id: z.string().uuid(),
+    tenant_id: z.string().uuid(),
+    container_id: z.string().uuid(),
+    product_id: z.string().uuid(),
+    quantity: z.number(),
+    uom: z.string(),
+    created_at: z.string(),
+    created_by: z.string().uuid().nullable()
+  }),
+  product: z.object({
+    id: z.string().uuid(),
+    source: z.string(),
+    external_product_id: z.string(),
+    sku: z.string().nullable(),
+    name: z.string(),
+    permalink: z.string().nullable(),
+    image_urls: z.unknown(),
+    image_files: z.unknown(),
+    is_active: z.boolean(),
+    created_at: z.string(),
+    updated_at: z.string()
+  })
+});
+
+function mapReceiveInventoryRpcError(error: { message?: string } | null): ApiError | null {
+  switch (error?.message) {
+    case 'CONTAINER_NOT_FOUND':
+      return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+    case 'CONTAINER_NOT_RECEIVABLE':
+      return new ApiError(409, 'CONTAINER_NOT_RECEIVABLE', 'Only active containers can receive inventory.');
+    case 'PRODUCT_NOT_FOUND':
+    case 'PRODUCT_INACTIVE':
+      return new ApiError(404, 'NOT_FOUND', 'Product was not found.');
+    default:
+      return null;
+  }
+}
+
 async function fetchProductById(supabase: SupabaseClient, productId: string) {
   const { data, error } = await supabase
     .from('products')
@@ -1437,52 +1477,26 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
     }
     const supabase = getUserSupabase(auth);
-    const { data: container, error: containerError } = await supabase
-      .from('containers')
-      .select('id,status')
-      .eq('tenant_id', auth.currentTenant.tenantId)
-      .eq('id', containerId)
-      .maybeSingle();
-
-    if (containerError) {
-      throw containerError;
-    }
-
-    if (!container) {
-      throw new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
-    }
-
-    if (container.status !== 'active') {
-      throw new ApiError(409, 'CONTAINER_NOT_RECEIVABLE', 'Only active containers can receive inventory.');
-    }
-
-    const product = await fetchProductById(supabase, body.productId);
-
-    if (!product || !product.is_active) {
-      throw new ApiError(404, 'NOT_FOUND', 'Product was not found.');
-    }
-
-    const { data, error } = await supabase
-      .from('inventory_unit')
-      .insert({
-        tenant_id: auth.currentTenant.tenantId,
-        container_id: containerId,
-        product_id: product.id,
-        quantity: body.quantity,
-        uom: body.uom,
-        created_by: auth.user.id
-      })
-      .select('id,tenant_id,container_id,product_id,quantity,uom,lot_code,serial_no,expiry_date,status,created_at,updated_at,created_by')
-      .single();
+    const { data, error } = await supabase.rpc('receive_inventory_unit', {
+      tenant_uuid: auth.currentTenant.tenantId,
+      container_uuid: containerId,
+      product_uuid: body.productId,
+      quantity: body.quantity,
+      uom: body.uom,
+      actor_uuid: auth.user.id
+    });
 
     if (error) {
-      throw error;
+      throw mapReceiveInventoryRpcError(error as { message?: string } | null) ?? error;
     }
+
+    const rpcResult = parseOrThrow(receiveInventoryUnitRpcResultSchema, data);
+    const product = rpcResult.product as ProductRow;
 
     return parseOrThrow(
       inventoryItemResponseSchema,
       mapInventoryUnitRowToLegacyInventoryItemDomain({
-        ...data,
+        ...rpcResult.inventoryUnit,
         product
       })
     );
