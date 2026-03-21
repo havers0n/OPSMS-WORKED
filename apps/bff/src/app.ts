@@ -58,11 +58,9 @@ import {
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
-  mapContainerRowToDomain,
   mapLocationOccupancyRowToDomain,
   mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
-  mapContainerTypeRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
   mapValidationResult
 } from './mappers.js';
@@ -90,7 +88,10 @@ import {
   createLayoutService,
   type LayoutService
 } from './features/layout/service.js';
-import { createContainersRepo } from './features/containers/repo.js';
+import {
+  createContainersService,
+  type ContainersService
+} from './features/containers/service.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
   mapExecutionLocationMoveError,
@@ -104,7 +105,6 @@ import {
   createSitesService,
   type SitesService
 } from './features/sites/service.js';
-import { isContainerTypeConstraintError } from './features/containers/errors.js';
 import {
   attachProductsToRows,
   type ProductAwareRow,
@@ -119,6 +119,7 @@ type WavesServiceFactory = (context: AuthenticatedRequestContext) => WavesServic
 type InventoryServiceFactory = (context: AuthenticatedRequestContext) => InventoryService;
 type LayoutServiceFactory = (context: AuthenticatedRequestContext) => LayoutService;
 type SitesServiceFactory = (context: AuthenticatedRequestContext) => SitesService;
+type ContainersServiceFactory = (context: AuthenticatedRequestContext) => ContainersService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -130,6 +131,7 @@ type BuildAppOptions = {
   getInventoryService?: InventoryServiceFactory;
   getLayoutService?: LayoutServiceFactory;
   getSitesService?: SitesServiceFactory;
+  getContainersService?: ContainersServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -172,6 +174,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getSitesService =
     options.getSitesService ??
     ((context: AuthenticatedRequestContext) => createSitesService(getUserSupabase(context)));
+  const getContainersService =
+    options.getContainersService ??
+    ((context: AuthenticatedRequestContext) => createContainersService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -243,17 +248,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('container_types')
-      .select('id,code,description')
-      .order('code', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(containerTypesResponseSchema, (data ?? []).map(mapContainerTypeRowToDomain));
+    const types = await getContainersService(auth).listAllTypes();
+    return parseOrThrow(containerTypesResponseSchema, types);
   });
 
   app.get('/api/products', async (request, reply) => {
@@ -326,17 +322,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('containers')
-      .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(containersResponseSchema, (data ?? []).map(mapContainerRowToDomain));
+    const containers = await getContainersService(auth).listAll();
+    return parseOrThrow(containersResponseSchema, containers);
   });
 
   app.get('/api/locations/:locationId/containers', async (request, reply) => {
@@ -507,49 +494,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for container creation.');
     }
 
-    const supabase = getUserSupabase(auth);
-    const containersRepo = createContainersRepo(supabase);
-    const typeExists = await containersRepo.containerTypeExists(body.containerTypeId);
-    if (!typeExists) {
-      throw new ApiError(400, 'INVALID_CONTAINER_TYPE', 'Container type was not found.');
-    }
-
-    const externalCodeExists = await containersRepo.containerCodeExists(
-      auth.currentTenant.tenantId,
-      body.externalCode
-    );
-    if (externalCodeExists) {
-      throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
-    }
-
-    const { data, error } = await supabase
-      .from('containers')
-      .insert({
-        tenant_id: auth.currentTenant.tenantId,
-        container_type_id: body.containerTypeId,
-        external_code: body.externalCode,
-        created_by: auth.user.id
-      })
-      .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
-      .single();
-
-    if (error) {
-      if ('code' in error && error.code === '23505') {
-        throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
-      }
-
-      if ('code' in error && error.code === '23503' && isContainerTypeConstraintError(error)) {
-        throw new ApiError(400, 'INVALID_CONTAINER_TYPE', 'Container type was not found.');
-      }
-
-      throw error;
-    }
+    const container = await getContainersService(auth).createContainer({
+      tenantId: auth.currentTenant.tenantId,
+      containerTypeId: body.containerTypeId,
+      externalCode: body.externalCode,
+      createdBy: auth.user.id
+    });
 
     return parseOrThrow(createContainerResponseSchema, {
-      containerId: data.id,
-      externalCode: data.external_code ?? '',
-      containerTypeId: data.container_type_id,
-      status: data.status
+      containerId: container.id,
+      externalCode: container.externalCode ?? '',
+      containerTypeId: container.containerTypeId,
+      status: container.status
     });
   });
 
@@ -567,22 +523,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('containers')
-      .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
-      .eq('id', containerId)
-      .maybeSingle();
+    const container = await getContainersService(auth).findById(containerId);
 
-    if (error) {
-      throw error;
-    }
-
-    if (!data) {
+    if (!container) {
       throw new ApiError(404, 'NOT_FOUND', 'Container was not found.');
     }
 
-    return parseOrThrow(containerResponseSchema, mapContainerRowToDomain(data));
+    return parseOrThrow(containerResponseSchema, container);
   });
 
   app.get('/api/containers/:containerId/location', async (request, reply) => {
@@ -616,16 +563,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('remove_container', {
-      container_uuid: containerId,
-      actor_uuid: auth.user.id
-    });
-
-    if (error) {
-      throw error;
-    }
-
+    const data = await getContainersService(auth).removeContainer(containerId, auth.user.id);
     return parseOrThrow(removeContainerResponseSchema, data);
   });
 
