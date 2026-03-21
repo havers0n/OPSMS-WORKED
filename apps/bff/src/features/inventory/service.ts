@@ -1,6 +1,17 @@
-// PR-01 scaffold only.
-// TODO(PR-05+): define inventory service contract during write-flow extraction.
+import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  createInventoryRepo,
+  type ReceiveInventoryUnitParams,
+  type ReceiveInventoryUnitResult
+} from './repo.js';
 
-export interface InventoryService {
-  // Intentionally empty in PR-01.
+export type InventoryService = {
+  receiveInventoryUnit(params: ReceiveInventoryUnitParams): Promise<ReceiveInventoryUnitResult>;
+};
+
+export function createInventoryService(supabase: SupabaseClient): InventoryService {
+  const repo = createInventoryRepo(supabase);
+  return {
+    receiveInventoryUnit: (params) => repo.receiveInventoryUnit(params)
+  };
 }

@@ -1,3 +1,2 @@
-// TODO(PR-02+): move inventory request/response schemas from app.ts/schemas.ts.
-
-export type InventorySchemaPlaceholder = Record<string, never>;
+// Inventory request/response schemas live in the root schemas.ts (shared with other features).
+// RPC result schemas are internal to repo.ts.

@@ -94,7 +94,11 @@ import {
   mapExecutionLocationMoveError,
   mapExecutionTransferError
 } from './features/execution/errors.js';
-import { mapReceiveInventoryRpcError } from './features/inventory/errors.js';
+import {
+  createInventoryService,
+  type InventoryService
+} from './features/inventory/service.js';
+import { isContainerTypeConstraintError } from './features/containers/errors.js';
 import {
   attachProductsToRows,
   type ProductAwareRow,
@@ -106,6 +110,7 @@ type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClien
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
 type OrdersServiceFactory = (context: AuthenticatedRequestContext) => OrdersService;
 type WavesServiceFactory = (context: AuthenticatedRequestContext) => WavesService;
+type InventoryServiceFactory = (context: AuthenticatedRequestContext) => InventoryService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -114,51 +119,13 @@ type BuildAppOptions = {
   getPlacementService?: PlacementServiceFactory;
   getOrdersService?: OrdersServiceFactory;
   getWavesService?: WavesServiceFactory;
+  getInventoryService?: InventoryServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
 }
 
-const receiveInventoryUnitRpcResultSchema = z.object({
-  inventoryUnit: z.object({
-    id: z.string().uuid(),
-    tenant_id: z.string().uuid(),
-    container_id: z.string().uuid(),
-    product_id: z.string().uuid(),
-    quantity: z.number(),
-    uom: z.string(),
-    created_at: z.string(),
-    created_by: z.string().uuid().nullable()
-  }),
-  product: z.object({
-    id: z.string().uuid(),
-    source: z.string(),
-    external_product_id: z.string(),
-    sku: z.string().nullable(),
-    name: z.string(),
-    permalink: z.string().nullable(),
-    image_urls: z.unknown(),
-    image_files: z.unknown(),
-    is_active: z.boolean(),
-    created_at: z.string(),
-    updated_at: z.string()
-  })
-});
-
-function isContainerTypeConstraintError(error: unknown) {
-  if (typeof error !== 'object' || error === null) {
-    return false;
-  }
-
-  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
-  const details = 'details' in error && typeof error.details === 'string' ? error.details : '';
-  const constraint = 'constraint' in error && typeof error.constraint === 'string' ? error.constraint : '';
-
-  return [message, details, constraint].some((value) =>
-    value.includes('container_type') || value.includes('containers_container_type_id_fkey')
-  );
-}
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
@@ -186,6 +153,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getWavesService =
     options.getWavesService ??
     ((context: AuthenticatedRequestContext) => createWavesService(getUserSupabase(context)));
+  const getInventoryService =
+    options.getInventoryService ??
+    ((context: AuthenticatedRequestContext) => createInventoryService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -725,28 +695,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth.currentTenant) {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
     }
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('receive_inventory_unit', {
-      tenant_uuid: auth.currentTenant.tenantId,
-      container_uuid: containerId,
-      product_uuid: body.productId,
+
+    const inventoryService = getInventoryService(auth);
+    const rpcResult = await inventoryService.receiveInventoryUnit({
+      tenantId: auth.currentTenant.tenantId,
+      containerId,
+      productId: body.productId,
       quantity: body.quantity,
       uom: body.uom,
-      actor_uuid: auth.user.id
+      actorId: auth.user.id
     });
-
-    if (error) {
-      throw mapReceiveInventoryRpcError(error as { message?: string } | null) ?? error;
-    }
-
-    const rpcResult = parseOrThrow(receiveInventoryUnitRpcResultSchema, data);
-    const product = rpcResult.product as ProductRow;
 
     return parseOrThrow(
       inventoryItemResponseSchema,
       mapInventoryUnitRowToLegacyInventoryItemDomain({
         ...rpcResult.inventoryUnit,
-        product
+        product: rpcResult.product as ProductRow
       })
     );
   });
