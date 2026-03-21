@@ -86,10 +86,7 @@ import {
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
 import {
-  ContainerNotFoundError,
-  LocationNotActiveError,
-  LocationNotFoundError,
-  LocationOccupiedError
+  mapPlacementError
 } from './features/placement/errors.js';
 import {
   createPlacementCommandService,
@@ -103,26 +100,13 @@ import {
   createWavesService,
   type WavesService
 } from './features/waves/service.js';
+import { mapWaveMembershipRpcError } from './features/waves/errors.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
-  ExecutionContainerNotFoundError,
-  ExecutionContainerNotPlacedError,
-  ExecutionInventoryUnitNotFoundError,
-  ExecutionInvalidSplitQuantityError,
-  ExecutionSerialSplitNotAllowedError,
-  ExecutionTargetContainerNotFoundError,
-  ExecutionTargetContainerSameAsSourceError,
-  ExecutionTargetContainerTenantMismatchError,
-  ExecutionTargetLocationDimensionOverflowError,
-  ExecutionTargetLocationDimensionUnknownError,
-  ExecutionTargetLocationNotActiveError,
-  ExecutionTargetLocationNotFoundError,
-  ExecutionTargetLocationOccupiedError,
-  ExecutionTargetLocationSameAsSourceError,
-  ExecutionTargetLocationTenantMismatchError,
-  ExecutionTargetLocationWeightOverflowError,
-  ExecutionTargetLocationWeightUnknownError
+  mapExecutionLocationMoveError,
+  mapExecutionTransferError
 } from './features/execution/errors.js';
+import { mapReceiveInventoryRpcError } from './features/inventory/errors.js';
 import {
   attachProductsToRows,
   productSelectColumns,
@@ -321,32 +305,6 @@ function mapWaveWithOrders(row: WaveRow, orders: ReturnType<typeof mapOrderSumma
   );
 }
 
-function mapWaveMembershipRpcError(
-  error: { message?: string } | null,
-  input: { waveId: string; orderId: string }
-) {
-  const message = error?.message ?? 'WAVE_MEMBERSHIP_UPDATE_FAILED';
-
-  switch (message) {
-    case 'WAVE_NOT_FOUND':
-      return new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${input.waveId} not found.`);
-    case 'ORDER_NOT_FOUND':
-      return new ApiError(404, 'ORDER_NOT_FOUND', `Order ${input.orderId} not found.`);
-    case 'WAVE_MEMBERSHIP_LOCKED':
-      return new ApiError(409, 'WAVE_MEMBERSHIP_LOCKED', 'Released waves have immutable membership.');
-    case 'ORDER_ALREADY_IN_WAVE':
-      return new ApiError(409, 'ORDER_ALREADY_IN_WAVE', 'Order is already attached to this wave.');
-    case 'ORDER_NOT_IN_WAVE':
-      return new ApiError(409, 'ORDER_NOT_IN_WAVE', 'Order is not attached to this wave.');
-    case 'ORDER_NOT_ATTACHABLE':
-      return new ApiError(409, 'ORDER_NOT_ATTACHABLE', 'Only draft or ready orders can be attached to a wave.');
-    case 'ORDER_NOT_DETACHABLE':
-      return new ApiError(409, 'ORDER_NOT_DETACHABLE', 'Only draft or ready orders can be detached from a wave.');
-    default:
-      return error;
-  }
-}
-
 const receiveInventoryUnitRpcResultSchema = z.object({
   inventoryUnit: z.object({
     id: z.string().uuid(),
@@ -372,20 +330,6 @@ const receiveInventoryUnitRpcResultSchema = z.object({
     updated_at: z.string()
   })
 });
-
-function mapReceiveInventoryRpcError(error: { message?: string } | null): ApiError | null {
-  switch (error?.message) {
-    case 'CONTAINER_NOT_FOUND':
-      return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
-    case 'CONTAINER_NOT_RECEIVABLE':
-      return new ApiError(409, 'CONTAINER_NOT_RECEIVABLE', 'Only active containers can receive inventory.');
-    case 'PRODUCT_NOT_FOUND':
-    case 'PRODUCT_INACTIVE':
-      return new ApiError(404, 'NOT_FOUND', 'Product was not found.');
-    default:
-      return null;
-  }
-}
 
 async function fetchProductById(supabase: SupabaseClient, productId: string) {
   const { data, error } = await supabase
@@ -626,158 +570,6 @@ async function fetchPublishedLayoutSummary(supabase: SupabaseClient, floorId: st
     cellCount: count ?? sampleCells?.length ?? 0,
     sampleAddresses: (sampleCells ?? []).map((cell) => cell.address)
   };
-}
-
-function mapPlacementError(error: unknown): ApiError | null {
-  if (error instanceof ContainerNotFoundError) {
-    return new ApiError(404, 'CONTAINER_NOT_FOUND', error.message);
-  }
-
-  if (error instanceof LocationNotFoundError) {
-    return new ApiError(404, 'LOCATION_NOT_FOUND', error.message);
-  }
-
-  if (error instanceof LocationOccupiedError) {
-    return new ApiError(409, 'PLACEMENT_CONFLICT', error.message);
-  }
-
-  if (error instanceof LocationNotActiveError) {
-    return new ApiError(409, 'LOCATION_NOT_WRITABLE', error.message);
-  }
-
-  return null;
-}
-
-function mapExecutionMoveError(error: unknown): ApiError | null {
-  if (error instanceof ExecutionContainerNotFoundError) {
-    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
-  }
-
-  if (error instanceof ExecutionContainerNotPlacedError) {
-    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is not currently placed.');
-  }
-
-  if (error instanceof ExecutionTargetLocationNotFoundError) {
-    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell was not found.');
-  }
-
-  if (error instanceof ExecutionTargetLocationTenantMismatchError) {
-    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell belongs to a different tenant.');
-  }
-
-  if (error instanceof ExecutionTargetLocationNotActiveError) {
-    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell is not currently writable.');
-  }
-
-  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
-    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is already in the target cell.');
-  }
-
-  if (error instanceof ExecutionTargetLocationOccupiedError) {
-    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Target cell is already occupied.');
-  }
-
-  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
-    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Target cell enforces dimensions that are missing on this container type.');
-  }
-
-  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
-    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Container dimensions exceed the target cell limits.');
-  }
-
-  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
-    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Target cell enforces weight, but the container gross weight cannot be computed.');
-  }
-
-  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
-    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Container gross weight exceeds the target cell limit.');
-  }
-
-  return null;
-}
-
-function mapExecutionLocationMoveError(error: unknown): ApiError | null {
-  if (error instanceof ExecutionContainerNotFoundError) {
-    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
-  }
-
-  if (error instanceof ExecutionContainerNotPlacedError) {
-    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Container does not have a current execution location.');
-  }
-
-  if (error instanceof ExecutionTargetLocationNotFoundError) {
-    return new ApiError(404, 'LOCATION_NOT_FOUND', 'Target location was not found.');
-  }
-
-  if (error instanceof ExecutionTargetLocationTenantMismatchError) {
-    return new ApiError(409, 'LOCATION_TENANT_MISMATCH', 'Target location belongs to a different tenant.');
-  }
-
-  if (error instanceof ExecutionTargetLocationNotActiveError) {
-    return new ApiError(409, 'LOCATION_NOT_WRITABLE', 'Target location is not active.');
-  }
-
-  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
-    return new ApiError(409, 'SAME_LOCATION', 'Container is already at the target location.');
-  }
-
-  if (error instanceof ExecutionTargetLocationOccupiedError) {
-    return new ApiError(409, 'LOCATION_OCCUPIED', 'Target location already has an active container.');
-  }
-
-  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
-    return new ApiError(409, 'LOCATION_DIMENSION_UNKNOWN', 'Target location enforces dimensions that are missing on this container type.');
-  }
-
-  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
-    return new ApiError(409, 'LOCATION_DIMENSION_OVERFLOW', 'Container dimensions exceed the target location limits.');
-  }
-
-  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
-    return new ApiError(409, 'LOCATION_WEIGHT_UNKNOWN', 'Target location enforces weight, but the container gross weight cannot be computed.');
-  }
-
-  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
-    return new ApiError(409, 'LOCATION_WEIGHT_OVERFLOW', 'Container gross weight exceeds the target location weight limit.');
-  }
-
-  return null;
-}
-
-function mapExecutionTransferError(error: unknown): ApiError | null {
-  if (error instanceof ExecutionInventoryUnitNotFoundError) {
-    return new ApiError(404, 'INVENTORY_UNIT_NOT_FOUND', 'Inventory unit was not found.');
-  }
-
-  if (error instanceof ExecutionInvalidSplitQuantityError) {
-    return new ApiError(409, 'INVALID_SPLIT_QUANTITY', 'Split quantity must be greater than zero and less than the source quantity.');
-  }
-
-  if (error instanceof ExecutionSerialSplitNotAllowedError) {
-    return new ApiError(409, 'SERIAL_SPLIT_NOT_ALLOWED', 'Serial-tracked inventory units cannot be split.');
-  }
-
-  if (error instanceof ExecutionTargetContainerNotFoundError) {
-    return new ApiError(404, 'TARGET_CONTAINER_NOT_FOUND', 'Target container was not found.');
-  }
-
-  if (error instanceof ExecutionTargetContainerTenantMismatchError) {
-    return new ApiError(409, 'TARGET_CONTAINER_TENANT_MISMATCH', 'Target container belongs to a different tenant.');
-  }
-
-  if (error instanceof ExecutionTargetContainerSameAsSourceError) {
-    return new ApiError(409, 'TARGET_CONTAINER_CONFLICT', 'Target container cannot be the same as the source container.');
-  }
-
-  if (error instanceof ExecutionContainerNotPlacedError) {
-    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Source container does not have a current execution location.');
-  }
-
-  if (error instanceof ExecutionContainerNotFoundError) {
-    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Source container was not found.');
-  }
-
-  return null;
 }
 
 function isContainerTypeConstraintError(error: unknown) {

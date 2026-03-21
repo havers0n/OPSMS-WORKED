@@ -1,3 +1,5 @@
+import { ApiError } from '../../errors.js';
+
 export class ExecutionContainerNotFoundError extends Error {
   constructor() {
     super('Container was not found for canonical execution.');
@@ -98,4 +100,156 @@ export class ExecutionTargetLocationWeightOverflowError extends Error {
   constructor() {
     super('Container gross weight exceeds the target location weight limit.');
   }
+}
+
+export function mapExecutionMoveError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is not currently placed.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotFoundError) {
+    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell was not found.');
+  }
+
+  if (error instanceof ExecutionTargetLocationTenantMismatchError) {
+    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotActiveError) {
+    return new ApiError(409, 'INVALID_TARGET_CELL', 'Target cell is not currently writable.');
+  }
+
+  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Container is already in the target cell.');
+  }
+
+  if (error instanceof ExecutionTargetLocationOccupiedError) {
+    return new ApiError(409, 'PLACEMENT_CONFLICT', 'Target cell is already occupied.');
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
+    return new ApiError(
+      409,
+      'PLACEMENT_CONSTRAINT',
+      'Target cell enforces dimensions that are missing on this container type.'
+    );
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
+    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Container dimensions exceed the target cell limits.');
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
+    return new ApiError(
+      409,
+      'PLACEMENT_CONSTRAINT',
+      'Target cell enforces weight, but the container gross weight cannot be computed.'
+    );
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
+    return new ApiError(409, 'PLACEMENT_CONSTRAINT', 'Container gross weight exceeds the target cell limit.');
+  }
+
+  return null;
+}
+
+export function mapExecutionLocationMoveError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Container was not found.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Container does not have a current execution location.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotFoundError) {
+    return new ApiError(404, 'LOCATION_NOT_FOUND', 'Target location was not found.');
+  }
+
+  if (error instanceof ExecutionTargetLocationTenantMismatchError) {
+    return new ApiError(409, 'LOCATION_TENANT_MISMATCH', 'Target location belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotActiveError) {
+    return new ApiError(409, 'LOCATION_NOT_WRITABLE', 'Target location is not active.');
+  }
+
+  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
+    return new ApiError(409, 'SAME_LOCATION', 'Container is already at the target location.');
+  }
+
+  if (error instanceof ExecutionTargetLocationOccupiedError) {
+    return new ApiError(409, 'LOCATION_OCCUPIED', 'Target location already has an active container.');
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionUnknownError) {
+    return new ApiError(
+      409,
+      'LOCATION_DIMENSION_UNKNOWN',
+      'Target location enforces dimensions that are missing on this container type.'
+    );
+  }
+
+  if (error instanceof ExecutionTargetLocationDimensionOverflowError) {
+    return new ApiError(409, 'LOCATION_DIMENSION_OVERFLOW', 'Container dimensions exceed the target location limits.');
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightUnknownError) {
+    return new ApiError(
+      409,
+      'LOCATION_WEIGHT_UNKNOWN',
+      'Target location enforces weight, but the container gross weight cannot be computed.'
+    );
+  }
+
+  if (error instanceof ExecutionTargetLocationWeightOverflowError) {
+    return new ApiError(409, 'LOCATION_WEIGHT_OVERFLOW', 'Container gross weight exceeds the target location weight limit.');
+  }
+
+  return null;
+}
+
+export function mapExecutionTransferError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionInventoryUnitNotFoundError) {
+    return new ApiError(404, 'INVENTORY_UNIT_NOT_FOUND', 'Inventory unit was not found.');
+  }
+
+  if (error instanceof ExecutionInvalidSplitQuantityError) {
+    return new ApiError(
+      409,
+      'INVALID_SPLIT_QUANTITY',
+      'Split quantity must be greater than zero and less than the source quantity.'
+    );
+  }
+
+  if (error instanceof ExecutionSerialSplitNotAllowedError) {
+    return new ApiError(409, 'SERIAL_SPLIT_NOT_ALLOWED', 'Serial-tracked inventory units cannot be split.');
+  }
+
+  if (error instanceof ExecutionTargetContainerNotFoundError) {
+    return new ApiError(404, 'TARGET_CONTAINER_NOT_FOUND', 'Target container was not found.');
+  }
+
+  if (error instanceof ExecutionTargetContainerTenantMismatchError) {
+    return new ApiError(409, 'TARGET_CONTAINER_TENANT_MISMATCH', 'Target container belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionTargetContainerSameAsSourceError) {
+    return new ApiError(409, 'TARGET_CONTAINER_CONFLICT', 'Target container cannot be the same as the source container.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Source container does not have a current execution location.');
+  }
+
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Source container was not found.');
+  }
+
+  return null;
 }
