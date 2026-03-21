@@ -71,7 +71,17 @@ function createOrderRow(args: {
   externalNumber: string;
   status: string;
   waveId?: string | null;
-}) {
+}): {
+  id: string;
+  tenant_id: string;
+  external_number: string;
+  status: string;
+  priority: number;
+  wave_id: string | null;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+} {
   return {
     id: args.id,
     tenant_id: tenantId,
@@ -107,6 +117,110 @@ function createAppWithSupabase(supabase: { from: ReturnType<typeof vi.fn>; rpc?:
     getAuthContext: vi.fn(async () => authContext as never),
     getUserSupabase: vi.fn(() => ({ ...supabase, rpc: supabase.rpc ?? vi.fn() }) as never)
   });
+}
+
+function toOrderLineDto(row: {
+  id: string;
+  order_id: string;
+  tenant_id: string;
+  product_id: string | null;
+  sku: string;
+  name: string;
+  qty_required: number;
+  qty_picked: number;
+  status: string;
+}) {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    tenantId: row.tenant_id,
+    productId: row.product_id,
+    sku: row.sku,
+    name: row.name,
+    qtyRequired: row.qty_required,
+    qtyPicked: row.qty_picked,
+    status: row.status
+  };
+}
+
+function toOrderSummaryDto(row: ReturnType<typeof buildOrderSummaryRow>) {
+  const waveName = Array.isArray(row.waves) ? row.waves[0]?.name ?? null : row.waves?.name ?? null;
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    externalNumber: row.external_number,
+    status: row.status,
+    priority: row.priority,
+    waveId: row.wave_id,
+    waveName,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    closedAt: row.closed_at,
+    lineCount: row.line_count,
+    unitCount: row.unit_count,
+    pickedUnitCount: row.picked_unit_count
+  };
+}
+
+function toOrderDto(
+  row: ReturnType<typeof createOrderRow>,
+  waveName: string | null,
+  lines: Array<{
+    id: string;
+    order_id: string;
+    tenant_id: string;
+    product_id: string | null;
+    sku: string;
+    name: string;
+    qty_required: number;
+    qty_picked: number;
+    status: string;
+  }>
+) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    externalNumber: row.external_number,
+    status: row.status,
+    priority: row.priority,
+    waveId: row.wave_id,
+    waveName,
+    createdAt: row.created_at,
+    releasedAt: row.released_at,
+    closedAt: row.closed_at,
+    lines: lines.map(toOrderLineDto)
+  };
+}
+
+function toWaveDto(
+  wave: {
+    id: string;
+    tenant_id: string;
+    name: string;
+    status: string;
+    created_at: string;
+    released_at: string | null;
+    closed_at: string | null;
+  },
+  orders: Array<ReturnType<typeof buildOrderSummaryRow>>
+) {
+  const totalOrders = orders.length;
+  const readyOrders = orders.filter((order) => order.status === 'ready').length;
+  const blockingOrderCount = orders.filter((order) => order.status !== 'ready').length;
+
+  return {
+    id: wave.id,
+    tenantId: wave.tenant_id,
+    name: wave.name,
+    status: wave.status,
+    createdAt: wave.created_at,
+    releasedAt: wave.released_at,
+    closedAt: wave.closed_at,
+    totalOrders,
+    readyOrders,
+    blockingOrderCount,
+    orders: orders.map(toOrderSummaryDto)
+  };
 }
 
 describe('orders and waves', () => {
@@ -202,6 +316,192 @@ describe('orders and waves', () => {
     await app.close();
   });
 
+  it('rejects adding an inactive product to an order line with stable error contract', async () => {
+    const orderId = '11111111-2222-4333-8444-555555555555';
+    const inactiveProduct = {
+      ...productRow,
+      id: '82ec73f2-bf4b-4ec8-8515-2b95bb1f639f',
+      is_active: false
+    };
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: { id: orderId, status: 'draft' },
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'products') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: inactiveProduct,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${orderId}/lines`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: inactiveProduct.id,
+        qtyRequired: 2
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PRODUCT_INACTIVE',
+      message: 'Inactive products cannot be added to orders.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('deletes an order line from an editable order with 204 contract', async () => {
+    const orderId = 'fa357435-1202-4aff-bf06-16713fb4b2ea';
+    const lineId = '8df66bd7-0ec3-4f8f-b0aa-7c621a13cb07';
+    const deleteByOrderId = vi.fn(async () => ({
+      error: null
+    }));
+    const deleteByLineId = vi.fn(() => ({
+      eq: deleteByOrderId
+    }));
+    const deleteOrderLine = vi.fn(() => ({
+      eq: deleteByLineId
+    }));
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: { id: orderId, status: 'ready' },
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            delete: deleteOrderLine
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/orders/${orderId}/lines/${lineId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).toBe('');
+    expect(deleteOrderLine).toHaveBeenCalledTimes(1);
+    expect(deleteByLineId).toHaveBeenCalledWith('id', lineId);
+    expect(deleteByOrderId).toHaveBeenCalledWith('order_id', orderId);
+
+    await app.close();
+  });
+
+  it('blocks deleting an order line when the order is not editable', async () => {
+    const orderId = 'cdb0f6a2-f304-4b53-a648-c9a88e4fcf1b';
+    const lineId = '0af82f90-2f3e-4a7a-a1c7-8dcaab7ee870';
+    const deleteOrderLine = vi.fn();
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: { id: orderId, status: 'released' },
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            delete: deleteOrderLine
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/orders/${orderId}/lines/${lineId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'ORDER_NOT_EDITABLE',
+      message: "Cannot remove lines from an order in status 'released'."
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(deleteOrderLine).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
   it('rejects marking an empty order as ready', async () => {
     const orderId = '66666666-6666-4666-8666-666666666666';
 
@@ -255,8 +555,208 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'ORDER_HAS_NO_LINES'
+      code: 'ORDER_HAS_NO_LINES',
+      message: 'Cannot mark an order as ready until it has at least one line.'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('marks a draft order as ready and returns the updated order contract', async () => {
+    const orderId = '71d25372-5516-48be-bd5b-9152f5ccbe1a';
+    let order = createOrderRow({
+      id: orderId,
+      externalNumber: 'ORD-2010',
+      status: 'draft',
+      waveId: null
+    });
+    const orderLineRows = [
+      {
+        id: '7139de5d-ef9f-4d30-9583-e994be2c9e54',
+        order_id: orderId,
+        tenant_id: tenantId,
+        product_id: productRow.id,
+        sku: productRow.sku,
+        name: productRow.name,
+        qty_required: 2,
+        qty_picked: 0,
+        status: 'pending'
+      }
+    ];
+    const updateOrder = vi.fn((patch: Record<string, unknown>) => {
+      order = {
+        ...order,
+        status: patch.status as string
+      };
+      return {
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn(async () => ({
+              data: { id: order.id },
+              error: null
+            }))
+          }))
+        }))
+      };
+    });
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: buildOrderRow(order, null),
+                  error: null
+                }))
+              }))
+            })),
+            update: updateOrder
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            select: vi.fn((_columns: string, options?: { count?: string; head?: boolean }) => ({
+              eq: vi.fn(() => {
+                if (options?.head) {
+                  return Promise.resolve({
+                    data: null,
+                    count: orderLineRows.length,
+                    error: null
+                  });
+                }
+
+                return {
+                  order: vi.fn(async () => ({
+                    data: orderLineRows,
+                    error: null
+                  }))
+                };
+              })
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/orders/${orderId}/status`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        status: 'ready'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(toOrderDto(order, null, orderLineRows));
+    expect(updateOrder).toHaveBeenCalledWith({
+      status: 'ready'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('releases an order through release_order rpc and returns released status contract', async () => {
+    const orderId = '8e1e9f95-eb5a-4e4b-b4a0-6948ce593fa8';
+    let order = createOrderRow({
+      id: orderId,
+      externalNumber: 'ORD-2011',
+      status: 'ready',
+      waveId: null
+    });
+    const orderLineRows = [
+      {
+        id: '41d3f4cd-20e2-4ec5-b82d-d80c8f0e4afd',
+        order_id: orderId,
+        tenant_id: tenantId,
+        product_id: productRow.id,
+        sku: productRow.sku,
+        name: productRow.name,
+        qty_required: 1,
+        qty_picked: 0,
+        status: 'pending'
+      }
+    ];
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: buildOrderRow(order, null),
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(async () => ({
+                  data: orderLineRows,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn(async (fn: string) => {
+        if (fn === 'release_order') {
+          order = {
+            ...order,
+            status: 'released',
+            released_at: '2026-03-15T11:00:00.000Z'
+          };
+          return { data: null, error: null };
+        }
+
+        return { data: null, error: null };
+      })
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/orders/${orderId}/status`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        status: 'released'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(toOrderDto(order, null, orderLineRows));
+    expect(supabase.rpc).toHaveBeenCalledWith('release_order', { order_uuid: orderId });
 
     await app.close();
   });
@@ -302,8 +802,11 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'ORDER_RELEASE_CONTROLLED_BY_WAVE'
+      code: 'ORDER_RELEASE_CONTROLLED_BY_WAVE',
+      message: 'This order belongs to a wave. Release is controlled by the wave.'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
     expect(supabase.rpc).not.toHaveBeenCalled();
 
     await app.close();
@@ -450,6 +953,212 @@ describe('orders and waves', () => {
     await app.close();
   });
 
+  it('creates a wave and returns wave contract', async () => {
+    const createdWaveId = '0f0d9d43-b9ff-4f9f-abde-1846a998c298';
+    const createdWave = {
+      ...waveDraftRow,
+      id: createdWaveId,
+      name: 'Wave B'
+    };
+    const insertWave = vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn(async () => ({
+          data: { id: createdWaveId },
+          error: null
+        }))
+      }))
+    }));
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'waves') {
+          return {
+            insert: insertWave,
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: createdWave,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(async () => ({
+                  data: [],
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/waves',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        name: 'Wave B'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: createdWaveId,
+      tenantId,
+      name: 'Wave B',
+      status: 'draft',
+      createdAt: '2026-03-15T08:00:00.000Z',
+      releasedAt: null,
+      closedAt: null,
+      totalOrders: 0,
+      readyOrders: 0,
+      blockingOrderCount: 0,
+      orders: []
+    });
+    expect(insertWave).toHaveBeenCalledWith({
+      tenant_id: tenantId,
+      name: 'Wave B',
+      status: 'draft'
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid create-wave payloads with validation error', async () => {
+    const supabase = {
+      from: vi.fn(),
+      rpc: vi.fn()
+    };
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/waves',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        name: ''
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(supabase.from).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('moves a wave from draft to ready and returns updated wave contract', async () => {
+    let wave = { ...waveDraftRow };
+    const orders = [
+      buildOrderSummaryRow(
+        createOrderRow({
+          id: '58fc4fc0-91ed-4337-92fd-c190c6493ca6',
+          externalNumber: 'ORD-3003',
+          status: 'ready',
+          waveId: wave.id
+        }),
+        wave.name
+      )
+    ];
+    const updateWave = vi.fn((patch: Record<string, unknown>) => {
+      wave = {
+        ...wave,
+        status: patch.status as string
+      };
+      return {
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn(async () => ({
+              data: { id: wave.id },
+              error: null
+            }))
+          }))
+        }))
+      };
+    });
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'waves') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: wave,
+                  error: null
+                }))
+              }))
+            })),
+            update: updateWave
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(async () => ({
+                  data: orders,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/waves/${waveDraftRow.id}/status`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        status: 'ready'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(toWaveDto(wave, orders));
+    expect(updateWave).toHaveBeenCalledWith({
+      status: 'ready'
+    });
+
+    await app.close();
+  });
+
   it('rejects marking an empty wave as ready', async () => {
     const supabase = {
       from: vi.fn((table: string) => {
@@ -502,8 +1211,11 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'WAVE_HAS_NO_ORDERS'
+      code: 'WAVE_HAS_NO_ORDERS',
+      message: 'Cannot mark an empty wave as ready.'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
 
     await app.close();
   });
@@ -581,8 +1293,11 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'WAVE_HAS_BLOCKING_ORDERS'
+      code: 'WAVE_HAS_BLOCKING_ORDERS',
+      message: 'All attached orders must be ready before wave release.'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
     expect(supabase.rpc).not.toHaveBeenCalled();
 
     await app.close();
@@ -684,11 +1399,272 @@ describe('orders and waves', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      id: waveReadyRow.id,
-      status: 'released'
-    });
+    expect(response.json()).toEqual(toWaveDto(wave, orders));
     expect(supabase.rpc).toHaveBeenCalledWith('release_wave', { wave_uuid: waveReadyRow.id });
+
+    await app.close();
+  });
+
+  it('attaches an editable order to an editable wave', async () => {
+    const orderId = '6f96d767-1662-4f9f-b7a0-8a3d111f7b40';
+    let order = createOrderRow({
+      id: orderId,
+      externalNumber: 'ORD-5001',
+      status: 'draft',
+      waveId: null
+    });
+    const attachToWave = vi.fn((patch: Record<string, unknown>) => {
+      order = {
+        ...order,
+        wave_id: patch.wave_id as string | null
+      };
+      return {
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn(async () => ({
+              data: { id: order.id },
+              error: null
+            }))
+          }))
+        }))
+      };
+    });
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'waves') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: waveDraftRow,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn((column: string) => {
+                if (column === 'id') {
+                  return {
+                    single: vi.fn(async () => ({
+                      data: {
+                        id: order.id,
+                        status: order.status,
+                        wave_id: order.wave_id
+                      },
+                      error: null
+                    }))
+                  };
+                }
+
+                return {
+                  order: vi.fn(async () => ({
+                    data: order.wave_id === waveDraftRow.id ? [buildOrderSummaryRow(order, waveDraftRow.name)] : [],
+                    error: null
+                  }))
+                };
+              })
+            })),
+            update: attachToWave
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/waves/${waveDraftRow.id}/orders`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        orderId
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      toWaveDto(waveDraftRow, [buildOrderSummaryRow(order, waveDraftRow.name)])
+    );
+    expect(attachToWave).toHaveBeenCalledWith({
+      wave_id: waveDraftRow.id
+    });
+
+    await app.close();
+  });
+
+  it('detaches an order from a wave and returns updated wave contract', async () => {
+    const orderId = '8dea2f29-b8e6-40d0-92eb-5118e6177d36';
+    let order = createOrderRow({
+      id: orderId,
+      externalNumber: 'ORD-5002',
+      status: 'ready',
+      waveId: waveDraftRow.id
+    });
+    const detachFromWave = vi.fn((patch: Record<string, unknown>) => {
+      order = {
+        ...order,
+        wave_id: patch.wave_id as string | null
+      };
+      return {
+        eq: vi.fn(() => ({
+          select: vi.fn(() => ({
+            single: vi.fn(async () => ({
+              data: { id: order.id },
+              error: null
+            }))
+          }))
+        }))
+      };
+    });
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'waves') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: waveDraftRow,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn((column: string) => {
+                if (column === 'id') {
+                  return {
+                    single: vi.fn(async () => ({
+                      data: {
+                        id: order.id,
+                        status: order.status,
+                        wave_id: order.wave_id
+                      },
+                      error: null
+                    }))
+                  };
+                }
+
+                return {
+                  order: vi.fn(async () => ({
+                    data: order.wave_id === waveDraftRow.id ? [buildOrderSummaryRow(order, waveDraftRow.name)] : [],
+                    error: null
+                  }))
+                };
+              })
+            })),
+            update: detachFromWave
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/waves/${waveDraftRow.id}/orders/${orderId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(toWaveDto(waveDraftRow, []));
+    expect(detachFromWave).toHaveBeenCalledWith({
+      wave_id: null
+    });
+
+    await app.close();
+  });
+
+  it('rejects detach when order is not attached to the requested wave', async () => {
+    const orderId = '117f4d37-cf2b-45bc-a234-cf034eaf70d8';
+    const detachFromWave = vi.fn();
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'waves') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: waveDraftRow,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: {
+                    id: orderId,
+                    status: 'ready',
+                    wave_id: null
+                  },
+                  error: null
+                }))
+              }))
+            })),
+            update: detachFromWave
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/waves/${waveDraftRow.id}/orders/${orderId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'ORDER_NOT_IN_WAVE',
+      message: 'Order is not attached to this wave.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(detachFromWave).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -739,8 +1715,11 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'WAVE_MEMBERSHIP_LOCKED'
+      code: 'WAVE_MEMBERSHIP_LOCKED',
+      message: 'Released waves have immutable membership.'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
 
     await app.close();
   });

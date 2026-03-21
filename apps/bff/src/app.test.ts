@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildApp } from './app.js';
+import { LocationNotFoundError } from './features/placement/errors.js';
 
 const authContext = {
   accessToken: 'token',
@@ -1764,6 +1765,65 @@ describe('buildApp', () => {
     expect(response.json()).toMatchObject({
       code: 'CONTAINER_NOT_FOUND'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('maps inactive inventory products to the current not-found contract', async () => {
+    const inactiveProduct = {
+      ...productRows[0],
+      id: 'ac4f86de-c7f8-4357-9fa2-7e6c2bbaeeee',
+      is_active: false
+    };
+    const base = createSupabaseStub();
+    const supabase = {
+      ...base,
+      from: vi.fn((table: string) => {
+        if (table === 'products') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn((_column: string, value: string) => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: value === inactiveProduct.id ? inactiveProduct : null,
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        return base.from(table);
+      })
+    };
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: inactiveProduct.id,
+        quantity: 1,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Product was not found.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(supabase.from.mock.calls.some(([table]) => table === 'inventory_unit')).toBe(false);
 
     await app.close();
   });
@@ -1831,6 +1891,8 @@ describe('buildApp', () => {
     expect(response.json()).toMatchObject({
       code: 'CONTAINER_NOT_RECEIVABLE'
     });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
 
     await app.close();
   });
@@ -2477,6 +2539,94 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('creates a floor and returns the id contract', async () => {
+    const base = createSupabaseStub();
+    const insertFloor = vi.fn((payload: Record<string, unknown>) => ({
+      select: vi.fn(() => ({
+        single: vi.fn(async () => ({
+          data: {
+            id: 'f5d8bc5a-85d2-4f1d-b3dc-90d4d7b3c8fe',
+            payload
+          },
+          error: null
+        }))
+      }))
+    }));
+    const supabase = {
+      ...base,
+      from: vi.fn((table: string) => {
+        if (table === 'floors') {
+          return {
+            insert: insertFloor
+          };
+        }
+
+        return base.from(table);
+      })
+    };
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/floors',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        siteId: '1f7eec3d-7300-47ff-b5a2-164e31422d22',
+        code: 'F1',
+        name: 'Floor 1',
+        sortOrder: 0
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'f5d8bc5a-85d2-4f1d-b3dc-90d4d7b3c8fe'
+    });
+    expect(insertFloor).toHaveBeenCalledWith({
+      site_id: '1f7eec3d-7300-47ff-b5a2-164e31422d22',
+      code: 'F1',
+      name: 'Floor 1',
+      sort_order: 0
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid create-floor payloads with validation error', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/floors',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        siteId: 'not-a-uuid',
+        code: '',
+        name: 'Floor 1',
+        sortOrder: -1
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.from.mock.calls.some(([table]) => table === 'floors')).toBe(false);
+
+    await app.close();
+  });
+
   it('returns not found for the removed legacy place-by-cell route', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
@@ -2541,6 +2691,42 @@ describe('buildApp', () => {
       locationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64',
       actorId: authContext.user.id
     });
+
+    await app.close();
+  });
+
+  it('maps placement service location-not-found to stable api contract', async () => {
+    const supabase = createSupabaseStub();
+    const placementService = {
+      placeContainerAtLocation: vi.fn(async () => {
+        throw new LocationNotFoundError();
+      })
+    };
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never),
+      getPlacementService: vi.fn(() => placementService as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/placement/place-at-location',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+        locationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64'
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      code: 'LOCATION_NOT_FOUND',
+      message: 'Location was not found.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
 
     await app.close();
   });
@@ -2742,6 +2928,49 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('maps move-to-location occupancy conflicts to stable api contract', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'move_container_canonical') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'LOCATION_OCCUPIED'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/move-to-location',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetLocationId: '88b79cb6-24f0-4edb-9af7-8902e9f0fb64'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'LOCATION_OCCUPIED',
+      message: 'Target location already has an active container.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
   it('transfers stock through the canonical public endpoint', async () => {
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
@@ -2810,6 +3039,50 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('maps transfer target-container-not-found to stable api contract', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'transfer_inventory_unit') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'TARGET_CONTAINER_NOT_FOUND'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/inventory/e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c/transfer',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        targetContainerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        quantity: 2
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({
+      code: 'TARGET_CONTAINER_NOT_FOUND',
+      message: 'Target container was not found.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
   it('picks partial stock through the canonical public endpoint', async () => {
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
@@ -2874,6 +3147,356 @@ describe('buildApp', () => {
       transferMovementId: '9d35f4c2-184b-4a07-b011-0caec48ba1f9',
       occurredAt: '2026-03-13T13:10:00.000Z'
     });
+
+    await app.close();
+  });
+
+  it('maps pick-partial invalid split quantity to stable api contract', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'pick_partial_inventory_unit') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'INVALID_SPLIT_QUANTITY'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/inventory/e7555d1b-f3f4-4c72-b2c8-8e6bc8f2cd7c/pick-partial',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        pickContainerId: '4f8a33c1-c803-4515-b8d4-0144f788e5d2',
+        quantity: 1
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'INVALID_SPLIT_QUANTITY',
+      message: 'Split quantity must be greater than zero and less than the source quantity.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('creates a layout draft and returns id contract', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'create_layout_draft') {
+        return {
+          data: '30ad8d7e-15a4-404f-953e-23634eb38769',
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: '30ad8d7e-15a4-404f-953e-23634eb38769'
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith('create_layout_draft', {
+      floor_uuid: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      actor_uuid: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid create-layout-draft payloads before rpc', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        floorId: 'not-a-uuid'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('validates a layout draft and returns validation contract', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'validate_layout_version') {
+        return {
+          data: {
+            isValid: false,
+            issues: [
+              {
+                code: 'LAYOUT_OVERLAP',
+                severity: 'error',
+                message: 'Rack geometry overlaps another rack.',
+                entityId: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'
+              }
+            ]
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/validate`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      isValid: false,
+      issues: [
+        {
+          code: 'LAYOUT_OVERLAP',
+          severity: 'error',
+          message: 'Rack geometry overlaps another rack.',
+          entityId: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'
+        }
+      ]
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith('validate_layout_version', {
+      layout_version_uuid: layoutVersionId
+    });
+
+    await app.close();
+  });
+
+  it('keeps validate-layout rpc P0001 fallback mapping as placement-conflict contract', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'validate_layout_version') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'LAYOUT_VALIDATION_FAILED'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/validate`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_CONFLICT',
+      message: 'LAYOUT_VALIDATION_FAILED'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('rejects invalid validate-layout params before rpc', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts/not-a-uuid/validate',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('publishes a layout draft and returns publish contract', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version') {
+        return {
+          data: {
+            layoutVersionId,
+            publishedAt: '2026-03-21T10:15:00.000Z',
+            generatedCells: 8,
+            validation: {
+              isValid: true,
+              issues: []
+            }
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      layoutVersionId,
+      publishedAt: '2026-03-21T10:15:00.000Z',
+      generatedCells: 8,
+      validation: {
+        isValid: true,
+        issues: []
+      }
+    });
+    expect(supabase.rpc).toHaveBeenCalledWith('publish_layout_version', {
+      layout_version_uuid: layoutVersionId,
+      actor_uuid: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('keeps publish-layout rpc P0001 fallback mapping as placement-conflict contract', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'LAYOUT_NOT_VALID'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_CONFLICT',
+      message: 'LAYOUT_NOT_VALID'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('rejects invalid publish-layout params before rpc', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts/not-a-uuid/publish',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(supabase.rpc).not.toHaveBeenCalled();
 
     await app.close();
   });
