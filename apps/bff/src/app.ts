@@ -63,9 +63,7 @@ import {
   mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
   mapContainerTypeRowToDomain,
-  mapFloorRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
-  mapSiteRowToDomain,
   mapValidationResult
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
@@ -102,6 +100,10 @@ import {
   createInventoryService,
   type InventoryService
 } from './features/inventory/service.js';
+import {
+  createSitesService,
+  type SitesService
+} from './features/sites/service.js';
 import { isContainerTypeConstraintError } from './features/containers/errors.js';
 import {
   attachProductsToRows,
@@ -116,6 +118,7 @@ type OrdersServiceFactory = (context: AuthenticatedRequestContext) => OrdersServ
 type WavesServiceFactory = (context: AuthenticatedRequestContext) => WavesService;
 type InventoryServiceFactory = (context: AuthenticatedRequestContext) => InventoryService;
 type LayoutServiceFactory = (context: AuthenticatedRequestContext) => LayoutService;
+type SitesServiceFactory = (context: AuthenticatedRequestContext) => SitesService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -126,6 +129,7 @@ type BuildAppOptions = {
   getWavesService?: WavesServiceFactory;
   getInventoryService?: InventoryServiceFactory;
   getLayoutService?: LayoutServiceFactory;
+  getSitesService?: SitesServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -165,6 +169,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getLayoutService =
     options.getLayoutService ??
     ((context: AuthenticatedRequestContext) => createLayoutService(getUserSupabase(context)));
+  const getSitesService =
+    options.getSitesService ??
+    ((context: AuthenticatedRequestContext) => createSitesService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -228,14 +235,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.from('sites').select('id,code,name,timezone').order('name', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(sitesResponseSchema, (data ?? []).map(mapSiteRowToDomain));
+    const sites = await getSitesService(auth).listSites();
+    return parseOrThrow(sitesResponseSchema, sites);
   });
 
   app.get('/api/container-types', async (request, reply) => {
@@ -488,18 +489,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for site creation.');
     }
 
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('sites')
-      .insert({ tenant_id: auth.currentTenant.tenantId, code: body.code, name: body.name, timezone: body.timezone })
-      .select('id')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(idResponseSchema, { id: data.id });
+    const id = await getSitesService(auth).createSite({
+      tenantId: auth.currentTenant.tenantId,
+      code: body.code,
+      name: body.name,
+      timezone: body.timezone
+    });
+    return parseOrThrow(idResponseSchema, { id });
   });
 
   app.post('/api/containers', async (request, reply) => {
@@ -562,18 +558,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const siteId = parseOrThrow(idResponseSchema, { id: (request.params as { siteId: string }).siteId }).id;
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('floors')
-      .select('id,site_id,code,name,sort_order')
-      .eq('site_id', siteId)
-      .order('sort_order', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(floorsResponseSchema, (data ?? []).map(mapFloorRowToDomain));
+    const floors = await getSitesService(auth).listFloors(siteId);
+    return parseOrThrow(floorsResponseSchema, floors);
   });
 
   app.get('/api/containers/:containerId', async (request, reply) => {
