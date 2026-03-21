@@ -88,6 +88,10 @@ import { createOrdersRepo } from './features/orders/repo.js';
 import { createWavesRepo } from './features/waves/repo.js';
 import { createProductsRepo } from './features/products/repo.js';
 import { createLayoutRepo } from './features/layout/repo.js';
+import {
+  createLayoutService,
+  type LayoutService
+} from './features/layout/service.js';
 import { createContainersRepo } from './features/containers/repo.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
@@ -111,6 +115,7 @@ type PlacementServiceFactory = (context: AuthenticatedRequestContext) => Placeme
 type OrdersServiceFactory = (context: AuthenticatedRequestContext) => OrdersService;
 type WavesServiceFactory = (context: AuthenticatedRequestContext) => WavesService;
 type InventoryServiceFactory = (context: AuthenticatedRequestContext) => InventoryService;
+type LayoutServiceFactory = (context: AuthenticatedRequestContext) => LayoutService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -120,6 +125,7 @@ type BuildAppOptions = {
   getOrdersService?: OrdersServiceFactory;
   getWavesService?: WavesServiceFactory;
   getInventoryService?: InventoryServiceFactory;
+  getLayoutService?: LayoutServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -156,6 +162,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getInventoryService =
     options.getInventoryService ??
     ((context: AuthenticatedRequestContext) => createInventoryService(getUserSupabase(context)));
+  const getLayoutService =
+    options.getLayoutService ??
+    ((context: AuthenticatedRequestContext) => createLayoutService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -831,17 +840,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const body = parseOrThrow(createLayoutDraftBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('create_layout_draft', {
-      floor_uuid: body.floorId,
-      actor_uuid: auth.user.id
-    });
+    const layoutService = getLayoutService(auth);
+    const id = await layoutService.createDraft(body.floorId, auth.user.id);
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(idResponseSchema, { id: data });
+    return parseOrThrow(idResponseSchema, { id });
   });
 
   app.post('/api/layout-drafts/save', async (request, reply) => {
@@ -849,17 +851,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const body = parseOrThrow(saveLayoutDraftBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('save_layout_draft', {
-      layout_payload: body.layoutDraft,
-      actor_uuid: auth.user.id
-    });
+    const layoutService = getLayoutService(auth);
+    const layoutVersionId = await layoutService.saveDraft(body.layoutDraft, auth.user.id);
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(layoutVersionIdResponseSchema, { layoutVersionId: data });
+    return parseOrThrow(layoutVersionIdResponseSchema, { layoutVersionId });
   });
 
   app.post('/api/layout-drafts/:layoutVersionId/validate', async (request, reply) => {
@@ -867,16 +862,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('validate_layout_version', {
-      layout_version_uuid: layoutVersionId
-    });
+    const layoutService = getLayoutService(auth);
+    const result = await layoutService.validateVersion(layoutVersionId);
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(validationResponseSchema, mapValidationResult(data ?? { isValid: false, issues: [] }));
+    return parseOrThrow(validationResponseSchema, mapValidationResult(result));
   });
 
   app.post('/api/layout-drafts/:layoutVersionId/publish', async (request, reply) => {
@@ -884,17 +873,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase.rpc('publish_layout_version', {
-      layout_version_uuid: layoutVersionId,
-      actor_uuid: auth.user.id
-    });
+    const layoutService = getLayoutService(auth);
+    const result = await layoutService.publishVersion(layoutVersionId, auth.user.id);
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(publishResponseSchema, data);
+    return parseOrThrow(publishResponseSchema, result);
   });
 
   // ── Orders ───────────────────────────────────────────────────────────────────

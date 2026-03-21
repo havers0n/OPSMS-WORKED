@@ -72,6 +72,10 @@ export type LayoutRepo = {
   findLatestPublished(floorId: string): Promise<LayoutDraft | null>;
   findPublishedLayoutSummary(floorId: string): Promise<PublishedLayoutSummary | null>;
   listPublishedCells(floorId: string): Promise<Cell[]>;
+  createDraft(floorId: string, actorId: string): Promise<string>;
+  saveDraft(layoutDraft: unknown, actorId: string): Promise<string>;
+  validateVersion(layoutVersionId: string): Promise<unknown>;
+  publishVersion(layoutVersionId: string, actorId: string): Promise<unknown>;
 };
 
 function omitVersionNo(layout: LayoutDraft | null): LayoutDraft | null {
@@ -257,6 +261,57 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
       }
 
       return ((data ?? []) as CellRow[]).map(mapCellRowToDomain);
+    },
+
+    async createDraft(floorId, actorId) {
+      const { data, error } = await supabase.rpc('create_layout_draft', {
+        floor_uuid: floorId,
+        actor_uuid: actorId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return data as string;
+    },
+
+    async saveDraft(layoutDraft, actorId) {
+      const { data, error } = await supabase.rpc('save_layout_draft', {
+        layout_payload: layoutDraft,
+        actor_uuid: actorId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return data as string;
+    },
+
+    async validateVersion(layoutVersionId) {
+      const { data, error } = await supabase.rpc('validate_layout_version', {
+        layout_version_uuid: layoutVersionId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return data ?? { isValid: false, issues: [] };
+    },
+
+    async publishVersion(layoutVersionId, actorId) {
+      const { data, error } = await supabase.rpc('publish_layout_version', {
+        layout_version_uuid: layoutVersionId,
+        actor_uuid: actorId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
     }
   };
 }
