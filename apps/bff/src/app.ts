@@ -95,6 +95,14 @@ import {
   createPlacementCommandService,
   type PlacementCommandService
 } from './features/placement/service.js';
+import {
+  createOrdersService,
+  type OrdersService
+} from './features/orders/service.js';
+import {
+  createWavesService,
+  type WavesService
+} from './features/waves/service.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
   ExecutionContainerNotFoundError,
@@ -125,37 +133,20 @@ import { createLocationReadRepo } from './features/location-read/location-read-r
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
+type OrdersServiceFactory = (context: AuthenticatedRequestContext) => OrdersService;
+type WavesServiceFactory = (context: AuthenticatedRequestContext) => WavesService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
   getUserSupabase?: UserClientFactory;
   getHealthSupabase?: () => SupabaseClient;
   getPlacementService?: PlacementServiceFactory;
+  getOrdersService?: OrdersServiceFactory;
+  getWavesService?: WavesServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
-}
-
-function getAllowedTransitions(currentStatus: string): string[] {
-  switch (currentStatus) {
-    case 'draft':     return ['ready', 'cancelled'];
-    case 'ready':     return ['draft', 'released', 'cancelled'];
-    case 'released':  return ['picking', 'cancelled'];
-    case 'picking':   return ['picked', 'partial'];
-    case 'picked':    return ['closed'];
-    case 'partial':   return ['closed'];
-    default:          return [];
-  }
-}
-
-function getAllowedWaveTransitions(currentStatus: string): string[] {
-  switch (currentStatus) {
-    case 'draft': return ['ready'];
-    case 'ready': return ['draft', 'released'];
-    case 'released': return ['closed'];
-    default: return [];
-  }
 }
 
 type LayoutVersionRow = {
@@ -328,40 +319,6 @@ function mapWaveWithOrders(row: WaveRow, orders: ReturnType<typeof mapOrderSumma
     },
     orders
   );
-}
-
-function mapReleaseOrderRpcError(error: { message?: string } | null) {
-  const message = error?.message ?? 'ORDER_RELEASE_FAILED';
-
-  switch (message) {
-    case 'ORDER_NOT_FOUND':
-      return new ApiError(404, 'ORDER_NOT_FOUND', 'Order was not found.');
-    case 'ORDER_NOT_READY':
-      return new ApiError(409, 'INVALID_TRANSITION', 'Only ready orders can be released.');
-    case 'ORDER_HAS_NO_LINES':
-      return new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot release an order with no lines.');
-    case 'ORDER_ALREADY_RELEASED':
-      return new ApiError(409, 'ORDER_ALREADY_RELEASED', 'Order has already been released.');
-    default:
-      return error;
-  }
-}
-
-function mapReleaseWaveRpcError(error: { message?: string } | null) {
-  const message = error?.message ?? 'WAVE_RELEASE_FAILED';
-
-  switch (message) {
-    case 'WAVE_NOT_FOUND':
-      return new ApiError(404, 'WAVE_NOT_FOUND', 'Wave was not found.');
-    case 'WAVE_NOT_READY':
-      return new ApiError(409, 'INVALID_WAVE_TRANSITION', 'Only ready waves can be released.');
-    case 'WAVE_HAS_NO_ORDERS':
-      return new ApiError(409, 'WAVE_HAS_NO_ORDERS', 'Cannot release an empty wave.');
-    case 'WAVE_HAS_BLOCKING_ORDERS':
-      return new ApiError(409, 'WAVE_HAS_BLOCKING_ORDERS', 'All attached orders must be ready before wave release.');
-    default:
-      return error;
-  }
 }
 
 function mapWaveMembershipRpcError(
@@ -915,6 +872,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getPlacementService =
     options.getPlacementService ??
     ((context: AuthenticatedRequestContext) => createPlacementCommandService(getUserSupabase(context)));
+  const getOrdersService =
+    options.getOrdersService ??
+    ((context: AuthenticatedRequestContext) => createOrdersService(getUserSupabase(context)));
+  const getWavesService =
+    options.getWavesService ??
+    ((context: AuthenticatedRequestContext) => createWavesService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -1726,37 +1689,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const tenantId = auth.currentTenant.tenantId;
     const body = parseOrThrow(createOrderBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
+    const service = getOrdersService(auth);
+    const order = await service.createOrder({
+      tenantId,
+      externalNumber: body.externalNumber,
+      priority: body.priority,
+      waveId: body.waveId
+    });
 
-    if (body.waveId) {
-      const wave = await fetchWaveRowById(supabase, body.waveId);
-
-      if (wave.tenant_id !== tenantId) {
-        throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${body.waveId} not found.`);
-      }
-
-      if (wave.status !== 'draft' && wave.status !== 'ready') {
-        throw new ApiError(409, 'WAVE_NOT_EDITABLE', 'Orders can only be created inside draft or ready waves.');
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('orders')
-      .insert({
-        tenant_id: tenantId,
-        external_number: body.externalNumber,
-        priority: body.priority,
-        wave_id: body.waveId ?? null,
-        status: 'draft'
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, data.id));
+    return parseOrThrow(orderResponseSchema, order);
   });
 
   app.get('/api/orders/:orderId', async (request, reply) => {
@@ -1779,51 +1720,16 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const tenantId = auth.currentTenant.tenantId;
     const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
     const body = parseOrThrow(addOrderLineBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-
-    const { data: orderRow, error: orderError } = await supabase
-      .from('orders')
-      .select('id,status')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderRow) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-    }
-
-    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
-      throw new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot add lines to an order in status '${orderRow.status}'.`);
-    }
-
-    const product = await fetchProductById(supabase, body.productId);
-    if (!product) {
-      throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
-    }
-
-    if (!product.is_active) {
-      throw new ApiError(409, 'PRODUCT_INACTIVE', 'Inactive products cannot be added to orders.');
-    }
-
-    const { data, error } = await supabase
-      .from('order_lines')
-      .insert({
-        order_id: orderId,
-        tenant_id: tenantId,
-        product_id: product.id,
-        sku: product.sku ?? product.external_product_id,
-        name: product.name,
-        qty_required: body.qtyRequired,
-        status: 'pending'
-      })
-      .select(orderLineSelectColumns)
-      .single();
-
-    if (error) {
-      throw error;
-    }
+    const service = getOrdersService(auth);
+    const line = await service.addOrderLine({
+      tenantId,
+      orderId,
+      productId: body.productId,
+      qtyRequired: body.qtyRequired
+    });
 
     void reply.code(201);
-    return parseOrThrow(orderLineResponseSchema, mapOrderLineRowToDomain(data));
+    return parseOrThrow(orderLineResponseSchema, line);
   });
 
   app.delete('/api/orders/:orderId/lines/:lineId', async (request, reply) => {
@@ -1833,31 +1739,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const params = request.params as { orderId: string; lineId: string };
     const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
     const lineId = parseOrThrow(idResponseSchema, { id: params.lineId }).id;
-    const supabase = getUserSupabase(auth);
-
-    const { data: orderRow, error: orderError } = await supabase
-      .from('orders')
-      .select('id,status')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderRow) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-    }
-
-    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
-      throw new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot remove lines from an order in status '${orderRow.status}'.`);
-    }
-
-    const { error } = await supabase
-      .from('order_lines')
-      .delete()
-      .eq('id', lineId)
-      .eq('order_id', orderId);
-
-    if (error) {
-      throw error;
-    }
+    const service = getOrdersService(auth);
+    await service.removeOrderLine({ orderId, lineId });
 
     void reply.code(204);
   });
@@ -1872,68 +1755,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
     const body = parseOrThrow(transitionOrderStatusBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
+    const service = getOrdersService(auth);
+    const order = await service.transitionOrderStatus({
+      orderId,
+      status: body.status
+    });
 
-    const { data: orderRow, error: orderError } = await supabase
-      .from('orders')
-      .select('id,status,wave_id')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderRow) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-    }
-
-    // Validate transition
-    const allowed = getAllowedTransitions(orderRow.status);
-    if (!allowed.includes(body.status)) {
-      throw new ApiError(409, 'INVALID_TRANSITION', `Cannot transition order from '${orderRow.status}' to '${body.status}'.`);
-    }
-
-    if (body.status === 'ready') {
-      const { count, error: linesError } = await supabase
-        .from('order_lines')
-        .select('id', { count: 'exact', head: true })
-        .eq('order_id', orderId);
-
-      if (linesError) {
-        throw linesError;
-      }
-
-      if (!count) {
-        throw new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot mark an order as ready until it has at least one line.');
-      }
-    }
-
-    if (body.status === 'released') {
-      if (orderRow.wave_id) {
-        throw new ApiError(
-          409,
-          'ORDER_RELEASE_CONTROLLED_BY_WAVE',
-          'This order belongs to a wave. Release is controlled by the wave.'
-        );
-      }
-
-      const { error } = await supabase.rpc('release_order', { order_uuid: orderId });
-      if (error) {
-        throw mapReleaseOrderRpcError(error as { message?: string });
-      }
-
-      return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, orderId));
-    }
-
-    const patch: Record<string, unknown> = { status: body.status };
-    if (body.status === 'closed' || body.status === 'cancelled') patch.closed_at = new Date().toISOString();
-
-    const { error } = await supabase
-      .from('orders')
-      .update(patch)
-      .eq('id', orderId)
-      .select('id')
-      .single();
-
-    if (error) throw error;
-    return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, orderId));
+    return parseOrThrow(orderResponseSchema, order);
   });
 
   app.get('/api/orders/:orderId/execution', async (request, reply) => {
@@ -2019,22 +1847,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const tenantId = auth.currentTenant.tenantId;
     const body = parseOrThrow(createWaveBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('waves')
-      .insert({
-        tenant_id: tenantId,
-        name: body.name,
-        status: 'draft'
-      })
-      .select('id')
-      .single();
+    const service = getWavesService(auth);
+    const wave = await service.createWave({
+      tenantId,
+      name: body.name
+    });
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, data.id));
+    return parseOrThrow(waveResponseSchema, wave);
   });
 
   app.get('/api/waves/:waveId', async (request, reply) => {
@@ -2052,52 +1871,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
     const body = parseOrThrow(transitionWaveStatusBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const wave = await fetchWaveResponse(supabase, waveId);
-    const allowed = getAllowedWaveTransitions(wave.status);
+    const service = getWavesService(auth);
+    const wave = await service.transitionWaveStatus({
+      waveId,
+      status: body.status
+    });
 
-    if (!allowed.includes(body.status)) {
-      throw new ApiError(409, 'INVALID_WAVE_TRANSITION', `Cannot transition wave from '${wave.status}' to '${body.status}'.`);
-    }
-
-    if (body.status === 'ready' && wave.totalOrders === 0) {
-      throw new ApiError(409, 'WAVE_HAS_NO_ORDERS', 'Cannot mark an empty wave as ready.');
-    }
-
-    if (body.status === 'released') {
-      if (wave.totalOrders === 0) {
-        throw new ApiError(409, 'WAVE_HAS_NO_ORDERS', 'Cannot release an empty wave.');
-      }
-
-      if (wave.blockingOrderCount > 0) {
-        throw new ApiError(409, 'WAVE_HAS_BLOCKING_ORDERS', 'All attached orders must be ready before wave release.');
-      }
-
-      const { error } = await supabase.rpc('release_wave', { wave_uuid: waveId });
-      if (error) {
-        throw mapReleaseWaveRpcError(error as { message?: string });
-      }
-
-      return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
-    }
-
-    const patch: Record<string, unknown> = { status: body.status };
-    if (body.status === 'closed') {
-      patch.closed_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase
-      .from('waves')
-      .update(patch)
-      .eq('id', waveId)
-      .select('id')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+    return parseOrThrow(waveResponseSchema, wave);
   });
 
   app.post('/api/waves/:waveId/orders', async (request, reply) => {

@@ -99,6 +99,10 @@ function buildOrderSummaryRow(order: ReturnType<typeof createOrderRow>, waveName
   return {
     ...order,
     waves: waveName ? { name: waveName } : null,
+    order_lines: Array.from({ length: lineCount }, () => ({
+      qty_required: 1,
+      qty_picked: 0
+    })),
     line_count: lineCount,
     unit_count: lineCount,
     picked_unit_count: 0
@@ -314,7 +318,7 @@ describe('orders and waves', () => {
     });
 
     await app.close();
-  });
+  }, 15000);
 
   it('rejects adding an inactive product to an order line with stable error contract', async () => {
     const orderId = '11111111-2222-4333-8444-555555555555';
@@ -1401,6 +1405,194 @@ describe('orders and waves', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(toWaveDto(wave, orders));
     expect(supabase.rpc).toHaveBeenCalledWith('release_wave', { wave_uuid: waveReadyRow.id });
+
+    await app.close();
+  });
+
+  it('delegates orders command routes to orders service factory', async () => {
+    const orderId = '8f38af74-57af-4e9c-b44b-2deac0b9f2aa';
+    const lineId = '870f8de6-9332-4db4-bc0f-8102be509fe8';
+    const createdOrder = toOrderDto(
+      createOrderRow({
+        id: orderId,
+        externalNumber: 'ORD-SVC-100',
+        status: 'draft',
+        waveId: null
+      }),
+      null,
+      []
+    );
+    const transitionedOrder = {
+      ...createdOrder,
+      status: 'ready' as const
+    };
+    const createdLine = {
+      id: lineId,
+      orderId,
+      tenantId,
+      productId: productRow.id,
+      sku: productRow.sku,
+      name: productRow.name,
+      qtyRequired: 2,
+      qtyPicked: 0,
+      status: 'pending' as const
+    };
+
+    const ordersService = {
+      createOrder: vi.fn(async () => createdOrder),
+      addOrderLine: vi.fn(async () => createdLine),
+      removeOrderLine: vi.fn(async () => undefined),
+      transitionOrderStatus: vi.fn(async () => transitionedOrder)
+    };
+    const getOrdersService = vi.fn(() => ordersService as never);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(
+        () =>
+          ({
+            from: vi.fn(),
+            rpc: vi.fn()
+          }) as never
+      ),
+      getOrdersService
+    });
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/orders',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        externalNumber: 'ORD-SVC-100'
+      }
+    });
+    expect(createResponse.statusCode).toBe(200);
+
+    const addLineResponse = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${orderId}/lines`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: productRow.id,
+        qtyRequired: 2
+      }
+    });
+    expect(addLineResponse.statusCode).toBe(201);
+
+    const removeLineResponse = await app.inject({
+      method: 'DELETE',
+      url: `/api/orders/${orderId}/lines/${lineId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+    expect(removeLineResponse.statusCode).toBe(204);
+
+    const transitionResponse = await app.inject({
+      method: 'PATCH',
+      url: `/api/orders/${orderId}/status`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        status: 'ready'
+      }
+    });
+    expect(transitionResponse.statusCode).toBe(200);
+
+    expect(getOrdersService).toHaveBeenCalledTimes(4);
+    expect(ordersService.createOrder).toHaveBeenCalledWith({
+      tenantId,
+      externalNumber: 'ORD-SVC-100',
+      priority: 0,
+      waveId: undefined
+    });
+    expect(ordersService.addOrderLine).toHaveBeenCalledWith({
+      tenantId,
+      orderId,
+      productId: productRow.id,
+      qtyRequired: 2
+    });
+    expect(ordersService.removeOrderLine).toHaveBeenCalledWith({
+      orderId,
+      lineId
+    });
+    expect(ordersService.transitionOrderStatus).toHaveBeenCalledWith({
+      orderId,
+      status: 'ready'
+    });
+
+    await app.close();
+  });
+
+  it('delegates waves command routes to waves service factory', async () => {
+    const waveId = '0f0d9d43-b9ff-4f9f-abde-1846a998c298';
+    const createdWave = toWaveDto(
+      {
+        ...waveDraftRow,
+        id: waveId,
+        name: 'Wave Service Delegation'
+      },
+      []
+    );
+    const transitionedWave = {
+      ...createdWave,
+      status: 'ready' as const
+    };
+
+    const wavesService = {
+      createWave: vi.fn(async () => createdWave),
+      transitionWaveStatus: vi.fn(async () => transitionedWave)
+    };
+    const getWavesService = vi.fn(() => wavesService as never);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(
+        () =>
+          ({
+            from: vi.fn(),
+            rpc: vi.fn()
+          }) as never
+      ),
+      getWavesService
+    });
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: '/api/waves',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        name: 'Wave Service Delegation'
+      }
+    });
+    expect(createResponse.statusCode).toBe(200);
+
+    const transitionResponse = await app.inject({
+      method: 'PATCH',
+      url: `/api/waves/${waveId}/status`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        status: 'ready'
+      }
+    });
+    expect(transitionResponse.statusCode).toBe(200);
+
+    expect(getWavesService).toHaveBeenCalledTimes(2);
+    expect(wavesService.createWave).toHaveBeenCalledWith({
+      tenantId,
+      name: 'Wave Service Delegation'
+    });
+    expect(wavesService.transitionWaveStatus).toHaveBeenCalledWith({
+      waveId,
+      status: 'ready'
+    });
 
     await app.close();
   });
