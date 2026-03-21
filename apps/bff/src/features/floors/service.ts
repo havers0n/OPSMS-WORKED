@@ -1,6 +1,20 @@
-// PR-01 scaffold only.
-// TODO(PR-05+): define floors service contract during write-flow extraction.
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createFloorsRepo } from './repo.js';
 
-export interface FloorsService {
-  // Intentionally empty in PR-01.
+type CreateFloorInput = {
+  siteId: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+};
+
+export type FloorsService = {
+  createFloor(input: CreateFloorInput): Promise<string>;
+};
+
+export function createFloorsService(supabase: SupabaseClient): FloorsService {
+  const repo = createFloorsRepo(supabase);
+  return {
+    createFloor: (input) => repo.createFloor(input)
+  };
 }

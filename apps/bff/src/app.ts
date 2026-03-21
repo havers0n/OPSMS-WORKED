@@ -106,6 +106,10 @@ import {
   type SitesService
 } from './features/sites/service.js';
 import {
+  createFloorsService,
+  type FloorsService
+} from './features/floors/service.js';
+import {
   attachProductsToRows,
   type ProductAwareRow,
   type ProductRow
@@ -120,6 +124,7 @@ type InventoryServiceFactory = (context: AuthenticatedRequestContext) => Invento
 type LayoutServiceFactory = (context: AuthenticatedRequestContext) => LayoutService;
 type SitesServiceFactory = (context: AuthenticatedRequestContext) => SitesService;
 type ContainersServiceFactory = (context: AuthenticatedRequestContext) => ContainersService;
+type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -132,6 +137,7 @@ type BuildAppOptions = {
   getLayoutService?: LayoutServiceFactory;
   getSitesService?: SitesServiceFactory;
   getContainersService?: ContainersServiceFactory;
+  getFloorsService?: FloorsServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -177,6 +183,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getContainersService =
     options.getContainersService ??
     ((context: AuthenticatedRequestContext) => createContainersService(getUserSupabase(context)));
+  const getFloorsService =
+    options.getFloorsService ??
+    ((context: AuthenticatedRequestContext) => createFloorsService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -699,23 +708,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const body = parseOrThrow(createFloorBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('floors')
-      .insert({
-        site_id: body.siteId,
-        code: body.code,
-        name: body.name,
-        sort_order: body.sortOrder
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(idResponseSchema, { id: data.id });
+    const id = await getFloorsService(auth).createFloor(body);
+    return parseOrThrow(idResponseSchema, { id });
   });
 
   app.get('/api/floors/:floorId/layout-draft', async (request, reply) => {
