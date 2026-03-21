@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Order, OrderLine, OrderStatus } from '@wos/domain';
-import { mapOrderLineRowToDomain, mapOrderRowToDomain } from '../../mappers.js';
+import type { Order, OrderLine, OrderStatus, OrderSummary } from '@wos/domain';
+import { mapOrderLineRowToDomain, mapOrderRowToDomain, mapOrderSummaryRowToDomain } from '../../mappers.js';
 
 type WaveRelation = { name: string } | Array<{ name: string }> | null | undefined;
 
@@ -23,6 +23,20 @@ type ProductRow = {
   sku: string | null;
   name: string;
   is_active: boolean;
+};
+
+type OrderSummaryMetricsRow = {
+  id: string;
+  tenant_id: string;
+  external_number: string;
+  status: string;
+  priority: number;
+  wave_id: string | null;
+  created_at: string;
+  released_at: string | null;
+  closed_at: string | null;
+  waves?: WaveRelation;
+  order_lines?: Array<{ qty_required: number; qty_picked: number }>;
 };
 
 type OrderLineInsertRow = {
@@ -56,6 +70,20 @@ const orderSelectColumns = `
   waves(name)
 `;
 
+const orderSummarySelectColumns = `
+  id,
+  tenant_id,
+  external_number,
+  status,
+  priority,
+  wave_id,
+  created_at,
+  released_at,
+  closed_at,
+  waves(name),
+  order_lines(qty_required, qty_picked)
+`;
+
 const orderLineSelectColumns = 'id,order_id,tenant_id,product_id,sku,name,qty_required,qty_picked,status';
 const productSelectColumns = 'id,external_product_id,sku,name,is_active';
 
@@ -83,6 +111,26 @@ function mapOrderRow(row: OrderRow, lines: OrderLine[]): Order {
     },
     lines
   );
+}
+
+function mapOrderSummaryMetricsRow(row: OrderSummaryMetricsRow): OrderSummary {
+  const lines = row.order_lines ?? [];
+
+  return mapOrderSummaryRowToDomain({
+    id: row.id,
+    tenant_id: row.tenant_id,
+    external_number: row.external_number,
+    status: row.status,
+    priority: row.priority,
+    wave_id: row.wave_id,
+    wave_name: getWaveNameFromRelation(row.waves),
+    created_at: row.created_at,
+    released_at: row.released_at,
+    closed_at: row.closed_at,
+    line_count: lines.length,
+    unit_count: lines.reduce((sum, line) => sum + line.qty_required, 0),
+    picked_unit_count: lines.reduce((sum, line) => sum + line.qty_picked, 0)
+  });
 }
 
 export type OrderStatusSnapshot = {
@@ -116,6 +164,7 @@ export type OrderPatch = {
 };
 
 export type OrdersRepo = {
+  listOrderSummaries(tenantId: string, status?: string | null): Promise<OrderSummary[]>;
   findWaveForOrderCreate(waveId: string): Promise<WaveCreateCheck | null>;
   createOrder(input: {
     tenantId: string;
@@ -143,6 +192,26 @@ export type OrdersRepo = {
 
 export function createOrdersRepo(supabase: SupabaseClient): OrdersRepo {
   return {
+    async listOrderSummaries(tenantId, status) {
+      let query = supabase
+        .from('orders')
+        .select(orderSummarySelectColumns)
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as OrderSummaryMetricsRow[]).map(mapOrderSummaryMetricsRow);
+    },
+
     async findWaveForOrderCreate(waveId) {
       const { data, error } = await supabase
         .from('waves')

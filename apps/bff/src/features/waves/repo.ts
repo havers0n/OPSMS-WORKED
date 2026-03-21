@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Wave, WaveStatus } from '@wos/domain';
-import { mapOrderSummaryRowToDomain, mapWaveRowToDomain } from '../../mappers.js';
+import type { Wave, WaveStatus, WaveSummary } from '@wos/domain';
+import { mapOrderSummaryRowToDomain, mapWaveRowToDomain, mapWaveSummaryRowToDomain } from '../../mappers.js';
 
 type WaveRelation = { name: string } | Array<{ name: string }> | null | undefined;
 
@@ -104,12 +104,30 @@ function mapWaveWithOrders(waveRow: WaveRow, orders: ReturnType<typeof mapOrderS
   );
 }
 
+function mapWaveSummaryWithCounts(row: WaveRow & { orders?: Array<{ status: string }> }): WaveSummary {
+  const counts = buildWaveCounts(row.orders ?? []);
+
+  return mapWaveSummaryRowToDomain({
+    id: row.id,
+    tenant_id: row.tenant_id,
+    name: row.name,
+    status: row.status,
+    created_at: row.created_at,
+    released_at: row.released_at,
+    closed_at: row.closed_at,
+    total_orders: counts.totalOrders,
+    ready_orders: counts.readyOrders,
+    blocking_order_count: counts.blockingOrderCount
+  });
+}
+
 export type WavePatch = {
   status: WaveStatus;
   closedAt?: string;
 };
 
 export type WavesRepo = {
+  listWaveSummaries(tenantId: string): Promise<WaveSummary[]>;
   createWave(input: { tenantId: string; name: string }): Promise<string>;
   updateWaveStatus(waveId: string, patch: WavePatch): Promise<void>;
   runReleaseWave(waveId: string): Promise<void>;
@@ -118,6 +136,20 @@ export type WavesRepo = {
 
 export function createWavesRepo(supabase: SupabaseClient): WavesRepo {
   return {
+    async listWaveSummaries(tenantId) {
+      const { data, error } = await supabase
+        .from('waves')
+        .select(`${waveSelectColumns},orders(status)`)
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as Array<WaveRow & { orders?: Array<{ status: string }> }>).map(mapWaveSummaryWithCounts);
+    },
+
     async createWave(input) {
       const { data, error } = await supabase
         .from('waves')

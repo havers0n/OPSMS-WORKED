@@ -583,7 +583,7 @@ function createSupabaseStub() {
         };
       }
 
-      if (table === 'location_storage_snapshot_v') {
+      if (table === 'location_storage_snapshot_v' || table === 'location_storage_canonical_v') {
         return {
           select: vi.fn(() => ({
             eq: vi.fn((column: string, value: string) => ({

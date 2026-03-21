@@ -2,12 +2,10 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError, z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildCatalogProductItemRef } from '@wos/domain';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import {
   addInventoryToContainerBodySchema,
-  addInventoryToContainerResponseSchema,
   cellsResponseSchema,
   containerCurrentLocationResponseSchema,
   locationReferenceResponseSchema,
@@ -56,13 +54,10 @@ import {
   attachWaveOrderBodySchema,
   wavesResponseSchema,
   waveResponseSchema,
-  pickTaskResponseSchema,
-  pickTaskSummaryResponseSchema,
   pickTasksResponseSchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
-  mapCellRowToDomain,
   mapContainerRowToDomain,
   mapLocationOccupancyRowToDomain,
   mapLocationStorageSnapshotRowToDomain,
@@ -70,18 +65,8 @@ import {
   mapContainerTypeRowToDomain,
   mapFloorRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
-  mapLayoutDraftBundleToDomain,
-  mapLayoutBundleJsonToDomain,
-  mapProductRowToDomain,
   mapSiteRowToDomain,
   mapValidationResult,
-  mapOrderLineRowToDomain,
-  mapOrderRowToDomain,
-  mapOrderSummaryRowToDomain,
-  mapWaveRowToDomain,
-  mapWaveSummaryRowToDomain,
-  mapPickStepRowToDomain,
-  mapPickTaskRowToDomain,
   mapPickTaskSummaryRowToDomain
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
@@ -101,6 +86,11 @@ import {
   type WavesService
 } from './features/waves/service.js';
 import { mapWaveMembershipRpcError } from './features/waves/errors.js';
+import { createOrdersRepo } from './features/orders/repo.js';
+import { createWavesRepo } from './features/waves/repo.js';
+import { createProductsRepo } from './features/products/repo.js';
+import { createLayoutRepo } from './features/layout/repo.js';
+import { createContainersRepo } from './features/containers/repo.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
   mapExecutionLocationMoveError,
@@ -109,7 +99,6 @@ import {
 import { mapReceiveInventoryRpcError } from './features/inventory/errors.js';
 import {
   attachProductsToRows,
-  productSelectColumns,
   type ProductAwareRow,
   type ProductRow
 } from './inventory-product-resolution.js';
@@ -131,178 +120,6 @@ type BuildAppOptions = {
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
-}
-
-type LayoutVersionRow = {
-  id: string;
-  floor_id: string;
-  version_no: number;
-  state: 'draft' | 'published' | 'archived';
-  published_at?: string | null;
-};
-
-type WaveRelation = { name: string } | Array<{ name: string }> | null | undefined;
-
-type OrderSummaryMetricsRow = {
-  id: string;
-  tenant_id: string;
-  external_number: string;
-  status: string;
-  priority: number;
-  wave_id: string | null;
-  created_at: string;
-  released_at: string | null;
-  closed_at: string | null;
-  waves?: WaveRelation;
-  order_lines?: Array<{ qty_required: number; qty_picked: number }>;
-};
-
-type OrderRow = {
-  id: string;
-  tenant_id: string;
-  external_number: string;
-  status: string;
-  priority: number;
-  wave_id: string | null;
-  created_at: string;
-  released_at: string | null;
-  closed_at: string | null;
-  waves?: WaveRelation;
-};
-
-type WaveRow = {
-  id: string;
-  tenant_id: string;
-  name: string;
-  status: string;
-  created_at: string;
-  released_at: string | null;
-  closed_at: string | null;
-};
-
-const orderSummarySelectColumns = `
-  id,
-  tenant_id,
-  external_number,
-  status,
-  priority,
-  wave_id,
-  created_at,
-  released_at,
-  closed_at,
-  waves(name),
-  order_lines(qty_required, qty_picked)
-`;
-
-const orderSelectColumns = `
-  id,
-  tenant_id,
-  external_number,
-  status,
-  priority,
-  wave_id,
-  created_at,
-  released_at,
-  closed_at,
-  waves(name)
-`;
-
-const orderLineSelectColumns = 'id,order_id,tenant_id,product_id,sku,name,qty_required,qty_picked,status';
-const waveSelectColumns = 'id,tenant_id,name,status,created_at,released_at,closed_at';
-
-function getWaveNameFromRelation(relation: WaveRelation): string | null {
-  if (Array.isArray(relation)) {
-    return relation[0]?.name ?? null;
-  }
-
-  return relation?.name ?? null;
-}
-
-function mapOrderSummaryMetricsRow(row: OrderSummaryMetricsRow) {
-  const lines = row.order_lines ?? [];
-
-  return mapOrderSummaryRowToDomain({
-    id: row.id,
-    tenant_id: row.tenant_id,
-    external_number: row.external_number,
-    status: row.status,
-    priority: row.priority,
-    wave_id: row.wave_id,
-    wave_name: getWaveNameFromRelation(row.waves),
-    created_at: row.created_at,
-    released_at: row.released_at,
-    closed_at: row.closed_at,
-    line_count: lines.length,
-    unit_count: lines.reduce((sum, line) => sum + line.qty_required, 0),
-    picked_unit_count: lines.reduce((sum, line) => sum + line.qty_picked, 0)
-  });
-}
-
-function mapOrderRow(row: OrderRow, lines: ReturnType<typeof mapOrderLineRowToDomain>[]) {
-  return mapOrderRowToDomain(
-    {
-      id: row.id,
-      tenant_id: row.tenant_id,
-      external_number: row.external_number,
-      status: row.status,
-      priority: row.priority,
-      wave_id: row.wave_id,
-      wave_name: getWaveNameFromRelation(row.waves),
-      created_at: row.created_at,
-      released_at: row.released_at,
-      closed_at: row.closed_at
-    },
-    lines
-  );
-}
-
-function buildWaveCounts(orders: Array<{ status: string }>) {
-  const totalOrders = orders.length;
-  const readyOrders = orders.filter((order) => order.status === 'ready').length;
-  const blockingOrderCount = orders.filter((order) => order.status !== 'ready').length;
-
-  return {
-    totalOrders,
-    readyOrders,
-    blockingOrderCount
-  };
-}
-
-function mapWaveSummaryWithCounts(row: WaveRow & { orders?: Array<{ status: string }> }) {
-  const counts = buildWaveCounts(row.orders ?? []);
-
-  return mapWaveSummaryRowToDomain({
-    id: row.id,
-    tenant_id: row.tenant_id,
-    name: row.name,
-    status: row.status,
-    created_at: row.created_at,
-    released_at: row.released_at,
-    closed_at: row.closed_at,
-    total_orders: counts.totalOrders,
-    ready_orders: counts.readyOrders,
-    blocking_order_count: counts.blockingOrderCount
-  });
-}
-
-function mapWaveWithOrders(row: WaveRow, orders: ReturnType<typeof mapOrderSummaryMetricsRow>[]) {
-  const counts = buildWaveCounts(orders);
-
-  return mapWaveRowToDomain(
-    {
-      id: row.id,
-      tenant_id: row.tenant_id,
-      name: row.name,
-      status: row.status,
-      created_at: row.created_at,
-      released_at: row.released_at,
-      closed_at: row.closed_at,
-      total_orders: counts.totalOrders,
-      ready_orders: counts.readyOrders,
-      blocking_order_count: counts.blockingOrderCount
-    },
-    orders
-  );
 }
 
 const receiveInventoryUnitRpcResultSchema = z.object({
@@ -331,247 +148,6 @@ const receiveInventoryUnitRpcResultSchema = z.object({
   })
 });
 
-async function fetchProductById(supabase: SupabaseClient, productId: string) {
-  const { data, error } = await supabase
-    .from('products')
-    .select(productSelectColumns)
-    .eq('id', productId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data as ProductRow | null) ?? null;
-}
-
-async function fetchActiveProducts(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from('products')
-    .select(productSelectColumns)
-    .eq('is_active', true)
-    .order('name', { ascending: true })
-    .limit(20);
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as ProductRow[];
-}
-
-async function searchActiveProducts(supabase: SupabaseClient, query: string) {
-  const normalizedQuery = query.trim();
-
-  let request = supabase
-    .from('products')
-    .select(productSelectColumns)
-    .eq('is_active', true);
-
-  if (normalizedQuery.length > 0) {
-    request = request.or(
-      `name.ilike.%${normalizedQuery}%,sku.ilike.%${normalizedQuery}%,external_product_id.ilike.%${normalizedQuery}%`
-    );
-  }
-
-  const { data, error } = await request
-    .order('name', { ascending: true })
-    .limit(20);
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as ProductRow[];
-}
-
-async function fetchProductCatalog(
-  supabase: SupabaseClient,
-  args: { query: string; limit: number; offset: number; activeOnly: boolean }
-) {
-  const normalizedQuery = args.query.trim();
-
-  let itemsRequest = supabase
-    .from('products')
-    .select(productSelectColumns);
-
-  let totalRequest = supabase
-    .from('products')
-    .select('id', { count: 'exact', head: true });
-
-  let activeTotalRequest = supabase
-    .from('products')
-    .select('id', { count: 'exact', head: true })
-    .eq('is_active', true);
-
-  if (args.activeOnly) {
-    itemsRequest = itemsRequest.eq('is_active', true);
-    totalRequest = totalRequest.eq('is_active', true);
-  }
-
-  if (normalizedQuery.length > 0) {
-    const expression = `name.ilike.%${normalizedQuery}%,sku.ilike.%${normalizedQuery}%,external_product_id.ilike.%${normalizedQuery}%`;
-    itemsRequest = itemsRequest.or(expression);
-    totalRequest = totalRequest.or(expression);
-    activeTotalRequest = activeTotalRequest.or(expression);
-  }
-
-  const [
-    { data: itemRows, error: itemsError },
-    { count: total, error: totalError },
-    { count: activeTotal, error: activeTotalError }
-  ] = await Promise.all([
-    itemsRequest
-        .order('name', { ascending: true })
-        .range(args.offset, args.offset + args.limit - 1),
-    totalRequest.limit(1),
-    activeTotalRequest.limit(1)
-  ]);
-
-  if (itemsError) throw itemsError;
-  if (totalError) throw totalError;
-  if (activeTotalError) throw activeTotalError;
-
-  return {
-    items: (itemRows ?? []) as ProductRow[],
-    total: total ?? 0,
-    activeTotal: activeTotal ?? 0,
-    limit: args.limit,
-    offset: args.offset
-  };
-}
-
-async function fetchOrderResponse(supabase: SupabaseClient, orderId: string) {
-  const { data: orderRow, error: orderError } = await supabase
-    .from('orders')
-    .select(orderSelectColumns)
-    .eq('id', orderId)
-    .single();
-
-  if (orderError || !orderRow) {
-    throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-  }
-
-  const { data: lineRows, error: linesError } = await supabase
-    .from('order_lines')
-    .select(orderLineSelectColumns)
-    .eq('order_id', orderId)
-    .order('id', { ascending: true });
-
-  if (linesError) {
-    throw linesError;
-  }
-
-  const lines = (lineRows ?? []).map(mapOrderLineRowToDomain);
-  return mapOrderRow(orderRow as OrderRow, lines);
-}
-
-async function fetchWaveRowById(supabase: SupabaseClient, waveId: string) {
-  const { data, error } = await supabase
-    .from('waves')
-    .select(waveSelectColumns)
-    .eq('id', waveId)
-    .single();
-
-  if (error || !data) {
-    throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
-  }
-
-  return data as WaveRow;
-}
-
-async function fetchWaveResponse(supabase: SupabaseClient, waveId: string) {
-  const waveRow = await fetchWaveRowById(supabase, waveId);
-  const { data: orderRows, error: ordersError } = await supabase
-    .from('orders')
-    .select(orderSummarySelectColumns)
-    .eq('wave_id', waveId)
-    .order('created_at', { ascending: true });
-
-  if (ordersError) {
-    throw ordersError;
-  }
-
-  const orders = ((orderRows ?? []) as OrderSummaryMetricsRow[]).map(mapOrderSummaryMetricsRow);
-  return mapWaveWithOrders(waveRow, orders);
-}
-
-async function fetchLatestLayoutVersionByState(
-  supabase: SupabaseClient,
-  floorId: string,
-  state: LayoutVersionRow['state']
-) {
-  const { data: layoutVersions, error: layoutVersionsError } = await supabase
-    .from('layout_versions')
-    .select('id,floor_id,version_no,state,published_at')
-    .eq('floor_id', floorId);
-
-  if (layoutVersionsError) {
-    throw layoutVersionsError;
-  }
-
-  return ((layoutVersions ?? []) as LayoutVersionRow[])
-    .filter((row) => row.state === state)
-    .sort((a, b) => b.version_no - a.version_no)[0];
-}
-
-async function fetchLayoutVersionBundle(
-  supabase: SupabaseClient,
-  layoutVersion: LayoutVersionRow | null
-) {
-  if (!layoutVersion) {
-    return null;
-  }
-
-  // Single SECURITY DEFINER RPC call replaces 4 sequential queries that each
-  // triggered per-row RLS checks (can_access_rack → can_manage_layout_version
-  // → can_manage_floor) causing statement timeouts on large layouts.
-  const { data, error } = await supabase.rpc('get_layout_bundle', {
-    layout_version_uuid: layoutVersion.id
-  });
-
-  if (error) throw error;
-
-  return mapLayoutBundleJsonToDomain(data);
-}
-
-async function fetchActiveLayoutDraft(supabase: SupabaseClient, floorId: string) {
-  const activeDraft = await fetchLatestLayoutVersionByState(supabase, floorId, 'draft');
-  return fetchLayoutVersionBundle(supabase, activeDraft);
-}
-
-async function fetchLatestPublishedLayout(supabase: SupabaseClient, floorId: string) {
-  const latestPublished = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
-  return fetchLayoutVersionBundle(supabase, latestPublished);
-}
-
-async function fetchPublishedLayoutSummary(supabase: SupabaseClient, floorId: string) {
-  const publishedVersion = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
-  if (!publishedVersion) {
-    return null;
-  }
-
-  const { data: sampleCells, count, error: sampleCellsError } = await supabase
-    .from('cells')
-    .select('address,address_sort_key', { count: 'exact' })
-    .eq('layout_version_id', publishedVersion.id)
-    .order('address_sort_key', { ascending: true })
-    .limit(4);
-
-  if (sampleCellsError) {
-    throw sampleCellsError;
-  }
-
-  return {
-    layoutVersionId: publishedVersion.id,
-    floorId: publishedVersion.floor_id,
-    versionNo: publishedVersion.version_no,
-    publishedAt: publishedVersion.published_at ?? new Date(0).toISOString(),
-    cellCount: count ?? sampleCells?.length ?? 0,
-    sampleAddresses: (sampleCells ?? []).map((cell) => cell.address)
-  };
-}
-
 function isContainerTypeConstraintError(error: unknown) {
   if (typeof error !== 'object' || error === null) {
     return false;
@@ -584,64 +160,6 @@ function isContainerTypeConstraintError(error: unknown) {
   return [message, details, constraint].some((value) =>
     value.includes('container_type') || value.includes('containers_container_type_id_fkey')
   );
-}
-
-async function containerTypeExists(supabase: SupabaseClient, containerTypeId: string) {
-  const { data, error } = await supabase
-    .from('container_types')
-    .select('id')
-    .eq('id', containerTypeId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return Boolean(data);
-}
-
-async function containerCodeExists(supabase: SupabaseClient, tenantId: string, externalCode: string) {
-  const { data, error } = await supabase
-    .from('containers')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('external_code', externalCode)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return Boolean(data);
-}
-
-type InventoryWriteContainerRow = {
-  id: string;
-  tenant_id: string;
-  status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
-};
-
-async function fetchInventoryWriteContainer(
-  supabase: SupabaseClient,
-  tenantId: string,
-  containerId: string
-) {
-  const { data, error } = await supabase
-    .from('containers')
-    .select('id,tenant_id,status')
-    .eq('tenant_id', tenantId)
-    .eq('id', containerId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? null) as InventoryWriteContainerRow | null;
-}
-
-function canContainerReceiveInventory(status: InventoryWriteContainerRow['status']) {
-  return status === 'active';
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -776,23 +294,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       .parse(request.query);
 
     const supabase = getUserSupabase(auth);
-    const catalog = await fetchProductCatalog(supabase, {
+    const productsRepo = createProductsRepo(supabase);
+    const catalog = await productsRepo.findCatalog({
       query: queryParams.query ?? '',
       limit: queryParams.limit ?? 50,
       offset: queryParams.offset ?? 0,
       activeOnly: queryParams.activeOnly === 'true'
     });
 
-    return parseOrThrow(
-      productCatalogResponseSchema,
-      {
-        items: catalog.items.map(mapProductRowToDomain),
-        total: catalog.total,
-        activeTotal: catalog.activeTotal,
-        limit: catalog.limit,
-        offset: catalog.offset
-      }
-    );
+    return parseOrThrow(productCatalogResponseSchema, catalog);
   });
 
   app.get('/api/products/search', async (request, reply) => {
@@ -806,15 +316,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       .parse(request.query);
 
     const supabase = getUserSupabase(auth);
+    const productsRepo = createProductsRepo(supabase);
     const products =
       queryParams.query && queryParams.query.trim().length > 0
-        ? await searchActiveProducts(supabase, queryParams.query)
-        : await fetchActiveProducts(supabase);
+        ? await productsRepo.searchActive(queryParams.query)
+        : await productsRepo.listActive();
 
-    return parseOrThrow(
-      productsResponseSchema,
-      products.map(mapProductRowToDomain)
-    );
+    return parseOrThrow(productsResponseSchema, products);
   });
 
   app.get('/api/products/:productId', async (request, reply) => {
@@ -826,13 +334,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }).id;
 
     const supabase = getUserSupabase(auth);
-    const product = await fetchProductById(supabase, productId);
+    const productsRepo = createProductsRepo(supabase);
+    const product = await productsRepo.findById(productId);
 
     if (!product) {
       throw new ApiError(404, 'NOT_FOUND', 'Product was not found.');
     }
 
-    return parseOrThrow(productResponseSchema, mapProductRowToDomain(product));
+    return parseOrThrow(productResponseSchema, product);
   });
 
   app.get('/api/containers', async (request, reply) => {
@@ -943,23 +452,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       id: (request.params as { floorId: string }).floorId
     }).id;
     const supabase = getUserSupabase(auth);
-    const publishedVersion = await fetchLatestLayoutVersionByState(supabase, floorId, 'published');
+    const layoutRepo = createLayoutRepo(supabase);
+    const cells = await layoutRepo.listPublishedCells(floorId);
 
-    if (!publishedVersion) {
-      return parseOrThrow(cellsResponseSchema, []);
-    }
-
-    const { data, error } = await supabase
-      .from('cells')
-      .select('id,layout_version_id,rack_id,rack_face_id,rack_section_id,rack_level_id,slot_no,address,address_sort_key,cell_code,x,y,status')
-      .eq('layout_version_id', publishedVersion.id)
-      .order('address_sort_key', { ascending: true });
-
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(cellsResponseSchema, (data ?? []).map(mapCellRowToDomain));
+    return parseOrThrow(cellsResponseSchema, cells);
   });
 
   app.get('/api/containers/:containerId/storage', async (request, reply) => {
@@ -1039,13 +535,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     const supabase = getUserSupabase(auth);
-    const typeExists = await containerTypeExists(supabase, body.containerTypeId);
+    const containersRepo = createContainersRepo(supabase);
+    const typeExists = await containersRepo.containerTypeExists(body.containerTypeId);
     if (!typeExists) {
       throw new ApiError(400, 'INVALID_CONTAINER_TYPE', 'Container type was not found.');
     }
 
-    const externalCodeExists = await containerCodeExists(
-      supabase,
+    const externalCodeExists = await containersRepo.containerCodeExists(
       auth.currentTenant.tenantId,
       body.externalCode
     );
@@ -1333,7 +829,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
     const supabase = getUserSupabase(auth);
-    const draft = await fetchActiveLayoutDraft(supabase, floorId);
+    const layoutRepo = createLayoutRepo(supabase);
+    const draft = await layoutRepo.findActiveDraft(floorId);
     return parseOrThrow(layoutDraftResponseSchema, draft);
   });
 
@@ -1343,9 +840,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
     const supabase = getUserSupabase(auth);
+    const layoutRepo = createLayoutRepo(supabase);
     const [activeDraft, latestPublished] = await Promise.all([
-      fetchActiveLayoutDraft(supabase, floorId),
-      fetchLatestPublishedLayout(supabase, floorId)
+      layoutRepo.findActiveDraft(floorId),
+      layoutRepo.findLatestPublished(floorId)
     ]);
 
     return parseOrThrow(floorWorkspaceResponseSchema, {
@@ -1361,7 +859,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
     const supabase = getUserSupabase(auth);
-    const summary = await fetchPublishedLayoutSummary(supabase, floorId);
+    const layoutRepo = createLayoutRepo(supabase);
+    const summary = await layoutRepo.findPublishedLayoutSummary(floorId);
     return parseOrThrow(publishedLayoutSummaryResponseSchema, summary);
   });
 
@@ -1449,24 +948,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const tenantId = auth.currentTenant.tenantId;
     const statusFilter = (request.query as { status?: string }).status ?? null;
     const supabase = getUserSupabase(auth);
-
-    let query = supabase
-      .from('orders')
-      .select(orderSummarySelectColumns)
-      .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false });
-
-    if (statusFilter) {
-      query = query.eq('status', statusFilter);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw error;
-    }
-
-    const summaries = ((data ?? []) as OrderSummaryMetricsRow[]).map(mapOrderSummaryMetricsRow);
+    const ordersRepo = createOrdersRepo(supabase);
+    const summaries = await ordersRepo.listOrderSummaries(tenantId, statusFilter);
 
     return parseOrThrow(ordersResponseSchema, summaries);
   });
@@ -1498,7 +981,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
     const supabase = getUserSupabase(auth);
-    return parseOrThrow(orderResponseSchema, await fetchOrderResponse(supabase, orderId));
+    const ordersRepo = createOrdersRepo(supabase);
+    const order = await ordersRepo.findOrderResponse(orderId);
+
+    if (!order) {
+      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
+    }
+
+    return parseOrThrow(orderResponseSchema, order);
   });
 
   app.post('/api/orders/:orderId/lines', async (request, reply) => {
@@ -1613,20 +1103,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const tenantId = auth.currentTenant.tenantId;
     const supabase = getUserSupabase(auth);
-    const { data, error } = await supabase
-      .from('waves')
-      .select(`${waveSelectColumns},orders(status)`)
-      .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false });
+    const wavesRepo = createWavesRepo(supabase);
+    const waves = await wavesRepo.listWaveSummaries(tenantId);
 
-    if (error) {
-      throw error;
-    }
-
-    return parseOrThrow(
-      wavesResponseSchema,
-      ((data ?? []) as Array<WaveRow & { orders?: Array<{ status: string }> }>).map(mapWaveSummaryWithCounts)
-    );
+    return parseOrThrow(wavesResponseSchema, waves);
   });
 
   app.post('/api/waves', async (request, reply) => {
@@ -1654,7 +1134,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
     const supabase = getUserSupabase(auth);
-    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+    const wavesRepo = createWavesRepo(supabase);
+    const wave = await wavesRepo.findWaveResponse(waveId);
+
+    if (!wave) {
+      throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
+    }
+
+    return parseOrThrow(waveResponseSchema, wave);
   });
 
   app.patch('/api/waves/:waveId/status', async (request, reply) => {
@@ -1688,7 +1175,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw mapWaveMembershipRpcError(error as { message?: string }, { waveId, orderId: body.orderId });
     }
 
-    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+    const wavesRepo = createWavesRepo(supabase);
+    const wave = await wavesRepo.findWaveResponse(waveId);
+
+    if (!wave) {
+      throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
+    }
+
+    return parseOrThrow(waveResponseSchema, wave);
   });
 
   app.delete('/api/waves/:waveId/orders/:orderId', async (request, reply) => {
@@ -1708,7 +1202,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       throw mapWaveMembershipRpcError(error as { message?: string }, { waveId, orderId });
     }
 
-    return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
+    const wavesRepo = createWavesRepo(supabase);
+    const wave = await wavesRepo.findWaveResponse(waveId);
+
+    if (!wave) {
+      throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
+    }
+
+    return parseOrThrow(waveResponseSchema, wave);
   });
 
   app.setErrorHandler((error, request, reply) => {
