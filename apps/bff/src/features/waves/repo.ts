@@ -131,6 +131,8 @@ export type WavesRepo = {
   createWave(input: { tenantId: string; name: string }): Promise<string>;
   updateWaveStatus(waveId: string, patch: WavePatch): Promise<void>;
   runReleaseWave(waveId: string): Promise<void>;
+  attachOrderToWave(waveId: string, orderId: string): Promise<void>;
+  detachOrderFromWave(waveId: string, orderId: string): Promise<void>;
   findWaveResponse(waveId: string): Promise<Wave | null>;
 };
 
@@ -189,6 +191,28 @@ export function createWavesRepo(supabase: SupabaseClient): WavesRepo {
 
     async runReleaseWave(waveId) {
       const { error } = await supabase.rpc('release_wave', { wave_uuid: waveId });
+
+      if (error) {
+        throw error;
+      }
+    },
+
+    async attachOrderToWave(waveId, orderId) {
+      const { error } = await supabase.rpc('attach_order_to_wave', {
+        wave_uuid: waveId,
+        order_uuid: orderId
+      });
+
+      if (error) {
+        throw error;
+      }
+    },
+
+    async detachOrderFromWave(waveId, orderId) {
+      const { error } = await supabase.rpc('detach_order_from_wave', {
+        wave_uuid: waveId,
+        order_uuid: orderId
+      });
 
       if (error) {
         throw error;

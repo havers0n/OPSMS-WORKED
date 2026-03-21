@@ -1,6 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Order, OrderLine, OrderStatus, OrderSummary } from '@wos/domain';
-import { mapOrderLineRowToDomain, mapOrderRowToDomain, mapOrderSummaryRowToDomain } from '../../mappers.js';
+import type { Order, OrderLine, OrderStatus, OrderSummary, PickTaskSummary } from '@wos/domain';
+import {
+  mapOrderLineRowToDomain,
+  mapOrderRowToDomain,
+  mapOrderSummaryRowToDomain,
+  mapPickTaskSummaryRowToDomain
+} from '../../mappers.js';
 
 type WaveRelation = { name: string } | Array<{ name: string }> | null | undefined;
 
@@ -55,6 +60,18 @@ type WaveCreateCheckRow = {
   id: string;
   tenant_id: string;
   status: string;
+};
+
+type PickTaskRow = {
+  id: string;
+  tenant_id: string;
+  source_type: 'order' | 'wave';
+  source_id: string;
+  status: string;
+  assigned_to: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
 };
 
 const orderSelectColumns = `
@@ -188,6 +205,7 @@ export type OrdersRepo = {
   }): Promise<OrderLine>;
   removeOrderLine(orderId: string, lineId: string): Promise<void>;
   findOrderResponse(orderId: string): Promise<Order | null>;
+  listOrderExecutionPickTasks(orderId: string): Promise<PickTaskSummary[]>;
 };
 
 export function createOrdersRepo(supabase: SupabaseClient): OrdersRepo {
@@ -409,6 +427,51 @@ export function createOrdersRepo(supabase: SupabaseClient): OrdersRepo {
 
       const lines = (lineRows ?? []).map((row) => mapOrderLineRowToDomain(row as OrderLineInsertRow));
       return mapOrderRow(orderRow as OrderRow, lines);
+    },
+
+    async listOrderExecutionPickTasks(orderId) {
+      const { data: taskRows, error: taskError } = await supabase
+        .from('pick_tasks')
+        .select('id,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at')
+        .eq('source_type', 'order')
+        .eq('source_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (taskError) {
+        throw taskError;
+      }
+
+      const taskRow = (taskRows ?? [])[0] as PickTaskRow | undefined;
+
+      if (!taskRow) {
+        return [];
+      }
+
+      const { data: stepRows, error: stepsError } = await supabase
+        .from('pick_steps')
+        .select('id,status')
+        .eq('task_id', taskRow.id);
+
+      if (stepsError) {
+        throw stepsError;
+      }
+
+      const steps = stepRows ?? [];
+      const totalSteps = steps.length;
+      const completedSteps = steps.filter((step) => step.status === 'picked').length;
+      const exceptionSteps = steps.filter(
+        (step) => step.status === 'skipped' || step.status === 'exception' || step.status === 'partial'
+      ).length;
+
+      return [
+        mapPickTaskSummaryRowToDomain({
+          ...taskRow,
+          total_steps: totalSteps,
+          completed_steps: completedSteps,
+          exception_steps: exceptionSteps
+        })
+      ];
     }
   };
 }

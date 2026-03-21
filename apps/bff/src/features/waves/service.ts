@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Wave, WaveStatus } from '@wos/domain';
 import {
   invalidWaveTransition,
+  mapWaveMembershipRpcError,
   mapReleaseWaveRpcError,
   waveHasBlockingOrders,
   waveHasNoOrdersForReady,
@@ -21,9 +22,16 @@ export type TransitionWaveStatusCommand = {
   status: WaveStatus;
 };
 
+export type WaveMembershipCommand = {
+  waveId: string;
+  orderId: string;
+};
+
 export type WavesService = {
   createWave(command: CreateWaveCommand): Promise<Wave>;
   transitionWaveStatus(command: TransitionWaveStatusCommand): Promise<Wave>;
+  attachOrderToWave(command: WaveMembershipCommand): Promise<Wave>;
+  detachOrderFromWave(command: WaveMembershipCommand): Promise<Wave>;
 };
 
 export function createWavesServiceFromRepo(repo: WavesRepo): WavesService {
@@ -95,6 +103,46 @@ export function createWavesServiceFromRepo(repo: WavesRepo): WavesService {
       }
 
       return updatedWave;
+    },
+
+    async attachOrderToWave(command) {
+      try {
+        await repo.attachOrderToWave(command.waveId, command.orderId);
+      } catch (error) {
+        const mapped = mapWaveMembershipRpcError(
+          error as { code?: string; message?: string } | null,
+          { waveId: command.waveId, orderId: command.orderId }
+        );
+        throw mapped ?? error;
+      }
+
+      const wave = await repo.findWaveResponse(command.waveId);
+
+      if (!wave) {
+        throw waveNotFound(command.waveId);
+      }
+
+      return wave;
+    },
+
+    async detachOrderFromWave(command) {
+      try {
+        await repo.detachOrderFromWave(command.waveId, command.orderId);
+      } catch (error) {
+        const mapped = mapWaveMembershipRpcError(
+          error as { code?: string; message?: string } | null,
+          { waveId: command.waveId, orderId: command.orderId }
+        );
+        throw mapped ?? error;
+      }
+
+      const wave = await repo.findWaveResponse(command.waveId);
+
+      if (!wave) {
+        throw waveNotFound(command.waveId);
+      }
+
+      return wave;
     }
   };
 }

@@ -66,8 +66,7 @@ import {
   mapFloorRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
   mapSiteRowToDomain,
-  mapValidationResult,
-  mapPickTaskSummaryRowToDomain
+  mapValidationResult
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
 import {
@@ -85,7 +84,6 @@ import {
   createWavesService,
   type WavesService
 } from './features/waves/service.js';
-import { mapWaveMembershipRpcError } from './features/waves/errors.js';
 import { createOrdersRepo } from './features/orders/repo.js';
 import { createWavesRepo } from './features/waves/repo.js';
 import { createProductsRepo } from './features/products/repo.js';
@@ -1052,45 +1050,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
     const supabase = getUserSupabase(auth);
+    const ordersRepo = createOrdersRepo(supabase);
+    const execution = await ordersRepo.listOrderExecutionPickTasks(orderId);
 
-    // Find pick task for this order
-    const { data: taskRows, error: taskError } = await supabase
-      .from('pick_tasks')
-      .select('id,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at')
-      .eq('source_type', 'order')
-      .eq('source_id', orderId)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (taskError) throw taskError;
-
-    if (!taskRows || taskRows.length === 0) {
-      return parseOrThrow(pickTasksResponseSchema, []);
-    }
-
-    const taskRow = taskRows[0];
-
-    // Aggregate step counts
-    const { data: stepRows, error: stepsError } = await supabase
-      .from('pick_steps')
-      .select('id,status')
-      .eq('task_id', taskRow.id);
-
-    if (stepsError) throw stepsError;
-
-    const steps = stepRows ?? [];
-    const totalSteps = steps.length;
-    const completedSteps = steps.filter((s) => s.status === 'picked').length;
-    const exceptionSteps = steps.filter((s) => s.status === 'skipped' || s.status === 'exception' || s.status === 'partial').length;
-
-    return parseOrThrow(pickTasksResponseSchema, [
-      mapPickTaskSummaryRowToDomain({
-        ...taskRow,
-        total_steps: totalSteps,
-        completed_steps: completedSteps,
-        exception_steps: exceptionSteps
-      })
-    ]);
+    return parseOrThrow(pickTasksResponseSchema, execution);
   });
 
   app.get('/api/waves', async (request, reply) => {
@@ -1165,22 +1128,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
     const body = parseOrThrow(attachWaveOrderBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const { error } = await supabase.rpc('attach_order_to_wave', {
-      wave_uuid: waveId,
-      order_uuid: body.orderId
+    const service = getWavesService(auth);
+    const wave = await service.attachOrderToWave({
+      waveId,
+      orderId: body.orderId
     });
-
-    if (error) {
-      throw mapWaveMembershipRpcError(error as { message?: string }, { waveId, orderId: body.orderId });
-    }
-
-    const wavesRepo = createWavesRepo(supabase);
-    const wave = await wavesRepo.findWaveResponse(waveId);
-
-    if (!wave) {
-      throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
-    }
 
     return parseOrThrow(waveResponseSchema, wave);
   });
@@ -1192,22 +1144,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const params = request.params as { waveId: string; orderId: string };
     const waveId = parseOrThrow(idResponseSchema, { id: params.waveId }).id;
     const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
-    const supabase = getUserSupabase(auth);
-    const { error } = await supabase.rpc('detach_order_from_wave', {
-      wave_uuid: waveId,
-      order_uuid: orderId
+    const service = getWavesService(auth);
+    const wave = await service.detachOrderFromWave({
+      waveId,
+      orderId
     });
-
-    if (error) {
-      throw mapWaveMembershipRpcError(error as { message?: string }, { waveId, orderId });
-    }
-
-    const wavesRepo = createWavesRepo(supabase);
-    const wave = await wavesRepo.findWaveResponse(waveId);
-
-    if (!wave) {
-      throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
-    }
 
     return parseOrThrow(waveResponseSchema, wave);
   });
