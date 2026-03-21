@@ -364,6 +364,32 @@ function mapReleaseWaveRpcError(error: { message?: string } | null) {
   }
 }
 
+function mapWaveMembershipRpcError(
+  error: { message?: string } | null,
+  input: { waveId: string; orderId: string }
+) {
+  const message = error?.message ?? 'WAVE_MEMBERSHIP_UPDATE_FAILED';
+
+  switch (message) {
+    case 'WAVE_NOT_FOUND':
+      return new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${input.waveId} not found.`);
+    case 'ORDER_NOT_FOUND':
+      return new ApiError(404, 'ORDER_NOT_FOUND', `Order ${input.orderId} not found.`);
+    case 'WAVE_MEMBERSHIP_LOCKED':
+      return new ApiError(409, 'WAVE_MEMBERSHIP_LOCKED', 'Released waves have immutable membership.');
+    case 'ORDER_ALREADY_IN_WAVE':
+      return new ApiError(409, 'ORDER_ALREADY_IN_WAVE', 'Order is already attached to this wave.');
+    case 'ORDER_NOT_IN_WAVE':
+      return new ApiError(409, 'ORDER_NOT_IN_WAVE', 'Order is not attached to this wave.');
+    case 'ORDER_NOT_ATTACHABLE':
+      return new ApiError(409, 'ORDER_NOT_ATTACHABLE', 'Only draft or ready orders can be attached to a wave.');
+    case 'ORDER_NOT_DETACHABLE':
+      return new ApiError(409, 'ORDER_NOT_DETACHABLE', 'Only draft or ready orders can be detached from a wave.');
+    default:
+      return error;
+  }
+}
+
 async function fetchProductById(supabase: SupabaseClient, productId: string) {
   const { data, error } = await supabase
     .from('products')
@@ -2067,43 +2093,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
     const body = parseOrThrow(attachWaveOrderBodySchema, request.body);
     const supabase = getUserSupabase(auth);
-    const wave = await fetchWaveRowById(supabase, waveId);
-
-    if (wave.status !== 'draft' && wave.status !== 'ready') {
-      throw new ApiError(409, 'WAVE_MEMBERSHIP_LOCKED', 'Released waves have immutable membership.');
-    }
-
-    const { data: orderRow, error: orderError } = await supabase
-      .from('orders')
-      .select('id,status,wave_id')
-      .eq('id', body.orderId)
-      .single();
-
-    if (orderError || !orderRow) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${body.orderId} not found.`);
-    }
-
-    if (orderRow.wave_id === waveId) {
-      throw new ApiError(409, 'ORDER_ALREADY_IN_WAVE', 'Order is already attached to this wave.');
-    }
-
-    if (orderRow.wave_id) {
-      throw new ApiError(409, 'ORDER_ALREADY_IN_WAVE', 'Order already belongs to another wave.');
-    }
-
-    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
-      throw new ApiError(409, 'ORDER_NOT_ATTACHABLE', 'Only draft or ready orders can be attached to a wave.');
-    }
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ wave_id: waveId })
-      .eq('id', body.orderId)
-      .select('id')
-      .single();
+    const { error } = await supabase.rpc('attach_order_to_wave', {
+      wave_uuid: waveId,
+      order_uuid: body.orderId
+    });
 
     if (error) {
-      throw error;
+      throw mapWaveMembershipRpcError(error as { message?: string }, { waveId, orderId: body.orderId });
     }
 
     return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));
@@ -2117,39 +2113,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const waveId = parseOrThrow(idResponseSchema, { id: params.waveId }).id;
     const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
     const supabase = getUserSupabase(auth);
-    const wave = await fetchWaveRowById(supabase, waveId);
-
-    if (wave.status !== 'draft' && wave.status !== 'ready') {
-      throw new ApiError(409, 'WAVE_MEMBERSHIP_LOCKED', 'Released waves have immutable membership.');
-    }
-
-    const { data: orderRow, error: orderError } = await supabase
-      .from('orders')
-      .select('id,status,wave_id')
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderRow) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-    }
-
-    if (orderRow.wave_id !== waveId) {
-      throw new ApiError(409, 'ORDER_NOT_IN_WAVE', 'Order is not attached to this wave.');
-    }
-
-    if (orderRow.status !== 'draft' && orderRow.status !== 'ready') {
-      throw new ApiError(409, 'ORDER_NOT_DETACHABLE', 'Only draft or ready orders can be detached from a wave.');
-    }
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ wave_id: null })
-      .eq('id', orderId)
-      .select('id')
-      .single();
+    const { error } = await supabase.rpc('detach_order_from_wave', {
+      wave_uuid: waveId,
+      order_uuid: orderId
+    });
 
     if (error) {
-      throw error;
+      throw mapWaveMembershipRpcError(error as { message?: string }, { waveId, orderId });
     }
 
     return parseOrThrow(waveResponseSchema, await fetchWaveResponse(supabase, waveId));

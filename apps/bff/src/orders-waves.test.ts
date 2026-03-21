@@ -1413,22 +1413,6 @@ describe('orders and waves', () => {
       status: 'draft',
       waveId: null
     });
-    const attachToWave = vi.fn((patch: Record<string, unknown>) => {
-      order = {
-        ...order,
-        wave_id: patch.wave_id as string | null
-      };
-      return {
-        eq: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(async () => ({
-              data: { id: order.id },
-              error: null
-            }))
-          }))
-        }))
-      };
-    });
 
     const supabase = {
       from: vi.fn((table: string) => {
@@ -1449,17 +1433,8 @@ describe('orders and waves', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn((column: string) => {
-                if (column === 'id') {
-                  return {
-                    single: vi.fn(async () => ({
-                      data: {
-                        id: order.id,
-                        status: order.status,
-                        wave_id: order.wave_id
-                      },
-                      error: null
-                    }))
-                  };
+                if (column !== 'wave_id') {
+                  throw new Error(`Unexpected orders filter column: ${column}`);
                 }
 
                 return {
@@ -1469,8 +1444,7 @@ describe('orders and waves', () => {
                   }))
                 };
               })
-            })),
-            update: attachToWave
+            }))
           };
         }
 
@@ -1480,7 +1454,21 @@ describe('orders and waves', () => {
           }))
         };
       }),
-      rpc: vi.fn()
+      rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'attach_order_to_wave') {
+          expect(args).toEqual({
+            wave_uuid: waveDraftRow.id,
+            order_uuid: orderId
+          });
+          order = {
+            ...order,
+            wave_id: waveDraftRow.id
+          };
+          return { data: orderId, error: null };
+        }
+
+        return { data: null, error: null };
+      })
     };
 
     const app = createAppWithSupabase(supabase);
@@ -1499,8 +1487,9 @@ describe('orders and waves', () => {
     expect(response.json()).toEqual(
       toWaveDto(waveDraftRow, [buildOrderSummaryRow(order, waveDraftRow.name)])
     );
-    expect(attachToWave).toHaveBeenCalledWith({
-      wave_id: waveDraftRow.id
+    expect(supabase.rpc).toHaveBeenCalledWith('attach_order_to_wave', {
+      wave_uuid: waveDraftRow.id,
+      order_uuid: orderId
     });
 
     await app.close();
@@ -1513,22 +1502,6 @@ describe('orders and waves', () => {
       externalNumber: 'ORD-5002',
       status: 'ready',
       waveId: waveDraftRow.id
-    });
-    const detachFromWave = vi.fn((patch: Record<string, unknown>) => {
-      order = {
-        ...order,
-        wave_id: patch.wave_id as string | null
-      };
-      return {
-        eq: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(async () => ({
-              data: { id: order.id },
-              error: null
-            }))
-          }))
-        }))
-      };
     });
 
     const supabase = {
@@ -1550,17 +1523,8 @@ describe('orders and waves', () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn((column: string) => {
-                if (column === 'id') {
-                  return {
-                    single: vi.fn(async () => ({
-                      data: {
-                        id: order.id,
-                        status: order.status,
-                        wave_id: order.wave_id
-                      },
-                      error: null
-                    }))
-                  };
+                if (column !== 'wave_id') {
+                  throw new Error(`Unexpected orders filter column: ${column}`);
                 }
 
                 return {
@@ -1570,8 +1534,7 @@ describe('orders and waves', () => {
                   }))
                 };
               })
-            })),
-            update: detachFromWave
+            }))
           };
         }
 
@@ -1581,7 +1544,21 @@ describe('orders and waves', () => {
           }))
         };
       }),
-      rpc: vi.fn()
+      rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'detach_order_from_wave') {
+          expect(args).toEqual({
+            wave_uuid: waveDraftRow.id,
+            order_uuid: orderId
+          });
+          order = {
+            ...order,
+            wave_id: null
+          };
+          return { data: orderId, error: null };
+        }
+
+        return { data: null, error: null };
+      })
     };
 
     const app = createAppWithSupabase(supabase);
@@ -1595,8 +1572,9 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(toWaveDto(waveDraftRow, []));
-    expect(detachFromWave).toHaveBeenCalledWith({
-      wave_id: null
+    expect(supabase.rpc).toHaveBeenCalledWith('detach_order_from_wave', {
+      wave_uuid: waveDraftRow.id,
+      order_uuid: orderId
     });
 
     await app.close();
@@ -1604,48 +1582,22 @@ describe('orders and waves', () => {
 
   it('rejects detach when order is not attached to the requested wave', async () => {
     const orderId = '117f4d37-cf2b-45bc-a234-cf034eaf70d8';
-    const detachFromWave = vi.fn();
 
     const supabase = {
-      from: vi.fn((table: string) => {
-        if (table === 'waves') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                single: vi.fn(async () => ({
-                  data: waveDraftRow,
-                  error: null
-                }))
-              }))
-            }))
-          };
-        }
-
-        if (table === 'orders') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                single: vi.fn(async () => ({
-                  data: {
-                    id: orderId,
-                    status: 'ready',
-                    wave_id: null
-                  },
-                  error: null
-                }))
-              }))
-            })),
-            update: detachFromWave
-          };
-        }
-
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(async () => ({ data: null, error: null }))
-          }))
-        };
+      from: vi.fn(() => {
+        throw new Error('from() should not be used when detach RPC fails');
       }),
-      rpc: vi.fn()
+      rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'detach_order_from_wave') {
+          expect(args).toEqual({
+            wave_uuid: waveDraftRow.id,
+            order_uuid: orderId
+          });
+          return { data: null, error: { message: 'ORDER_NOT_IN_WAVE', code: 'P0001' } };
+        }
+
+        return { data: null, error: null };
+      })
     };
 
     const app = createAppWithSupabase(supabase);
@@ -1664,41 +1616,31 @@ describe('orders and waves', () => {
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
-    expect(detachFromWave).not.toHaveBeenCalled();
+    expect(supabase.rpc).toHaveBeenCalledWith('detach_order_from_wave', {
+      wave_uuid: waveDraftRow.id,
+      order_uuid: orderId
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
 
     await app.close();
   });
 
   it('locks wave membership after release', async () => {
     const supabase = {
-      from: vi.fn((table: string) => {
-        if (table === 'waves') {
-          return {
-            select: vi.fn(() => ({
-              eq: vi.fn(() => ({
-                single: vi.fn(async () => ({
-                  data: waveReleasedRow,
-                  error: null
-                }))
-              }))
-            }))
-          };
+      from: vi.fn(() => {
+        throw new Error('from() should not be used when attach RPC fails');
+      }),
+      rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'attach_order_to_wave') {
+          expect(args).toEqual({
+            wave_uuid: waveReleasedRow.id,
+            order_uuid: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+          });
+          return { data: null, error: { message: 'WAVE_MEMBERSHIP_LOCKED', code: 'P0001' } };
         }
 
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(async () => ({ data: null, error: null }))
-          })),
-          update: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              select: vi.fn(() => ({
-                single: vi.fn(async () => ({ data: null, error: null }))
-              }))
-            }))
-          }))
-        };
-      }),
-      rpc: vi.fn()
+        return { data: null, error: null };
+      })
     };
 
     const app = createAppWithSupabase(supabase);
@@ -1720,6 +1662,90 @@ describe('orders and waves', () => {
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
+    expect(supabase.rpc).toHaveBeenCalledWith('attach_order_to_wave', {
+      wave_uuid: waveReleasedRow.id,
+      order_uuid: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('maps attach rpc ORDER_NOT_ATTACHABLE to stable HTTP contract', async () => {
+    const orderId = 'ce8bc2e7-02e2-46f7-a07e-0ca50bc49baf';
+    const supabase = {
+      from: vi.fn(() => {
+        throw new Error('from() should not be used when attach RPC fails');
+      }),
+      rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'attach_order_to_wave') {
+          expect(args).toEqual({
+            wave_uuid: waveDraftRow.id,
+            order_uuid: orderId
+          });
+          return { data: null, error: { message: 'ORDER_NOT_ATTACHABLE', code: 'P0001' } };
+        }
+
+        return { data: null, error: null };
+      })
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/waves/${waveDraftRow.id}/orders`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        orderId
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'ORDER_NOT_ATTACHABLE',
+      message: 'Only draft or ready orders can be attached to a wave.'
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('maps detach rpc ORDER_NOT_DETACHABLE to stable HTTP contract', async () => {
+    const orderId = '3635f3e4-b811-4950-a9a0-ec9c1bc4dd1c';
+    const supabase = {
+      from: vi.fn(() => {
+        throw new Error('from() should not be used when detach RPC fails');
+      }),
+      rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'detach_order_from_wave') {
+          expect(args).toEqual({
+            wave_uuid: waveDraftRow.id,
+            order_uuid: orderId
+          });
+          return { data: null, error: { message: 'ORDER_NOT_DETACHABLE', code: 'P0001' } };
+        }
+
+        return { data: null, error: null };
+      })
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/waves/${waveDraftRow.id}/orders/${orderId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'ORDER_NOT_DETACHABLE',
+      message: 'Only draft or ready orders can be detached from a wave.'
+    });
+    expect(supabase.from).not.toHaveBeenCalled();
 
     await app.close();
   });
