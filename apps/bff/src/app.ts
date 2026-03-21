@@ -35,9 +35,6 @@ import {
   layoutDraftResponseSchema,
   layoutVersionIdResponseSchema,
   publishResponseSchema,
-  productCatalogResponseSchema,
-  productResponseSchema,
-  productsResponseSchema,
   publishedLayoutSummaryResponseSchema,
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
@@ -82,7 +79,11 @@ import {
 } from './features/waves/service.js';
 import { createOrdersRepo } from './features/orders/repo.js';
 import { createWavesRepo } from './features/waves/repo.js';
-import { createProductsRepo } from './features/products/repo.js';
+import {
+  createProductsService,
+  type ProductsService
+} from './features/products/service.js';
+import { registerProductsRoutes } from './features/products/routes.js';
 import { createLayoutRepo } from './features/layout/repo.js';
 import {
   createLayoutService,
@@ -125,6 +126,7 @@ type LayoutServiceFactory = (context: AuthenticatedRequestContext) => LayoutServ
 type SitesServiceFactory = (context: AuthenticatedRequestContext) => SitesService;
 type ContainersServiceFactory = (context: AuthenticatedRequestContext) => ContainersService;
 type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsService;
+type ProductsServiceFactory = (context: AuthenticatedRequestContext) => ProductsService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -138,6 +140,7 @@ type BuildAppOptions = {
   getSitesService?: SitesServiceFactory;
   getContainersService?: ContainersServiceFactory;
   getFloorsService?: FloorsServiceFactory;
+  getProductsService?: ProductsServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -186,6 +189,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getFloorsService =
     options.getFloorsService ??
     ((context: AuthenticatedRequestContext) => createFloorsService(getUserSupabase(context)));
+  const getProductsService =
+    options.getProductsService ??
+    ((context: AuthenticatedRequestContext) => createProductsService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -261,71 +267,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(containerTypesResponseSchema, types);
   });
 
-  app.get('/api/products', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const queryParams = z
-      .object({
-        query: z.string().trim().optional(),
-        limit: z.coerce.number().int().min(1).max(100).optional(),
-        offset: z.coerce.number().int().min(0).optional(),
-        activeOnly: z
-          .union([z.literal('true'), z.literal('false')])
-          .optional()
-      })
-      .parse(request.query);
-
-    const supabase = getUserSupabase(auth);
-    const productsRepo = createProductsRepo(supabase);
-    const catalog = await productsRepo.findCatalog({
-      query: queryParams.query ?? '',
-      limit: queryParams.limit ?? 50,
-      offset: queryParams.offset ?? 0,
-      activeOnly: queryParams.activeOnly === 'true'
-    });
-
-    return parseOrThrow(productCatalogResponseSchema, catalog);
-  });
-
-  app.get('/api/products/search', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const queryParams = z
-      .object({
-        query: z.string().trim().optional()
-      })
-      .parse(request.query);
-
-    const supabase = getUserSupabase(auth);
-    const productsRepo = createProductsRepo(supabase);
-    const products =
-      queryParams.query && queryParams.query.trim().length > 0
-        ? await productsRepo.searchActive(queryParams.query)
-        : await productsRepo.listActive();
-
-    return parseOrThrow(productsResponseSchema, products);
-  });
-
-  app.get('/api/products/:productId', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const productId = parseOrThrow(idResponseSchema, {
-      id: (request.params as { productId: string }).productId
-    }).id;
-
-    const supabase = getUserSupabase(auth);
-    const productsRepo = createProductsRepo(supabase);
-    const product = await productsRepo.findById(productId);
-
-    if (!product) {
-      throw new ApiError(404, 'NOT_FOUND', 'Product was not found.');
-    }
-
-    return parseOrThrow(productResponseSchema, product);
-  });
+  registerProductsRoutes(app, { getAuthContext, getProductsService });
 
   app.get('/api/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
