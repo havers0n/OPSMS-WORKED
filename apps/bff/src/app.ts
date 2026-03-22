@@ -40,17 +40,6 @@ import {
   saveLayoutDraftBodySchema,
   sitesResponseSchema,
   validationResponseSchema,
-  createOrderBodySchema,
-  addOrderLineBodySchema,
-  transitionOrderStatusBodySchema,
-  ordersResponseSchema,
-  orderResponseSchema,
-  orderLineResponseSchema,
-  createWaveBodySchema,
-  transitionWaveStatusBodySchema,
-  attachWaveOrderBodySchema,
-  wavesResponseSchema,
-  waveResponseSchema,
   pickTasksResponseSchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
@@ -78,7 +67,8 @@ import {
   type WavesService
 } from './features/waves/service.js';
 import { createOrdersRepo } from './features/orders/repo.js';
-import { createWavesRepo } from './features/waves/repo.js';
+import { registerOrdersRoutes } from './features/orders/routes.js';
+import { registerWavesRoutes } from './features/waves/routes.js';
 import {
   createProductsService,
   type ProductsService
@@ -741,114 +731,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   // ── Orders ───────────────────────────────────────────────────────────────────
 
-  app.get('/api/orders', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
-    }
-
-    const tenantId = auth.currentTenant.tenantId;
-    const statusFilter = (request.query as { status?: string }).status ?? null;
-    const supabase = getUserSupabase(auth);
-    const ordersRepo = createOrdersRepo(supabase);
-    const summaries = await ordersRepo.listOrderSummaries(tenantId, statusFilter);
-
-    return parseOrThrow(ordersResponseSchema, summaries);
-  });
-
-  app.post('/api/orders', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
-    }
-
-    const tenantId = auth.currentTenant.tenantId;
-    const body = parseOrThrow(createOrderBodySchema, request.body);
-    const service = getOrdersService(auth);
-    const order = await service.createOrder({
-      tenantId,
-      externalNumber: body.externalNumber,
-      priority: body.priority,
-      waveId: body.waveId
-    });
-
-    return parseOrThrow(orderResponseSchema, order);
-  });
-
-  app.get('/api/orders/:orderId', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
-    const supabase = getUserSupabase(auth);
-    const ordersRepo = createOrdersRepo(supabase);
-    const order = await ordersRepo.findOrderResponse(orderId);
-
-    if (!order) {
-      throw new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
-    }
-
-    return parseOrThrow(orderResponseSchema, order);
-  });
-
-  app.post('/api/orders/:orderId/lines', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
-    }
-
-    const tenantId = auth.currentTenant.tenantId;
-    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
-    const body = parseOrThrow(addOrderLineBodySchema, request.body);
-    const service = getOrdersService(auth);
-    const line = await service.addOrderLine({
-      tenantId,
-      orderId,
-      productId: body.productId,
-      qtyRequired: body.qtyRequired
-    });
-
-    void reply.code(201);
-    return parseOrThrow(orderLineResponseSchema, line);
-  });
-
-  app.delete('/api/orders/:orderId/lines/:lineId', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const params = request.params as { orderId: string; lineId: string };
-    const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
-    const lineId = parseOrThrow(idResponseSchema, { id: params.lineId }).id;
-    const service = getOrdersService(auth);
-    await service.removeOrderLine({ orderId, lineId });
-
-    void reply.code(204);
-  });
-
-  app.patch('/api/orders/:orderId/status', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
-    }
-
-    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
-    const body = parseOrThrow(transitionOrderStatusBodySchema, request.body);
-    const service = getOrdersService(auth);
-    const order = await service.transitionOrderStatus({
-      orderId,
-      status: body.status
-    });
-
-    return parseOrThrow(orderResponseSchema, order);
-  });
+  registerOrdersRoutes(app, { getAuthContext, getUserSupabase, getOrdersService });
 
   app.get('/api/orders/:orderId/execution', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -862,102 +745,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(pickTasksResponseSchema, execution);
   });
 
-  app.get('/api/waves', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
-    }
-
-    const tenantId = auth.currentTenant.tenantId;
-    const supabase = getUserSupabase(auth);
-    const wavesRepo = createWavesRepo(supabase);
-    const waves = await wavesRepo.listWaveSummaries(tenantId);
-
-    return parseOrThrow(wavesResponseSchema, waves);
-  });
-
-  app.post('/api/waves', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
-    }
-
-    const tenantId = auth.currentTenant.tenantId;
-    const body = parseOrThrow(createWaveBodySchema, request.body);
-    const service = getWavesService(auth);
-    const wave = await service.createWave({
-      tenantId,
-      name: body.name
-    });
-
-    return parseOrThrow(waveResponseSchema, wave);
-  });
-
-  app.get('/api/waves/:waveId', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
-    const supabase = getUserSupabase(auth);
-    const wavesRepo = createWavesRepo(supabase);
-    const wave = await wavesRepo.findWaveResponse(waveId);
-
-    if (!wave) {
-      throw new ApiError(404, 'WAVE_NOT_FOUND', `Wave ${waveId} not found.`);
-    }
-
-    return parseOrThrow(waveResponseSchema, wave);
-  });
-
-  app.patch('/api/waves/:waveId/status', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
-    const body = parseOrThrow(transitionWaveStatusBodySchema, request.body);
-    const service = getWavesService(auth);
-    const wave = await service.transitionWaveStatus({
-      waveId,
-      status: body.status
-    });
-
-    return parseOrThrow(waveResponseSchema, wave);
-  });
-
-  app.post('/api/waves/:waveId/orders', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const waveId = parseOrThrow(idResponseSchema, { id: (request.params as { waveId: string }).waveId }).id;
-    const body = parseOrThrow(attachWaveOrderBodySchema, request.body);
-    const service = getWavesService(auth);
-    const wave = await service.attachOrderToWave({
-      waveId,
-      orderId: body.orderId
-    });
-
-    return parseOrThrow(waveResponseSchema, wave);
-  });
-
-  app.delete('/api/waves/:waveId/orders/:orderId', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const params = request.params as { waveId: string; orderId: string };
-    const waveId = parseOrThrow(idResponseSchema, { id: params.waveId }).id;
-    const orderId = parseOrThrow(idResponseSchema, { id: params.orderId }).id;
-    const service = getWavesService(auth);
-    const wave = await service.detachOrderFromWave({
-      waveId,
-      orderId
-    });
-
-    return parseOrThrow(waveResponseSchema, wave);
-  });
+  registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
 
   app.setErrorHandler((error, request, reply) => {
     const mappedSupabaseError = mapSupabaseError(error);

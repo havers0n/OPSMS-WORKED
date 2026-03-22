@@ -1409,6 +1409,125 @@ describe('orders and waves', () => {
     await app.close();
   });
 
+  it('serves orders list and detail reads through repo-backed routes without using orders service', async () => {
+    const listedOrder = buildOrderSummaryRow(
+      createOrderRow({
+        id: 'ab18734c-15c0-4ea5-8d5c-7bd68d555ca9',
+        externalNumber: 'ORD-READ-100',
+        status: 'draft',
+        waveId: null
+      }),
+      null,
+      2
+    );
+    const detailOrder = toOrderDto(
+      createOrderRow({
+        id: listedOrder.id,
+        externalNumber: listedOrder.external_number,
+        status: listedOrder.status,
+        waveId: listedOrder.wave_id
+      }),
+      null,
+      []
+    );
+
+    const ordersSelect = vi.fn((columns: string) => {
+      if (columns.includes('order_lines(qty_required, qty_picked)')) {
+        return {
+          eq: vi.fn(() => ({
+            order: vi.fn(async () => ({
+              data: [listedOrder],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (columns.includes('external_number')) {
+        return {
+          eq: vi.fn(() => ({
+            single: vi.fn(async () => ({
+              data: buildOrderRow(
+                createOrderRow({
+                  id: detailOrder.id,
+                  externalNumber: detailOrder.externalNumber,
+                  status: detailOrder.status,
+                  waveId: detailOrder.waveId
+                }),
+                null
+              ),
+              error: null
+            }))
+          }))
+        };
+      }
+
+      throw new Error(`Unexpected orders select: ${columns}`);
+    });
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: ordersSelect
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(async () => ({
+                  data: [],
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+      rpc: vi.fn()
+    };
+
+    const getOrdersService = vi.fn(() => ({
+      createOrder: vi.fn(),
+      addOrderLine: vi.fn(),
+      removeOrderLine: vi.fn(),
+      transitionOrderStatus: vi.fn()
+    }) as never);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never),
+      getOrdersService
+    });
+
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: '/api/orders',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([toOrderSummaryDto(listedOrder)]);
+
+    const detailResponse = await app.inject({
+      method: 'GET',
+      url: `/api/orders/${detailOrder.id}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toEqual(detailOrder);
+
+    expect(getOrdersService).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
   it('delegates orders command routes to orders service factory', async () => {
     const orderId = '8f38af74-57af-4e9c-b44b-2deac0b9f2aa';
     const lineId = '870f8de6-9332-4db4-bc0f-8102be509fe8';
@@ -1530,6 +1649,7 @@ describe('orders and waves', () => {
 
   it('delegates waves command routes to waves service factory', async () => {
     const waveId = '0f0d9d43-b9ff-4f9f-abde-1846a998c298';
+    const orderId = '08c6f61c-9f0c-4b01-af9f-57076d18b2cf';
     const createdWave = toWaveDto(
       {
         ...waveDraftRow,
@@ -1545,7 +1665,9 @@ describe('orders and waves', () => {
 
     const wavesService = {
       createWave: vi.fn(async () => createdWave),
-      transitionWaveStatus: vi.fn(async () => transitionedWave)
+      transitionWaveStatus: vi.fn(async () => transitionedWave),
+      attachOrderToWave: vi.fn(async () => transitionedWave),
+      detachOrderFromWave: vi.fn(async () => transitionedWave)
     };
     const getWavesService = vi.fn(() => wavesService as never);
     const app = buildApp({
@@ -1584,7 +1706,28 @@ describe('orders and waves', () => {
     });
     expect(transitionResponse.statusCode).toBe(200);
 
-    expect(getWavesService).toHaveBeenCalledTimes(2);
+    const attachResponse = await app.inject({
+      method: 'POST',
+      url: `/api/waves/${waveId}/orders`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        orderId
+      }
+    });
+    expect(attachResponse.statusCode).toBe(200);
+
+    const detachResponse = await app.inject({
+      method: 'DELETE',
+      url: `/api/waves/${waveId}/orders/${orderId}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+    expect(detachResponse.statusCode).toBe(200);
+
+    expect(getWavesService).toHaveBeenCalledTimes(4);
     expect(wavesService.createWave).toHaveBeenCalledWith({
       tenantId,
       name: 'Wave Service Delegation'
@@ -1593,6 +1736,138 @@ describe('orders and waves', () => {
       waveId,
       status: 'ready'
     });
+    expect(wavesService.attachOrderToWave).toHaveBeenCalledWith({
+      waveId,
+      orderId
+    });
+    expect(wavesService.detachOrderFromWave).toHaveBeenCalledWith({
+      waveId,
+      orderId
+    });
+
+    await app.close();
+  });
+
+  it('serves waves list and detail reads through repo-backed routes without using waves service', async () => {
+    const listedWave = {
+      ...waveDraftRow,
+      orders: [{ status: 'ready' }]
+    };
+    const detailOrderRow = buildOrderSummaryRow(
+      createOrderRow({
+        id: 'd3496cc8-8bb5-4260-99d6-67d33ab7a22a',
+        externalNumber: 'ORD-WAVE-READ-1',
+        status: 'ready',
+        waveId: waveDraftRow.id
+      }),
+      waveDraftRow.name
+    );
+    const detailWave = toWaveDto(
+      {
+        ...waveDraftRow,
+        id: waveDraftRow.id
+      },
+      [detailOrderRow]
+    );
+
+    const wavesSelect = vi.fn((columns: string) => {
+      if (columns.includes('orders(status)')) {
+        return {
+          eq: vi.fn(() => ({
+            order: vi.fn(async () => ({
+              data: [listedWave],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (columns === 'id,tenant_id,name,status,created_at,released_at,closed_at') {
+        return {
+          eq: vi.fn(() => ({
+            single: vi.fn(async () => ({
+              data: waveDraftRow,
+              error: null
+            }))
+          }))
+        };
+      }
+
+      throw new Error(`Unexpected waves select: ${columns}`);
+    });
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'waves') {
+          return {
+            select: wavesSelect
+          };
+        }
+
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(async () => ({
+                  data: [detailOrderRow],
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+      rpc: vi.fn()
+    };
+
+    const getWavesService = vi.fn(() => ({
+      createWave: vi.fn(),
+      transitionWaveStatus: vi.fn(),
+      attachOrderToWave: vi.fn(),
+      detachOrderFromWave: vi.fn()
+    }) as never);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never),
+      getWavesService
+    });
+
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: '/api/waves',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([
+      {
+        id: waveDraftRow.id,
+        tenantId,
+        name: waveDraftRow.name,
+        status: waveDraftRow.status,
+        createdAt: waveDraftRow.created_at,
+        releasedAt: waveDraftRow.released_at,
+        closedAt: waveDraftRow.closed_at,
+        totalOrders: 1,
+        readyOrders: 1,
+        blockingOrderCount: 0
+      }
+    ]);
+
+    const detailResponse = await app.inject({
+      method: 'GET',
+      url: `/api/waves/${detailWave.id}`,
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+    expect(detailResponse.statusCode).toBe(200);
+    expect(detailResponse.json()).toEqual(detailWave);
+
+    expect(getWavesService).not.toHaveBeenCalled();
 
     await app.close();
   });
