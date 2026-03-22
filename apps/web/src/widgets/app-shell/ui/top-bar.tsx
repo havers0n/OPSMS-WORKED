@@ -43,7 +43,8 @@ import { useEditorStore } from '@/entities/layout-version/model/editor-store';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'layout', label: 'Layout' },
-  { id: 'placement', label: 'Storage' }
+  { id: 'placement', label: 'Storage' },
+  { id: 'operations', label: 'Operations' }
 ];
 
 const TRACE = import.meta.env.DEV;

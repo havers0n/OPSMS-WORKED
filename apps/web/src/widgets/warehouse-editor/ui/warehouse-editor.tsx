@@ -32,9 +32,10 @@ export function WarehouseEditor() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
   useEffect(() => {
-    if (viewMode !== 'layout') {
+    if (viewMode === 'placement') {
       setInspectorOpen(true);
     } else {
+      // 'layout' and 'operations': inspector opens only when something is selected
       setInspectorOpen(selectedRackId !== null || creatingRackId !== null);
     }
   }, [viewMode, selectedRackId, creatingRackId]);

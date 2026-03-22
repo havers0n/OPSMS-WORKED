@@ -25,6 +25,9 @@ const TOOLS_BY_VIEW: Record<ViewMode, Tool[]> = {
   ],
   placement: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
+  ],
+  operations: [
+    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
   ]
 };
 

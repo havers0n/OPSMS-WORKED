@@ -166,18 +166,19 @@ export function EditorCanvas({
   const minRackDistance = useMinRackDistance();
 
   const isPlacementMode = viewMode === 'placement';
-  // In Storage (placement) mode the published rack tree must be used as the
-  // source for RackCells so that rackId/faceId/sectionId/levelId in the lookup
-  // key match the keys in publishedCellsByStructure.
+  const isOperationsMode = viewMode === 'operations';
+  // In Storage (placement) and Operations mode the published rack tree must be
+  // used as the source for RackCells so that rackId/faceId/sectionId/levelId
+  // in the lookup key match the keys in publishedCellsByStructure.
   // publishedCells is always fetched from the published layout version; the
   // active draft always has fresh UUIDs after create_layout_draft(), causing a
   // permanent identity mismatch when the draft layout is used instead.
-  const placementLayout = isPlacementMode ? (workspace?.latestPublished ?? null) : null;
+  const placementLayout = (isPlacementMode || isOperationsMode) ? (workspace?.latestPublished ?? null) : null;
   const moveTargetCellId =
     placementInteraction.type === 'move-container' ? placementInteraction.targetCellId : null;
   const isPlacementMoveMode = placementInteraction.type === 'move-container';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
-  const placementFloorId = isPlacementMode ? workspace?.floorId ?? null : null;
+  const placementFloorId = (isPlacementMode || isOperationsMode) ? workspace?.floorId ?? null : null;
   const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
   const { data: publishedCells = [] } = usePublishedCells(
     placementFloorId
@@ -626,7 +627,7 @@ export function EditorCanvas({
                       offsetX={geometry.centerX}
                       offsetY={geometry.centerY}
                       rotation={rack.rotationDeg}
-                      draggable={isLayoutEditable && !isPlacing && !isPlacementMode}
+                      draggable={isLayoutEditable && !isPlacing && !isPlacementMode && !isOperationsMode}
                       onMouseDown={(event) => {
                         // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
                         event.cancelBubble = true;
@@ -697,7 +698,7 @@ export function EditorCanvas({
                         />
                       )}
 
-                      {lod >= 2 && faceA && (
+                      {(lod >= 2 || (isOperationsMode && lod >= 1)) && faceA && (
                         <RackCells
                           geometry={geometry}
                           rackId={rack.id}
@@ -745,7 +746,9 @@ export function EditorCanvas({
                   backdropFilter: 'blur(4px)'
                 }}
               >
-                {isPlacementMode
+                {isOperationsMode
+                ? 'Live view · Click rack to inspect · MMB pan · Scroll zoom'
+                : isPlacementMode
                 ? 'Click cell to select · MMB pan · Scroll zoom'
                 : isLayoutEditable
                   ? 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del'

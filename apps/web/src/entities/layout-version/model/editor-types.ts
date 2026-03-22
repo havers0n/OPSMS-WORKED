@@ -1,7 +1,7 @@
 export type EditorMode = 'select' | 'place';
 
 /** Top-level editing perspective — controls which tools, overlays and inspector sections are active */
-export type ViewMode = 'layout' | 'placement';
+export type ViewMode = 'layout' | 'placement' | 'operations';
 
 /**
  * Typed selection state for the editor.
