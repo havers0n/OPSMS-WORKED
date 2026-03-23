@@ -752,7 +752,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const apiError =
       error instanceof ZodError
-        ? new ApiError(400, 'VALIDATION_ERROR', error.issues.map((issue) => issue.message).join('; '))
+        ? new ApiError(400, 'VALIDATION_ERROR', error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
         : error instanceof ApiError
         ? error
         : mappedSupabaseError

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { LayoutDraft } from '@wos/domain';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
 import { useEditorStore } from '@/entities/layout-version/model/editor-store';
+import { BffRequestError } from '@/shared/api/bff/client';
 import { saveLayoutDraft } from '../api/mutations';
 
 export function useSaveLayoutDraft(floorId: string | null) {
@@ -16,6 +17,13 @@ export function useSaveLayoutDraft(floorId: string | null) {
       });
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(floorId) });
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(floorId) });
+    },
+    onError: (error) => {
+      // Draft expired (e.g. published from another tab or publish succeeded but
+      // BFF response failed) — reload workspace so the store gets the current state.
+      if (error instanceof BffRequestError && error.code === 'DRAFT_NOT_ACTIVE') {
+        void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(floorId) });
+      }
     }
   });
 }

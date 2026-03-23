@@ -43,6 +43,12 @@ export function usePublishLayout(floorId: string | null) {
       // Published cells reference UUIDs from the newly-promoted layout version.
       // Invalidate so that RackCells lookup keys align with the fresh published rack tree.
       void queryClient.invalidateQueries({ queryKey: cellKeys.publishedByFloor(floorId) });
+    },
+    onError: () => {
+      // The DB publish may have succeeded even if the BFF response failed (e.g.
+      // response schema mismatch). Always reload workspace so the store doesn't
+      // hold a stale draft ID that is already published.
+      void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(floorId) });
     }
   });
 }

@@ -29,6 +29,9 @@ export function mapSupabaseError(error: unknown) {
   }
 
   if (error.code === 'P0001') {
+    if (typeof error.message === 'string' && error.message.includes('is not an active draft')) {
+      return new ApiError(409, 'DRAFT_NOT_ACTIVE', 'Layout draft is no longer active. Please reload.');
+    }
     switch (error.message) {
       case 'CONTAINER_NOT_FOUND':
         return new ApiError(404, 'NOT_FOUND', 'Container was not found.');
