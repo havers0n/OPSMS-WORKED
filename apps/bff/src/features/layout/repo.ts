@@ -286,6 +286,12 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
         throw error;
       }
 
+      // save_layout_draft returns either a plain uuid (migration 0042) or a jsonb
+      // object { layoutVersionId, draftVersion } if the function was later updated.
+      // Normalise to the uuid string the BFF contract expects.
+      if (data !== null && typeof data === 'object' && 'layoutVersionId' in (data as object)) {
+        return (data as { layoutVersionId: string }).layoutVersionId;
+      }
       return data as string;
     },
 
