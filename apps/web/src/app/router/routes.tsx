@@ -6,6 +6,7 @@ import { OperationsPage } from '@/pages/operations/ui/operations-page';
 import { ProductsPage } from '@/pages/products/ui/products-page';
 import { WaveDetailPage } from '@/pages/wave-detail/ui/wave-detail-page';
 import { WarehouseSetupPage } from '@/pages/warehouse-setup/ui/warehouse-setup-page';
+import { WarehouseViewPage } from '@/pages/warehouse-view/ui/warehouse-view-page';
 import { routes } from '@/shared/config/routes';
 
 export function AppRouter() {
@@ -20,6 +21,7 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         >
+          <Route path={routes.warehouseView} element={<WarehouseViewPage />} />
           <Route path={routes.warehouse} element={<WarehouseSetupPage />} />
           <Route path={routes.products} element={<ProductsPage />} />
           <Route path={routes.operations} element={<OperationsPage />} />

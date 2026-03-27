@@ -1,4 +1,4 @@
-import { BarChart3, Layers, LayoutGrid, Package, X } from 'lucide-react';
+import { BarChart3, Eye, Layers, LayoutGrid, Package, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
@@ -13,6 +13,13 @@ const items: NavigationItem[] = [
     description: 'Floor plan editor',
     icon: LayoutGrid,
     to: routes.warehouse,
+    enabled: true
+  },
+  {
+    label: 'Live View',
+    description: 'Read-only floor map',
+    icon: Eye,
+    to: routes.warehouseView,
     enabled: true
   },
   {
