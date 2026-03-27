@@ -48,10 +48,6 @@ begin
     (attach_wave_uuid, default_tenant_uuid, 'PR-05 Attach Wave', 'draft'),
     (detach_wave_uuid, default_tenant_uuid, 'PR-05 Detach Wave', 'draft'),
     (locked_wave_uuid, default_tenant_uuid, 'PR-05 Locked Wave', 'draft'),
-    (race_wave_a_uuid, default_tenant_uuid, 'PR-05 Race Wave A', 'draft'),
-    (race_wave_b_uuid, default_tenant_uuid, 'PR-05 Race Wave B', 'draft'),
-    (race_source_wave_uuid, default_tenant_uuid, 'PR-05 Race Source Wave', 'draft'),
-    (race_target_wave_uuid, default_tenant_uuid, 'PR-05 Race Target Wave', 'draft'),
     (mismatch_wave_uuid, other_tenant_uuid, 'PR-05 Mismatch Wave', 'draft'),
     (unauthorized_wave_uuid, default_tenant_uuid, 'PR-05 Unauthorized Wave', 'draft');
 
@@ -66,8 +62,6 @@ begin
     (already_attached_order_uuid, default_tenant_uuid, 'PR05-ALREADY-IN-WAVE', 'draft', attach_wave_uuid),
     (not_in_wave_order_uuid, default_tenant_uuid, 'PR05-NOT-IN-WAVE', 'draft', null),
     (tenant_mismatch_order_uuid, default_tenant_uuid, 'PR05-TENANT-MISMATCH', 'draft', null),
-    (race_attach_order_uuid, default_tenant_uuid, 'PR05-RACE-ATTACH', 'draft', null),
-    (race_attach_detach_order_uuid, default_tenant_uuid, 'PR05-RACE-DETACH-ATTACH', 'draft', race_source_wave_uuid),
     (unauthorized_order_uuid, default_tenant_uuid, 'PR05-UNAUTHORIZED', 'draft', null);
 
   update public.waves
@@ -201,41 +195,43 @@ begin
       end if;
   end;
 
-  -- unauthorized/masked behavior (caller without tenant scope)
-  perform dblink_connect('pr05_unauthorized', 'dbname=postgres options=-crole=authenticated');
-  begin
-    perform dblink_exec(
-      'pr05_unauthorized',
-      format(
-        'select public.attach_order_to_wave(%L::uuid, %L::uuid)',
-        unauthorized_wave_uuid::text,
-        unauthorized_order_uuid::text
-      )
-    );
-    raise exception 'Expected unauthorized attach to be masked as not found.';
-  exception
-    when others then
-      if position('WAVE_NOT_FOUND' in sqlerrm) = 0 then
-        raise;
-      end if;
-  end;
-  perform dblink_disconnect('pr05_unauthorized');
+  -- concurrency tests require committed data visible to parallel connections.
+  -- Insert race fixtures via auto-committing dblink_exec before opening race connections.
+  perform dblink_connect('pr05_setup', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_exec('pr05_setup', format(
+    'INSERT INTO public.waves (id, tenant_id, name, status) VALUES '
+    '(%L, %L, ''PR-05 Race Wave A'', ''draft''), '
+    '(%L, %L, ''PR-05 Race Wave B'', ''draft''), '
+    '(%L, %L, ''PR-05 Race Source Wave'', ''draft''), '
+    '(%L, %L, ''PR-05 Race Target Wave'', ''draft'')',
+    race_wave_a_uuid, default_tenant_uuid,
+    race_wave_b_uuid, default_tenant_uuid,
+    race_source_wave_uuid, default_tenant_uuid,
+    race_target_wave_uuid, default_tenant_uuid
+  ));
+  perform dblink_exec('pr05_setup', format(
+    'INSERT INTO public.orders (id, tenant_id, external_number, status, wave_id) VALUES '
+    '(%L, %L, ''PR05-RACE-ATTACH'', ''draft'', null), '
+    '(%L, %L, ''PR05-RACE-DETACH-ATTACH'', ''draft'', %L)',
+    race_attach_order_uuid, default_tenant_uuid,
+    race_attach_detach_order_uuid, default_tenant_uuid, race_source_wave_uuid
+  ));
 
   -- concurrency: same order attached to two waves
-  perform dblink_connect('pr05_attach_race_a', 'dbname=postgres');
-  perform dblink_connect('pr05_attach_race_b', 'dbname=postgres');
+  perform dblink_connect('pr05_attach_race_a', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_connect('pr05_attach_race_b', 'host=127.0.0.1 dbname=postgres');
 
   perform dblink_exec('pr05_attach_race_a', 'begin');
   perform dblink_exec('pr05_attach_race_b', 'begin');
 
-  perform dblink_exec(
+  perform * from dblink(
     'pr05_attach_race_a',
     format(
       'select public.attach_order_to_wave(%L::uuid, %L::uuid)',
       race_wave_a_uuid::text,
       race_attach_order_uuid::text
     )
-  );
+  ) as r(order_id uuid);
 
   perform dblink_send_query(
     'pr05_attach_race_b',
@@ -260,6 +256,11 @@ begin
       end if;
   end;
 
+  -- drain any remaining result state on race_b before issuing rollback
+  while (select count(*) from dblink_get_result('pr05_attach_race_b') as r(s text)) > 0 loop
+    null;
+  end loop;
+
   perform dblink_exec('pr05_attach_race_b', 'rollback');
   perform dblink_disconnect('pr05_attach_race_a');
   perform dblink_disconnect('pr05_attach_race_b');
@@ -273,20 +274,20 @@ begin
   end if;
 
   -- concurrency: attach and detach the same order
-  perform dblink_connect('pr05_mix_race_a', 'dbname=postgres');
-  perform dblink_connect('pr05_mix_race_b', 'dbname=postgres');
+  perform dblink_connect('pr05_mix_race_a', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_connect('pr05_mix_race_b', 'host=127.0.0.1 dbname=postgres');
 
   perform dblink_exec('pr05_mix_race_a', 'begin');
   perform dblink_exec('pr05_mix_race_b', 'begin');
 
-  perform dblink_exec(
+  perform * from dblink(
     'pr05_mix_race_a',
     format(
       'select public.detach_order_from_wave(%L::uuid, %L::uuid)',
       race_source_wave_uuid::text,
       race_attach_detach_order_uuid::text
     )
-  );
+  ) as r(order_id uuid);
 
   perform dblink_send_query(
     'pr05_mix_race_b',
@@ -308,6 +309,11 @@ begin
       raise exception 'Expected attach after concurrent detach to succeed, got: %', sqlerrm;
   end;
 
+  -- drain remaining result state before commit
+  while (select count(*) from dblink_get_result('pr05_mix_race_b') as r(s text)) > 0 loop
+    null;
+  end loop;
+
   perform dblink_exec('pr05_mix_race_b', 'commit');
   perform dblink_disconnect('pr05_mix_race_a');
   perform dblink_disconnect('pr05_mix_race_b');
@@ -319,6 +325,34 @@ begin
   ) is distinct from race_target_wave_uuid then
     raise exception 'Expected concurrent detach+attach flow to finish with target wave ownership.';
   end if;
+
+  -- cleanup committed concurrent fixtures (committed outside the outer rollback scope)
+  perform dblink_exec('pr05_setup', format(
+    'DELETE FROM public.orders WHERE id IN (%L::uuid, %L::uuid)',
+    race_attach_order_uuid, race_attach_detach_order_uuid
+  ));
+  perform dblink_exec('pr05_setup', format(
+    'DELETE FROM public.waves WHERE id IN (%L::uuid, %L::uuid, %L::uuid, %L::uuid)',
+    race_wave_a_uuid, race_wave_b_uuid, race_source_wave_uuid, race_target_wave_uuid
+  ));
+  perform dblink_disconnect('pr05_setup');
+
+  -- unauthorized/masked behavior (caller without tenant scope)
+  -- attach_order_to_wave relies on RLS on waves/orders tables (not SECURITY DEFINER).
+  -- Running as authenticated role with an unknown sub triggers RLS filtering.
+  perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid()::text)::text, true);
+  execute 'set local role authenticated';
+  begin
+    perform public.attach_order_to_wave(unauthorized_wave_uuid, unauthorized_order_uuid);
+    raise exception 'Expected unauthorized attach to be masked as not found.';
+  exception
+    when others then
+      if sqlerrm <> 'WAVE_NOT_FOUND' then
+        raise;
+      end if;
+  end;
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '{}', true);
 end
 $$;
 

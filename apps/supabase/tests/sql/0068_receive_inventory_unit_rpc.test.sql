@@ -12,11 +12,12 @@ declare
 
   actor_uuid uuid := gen_random_uuid();
   spoof_actor_uuid uuid := gen_random_uuid();
+  concurrent_actor_uuid uuid := gen_random_uuid();
 
   success_container_uuid uuid;
   inactive_container_uuid uuid;
-  race_status_container_uuid uuid;
-  race_product_container_uuid uuid;
+  race_status_container_uuid uuid := gen_random_uuid();
+  race_product_container_uuid uuid := gen_random_uuid();
   other_tenant_container_uuid uuid;
 
   active_product_uuid uuid := gen_random_uuid();
@@ -67,22 +68,16 @@ begin
   insert into public.products (id, source, external_product_id, sku, name, is_active)
   values
     (active_product_uuid, 'test-suite', 'pr07-active', 'SKU-PR07-ACT', 'PR-07 Active Product', true),
-    (inactive_product_uuid, 'test-suite', 'pr07-inactive', 'SKU-PR07-INACT', 'PR-07 Inactive Product', false),
-    (race_status_product_uuid, 'test-suite', 'pr07-race-status', 'SKU-PR07-RS', 'PR-07 Race Status Product', true),
-    (race_product_uuid, 'test-suite', 'pr07-race-product', 'SKU-PR07-RP', 'PR-07 Race Product', true);
+    (inactive_product_uuid, 'test-suite', 'pr07-inactive', 'SKU-PR07-INACT', 'PR-07 Inactive Product', false);
 
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values
     (default_tenant_uuid, 'PR07-SUCCESS', pallet_type_uuid, 'active'),
     (default_tenant_uuid, 'PR07-INACTIVE', pallet_type_uuid, 'quarantined'),
-    (default_tenant_uuid, 'PR07-RACE-STATUS', pallet_type_uuid, 'active'),
-    (default_tenant_uuid, 'PR07-RACE-PRODUCT', pallet_type_uuid, 'active'),
     (other_tenant_uuid, 'PR07-OTHER', pallet_type_uuid, 'active');
 
   select id into success_container_uuid from public.containers where external_code = 'PR07-SUCCESS';
   select id into inactive_container_uuid from public.containers where external_code = 'PR07-INACTIVE';
-  select id into race_status_container_uuid from public.containers where external_code = 'PR07-RACE-STATUS';
-  select id into race_product_container_uuid from public.containers where external_code = 'PR07-RACE-PRODUCT';
   select id into other_tenant_container_uuid from public.containers where external_code = 'PR07-OTHER';
 
   -- receive success
@@ -265,26 +260,31 @@ begin
       end if;
   end;
 
-  perform dblink_connect('pr07_unauthorized', 'dbname=postgres options=-crole=authenticated');
+  -- Simulate authenticated user with no tenant membership by setting an unknown sub.
+  -- receive_inventory_unit is SECURITY DEFINER: auth.uid() drives can_manage_tenant().
+  perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid()::text)::text, true);
   begin
-    perform dblink_exec(
-      'pr07_unauthorized',
-      format(
-        'select public.receive_inventory_unit(%L::uuid, %L::uuid, %L::uuid, 1, %L, null)',
-        default_tenant_uuid::text,
-        success_container_uuid::text,
-        active_product_uuid::text,
-        'pcs'
-      )
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      1,
+      'pcs',
+      null
     );
     raise exception 'Expected unauthorized receive call to be masked as not found.';
   exception
     when others then
-      if position('CONTAINER_NOT_FOUND' in sqlerrm) = 0 then
+      if sqlerrm <> 'CONTAINER_NOT_FOUND' then
         raise;
       end if;
   end;
-  perform dblink_disconnect('pr07_unauthorized');
+  -- Restore actor JWT claims for subsequent tests
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', actor_uuid::text)::text,
+    true
+  );
 
   -- rollback correctness / no partial insert after failure
   baseline_count := (
@@ -320,27 +320,56 @@ begin
     raise exception 'Expected rollback correctness: no partial insert after failure.';
   end if;
 
-  -- race: receive concurrent with container status flip
-  perform dblink_connect('pr07_race_status_a', 'dbname=postgres');
-  perform dblink_connect('pr07_race_status_b', 'dbname=postgres');
+  -- commit race fixtures for concurrent tests (MVCC: outer tx data invisible to parallel connections)
+  perform dblink_connect('pr07_setup', 'host=127.0.0.1 dbname=postgres');
 
-  perform dblink_exec(
-    'pr07_race_status_a',
-    format(
-      'select set_config(''request.jwt.claims'', %L, true)',
-      json_build_object('sub', actor_uuid::text)::text
-    )
-  );
-  perform dblink_exec(
-    'pr07_race_status_b',
-    format(
-      'select set_config(''request.jwt.claims'', %L, true)',
-      json_build_object('sub', actor_uuid::text)::text
-    )
-  );
+  perform dblink_exec('pr07_setup', format(
+    'insert into auth.users (id, email, email_confirmed_at, created_at, updated_at, is_sso_user, raw_app_meta_data, raw_user_meta_data) '
+    'values (%L::uuid, %L, now(), now(), now(), false, %L::jsonb, %L::jsonb)',
+    concurrent_actor_uuid::text, 'pr07-concurrent@wos.test', '{}', '{}'
+  ));
+
+  perform dblink_exec('pr07_setup', format(
+    'insert into public.tenant_members (tenant_id, profile_id, role) '
+    'values (%L::uuid, %L::uuid, ''tenant_admin'') '
+    'on conflict (tenant_id, profile_id) do update set role = excluded.role',
+    default_tenant_uuid::text, concurrent_actor_uuid::text
+  ));
+
+  perform dblink_exec('pr07_setup', format(
+    'insert into public.products (id, source, external_product_id, sku, name, is_active) values '
+    '(%L::uuid, ''test-suite'', ''pr07-race-status-prod'', ''SKU-PR07-RS'', ''PR-07 Race Status Product'', true), '
+    '(%L::uuid, ''test-suite'', ''pr07-race-product-prod'', ''SKU-PR07-RP'', ''PR-07 Race Product'', true)',
+    race_status_product_uuid::text, race_product_uuid::text
+  ));
+
+  perform dblink_exec('pr07_setup', format(
+    'insert into public.containers (id, tenant_id, external_code, container_type_id, status) values '
+    '(%L::uuid, %L::uuid, ''PR07-RACE-STATUS'', %L::uuid, ''active''), '
+    '(%L::uuid, %L::uuid, ''PR07-RACE-PRODUCT'', %L::uuid, ''active'')',
+    race_status_container_uuid::text, default_tenant_uuid::text, pallet_type_uuid::text,
+    race_product_container_uuid::text, default_tenant_uuid::text, pallet_type_uuid::text
+  ));
+
+  perform dblink_disconnect('pr07_setup');
+
+  -- race: receive concurrent with container status flip
+  perform dblink_connect('pr07_race_status_a', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_connect('pr07_race_status_b', 'host=127.0.0.1 dbname=postgres');
 
   perform dblink_exec('pr07_race_status_a', 'begin');
+  perform * from dblink(
+    'pr07_race_status_a',
+    format('select set_config(''request.jwt.claims'', %L, true)',
+      json_build_object('sub', concurrent_actor_uuid::text)::text)
+  ) as r(val text);
+
   perform dblink_exec('pr07_race_status_b', 'begin');
+  perform * from dblink(
+    'pr07_race_status_b',
+    format('select set_config(''request.jwt.claims'', %L, true)',
+      json_build_object('sub', concurrent_actor_uuid::text)::text)
+  ) as r(val text);
 
   perform dblink_exec(
     'pr07_race_status_a',
@@ -385,6 +414,11 @@ begin
       end if;
   end;
 
+  -- drain remaining result state before rollback
+  while (select count(*) from dblink_get_result('pr07_race_status_b') as r(s text)) > 0 loop
+    null;
+  end loop;
+
   perform dblink_exec('pr07_race_status_b', 'rollback');
   perform dblink_disconnect('pr07_race_status_a');
   perform dblink_disconnect('pr07_race_status_b');
@@ -399,26 +433,22 @@ begin
   end if;
 
   -- race: receive concurrent with product deactivation
-  perform dblink_connect('pr07_race_product_a', 'dbname=postgres');
-  perform dblink_connect('pr07_race_product_b', 'dbname=postgres');
-
-  perform dblink_exec(
-    'pr07_race_product_a',
-    format(
-      'select set_config(''request.jwt.claims'', %L, true)',
-      json_build_object('sub', actor_uuid::text)::text
-    )
-  );
-  perform dblink_exec(
-    'pr07_race_product_b',
-    format(
-      'select set_config(''request.jwt.claims'', %L, true)',
-      json_build_object('sub', actor_uuid::text)::text
-    )
-  );
+  perform dblink_connect('pr07_race_product_a', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_connect('pr07_race_product_b', 'host=127.0.0.1 dbname=postgres');
 
   perform dblink_exec('pr07_race_product_a', 'begin');
+  perform * from dblink(
+    'pr07_race_product_a',
+    format('select set_config(''request.jwt.claims'', %L, true)',
+      json_build_object('sub', concurrent_actor_uuid::text)::text)
+  ) as r(val text);
+
   perform dblink_exec('pr07_race_product_b', 'begin');
+  perform * from dblink(
+    'pr07_race_product_b',
+    format('select set_config(''request.jwt.claims'', %L, true)',
+      json_build_object('sub', concurrent_actor_uuid::text)::text)
+  ) as r(val text);
 
   perform dblink_exec(
     'pr07_race_product_a',
@@ -463,6 +493,11 @@ begin
       end if;
   end;
 
+  -- drain remaining result state before rollback
+  while (select count(*) from dblink_get_result('pr07_race_product_b') as r(s text)) > 0 loop
+    null;
+  end loop;
+
   perform dblink_exec('pr07_race_product_b', 'rollback');
   perform dblink_disconnect('pr07_race_product_a');
   perform dblink_disconnect('pr07_race_product_b');
@@ -475,6 +510,30 @@ begin
   ) then
     raise exception 'Expected no partial insert after product deactivation race failure.';
   end if;
+
+  -- cleanup committed concurrent fixtures (committed outside outer rollback scope)
+  perform dblink_connect('pr07_cleanup', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_exec('pr07_cleanup', format(
+    'delete from public.inventory_unit where container_id in (%L::uuid, %L::uuid)',
+    race_status_container_uuid::text, race_product_container_uuid::text
+  ));
+  perform dblink_exec('pr07_cleanup', format(
+    'delete from public.containers where id in (%L::uuid, %L::uuid)',
+    race_status_container_uuid::text, race_product_container_uuid::text
+  ));
+  perform dblink_exec('pr07_cleanup', format(
+    'delete from public.products where id in (%L::uuid, %L::uuid)',
+    race_status_product_uuid::text, race_product_uuid::text
+  ));
+  perform dblink_exec('pr07_cleanup', format(
+    'delete from public.tenant_members where profile_id = %L::uuid',
+    concurrent_actor_uuid::text
+  ));
+  perform dblink_exec('pr07_cleanup', format(
+    'delete from auth.users where id = %L::uuid',
+    concurrent_actor_uuid::text
+  ));
+  perform dblink_disconnect('pr07_cleanup');
 end
 $$;
 

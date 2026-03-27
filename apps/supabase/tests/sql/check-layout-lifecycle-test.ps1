@@ -23,7 +23,7 @@ Pop-Location
 
 foreach ($testFile in $testFiles) {
   Get-Content -Raw -Path $testFile.FullName |
-    docker exec -i $containerName psql -v ON_ERROR_STOP=1 -U postgres -d postgres
+    docker exec -i $containerName psql -h 127.0.0.1 -v ON_ERROR_STOP=1 -U supabase_admin -d postgres
 
   if ($LASTEXITCODE -ne 0) {
     throw "SQL verification failed for file: $($testFile.Name)"

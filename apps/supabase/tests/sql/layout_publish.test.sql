@@ -52,6 +52,7 @@ delete from public.layout_versions where id in (
 );
 delete from public.floors where code in ('SQLF1', 'SQLF2');
 delete from public.sites where code = 'SQLTEST_MAIN';
+delete from auth.users where id = '00000000-0000-0000-0000-000000000999'::uuid;
 delete from public.tenants where code = 'SQLTEST_TENANT';
 
 insert into public.tenants (id, code, name)
@@ -67,6 +68,7 @@ values
 
 do $$
 declare
+  actor_uuid constant uuid := '00000000-0000-0000-0000-000000000999'::uuid;
   draft_one uuid;
   same_draft uuid;
   draft_two uuid;
@@ -81,6 +83,24 @@ declare
   cloned_face_length_count integer;
   caught boolean;
 begin
+  insert into auth.users (
+    id, email, email_confirmed_at, created_at, updated_at,
+    is_sso_user, raw_app_meta_data, raw_user_meta_data
+  ) values (
+    actor_uuid, 'sql-test-actor@wos.test', now(), now(), now(),
+    false, '{}', '{}'
+  ) on conflict (id) do nothing;
+
+  insert into public.tenant_members (tenant_id, profile_id, role)
+  values ('00000000-0000-0000-0000-000000000900'::uuid, actor_uuid, 'tenant_admin')
+  on conflict (tenant_id, profile_id) do update set role = excluded.role;
+
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', actor_uuid::text)::text,
+    true
+  );
+
   draft_one := public.create_layout_draft('00000000-0000-0000-0000-000000000011'::uuid, null);
   same_draft := public.create_layout_draft('00000000-0000-0000-0000-000000000011'::uuid, null);
 

@@ -37,6 +37,14 @@ declare
   same_draft_a uuid;
   same_draft_b uuid;
 
+  -- dedicated committed site/floor for concurrent test (MVCC: outer tx invisible to parallel connections)
+  race_site_uuid  uuid := gen_random_uuid();
+  race_floor_uuid uuid := gen_random_uuid();
+  race_site_code  text := 'PR09-RS-' || substring(replace(gen_random_uuid()::text, '-', '') from 1 for 8);
+  race_floor_code text := 'PR09-RF-' || substring(replace(gen_random_uuid()::text, '-', '') from 1 for 8);
+
+  actor_uuid uuid := gen_random_uuid();
+
   publish_one jsonb;
   publish_two jsonb;
 
@@ -60,6 +68,25 @@ begin
   if default_tenant_uuid is null then
     raise exception 'Expected default tenant to exist for PR-09 publish hardening test.';
   end if;
+
+  insert into auth.users (
+    id, email, email_confirmed_at, created_at, updated_at,
+    is_sso_user, raw_app_meta_data, raw_user_meta_data
+  )
+  values (
+    actor_uuid, 'pr09-actor@wos.test', now(), now(), now(),
+    false, '{}', '{}'
+  );
+
+  insert into public.tenant_members (tenant_id, profile_id, role)
+  values (default_tenant_uuid, actor_uuid, 'tenant_admin')
+  on conflict (tenant_id, profile_id) do update set role = excluded.role;
+
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', actor_uuid::text)::text,
+    true
+  );
 
   insert into public.sites (id, tenant_id, code, name, timezone)
   values (site_uuid, default_tenant_uuid, site_code, 'PR-09 Site', 'UTC');
@@ -292,6 +319,10 @@ begin
   end if;
 
   -- This row forces post-publish location upsert to fail the row validator on UPDATE.
+  -- publish_layout_version(draft_two) already created a rack_slot location at this code,
+  -- so we upsert to overwrite it as staging (geometry_slot_id = null, non-rack_slot type).
+  -- When rollback_draft is published, the ON CONFLICT DO UPDATE will try to set
+  -- geometry_slot_id on this staging row, triggering the row-validator constraint.
   insert into public.locations (
     tenant_id,
     floor_id,
@@ -308,7 +339,11 @@ begin
     null,
     'multi_container',
     'active'
-  );
+  )
+  on conflict (floor_id, code) do update
+    set location_type    = 'staging',
+        geometry_slot_id = null,
+        capacity_mode    = 'multi_container';
 
   begin
     perform public.publish_layout_version(rollback_draft, null);
@@ -371,21 +406,44 @@ begin
   end if;
 
   -- 6.2 + 7) concurrent publish same floor serializes + double publish same draft
-  race_draft := same_draft_a;
+  -- race_draft uses a dedicated committed site/floor so it is visible to parallel dblink connections
+  -- (MVCC: data created in the outer uncommitted transaction is invisible to parallel connections)
+  perform dblink_connect('pr09_race_setup', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_exec('pr09_race_setup', format(
+    'insert into public.sites (id, tenant_id, code, name, timezone) '
+    'values (%L::uuid, %L::uuid, %L, ''PR-09 Race Site'', ''UTC'')',
+    race_site_uuid::text, default_tenant_uuid::text, race_site_code
+  ));
+  perform dblink_exec('pr09_race_setup', format(
+    'insert into public.floors (id, site_id, code, name, sort_order) '
+    'values (%L::uuid, %L::uuid, %L, ''PR-09 Race Floor'', 1)',
+    race_floor_uuid::text, race_site_uuid::text, race_floor_code
+  ));
+  perform * from dblink('pr09_race_setup', format(
+    'select public.create_layout_draft(%L::uuid, null)',
+    race_floor_uuid::text
+  )) as r(v uuid);
+  select v into race_draft
+  from dblink('pr09_race_setup', format(
+    'select id from public.layout_versions where floor_id = %L::uuid and state = ''draft'' limit 1',
+    race_floor_uuid::text
+  )) as r(v uuid);
+  perform dblink_disconnect('pr09_race_setup');
 
-  perform dblink_connect(conn_a, 'dbname=postgres');
-  perform dblink_connect(conn_b, 'dbname=postgres');
+  perform dblink_connect(conn_a, 'host=127.0.0.1 dbname=postgres');
+  perform dblink_connect(conn_b, 'host=127.0.0.1 dbname=postgres');
 
   perform dblink_exec(conn_a, 'begin');
   perform dblink_exec(conn_b, 'begin');
 
-  perform dblink_exec(
+  perform *
+  from dblink(
     conn_a,
     format(
       'select public.publish_layout_version(%L::uuid, null)',
       race_draft::text
     )
-  );
+  ) as r(result jsonb);
 
   perform dblink_send_query(
     conn_b,
@@ -401,7 +459,7 @@ begin
     raise exception 'Expected second concurrent publish to wait on floor-scoped advisory lock.';
   end if;
 
-  -- Winner transaction is still uncommitted; this session should still see draft.
+  -- Winner (conn_a) is uncommitted; outer session (READ COMMITTED) should still see draft.
   if (select state from public.layout_versions where id = race_draft) <> 'draft' then
     raise exception 'Expected winner publish state to remain invisible before commit.';
   end if;
@@ -419,10 +477,16 @@ begin
       end if;
   end;
 
+  -- drain remaining result state before rollback
+  while (select count(*) from dblink_get_result(conn_b) as r(s text)) > 0 loop
+    null;
+  end loop;
+
   perform dblink_exec(conn_b, 'rollback');
   perform dblink_disconnect(conn_a);
   perform dblink_disconnect(conn_b);
 
+  -- race_draft was committed externally; READ COMMITTED outer session sees conn_a's commit.
   if (select state from public.layout_versions where id = race_draft) <> 'published' then
     raise exception 'Expected winning publish in race scenario to be committed as published.';
   end if;
@@ -430,17 +494,17 @@ begin
   if (
     select count(*)
     from public.layout_versions
-    where floor_id = floor_uuid
+    where floor_id = race_floor_uuid
       and state = 'published'
   ) <> 1 then
     raise exception 'Expected one published version after concurrent publish race resolution.';
   end if;
 
-  -- 9) no duplicate/partial location side effects after concurrency
+  -- 9) no duplicate/partial location side effects after concurrency (checked on race floor)
   if exists (
     select 1
     from public.locations l
-    where l.floor_id = floor_uuid
+    where l.floor_id = race_floor_uuid
     group by l.code
     having count(*) > 1
   ) then
@@ -452,12 +516,66 @@ begin
     from public.locations l
     join public.cells c on c.id = l.geometry_slot_id
     join public.layout_versions lv on lv.id = c.layout_version_id
-    where l.floor_id = floor_uuid
+    where l.floor_id = race_floor_uuid
       and l.geometry_slot_id is not null
       and lv.state <> 'published'
   ) then
     raise exception 'Expected all geometry_slot-linked locations to reference published layout cells only.';
   end if;
+
+  -- cleanup committed race site/floor/draft (outside outer rollback scope)
+  perform dblink_connect('pr09_race_cleanup', 'host=127.0.0.1 dbname=postgres');
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.locations where floor_id = %L::uuid',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.cells where layout_version_id in '
+    '(select id from public.layout_versions where floor_id = %L::uuid)',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.rack_levels where rack_section_id in ('
+    '  select rs.id from public.rack_sections rs'
+    '  join public.rack_faces rf on rf.id = rs.rack_face_id'
+    '  join public.racks r on r.id = rf.rack_id'
+    '  join public.layout_versions lv on lv.id = r.layout_version_id'
+    '  where lv.floor_id = %L::uuid)',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.rack_sections where rack_face_id in ('
+    '  select rf.id from public.rack_faces rf'
+    '  join public.racks r on r.id = rf.rack_id'
+    '  join public.layout_versions lv on lv.id = r.layout_version_id'
+    '  where lv.floor_id = %L::uuid)',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.rack_faces where rack_id in ('
+    '  select r.id from public.racks r'
+    '  join public.layout_versions lv on lv.id = r.layout_version_id'
+    '  where lv.floor_id = %L::uuid)',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.racks where layout_version_id in '
+    '(select id from public.layout_versions where floor_id = %L::uuid)',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.layout_versions where floor_id = %L::uuid',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.floors where id = %L::uuid',
+    race_floor_uuid::text
+  ));
+  perform dblink_exec('pr09_race_cleanup', format(
+    'delete from public.sites where id = %L::uuid',
+    race_site_uuid::text
+  ));
+  perform dblink_disconnect('pr09_race_cleanup');
 
   -- 8) save-vs-publish race coverage limitation
   raise notice 'PR-09 limitation: deterministic save-vs-publish race is not reliably reproducible in current SQL harness without intrusive instrumentation; scenario explicitly documented.';
