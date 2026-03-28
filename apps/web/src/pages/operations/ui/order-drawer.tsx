@@ -128,10 +128,26 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
   const transition = useTransitionOrderStatus();
   const removeLine = useRemoveOrderLine(orderId);
 
-  if (isLoading || !order) {
+  if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <RefreshCw className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertCircle className="h-8 w-8 text-slate-300" />
+        <div className="text-sm text-slate-500">Order not found.</div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+        >
+          Dismiss
+        </button>
       </div>
     );
   }
