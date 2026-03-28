@@ -14,7 +14,8 @@ export const pickStepStatusSchema = z.enum([
   'picked',
   'partial',
   'skipped',
-  'exception'
+  'exception',
+  'needs_replenishment'
 ]);
 export type PickStepStatus = z.infer<typeof pickStepStatusSchema>;
 
@@ -31,7 +32,9 @@ export const pickStepSchema = z.object({
   qtyPicked: z.number().int().min(0),
   status: pickStepStatusSchema,
   sourceCellId: z.string().uuid().nullable(),
-  sourceContainerId: z.string().uuid().nullable()
+  sourceContainerId: z.string().uuid().nullable(),
+  inventoryUnitId: z.string().uuid().nullable(),
+  pickContainerId: z.string().uuid().nullable()
 });
 export type PickStep = z.infer<typeof pickStepSchema>;
 
