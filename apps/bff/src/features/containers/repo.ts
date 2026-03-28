@@ -25,15 +25,20 @@ export type CreateContainerInput = {
   tenantId: string;
   containerTypeId: string;
   externalCode: string;
+  operationalRole: 'storage' | 'pick';
   createdBy: string;
+};
+
+export type ListContainersFilter = {
+  operationalRole?: 'storage' | 'pick';
 };
 
 export type ContainersRepo = {
   listAllTypes(): Promise<ContainerType[]>;
-  listAll(): Promise<Container[]>;
+  listAll(filter?: ListContainersFilter): Promise<Container[]>;
   findById(id: string): Promise<Container | null>;
+  findTypeById(id: string): Promise<ContainerType | null>;
   create(input: CreateContainerInput): Promise<Container>;
-  containerTypeExists(containerTypeId: string): Promise<boolean>;
   containerCodeExists(tenantId: string, externalCode: string): Promise<boolean>;
 };
 
@@ -55,11 +60,18 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
       return ((data ?? []) as ContainerTypeRow[]).map(mapContainerTypeRowToDomain);
     },
 
-    async listAll() {
-      const { data, error } = await supabase
+    async listAll(filter?: ListContainersFilter) {
+      // Build filter first, then apply ordering as the terminal call so the
+      // query chain works correctly with both real Supabase and test stubs.
+      let query = supabase
         .from('containers')
-        .select(CONTAINER_COLUMNS)
-        .order('created_at', { ascending: false });
+        .select(CONTAINER_COLUMNS);
+
+      if (filter?.operationalRole !== undefined) {
+        query = query.eq('operational_role', filter.operationalRole);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         throw error;
@@ -82,6 +94,20 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
       return data ? mapContainerRowToDomain(data as ContainerRow) : null;
     },
 
+    async findTypeById(id) {
+      const { data, error } = await supabase
+        .from('container_types')
+        .select(CONTAINER_TYPE_COLUMNS)
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapContainerTypeRowToDomain(data as ContainerTypeRow) : null;
+    },
+
     async create(input) {
       const { data, error } = await supabase
         .from('containers')
@@ -89,6 +115,7 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
           tenant_id: input.tenantId,
           container_type_id: input.containerTypeId,
           external_code: input.externalCode,
+          operational_role: input.operationalRole,
           created_by: input.createdBy
         })
         .select(CONTAINER_COLUMNS)
@@ -99,20 +126,6 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
       }
 
       return mapContainerRowToDomain(data as ContainerRow);
-    },
-
-    async containerTypeExists(containerTypeId) {
-      const { data, error } = await supabase
-        .from('container_types')
-        .select('id')
-        .eq('id', containerTypeId)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      return Boolean(data);
     },
 
     async containerCodeExists(tenantId, externalCode) {

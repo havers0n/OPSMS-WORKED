@@ -4,6 +4,7 @@ import {
   cellOccupancyRowSchema,
   cellSchema,
   containerCurrentLocationSchema,
+  containerOperationalRoleSchema,
   containerSchema,
   containerStatusSchema,
   containerStorageSnapshotRowSchema,
@@ -38,6 +39,7 @@ import {
   pickTaskSchema,
   pickTaskSummarySchema,
   pickStepSchema,
+  pickTaskDetailSchema,
   waveSchema,
   waveSummarySchema,
   waveStatusSchema
@@ -58,7 +60,12 @@ export const createFloorBodySchema = z.object({
 
 export const createContainerBodySchema = z.object({
   containerTypeId: z.string().uuid(),
-  externalCode: z.string().trim().min(1)
+  externalCode: z.string().trim().min(1),
+  operationalRole: containerOperationalRoleSchema.default('storage')
+});
+
+export const listContainersQuerySchema = z.object({
+  operationalRole: containerOperationalRoleSchema.optional()
 });
 
 export const addInventoryToContainerBodySchema = z.object({
@@ -164,7 +171,8 @@ export const createContainerResponseSchema = z.object({
   containerId: z.string().uuid(),
   externalCode: z.string().trim().min(1),
   containerTypeId: z.string().uuid(),
-  status: containerStatusSchema
+  status: containerStatusSchema,
+  operationalRole: containerOperationalRoleSchema
 });
 export const cellsResponseSchema = z.array(cellSchema);
 export const cellOccupancyResponseSchema = z.array(cellOccupancyRowSchema);
@@ -244,8 +252,9 @@ export { waveStatusSchema, waveSummarySchema, waveSchema };
 export const pickTaskResponseSchema = pickTaskSchema;
 export const pickTaskSummaryResponseSchema = pickTaskSummarySchema;
 export const pickTasksResponseSchema = z.array(pickTaskSummarySchema);
+export const pickTaskDetailResponseSchema = pickTaskDetailSchema;
 
-export { pickTaskSchema, pickTaskSummarySchema, pickStepSchema };
+export { pickTaskSchema, pickTaskSummarySchema, pickStepSchema, pickTaskDetailSchema };
 
 // ── Picking / allocation ───────────────────────────────────────────────────────
 

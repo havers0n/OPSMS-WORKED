@@ -1,19 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Container, ContainerType } from '@wos/domain';
 import { ApiError } from '../../errors.js';
-import { createContainersRepo } from './repo.js';
+import { createContainersRepo, type ListContainersFilter } from './repo.js';
 import { isContainerTypeConstraintError } from './errors.js';
 
 type CreateContainerInput = {
   tenantId: string;
   containerTypeId: string;
   externalCode: string;
+  operationalRole: 'storage' | 'pick';
   createdBy: string;
 };
 
 export type ContainersService = {
   listAllTypes(): Promise<ContainerType[]>;
-  listAll(): Promise<Container[]>;
+  listAll(filter?: ListContainersFilter): Promise<Container[]>;
   findById(id: string): Promise<Container | null>;
   createContainer(input: CreateContainerInput): Promise<Container>;
   removeContainer(containerId: string, actorId: string): Promise<unknown>;
@@ -25,14 +26,32 @@ export function createContainersService(supabase: SupabaseClient): ContainersSer
   return {
     listAllTypes: () => repo.listAllTypes(),
 
-    listAll: () => repo.listAll(),
+    listAll: (filter?) => repo.listAll(filter),
 
     findById: (id) => repo.findById(id),
 
     async createContainer(input) {
-      const typeExists = await repo.containerTypeExists(input.containerTypeId);
-      if (!typeExists) {
+      // Resolve type — replaces the old containerTypeExists check with a single
+      // query that also gives us capability booleans for validation.
+      const type = await repo.findTypeById(input.containerTypeId);
+      if (!type) {
         throw new ApiError(400, 'INVALID_CONTAINER_TYPE', 'Container type was not found.');
+      }
+
+      // Capability validation: guard before touching containers table.
+      if (input.operationalRole === 'storage' && !type.supportsStorage) {
+        throw new ApiError(
+          400,
+          'CONTAINER_TYPE_NOT_STORAGE_CAPABLE',
+          `Container type '${type.code}' does not support storage use.`
+        );
+      }
+      if (input.operationalRole === 'pick' && !type.supportsPicking) {
+        throw new ApiError(
+          400,
+          'CONTAINER_TYPE_NOT_PICK_CAPABLE',
+          `Container type '${type.code}' does not support picker use.`
+        );
       }
 
       const codeExists = await repo.containerCodeExists(input.tenantId, input.externalCode);

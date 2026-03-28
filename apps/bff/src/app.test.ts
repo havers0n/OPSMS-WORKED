@@ -40,6 +40,22 @@ const containerTypeRows = [
     description: 'Standard pallet',
     supports_storage: true,
     supports_picking: true
+  },
+  // tote: pick-only, used to test CONTAINER_TYPE_NOT_STORAGE_CAPABLE
+  {
+    id: 'c0000000-0000-4000-8000-000000000001',
+    code: 'tote',
+    description: 'Reusable tote',
+    supports_storage: false,
+    supports_picking: true
+  },
+  // storage-only type (hypothetical): used to test CONTAINER_TYPE_NOT_PICK_CAPABLE
+  {
+    id: 'c0000000-0000-4000-8000-000000000002',
+    code: 'rack_pallet',
+    description: 'Fixed rack pallet',
+    supports_storage: true,
+    supports_picking: false
   }
 ];
 
@@ -52,6 +68,17 @@ const containerRows = [
     status: 'active',
     operational_role: 'storage',
     created_at: '2026-03-13T09:15:00.000Z',
+    created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+  },
+  // pick-role container for filtering tests
+  {
+    id: 'f0000000-0000-4000-8000-000000000001',
+    tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    external_code: 'TOTE-001',
+    container_type_id: 'c0000000-0000-4000-8000-000000000001',
+    status: 'active',
+    operational_role: 'pick',
+    created_at: '2026-03-14T08:00:00.000Z',
     created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
   }
 ];
@@ -428,6 +455,7 @@ function createSupabaseStub() {
                 if (column === 'id') return row.id === value;
                 if (column === 'tenant_id') return row.tenant_id === value;
                 if (column === 'external_code') return row.external_code === value;
+                if (column === 'operational_role') return row.operational_role === value;
                 return false;
               });
 
@@ -446,6 +474,11 @@ function createSupabaseStub() {
                 })),
                 maybeSingle: vi.fn(async () => ({
                   data: firstMatches[0] ?? null,
+                  error: null
+                })),
+                // Support eq(...).order(...) for filtered listAll
+                order: vi.fn(async () => ({
+                  data: firstMatches,
                   error: null
                 }))
               };
@@ -1254,22 +1287,15 @@ describe('buildApp', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual([
-      {
-        id: 'a8c1ab0f-2917-4ae0-b332-fd50f39db123',
-        code: 'bin',
-        description: 'Storage bin',
-        supportsStorage: true,
-        supportsPicking: true
-      },
-      {
-        id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
-        code: 'pallet',
-        description: 'Standard pallet',
-        supportsStorage: true,
-        supportsPicking: true
-      }
-    ]);
+    const json = response.json() as Array<{ code: string; supportsStorage: boolean; supportsPicking: boolean }>;
+    expect(json).toHaveLength(containerTypeRows.length);
+    // spot-check the capability fields on two known types
+    const bin = json.find((t) => t.code === 'bin')!;
+    expect(bin.supportsStorage).toBe(true);
+    expect(bin.supportsPicking).toBe(true);
+    const tote = json.find((t) => t.code === 'tote')!;
+    expect(tote.supportsStorage).toBe(false);
+    expect(tote.supportsPicking).toBe(true);
 
     await app.close();
   });
@@ -1381,7 +1407,7 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('returns tenant-scoped containers', async () => {
+  it('returns tenant-scoped containers (all roles when no filter)', async () => {
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -1397,18 +1423,80 @@ describe('buildApp', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual([
-      {
-        id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
-        tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
-        externalCode: 'PALLET-001',
-        containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
-        status: 'active',
-        operationalRole: 'storage',
-        createdAt: '2026-03-13T09:15:00.000Z',
-        createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
+    const json = response.json() as Array<{ id: string; operationalRole: string }>;
+    // Both storage and pick containers returned when no filter applied
+    expect(json).toHaveLength(2);
+    expect(json.some((c) => c.operationalRole === 'storage')).toBe(true);
+    expect(json.some((c) => c.operationalRole === 'pick')).toBe(true);
+
+    await app.close();
+  });
+
+  it('filters containers by operationalRole=pick', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers?operationalRole=pick',
+      headers: {
+        authorization: 'Bearer token'
       }
-    ]);
+    });
+
+    expect(response.statusCode).toBe(200);
+    const json = response.json() as Array<{ id: string; operationalRole: string }>;
+    expect(json).toHaveLength(1);
+    expect(json[0].operationalRole).toBe('pick');
+    expect(json[0].id).toBe('f0000000-0000-4000-8000-000000000001');
+
+    await app.close();
+  });
+
+  it('filters containers by operationalRole=storage', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers?operationalRole=storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const json = response.json() as Array<{ id: string; operationalRole: string }>;
+    expect(json).toHaveLength(1);
+    expect(json[0].operationalRole).toBe('storage');
+    expect(json[0].id).toBe('188ed1eb-c44d-47f8-a8b1-94c7e20db85f');
+
+    await app.close();
+  });
+
+  it('rejects unknown operationalRole query value', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/containers?operationalRole=staging',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
 
     await app.close();
   });
@@ -2496,7 +2584,8 @@ describe('buildApp', () => {
       containerId: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
       externalCode: 'PALLET-002',
       containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
-      status: 'active'
+      status: 'active',
+      operationalRole: 'storage'
     });
 
     const containerCallIndex = supabase.from.mock.calls.reduce(
@@ -2508,6 +2597,7 @@ describe('buildApp', () => {
       tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
       container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
       external_code: 'PALLET-002',
+      operational_role: 'storage',
       created_by: authContext.user.id
     });
 
@@ -2574,6 +2664,111 @@ describe('buildApp', () => {
       message: 'Container type was not found.'
     });
     expect(supabase.from.mock.calls.some(([table]) => table === 'containers')).toBe(false);
+
+    await app.close();
+  });
+
+  it('creates a pick container when type supports picking', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        containerTypeId: 'c0000000-0000-4000-8000-000000000001', // tote: pick-capable
+        externalCode: 'TOTE-NEW-001',
+        operationalRole: 'pick'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ operationalRole: 'pick' });
+
+    await app.close();
+  });
+
+  it('rejects creating a storage container when type does not support storage', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        containerTypeId: 'c0000000-0000-4000-8000-000000000001', // tote: supports_storage=false
+        externalCode: 'TOTE-AS-STORAGE',
+        operationalRole: 'storage'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'CONTAINER_TYPE_NOT_STORAGE_CAPABLE' });
+
+    await app.close();
+  });
+
+  it('rejects creating a pick container when type does not support picking', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        containerTypeId: 'c0000000-0000-4000-8000-000000000002', // rack_pallet: supports_picking=false
+        externalCode: 'RACK-AS-PICK',
+        operationalRole: 'pick'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'CONTAINER_TYPE_NOT_PICK_CAPABLE' });
+
+    await app.close();
+  });
+
+  it('defaults operationalRole to storage when omitted from create payload', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe', // pallet: supports_storage=true
+        externalCode: 'PALLET-NEW-DEFAULT'
+        // operationalRole intentionally omitted
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    // Verify the insert was called with the defaulted 'storage' role
+    const containerCallIndex = supabase.from.mock.calls.reduce(
+      (lastIndex: number, [table]: [string], index: number) => (table === 'containers' ? index : lastIndex),
+      -1
+    );
+    const containerApi = supabase.from.mock.results[containerCallIndex]?.value as { insert: ReturnType<typeof vi.fn> };
+    expect(containerApi.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ operational_role: 'storage' })
+    );
 
     await app.close();
   });

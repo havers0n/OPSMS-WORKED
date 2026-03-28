@@ -23,6 +23,7 @@ import {
   createContainerResponseSchema,
   containerTypesResponseSchema,
   createContainerBodySchema,
+  listContainersQuerySchema,
   createFloorBodySchema,
   createLayoutDraftBodySchema,
   placementPlaceAtLocationBodySchema,
@@ -41,6 +42,7 @@ import {
   sitesResponseSchema,
   validationResponseSchema,
   pickTasksResponseSchema,
+  pickTaskDetailResponseSchema,
   operationsCellsRuntimeResponseSchema,
   allocatePickStepsResponseSchema,
   executePickStepBodySchema,
@@ -115,6 +117,7 @@ import {
   type PickingService
 } from './features/picking/service.js';
 import { mapPickingError } from './features/picking/errors.js';
+import { createPickReadRepo } from './features/picking/pick-read-repo.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
@@ -295,7 +298,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
 
-    const containers = await getContainersService(auth).listAll();
+    const query = parseOrThrow(listContainersQuerySchema, request.query);
+    const containers = await getContainersService(auth).listAll(
+      query.operationalRole !== undefined ? { operationalRole: query.operationalRole } : undefined
+    );
     return parseOrThrow(containersResponseSchema, containers);
   });
 
@@ -669,6 +675,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       tenantId: auth.currentTenant.tenantId,
       containerTypeId: body.containerTypeId,
       externalCode: body.externalCode,
+      operationalRole: body.operationalRole,
       createdBy: auth.user.id
     });
 
@@ -676,7 +683,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       containerId: container.id,
       externalCode: container.externalCode ?? '',
       containerTypeId: container.containerTypeId,
-      status: container.status
+      status: container.status,
+      operationalRole: container.operationalRole
     });
   });
 
@@ -973,6 +981,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const execution = await ordersRepo.listOrderExecutionPickTasks(orderId);
 
     return parseOrThrow(pickTasksResponseSchema, execution);
+  });
+
+  app.get('/api/pick-tasks/:taskId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const taskId = parseOrThrow(
+      idResponseSchema,
+      { id: (request.params as { taskId: string }).taskId }
+    ).id;
+    const supabase = getUserSupabase(auth);
+    const pickReadRepo = createPickReadRepo(supabase);
+    const detail = await pickReadRepo.findPickTaskDetail(taskId);
+
+    if (!detail) {
+      throw new ApiError(404, 'PICK_TASK_NOT_FOUND', `Pick task ${taskId} not found.`);
+    }
+
+    return parseOrThrow(pickTaskDetailResponseSchema, detail);
   });
 
   app.post('/api/pick-tasks/:taskId/allocate', async (request, reply) => {
