@@ -4,6 +4,7 @@ import {
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
+  containerTypeSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
   inventoryUnitSchema,
@@ -151,11 +152,19 @@ export function mapFloorRowToDomain(row: { id: string; site_id: string; code: st
   });
 }
 
-export function mapContainerTypeRowToDomain(row: { id: string; code: string; description: string }): ContainerType {
+export function mapContainerTypeRowToDomain(row: {
+  id: string;
+  code: string;
+  description: string;
+  supports_storage: boolean;
+  supports_picking: boolean;
+}): ContainerType {
   return containerTypeSchema.parse({
     id: row.id,
     code: row.code,
-    description: row.description
+    description: row.description,
+    supportsStorage: row.supports_storage,
+    supportsPicking: row.supports_picking
   });
 }
 
@@ -165,6 +174,7 @@ export function mapContainerRowToDomain(row: {
   external_code: string | null;
   container_type_id: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  operational_role: 'storage' | 'pick';
   created_at: string;
   created_by: string | null;
 }): Container {
@@ -174,6 +184,7 @@ export function mapContainerRowToDomain(row: {
     externalCode: row.external_code,
     containerTypeId: row.container_type_id,
     status: row.status,
+    operationalRole: row.operational_role,
     createdAt: row.created_at,
     createdBy: row.created_by
   });
@@ -754,6 +765,10 @@ export function mapPickStepRowToDomain(row: {
   status: string;
   source_cell_id: string | null;
   source_container_id: string | null;
+  inventory_unit_id?: string | null;
+  pick_container_id?: string | null;
+  executed_at?: string | null;
+  executed_by?: string | null;
 }): PickStep {
   return pickStepSchema.parse({
     id: row.id,
@@ -768,7 +783,11 @@ export function mapPickStepRowToDomain(row: {
     qtyPicked: row.qty_picked,
     status: row.status,
     sourceCellId: row.source_cell_id,
-    sourceContainerId: row.source_container_id
+    sourceContainerId: row.source_container_id,
+    inventoryUnitId: row.inventory_unit_id ?? null,
+    pickContainerId: row.pick_container_id ?? null,
+    executedAt: row.executed_at ?? null,
+    executedBy: row.executed_by ?? null
   });
 }
 

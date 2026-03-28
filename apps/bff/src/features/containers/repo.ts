@@ -6,6 +6,8 @@ type ContainerTypeRow = {
   id: string;
   code: string;
   description: string;
+  supports_storage: boolean;
+  supports_picking: boolean;
 };
 
 type ContainerRow = {
@@ -14,6 +16,7 @@ type ContainerRow = {
   external_code: string | null;
   container_type_id: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  operational_role: 'storage' | 'pick';
   created_at: string;
   created_by: string | null;
 };
@@ -34,12 +37,15 @@ export type ContainersRepo = {
   containerCodeExists(tenantId: string, externalCode: string): Promise<boolean>;
 };
 
+const CONTAINER_TYPE_COLUMNS = 'id,code,description,supports_storage,supports_picking';
+const CONTAINER_COLUMNS = 'id,tenant_id,external_code,container_type_id,status,operational_role,created_at,created_by';
+
 export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
   return {
     async listAllTypes() {
       const { data, error } = await supabase
         .from('container_types')
-        .select('id,code,description')
+        .select(CONTAINER_TYPE_COLUMNS)
         .order('code', { ascending: true });
 
       if (error) {
@@ -52,7 +58,7 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
     async listAll() {
       const { data, error } = await supabase
         .from('containers')
-        .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
+        .select(CONTAINER_COLUMNS)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -65,7 +71,7 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
     async findById(id) {
       const { data, error } = await supabase
         .from('containers')
-        .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
+        .select(CONTAINER_COLUMNS)
         .eq('id', id)
         .maybeSingle();
 
@@ -85,7 +91,7 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
           external_code: input.externalCode,
           created_by: input.createdBy
         })
-        .select('id,tenant_id,external_code,container_type_id,status,created_at,created_by')
+        .select(CONTAINER_COLUMNS)
         .single();
 
       if (error) {

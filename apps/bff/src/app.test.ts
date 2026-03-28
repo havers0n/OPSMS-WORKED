@@ -30,12 +30,16 @@ const containerTypeRows = [
   {
     id: 'a8c1ab0f-2917-4ae0-b332-fd50f39db123',
     code: 'bin',
-    description: 'Storage bin'
+    description: 'Storage bin',
+    supports_storage: true,
+    supports_picking: true
   },
   {
     id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
     code: 'pallet',
-    description: 'Standard pallet'
+    description: 'Standard pallet',
+    supports_storage: true,
+    supports_picking: true
   }
 ];
 
@@ -46,6 +50,7 @@ const containerRows = [
     external_code: 'PALLET-001',
     container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
     status: 'active',
+    operational_role: 'storage',
     created_at: '2026-03-13T09:15:00.000Z',
     created_by: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
   }
@@ -455,6 +460,7 @@ function createSupabaseStub() {
                   external_code: payload.external_code ?? null,
                   container_type_id: payload.container_type_id,
                   status: 'active',
+                  operational_role: payload.operational_role ?? 'storage',
                   created_at: '2026-03-13T12:00:00.000Z',
                   created_by: payload.created_by ?? null
                 },
@@ -1252,12 +1258,16 @@ describe('buildApp', () => {
       {
         id: 'a8c1ab0f-2917-4ae0-b332-fd50f39db123',
         code: 'bin',
-        description: 'Storage bin'
+        description: 'Storage bin',
+        supportsStorage: true,
+        supportsPicking: true
       },
       {
         id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
         code: 'pallet',
-        description: 'Standard pallet'
+        description: 'Standard pallet',
+        supportsStorage: true,
+        supportsPicking: true
       }
     ]);
 
@@ -1394,6 +1404,7 @@ describe('buildApp', () => {
         externalCode: 'PALLET-001',
         containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
         status: 'active',
+        operationalRole: 'storage',
         createdAt: '2026-03-13T09:15:00.000Z',
         createdBy: '16e4f7f4-0d03-4ea0-ac6a-3d6f6b6e2b2d'
       }
@@ -3638,6 +3649,214 @@ describe('buildApp', () => {
       code: 'VALIDATION_ERROR'
     });
     expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+});
+
+// ── GET /api/pick-tasks/:taskId ───────────────────────────────────────────────
+
+const pickTaskDetailIds = {
+  task:      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  tenant:    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  step:      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  order:     'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  orderLine: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  container: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  cell:      '00000000-0000-4000-8000-000000000001',
+  product:   '00000000-0000-4000-8000-000000000002'
+};
+
+function createPickTaskDetailSupabaseStub(overrides: {
+  taskData?: unknown;
+  taskError?: unknown;
+  stepData?: unknown[];
+} = {}) {
+  const {
+    taskData = {
+      id: pickTaskDetailIds.task,
+      tenant_id: pickTaskDetailIds.tenant,
+      source_type: 'order',
+      source_id: pickTaskDetailIds.order,
+      status: 'in_progress',
+      assigned_to: null,
+      started_at: null,
+      completed_at: null,
+      created_at: '2026-03-01T09:00:00.000Z'
+    },
+    taskError = null,
+    stepData = [
+      {
+        id: pickTaskDetailIds.step,
+        task_id: pickTaskDetailIds.task,
+        tenant_id: pickTaskDetailIds.tenant,
+        order_id: pickTaskDetailIds.order,
+        order_line_id: pickTaskDetailIds.orderLine,
+        sequence_no: 1,
+        sku: 'SKU-TEST',
+        item_name: 'Test Widget',
+        qty_required: 4,
+        qty_picked: 0,
+        status: 'pending',
+        source_cell_id: pickTaskDetailIds.cell,
+        source_container_id: pickTaskDetailIds.container,
+        inventory_unit_id: null,
+        pick_container_id: null,
+        executed_at: null,
+        executed_by: null
+      }
+    ]
+  } = overrides;
+
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'pick_tasks') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn(async () => ({ data: taskData, error: taskError }))
+            }))
+          }))
+        };
+      }
+      if (table === 'pick_steps') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(async () => ({ data: stepData, error: null }))
+            }))
+          }))
+        };
+      }
+      if (table === 'containers') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{ id: pickTaskDetailIds.container, external_code: 'CTN-ALPHA' }],
+              error: null
+            }))
+          }))
+        };
+      }
+      if (table === 'cells') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{ id: pickTaskDetailIds.cell, address: '03-A.01.01.01' }],
+              error: null
+            }))
+          }))
+        };
+      }
+      if (table === 'order_lines') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{ id: pickTaskDetailIds.orderLine, product_id: pickTaskDetailIds.product }],
+              error: null
+            }))
+          }))
+        };
+      }
+      if (table === 'products') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{ id: pickTaskDetailIds.product, image_urls: ['https://cdn.example.com/img.png'] }],
+              error: null
+            }))
+          }))
+        };
+      }
+      return {
+        select: vi.fn(() => ({
+          in: vi.fn(async () => ({ data: [], error: null }))
+        }))
+      };
+    }),
+    rpc: vi.fn()
+  };
+}
+
+describe('GET /api/pick-tasks/:taskId', () => {
+  it('returns full task detail with enriched step fields', async () => {
+    const supabase = createPickTaskDetailSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/pick-tasks/${pickTaskDetailIds.task}`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.id).toBe(pickTaskDetailIds.task);
+    expect(body.status).toBe('in_progress');
+    expect(body.totalSteps).toBe(1);
+    expect(body.completedSteps).toBe(0);
+    expect(body.steps).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('maps enriched step fields in the response', async () => {
+    const supabase = createPickTaskDetailSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/pick-tasks/${pickTaskDetailIds.task}`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    const step = response.json().steps[0];
+    expect(step.sourceCellAddress).toBe('03-A.01.01.01');
+    expect(step.sourceContainerCode).toBe('CTN-ALPHA');
+    expect(step.imageUrl).toBe('https://cdn.example.com/img.png');
+    expect(step.sku).toBe('SKU-TEST');
+    expect(step.qtyRequired).toBe(4);
+
+    await app.close();
+  });
+
+  it('returns 404 when task does not exist', async () => {
+    const supabase = createPickTaskDetailSupabaseStub({
+      taskData: null,
+      taskError: { code: 'PGRST116', message: 'Not Found' }
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/pick-tasks/${pickTaskDetailIds.task}`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ code: 'PICK_TASK_NOT_FOUND' });
+
+    await app.close();
+  });
+
+  it('returns 401 when authorization header is missing', async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/pick-tasks/${pickTaskDetailIds.task}`
+    });
+
+    expect(response.statusCode).toBe(401);
 
     await app.close();
   });
