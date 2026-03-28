@@ -11,6 +11,7 @@ import {
   canonicalTransferInventoryResultSchema,
   inventoryItemSchema,
   locationOccupancyResponseSchema,
+  operationsCellRuntimeResponseSchema,
   locationReferenceSchema,
   locationStorageSnapshotResponseSchema,
   moveContainerToLocationBodySchema,
@@ -172,6 +173,7 @@ export const cellStorageSnapshotResponseSchema = z.array(cellStorageSnapshotRowS
 export const locationOccupancyRowsResponseSchema = locationOccupancyResponseSchema;
 export const locationStorageSnapshotRowsResponseSchema = locationStorageSnapshotResponseSchema;
 export const locationReferenceResponseSchema = locationReferenceSchema;
+export const operationsCellsRuntimeResponseSchema = operationsCellRuntimeResponseSchema;
 export const containerCurrentLocationResponseSchema = containerCurrentLocationSchema;
 
 export const inventoryItemResponseSchema = inventoryItemSchema;
@@ -244,6 +246,14 @@ export const pickTaskSummaryResponseSchema = pickTaskSummarySchema;
 export const pickTasksResponseSchema = z.array(pickTaskSummarySchema);
 
 export { pickTaskSchema, pickTaskSummarySchema, pickStepSchema };
+
+// ── Picking / allocation ───────────────────────────────────────────────────────
+
+export const allocatePickStepsResponseSchema = z.object({
+  taskId: z.string().uuid(),
+  allocated: z.number().int().min(0),
+  needsReplenishment: z.number().int().min(0)
+});
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 
