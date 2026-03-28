@@ -42,7 +42,9 @@ import {
   validationResponseSchema,
   pickTasksResponseSchema,
   operationsCellsRuntimeResponseSchema,
-  allocatePickStepsResponseSchema
+  allocatePickStepsResponseSchema,
+  executePickStepBodySchema,
+  executePickStepResponseSchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
@@ -986,6 +988,30 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     try {
       const result = await pickingService.allocatePickSteps({ taskId });
       return parseOrThrow(allocatePickStepsResponseSchema, result);
+    } catch (error) {
+      throw mapPickingError(error) ?? error;
+    }
+  });
+
+  app.post('/api/pick-steps/:stepId/execute', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const stepId = parseOrThrow(
+      idResponseSchema,
+      { id: (request.params as { stepId: string }).stepId }
+    ).id;
+    const body = parseOrThrow(executePickStepBodySchema, request.body);
+    const pickingService = getPickingService(auth);
+
+    try {
+      const result = await pickingService.executePickStep({
+        stepId,
+        qtyActual: body.qtyActual,
+        pickContainerId: body.pickContainerId,
+        actorId: auth.user.id
+      });
+      return parseOrThrow(executePickStepResponseSchema, result);
     } catch (error) {
       throw mapPickingError(error) ?? error;
     }

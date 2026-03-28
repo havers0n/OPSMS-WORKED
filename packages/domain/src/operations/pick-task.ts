@@ -34,7 +34,9 @@ export const pickStepSchema = z.object({
   sourceCellId: z.string().uuid().nullable(),
   sourceContainerId: z.string().uuid().nullable(),
   inventoryUnitId: z.string().uuid().nullable(),
-  pickContainerId: z.string().uuid().nullable()
+  pickContainerId: z.string().uuid().nullable(),
+  executedAt: z.string().nullable(),
+  executedBy: z.string().uuid().nullable()
 });
 export type PickStep = z.infer<typeof pickStepSchema>;
 

@@ -255,6 +255,24 @@ export const allocatePickStepsResponseSchema = z.object({
   needsReplenishment: z.number().int().min(0)
 });
 
+// ── Picking / execution ────────────────────────────────────────────────────────
+
+export const executePickStepBodySchema = z.object({
+  qtyActual: z.number().int().positive(),
+  pickContainerId: z.string().uuid()
+});
+
+export const executePickStepResponseSchema = z.object({
+  stepId: z.string().uuid(),
+  status: z.enum(['picked', 'partial']),
+  qtyPicked: z.number().int().min(0),
+  taskId: z.string().uuid(),
+  taskStatus: z.enum(['in_progress', 'completed', 'completed_with_exceptions']),
+  orderStatus: z.string().nullable(),
+  waveStatus: z.string().nullable(),
+  movementId: z.string().uuid().nullable()
+});
+
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 export const errorResponseSchema = z.object({
