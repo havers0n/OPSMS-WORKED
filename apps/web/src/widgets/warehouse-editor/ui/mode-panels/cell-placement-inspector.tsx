@@ -13,6 +13,7 @@ import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useCreateContainer } from '@/features/container-create/model/use-create-container';
 import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
+import { filterStorableTypes } from './cell-placement-inspector.lib';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -222,6 +223,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const isPending = isStoragePending && locationId !== null;
 
   const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } = useContainerTypes();
+  const storableTypes = filterStorableTypes(containerTypes);
   const bffError = error instanceof BffRequestError ? error : null;
   const locationBffError = locationQueryError instanceof BffRequestError ? locationQueryError : null;
   const containers = groupByContainer(data);
@@ -234,10 +236,10 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const isActionPending = placeContainer.isPending || createContainer.isPending;
 
   useEffect(() => {
-    if (containerTypeIdInput.length === 0 && containerTypes.length > 0) {
-      setContainerTypeIdInput(containerTypes[0].id);
+    if (containerTypeIdInput.length === 0 && storableTypes.length > 0) {
+      setContainerTypeIdInput(storableTypes[0].id);
     }
-  }, [containerTypeIdInput, containerTypes]);
+  }, [containerTypeIdInput, storableTypes]);
 
   const handlePlace = async () => {
     const nextContainerId = containerIdInput.trim();
@@ -298,7 +300,8 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     try {
       const container = await createContainer.mutateAsync({
         externalCode,
-        containerTypeId: containerTypeIdInput
+        containerTypeId: containerTypeIdInput,
+        operationalRole: 'storage'
       });
 
       // eslint-disable-next-line no-console
@@ -333,7 +336,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
       }
 
       setContainerCodeInput('');
-      setContainerTypeIdInput(containerTypes[0]?.id ?? '');
+      setContainerTypeIdInput(storableTypes[0]?.id ?? '');
       setActiveAction(null);
     } catch (mutationError) {
       // eslint-disable-next-line no-console
@@ -472,14 +475,14 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
                 onChange={(event) => setContainerTypeIdInput(event.target.value)}
                 className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
                 style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                disabled={isContainerTypesPending || isActionPending || containerTypes.length === 0}
+                disabled={isContainerTypesPending || isActionPending || storableTypes.length === 0}
               >
-                {containerTypes.length === 0 && (
+                {storableTypes.length === 0 && (
                   <option value="">
-                    {isContainerTypesPending ? 'Loading container types...' : 'No container types available'}
+                    {isContainerTypesPending ? 'Loading container types...' : 'No storage-capable container types available'}
                   </option>
                 )}
-                {containerTypes.map((containerType) => (
+                {storableTypes.map((containerType) => (
                   <option key={containerType.id} value={containerType.id}>
                     {containerType.code}
                   </option>
@@ -497,11 +500,11 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
                 : !isActionPending &&
                   containerCodeInput.trim().length === 0 &&
                   containerTypeIdInput.length === 0 &&
-                  containerTypes.length === 0
-                  ? ['missing code', 'missing type', 'no types loaded'].join(' + ')
+                  storableTypes.length === 0
+                  ? ['missing code', 'missing type', 'no storable types loaded'].join(' + ')
                 : !isActionPending && containerCodeInput.trim().length === 0 ? 'missing code'
                 : !isActionPending && containerTypeIdInput.length === 0 ? 'missing type'
-                : !isActionPending && containerTypes.length === 0 ? 'no types loaded'
+                : !isActionPending && storableTypes.length === 0 ? 'no storable types loaded'
                 : isActionPending ? 'action pending'
                 : null;
 
@@ -512,7 +515,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
                   <p className="font-semibold">🔍 DEBUG: Create & Place State</p>
                   <p>code: {containerCodeInput.trim().length > 0 ? '✓' : '✗'} ({containerCodeInput.length})</p>
                   <p>type: {containerTypeIdInput.length > 0 ? '✓' : '✗'}</p>
-                  <p>containerTypes: {containerTypes.length} loaded {isContainerTypesPending ? '(loading...)' : ''}</p>
+                  <p>storableTypes: {storableTypes.length}/{containerTypes.length} loaded {isContainerTypesPending ? '(loading...)' : ''}</p>
                   <p>createMutation: {createContainer.status} {createContainer.error ? `[ERROR: ${createContainer.error.message}]` : ''}</p>
                   <p>placeMutation: {placeContainer.status} {placeContainer.error ? `[ERROR: ${placeContainer.error.message}]` : ''}</p>
                   <p>isActionPending: {isActionPending ? 'YES' : 'NO'}</p>
@@ -527,13 +530,13 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
                   !locationId ||
                   containerCodeInput.trim().length === 0 ||
                   containerTypeIdInput.length === 0 ||
-                  containerTypes.length === 0;
+                  storableTypes.length === 0;
                 const disabledReasons = [];
                 if (isActionPending) disabledReasons.push('action pending');
                 if (!locationId) disabledReasons.push('no active location');
                 if (containerCodeInput.trim().length === 0) disabledReasons.push('missing code');
                 if (containerTypeIdInput.length === 0) disabledReasons.push('missing type');
-                if (containerTypes.length === 0) disabledReasons.push('no types loaded');
+                if (storableTypes.length === 0) disabledReasons.push('no storable types loaded');
 
                 return (
                   <>
