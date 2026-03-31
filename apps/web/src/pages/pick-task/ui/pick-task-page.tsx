@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, CheckCircle2, MapPin, Package, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { Container, ContainerType, PickStepDetail, PickTaskDetail } from '@wos/domain';
 import {
   containerListQueryOptions,
   containerTypesQueryOptions
 } from '@/entities/container/api/queries';
+import { orderQueryOptions } from '@/entities/order/api/queries';
 import { useExecutePickStep } from '@/entities/pick-task/api/mutations';
 import { pickTaskDetailQueryOptions } from '@/entities/pick-task/api/queries';
 import {
@@ -17,7 +18,7 @@ import {
   getPickTaskStatusLabel
 } from '@/entities/pick-task/lib/pick-task-actions';
 import { useCreateContainer } from '@/features/container-create/api/mutations';
-import { routes } from '@/shared/config/routes';
+import { routes, waveDetailPath } from '@/shared/config/routes';
 
 // ── Container setup (choose existing OR create new) ───────────────────────────
 
@@ -28,7 +29,7 @@ function PickContainerSetup({
 }: {
   containers: Container[];
   containerTypes: ContainerType[];
-  onSelect: (id: string, label: string) => void;
+  onSelect: (id: string, label: string, typeLabel: string | null) => void;
 }) {
   const [tab, setTab] = useState<'existing' | 'new'>('existing');
   const pickableTypes = containerTypes.filter((ct) => ct.supportsPicking);
@@ -39,6 +40,9 @@ function PickContainerSetup({
 
   const active = containers.filter((c) => c.status === 'active');
 
+  // Build lookup map — data is already in memory, no extra fetch
+  const typeById = new Map(containerTypes.map((t) => [t.id, t]));
+
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const externalCode = code.trim();
@@ -48,7 +52,8 @@ function PickContainerSetup({
       { containerTypeId: typeId, externalCode, operationalRole: 'pick' },
       {
         onSuccess: (result) => {
-          onSelect(result.containerId, result.externalCode);
+          const selectedType = pickableTypes.find((t) => t.id === typeId);
+          onSelect(result.containerId, result.externalCode, selectedType?.description ?? null);
         },
         onError: (err) => {
           setCreateError(err instanceof Error ? err.message : 'Creation failed. Try again.');
@@ -87,19 +92,27 @@ function PickContainerSetup({
             </div>
           ) : (
             <div className="space-y-2">
-              {active.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onSelect(c.id, c.externalCode ?? c.id)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm transition hover:border-cyan-300 hover:bg-cyan-50"
-                >
-                  <Package className="h-4 w-4 shrink-0 text-slate-400" />
-                  <span className="font-medium text-slate-900">
-                    {c.externalCode ?? c.id}
-                  </span>
-                </button>
-              ))}
+              {active.map((c) => {
+                const type = typeById.get(c.containerTypeId);
+                const label = c.externalCode ?? type?.code ?? 'Container';
+                const typeLabel = type?.description ?? null;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => onSelect(c.id, label, typeLabel)}
+                    className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm transition hover:border-cyan-300 hover:bg-cyan-50"
+                  >
+                    <Package className="h-4 w-4 shrink-0 text-slate-400" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-900">{label}</div>
+                      {type && (
+                        <div className="text-xs text-slate-500">{type.code} · {type.description}</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </>
@@ -368,15 +381,26 @@ function AllBlockedBanner() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-type PickContainer = { id: string; label: string };
+type PickContainer = { id: string; label: string; typeLabel: string | null };
 
 export function PickTaskPage() {
   const { id: taskId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const [pickContainer, setPickContainer] = useState<PickContainer | null>(null);
+
+  // Origin context passed by the order drawer when navigating here
+  const queryOrder = searchParams.get('order');
+  const queryWave = searchParams.get('wave');
 
   const { data: task, isLoading: taskLoading } = useQuery(
     pickTaskDetailQueryOptions(taskId ?? null)
   );
+
+  // Resolve orderId as early as possible so the order query fires immediately.
+  // queryOrder covers normal navigation (cache hit); task?.sourceId covers direct open.
+  const preTaskOrderId =
+    queryOrder ?? (task?.sourceType === 'order' ? task.sourceId : null);
+  const { data: orderDetail } = useQuery(orderQueryOptions(preTaskOrderId));
   const { data: containers = [], isLoading: containersLoading } = useQuery(
     containerListQueryOptions({ operationalRole: 'pick' })
   );
@@ -395,15 +419,41 @@ export function PickTaskPage() {
 
   // ── Not found ──
   if (!task) {
+    const notFoundBackPath =
+      queryWave && queryOrder ? `${waveDetailPath(queryWave)}?order=${queryOrder}`
+      : queryWave ? waveDetailPath(queryWave)
+      : queryOrder ? `${routes.operations}?order=${queryOrder}`
+      : routes.operations;
+
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
         <div className="text-sm">Pick task not found.</div>
-        <Link to={routes.operations} className="text-sm text-cyan-600 hover:underline">
+        <Link to={notFoundBackPath} className="text-sm text-cyan-600 hover:underline">
           Back to Operations
         </Link>
       </div>
     );
   }
+
+  // ── Derive origin context ──
+  // URL params take priority; fall back to task.sourceType/sourceId
+  const effectiveOrderId =
+    queryOrder ?? (task.sourceType === 'order' ? task.sourceId : null);
+  const effectiveWaveId =
+    queryWave ?? (task.sourceType === 'wave' ? task.sourceId : null);
+  // Human-readable label from fetched order (cache hit in normal flow; one fetch on direct open)
+  const orderLabel = orderDetail?.externalNumber ?? (effectiveOrderId ? effectiveOrderId.slice(-8) : '—');
+
+  // ── Back target ──
+  const backPath =
+    effectiveWaveId && effectiveOrderId
+      ? `${waveDetailPath(effectiveWaveId)}?order=${effectiveOrderId}`
+      : effectiveWaveId
+        ? waveDetailPath(effectiveWaveId)
+        : effectiveOrderId
+          ? `${routes.operations}?order=${effectiveOrderId}`
+          : routes.operations;
+  const backLabel = effectiveWaveId ? 'Wave' : 'Operations';
 
   const pct = task.totalSteps > 0
     ? Math.round((task.completedSteps / task.totalSteps) * 100)
@@ -426,24 +476,34 @@ export function PickTaskPage() {
 
         {/* ── Back link ── */}
         <Link
-          to={routes.operations}
+          to={backPath}
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
         >
           <ArrowLeft className="h-4 w-4" />
-          Operations
+          {backLabel}
         </Link>
 
         {/* ── Task header ── */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-wide text-slate-500">Pick task</div>
-            <div className="mt-1 font-mono text-sm text-slate-700">{task.id}</div>
-            <div className="mt-2 flex items-center gap-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Order</div>
+            <div className="mt-1 text-lg font-semibold text-slate-900">
+              {orderLabel}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getPickTaskStatusColor(task.status)}`}
               >
                 {getPickTaskStatusLabel(task.status)}
               </span>
+              {effectiveWaveId && (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Wave pick
+                </span>
+              )}
+            </div>
+            <div className="mt-1.5 font-mono text-xs text-slate-400">
+              Task {task.id.slice(0, 8)}…
             </div>
           </div>
 
@@ -474,7 +534,7 @@ export function PickTaskPage() {
           <PickContainerSetup
             containers={containers}
             containerTypes={containerTypes}
-            onSelect={(id, label) => setPickContainer({ id, label })}
+            onSelect={(id, label, typeLabel) => setPickContainer({ id, label, typeLabel })}
           />
         )}
 
@@ -485,6 +545,12 @@ export function PickTaskPage() {
               <Package className="h-4 w-4 text-slate-400" />
               <span className="text-slate-500">Picking into:</span>
               <span className="font-medium text-slate-900">{pickContainer.label}</span>
+              {pickContainer.typeLabel && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">{pickContainer.typeLabel}</span>
+                </>
+              )}
             </div>
             <button
               type="button"
