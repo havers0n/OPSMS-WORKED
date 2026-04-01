@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Package, PackagePlus, RefreshCw, Waves as WavesIcon } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, WaveStatus, WaveSummary } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
@@ -106,6 +106,7 @@ export function OperationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedOrderId = searchParams.get('order');
   const [navigateToWave, setNavigateToWave] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const { data: waves = [], isLoading: wavesLoading, refetch: refetchWaves, isRefetching: wavesRefetching } = useQuery(wavesQueryOptions());
   const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders, isRefetching: ordersRefetching } = useQuery(ordersQueryOptions());
@@ -114,11 +115,12 @@ export function OperationsPage() {
 
   const standaloneOrders = allOrders.filter((o) => !o.waveId);
 
-  // Navigate after wave creation
-  if (navigateToWave) {
-    window.location.href = waveDetailPath(navigateToWave);
-    return null;
-  }
+  // Navigate after wave creation (SPA-safe: no hard reload)
+  useEffect(() => {
+    if (navigateToWave) {
+      navigate(waveDetailPath(navigateToWave));
+    }
+  }, [navigateToWave, navigate]);
 
   return (
     <div className="flex h-full flex-col overflow-auto">

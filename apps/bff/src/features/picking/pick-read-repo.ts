@@ -102,7 +102,7 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
           ? supabase.from('containers').select('id,external_code').in('id', containerIds)
           : Promise.resolve({ data: [], error: null }),
         cellIds.length > 0
-          ? supabase.from('cells').select('id,address').in('id', cellIds)
+          ? supabase.from('cells').select('id,address,layout_version_id').in('id', cellIds)
           : Promise.resolve({ data: [], error: null }),
         orderLineIds.length > 0
           ? supabase.from('order_lines').select('id,product_id').in('id', orderLineIds)
@@ -132,9 +132,32 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
           .map((c) => [c.id, c.external_code])
       );
 
-      const cellAddressById = new Map(
-        ((cellResult.data ?? []) as { id: string; address: string }[])
-          .map((c) => [c.id, c.address])
+      const cellRows = (cellResult.data ?? []) as {
+        id: string;
+        address: string;
+        layout_version_id: string;
+      }[];
+
+      const cellAddressById = new Map(cellRows.map((c) => [c.id, c.address]));
+
+      // Resolve floor_id per cell via layout_versions
+      const layoutVersionIds = [...new Set(cellRows.map((c) => c.layout_version_id))];
+      const layoutVersionResult = layoutVersionIds.length > 0
+        ? await supabase
+            .from('layout_versions')
+            .select('id,floor_id')
+            .in('id', layoutVersionIds)
+        : { data: [], error: null };
+
+      if (layoutVersionResult.error) throw layoutVersionResult.error;
+
+      const floorIdByLayoutVersionId = new Map(
+        ((layoutVersionResult.data ?? []) as { id: string; floor_id: string }[])
+          .map((lv) => [lv.id, lv.floor_id])
+      );
+
+      const floorIdByCellId = new Map(
+        cellRows.map((c) => [c.id, floorIdByLayoutVersionId.get(c.layout_version_id) ?? null] as [string, string | null])
       );
 
       const productIdByOrderLineId = new Map(
@@ -179,6 +202,9 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
             : null,
           sourceContainerCode: row.source_container_id
             ? (containerCodeById.get(row.source_container_id) ?? null)
+            : null,
+          sourceFloorId: row.source_cell_id
+            ? (floorIdByCellId.get(row.source_cell_id) ?? null)
             : null,
           imageUrl: productId ? (imageUrlByProductId.get(productId) ?? null) : null
         };

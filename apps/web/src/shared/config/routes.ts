@@ -25,3 +25,12 @@ export function pickTaskDetailPath(
   const qs = params.toString();
   return `/operations/pick-tasks/${id}${qs ? `?${qs}` : ''}`;
 }
+
+export function warehouseViewPath(opts?: { floorId?: string; cellId?: string }) {
+  if (!opts) return routes.warehouseView;
+  const params = new URLSearchParams();
+  if (opts.floorId) params.set('floor', opts.floorId);
+  if (opts.cellId) params.set('cell', opts.cellId);
+  const qs = params.toString();
+  return `${routes.warehouseView}${qs ? `?${qs}` : ''}`;
+}

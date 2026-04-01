@@ -58,6 +58,7 @@ export type PickTask = z.infer<typeof pickTaskSchema>;
 export const pickStepDetailSchema = pickStepSchema.extend({
   sourceCellAddress: z.string().nullable(),
   sourceContainerCode: z.string().nullable(),
+  sourceFloorId: z.string().uuid().nullable(),
   imageUrl: z.string().nullable()
 });
 export type PickStepDetail = z.infer<typeof pickStepDetailSchema>;

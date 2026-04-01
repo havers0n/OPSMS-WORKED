@@ -1,9 +1,15 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useActiveFloorId, useActiveSiteId, useSetActiveSiteId } from '@/app/store/ui-selectors';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  useActiveFloorId,
+  useActiveSiteId,
+  useSetActiveFloorId,
+  useSetActiveSiteId
+} from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
+  useSetHighlightedCellIds,
   useSetViewMode,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
@@ -16,11 +22,17 @@ export function WarehouseViewPage() {
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
+  const setActiveFloorId = useSetActiveFloorId();
   const sitesQuery = useSites();
   const floorsQuery = useFloors(activeSiteId);
   const workspaceQuery = useFloorWorkspace(activeFloorId);
   const viewMode = useViewMode();
   const setViewMode = useSetViewMode();
+  const setHighlightedCellIds = useSetHighlightedCellIds();
+
+  const [searchParams] = useSearchParams();
+  const targetFloorId = searchParams.get('floor');
+  const targetCellId = searchParams.get('cell');
 
   // Auto-select first site if none selected
   useEffect(() => {
@@ -35,6 +47,28 @@ export function WarehouseViewPage() {
       setViewMode('operations');
     }
   }, [viewMode, setViewMode]);
+
+  // URL hydration: select target floor when site is ready and floor exists on it.
+  // Runs after site auto-select so setActiveSiteId won't clobber it.
+  useEffect(() => {
+    if (!targetFloorId) return;
+    if (!activeSiteId) return;
+    if (!floorsQuery.data) return;
+    if (activeFloorId === targetFloorId) return;
+    const floorExists = floorsQuery.data.some((f) => f.id === targetFloorId);
+    if (floorExists) {
+      setActiveFloorId(targetFloorId);
+    }
+    // floor not found on this site → silently fall through to existing behavior
+  }, [targetFloorId, activeSiteId, activeFloorId, floorsQuery.data, setActiveFloorId]);
+
+  // URL hydration: highlight target cell.
+  // Guarded on viewMode === 'operations' because setViewMode clears highlightedCellIds.
+  useEffect(() => {
+    if (!targetCellId) return;
+    if (viewMode !== 'operations') return;
+    setHighlightedCellIds([targetCellId]);
+  }, [targetCellId, viewMode, setHighlightedCellIds]);
 
   const isLoading =
     sitesQuery.isLoading ||

@@ -43,6 +43,7 @@ type EditorStore = {
   hoveredRackId: string | null;
   /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
   creatingRackId: string | null;
+  highlightedCellIds: string[];
   zoom: number;
   minRackDistance: number;
   draft: LayoutDraft | null;
@@ -66,6 +67,8 @@ type EditorStore = {
   cancelPlacementInteraction: () => void;
   setHoveredRackId: (rackId: string | null) => void;
   setCreatingRackId: (rackId: string | null) => void;
+  setHighlightedCellIds: (cellIds: string[]) => void;
+  clearHighlightedCellIds: () => void;
   setZoom: (zoom: number) => void;
   setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
@@ -102,6 +105,7 @@ const initialEditorState = {
   placementInteraction: { type: 'idle' } as PlacementInteraction,
   hoveredRackId: null,
   creatingRackId: null,
+  highlightedCellIds: [],
   zoom: 1,
   minRackDistance: 0,
   draft: null,
@@ -303,7 +307,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Clear selection on every mode switch — stale rack/cell selections from
       // the previous mode should never bleed into the new one.
       selection: { type: 'none' },
-      placementInteraction: { type: 'idle' }
+      placementInteraction: { type: 'idle' },
+      highlightedCellIds: []
     }),
   setEditorMode: (editorMode) => set({ editorMode }),
   setSelection: (selection) => set({ selection, placementInteraction: { type: 'idle' } }),
@@ -356,6 +361,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
   cancelPlacementInteraction: () => set({ placementInteraction: { type: 'idle' } }),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
+  setHighlightedCellIds: (cellIds) => set({ highlightedCellIds: [...new Set(cellIds)] }),
+  clearHighlightedCellIds: () => set({ highlightedCellIds: [] }),
   setZoom: (zoom) => set({ zoom }),
   setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
   resetDraft: () =>
@@ -369,6 +376,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       draftSourceVersionId: null,
       selection: { type: 'none' },
       placementInteraction: { type: 'idle' },
+      highlightedCellIds: [],
       hoveredRackId: null,
       creatingRackId: null,
       isDraftDirty: false,

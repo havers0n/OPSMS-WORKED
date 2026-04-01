@@ -20,6 +20,7 @@ export type LocationStorageSnapshotRowRecord = LocationOccupancyRowRecord & {
   product_id?: string | null;
   quantity: number | null;
   uom: string | null;
+  inventory_status?: 'available' | 'reserved' | 'damaged' | 'hold' | null;
 };
 
 export type ContainerCurrentLocationRecord = {
@@ -142,7 +143,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
     async listLocationStorage(locationId) {
       const { data, error } = await supabase
         .from('location_storage_canonical_v')
-        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom,inventory_status')
         .eq('location_id', locationId)
         .order('placed_at', { ascending: true });
 
@@ -156,7 +157,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
     async listCellStorage(cellId) {
       const { data, error } = await supabase
         .from('location_storage_canonical_v')
-        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom,inventory_status')
         .eq('cell_id', cellId)
         .order('placed_at', { ascending: true });
 
@@ -174,7 +175,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
 
       const { data, error } = await supabase
         .from('location_storage_canonical_v')
-        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom,inventory_status')
         .in('cell_id', cellIds)
         .order('placed_at', { ascending: true });
 

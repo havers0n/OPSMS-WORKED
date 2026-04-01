@@ -2,6 +2,30 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 import { pickTaskKeys } from './queries';
 
+// ── allocatePickSteps ─────────────────────────────────────────────────────────
+
+type AllocatePickStepsResult = {
+  taskId: string;
+  allocated: number;
+  needsReplenishment: number;
+};
+
+async function allocatePickSteps(taskId: string): Promise<AllocatePickStepsResult> {
+  return bffRequest<AllocatePickStepsResult>(`/api/pick-tasks/${taskId}/allocate`, {
+    method: 'POST'
+  });
+}
+
+export function useAllocatePickSteps() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: allocatePickSteps,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: pickTaskKeys.detail(result.taskId) });
+    }
+  });
+}
+
 // ── executePickStep ───────────────────────────────────────────────────────────
 
 type ExecutePickStepInput = {
