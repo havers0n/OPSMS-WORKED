@@ -46,14 +46,18 @@ function PickContainerSetup({
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const externalCode = code.trim();
-    if (!typeId || !externalCode) return;
+    if (!typeId) return;
     setCreateError(null);
     create.mutate(
-      { containerTypeId: typeId, externalCode, operationalRole: 'pick' },
+      {
+        containerTypeId: typeId,
+        externalCode: externalCode.length > 0 ? externalCode : undefined,
+        operationalRole: 'pick'
+      },
       {
         onSuccess: (result) => {
           const selectedType = pickableTypes.find((t) => t.id === typeId);
-          onSelect(result.containerId, result.externalCode, selectedType?.description ?? null);
+          onSelect(result.containerId, result.systemCode, selectedType?.description ?? null);
         },
         onError: (err) => {
           setCreateError(err instanceof Error ? err.message : 'Creation failed. Try again.');
@@ -94,7 +98,8 @@ function PickContainerSetup({
             <div className="space-y-2">
               {active.map((c) => {
                 const type = typeById.get(c.containerTypeId);
-                const label = c.externalCode ?? type?.code ?? 'Container';
+                const label = c.systemCode;
+                const secondary = c.externalCode;
                 const typeLabel = type?.description ?? null;
                 return (
                   <button
@@ -106,8 +111,12 @@ function PickContainerSetup({
                     <Package className="h-4 w-4 shrink-0 text-slate-400" />
                     <div className="min-w-0">
                       <div className="font-medium text-slate-900">{label}</div>
-                      {type && (
-                        <div className="text-xs text-slate-500">{type.code} · {type.description}</div>
+                      {(secondary || type) && (
+                        <div className="text-xs text-slate-500">
+                          {secondary ? secondary : null}
+                          {secondary && type ? ' · ' : null}
+                          {type ? `${type.code} · ${type.description}` : null}
+                        </div>
                       )}
                     </div>
                   </button>
@@ -148,16 +157,18 @@ function PickContainerSetup({
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-700">
-                  External code <span className="text-red-500">*</span>
+                  External code <span className="font-normal text-slate-400">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="e.g. TOTE-42"
-                  required
+                  placeholder="Optional operator code, e.g. TOTE-42"
                   className="h-10 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-cyan-500"
                 />
+                <div className="mt-1 text-xs text-slate-500">
+                  A system code will be assigned automatically.
+                </div>
               </div>
 
               {createError && (
@@ -166,7 +177,7 @@ function PickContainerSetup({
 
               <button
                 type="submit"
-                disabled={!typeId || !code.trim() || create.isPending}
+                disabled={!typeId || create.isPending}
                 className="w-full rounded-xl bg-cyan-600 py-2.5 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:opacity-50"
               >
                 {create.isPending ? 'Creating…' : 'Create & select'}
@@ -419,6 +430,7 @@ export function PickTaskPage() {
   const { data: containerTypes = [], isLoading: typesLoading } = useQuery(
     containerTypesQueryOptions()
   );
+  const allocate = useAllocatePickSteps();
 
   // ── Loading ──
   if (taskLoading || containersLoading || typesLoading) {
@@ -466,8 +478,6 @@ export function PickTaskPage() {
           ? `${routes.operations}?order=${effectiveOrderId}`
           : routes.operations;
   const backLabel = effectiveWaveId ? 'Wave' : 'Operations';
-
-  const allocate = useAllocatePickSteps();
 
   const pct = task.totalSteps > 0
     ? Math.round((task.completedSteps / task.totalSteps) * 100)
@@ -522,7 +532,7 @@ export function PickTaskPage() {
               )}
             </div>
             <div className="mt-1.5 font-mono text-xs text-slate-400">
-              Task {task.id.slice(0, 8)}…
+              {task.taskNumber}
             </div>
           </div>
 
@@ -596,14 +606,13 @@ export function PickTaskPage() {
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
             <div className="flex items-center gap-2 text-sm">
               <Package className="h-4 w-4 text-slate-400" />
-              <span className="text-slate-500">Picking into:</span>
-              <span className="font-medium text-slate-900">{pickContainer.label}</span>
-              {pickContainer.typeLabel && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-500">{pickContainer.typeLabel}</span>
-                </>
-              )}
+              <div>
+                <div className="text-slate-500">Picking into container:</div>
+                <div className="font-medium text-slate-900">{pickContainer.label}</div>
+                {pickContainer.typeLabel && (
+                  <div className="text-slate-500">{pickContainer.typeLabel}</div>
+                )}
+              </div>
             </div>
             <button
               type="button"

@@ -60,6 +60,7 @@ describe('mapContainerRowToDomain', () => {
   const baseRow = {
     id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    system_code: 'CNT-000123',
     external_code: 'PALLET-001',
     container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
     status: 'active' as const,
@@ -92,6 +93,7 @@ describe('mapContainerRowToDomain', () => {
     const result = mapContainerRowToDomain(baseRow);
     expect(result.id).toBe(baseRow.id);
     expect(result.tenantId).toBe(baseRow.tenant_id);
+    expect(result.systemCode).toBe(baseRow.system_code);
     expect(result.containerTypeId).toBe(baseRow.container_type_id);
     expect(result.status).toBe('active');
     expect(result.createdAt).toBe(baseRow.created_at);

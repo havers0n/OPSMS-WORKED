@@ -7,7 +7,7 @@ import { isContainerTypeConstraintError } from './errors.js';
 type CreateContainerInput = {
   tenantId: string;
   containerTypeId: string;
-  externalCode: string;
+  externalCode?: string;
   operationalRole: 'storage' | 'pick';
   createdBy: string;
 };
@@ -54,9 +54,11 @@ export function createContainersService(supabase: SupabaseClient): ContainersSer
         );
       }
 
-      const codeExists = await repo.containerCodeExists(input.tenantId, input.externalCode);
-      if (codeExists) {
-        throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
+      if (input.externalCode) {
+        const codeExists = await repo.containerCodeExists(input.tenantId, input.externalCode);
+        if (codeExists) {
+          throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
+        }
       }
 
       try {
@@ -64,7 +66,11 @@ export function createContainersService(supabase: SupabaseClient): ContainersSer
       } catch (error) {
         if (typeof error === 'object' && error !== null && 'code' in error) {
           const code = (error as { code: string }).code;
-          if (code === '23505') {
+          const constraint =
+            'constraint' in error && typeof error.constraint === 'string'
+              ? error.constraint
+              : '';
+          if (code === '23505' && constraint === 'containers_tenant_external_code_unique') {
             throw new ApiError(409, 'CONTAINER_CODE_ALREADY_EXISTS', 'Container code already exists in this workspace.');
           }
           if (code === '23503' && isContainerTypeConstraintError(error)) {

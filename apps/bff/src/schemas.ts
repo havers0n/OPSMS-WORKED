@@ -60,7 +60,7 @@ export const createFloorBodySchema = z.object({
 
 export const createContainerBodySchema = z.object({
   containerTypeId: z.string().uuid(),
-  externalCode: z.string().trim().min(1),
+  externalCode: z.string().trim().min(1).optional(),
   operationalRole: containerOperationalRoleSchema.default('storage')
 });
 
@@ -169,7 +169,8 @@ export const containersResponseSchema = z.array(containerSchema);
 export const containerResponseSchema = containerSchema;
 export const createContainerResponseSchema = z.object({
   containerId: z.string().uuid(),
-  externalCode: z.string().trim().min(1),
+  systemCode: z.string().trim().min(1),
+  externalCode: z.string().trim().min(1).nullable(),
   containerTypeId: z.string().uuid(),
   status: containerStatusSchema,
   operationalRole: containerOperationalRoleSchema

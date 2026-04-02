@@ -5,7 +5,7 @@ import { pickTaskDetailSchema } from '@wos/domain';
 // ── Column lists ──────────────────────────────────────────────────────────────
 
 const pickTaskColumns =
-  'id,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at';
+  'id,task_number,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at';
 
 const pickStepColumns = [
   'id', 'task_id', 'tenant_id', 'order_id', 'order_line_id',
@@ -18,6 +18,7 @@ const pickStepColumns = [
 
 type PickTaskRow = {
   id: string;
+  task_number: string;
   tenant_id: string;
   source_type: 'order' | 'wave';
   source_id: string;
@@ -83,7 +84,7 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
         throw stepsError;
       }
 
-      const steps = (stepRows ?? []) as PickStepRow[];
+      const steps = ((stepRows ?? []) as unknown) as PickStepRow[];
 
       // 3. Collect unique IDs for enrichment
       const containerIds = [...new Set(
@@ -99,7 +100,7 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
       // 4. Batch-fetch enrichment data in parallel
       const [containerResult, cellResult, orderLineResult] = await Promise.all([
         containerIds.length > 0
-          ? supabase.from('containers').select('id,external_code').in('id', containerIds)
+          ? supabase.from('containers').select('id,system_code,external_code').in('id', containerIds)
           : Promise.resolve({ data: [], error: null }),
         cellIds.length > 0
           ? supabase.from('cells').select('id,address,layout_version_id').in('id', cellIds)
@@ -128,8 +129,8 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
 
       // 6. Build lookup maps
       const containerCodeById = new Map(
-        ((containerResult.data ?? []) as { id: string; external_code: string }[])
-          .map((c) => [c.id, c.external_code])
+        ((containerResult.data ?? []) as { id: string; system_code: string; external_code: string | null }[])
+          .map((c) => [c.id, c.system_code])
       );
 
       const cellRows = (cellResult.data ?? []) as {
@@ -218,6 +219,7 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
 
       return pickTaskDetailSchema.parse({
         id: task.id,
+        taskNumber: task.task_number,
         tenantId: task.tenant_id,
         sourceType: task.source_type,
         sourceId: task.source_id,

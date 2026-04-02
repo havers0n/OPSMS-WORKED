@@ -13,6 +13,7 @@ type ContainerTypeRow = {
 type ContainerRow = {
   id: string;
   tenant_id: string;
+  system_code: string;
   external_code: string | null;
   container_type_id: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -24,7 +25,7 @@ type ContainerRow = {
 export type CreateContainerInput = {
   tenantId: string;
   containerTypeId: string;
-  externalCode: string;
+  externalCode?: string;
   operationalRole: 'storage' | 'pick';
   createdBy: string;
 };
@@ -43,7 +44,7 @@ export type ContainersRepo = {
 };
 
 const CONTAINER_TYPE_COLUMNS = 'id,code,description,supports_storage,supports_picking';
-const CONTAINER_COLUMNS = 'id,tenant_id,external_code,container_type_id,status,operational_role,created_at,created_by';
+const CONTAINER_COLUMNS = 'id,tenant_id,system_code,external_code,container_type_id,status,operational_role,created_at,created_by';
 
 export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
   return {
@@ -114,7 +115,7 @@ export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
         .insert({
           tenant_id: input.tenantId,
           container_type_id: input.containerTypeId,
-          external_code: input.externalCode,
+          external_code: input.externalCode ?? null,
           operational_role: input.operationalRole,
           created_by: input.createdBy
         })

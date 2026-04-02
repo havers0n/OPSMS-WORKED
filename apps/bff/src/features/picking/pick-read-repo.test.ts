@@ -14,6 +14,7 @@ const ids = {
 
 const taskRow = {
   id: ids.task,
+  task_number: 'TSK-000321',
   tenant_id: ids.tenant,
   source_type: 'order' as const,
   source_id: ids.order,
@@ -61,8 +62,8 @@ function makeSupabaseStub(overrides: {
     taskError = null,
     stepData = [stepRow],
     stepError = null,
-    containerData = [{ id: ids.container, external_code: 'CTN-001' }],
-    cellData = [{ id: ids.cell, address: '03-A.01.01.01' }],
+    containerData = [{ id: ids.container, system_code: 'CNT-000111', external_code: 'CTN-001' }],
+    cellData = [{ id: ids.cell, address: '03-A.01.01.01', layout_version_id: '88888888-8888-4888-8888-888888888888' }],
     orderLineData = [{ id: ids.orderLine, product_id: ids.product }],
     productData = [{ id: ids.product, image_urls: ['https://cdn.example.com/widget-a.jpg'] }]
   } = overrides;
@@ -101,6 +102,17 @@ function makeSupabaseStub(overrides: {
         return {
           select: vi.fn(() => ({
             in: vi.fn(async () => ({ data: cellData, error: null }))
+          }))
+        };
+      }
+
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{ id: '88888888-8888-4888-8888-888888888888', floor_id: '99999999-9999-4999-8999-999999999999' }],
+              error: null
+            }))
           }))
         };
       }
@@ -146,6 +158,7 @@ describe('pick-read-repo — findPickTaskDetail', () => {
 
     expect(result).not.toBeNull();
     expect(result!.id).toBe(ids.task);
+    expect(result!.taskNumber).toBe('TSK-000321');
     expect(result!.status).toBe('in_progress');
     expect(result!.totalSteps).toBe(1);
     expect(result!.completedSteps).toBe(0);
@@ -160,7 +173,7 @@ describe('pick-read-repo — findPickTaskDetail', () => {
     const step = result!.steps[0];
 
     expect(step.sourceCellAddress).toBe('03-A.01.01.01');
-    expect(step.sourceContainerCode).toBe('CTN-001');
+    expect(step.sourceContainerCode).toBe('CNT-000111');
     expect(step.imageUrl).toBe('https://cdn.example.com/widget-a.jpg');
   });
 

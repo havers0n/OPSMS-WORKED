@@ -681,7 +681,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     return parseOrThrow(createContainerResponseSchema, {
       containerId: container.id,
-      externalCode: container.externalCode ?? '',
+      systemCode: container.systemCode,
+      externalCode: container.externalCode,
       containerTypeId: container.containerTypeId,
       status: container.status,
       operationalRole: container.operationalRole

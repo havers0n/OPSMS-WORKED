@@ -42,6 +42,7 @@ export type PickStep = z.infer<typeof pickStepSchema>;
 
 export const pickTaskSchema = z.object({
   id: z.string().uuid(),
+  taskNumber: z.string().trim().min(1),
   tenantId: z.string().uuid(),
   sourceType: z.enum(['order', 'wave']),
   sourceId: z.string().uuid(),
@@ -66,6 +67,7 @@ export type PickStepDetail = z.infer<typeof pickStepDetailSchema>;
 /** Full task detail including enriched steps — used by picker-facing UI */
 export const pickTaskDetailSchema = z.object({
   id: z.string().uuid(),
+  taskNumber: z.string().trim().min(1),
   tenantId: z.string().uuid(),
   sourceType: z.enum(['order', 'wave']),
   sourceId: z.string().uuid(),
@@ -83,6 +85,7 @@ export type PickTaskDetail = z.infer<typeof pickTaskDetailSchema>;
 /** Summary returned in order execution section (no full steps array) */
 export const pickTaskSummarySchema = z.object({
   id: z.string().uuid(),
+  taskNumber: z.string().trim().min(1),
   tenantId: z.string().uuid(),
   sourceType: z.enum(['order', 'wave']),
   sourceId: z.string().uuid(),

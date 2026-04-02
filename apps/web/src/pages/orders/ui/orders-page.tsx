@@ -46,7 +46,7 @@ function TaskCard({ task }: { task: PickTaskSummary }) {
   return (
     <div className="rounded-xl border border-slate-200 p-3 text-sm">
       <div className="flex items-center justify-between">
-        <span className="font-medium text-slate-900">Pick task</span>
+        <span className="font-medium text-slate-900">{task.taskNumber}</span>
         <span className="text-xs text-slate-500">{task.status}</span>
       </div>
       <div className="mt-2 text-xs text-slate-500">

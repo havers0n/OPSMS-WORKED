@@ -52,7 +52,7 @@ function TaskCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-slate-900">Pick task</span>
+          <span className="font-medium text-slate-900">{task.taskNumber}</span>
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getPickTaskStatusColor(task.status)}`}>
             {getPickTaskStatusLabel(task.status)}
           </span>

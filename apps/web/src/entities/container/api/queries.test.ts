@@ -46,21 +46,21 @@ describe('containerListQueryOptions', () => {
   it('fetches /api/containers with no query string when no filter is given', async () => {
     vi.mocked(bffRequest).mockResolvedValue([] as never);
     const opts = containerListQueryOptions();
-    await opts.queryFn({} as never);
+    await opts.queryFn?.({} as never);
     expect(bffRequest).toHaveBeenCalledWith('/api/containers');
   });
 
   it('appends operationalRole query param when filter is provided', async () => {
     vi.mocked(bffRequest).mockResolvedValue([] as never);
     const opts = containerListQueryOptions({ operationalRole: 'pick' });
-    await opts.queryFn({} as never);
+    await opts.queryFn?.({} as never);
     expect(bffRequest).toHaveBeenCalledWith('/api/containers?operationalRole=pick');
   });
 
   it('appends storage operationalRole correctly', async () => {
     vi.mocked(bffRequest).mockResolvedValue([] as never);
     const opts = containerListQueryOptions({ operationalRole: 'storage' });
-    await opts.queryFn({} as never);
+    await opts.queryFn?.({} as never);
     expect(bffRequest).toHaveBeenCalledWith('/api/containers?operationalRole=storage');
   });
 });
