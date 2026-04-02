@@ -4,10 +4,13 @@ import type { EditorSelection } from './editor-types';
 
 function resetStore() {
   useEditorStore.setState({
+    viewMode: 'layout',
+    editorMode: 'select',
     selection: { type: 'none' },
     placementInteraction: { type: 'idle' },
     hoveredRackId: null,
     creatingRackId: null,
+    highlightedCellIds: [],
     zoom: 1,
     minRackDistance: 0,
     draft: null,

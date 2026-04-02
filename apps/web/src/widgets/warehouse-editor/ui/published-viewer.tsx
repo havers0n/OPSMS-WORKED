@@ -3,11 +3,11 @@ import { PanelRight } from 'lucide-react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
+  useClearSelection,
   useInitializeDraft,
   useResetDraft,
   useSelectedRackId,
   useSetEditorMode,
-  useSetSelectedRackId,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
@@ -29,11 +29,11 @@ import { ToolRail } from './tool-rail';
 export function PublishedViewer() {
   const activeFloorId = useActiveFloorId();
   const { data: workspace } = useFloorWorkspace(activeFloorId);
+  const clearSelection = useClearSelection();
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
   const viewMode = useViewMode();
   const selectedRackId = useSelectedRackId();
-  const setSelectedRackId = useSetSelectedRackId();
   const setEditorMode = useSetEditorMode();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -42,11 +42,12 @@ export function PublishedViewer() {
   // Also reset editorMode to 'select' — the place tool is unavailable in read-only mode
   // and the mode may be stale from a prior WarehouseEditor session.
   useEffect(() => {
-    if (workspace?.latestPublished) {
-      initializeDraft(workspace.latestPublished);
+    const readonlyLayout = workspace?.latestPublished ?? workspace?.activeDraft ?? null;
+    if (readonlyLayout) {
+      initializeDraft(readonlyLayout);
       setEditorMode('select');
     }
-  }, [initializeDraft, setEditorMode, workspace?.latestPublished]);
+  }, [initializeDraft, setEditorMode, workspace?.activeDraft, workspace?.latestPublished]);
 
   // Reset store when floor is deselected.
   useEffect(() => {
@@ -66,9 +67,7 @@ export function PublishedViewer() {
 
   const handleCloseInspector = () => {
     setInspectorOpen(false);
-    if (viewMode === 'layout') {
-      setSelectedRackId(null);
-    }
+    clearSelection();
   };
 
   // Rack placement is not available in the published viewer.

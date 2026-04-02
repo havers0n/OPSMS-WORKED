@@ -3,13 +3,13 @@ import { PanelRight } from 'lucide-react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
+  useClearSelection,
   useCreatingRackId,
   useInitializeDraft,
   useLayoutDraftState,
   useResetDraft,
   useSelectedRackId,
   useSetEditorMode,
-  useSetSelectedRackId,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
@@ -23,19 +23,19 @@ export function WarehouseEditor() {
   const currentDraft = useLayoutDraftState();
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
+  const clearSelection = useClearSelection();
   const viewMode = useViewMode();
   const selectedRackId = useSelectedRackId();
   const creatingRackId = useCreatingRackId();
-  const setSelectedRackId = useSetSelectedRackId();
   const setEditorMode = useSetEditorMode();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
 
   useEffect(() => {
-    if (viewMode === 'placement') {
+    if (viewMode === 'view' || viewMode === 'storage') {
       setInspectorOpen(true);
     } else {
-      // 'layout' and 'operations': inspector opens only when something is selected
+      // Layout mode opens only for rack selection or rack creation.
       setInspectorOpen(selectedRackId !== null || creatingRackId !== null);
     }
   }, [viewMode, selectedRackId, creatingRackId]);
@@ -89,15 +89,13 @@ export function WarehouseEditor() {
   }
 
   const handleAddRack = () => {
-    setSelectedRackId(null);
+    clearSelection();
     setEditorMode('place');
   };
 
   const handleCloseInspector = () => {
     setInspectorOpen(false);
-    if (viewMode === 'layout') {
-      setSelectedRackId(null);
-    }
+    clearSelection();
   };
 
   return (

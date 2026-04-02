@@ -1,5 +1,5 @@
 import { generatePreviewCells, validateLayoutDraft } from '@wos/domain';
-import type { LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
+import type { FloorWorkspace, LayoutValidationIssue, RackFace } from '@wos/domain';
 import {
   AlertTriangle,
   ChevronDown,
@@ -23,7 +23,6 @@ import {
   useDraftDirtyState,
   useIsLayoutEditable,
   useDuplicateRack,
-  useLayoutDraftState,
   useResetFaceB,
   useRotateRack,
   useSelectedRackId,
@@ -32,6 +31,7 @@ import {
   useSetSelectedRackId,
   useUpdateFaceConfig
 } from '@/entities/layout-version/model/editor-selectors';
+import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ function AccordionHeader({
   );
 }
 
-function StatusBadge({ rack, issues }: { rack: Rack; issues: LayoutValidationIssue[] }) {
+function StatusBadge({ issues }: { issues: LayoutValidationIssue[] }) {
   const { errors, warnings } = validationSummary(issues);
   if (errors.length > 0) {
     return (
@@ -144,45 +144,6 @@ function ValidationStrip({ issues }: { issues: LayoutValidationIssue[] }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function DeleteConfirm({
-  rackCode,
-  cellCount,
-  onConfirm,
-  onCancel
-}: {
-  rackCode: string;
-  cellCount: number;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="rounded-[14px] border border-red-200 bg-red-50 p-4">
-      <div className="mb-2 text-sm font-semibold text-red-800">
-        Delete Rack {rackCode}?
-      </div>
-      <div className="mb-3 text-xs text-red-600">
-        This will remove the rack and its {cellCount} cell{cellCount !== 1 ? 's' : ''} from the layout. This action cannot be undone.
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="flex-1 rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
-        >
-          Delete rack
-        </button>
-      </div>
     </div>
   );
 }
@@ -282,11 +243,17 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpda
  * Wizard routing (rack-creation-wizard) and empty-state routing (layout-empty)
  * are handled by InspectorRouter. This component never renders those states.
  */
-export function RackInspector({ onClose }: { onClose: () => void }) {
+export function RackInspector({
+  workspace,
+  onClose
+}: {
+  workspace: FloorWorkspace | null;
+  onClose: () => void;
+}) {
   const [openSections, setOpenSections] = useState<Set<AccordionSection>>(new Set(['geometry', 'faceA']));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const layoutDraft = useLayoutDraftState();
+  const layoutDraft = useWorkspaceLayout(workspace);
   const isLayoutEditable = useIsLayoutEditable();
   const isDraftDirty = useDraftDirtyState();
   const selectedRackId = useSelectedRackId();
@@ -408,7 +375,7 @@ export function RackInspector({ onClose }: { onClose: () => void }) {
               {rack.kind === 'paired' ? 'Paired' : 'Single'} | {rack.totalLength.toFixed(1)} m x {rack.depth.toFixed(1)} m | {rack.rotationDeg} deg
             </div>
           </div>
-          <StatusBadge rack={rack} issues={rackIssues} />
+          <StatusBadge issues={rackIssues} />
         </div>
 
         {/* stat chips */}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FloorWorkspace, OperationsCellRuntime } from '@wos/domain';
+import type { FloorWorkspace } from '@wos/domain';
 import { Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import { Copy, Minus, Plus, RotateCcw, RotateCw, SlidersHorizontal, Trash2 } from 'lucide-react';
@@ -139,101 +139,9 @@ function ToolbarBtn({
   );
 }
 
-function OperationsCellPopover({
-  cell,
-  anchor,
-  onClose
-}: {
-  cell: OperationsCellRuntime;
-  anchor: { x: number; y: number };
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="pointer-events-auto absolute z-40 w-[320px] rounded-xl p-3 shadow-xl"
-      style={{
-        left: anchor.x,
-        top: anchor.y,
-        transform: 'translate(10px, 10px)',
-        background: 'var(--surface-strong)',
-        border: '1px solid var(--border-muted)',
-        boxShadow: 'var(--shadow-panel)'
-      }}
-    >
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Cell</p>
-          <p className="font-mono text-sm font-semibold text-[var(--text-primary)]">{cell.cellAddress}</p>
-          <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            Status: <span className="font-semibold text-[var(--text-primary)]">{cell.status}</span>
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md px-2 py-1 text-xs text-[var(--text-muted)] hover:bg-slate-100"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 rounded-lg border border-[var(--border-muted)] bg-[var(--surface-primary)] p-2 text-[11px]">
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Containers</p>
-          <p className="font-semibold text-[var(--text-primary)]">{cell.containerCount}</p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Stock</p>
-          <p className="font-semibold text-[var(--text-primary)]">{cell.totalQuantity}</p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Flags</p>
-          <p className="font-semibold text-[var(--text-primary)]">
-            {[cell.pickActive && 'pick', cell.reserved && 'reserved', cell.quarantined && 'quarantine']
-              .filter(Boolean)
-              .join(', ') || 'none'}
-          </p>
-        </div>
-      </div>
-
-      {cell.containers.length > 0 ? (
-        <div className="mt-2 max-h-52 space-y-2 overflow-y-auto pr-1">
-          {cell.containers.map((container) => (
-            <div
-              key={container.containerId}
-              className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-primary)] p-2"
-            >
-              <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
-                {container.externalCode ?? container.containerId}
-              </p>
-              <p className="text-[10px] text-[var(--text-muted)]">
-                {container.containerType} · {container.containerStatus} · stock {container.totalQuantity}
-              </p>
-              {container.items.length > 0 ? (
-                <div className="mt-1 space-y-1">
-                  {container.items.slice(0, 4).map((item, index) => (
-                    <div key={`${container.containerId}-${item.itemRef ?? index}`} className="flex items-center justify-between gap-2 text-[10px]">
-                      <span className="truncate text-[var(--text-muted)]">{item.sku ?? item.name ?? item.productId ?? 'Item'}</span>
-                      <span className="shrink-0 text-[var(--text-primary)]">
-                        {item.quantity} {item.uom}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 text-xs text-[var(--text-muted)]">No containers in this cell.</p>
-      )}
-    </div>
-  );
-}
-
 export function EditorCanvas({
   workspace,
-  onAddRack,
+  onAddRack: _onAddRack,
   onOpenInspector
 }: {
   workspace: FloorWorkspace | null;
@@ -264,30 +172,31 @@ export function EditorCanvas({
   const createRack = useCreateRack();
   const minRackDistance = useMinRackDistance();
 
-  const isPlacementMode = viewMode === 'placement';
-  const isOperationsMode = viewMode === 'operations';
-  // In Storage (placement) and Operations mode the published rack tree must be
+  const isViewMode = viewMode === 'view';
+  const isStorageMode = viewMode === 'storage';
+  const isLayoutMode = viewMode === 'layout';
+  // In View and Storage mode the published rack tree must be
   // used as the source for RackCells so that rackId/faceId/sectionId/levelId
   // in the lookup key match the keys in publishedCellsByStructure.
   // publishedCells is always fetched from the published layout version; the
   // active draft always has fresh UUIDs after create_layout_draft(), causing a
   // permanent identity mismatch when the draft layout is used instead.
-  const placementLayout = (isPlacementMode || isOperationsMode) ? (workspace?.latestPublished ?? null) : null;
+  // Fall back to the draft tree when no published version exists; interaction
+  // rights still come from viewMode, not from the selected data source.
+  const placementLayout = isViewMode || isStorageMode
+    ? (workspace?.latestPublished ?? workspace?.activeDraft ?? null)
+    : null;
   const moveTargetCellId =
     placementInteraction.type === 'move-container' ? placementInteraction.targetCellId : null;
   const isPlacementMoveMode = placementInteraction.type === 'move-container';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
-  const placementFloorId = (isPlacementMode || isOperationsMode) ? workspace?.floorId ?? null : null;
+  const placementFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
+  const runtimeFloorId = isViewMode ? workspace?.floorId ?? null : null;
   const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
-  const { data: floorOperationsCells = [] } = useFloorOperationsCells(placementFloorId);
+  const { data: floorOperationsCells = [] } = useFloorOperationsCells(runtimeFloorId);
   const { data: publishedCells = [] } = usePublishedCells(
     placementFloorId
   );
-
-  const [operationsPopover, setOperationsPopover] = useState<{
-    cellId: string;
-    anchor: { x: number; y: number };
-  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -336,18 +245,14 @@ export function EditorCanvas({
     () => new Set(highlightedCellIds),
     [highlightedCellIds]
   );
-  const operationsSelectedCellId = operationsPopover?.cellId ?? null;
-  const operationsSelectedCell = operationsSelectedCellId
-    ? floorOperationsCellsById.get(operationsSelectedCellId) ?? null
-    : null;
   const lod = getCanvasLOD(zoom);
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
-  const isPlacementModeRef = useRef(isPlacementMode);
-  isPlacementModeRef.current = isPlacementMode;
-  const isOperationsModeRef = useRef(isOperationsMode);
-  isOperationsModeRef.current = isOperationsMode;
+  const isViewModeRef = useRef(isViewMode);
+  isViewModeRef.current = isViewMode;
+  const isStorageModeRef = useRef(isStorageMode);
+  isStorageModeRef.current = isStorageMode;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
   const setSelectedRackIdsRef = useRef(setSelectedRackIds);
@@ -387,19 +292,20 @@ export function EditorCanvas({
     return () => ro.disconnect();
   }, []);
 
-  // Auto-zoom to cell-visible level when entering Storage (placement) mode.
+  // Auto-zoom to cell-visible level when entering View/Storage.
   // Ensures cells are always visible on mode entry without requiring manual zoom.
   useEffect(() => {
     const prevMode = prevViewModeRef.current;
     prevViewModeRef.current = viewMode;
 
-    // Only fire on the transition → 'placement', not on every render.
-    if (viewMode !== 'placement' || prevMode === 'placement') return;
+    // Only fire on the transition from Layout to View/Storage, not on every render.
+    if ((viewMode !== 'view' && viewMode !== 'storage') || prevMode !== 'layout') return;
     if (viewport.width === 0) return;
 
     // Selection is already cleared by setViewMode() in the store.
     // This effect only handles the auto-zoom to cell-visible level.
-    const racks = layoutDraft ? Object.values(layoutDraft.racks) : [];
+    const layout = placementLayout ?? layoutDraft;
+    const racks = layout ? Object.values(layout.racks) : [];
 
     if (racks.length === 0) {
       // No racks yet — just ensure cells would be visible if any appear.
@@ -428,16 +334,15 @@ export function EditorCanvas({
 
     setCanvasZoom(targetZoom);
     setCanvasOffset({ x: offsetX, y: offsetY });
-  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewMode]);
   // Intentionally reads viewport/layoutDraft/zoom via closure at transition time —
   // re-running on their changes would fight the user's manual zoom adjustments.
 
   useEffect(() => {
-    if (!isOperationsMode) {
-      setOperationsPopover(null);
+    if (!isViewMode) {
       clearHighlightedCellIds();
     }
-  }, [clearHighlightedCellIds, isOperationsMode]);
+  }, [clearHighlightedCellIds, isViewMode]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -499,11 +404,9 @@ export function EditorCanvas({
           Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
           Math.round(pos.y / GRID_SIZE) * GRID_SIZE
         );
-      } else if (isPlacementModeRef.current) {
-        // In storage mode, empty-canvas click deselects the current cell.
+      } else if (isStorageModeRef.current || isViewModeRef.current) {
+        // In View/Storage, empty-canvas click clears the current object selection.
         setSelectedCellId(null);
-      } else if (isOperationsModeRef.current) {
-        setOperationsPopover(null);
         clearHighlightedCellIds();
       } else {
         setSelectedRackIdsRef.current([]);
@@ -520,8 +423,11 @@ export function EditorCanvas({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isPlacingRef.current) {
         setEditorMode('select');
-      } else if (event.key === 'Escape' && isOperationsModeRef.current) {
-        setOperationsPopover(null);
+      } else if (
+        event.key === 'Escape' &&
+        (isViewModeRef.current || isStorageModeRef.current)
+      ) {
+        setSelectedCellId(null);
         clearHighlightedCellIds();
       }
 
@@ -540,7 +446,7 @@ export function EditorCanvas({
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [clearHighlightedCellIds, isLayoutEditable, setEditorMode]);
+  }, [clearHighlightedCellIds, isLayoutEditable, setEditorMode, setSelectedCellId]);
 
   const gridLines = useMemo(() => {
     if (!viewport.width || !viewport.height) {
@@ -593,7 +499,9 @@ export function EditorCanvas({
   };
 
   const handleCellClick = (cellId: string, anchor: { x: number; y: number }) => {
-    if (isPlacementMode) {
+    void anchor;
+
+    if (isStorageMode) {
       if (placementInteraction.type === 'move-container') {
         setPlacementMoveTargetCellId(cellId);
         return;
@@ -603,9 +511,9 @@ export function EditorCanvas({
       return;
     }
 
-    if (isOperationsMode) {
+    if (isViewMode) {
+      setSelectedCellId(cellId);
       setHighlightedCellIds([cellId]);
-      setOperationsPopover({ cellId, anchor });
     }
   };
 
@@ -662,7 +570,7 @@ export function EditorCanvas({
             </div>
           )}
 
-          {isLayoutEditable && !isPlacementMode && selectedRack && selectedRackGeometry && selectedRackIds.length === 1 && (
+          {isLayoutEditable && selectedRack && selectedRackGeometry && selectedRackIds.length === 1 && (
             <FloatingToolbar
               rackId={selectedRack.id}
               screenX={toolbarScreenX}
@@ -685,9 +593,9 @@ export function EditorCanvas({
                 setCanvasZoomRef.current(clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2))));
               }}
               onMouseDown={(event) => {
-                // Marquee starts on LMB on empty canvas (not while placing or in storage mode).
+                // Marquee starts on LMB on empty canvas in Layout mode only.
                 // Rack Groups suppress this via cancelBubble on their own onMouseDown.
-                if (event.evt.button !== 0 || isPlacing || isPlacementMode || isOperationsMode) return;
+                if (event.evt.button !== 0 || isPlacing || !isLayoutMode) return;
                 const pos = stageRef.current?.getRelativePointerPosition();
                 if (!pos) return;
                 marqueeStartRef.current = { x: pos.x, y: pos.y };
@@ -767,14 +675,20 @@ export function EditorCanvas({
                       offsetX={geometry.centerX}
                       offsetY={geometry.centerY}
                       rotation={rack.rotationDeg}
-                      draggable={isLayoutEditable && !isPlacing && !isPlacementMode && !isOperationsMode}
+                      draggable={isLayoutEditable && !isPlacing}
                       onMouseDown={(event) => {
                         // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
                         event.cancelBubble = true;
                       }}
                       onClick={(event) => {
                         event.cancelBubble = true;
-                        if (isPlacing || isPlacementMode) return;
+                        if (isPlacing || isStorageMode) return;
+
+                        if (isViewMode) {
+                          clearHighlightedCellIds();
+                          setSelectedRackIdsRef.current([rack.id]);
+                          return;
+                        }
 
                         const pointerEvent = event.evt as unknown as PointerEvent;
                         if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
@@ -785,7 +699,13 @@ export function EditorCanvas({
                       }}
                       onTap={(event) => {
                         event.cancelBubble = true;
-                        if (isPlacing || isPlacementMode) return;
+                        if (isPlacing || isStorageMode) return;
+
+                        if (isViewMode) {
+                          clearHighlightedCellIds();
+                          setSelectedRackIdsRef.current([rack.id]);
+                          return;
+                        }
 
                         const pointerEvent = event.evt as unknown as PointerEvent;
                         if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
@@ -795,10 +715,10 @@ export function EditorCanvas({
                         }
                       }}
                       onMouseEnter={() => {
-                        if (!isPlacing && !isPlacementMode) setHoveredRackId(rack.id);
+                        if (!isPlacing && !isStorageMode) setHoveredRackId(rack.id);
                       }}
                       onMouseLeave={() => {
-                        if (!isPlacing && !isPlacementMode) setHoveredRackId(null);
+                        if (!isPlacing && !isStorageMode) setHoveredRackId(null);
                       }}
                       onDragStart={() => {
                         if (isLayoutEditable && !selectedRackIds.includes(rack.id)) {
@@ -838,7 +758,7 @@ export function EditorCanvas({
                         />
                       )}
 
-                      {(lod >= 2 || (isOperationsMode && lod >= 1)) && faceA && (
+                      {(lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
                         <RackCells
                           geometry={geometry}
                           rackId={rack.id}
@@ -849,12 +769,12 @@ export function EditorCanvas({
                           occupiedCellIds={occupiedCellIds}
                           cellRuntimeById={floorOperationsCellsById}
                           highlightedCellIds={highlightedCellIdSet}
-                          isInteractive={isPlacementMode || isOperationsMode}
+                          isInteractive={isStorageMode || isViewMode}
                           selectedCellId={
-                            isPlacementMode
+                            isStorageMode
                               ? moveTargetCellId ?? selectedCellId
-                              : isOperationsMode
-                                ? operationsSelectedCellId
+                              : isViewMode
+                                ? selectedCellId
                                 : null
                           }
                           onCellClick={handleCellClick}
@@ -884,17 +804,6 @@ export function EditorCanvas({
             </Stage>
           )}
 
-          {isOperationsMode && operationsSelectedCell && operationsPopover && (
-            <OperationsCellPopover
-              cell={operationsSelectedCell}
-              anchor={operationsPopover.anchor}
-              onClose={() => {
-                setOperationsPopover(null);
-                clearHighlightedCellIds();
-              }}
-            />
-          )}
-
           <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
             {!isPlacing && (
               <div
@@ -905,9 +814,9 @@ export function EditorCanvas({
                   backdropFilter: 'blur(4px)'
                 }}
               >
-                {isOperationsMode
-                ? 'Live view · Click cell for runtime details · MMB pan · Scroll zoom'
-                : isPlacementMode
+                {isViewMode
+                ? 'Read-only view · Click rack or cell to inspect · MMB pan · Scroll zoom'
+                : isStorageMode
                 ? 'Click cell to select · MMB pan · Scroll zoom'
                 : isLayoutEditable
                   ? 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del'

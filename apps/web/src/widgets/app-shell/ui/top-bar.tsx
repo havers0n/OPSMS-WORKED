@@ -24,7 +24,6 @@ import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
   useDraftDirtyState,
-  useIsLayoutEditable,
   useLayoutDraftState,
   useResetDraft,
   useSetViewMode,
@@ -42,9 +41,9 @@ import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/lay
 import { useEditorStore } from '@/entities/layout-version/model/editor-store';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
+  { id: 'view', label: 'View' },
+  { id: 'storage', label: 'Storage' },
   { id: 'layout', label: 'Layout' },
-  { id: 'placement', label: 'Storage' },
-  { id: 'operations', label: 'Operations' }
 ];
 
 const TRACE = import.meta.env.DEV;
@@ -89,7 +88,7 @@ export function TopBar() {
   const workspace = workspaceQuery.data;
   const latestPublished = workspace?.latestPublished ?? null;
   const layoutDraft = useLayoutDraftState();
-  const isLayoutEditable = useIsLayoutEditable();
+  const hasDraftLayout = layoutDraft?.state === 'draft';
   const isDraftDirty = useDraftDirtyState();
   const createDraft = useCreateLayoutDraft(activeFloorId);
   const saveDraft = useSaveLayoutDraft(activeFloorId);
@@ -107,7 +106,8 @@ export function TopBar() {
 
   // True when viewing a published layout with no active draft — the editor is
   // in read-only mode and the primary action is to create a new draft.
-  const isPublishedMode = actions.canCreateDraft && latestPublished !== null;
+  const canShowLayoutActions = viewMode === 'layout';
+  const isPublishedMode = canShowLayoutActions && actions.canCreateDraft && latestPublished !== null;
   const isBusy =
     createDraft.isPending ||
     saveDraft.isPending ||
@@ -166,7 +166,6 @@ export function TopBar() {
         // Snapshot what the user currently sees: rack ids + x/y for the current local draft.
         // If we later see old coordinates in initializeDraft()/workspace refetch,
         // we will know that publish or subsequent rehydration uses stale data.
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'publish:before-save',
@@ -185,7 +184,6 @@ export function TopBar() {
       await saveDraft.mutateAsync(latestDraft);
 
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'publish:after-save-before-publish',
@@ -198,7 +196,6 @@ export function TopBar() {
       setStatusMessage(`Published · ${result.generatedCells} cells · new draft ready`);
 
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'publish:success',
@@ -244,6 +241,24 @@ export function TopBar() {
 
   const activeSite = sites.find((s) => s.id === activeSiteId);
   const activeFloor = floors.find((f) => f.id === activeFloorId);
+  const workspaceStateLabel = isDraftDirty
+    ? 'Unsaved'
+    : !hasDraftLayout
+      ? 'Published'
+      : viewMode === 'layout'
+        ? 'Synced'
+        : 'Read-only';
+  const isCurrentModeLocked = viewMode !== 'layout' || !hasDraftLayout;
+  const workspaceStateStyle = isDraftDirty
+    ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
+    : isCurrentModeLocked
+      ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
+      : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' };
+  const workspaceTooltip = !hasDraftLayout
+    ? 'Structure locked · switch to Layout and create a draft to edit'
+    : viewMode !== 'layout'
+      ? 'Read-only in View/Storage · switch to Layout to edit structure'
+      : null;
 
   return (
     <header
@@ -318,26 +333,20 @@ export function TopBar() {
                 v{layoutDraft?.versionNo ?? latestPublished?.versionNo}
               </span>
             )}
-            
+
             <div className="mx-2 h-4 w-px bg-slate-200" />
-            
+
             {/* ── Block 3: Status ───────────────────────── */}
             <span
               className="group relative flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium cursor-help"
-              style={
-                isDraftDirty
-                  ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
-                  : !isLayoutEditable
-                    ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
-                    : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' }
-              }
+              style={workspaceStateStyle}
             >
-              {!isLayoutEditable ? <Lock className="h-3 w-3" /> : null}
-              {isDraftDirty ? 'Unsaved' : !isLayoutEditable ? 'Published' : 'Synced'}
-              
-              {!isLayoutEditable && (
+              {isCurrentModeLocked ? <Lock className="h-3 w-3" /> : null}
+              {workspaceStateLabel}
+
+              {workspaceTooltip && (
                 <div className="absolute left-1/2 top-full z-50 mt-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-white group-hover:block">
-                  Structure locked • Placement available
+                  {workspaceTooltip}
                 </div>
               )}
             </span>
@@ -347,9 +356,7 @@ export function TopBar() {
     </div>
 
       {/* ── Block 5: Mode switcher — center ─────────────────────────── */}
-      {/* Always shown — in published mode Layout tab is read-only, Storage tab
-          opens placement view. The PublishedBanner below communicates the
-          lock status so we don't duplicate it here. */}
+      {/* View and Storage are browse/runtime modes; Layout is the only structure authoring mode. */}
       <div className="flex flex-1 items-center justify-center px-4">
         <div
           className="flex items-center gap-0.5 rounded-lg p-0.5"
@@ -398,7 +405,7 @@ export function TopBar() {
           </span>
         )}
 
-        {isPublishedMode ? (
+        {canShowLayoutActions && isPublishedMode ? (
           /* Published mode: Create Draft action */
           <button
             type="button"
@@ -410,7 +417,7 @@ export function TopBar() {
             <FilePlus2 className="h-3.5 w-3.5" />
             {createDraft.isPending ? 'Creating…' : 'Create Draft'}
           </button>
-        ) : (
+        ) : canShowLayoutActions ? (
           /* Draft mode: full toolbar */
           <>
             {/* Undo / Redo */}
@@ -470,7 +477,7 @@ export function TopBar() {
               Publish
             </button>
           </>
-        )}
+        ) : null}
       </div>
 
       {/* ── Block 6: User Settings ────────────────────────── */}

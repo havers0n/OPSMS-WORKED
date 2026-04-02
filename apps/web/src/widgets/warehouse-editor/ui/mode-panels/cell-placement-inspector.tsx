@@ -4,7 +4,8 @@ import { AlertCircle, ChevronRight, Layers, Loader2, MapPin, Package, ShieldChec
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useEditorSelection,
-  useSetSelectedContainerId
+  useSetSelectedContainerId,
+  useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
@@ -265,15 +266,17 @@ function LocationPolicySection({ locationId, mode, onEdit }: LocationPolicySecti
             </div>
           )}
 
-          <div className="mt-3">
-            <button
-              type="button"
-              className="text-[11px] font-medium text-[var(--accent)] hover:underline"
-              onClick={onEdit}
-            >
-              Edit policy
-            </button>
-          </div>
+          {onEdit && (
+            <div className="mt-3">
+              <button
+                type="button"
+                className="text-[11px] font-medium text-[var(--accent)] hover:underline"
+                onClick={onEdit}
+              >
+                Edit policy
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="border-t border-[var(--border-muted)]" data-testid="cell-placement-policy-editor">
@@ -605,6 +608,7 @@ function CurrentInventorySection({ rows, hasContainers }: CurrentInventorySectio
 export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
   const setSelectedContainerId = useSetSelectedContainerId();
+  const viewMode = useViewMode();
   const [panelMode, setPanelMode] = useState<PlacementPanelMode>('details');
   const [taskType, setTaskType] = useState<PlacementTaskType>(null);
   const [containerIdInput, setContainerIdInput] = useState('');
@@ -613,6 +617,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const [createError, setCreateError] = useState<string | null>(null);
 
   const cellId = selection.type === 'cell' ? selection.cellId : null;
+  const isReadOnlyView = viewMode === 'view';
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const selectedCell = publishedCells.find((cell) => cell.id === cellId) ?? null;
 
@@ -624,7 +629,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   // Debug: log location query state
   useEffect(() => {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.debug('[placement] location query input', {
         cellId,
         selectedCell: selectedCell ? { id: selectedCell.id, address: selectedCell.address } : null,
@@ -636,11 +640,9 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
   useEffect(() => {
     if (import.meta.env.DEV && locationRef) {
-      // eslint-disable-next-line no-console
       console.debug('[placement] location query success', locationRef);
     }
     if (import.meta.env.DEV && locationQueryError) {
-      // eslint-disable-next-line no-console
       console.error('[placement] location query error', locationQueryError);
     }
   }, [locationRef, locationQueryError]);
@@ -690,6 +692,14 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     setTaskType(null);
   }, [cellId]);
 
+  useEffect(() => {
+    if (!isReadOnlyView) return;
+    setPanelMode('details');
+    setTaskType(null);
+    setPlaceError(null);
+    setCreateError(null);
+  }, [isReadOnlyView]);
+
   const handlePlace = async () => {
     const nextContainerId = containerIdInput.trim();
     if (!selectedCell || !locationId || nextContainerId.length === 0) {
@@ -699,7 +709,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     setPlaceError(null);
 
     // Debug instrumentation
-    // eslint-disable-next-line no-console
     console.debug('[PLACEMENT] before placeContainer.mutateAsync', {
       containerId: nextContainerId,
       locationId,
@@ -711,12 +720,10 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         containerId: nextContainerId,
         locationId
       });
-      // eslint-disable-next-line no-console
       console.debug('[PLACEMENT] placeContainer success');
       setContainerIdInput('');
       returnToDetails();
     } catch (mutationError) {
-      // eslint-disable-next-line no-console
       console.error('[PLACEMENT] placeContainer error', mutationError);
       setPlaceError(formatMutationError(mutationError, 'Could not place the container.'));
     }
@@ -724,7 +731,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
   const handleCreateAndPlace = async () => {
     if (!selectedCell || !locationId || containerTypeIdInput.length === 0) {
-      // eslint-disable-next-line no-console
       console.debug('[PLACEMENT] handleCreateAndPlace guard failed', {
         hasSelectedCell: !!selectedCell,
         hasLocationId: !!locationId,
@@ -736,7 +742,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     setCreateError(null);
 
     // Debug instrumentation
-    // eslint-disable-next-line no-console
     console.debug('[PLACEMENT] before createContainer.mutateAsync', {
       containerTypeId: containerTypeIdInput,
       locationId,
@@ -749,13 +754,11 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         operationalRole: 'storage'
       });
 
-      // eslint-disable-next-line no-console
       console.debug('[PLACEMENT] createContainer success', {
         containerId: container.containerId,
         externalCode: container.externalCode
       });
 
-      // eslint-disable-next-line no-console
       console.debug('[PLACEMENT] before placeContainer.mutateAsync (after create)', {
         containerId: container.containerId,
         locationId
@@ -766,10 +769,8 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           containerId: container.containerId,
           locationId
         });
-        // eslint-disable-next-line no-console
         console.debug('[PLACEMENT] placeContainer success (after create)');
       } catch (placementError) {
-        // eslint-disable-next-line no-console
         console.error('[PLACEMENT] placeContainer error (after create)', placementError);
         setCreateError(
           formatCreateAndPlacePlacementFailure(
@@ -783,13 +784,12 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
       setContainerTypeIdInput(storableTypes[0]?.id ?? '');
       returnToDetails();
     } catch (mutationError) {
-      // eslint-disable-next-line no-console
       console.error('[PLACEMENT] createContainer error', mutationError);
       setCreateError(formatMutationError(mutationError, 'Could not create the container.'));
     }
   };
 
-  const placementActionsBlock = selectedCell ? (
+  const placementActionsBlock = selectedCell && !isReadOnlyView ? (
     <div
       className="rounded-lg"
       style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
@@ -852,14 +852,14 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           ? 'Edit location policy'
         : '';
 
-  const showDetailsMode = panelMode === 'details';
-  const showTaskMode = panelMode === 'task' && taskType !== null;
+  const showDetailsMode = isReadOnlyView || panelMode === 'details';
+  const showTaskMode = !isReadOnlyView && panelMode === 'task' && taskType !== null;
 
   return (
     <aside className="flex h-full w-full flex-col" style={{ background: 'var(--surface-primary)' }}>
       <div className="border-b border-[var(--border-muted)] px-5 py-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
-          Placement
+          {isReadOnlyView ? 'View' : 'Storage'}
         </div>
         <div className="mt-1 flex items-center gap-2">
           <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
@@ -1025,7 +1025,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
           <LocationPolicySection
             locationId={locationId}
             mode="summary"
-            onEdit={() => enterTaskMode('edit-policy')}
+            onEdit={isReadOnlyView ? undefined : () => enterTaskMode('edit-policy')}
           />
         )}
 
@@ -1075,7 +1075,9 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             <div>
               <p className="text-sm font-medium text-slate-600">Cell is unavailable</p>
               <p className="mt-1 text-xs text-slate-400">
-                Placement mode requires a published physical cell selection.
+                {isReadOnlyView
+                  ? 'View mode requires a published physical cell selection.'
+                  : 'Storage mode requires a published physical cell selection.'}
               </p>
             </div>
           </div>

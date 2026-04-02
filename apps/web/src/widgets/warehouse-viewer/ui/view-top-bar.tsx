@@ -20,8 +20,8 @@ import { useSites } from '@/entities/site/api/use-sites';
 import { routes } from '@/shared/config/routes';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
-  { id: 'placement', label: 'Storage' },
-  { id: 'operations', label: 'Operations' }
+  { id: 'view', label: 'View' },
+  { id: 'storage', label: 'Storage' }
 ];
 
 export function ViewTopBar() {
@@ -52,8 +52,8 @@ export function ViewTopBar() {
     setActiveFloorId(nextFloorId || null);
   };
 
-  // Normalise: layout mode is not valid on this page
-  const activeViewMode = viewMode === 'layout' ? 'operations' : viewMode;
+  // Normalize: Layout authoring is not available in the read-only viewer route.
+  const activeViewMode = viewMode === 'layout' ? 'view' : viewMode;
 
   return (
     <header
@@ -119,7 +119,7 @@ export function ViewTopBar() {
         </div>
       </div>
 
-      {/* ── Center: view mode tabs (Storage | Operations only) ────────── */}
+      {/* ── Center: read-only View + Storage tabs ─────────────────────── */}
       <div className="flex flex-1 items-center justify-center px-4">
         <div
           className="flex items-center gap-0.5 rounded-lg p-0.5"

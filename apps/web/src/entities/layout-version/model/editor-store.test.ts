@@ -8,9 +8,13 @@ const UUID_REGEX =
 
 function resetStore() {
   useEditorStore.setState({
+    viewMode: 'layout',
+    editorMode: 'select',
     selection: { type: 'none' },
+    placementInteraction: { type: 'idle' },
     hoveredRackId: null,
     creatingRackId: null,
+    highlightedCellIds: [],
     zoom: 1,
     minRackDistance: 0,
     draft: null,
@@ -34,6 +38,14 @@ afterEach(() => {
 });
 
 describe('editor-store', () => {
+  it('normalizes legacy mode names onto the new mode model', () => {
+    useEditorStore.getState().setViewMode('placement');
+    expect(useEditorStore.getState().viewMode).toBe('storage');
+
+    useEditorStore.getState().setViewMode('operations');
+    expect(useEditorStore.getState().viewMode).toBe('view');
+  });
+
   it('initializes live draft into local state', () => {
     const draft = createLayoutDraftFixture();
 

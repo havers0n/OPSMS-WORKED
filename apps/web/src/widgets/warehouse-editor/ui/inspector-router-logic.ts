@@ -6,12 +6,12 @@ import type { EditorSelection, ViewMode } from '../../../entities/layout-version
 
 export type InspectorKind =
   | 'rack-creation-wizard'   // layout + single rack being created
-  | 'rack-structure'         // layout + single rack selected (existing)
+  | 'rack-structure'         // layout/view + single rack selected (existing)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'layout-empty'           // layout + nothing selected
-  | 'placement-placeholder'  // placement mode + no/rack selection
-  | 'placement-cell'         // placement mode + cell selected
-  | 'placement-container';   // placement mode + container selected
+  | 'placement-placeholder'  // view/storage mode + no selection
+  | 'placement-cell'         // view/storage mode + cell selected
+  | 'placement-container';   // view/storage mode + container selected
 
 /**
  * Maps (viewMode, selection, creatingRackId) → InspectorKind.
@@ -23,10 +23,16 @@ export type InspectorKind =
  *   layout + rack(1)            → rack-structure
  *   layout + rack(≥2)           → rack-multi
  *
- * Placement routing contract:
- *   placement + cell            → placement-cell
- *   placement + container       → placement-container
- *   placement + anything else   → placement-placeholder
+ * View routing contract:
+ *   view + rack                 → rack-structure
+ *   view + cell                 → placement-cell
+ *   view + container            → placement-container
+ *   view + none                 → placement-placeholder
+ *
+ * Storage routing contract:
+ *   storage + cell              → placement-cell
+ *   storage + container         → placement-container
+ *   storage + anything else     → placement-placeholder
  */
 export function resolveInspectorKind(
   viewMode: ViewMode,
@@ -43,7 +49,11 @@ export function resolveInspectorKind(
     return 'layout-empty';
   }
 
-  // viewMode === 'placement'
+  if (viewMode === 'view' && selection.type === 'rack') {
+    return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
+  }
+
+  // viewMode === 'view' | 'storage'
   if (selection.type === 'cell') return 'placement-cell';
   if (selection.type === 'container') return 'placement-container';
   return 'placement-placeholder';

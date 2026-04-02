@@ -16,7 +16,8 @@ import {
   usePlacementInteraction,
   useSetSelectedCellId,
   useSetSelectedContainerId,
-  useStartPlacementMove
+  useStartPlacementMove,
+  useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
@@ -80,10 +81,6 @@ function canReceiveInventory(status: string | null | undefined) {
   return status === 'active';
 }
 
-function formatMutationError(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
-
 export function ContainerPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
   const placementInteraction = usePlacementInteraction();
@@ -91,6 +88,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   const setSelectedCellId = useSetSelectedCellId();
   const startPlacementMove = useStartPlacementMove();
   const cancelPlacementInteraction = useCancelPlacementInteraction();
+  const viewMode = useViewMode();
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
   const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -103,6 +101,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
 
   const containerId = selection.type === 'container' ? selection.containerId : null;
   const sourceCellId = selection.type === 'container' ? selection.sourceCellId ?? null : null;
+  const isReadOnlyView = viewMode === 'view';
   const isMoveMode =
     placementInteraction.type === 'move-container' &&
     placementInteraction.containerId === containerId &&
@@ -158,6 +157,10 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
             : null;
 
   const handleRemove = async () => {
+    if (isReadOnlyView) {
+      return;
+    }
+
     if (!containerId || !sourceCellId) {
       return;
     }
@@ -177,6 +180,10 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   };
 
   const handleStartMove = () => {
+    if (isReadOnlyView) {
+      return;
+    }
+
     if (!containerId || !sourceCellId) {
       return;
     }
@@ -188,11 +195,19 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   };
 
   const handleCancelMove = () => {
+    if (isReadOnlyView) {
+      return;
+    }
+
     cancelPlacementInteraction();
     setMoveError(null);
   };
 
   const handleConfirmMove = async () => {
+    if (isReadOnlyView) {
+      return;
+    }
+
     if (!containerId || !sourceCellId || !targetCellId || !targetLocationId || targetValidationMessage) {
       return;
     }
@@ -210,6 +225,10 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   };
 
   const handleAddInventory = async () => {
+    if (isReadOnlyView) {
+      return;
+    }
+
     if (!containerId || !activeProduct || quantityValue === null || uomInput.trim().length === 0) {
       return;
     }
@@ -236,6 +255,10 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   };
 
   const handleToggleAddInventory = () => {
+    if (isReadOnlyView) {
+      return;
+    }
+
     setInventoryError(null);
     setIsRemoveConfirmOpen(false);
     setIsAddInventoryOpen((current) => !current);
@@ -248,7 +271,11 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
           type="button"
           onClick={() => {
             cancelPlacementInteraction();
-            setSelectedContainerId(null);
+            if (sourceCellId) {
+              setSelectedCellId(sourceCellId);
+            } else {
+              setSelectedContainerId(null);
+            }
           }}
           className="mb-3 flex items-center gap-1 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
         >
@@ -276,7 +303,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
             Placed in {sourceCell?.address.raw ?? sourceCellId}
           </p>
         )}
-        {sourceCellId && (
+        {sourceCellId && !isReadOnlyView && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -333,7 +360,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
             </button>
           </div>
         )}
-        {identity && !isInventoryReceivable && (
+        {identity && !isReadOnlyView && !isInventoryReceivable && (
           <p className="mt-2 text-[11px] text-amber-600">
             Only active containers can receive inventory.
           </p>
@@ -341,7 +368,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
       </div>
 
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {isMoveMode && sourceCellId && (
+        {!isReadOnlyView && isMoveMode && sourceCellId && (
           <div
             className="rounded-lg p-3"
             style={{ background: 'var(--surface-subtle)', border: '1px solid var(--accent)' }}
@@ -402,7 +429,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
           </div>
         )}
 
-        {isAddInventoryOpen && containerId && (
+        {!isReadOnlyView && isAddInventoryOpen && containerId && (
           <div
             className="rounded-lg p-3"
             style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
@@ -581,7 +608,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
           </div>
         )}
 
-        {isRemoveConfirmOpen && sourceCellId && (
+        {!isReadOnlyView && isRemoveConfirmOpen && sourceCellId && (
           <div
             className="rounded-lg p-3"
             style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}

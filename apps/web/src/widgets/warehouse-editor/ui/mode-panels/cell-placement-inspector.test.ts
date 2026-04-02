@@ -21,6 +21,7 @@ import {
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 let mockSelection: { type: string; cellId: string | null } = { type: 'cell', cellId: 'cell-1' };
+let mockViewMode: 'view' | 'storage' | 'layout' = 'storage';
 let mockPublishedCells = [{ id: 'cell-1', address: { raw: 'A-01-01' } }];
 let mockLocationRef: { locationId: string } | null = { locationId: 'loc-1' };
 let mockStorageData: LocationStorageSnapshotRow[] = [];
@@ -34,7 +35,8 @@ const mockDeletePolicyMutateAsync = vi.fn();
 
 vi.mock('@/entities/layout-version/model/editor-selectors', () => ({
   useEditorSelection: () => mockSelection,
-  useSetSelectedContainerId: () => vi.fn()
+  useSetSelectedContainerId: () => vi.fn(),
+  useViewMode: () => mockViewMode
 }));
 
 vi.mock('@/entities/location/api/use-location-by-cell', () => ({
@@ -244,6 +246,7 @@ function makeStorageRow(
 
 beforeEach(() => {
   mockSelection = { type: 'cell', cellId: 'cell-1' };
+  mockViewMode = 'storage';
   mockPublishedCells = [{ id: 'cell-1', address: { raw: 'A-01-01' } }];
   mockLocationRef = { locationId: 'loc-1' };
   mockStorageData = [];
@@ -610,6 +613,49 @@ describe('CellPlacementInspector placement mode transitions', () => {
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-edit-policy')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
+
+    view.unmount();
+  });
+});
+
+describe('CellPlacementInspector view mode read-only gating', () => {
+  beforeEach(() => {
+    mockViewMode = 'view';
+    mockContainerTypes = [pallet];
+    mockPolicyAssignments = [
+      makePolicyAssignment({
+        id: 'role-1',
+        role: 'primary_pick',
+        product: {
+          id: 'product-1',
+          name: 'Widget',
+          sku: 'W-1',
+          imageUrl: null
+        }
+      })
+    ];
+  });
+
+  it('keeps object detail visible but hides storage mutation launchers in view mode', () => {
+    mockStorageData = [
+      makeStorageRow({
+        containerId: 'c1',
+        locationId: 'loc-1',
+        cellId: 'cell-1'
+      })
+    ];
+
+    const view = renderInteractiveInspector();
+
+    expect(view.text()).toContain('View');
+    expect(view.text()).toContain('Current containers');
+    expect(view.text()).toContain('Current inventory');
+    expect(view.text()).toContain('Location Policy');
+    expect(view.text()).not.toContain('Placement actions');
+    expect(view.text()).not.toContain('Place existing container');
+    expect(view.text()).not.toContain('+ Create container');
+    expect(view.text()).not.toContain('Edit policy');
+    expect(view.findByTestId('cell-placement-task-view')).toBeNull();
 
     view.unmount();
   });

@@ -19,16 +19,22 @@ type Tool = {
 };
 
 const TOOLS_BY_VIEW: Record<ViewMode, Tool[]> = {
+  view: [
+    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
+  ],
+  storage: [
+    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
+  ],
   layout: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' },
     { id: 'rack', icon: PlusSquare, label: 'Add Rack', editorMode: 'place' }
-  ],
-  placement: [
-    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
-  ],
-  operations: [
-    { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' }
   ]
+};
+
+const MODE_LABELS: Record<ViewMode, string> = {
+  view: 'View',
+  storage: 'Storage',
+  layout: 'Layout'
 };
 
 export function ToolRail() {
@@ -125,7 +131,7 @@ export function ToolRail() {
           className="block text-center text-[9px] font-semibold uppercase tracking-widest"
           style={{ color: 'var(--border-strong)', writingMode: 'vertical-rl' }}
         >
-          {viewMode === 'placement' ? 'Storage' : viewMode}
+          {MODE_LABELS[viewMode]}
         </span>
       </div>
     </aside>

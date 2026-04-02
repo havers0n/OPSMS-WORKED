@@ -59,42 +59,42 @@ describe('resolveInspectorKind — layout mode, multi-rack', () => {
   });
 });
 
-// ─── placement mode — placeholder ────────────────────────────────────────────
+// ─── storage mode — placeholder ──────────────────────────────────────────────
 
-describe('resolveInspectorKind — placement mode, placeholder', () => {
-  it('returns placement-placeholder for placement mode with no selection', () => {
-    expect(resolveInspectorKind('placement', noSelection, null)).toBe('placement-placeholder');
+describe('resolveInspectorKind — storage mode, placeholder', () => {
+  it('returns placement-placeholder for storage mode with no selection', () => {
+    expect(resolveInspectorKind('storage', noSelection, null)).toBe('placement-placeholder');
   });
 
-  it('returns placement-placeholder for rack selection in placement mode', () => {
-    expect(resolveInspectorKind('placement', rackSelection(['r1']), null)).toBe('placement-placeholder');
+  it('returns placement-placeholder for rack selection in storage mode', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('placement-placeholder');
   });
 
   it('placement-placeholder is unaffected by creatingRackId', () => {
-    expect(resolveInspectorKind('placement', rackSelection(['r1']), 'r1')).toBe('placement-placeholder');
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), 'r1')).toBe('placement-placeholder');
   });
 });
 
-// ─── placement mode — cell selection (B1) ────────────────────────────────────
+// ─── storage mode — cell selection (B1) ──────────────────────────────────────
 
-describe('resolveInspectorKind — placement mode, cell selection', () => {
-  it('returns placement-cell when a cell is selected in placement mode', () => {
+describe('resolveInspectorKind — storage mode, cell selection', () => {
+  it('returns placement-cell when a cell is selected in storage mode', () => {
     const cellSel = cellSelection('rack-1:sec-abc:0');
-    expect(resolveInspectorKind('placement', cellSel, null)).toBe('placement-cell');
+    expect(resolveInspectorKind('storage', cellSel, null)).toBe('placement-cell');
   });
 
   it('returns placement-cell regardless of creatingRackId', () => {
     const cellSel = cellSelection('rack-1:sec-abc:2');
-    expect(resolveInspectorKind('placement', cellSel, 'rack-1')).toBe('placement-cell');
-    expect(resolveInspectorKind('placement', cellSel, null)).toBe('placement-cell');
+    expect(resolveInspectorKind('storage', cellSel, 'rack-1')).toBe('placement-cell');
+    expect(resolveInspectorKind('storage', cellSel, null)).toBe('placement-cell');
   });
 
   it('returns placement-placeholder when no cell is selected', () => {
-    expect(resolveInspectorKind('placement', noSelection, null)).toBe('placement-placeholder');
+    expect(resolveInspectorKind('storage', noSelection, null)).toBe('placement-placeholder');
   });
 
-  it('returns placement-placeholder for rack selection in placement mode (not cell)', () => {
-    expect(resolveInspectorKind('placement', rackSelection(['r1']), null)).toBe('placement-placeholder');
+  it('returns placement-placeholder for rack selection in storage mode (not cell)', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('placement-placeholder');
   });
 
   it('cell selection in layout mode still returns layout-empty (layout ignores cell)', () => {
@@ -104,17 +104,17 @@ describe('resolveInspectorKind — placement mode, cell selection', () => {
 
 });
 
-// ─── placement mode — container selection (B3) ───────────────────────────────
+// ─── storage mode — container selection (B3) ─────────────────────────────────
 
-describe('resolveInspectorKind — placement mode, container selection', () => {
-  it('returns placement-container when a container is selected in placement mode', () => {
+describe('resolveInspectorKind — storage mode, container selection', () => {
+  it('returns placement-container when a container is selected in storage mode', () => {
     const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
-    expect(resolveInspectorKind('placement', sel, null)).toBe('placement-container');
+    expect(resolveInspectorKind('storage', sel, null)).toBe('placement-container');
   });
 
   it('returns placement-container regardless of creatingRackId', () => {
     const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
-    expect(resolveInspectorKind('placement', sel, 'rack-x')).toBe('placement-container');
+    expect(resolveInspectorKind('storage', sel, 'rack-x')).toBe('placement-container');
   });
 
   it('container selection in layout mode returns layout-empty (layout ignores containers)', () => {
@@ -125,8 +125,27 @@ describe('resolveInspectorKind — placement mode, container selection', () => {
   it('cell and container are distinct routes — cell → placement-cell, container → placement-container', () => {
     const cell = cellSelection('rack-1:sec-abc:1');
     const container = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
-    expect(resolveInspectorKind('placement', cell, null)).toBe('placement-cell');
-    expect(resolveInspectorKind('placement', container, null)).toBe('placement-container');
+    expect(resolveInspectorKind('storage', cell, null)).toBe('placement-cell');
+    expect(resolveInspectorKind('storage', container, null)).toBe('placement-container');
+  });
+});
+
+// ─── view mode — rack/cell/container selection ───────────────────────────────
+
+describe('resolveInspectorKind — view mode, read-only object routing', () => {
+  it('routes rack selection to rack-structure in view mode', () => {
+    expect(resolveInspectorKind('view', rackSelection(['r1']), null)).toBe('rack-structure');
+  });
+
+  it('routes cell and container selection to placement inspectors in view mode', () => {
+    expect(resolveInspectorKind('view', cellSelection('cell-1'), null)).toBe('placement-cell');
+    expect(resolveInspectorKind('view', containerSelection('container-1'), null)).toBe(
+      'placement-container'
+    );
+  });
+
+  it('shows the placeholder when nothing is selected in view mode', () => {
+    expect(resolveInspectorKind('view', noSelection, null)).toBe('placement-placeholder');
   });
 });
 

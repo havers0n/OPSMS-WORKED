@@ -33,7 +33,8 @@ export const useSetHighlightedCellIds = () => useEditorStore((state) => state.se
 export const useClearHighlightedCellIds = () => useEditorStore((state) => state.clearHighlightedCellIds);
 export const useCanvasZoom = () => useEditorStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
-export const useIsLayoutEditable = () => useEditorStore((state) => state.draft?.state === 'draft');
+export const useIsLayoutEditable = () =>
+  useEditorStore((state) => state.viewMode === 'layout' && state.draft?.state === 'draft');
 export const useDraftDirtyState = () => useEditorStore((state) => state.isDraftDirty);
 export const useResetDraft = () => useEditorStore((state) => state.resetDraft);
 export const useInitializeDraft = () => useEditorStore((state) => state.initializeDraft);

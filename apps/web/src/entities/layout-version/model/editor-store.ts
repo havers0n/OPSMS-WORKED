@@ -1,16 +1,17 @@
 import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
 import { create } from 'zustand';
-import type {
-  EditorMode,
-  EditorSelection,
-  PlacementInteraction,
-  ViewMode
+import {
+  normalizeViewMode,
+  type AnyViewMode,
+  type EditorMode,
+  type EditorSelection,
+  type PlacementInteraction,
+  type ViewMode
 } from './editor-types';
 import {
   checkMinimumDistance,
   alignRacksToLine,
-  distributeRacksEqually,
-  getRackBoundingBox
+  distributeRacksEqually
 } from '../../../widgets/warehouse-editor/lib/rack-spacing';
 
 const TRACE = import.meta.env.DEV;
@@ -49,7 +50,7 @@ type EditorStore = {
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
-  setViewMode: (mode: ViewMode) => void;
+  setViewMode: (mode: AnyViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
   setSelection: (selection: EditorSelection) => void;
   clearSelection: () => void;
@@ -300,14 +301,15 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
 
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
-  setViewMode: (viewMode) =>
+  setViewMode: (nextViewMode) =>
     set({
-      viewMode,
+      viewMode: normalizeViewMode(nextViewMode),
       editorMode: 'select',
       // Clear selection on every mode switch — stale rack/cell selections from
       // the previous mode should never bleed into the new one.
       selection: { type: 'none' },
       placementInteraction: { type: 'idle' },
+      creatingRackId: null,
       highlightedCellIds: []
     }),
   setEditorMode: (editorMode) => set({ editorMode }),
@@ -368,7 +370,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
   resetDraft: () =>
     set(() => {
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
       }
       return {
@@ -389,7 +390,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
       if (TRACE) {
         const incoming = summarizeDraftForLogs(draft);
         const sameId = state.draft?.layoutVersionId === draft.layoutVersionId;
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'initializeDraft:call',
@@ -413,7 +413,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Different-id calls (after publish creates a new draft) are always allowed.
       if (state.draft?.layoutVersionId === draft.layoutVersionId) {
         if (TRACE) {
-          // eslint-disable-next-line no-console
           console.debug('[WOS TRACE]', {
             t: Date.now(),
             op: 'initializeDraft:guard-blocked',
@@ -424,7 +423,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
       }
 
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'initializeDraft:accepted',
@@ -444,11 +442,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
         currentRackIds.length > 0 && currentRackIds.every(id => nextDraftState.racks[id])
           ? currentRackIds
           : [];
+      const nextSelection =
+        state.selection.type === 'rack'
+          ? makeRackSelection(nextRackIds)
+          : state.selection;
 
       return {
         draft: nextDraftState,
         draftSourceVersionId: nextDraftState.layoutVersionId,
-        selection: makeRackSelection(nextRackIds),
+        selection: nextSelection,
         isDraftDirty: normalized.changed
       };
     }),

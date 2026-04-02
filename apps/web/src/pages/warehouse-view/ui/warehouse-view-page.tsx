@@ -11,6 +11,7 @@ import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
   useSetHighlightedCellIds,
+  useSetSelectedCellId,
   useSetViewMode,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
@@ -28,6 +29,7 @@ export function WarehouseViewPage() {
   const floorsQuery = useFloors(activeSiteId);
   const workspaceQuery = useFloorWorkspace(activeFloorId);
   const viewMode = useViewMode();
+  const setSelectedCellId = useSetSelectedCellId();
   const setViewMode = useSetViewMode();
   const setHighlightedCellIds = useSetHighlightedCellIds();
 
@@ -44,10 +46,10 @@ export function WarehouseViewPage() {
     }
   }, [activeSiteId, setActiveSiteId, sitesQuery.data]);
 
-  // Layout mode is an edit-only mode — switch to operations on this page
+  // Layout authoring is an editor-only mode — switch to safe View on this page.
   useEffect(() => {
     if (viewMode === 'layout') {
-      setViewMode('operations');
+      setViewMode('view');
     }
   }, [viewMode, setViewMode]);
 
@@ -65,13 +67,14 @@ export function WarehouseViewPage() {
     // floor not found on this site → silently fall through to existing behavior
   }, [targetFloorId, activeSiteId, activeFloorId, floorsQuery.data, setActiveFloorId]);
 
-  // URL hydration: highlight target cell.
-  // Guarded on viewMode === 'operations' because setViewMode clears highlightedCellIds.
+  // URL hydration: select and highlight target cell in View.
+  // Guarded on viewMode === 'view' because setViewMode clears selections/highlights.
   useEffect(() => {
     if (!targetCellId) return;
-    if (viewMode !== 'operations') return;
+    if (viewMode !== 'view') return;
+    setSelectedCellId(targetCellId);
     setHighlightedCellIds([targetCellId]);
-  }, [targetCellId, viewMode, setHighlightedCellIds]);
+  }, [targetCellId, viewMode, setHighlightedCellIds, setSelectedCellId]);
 
   const isLoading =
     sitesQuery.isLoading ||
@@ -79,7 +82,9 @@ export function WarehouseViewPage() {
     (activeFloorId ? workspaceQuery.isLoading : false);
 
   const isError = sitesQuery.isError || floorsQuery.isError || workspaceQuery.isError;
-  const hasPublished = Boolean(workspaceQuery.data?.latestPublished);
+  const hasViewableLayout = Boolean(
+    workspaceQuery.data?.latestPublished ?? workspaceQuery.data?.activeDraft
+  );
 
   if (isLoading) {
     return (
@@ -105,14 +110,14 @@ export function WarehouseViewPage() {
     );
   }
 
-  if (activeFloorId && !hasPublished) {
+  if (activeFloorId && !hasViewableLayout) {
     return (
       <div className="flex h-full w-full flex-col overflow-hidden">
         <ViewTopBar />
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              No published layout for this floor.
+              No warehouse layout is available for this floor.
             </p>
             <Link
               to={routes.warehouse}
