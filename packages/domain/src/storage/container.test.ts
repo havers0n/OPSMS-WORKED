@@ -100,6 +100,7 @@ describe('container storage contracts', () => {
     const baseContainer = {
       id: '1e4a2d96-cd70-4881-a73e-aa0c086a9bc8',
       tenantId: '4caa9e8d-4349-4623-ad98-9e2f2af193c0',
+      systemCode: 'CNT-000123',
       externalCode: 'PALLET-001',
       containerTypeId: 'e503c8ba-af56-4a1b-b4a8-c39ef09fdbcf',
       status: 'active',
@@ -133,6 +134,11 @@ describe('container storage contracts', () => {
     it('preserves externalCode: null', () => {
       const result = containerSchema.parse({ ...baseContainer, externalCode: null });
       expect(result.externalCode).toBeNull();
+    });
+
+    it('requires a system-owned systemCode', () => {
+      const result = containerSchema.parse(baseContainer);
+      expect(result.systemCode).toBe('CNT-000123');
     });
 
     it('preserves createdBy: null', () => {

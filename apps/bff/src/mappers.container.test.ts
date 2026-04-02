@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { mapContainerRowToDomain, mapContainerTypeRowToDomain } from './mappers.js';
+import {
+  mapContainerRowToDomain,
+  mapContainerStorageSnapshotRowToDomain,
+  mapContainerTypeRowToDomain,
+  mapLocationStorageSnapshotRowToDomain
+} from './mappers.js';
 
 // ──────────────────────────────────────────────────────────────
 // mapContainerTypeRowToDomain
@@ -60,6 +65,7 @@ describe('mapContainerRowToDomain', () => {
   const baseRow = {
     id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    system_code: 'CNT-000123',
     external_code: 'PALLET-001',
     container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
     status: 'active' as const,
@@ -92,8 +98,53 @@ describe('mapContainerRowToDomain', () => {
     const result = mapContainerRowToDomain(baseRow);
     expect(result.id).toBe(baseRow.id);
     expect(result.tenantId).toBe(baseRow.tenant_id);
+    expect(result.systemCode).toBe(baseRow.system_code);
     expect(result.containerTypeId).toBe(baseRow.container_type_id);
     expect(result.status).toBe('active');
     expect(result.createdAt).toBe(baseRow.created_at);
+  });
+});
+
+describe('mapContainerStorageSnapshotRowToDomain', () => {
+  it('maps system_code into systemCode', () => {
+    const result = mapContainerStorageSnapshotRowToDomain({
+      tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      system_code: 'CNT-000555',
+      external_code: null,
+      container_type: 'pallet',
+      container_status: 'active',
+      item_ref: null,
+      quantity: null,
+      uom: null
+    });
+
+    expect(result.systemCode).toBe('CNT-000555');
+    expect(result.externalCode).toBeNull();
+  });
+});
+
+describe('mapLocationStorageSnapshotRowToDomain', () => {
+  it('maps system_code into systemCode', () => {
+    const result = mapLocationStorageSnapshotRowToDomain({
+      tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      floor_id: '288ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      location_id: '388ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      location_code: 'A-01-01',
+      location_type: 'rack_slot',
+      cell_id: '488ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      system_code: 'CNT-000556',
+      external_code: null,
+      container_type: 'pallet',
+      container_status: 'active',
+      placed_at: '2026-01-01T00:00:00.000Z',
+      item_ref: null,
+      quantity: null,
+      uom: null
+    });
+
+    expect(result.systemCode).toBe('CNT-000556');
+    expect(result.externalCode).toBeNull();
   });
 });

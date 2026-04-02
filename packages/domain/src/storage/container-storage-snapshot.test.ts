@@ -7,6 +7,7 @@ describe('container storage snapshot contracts', () => {
       containerStorageSnapshotRowSchema.parse({
         tenantId: '4caa9e8d-4349-4623-ad98-9e2f2af193c0',
         containerId: '1e4a2d96-cd70-4881-a73e-aa0c086a9bc8',
+        systemCode: 'CNT-000001',
         externalCode: 'PALLET-001',
         containerType: 'pallet',
         containerStatus: 'active',
@@ -26,6 +27,7 @@ describe('container storage snapshot contracts', () => {
       containerStorageSnapshotRowSchema.parse({
         tenantId: '4caa9e8d-4349-4623-ad98-9e2f2af193c0',
         containerId: '1e4a2d96-cd70-4881-a73e-aa0c086a9bc8',
+        systemCode: 'CNT-000002',
         externalCode: 'PALLET-EMPTY',
         containerType: 'pallet',
         containerStatus: 'active',

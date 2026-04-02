@@ -1,5 +1,6 @@
 import { Group, Rect } from 'react-konva';
 import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
+import type { OperationsCellRuntime } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '../../lib/canvas-geometry';
 
 const MIN_CELL_W = 5;
@@ -19,6 +20,17 @@ const CELL_FILL_OCCUPIED_A = '#bbf7d0';
 const CELL_FILL_OCCUPIED_B = '#c4b5fd';
 const CELL_STROKE_OCCUPIED_A = '#22c55e';
 const CELL_STROKE_OCCUPIED_B = '#7c3aed';
+const CELL_FILL_STOCKED = '#bbf7d0';
+const CELL_STROKE_STOCKED = '#16a34a';
+const CELL_FILL_PICK_ACTIVE = '#bfdbfe';
+const CELL_STROKE_PICK_ACTIVE = '#2563eb';
+const CELL_FILL_RESERVED = '#fde68a';
+const CELL_STROKE_RESERVED = '#ca8a04';
+const CELL_FILL_QUARANTINED = '#fecaca';
+const CELL_STROKE_QUARANTINED = '#dc2626';
+const CELL_FILL_EMPTY = '#e2e8f0';
+const CELL_STROKE_EMPTY = '#94a3b8';
+const CELL_STROKE_HIGHLIGHTED = '#f97316';
 
 type FaceProps = {
   face: RackFace;
@@ -33,9 +45,11 @@ type FaceProps = {
   isRackSelected: boolean;
   publishedCellsByStructure: Map<string, Cell>;
   occupiedCellIds: Set<string>;
+  cellRuntimeById: Map<string, OperationsCellRuntime>;
+  highlightedCellIds: Set<string>;
   isInteractive: boolean;
   selectedCellId: string | null;
-  onCellClick: (cellId: string) => void;
+  onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
 function FaceCells({
@@ -51,6 +65,8 @@ function FaceCells({
   isRackSelected,
   publishedCellsByStructure,
   occupiedCellIds,
+  cellRuntimeById,
+  highlightedCellIds,
   isInteractive,
   selectedCellId,
   onCellClick
@@ -93,22 +109,43 @@ function FaceCells({
               })
             );
             const cellId = cell?.id ?? null;
-            const isSelected = isInteractive && selectedCellId === cellId;
+            const isSelected = selectedCellId === cellId;
+            const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
+            const runtime = cellId ? cellRuntimeById.get(cellId) : null;
             const isOccupied = cellId !== null && occupiedCellIds.has(cellId) && !isSelected;
 
             const cellX = secX + slotIndex * slotW;
             const cellY = bandY + inset + levelIndex * levelH;
             const cellW = slotW - 1;
+            const statusFillStroke = runtime
+              ? runtime.status === 'quarantined'
+                ? { fill: CELL_FILL_QUARANTINED, stroke: CELL_STROKE_QUARANTINED }
+                : runtime.status === 'pick_active'
+                  ? { fill: CELL_FILL_PICK_ACTIVE, stroke: CELL_STROKE_PICK_ACTIVE }
+                  : runtime.status === 'reserved'
+                    ? { fill: CELL_FILL_RESERVED, stroke: CELL_STROKE_RESERVED }
+                    : runtime.status === 'stocked'
+                      ? { fill: CELL_FILL_STOCKED, stroke: CELL_STROKE_STOCKED }
+                      : { fill: CELL_FILL_EMPTY, stroke: CELL_STROKE_EMPTY }
+              : null;
+
             const fill = isSelected
               ? CELL_FILL_SELECTED
-              : isOccupied
-                ? occupiedCellFill
-                : cellFill;
+              : statusFillStroke
+                ? statusFillStroke.fill
+                : isOccupied
+                  ? occupiedCellFill
+                  : cellFill;
+
             const stroke = isSelected
               ? CELL_STROKE_SELECTED
-              : isOccupied
-                ? occupiedCellStroke
-                : cellStroke;
+              : isHighlighted
+                ? CELL_STROKE_HIGHLIGHTED
+                : statusFillStroke
+                  ? statusFillStroke.stroke
+                  : isOccupied
+                    ? occupiedCellStroke
+                    : cellStroke;
 
             return (
               <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
@@ -120,11 +157,11 @@ function FaceCells({
                   cornerRadius={1}
                   fill={fill}
                   stroke={stroke}
-                  strokeWidth={isSelected ? 1.2 : isOccupied ? 1 : isRackSelected ? 0.9 : 0.5}
-                  opacity={cell ? isSelected || isOccupied ? 0.98 : isRackSelected ? 0.98 : 0.78 : 0.25}
+                  strokeWidth={isSelected ? 1.4 : isHighlighted ? 1.2 : isOccupied ? 1 : isRackSelected ? 0.9 : 0.5}
+                  opacity={cell ? isSelected || isHighlighted || isOccupied || runtime ? 0.98 : isRackSelected ? 0.98 : 0.78 : 0.25}
                   onClick={isInteractive && cellId ? (event) => {
                     event.cancelBubble = true;
-                    onCellClick(cellId);
+                    onCellClick(cellId, { x: event.evt.clientX, y: event.evt.clientY });
                   } : undefined}
                 />
               </Group>
@@ -144,12 +181,14 @@ type Props = {
   isSelected: boolean;
   publishedCellsByStructure: Map<string, Cell>;
   occupiedCellIds?: Set<string>;
+  cellRuntimeById?: Map<string, OperationsCellRuntime>;
+  highlightedCellIds?: Set<string>;
   isInteractive?: boolean;
   selectedCellId?: string | null;
-  onCellClick?: (cellId: string) => void;
+  onCellClick?: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
-const noop = () => {};
+const noop = () => undefined;
 
 export function RackCells({
   geometry,
@@ -159,6 +198,8 @@ export function RackCells({
   isSelected,
   publishedCellsByStructure,
   occupiedCellIds = new Set<string>(),
+  cellRuntimeById = new Map<string, OperationsCellRuntime>(),
+  highlightedCellIds = new Set<string>(),
   isInteractive = false,
   selectedCellId = null,
   onCellClick = noop
@@ -181,6 +222,8 @@ export function RackCells({
         isRackSelected={isSelected}
         publishedCellsByStructure={publishedCellsByStructure}
         occupiedCellIds={occupiedCellIds}
+        cellRuntimeById={cellRuntimeById}
+        highlightedCellIds={highlightedCellIds}
         isInteractive={isInteractive}
         selectedCellId={selectedCellId}
         onCellClick={onCellClick}
@@ -199,6 +242,8 @@ export function RackCells({
           isRackSelected={isSelected}
           publishedCellsByStructure={publishedCellsByStructure}
           occupiedCellIds={occupiedCellIds}
+          cellRuntimeById={cellRuntimeById}
+          highlightedCellIds={highlightedCellIds}
           isInteractive={isInteractive}
           selectedCellId={selectedCellId}
           onCellClick={onCellClick}

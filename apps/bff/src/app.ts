@@ -118,6 +118,11 @@ import {
 } from './features/picking/service.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
+import {
+  createProductLocationRolesService,
+  type ProductLocationRolesService
+} from './features/product-location-roles/service.js';
+import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
@@ -130,6 +135,7 @@ type ContainersServiceFactory = (context: AuthenticatedRequestContext) => Contai
 type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsService;
 type ProductsServiceFactory = (context: AuthenticatedRequestContext) => ProductsService;
 type PickingServiceFactory = (context: AuthenticatedRequestContext) => PickingService;
+type ProductLocationRolesServiceFactory = (context: AuthenticatedRequestContext) => ProductLocationRolesService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -145,6 +151,7 @@ type BuildAppOptions = {
   getContainersService?: ContainersServiceFactory;
   getFloorsService?: FloorsServiceFactory;
   getProductsService?: ProductsServiceFactory;
+  getProductLocationRolesService?: ProductLocationRolesServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -217,6 +224,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getPickingService =
     options.getPickingService ??
     ((context: AuthenticatedRequestContext) => createPickingService(getUserSupabase(context)));
+  const getProductLocationRolesService =
+    options.getProductLocationRolesService ??
+    ((context: AuthenticatedRequestContext) =>
+      createProductLocationRolesService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -293,6 +304,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
+  registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
 
   app.get('/api/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -346,6 +358,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
       cell_id: string | null;
       container_id: string;
+      system_code: string;
       external_code: string | null;
       container_type: string;
       container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -608,7 +621,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_canonical_v')
-      .select('tenant_id,container_id,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
+      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
       .eq('container_id', containerId);
 
     if (error) {
@@ -618,6 +631,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
       tenant_id: string;
       container_id: string;
+      system_code: string;
       external_code: string | null;
       container_type: string;
       container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -681,7 +695,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     return parseOrThrow(createContainerResponseSchema, {
       containerId: container.id,
-      externalCode: container.externalCode ?? '',
+      systemCode: container.systemCode,
+      externalCode: container.externalCode,
       containerTypeId: container.containerTypeId,
       status: container.status,
       operationalRole: container.operationalRole

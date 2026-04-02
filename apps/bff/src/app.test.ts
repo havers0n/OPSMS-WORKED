@@ -63,6 +63,7 @@ const containerRows = [
   {
     id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    system_code: 'CNT-000101',
     external_code: 'PALLET-001',
     container_type_id: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
     status: 'active',
@@ -74,6 +75,7 @@ const containerRows = [
   {
     id: 'f0000000-0000-4000-8000-000000000001',
     tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+    system_code: 'CNT-000102',
     external_code: 'TOTE-001',
     container_type_id: 'c0000000-0000-4000-8000-000000000001',
     status: 'active',
@@ -490,6 +492,7 @@ function createSupabaseStub() {
                 data: {
                   id: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
                   tenant_id: payload.tenant_id,
+                  system_code: 'CNT-000999',
                   external_code: payload.external_code ?? null,
                   container_type_id: payload.container_type_id,
                   status: 'active',
@@ -2070,6 +2073,7 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      systemCode: 'CNT-000101',
       externalCode: 'PALLET-001',
       status: 'active'
     });
@@ -2582,6 +2586,7 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       containerId: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
+      systemCode: 'CNT-000999',
       externalCode: 'PALLET-002',
       containerTypeId: '5fcaf68c-8f59-4130-a132-1fd8ab6d3cfe',
       status: 'active',
@@ -2687,7 +2692,50 @@ describe('buildApp', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ operationalRole: 'pick' });
+    expect(response.json()).toMatchObject({ operationalRole: 'pick', systemCode: 'CNT-000999' });
+
+    await app.close();
+  });
+
+  it('creates a container without externalCode and returns the generated systemCode', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers',
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        containerTypeId: 'c0000000-0000-4000-8000-000000000001',
+        operationalRole: 'pick'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      containerId: 'c7d4fed6-5d22-4562-bf6b-d4e863d43d70',
+      systemCode: 'CNT-000999',
+      externalCode: null,
+      containerTypeId: 'c0000000-0000-4000-8000-000000000001',
+      status: 'active',
+      operationalRole: 'pick'
+    });
+
+    const containerCallIndex = supabase.from.mock.calls.reduce(
+      (lastIndex, [table], index) => (table === 'containers' ? index : lastIndex),
+      -1
+    );
+    const containerApi = supabase.from.mock.results[containerCallIndex]?.value;
+    expect(containerApi.insert).toHaveBeenCalledWith({
+      tenant_id: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      container_type_id: 'c0000000-0000-4000-8000-000000000001',
+      external_code: null,
+      operational_role: 'pick',
+      created_by: authContext.user.id
+    });
 
     await app.close();
   });
@@ -3870,6 +3918,7 @@ function createPickTaskDetailSupabaseStub(overrides: {
   const {
     taskData = {
       id: pickTaskDetailIds.task,
+      task_number: 'TSK-000654',
       tenant_id: pickTaskDetailIds.tenant,
       source_type: 'order',
       source_id: pickTaskDetailIds.order,
@@ -3927,7 +3976,7 @@ function createPickTaskDetailSupabaseStub(overrides: {
         return {
           select: vi.fn(() => ({
             in: vi.fn(async () => ({
-              data: [{ id: pickTaskDetailIds.container, external_code: 'CTN-ALPHA' }],
+              data: [{ id: pickTaskDetailIds.container, system_code: 'CNT-000777', external_code: 'CTN-ALPHA' }],
               error: null
             }))
           }))
@@ -3937,7 +3986,23 @@ function createPickTaskDetailSupabaseStub(overrides: {
         return {
           select: vi.fn(() => ({
             in: vi.fn(async () => ({
-              data: [{ id: pickTaskDetailIds.cell, address: '03-A.01.01.01' }],
+              data: [
+                {
+                  id: pickTaskDetailIds.cell,
+                  address: '03-A.01.01.01',
+                  layout_version_id: '00000000-0000-4000-8000-000000000003'
+                }
+              ],
+              error: null
+            }))
+          }))
+        };
+      }
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{ id: '00000000-0000-4000-8000-000000000003', floor_id: '00000000-0000-4000-8000-000000000004' }],
               error: null
             }))
           }))
@@ -3990,6 +4055,7 @@ describe('GET /api/pick-tasks/:taskId', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.id).toBe(pickTaskDetailIds.task);
+    expect(body.taskNumber).toBe('TSK-000654');
     expect(body.status).toBe('in_progress');
     expect(body.totalSteps).toBe(1);
     expect(body.completedSteps).toBe(0);
@@ -4013,7 +4079,7 @@ describe('GET /api/pick-tasks/:taskId', () => {
 
     const step = response.json().steps[0];
     expect(step.sourceCellAddress).toBe('03-A.01.01.01');
-    expect(step.sourceContainerCode).toBe('CTN-ALPHA');
+    expect(step.sourceContainerCode).toBe('CNT-000777');
     expect(step.imageUrl).toBe('https://cdn.example.com/img.png');
     expect(step.sku).toBe('SKU-TEST');
     expect(step.qtyRequired).toBe(4);

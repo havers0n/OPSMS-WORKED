@@ -3,14 +3,15 @@ import { containerKeys } from '@/entities/container/api/queries';
 import { bffRequest } from '@/shared/api/bff/client';
 
 export type CreateContainerInput = {
-  externalCode: string;
+  externalCode?: string;
   containerTypeId: string;
   operationalRole?: 'storage' | 'pick';
 };
 
 export type CreateContainerResult = {
   containerId: string;
-  externalCode: string;
+  systemCode: string;
+  externalCode: string | null;
   containerTypeId: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   operationalRole: 'storage' | 'pick';

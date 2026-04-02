@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
-import { AlertCircle, ChevronRight, Layers, Loader2, MapPin, Package } from 'lucide-react';
+import { AlertCircle, ChevronRight, Layers, Loader2, MapPin, Package, ShieldCheck, X } from 'lucide-react';
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useEditorSelection,
@@ -13,7 +13,20 @@ import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useCreateContainer } from '@/features/container-create/model/use-create-container';
 import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
-import { filterStorableTypes } from './cell-placement-inspector.lib';
+import {
+  filterStorableTypes,
+  formatCreateAndPlacePlacementFailure,
+  getContainerDisplayLabel,
+  getContainerDisplaySecondary,
+  getCreateAndPlaceDisabledReasons,
+  summarizeInventory
+} from './cell-placement-inspector.lib';
+import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
+import { useCreateProductLocationRole, useDeleteProductLocationRole } from '@/entities/product-location-role/api/mutations';
+import { useProductsSearch } from '@/entities/product/api/use-products-search';
+
+type PlacementPanelMode = 'details' | 'task';
+type PlacementTaskType = 'place-existing' | 'create-and-place' | 'edit-policy' | null;
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -41,6 +54,7 @@ function StatusBadge({ status }: { status: string }) {
 
 type ContainerGroup = {
   containerId: string;
+  systemCode: string;
   externalCode: string | null;
   containerType: string;
   containerStatus: string;
@@ -55,6 +69,7 @@ function groupByContainer(rows: LocationStorageSnapshotRow[]): ContainerGroup[] 
     if (!map.has(row.containerId)) {
       map.set(row.containerId, {
         containerId: row.containerId,
+        systemCode: row.systemCode,
         externalCode: row.externalCode,
         containerType: row.containerType,
         containerStatus: row.containerStatus,
@@ -108,10 +123,14 @@ function ContainerCard({ group, onContainerClick, sourceCellId }: ContainerCardP
       <div className="flex items-start justify-between gap-2 px-3 py-2.5">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
-            {group.externalCode ?? <span className="text-[var(--text-muted)]">No code</span>}
+            {getContainerDisplayLabel(group)}
           </p>
           <p className="text-[10px] text-[var(--text-muted)]">
-            {group.containerType} &middot; placed {formatDate(group.placedAt)}
+            {getContainerDisplaySecondary({
+              externalCode: group.externalCode,
+              containerType: group.containerType,
+              placedAt: formatDate(group.placedAt)
+            })}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -119,15 +138,429 @@ function ContainerCard({ group, onContainerClick, sourceCellId }: ContainerCardP
           <ChevronRight className="h-3.5 w-3.5 text-[var(--text-muted)]" />
         </div>
       </div>
+      <div className="border-t border-[var(--border-muted)] px-3 py-2 text-[11px] text-[var(--text-muted)]">
+        {group.items.length > 0
+          ? `${group.items.length} inventory entr${group.items.length === 1 ? 'y' : 'ies'} recorded inside`
+          : 'No inventory is currently recorded inside this container.'}
+      </div>
+    </button>
+  );
+}
 
-      {group.items.length > 0 ? (
-        <div className="border-t border-[var(--border-muted)] px-3 py-2">
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
-            Inventory
+const ROLE_STYLES: Record<string, { label: string; className: string }> = {
+  primary_pick: { label: 'Primary pick', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  reserve: { label: 'Reserve', className: 'bg-amber-50 text-amber-700 border-amber-200' }
+};
+
+function RoleBadge({ role }: { role: string }) {
+  const style =
+    ROLE_STYLES[role] ?? { label: role, className: 'bg-slate-100 text-slate-500 border-slate-200' };
+  return (
+    <span
+      className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}
+    >
+      {style.label}
+    </span>
+  );
+}
+
+type LocationPolicySectionProps = {
+  locationId: string;
+  mode: 'summary' | 'editor';
+  onEdit?: () => void;
+};
+
+function LocationPolicySection({ locationId, mode, onEdit }: LocationPolicySectionProps) {
+  const { data: assignments = [], isPending } = useLocationProductAssignments(locationId);
+  const createAssignment = useCreateProductLocationRole();
+  const deleteAssignment = useDeleteProductLocationRole(locationId);
+
+  const [showForm, setShowForm] = useState(false);
+  const [productQuery, setProductQuery] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedProductLabel, setSelectedProductLabel] = useState('');
+  const [role, setRole] = useState<'primary_pick' | 'reserve'>('primary_pick');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const { data: searchResults = [] } = useProductsSearch(
+    productQuery.trim().length > 0 ? productQuery : null
+  );
+
+  const handleAssign = async () => {
+    if (!selectedProductId) return;
+    setFormError(null);
+    try {
+      await createAssignment.mutateAsync({ locationId, productId: selectedProductId, role });
+      setShowForm(false);
+      setProductQuery('');
+      setSelectedProductId(null);
+      setSelectedProductLabel('');
+      setRole('primary_pick');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not assign product.');
+    }
+  };
+
+  const handleDelete = async (roleId: string) => {
+    setPendingDeleteId(roleId);
+    try {
+      await deleteAssignment.mutateAsync(roleId);
+    } catch {
+      // silent — the list will not change
+    } finally {
+      setPendingDeleteId(null);
+    }
+  };
+
+  return (
+    <div
+      className="rounded-lg"
+      style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+    >
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
+        <ShieldCheck className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Location Policy
+        </span>
+      </div>
+
+      {mode === 'summary' ? (
+        <div className="border-t border-[var(--border-muted)] px-3 py-3" data-testid="cell-placement-policy-summary">
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Policies describe intended use for this location. They do not guarantee current stock.
           </p>
-          <div className="flex flex-col gap-1">
-            {group.items.map((item, index) => (
-              <div key={`${item.itemRef}-${index}`} className="flex items-center justify-between gap-2">
+
+          {isPending ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
+            </div>
+          ) : assignments.length === 0 ? (
+            <div className="mt-3 rounded border border-[var(--border-muted)] bg-[var(--surface-primary)] px-2.5 py-2 text-[11px] text-[var(--text-muted)]">
+              No SKU policies are assigned to this location.
+            </div>
+          ) : (
+            <div className="mt-3 rounded border border-[var(--border-muted)] bg-[var(--surface-primary)]">
+              <div className="border-b border-[var(--border-muted)] px-2.5 py-2 text-[11px] text-[var(--text-muted)]">
+                {assignments.length} policy assignment{assignments.length === 1 ? '' : 's'}
+              </div>
+              <div className="flex flex-col">
+                {assignments.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between gap-2 border-b border-[var(--border-muted)] px-2.5 py-2 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                        {a.product.name}
+                      </p>
+                      {a.product.sku && (
+                        <p className="truncate text-[10px] text-[var(--text-muted)]">{a.product.sku}</p>
+                      )}
+                    </div>
+                    <RoleBadge role={a.role} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3">
+            <button
+              type="button"
+              className="text-[11px] font-medium text-[var(--accent)] hover:underline"
+              onClick={onEdit}
+            >
+              Edit policy
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="border-t border-[var(--border-muted)]" data-testid="cell-placement-policy-editor">
+          <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
+            Policies describe the intended operational use of this location. They do not guarantee
+            that stock is currently here.
+          </div>
+
+          {isPending ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
+            </div>
+          ) : assignments.length === 0 && !showForm ? (
+            <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
+              <p>No SKU policies are assigned to this location.</p>
+              <p className="mt-1">Containers or inventory may still be present here.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0">
+              {assignments.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between gap-2 border-b border-[var(--border-muted)] px-3 py-2 last:border-b-0"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    {a.product.imageUrl ? (
+                      <img
+                        src={a.product.imageUrl}
+                        alt={a.product.name}
+                        className="h-7 w-7 shrink-0 rounded object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-[9px] text-[var(--text-muted)]"
+                        style={{ background: 'var(--surface-primary)' }}
+                      >
+                        SKU
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-[var(--text-primary)]">
+                        {a.product.name}
+                      </p>
+                      {a.product.sku && (
+                        <p className="truncate text-[10px] text-[var(--text-muted)]">
+                          {a.product.sku}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <RoleBadge role={a.role} />
+                    <button
+                      type="button"
+                      className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                      onClick={() => void handleDelete(a.id)}
+                      disabled={pendingDeleteId === a.id || deleteAssignment.isPending}
+                      title="Remove policy"
+                    >
+                      {pendingDeleteId === a.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showForm && (
+          <div className="border-t border-[var(--border-muted)] px-3 py-3">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
+              Add SKU policy
+            </p>
+            {selectedProductId ? (
+              <div className="mb-2 flex items-center justify-between rounded border border-[var(--border-muted)] bg-[var(--surface-primary)] px-2.5 py-1.5">
+                <span className="text-xs text-[var(--text-primary)]">{selectedProductLabel}</span>
+                <button
+                  type="button"
+                  className="ml-2 text-[var(--text-muted)] hover:text-red-500"
+                  onClick={() => {
+                    setSelectedProductId(null);
+                    setSelectedProductLabel('');
+                    setProductQuery('');
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="mb-2">
+                <input
+                  value={productQuery}
+                  onChange={(e) => setProductQuery(e.target.value)}
+                  placeholder="Search by name or SKU…"
+                  className="w-full rounded border px-2.5 py-1.5 text-xs outline-none"
+                  style={{
+                    borderColor: 'var(--border-muted)',
+                    background: 'var(--surface-primary)'
+                  }}
+                />
+                {productQuery.trim().length > 0 && searchResults.length > 0 && (
+                  <div
+                    className="mt-1 max-h-36 overflow-y-auto rounded border"
+                    style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                  >
+                    {searchResults.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="w-full px-2.5 py-1.5 text-left text-xs hover:bg-[var(--surface-subtle)]"
+                        onClick={() => {
+                          setSelectedProductId(p.id);
+                          setSelectedProductLabel(
+                            [p.name, p.sku].filter(Boolean).join(' · ')
+                          );
+                          setProductQuery('');
+                        }}
+                      >
+                        <span className="font-medium text-[var(--text-primary)]">{p.name}</span>
+                        {p.sku && (
+                          <span className="ml-1.5 text-[var(--text-muted)]">{p.sku}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {productQuery.trim().length > 0 && searchResults.length === 0 && (
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">No products found.</p>
+                )}
+              </div>
+            )}
+
+            <div className="mb-2 flex items-center gap-3">
+              {(['primary_pick', 'reserve'] as const).map((r) => (
+                <label key={r} className="flex cursor-pointer items-center gap-1.5 text-xs">
+                  <input
+                    type="radio"
+                    name="policy-role"
+                    value={r}
+                    checked={role === r}
+                    onChange={() => setRole(r)}
+                    className="accent-[var(--accent)]"
+                  />
+                  {ROLE_STYLES[r].label}
+                </label>
+              ))}
+            </div>
+
+            {formError && <p className="mb-2 text-[11px] text-red-500">{formError}</p>}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ background: 'var(--accent)' }}
+                onClick={() => void handleAssign()}
+                disabled={!selectedProductId || createAssignment.isPending}
+              >
+                {createAssignment.isPending ? 'Saving…' : 'Save policy'}
+              </button>
+              <button
+                type="button"
+                className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--text-muted)]"
+                style={{ borderColor: 'var(--border-muted)' }}
+                onClick={() => {
+                  setShowForm(false);
+                  setProductQuery('');
+                  setSelectedProductId(null);
+                  setSelectedProductLabel('');
+                  setFormError(null);
+                }}
+                disabled={createAssignment.isPending}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!showForm && (
+          <div className="px-3 py-2">
+            <button
+              type="button"
+              className="text-[11px] font-medium text-[var(--accent)] hover:underline disabled:opacity-40"
+              onClick={() => setShowForm(true)}
+              disabled={createAssignment.isPending}
+            >
+              + Add SKU policy
+            </button>
+          </div>
+        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type CurrentContainersSectionProps = {
+  containers: ContainerGroup[];
+  selectedCellId: string;
+  onContainerClick: (containerId: string, sourceCellId: string | null) => void;
+};
+
+function CurrentContainersSection({
+  containers,
+  selectedCellId,
+  onContainerClick
+}: CurrentContainersSectionProps) {
+  return (
+    <div
+      className="rounded-lg"
+      style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+    >
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
+        <Layers className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Current containers
+        </span>
+      </div>
+
+      <div className="border-t border-[var(--border-muted)]">
+        <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
+          Physical containers currently placed at this location.
+        </div>
+
+        {containers.length === 0 ? (
+          <div className="border-t border-[var(--border-muted)] px-3 py-3 text-[11px] text-[var(--text-muted)]">
+            No containers are currently placed at this location.
+          </div>
+        ) : (
+          <div className="border-t border-[var(--border-muted)] flex flex-col gap-2 px-3 py-3">
+            {containers.map((group) => (
+              <ContainerCard
+                key={group.containerId}
+                group={group}
+                onContainerClick={onContainerClick}
+                sourceCellId={selectedCellId}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type CurrentInventorySectionProps = {
+  rows: LocationStorageSnapshotRow[];
+  hasContainers: boolean;
+};
+
+function CurrentInventorySection({ rows, hasContainers }: CurrentInventorySectionProps) {
+  const inventory = summarizeInventory(rows);
+
+  return (
+    <div
+      className="rounded-lg"
+      style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+    >
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
+        <Package className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Current inventory
+        </span>
+      </div>
+
+      <div className="border-t border-[var(--border-muted)]">
+        <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
+          Inventory currently recorded inside containers at this location.
+        </div>
+
+        {inventory.length === 0 ? (
+          <div className="border-t border-[var(--border-muted)] px-3 py-3 text-[11px] text-[var(--text-muted)]">
+            {hasContainers
+              ? 'Containers are present, but no inventory is currently recorded inside them.'
+              : 'No current inventory because no containers are placed at this location.'}
+          </div>
+        ) : (
+          <div className="border-t border-[var(--border-muted)]">
+            {inventory.map((item) => (
+              <div
+                key={item.key}
+                className="flex items-center justify-between gap-2 border-b border-[var(--border-muted)] px-3 py-2 last:border-b-0"
+              >
                 <div className="flex min-w-0 items-center gap-2">
                   {getProductImageUrl(item.product) ? (
                     <img
@@ -152,29 +585,30 @@ function ContainerCard({ group, onContainerClick, sourceCellId }: ContainerCardP
                     </p>
                   </div>
                 </div>
-                <span className="shrink-0 text-xs text-[var(--text-muted)]">
-                  {item.quantity} {item.uom}
-                </span>
+                <div className="shrink-0 text-right">
+                  <p className="text-xs text-[var(--text-primary)]">
+                    {item.totalQuantity} {item.uom}
+                  </p>
+                  <p className="text-[10px] text-[var(--text-muted)]">
+                    {item.containerCount} container{item.containerCount === 1 ? '' : 's'}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      ) : (
-        <div className="border-t border-[var(--border-muted)] px-3 py-2 text-[11px] text-[var(--text-muted)]">
-          No inventory items
-        </div>
-      )}
-    </button>
+        )}
+      </div>
+    </div>
   );
 }
 
 export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
   const setSelectedContainerId = useSetSelectedContainerId();
-  const [activeAction, setActiveAction] = useState<'place' | 'create' | null>(null);
+  const [panelMode, setPanelMode] = useState<PlacementPanelMode>('details');
+  const [taskType, setTaskType] = useState<PlacementTaskType>(null);
   const [containerIdInput, setContainerIdInput] = useState('');
   const [placeError, setPlaceError] = useState<string | null>(null);
-  const [containerCodeInput, setContainerCodeInput] = useState('');
   const [containerTypeIdInput, setContainerTypeIdInput] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -213,9 +647,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
   const locationId = locationRef?.locationId ?? null;
 
-  // Debug: storageQuery state
-  const storageQueryEnabled = Boolean(locationId);
-  const storageQueryError = locationQueryError;
   const { data = [], error, isPending: isStoragePending, isError } = useLocationStorage(locationId);
   // Spinner should only show while actively loading storage (locationId known, storage fetching).
   // When locationQueryError is set, locationId is null → storage query is disabled → isPending is
@@ -227,6 +658,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const bffError = error instanceof BffRequestError ? error : null;
   const locationBffError = locationQueryError instanceof BffRequestError ? locationQueryError : null;
   const containers = groupByContainer(data);
+  const isOccupied = containers.length > 0;
 
   const createContainer = useCreateContainer();
   const placeContainer = usePlaceContainer({
@@ -235,11 +667,28 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   });
   const isActionPending = placeContainer.isPending || createContainer.isPending;
 
+  const enterTaskMode = (nextTaskType: Exclude<PlacementTaskType, null>) => {
+    setPanelMode('task');
+    setTaskType(nextTaskType);
+  };
+
+  const returnToDetails = () => {
+    setPanelMode('details');
+    setTaskType(null);
+    setPlaceError(null);
+    setCreateError(null);
+  };
+
   useEffect(() => {
     if (containerTypeIdInput.length === 0 && storableTypes.length > 0) {
       setContainerTypeIdInput(storableTypes[0].id);
     }
   }, [containerTypeIdInput, storableTypes]);
+
+  useEffect(() => {
+    setPanelMode('details');
+    setTaskType(null);
+  }, [cellId]);
 
   const handlePlace = async () => {
     const nextContainerId = containerIdInput.trim();
@@ -265,7 +714,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
       // eslint-disable-next-line no-console
       console.debug('[PLACEMENT] placeContainer success');
       setContainerIdInput('');
-      setActiveAction(null);
+      returnToDetails();
     } catch (mutationError) {
       // eslint-disable-next-line no-console
       console.error('[PLACEMENT] placeContainer error', mutationError);
@@ -274,13 +723,11 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   };
 
   const handleCreateAndPlace = async () => {
-    const externalCode = containerCodeInput.trim();
-    if (!selectedCell || !locationId || externalCode.length === 0 || containerTypeIdInput.length === 0) {
+    if (!selectedCell || !locationId || containerTypeIdInput.length === 0) {
       // eslint-disable-next-line no-console
       console.debug('[PLACEMENT] handleCreateAndPlace guard failed', {
         hasSelectedCell: !!selectedCell,
         hasLocationId: !!locationId,
-        codeLength: externalCode.length,
         typeLength: containerTypeIdInput.length
       });
       return;
@@ -291,7 +738,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     // Debug instrumentation
     // eslint-disable-next-line no-console
     console.debug('[PLACEMENT] before createContainer.mutateAsync', {
-      externalCode,
       containerTypeId: containerTypeIdInput,
       locationId,
       selectedCellId: cellId
@@ -299,7 +745,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
     try {
       const container = await createContainer.mutateAsync({
-        externalCode,
         containerTypeId: containerTypeIdInput,
         operationalRole: 'storage'
       });
@@ -327,23 +772,88 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         // eslint-disable-next-line no-console
         console.error('[PLACEMENT] placeContainer error (after create)', placementError);
         setCreateError(
-          `Container ${container.externalCode} was created, but it could not be placed into this cell and remains unplaced. ${formatMutationError(
-            placementError,
-            'Placement failed.'
-          )}`
+          formatCreateAndPlacePlacementFailure(
+            container.systemCode,
+            formatMutationError(placementError, 'Placement failed.')
+          )
         );
         return;
       }
 
-      setContainerCodeInput('');
       setContainerTypeIdInput(storableTypes[0]?.id ?? '');
-      setActiveAction(null);
+      returnToDetails();
     } catch (mutationError) {
       // eslint-disable-next-line no-console
       console.error('[PLACEMENT] createContainer error', mutationError);
       setCreateError(formatMutationError(mutationError, 'Could not create the container.'));
     }
   };
+
+  const placementActionsBlock = selectedCell ? (
+    <div
+      className="rounded-lg"
+      style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+    >
+      <div className="px-3 py-2.5">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Placement actions
+        </div>
+        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+          Use these actions to place physical containers at this location.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ background: 'var(--accent)' }}
+            onClick={() => {
+              setPlaceError(null);
+              enterTaskMode('place-existing');
+            }}
+            disabled={isActionPending}
+          >
+            Place existing container
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-2 text-xs font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
+            onClick={() => {
+              setCreateError(null);
+              enterTaskMode('create-and-place');
+            }}
+            disabled={isActionPending}
+          >
+            + Create container
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const currentStateSections =
+    selectedCell && locationId && !isPending && !isError ? (
+      <>
+        <CurrentContainersSection
+          containers={containers}
+          selectedCellId={selectedCell.id}
+          onContainerClick={setSelectedContainerId}
+        />
+        <CurrentInventorySection rows={data} hasContainers={isOccupied} />
+      </>
+    ) : null;
+
+  const taskTitle =
+    taskType === 'place-existing'
+      ? 'Place existing container'
+      : taskType === 'create-and-place'
+        ? 'Create new container'
+        : taskType === 'edit-policy'
+          ? 'Edit location policy'
+        : '';
+
+  const showDetailsMode = panelMode === 'details';
+  const showTaskMode = panelMode === 'task' && taskType !== null;
 
   return (
     <aside className="flex h-full w-full flex-col" style={{ background: 'var(--surface-primary)' }}>
@@ -357,225 +867,166 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             {selectedCell?.address.raw ?? cellId ?? '—'}
           </span>
         </div>
-        {selectedCell && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: 'var(--accent)' }}
-              onClick={() => {
-                setPlaceError(null);
-                setActiveAction((current) => (current === 'place' ? null : 'place'));
-              }}
-              disabled={isActionPending}
-            >
-              Place existing container
-            </button>
-            <button
-              type="button"
-              className="rounded-md border px-3 py-2 text-xs font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
-              onClick={() => {
-                setCreateError(null);
-                setActiveAction((current) => (current === 'create' ? null : 'create'));
-              }}
-              disabled={isActionPending}
-            >
-              + Create container
-            </button>
-          </div>
-        )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {/* Debug instrumentation (dev-only) - top level state */}
-        {import.meta.env.DEV && cellId && (
-          <div
-            className="rounded border border-blue-200 bg-blue-50 p-2 font-mono text-[10px] text-blue-800"
+      <div
+        className={`flex flex-1 flex-col overflow-y-auto px-4 py-4 ${
+          showTaskMode ? 'bg-[var(--surface-subtle)]' : 'gap-3'
+        }`}
+        data-testid={showTaskMode ? 'cell-placement-task-view' : 'cell-placement-details-view'}
+      >
+        {showTaskMode && selectedCell && (
+          <section
+            className="flex min-h-full flex-col rounded-xl border shadow-sm"
+            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+            data-testid="cell-placement-task-shell"
           >
-            <p className="font-semibold">🔍 DEBUG: Placement Panel State</p>
-            <p>cellId: {cellId}</p>
-            <p>selectedCell: {selectedCell ? '✓ found' : '✗ not found'}</p>
-            <p>locationQueryEnabled: {locationQueryEnabled ? 'YES' : 'NO'} | queryKey: {locationQueryKey}</p>
-            <p>locationQueryError: {locationQueryError ? `ERROR: ${locationQueryError.message}` : 'none'}</p>
-            <p>locationRef: {locationRef ? '✓ resolved' : 'pending'} → locationId: {locationId || '(none)'}</p>
-            <p>storageQueryEnabled: {storageQueryEnabled ? 'YES' : 'NO'} | error: {storageQueryError ? 'YES' : 'NO'}</p>
-            <p>storageQuery: {isPending ? 'pending' : 'done'} | isError: {isError ? 'YES' : 'NO'}</p>
-            <p>containerTypesQuery: {isContainerTypesPending ? 'pending' : 'done'} | count: {containerTypes.length}</p>
-          </div>
-        )}
-
-        {activeAction === 'place' && selectedCell && (
-          <div
-            className="rounded-lg p-3"
-            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Place existing container
-            </p>
-            <label className="mt-3 block text-xs text-[var(--text-primary)]">
-              Container ID or code
-              <input
-                value={containerIdInput}
-                onChange={(event) => setContainerIdInput(event.target.value)}
-                placeholder="PLT-23901"
-                className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
-                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-              />
-            </label>
-            {placeError && <p className="mt-2 text-xs text-red-500">{placeError}</p>}
-            <div className="mt-3 flex items-center gap-2">
+            <div
+              className="flex items-center justify-between gap-3 border-b px-4 py-3"
+              style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-subtle)' }}
+              data-testid="cell-placement-task-header"
+            >
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Inspector task
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{taskTitle}</p>
+              </div>
               <button
                 type="button"
-                className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: 'var(--accent)' }}
-                onClick={() => void handlePlace()}
-                disabled={isActionPending || containerIdInput.trim().length === 0}
-              >
-                {placeContainer.isPending ? 'Placing...' : 'Confirm place'}
-              </button>
-              <button
-                type="button"
-                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--text-muted)]"
                 style={{ borderColor: 'var(--border-muted)' }}
-                onClick={() => {
-                  setActiveAction(null);
-                  setPlaceError(null);
-                }}
+                onClick={returnToDetails}
                 disabled={isActionPending}
               >
-                Cancel
+                Back
               </button>
             </div>
-          </div>
-        )}
 
-        {activeAction === 'create' && selectedCell && (
-          <div
-            className="rounded-lg p-3"
-            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-muted)' }}
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              Create new container
-            </p>
-            <label className="mt-3 block text-xs text-[var(--text-primary)]">
-              Container code
-              <input
-                value={containerCodeInput}
-                onChange={(event) => setContainerCodeInput(event.target.value)}
-                placeholder="PLT-23902"
-                className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
-                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-              />
-            </label>
-            <label className="mt-3 block text-xs text-[var(--text-primary)]">
-              Container type
-              <select
-                value={containerTypeIdInput}
-                onChange={(event) => setContainerTypeIdInput(event.target.value)}
-                className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
-                style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                disabled={isContainerTypesPending || isActionPending || storableTypes.length === 0}
-              >
-                {storableTypes.length === 0 && (
-                  <option value="">
-                    {isContainerTypesPending ? 'Loading container types...' : 'No storage-capable container types available'}
-                  </option>
-                )}
-                {storableTypes.map((containerType) => (
-                  <option key={containerType.id} value={containerType.id}>
-                    {containerType.code}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isContainerTypesError && (
-              <p className="mt-2 text-xs text-red-500">Could not load container types.</p>
-            )}
-            {createError && <p className="mt-2 text-xs text-red-500">{createError}</p>}
-
-            {/* Debug instrumentation (dev-only) */}
-            {import.meta.env.DEV && (() => {
-              const createAndPlaceDisabledReason = !isActionPending && !locationId ? 'no active location'
-                : !isActionPending &&
-                  containerCodeInput.trim().length === 0 &&
-                  containerTypeIdInput.length === 0 &&
-                  storableTypes.length === 0
-                  ? ['missing code', 'missing type', 'no storable types loaded'].join(' + ')
-                : !isActionPending && containerCodeInput.trim().length === 0 ? 'missing code'
-                : !isActionPending && containerTypeIdInput.length === 0 ? 'missing type'
-                : !isActionPending && storableTypes.length === 0 ? 'no storable types loaded'
-                : isActionPending ? 'action pending'
-                : null;
-
-              return (
-                <div
-                  className="mt-3 rounded border border-amber-200 bg-amber-50 p-2 font-mono text-[10px] text-amber-800"
-                >
-                  <p className="font-semibold">🔍 DEBUG: Create & Place State</p>
-                  <p>code: {containerCodeInput.trim().length > 0 ? '✓' : '✗'} ({containerCodeInput.length})</p>
-                  <p>type: {containerTypeIdInput.length > 0 ? '✓' : '✗'}</p>
-                  <p>storableTypes: {storableTypes.length}/{containerTypes.length} loaded {isContainerTypesPending ? '(loading...)' : ''}</p>
-                  <p>createMutation: {createContainer.status} {createContainer.error ? `[ERROR: ${createContainer.error.message}]` : ''}</p>
-                  <p>placeMutation: {placeContainer.status} {placeContainer.error ? `[ERROR: ${placeContainer.error.message}]` : ''}</p>
-                  <p>isActionPending: {isActionPending ? 'YES' : 'NO'}</p>
-                  <p>createAndPlaceDisabledReason: {createAndPlaceDisabledReason || 'none'}</p>
-                </div>
-              );
-            })()}
-
-            <div className="mt-3 flex items-center gap-2">
-              {(() => {
-                const buttonDisabled = isActionPending ||
-                  !locationId ||
-                  containerCodeInput.trim().length === 0 ||
-                  containerTypeIdInput.length === 0 ||
-                  storableTypes.length === 0;
-                const disabledReasons = [];
-                if (isActionPending) disabledReasons.push('action pending');
-                if (!locationId) disabledReasons.push('no active location');
-                if (containerCodeInput.trim().length === 0) disabledReasons.push('missing code');
-                if (containerTypeIdInput.length === 0) disabledReasons.push('missing type');
-                if (storableTypes.length === 0) disabledReasons.push('no storable types loaded');
-
-                return (
-                  <>
+            <div className="flex-1 px-4 py-4" data-testid="cell-placement-task-body">
+              {taskType === 'place-existing' && (
+                <div className="space-y-3" data-testid="cell-placement-task-place-existing">
+                  <label className="block text-xs text-[var(--text-primary)]">
+                    Container ID or code
+                    <input
+                      value={containerIdInput}
+                      onChange={(event) => setContainerIdInput(event.target.value)}
+                      placeholder="PLT-23901"
+                      className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                      style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                    />
+                  </label>
+                  {placeError && <p className="mt-2 text-xs text-red-500">{placeError}</p>}
+                  <div className="mt-3 flex items-center gap-2">
                     <button
                       type="button"
                       className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
                       style={{ background: 'var(--accent)' }}
-                      onClick={() => void handleCreateAndPlace()}
-                      disabled={buttonDisabled}
-                      title={buttonDisabled ? `Disabled: ${disabledReasons.join(', ')}` : ''}
+                      onClick={() => void handlePlace()}
+                      disabled={isActionPending || containerIdInput.trim().length === 0}
                     >
-                      {createContainer.isPending
-                        ? 'Creating...'
-                        : placeContainer.isPending
-                          ? 'Placing...'
-                          : 'Create and place'}
+                      {placeContainer.isPending ? 'Placing...' : 'Confirm place'}
                     </button>
-                    {buttonDisabled && import.meta.env.DEV && (
-                      <span className="text-[10px] text-amber-600">
-                        {disabledReasons.join(', ')}
-                      </span>
-                    )}
-                  </>
-                );
-              })()}
-              <button
-                type="button"
-                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
-                style={{ borderColor: 'var(--border-muted)' }}
-                onClick={() => {
-                  setActiveAction(null);
-                  setCreateError(null);
-                }}
-                disabled={isActionPending}
-              >
-                Cancel
-              </button>
+                    <button
+                      type="button"
+                      className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                      style={{ borderColor: 'var(--border-muted)' }}
+                      onClick={returnToDetails}
+                      disabled={isActionPending}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {taskType === 'create-and-place' && (
+                <div className="space-y-3" data-testid="cell-placement-task-create-and-place">
+                  <label className="block text-xs text-[var(--text-primary)]">
+                    Container type
+                    <select
+                      value={containerTypeIdInput}
+                      onChange={(event) => setContainerTypeIdInput(event.target.value)}
+                      className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
+                      style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+                      disabled={isContainerTypesPending || isActionPending || storableTypes.length === 0}
+                    >
+                      {storableTypes.length === 0 && (
+                        <option value="">
+                          {isContainerTypesPending ? 'Loading container types...' : 'No storage-capable container types available'}
+                        </option>
+                      )}
+                      {storableTypes.map((containerType) => (
+                        <option key={containerType.id} value={containerType.id}>
+                          {containerType.code}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {isContainerTypesError && (
+                    <p className="mt-2 text-xs text-red-500">Could not load container types.</p>
+                  )}
+                  {createError && <p className="mt-2 text-xs text-red-500">{createError}</p>}
+
+                  <div className="mt-3 flex items-center gap-2">
+                    {(() => {
+                      const disabledReasons = getCreateAndPlaceDisabledReasons({
+                        isActionPending,
+                        locationId,
+                        containerTypeId: containerTypeIdInput,
+                        storableTypeCount: storableTypes.length
+                      });
+                      const buttonDisabled = disabledReasons.length > 0;
+
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{ background: 'var(--accent)' }}
+                            onClick={() => void handleCreateAndPlace()}
+                            disabled={buttonDisabled}
+                            title={buttonDisabled ? `Disabled: ${disabledReasons.join(', ')}` : ''}
+                          >
+                            {createContainer.isPending
+                              ? 'Creating...'
+                              : placeContainer.isPending
+                                ? 'Placing...'
+                                : 'Create and place'}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
+                            style={{ borderColor: 'var(--border-muted)' }}
+                            onClick={returnToDetails}
+                            disabled={isActionPending}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {taskType === 'edit-policy' && locationId && (
+                <div data-testid="cell-placement-task-edit-policy">
+                  <LocationPolicySection locationId={locationId} mode="editor" />
+                </div>
+              )}
             </div>
-          </div>
+          </section>
+        )}
+
+        {showDetailsMode && currentStateSections}
+        {showDetailsMode && placementActionsBlock}
+        {showDetailsMode && selectedCell && locationId && (
+          <LocationPolicySection
+            locationId={locationId}
+            mode="summary"
+            onEdit={() => enterTaskMode('edit-policy')}
+          />
         )}
 
         {!cellId && (
@@ -628,35 +1079,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
               </p>
             </div>
           </div>
-        )}
-
-        {selectedCell && !isPending && !isError && containers.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <Package className="h-7 w-7 text-slate-300" />
-            <div>
-              <p className="text-sm font-medium text-slate-600">No containers</p>
-              <p className="mt-1 text-xs text-slate-400">This cell is empty.</p>
-            </div>
-          </div>
-        )}
-
-        {selectedCell && !isPending && !isError && containers.length > 0 && (
-          <>
-            <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
-              <Layers className="h-3 w-3" />
-              <span>
-                {containers.length} container{containers.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            {containers.map((group) => (
-              <ContainerCard
-                key={group.containerId}
-                group={group}
-                onContainerClick={setSelectedContainerId}
-                sourceCellId={selectedCell.id}
-              />
-            ))}
-          </>
         )}
       </div>
     </aside>

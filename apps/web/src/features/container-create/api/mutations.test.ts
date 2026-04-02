@@ -73,4 +73,21 @@ describe('createContainer', () => {
       })
     });
   });
+
+  it('allows container creation without externalCode', async () => {
+    vi.mocked(bffRequest).mockResolvedValue({} as never);
+
+    await createContainer({
+      containerTypeId: 'd4e5f6a7-0000-0000-0000-000000000004',
+      operationalRole: 'pick'
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith('/api/containers', {
+      method: 'POST',
+      body: JSON.stringify({
+        containerTypeId: 'd4e5f6a7-0000-0000-0000-000000000004',
+        operationalRole: 'pick'
+      })
+    });
+  });
 });

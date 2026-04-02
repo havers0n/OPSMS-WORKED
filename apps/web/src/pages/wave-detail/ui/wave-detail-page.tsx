@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ChevronDown, ChevronRight, PackagePlus, RefreshCw } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, ChevronDown, ChevronRight, PackagePlus, RefreshCw, X } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, OrderSummary, WaveStatus } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
@@ -143,8 +143,7 @@ function AddOrderModal({ waveId, onClose }: { waveId: string; onClose: () => voi
 
 // ── Wave Order Card (expandable) ───────────────────────────────────────────────
 
-function WaveOrderCard({ order, waveId }: { order: OrderSummary; waveId: string }) {
-  const [expanded, setExpanded] = useState(false);
+function WaveOrderCard({ order, waveId, isExpanded, onToggle }: { order: OrderSummary; waveId: string; isExpanded: boolean; onToggle: () => void }) {
   const detach = useDetachOrderFromWave();
   const orderTransition = useTransitionOrderStatus();
   const target = getPrimaryTransitionTarget(order.status);
@@ -157,12 +156,12 @@ function WaveOrderCard({ order, waveId }: { order: OrderSummary; waveId: string 
       <div
         role="button"
         tabIndex={0}
-        onClick={() => setExpanded((v) => !v)}
-        onKeyDown={(e) => e.key === 'Enter' || e.key === ' ' ? setExpanded((v) => !v) : undefined}
+        onClick={onToggle}
+        onKeyDown={(e) => e.key === 'Enter' || e.key === ' ' ? onToggle() : undefined}
         className="flex w-full cursor-pointer items-center gap-4 p-4 text-left transition hover:bg-slate-50"
       >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -209,10 +208,10 @@ function WaveOrderCard({ order, waveId }: { order: OrderSummary; waveId: string 
       </div>
 
       {/* Expanded: inline order detail */}
-      {expanded && (
+      {isExpanded && (
         <div className="border-t border-slate-100">
           <div className="max-h-[480px] overflow-auto">
-            <OrderDrawer orderId={order.id} onClose={() => setExpanded(false)} />
+            <OrderDrawer orderId={order.id} onClose={onToggle} />
           </div>
         </div>
       )}
@@ -224,9 +223,21 @@ function WaveOrderCard({ order, waveId }: { order: OrderSummary; waveId: string 
 
 export function WaveDetailPage() {
   const { id: waveId } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showAddOrder, setShowAddOrder] = useState(false);
 
   const { data: wave, isLoading, refetch, isRefetching } = useQuery(waveQueryOptions(waveId ?? null));
+
+  // URL is the source of truth for selected order; validate against wave orders to handle stale/invalid params
+  const rawOrderParam = searchParams.get('order');
+  const selectedOrderId = wave?.orders.some((o) => o.id === rawOrderParam) ? rawOrderParam : null;
+
+  function openOrder(orderId: string) {
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('order', orderId); return next; });
+  }
+  function closeOrder() {
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('order'); return next; });
+  }
   const waveTransition = useTransitionWaveStatus();
 
   if (isLoading || !wave) {
@@ -296,6 +307,21 @@ export function WaveDetailPage() {
           </div>
         )}
 
+        {/* ── Stale / invalid order param notice ──────────────── */}
+        {rawOrderParam && !selectedOrderId && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span>Selected order was not found in this wave.</span>
+            <button
+              type="button"
+              onClick={closeOrder}
+              className="shrink-0 rounded p-0.5 hover:bg-amber-100"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* ── Orders section ──────────────────────────────────── */}
         <section>
           <div className="mb-3 flex items-center justify-between">
@@ -326,7 +352,13 @@ export function WaveDetailPage() {
           ) : (
             <div className="space-y-3">
               {wave.orders.map((order) => (
-                <WaveOrderCard key={order.id} order={order} waveId={wave.id} />
+                <WaveOrderCard
+                  key={order.id}
+                  order={order}
+                  waveId={wave.id}
+                  isExpanded={selectedOrderId === order.id}
+                  onToggle={() => selectedOrderId === order.id ? closeOrder() : openOrder(order.id)}
+                />
               ))}
             </div>
           )}

@@ -1,4 +1,9 @@
-import type { LocationOccupancyRow, LocationReference, LocationStorageSnapshotRow } from '@wos/domain';
+import type {
+  LocationOccupancyRow,
+  LocationReference,
+  LocationStorageSnapshotRow,
+  OperationsCellRuntime
+} from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 
@@ -11,7 +16,9 @@ export const locationKeys = {
   storage: (locationId: string | null) =>
     [...locationKeys.all, 'storage', locationId ?? 'none'] as const,
   occupancyByFloor: (floorId: string | null) =>
-    [...locationKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const
+    [...locationKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const,
+  operationsCellsByFloor: (floorId: string | null) =>
+    [...locationKeys.all, 'operations-cells-by-floor', floorId ?? 'none'] as const
 };
 
 async function fetchLocationByCell(cellId: string): Promise<LocationReference> {
@@ -28,6 +35,10 @@ async function fetchLocationStorage(locationId: string): Promise<LocationStorage
 
 async function fetchFloorLocationOccupancy(floorId: string): Promise<LocationOccupancyRow[]> {
   return bffRequest<LocationOccupancyRow[]>(`/api/floors/${floorId}/location-occupancy`);
+}
+
+async function fetchFloorOperationsCells(floorId: string): Promise<OperationsCellRuntime[]> {
+  return bffRequest<OperationsCellRuntime[]>(`/api/floors/${floorId}/operations-cells`);
 }
 
 export function locationByCellQueryOptions(cellId: string | null) {
@@ -58,6 +69,14 @@ export function floorLocationOccupancyQueryOptions(floorId: string | null) {
   return queryOptions({
     queryKey: locationKeys.occupancyByFloor(floorId),
     queryFn: () => fetchFloorLocationOccupancy(floorId as string),
+    enabled: Boolean(floorId)
+  });
+}
+
+export function floorOperationsCellsQueryOptions(floorId: string | null) {
+  return queryOptions({
+    queryKey: locationKeys.operationsCellsByFloor(floorId),
+    queryFn: () => fetchFloorOperationsCells(floorId as string),
     enabled: Boolean(floorId)
   });
 }

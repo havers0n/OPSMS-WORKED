@@ -262,7 +262,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
         <div className="mt-1 flex items-center gap-2">
           <Box className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
           <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">
-            {identity?.externalCode ?? containerId ?? '-'}
+            {identity?.systemCode ?? containerId ?? '-'}
           </span>
         </div>
         {identity && (

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ChevronRight, Package, PackagePlus, RefreshCw, Waves as WavesIcon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, WaveStatus, WaveSummary } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
@@ -103,8 +103,10 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 export function OperationsPage() {
   const [showCreateWave, setShowCreateWave] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedOrderId = searchParams.get('order');
   const [navigateToWave, setNavigateToWave] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const { data: waves = [], isLoading: wavesLoading, refetch: refetchWaves, isRefetching: wavesRefetching } = useQuery(wavesQueryOptions());
   const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders, isRefetching: ordersRefetching } = useQuery(ordersQueryOptions());
@@ -113,11 +115,12 @@ export function OperationsPage() {
 
   const standaloneOrders = allOrders.filter((o) => !o.waveId);
 
-  // Navigate after wave creation
-  if (navigateToWave) {
-    window.location.href = waveDetailPath(navigateToWave);
-    return null;
-  }
+  // Navigate after wave creation (SPA-safe: no hard reload)
+  useEffect(() => {
+    if (navigateToWave) {
+      navigate(waveDetailPath(navigateToWave));
+    }
+  }, [navigateToWave, navigate]);
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -285,7 +288,7 @@ export function OperationsPage() {
                     return (
                       <tr
                         key={order.id}
-                        onClick={() => setSelectedOrderId(order.id)}
+                        onClick={() => setSearchParams((p) => { p.set('order', order.id); return p; })}
                         className={`cursor-pointer transition hover:bg-slate-50 ${selectedOrderId === order.id ? 'bg-cyan-50/60' : ''}`}
                       >
                         <td className="px-5 py-3 font-medium text-slate-900">{order.externalNumber}</td>
@@ -324,7 +327,7 @@ export function OperationsPage() {
       {/* Order detail panel */}
       {selectedOrderId && (
         <div className="fixed inset-y-0 right-0 z-30 m-4 mt-[56px] w-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-          <OrderDrawer orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
+          <OrderDrawer orderId={selectedOrderId} onClose={() => setSearchParams((p) => { p.delete('order'); return p; })} />
         </div>
       )}
 

@@ -28,6 +28,9 @@ export const useSetMinRackDistance = () => useEditorStore((state) => state.setMi
 export const useHoveredRackId = () => useEditorStore((state) => state.hoveredRackId);
 export const useCreatingRackId = () => useEditorStore((state) => state.creatingRackId);
 export const useSetCreatingRackId = () => useEditorStore((state) => state.setCreatingRackId);
+export const useHighlightedCellIds = () => useEditorStore((state) => state.highlightedCellIds);
+export const useSetHighlightedCellIds = () => useEditorStore((state) => state.setHighlightedCellIds);
+export const useClearHighlightedCellIds = () => useEditorStore((state) => state.clearHighlightedCellIds);
 export const useCanvasZoom = () => useEditorStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
 export const useIsLayoutEditable = () => useEditorStore((state) => state.draft?.state === 'draft');

@@ -4,7 +4,6 @@ import {
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   containerSchema,
-  containerTypeSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
   inventoryUnitSchema,
@@ -171,6 +170,7 @@ export function mapContainerTypeRowToDomain(row: {
 export function mapContainerRowToDomain(row: {
   id: string;
   tenant_id: string;
+  system_code: string;
   external_code: string | null;
   container_type_id: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -181,6 +181,7 @@ export function mapContainerRowToDomain(row: {
   return containerSchema.parse({
     id: row.id,
     tenantId: row.tenant_id,
+    systemCode: row.system_code,
     externalCode: row.external_code,
     containerTypeId: row.container_type_id,
     status: row.status,
@@ -213,6 +214,7 @@ export function mapCellOccupancyRowToDomain(row: {
 export function mapContainerStorageSnapshotRowToDomain(row: {
   tenant_id: string;
   container_id: string;
+  system_code: string;
   external_code: string | null;
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -225,6 +227,7 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   return containerStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
     containerId: row.container_id,
+    systemCode: row.system_code,
     externalCode: row.external_code,
     containerType: row.container_type,
     containerStatus: row.container_status,
@@ -300,6 +303,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
   location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
   cell_id: string | null;
   container_id: string;
+  system_code: string;
   external_code: string | null;
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -318,6 +322,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
     locationType: row.location_type,
     cellId: row.cell_id,
     containerId: row.container_id,
+    systemCode: row.system_code,
     externalCode: row.external_code,
     containerType: row.container_type,
     containerStatus: row.container_status,
@@ -794,6 +799,7 @@ export function mapPickStepRowToDomain(row: {
 export function mapPickTaskRowToDomain(
   row: {
     id: string;
+    task_number: string;
     tenant_id: string;
     source_type: 'order' | 'wave';
     source_id: string;
@@ -807,6 +813,7 @@ export function mapPickTaskRowToDomain(
 ): PickTask {
   return pickTaskSchema.parse({
     id: row.id,
+    taskNumber: row.task_number,
     tenantId: row.tenant_id,
     sourceType: row.source_type,
     sourceId: row.source_id,
@@ -821,6 +828,7 @@ export function mapPickTaskRowToDomain(
 
 export function mapPickTaskSummaryRowToDomain(row: {
   id: string;
+  task_number: string;
   tenant_id: string;
   source_type: 'order' | 'wave';
   source_id: string;
@@ -835,6 +843,7 @@ export function mapPickTaskSummaryRowToDomain(row: {
 }): PickTaskSummary {
   return pickTaskSummarySchema.parse({
     id: row.id,
+    taskNumber: row.task_number,
     tenantId: row.tenant_id,
     sourceType: row.source_type,
     sourceId: row.source_id,

@@ -64,6 +64,7 @@ type WaveCreateCheckRow = {
 
 type PickTaskRow = {
   id: string;
+  task_number: string;
   tenant_id: string;
   source_type: 'order' | 'wave';
   source_id: string;
@@ -432,7 +433,7 @@ export function createOrdersRepo(supabase: SupabaseClient): OrdersRepo {
     async listOrderExecutionPickTasks(orderId) {
       const { data: taskRows, error: taskError } = await supabase
         .from('pick_tasks')
-        .select('id,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at')
+        .select('id,task_number,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at')
         .eq('source_type', 'order')
         .eq('source_id', orderId)
         .order('created_at', { ascending: false })

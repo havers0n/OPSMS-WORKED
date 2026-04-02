@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, Search, X } from 'lucide-react';
+import { AlertCircle, ChevronRight, RefreshCw, Search, X } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Order, OrderStatus, PickTaskSummary, Product } from '@wos/domain';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import {
@@ -15,6 +16,11 @@ import {
   getOrderStatusLabel,
   getPrimaryTransitionTarget
 } from '@/entities/order/lib/order-actions';
+import {
+  getPickTaskStatusColor,
+  getPickTaskStatusLabel
+} from '@/entities/pick-task/lib/pick-task-actions';
+import { pickTaskDetailPath } from '@/shared/config/routes';
 
 function primaryAction(order: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveName'>) {
   const target = getPrimaryTransitionTarget(order.status);
@@ -26,18 +32,52 @@ function primaryAction(order: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveN
   return { target, reason: null };
 }
 
-function TaskCard({ task }: { task: PickTaskSummary }) {
+function TaskCard({
+  task,
+  orderId,
+  waveId,
+}: {
+  task: PickTaskSummary;
+  orderId: string;
+  waveId?: string;
+}) {
+  const pct = task.totalSteps > 0
+    ? Math.round((task.completedSteps / task.totalSteps) * 100)
+    : 0;
+
   return (
-    <div className="rounded-xl border border-slate-200 p-3 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="font-medium text-slate-900">Pick task</span>
-        <span className="text-xs text-slate-500">{task.status}</span>
+    <Link
+      to={pickTaskDetailPath(task.id, { orderId, waveId })}
+      className="block rounded-xl border border-slate-200 p-3 text-sm transition hover:border-cyan-300 hover:bg-cyan-50/40"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-slate-900">{task.taskNumber}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getPickTaskStatusColor(task.status)}`}>
+            {getPickTaskStatusLabel(task.status)}
+          </span>
+        </div>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       </div>
-      <div className="mt-2 text-xs text-slate-500">
-        {task.completedSteps}/{task.totalSteps} steps complete
+
+      <div className="mt-2 flex items-center gap-2">
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-cyan-500'}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className="shrink-0 text-xs text-slate-500">
+          {task.completedSteps}/{task.totalSteps} steps
+        </span>
       </div>
-      <div className="mt-1 text-xs text-slate-500">Exceptions: {task.exceptionSteps}</div>
-    </div>
+
+      {task.exceptionSteps > 0 && (
+        <div className="mt-1 text-xs text-orange-600">
+          {task.exceptionSteps} exception{task.exceptionSteps !== 1 ? 's' : ''}
+        </div>
+      )}
+    </Link>
   );
 }
 
@@ -128,10 +168,26 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
   const transition = useTransitionOrderStatus();
   const removeLine = useRemoveOrderLine(orderId);
 
-  if (isLoading || !order) {
+  if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <RefreshCw className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertCircle className="h-8 w-8 text-slate-300" />
+        <div className="text-sm text-slate-500">Order not found.</div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+        >
+          Dismiss
+        </button>
       </div>
     );
   }
@@ -230,7 +286,12 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
         {execution.length > 0 ? (
           <div className="space-y-2">
             {execution.map((task) => (
-              <TaskCard key={task.id} task={task} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                orderId={order.id}
+                waveId={order.waveId ?? undefined}
+              />
             ))}
           </div>
         ) : null}

@@ -15,6 +15,7 @@ export const containerTypeSchema = z.object({
 export const containerSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
+  systemCode: z.string().trim().min(1),
   externalCode: z.string().trim().min(1).nullable(),
   containerTypeId: z.string().uuid(),
   status: containerStatusSchema,
