@@ -5,6 +5,7 @@ import { productSchema } from '../catalog/product';
 export const containerStorageSnapshotRowSchema = z.object({
   tenantId: z.string().uuid(),
   containerId: z.string().uuid(),
+  systemCode: z.string().trim().min(1),
   externalCode: z.string().trim().min(1).nullable(),
   containerType: z.string().trim().min(1),
   containerStatus: containerStatusSchema,

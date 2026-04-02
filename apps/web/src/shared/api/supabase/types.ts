@@ -1972,6 +1972,7 @@ export type Database = {
           location_type: string | null
           placed_at: string | null
           tenant_id: string | null
+          system_code: string | null
         }
         Relationships: [
           {
@@ -2070,6 +2071,7 @@ export type Database = {
           serial_no: string | null
           tenant_id: string | null
           uom: string | null
+          system_code: string | null
         }
         Relationships: [
           {
@@ -2308,6 +2310,7 @@ export type Database = {
           serial_no: string | null
           tenant_id: string | null
           uom: string | null
+          system_code: string | null
         }
         Relationships: [
           {
@@ -2777,4 +2780,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

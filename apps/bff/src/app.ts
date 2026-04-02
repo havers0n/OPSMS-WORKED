@@ -346,6 +346,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
       cell_id: string | null;
       container_id: string;
+      system_code: string;
       external_code: string | null;
       container_type: string;
       container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -608,7 +609,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_canonical_v')
-      .select('tenant_id,container_id,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
+      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
       .eq('container_id', containerId);
 
     if (error) {
@@ -618,6 +619,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
       tenant_id: string;
       container_id: string;
+      system_code: string;
       external_code: string | null;
       container_type: string;
       container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';

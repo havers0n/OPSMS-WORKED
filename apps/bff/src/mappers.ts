@@ -214,6 +214,7 @@ export function mapCellOccupancyRowToDomain(row: {
 export function mapContainerStorageSnapshotRowToDomain(row: {
   tenant_id: string;
   container_id: string;
+  system_code: string;
   external_code: string | null;
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -226,6 +227,7 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   return containerStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
     containerId: row.container_id,
+    systemCode: row.system_code,
     externalCode: row.external_code,
     containerType: row.container_type,
     containerStatus: row.container_status,
@@ -301,6 +303,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
   location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
   cell_id: string | null;
   container_id: string;
+  system_code: string;
   external_code: string | null;
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
@@ -319,6 +322,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
     locationType: row.location_type,
     cellId: row.cell_id,
     containerId: row.container_id,
+    systemCode: row.system_code,
     externalCode: row.external_code,
     containerType: row.container_type,
     containerStatus: row.container_status,
