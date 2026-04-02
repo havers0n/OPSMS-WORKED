@@ -196,11 +196,15 @@ function StepCard({
   step,
   isActive,
   pickContainerId,
+  taskId,
+  taskNumber,
   onExecuted
 }: {
   step: PickStepDetail;
   isActive: boolean;
   pickContainerId: string;
+  taskId: string;
+  taskNumber: string;
   onExecuted: () => void;
 }) {
   const [qtyActual, setQtyActual] = useState(String(step.qtyRequired));
@@ -269,7 +273,9 @@ function StepCard({
                   <Link
                     to={warehouseViewPath({
                       floorId: step.sourceFloorId,
-                      cellId: step.sourceCellId
+                      cellId: step.sourceCellId,
+                      returnTaskId: taskId,
+                      returnTaskNumber: taskNumber
                     })}
                     className="text-cyan-700 underline-offset-2 hover:underline"
                   >
@@ -647,6 +653,8 @@ export function PickTaskPage() {
                     step={step}
                     isActive={isActive}
                     pickContainerId={pickContainer?.id ?? ''}
+                    taskId={task.id}
+                    taskNumber={task.taskNumber}
                     onExecuted={() => {
                       // Invalidation handled by useExecutePickStep onSuccess.
                     }}

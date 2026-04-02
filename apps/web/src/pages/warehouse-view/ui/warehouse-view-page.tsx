@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import {
   useActiveFloorId,
   useActiveSiteId,
@@ -14,7 +15,7 @@ import {
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { useSites } from '@/entities/site/api/use-sites';
-import { routes } from '@/shared/config/routes';
+import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
 import { ViewTopBar } from '@/widgets/warehouse-viewer/ui/view-top-bar';
 
@@ -33,6 +34,8 @@ export function WarehouseViewPage() {
   const [searchParams] = useSearchParams();
   const targetFloorId = searchParams.get('floor');
   const targetCellId = searchParams.get('cell');
+  const returnTaskId = searchParams.get('returnTaskId');
+  const returnTaskNumber = searchParams.get('returnTaskNumber');
 
   // Auto-select first site if none selected
   useEffect(() => {
@@ -127,6 +130,24 @@ export function WarehouseViewPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <ViewTopBar />
+      {returnTaskId && returnTaskNumber && (
+        <div
+          className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
+          style={{
+            borderColor: 'var(--border-muted)',
+            background: 'var(--surface-subtle)'
+          }}
+        >
+          <Link
+            to={pickTaskDetailPath(returnTaskId)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+            style={{ color: 'var(--accent)' }}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Task {returnTaskNumber}
+          </Link>
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         <PublishedViewer />
       </div>

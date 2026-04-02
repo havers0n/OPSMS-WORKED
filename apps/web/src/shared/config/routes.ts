@@ -26,11 +26,18 @@ export function pickTaskDetailPath(
   return `/operations/pick-tasks/${id}${qs ? `?${qs}` : ''}`;
 }
 
-export function warehouseViewPath(opts?: { floorId?: string; cellId?: string }) {
+export function warehouseViewPath(opts?: {
+  floorId?: string;
+  cellId?: string;
+  returnTaskId?: string;
+  returnTaskNumber?: string;
+}) {
   if (!opts) return routes.warehouseView;
   const params = new URLSearchParams();
   if (opts.floorId) params.set('floor', opts.floorId);
   if (opts.cellId) params.set('cell', opts.cellId);
+  if (opts.returnTaskId) params.set('returnTaskId', opts.returnTaskId);
+  if (opts.returnTaskNumber) params.set('returnTaskNumber', opts.returnTaskNumber);
   const qs = params.toString();
   return `${routes.warehouseView}${qs ? `?${qs}` : ''}`;
 }
