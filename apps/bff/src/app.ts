@@ -118,6 +118,11 @@ import {
 } from './features/picking/service.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
+import {
+  createProductLocationRolesService,
+  type ProductLocationRolesService
+} from './features/product-location-roles/service.js';
+import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
@@ -130,6 +135,7 @@ type ContainersServiceFactory = (context: AuthenticatedRequestContext) => Contai
 type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsService;
 type ProductsServiceFactory = (context: AuthenticatedRequestContext) => ProductsService;
 type PickingServiceFactory = (context: AuthenticatedRequestContext) => PickingService;
+type ProductLocationRolesServiceFactory = (context: AuthenticatedRequestContext) => ProductLocationRolesService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -145,6 +151,7 @@ type BuildAppOptions = {
   getContainersService?: ContainersServiceFactory;
   getFloorsService?: FloorsServiceFactory;
   getProductsService?: ProductsServiceFactory;
+  getProductLocationRolesService?: ProductLocationRolesServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -217,6 +224,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getPickingService =
     options.getPickingService ??
     ((context: AuthenticatedRequestContext) => createPickingService(getUserSupabase(context)));
+  const getProductLocationRolesService =
+    options.getProductLocationRolesService ??
+    ((context: AuthenticatedRequestContext) =>
+      createProductLocationRolesService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -293,6 +304,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
+  registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
 
   app.get('/api/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
