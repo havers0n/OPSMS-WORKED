@@ -1,11 +1,18 @@
 import { useEditorStore } from './editor-store';
-import type { EditorSelection, PlacementInteraction } from './editor-types';
+import {
+  resolveInteractionScope,
+  type ActiveStorageWorkflow,
+  type EditorSelection,
+  type InteractionScope,
+  type RackSelectionFocus
+} from './editor-types';
 
 // Stable empty fallbacks — must live outside selectors so the reference never changes
 // between renders. Returning a new literal (e.g. `[] as string[]`) inside a Zustand
 // selector causes useSyncExternalStore to see a new snapshot on every call, which
 // triggers an infinite re-render loop ("getSnapshot should be cached" warning).
 const EMPTY_RACK_IDS: string[] = [];
+const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 
 export const useViewMode = () => useEditorStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
@@ -18,6 +25,16 @@ export const useSelectedRackIds = () =>
 export const useSelectedRackId = () =>
   useEditorStore((state) =>
     state.selection.type === 'rack' ? (state.selection.rackIds[0] ?? null) : null
+  );
+export const useSelectedZoneId = () =>
+  useEditorStore((state) =>
+    state.selection.type === 'zone' ? state.selection.zoneId : null
+  );
+export const useSelectedRackFocus = (): RackSelectionFocus =>
+  useEditorStore((state) =>
+    state.selection.type === 'rack'
+      ? (state.selection.focus ?? BODY_RACK_FOCUS)
+      : BODY_RACK_FOCUS
   );
 export const useSetSelection = () => useEditorStore((state) => state.setSelection);
 export const useClearSelection = () => useEditorStore((state) => state.clearSelection);
@@ -40,12 +57,19 @@ export const useResetDraft = () => useEditorStore((state) => state.resetDraft);
 export const useInitializeDraft = () => useEditorStore((state) => state.initializeDraft);
 export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraftSaved);
 export const useCreateRack = () => useEditorStore((state) => state.createRack);
+export const useCreateZone = () => useEditorStore((state) => state.createZone);
 export const useDeleteRack = () => useEditorStore((state) => state.deleteRack);
+export const useDeleteZone = () => useEditorStore((state) => state.deleteZone);
 export const useDuplicateRack = () => useEditorStore((state) => state.duplicateRack);
 export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackId);
+export const useSetSelectedZoneId = () => useEditorStore((state) => state.setSelectedZoneId);
+export const useSetSelectedRackSide = () =>
+  useEditorStore((state) => state.setSelectedRackSide);
 export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
 export const useSetCanvasZoom = () => useEditorStore((state) => state.setZoom);
 export const useUpdateRackPosition = () => useEditorStore((state) => state.updateRackPosition);
+export const useUpdateZoneRect = () => useEditorStore((state) => state.updateZoneRect);
+export const useUpdateZoneDetails = () => useEditorStore((state) => state.updateZoneDetails);
 export const useRotateRack = () => useEditorStore((state) => state.rotateRack);
 export const useUpdateRackGeneral = () => useEditorStore((state) => state.updateRackGeneral);
 export const useUpdateFaceConfig = () => useEditorStore((state) => state.updateFaceConfig);
@@ -74,10 +98,30 @@ export const useSelectedCellId = () =>
   );
 export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);
 export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);
-export const usePlacementInteraction = (): PlacementInteraction =>
-  useEditorStore((state) => state.placementInteraction);
+export const useActiveStorageWorkflow = (): ActiveStorageWorkflow =>
+  useEditorStore((state) => state.activeStorageWorkflow);
+export const useInteractionScope = (): InteractionScope =>
+  useEditorStore((state) =>
+    resolveInteractionScope(state.selection, state.activeStorageWorkflow)
+  );
+export const useStartPlaceContainerWorkflow = () =>
+  useEditorStore((state) => state.startPlaceContainerWorkflow);
+export const useStartCreateAndPlaceWorkflow = () =>
+  useEditorStore((state) => state.startCreateAndPlaceWorkflow);
 export const useStartPlacementMove = () => useEditorStore((state) => state.startPlacementMove);
 export const useSetPlacementMoveTargetCellId = () =>
   useEditorStore((state) => state.setPlacementMoveTargetCellId);
 export const useCancelPlacementInteraction = () =>
   useEditorStore((state) => state.cancelPlacementInteraction);
+export const useSetActiveStorageWorkflowError = () =>
+  useEditorStore((state) => state.setActiveStorageWorkflowError);
+export const useSetCreateAndPlacePlacementRetry = () =>
+  useEditorStore((state) => state.setCreateAndPlacePlacementRetry);
+export const useMarkActiveStorageWorkflowSubmitting = () =>
+  useEditorStore((state) => state.markActiveStorageWorkflowSubmitting);
+export const useContextPanelMode = () =>
+  useEditorStore((state) => state.contextPanelMode);
+export const useSetContextPanelMode = () =>
+  useEditorStore((state) => state.setContextPanelMode);
+export const useToggleContextPanelMode = () =>
+  useEditorStore((state) => state.toggleContextPanelMode);

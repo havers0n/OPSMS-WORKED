@@ -1,11 +1,21 @@
-import type { LayoutDraft, Rack, RackFace, RackKind, SlotNumberingDirection } from '@wos/domain';
+import type {
+  LayoutDraft,
+  Rack,
+  RackFace,
+  RackKind,
+  SlotNumberingDirection,
+  Zone
+} from '@wos/domain';
 import { create } from 'zustand';
 import {
+  type ActiveStorageWorkflow,
+  type ContextPanelMode,
   normalizeViewMode,
   type AnyViewMode,
   type EditorMode,
   type EditorSelection,
-  type PlacementInteraction,
+  type RackSelectionFocus,
+  type RackSideFocus,
   type ViewMode
 } from './editor-types';
 import {
@@ -31,6 +41,7 @@ function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
     layoutVersionId: draft.layoutVersionId,
     state: draft.state,
     rackCount: draft.rackIds.length,
+    zoneCount: draft.zoneIds.length,
     sample
   };
 }
@@ -40,7 +51,8 @@ type EditorStore = {
   editorMode: EditorMode;
   /** Canonical selection state. Use setSelection / clearSelection to mutate. */
   selection: EditorSelection;
-  placementInteraction: PlacementInteraction;
+  activeStorageWorkflow: ActiveStorageWorkflow;
+  contextPanelMode: ContextPanelMode;
   hoveredRackId: string | null;
   /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
   creatingRackId: string | null;
@@ -58,14 +70,24 @@ type EditorStore = {
   setSelectedRackIds: (rackIds: string[]) => void;
   /** Convenience wrapper — sets a single-rack selection, or clears if null. */
   setSelectedRackId: (rackId: string | null) => void;
+  /** Focus a specific side of one selected rack. */
+  setSelectedRackSide: (rackId: string, side: RackSideFocus) => void;
   toggleRackSelection: (rackId: string) => void;
+  setSelectedZoneId: (zoneId: string | null) => void;
   /** Convenience wrapper — sets a cell-type selection, or clears if null. */
   setSelectedCellId: (cellId: string | null) => void;
   /** Convenience wrapper — sets a container-type selection, or clears if null. */
   setSelectedContainerId: (containerId: string | null, sourceCellId?: string | null) => void;
+  startPlaceContainerWorkflow: (cellId: string) => void;
+  startCreateAndPlaceWorkflow: (cellId: string) => void;
   startPlacementMove: (containerId: string, fromCellId: string) => void;
   setPlacementMoveTargetCellId: (cellId: string | null) => void;
   cancelPlacementInteraction: () => void;
+  setActiveStorageWorkflowError: (errorMessage: string | null) => void;
+  setCreateAndPlacePlacementRetry: (createdContainer: { id: string; code: string }, errorMessage: string) => void;
+  markActiveStorageWorkflowSubmitting: () => void;
+  setContextPanelMode: (mode: ContextPanelMode) => void;
+  toggleContextPanelMode: () => void;
   setHoveredRackId: (rackId: string | null) => void;
   setCreatingRackId: (rackId: string | null) => void;
   setHighlightedCellIds: (cellIds: string[]) => void;
@@ -76,9 +98,13 @@ type EditorStore = {
   initializeDraft: (draft: LayoutDraft) => void;
   markDraftSaved: (layoutVersionId: string) => void;
   createRack: (x: number, y: number) => void;
+  createZone: (rect: { x: number; y: number; width: number; height: number }) => void;
   deleteRack: (rackId: string) => void;
+  deleteZone: (zoneId: string) => void;
   duplicateRack: (rackId: string) => void;
   updateRackPosition: (rackId: string, x: number, y: number) => void;
+  updateZoneRect: (zoneId: string, rect: { x: number; y: number; width: number; height: number }) => void;
+  updateZoneDetails: (zoneId: string, patch: Partial<Pick<Zone, 'name' | 'category' | 'color'>>) => void;
   rotateRack: (rackId: string) => void;
   updateRackGeneral: (rackId: string, patch: Partial<Pick<Rack, 'displayCode' | 'kind' | 'axis' | 'totalLength' | 'depth'>>) => void;
   updateFaceConfig: (rackId: string, side: 'A' | 'B', patch: Partial<Pick<RackFace, 'slotNumberingDirection' | 'enabled'>>) => void;
@@ -103,7 +129,8 @@ const initialEditorState = {
   viewMode: 'layout' as ViewMode,
   editorMode: 'select' as EditorMode,
   selection: { type: 'none' } as EditorSelection,
-  placementInteraction: { type: 'idle' } as PlacementInteraction,
+  activeStorageWorkflow: null as ActiveStorageWorkflow,
+  contextPanelMode: 'compact' as ContextPanelMode,
   hoveredRackId: null,
   creatingRackId: null,
   highlightedCellIds: [],
@@ -116,8 +143,17 @@ const initialEditorState = {
 
 // ── Selection helpers ──────────────────────────────────────────────────────────
 
-function makeRackSelection(ids: string[]): EditorSelection {
-  return ids.length > 0 ? { type: 'rack', rackIds: ids } : { type: 'none' };
+function makeRackSelection(
+  ids: string[],
+  focus: RackSelectionFocus = { type: 'body' }
+): EditorSelection {
+  return ids.length > 0 ? { type: 'rack', rackIds: ids, focus } : { type: 'none' };
+}
+
+function getRackSelectionFocus(selection: EditorSelection): RackSelectionFocus {
+  return selection.type === 'rack'
+    ? (selection.focus ?? { type: 'body' })
+    : { type: 'body' };
 }
 
 function getSelectedRackIds(selection: EditorSelection): string[] {
@@ -136,6 +172,17 @@ function updateRackInDraft(draft: LayoutDraft, rackId: string, updater: (rack: R
   const nextDraft = cloneDraft(draft);
   const rack = nextDraft.racks[rackId];
   nextDraft.racks[rackId] = updater(rack);
+  return nextDraft;
+}
+
+function updateZoneInDraft(draft: LayoutDraft, zoneId: string, updater: (zone: Zone) => Zone): LayoutDraft {
+  const nextDraft = cloneDraft(draft);
+  const zone = nextDraft.zones[zoneId];
+  if (!zone) {
+    return draft;
+  }
+
+  nextDraft.zones[zoneId] = updater(zone);
   return nextDraft;
 }
 
@@ -259,6 +306,47 @@ function nextRackDisplayCode(racks: Record<string, Rack>): string {
   return String(max + 1).padStart(2, '0');
 }
 
+function nextZoneCode(zones: Record<string, Zone>): string {
+  const numerics = Object.values(zones)
+    .map((zone) => parseInt(zone.code.replace(/^Z/i, ''), 10))
+    .filter((value) => !Number.isNaN(value));
+  const max = numerics.length > 0 ? Math.max(...numerics) : 0;
+  return `Z${String(max + 1).padStart(2, '0')}`;
+}
+
+function clampZoneCoordinate(value: number) {
+  return Math.max(0, Math.round(value));
+}
+
+function clampZoneSize(value: number) {
+  return Math.max(40, Math.round(value));
+}
+
+const DEFAULT_ZONE_COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#a78bfa'];
+
+function buildNewZone(
+  zones: Record<string, Zone>,
+  rect: { x: number; y: number; width: number; height: number }
+): Zone {
+  const id = newEntityId();
+  const code = nextZoneCode(zones);
+  const colorIndex =
+    Math.max(0, parseInt(code.replace(/^Z/i, ''), 10) - 1) %
+    DEFAULT_ZONE_COLORS.length;
+
+  return {
+    id,
+    code,
+    name: `Zone ${code.replace(/^Z/i, '')}`,
+    category: null,
+    color: DEFAULT_ZONE_COLORS[colorIndex],
+    x: clampZoneCoordinate(rect.x),
+    y: clampZoneCoordinate(rect.y),
+    width: clampZoneSize(rect.width),
+    height: clampZoneSize(rect.height)
+  };
+}
+
 function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
   const rackId = newEntityId();
   const faceAId = newEntityId();
@@ -308,19 +396,41 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Clear selection on every mode switch — stale rack/cell selections from
       // the previous mode should never bleed into the new one.
       selection: { type: 'none' },
-      placementInteraction: { type: 'idle' },
+      activeStorageWorkflow: null,
       creatingRackId: null,
       highlightedCellIds: []
     }),
   setEditorMode: (editorMode) => set({ editorMode }),
-  setSelection: (selection) => set({ selection, placementInteraction: { type: 'idle' } }),
-  clearSelection: () => set({ selection: { type: 'none' }, placementInteraction: { type: 'idle' } }),
+  setSelection: (selection) =>
+    set({
+      selection,
+      activeStorageWorkflow: null
+    }),
+  clearSelection: () =>
+    set({
+      selection: { type: 'none' },
+      activeStorageWorkflow: null
+    }),
   setSelectedRackIds: (rackIds) =>
-    set({ selection: makeRackSelection(rackIds), placementInteraction: { type: 'idle' } }),
+    set({
+      selection: makeRackSelection(rackIds),
+      activeStorageWorkflow: null
+    }),
   setSelectedRackId: (rackId) =>
     set({
-      selection: rackId ? { type: 'rack', rackIds: [rackId] } : { type: 'none' },
-      placementInteraction: { type: 'idle' }
+      selection: rackId
+        ? { type: 'rack', rackIds: [rackId], focus: { type: 'body' } }
+        : { type: 'none' },
+      activeStorageWorkflow: null
+    }),
+  setSelectedRackSide: (rackId, side) =>
+    set({
+      selection: {
+        type: 'rack',
+        rackIds: [rackId],
+        focus: { type: 'side', side }
+      },
+      activeStorageWorkflow: null
     }),
   toggleRackSelection: (rackId) => set((state) => {
     const current = getSelectedRackIds(state.selection);
@@ -329,38 +439,162 @@ export const useEditorStore = create<EditorStore>((set) => ({
       : [...current, rackId];
     return {
       selection: makeRackSelection(next),
-      placementInteraction: { type: 'idle' }
+      activeStorageWorkflow: null
     };
   }),
+  setSelectedZoneId: (zoneId) =>
+    set({
+      selection: zoneId ? { type: 'zone', zoneId } : { type: 'none' },
+      activeStorageWorkflow: null
+    }),
   setSelectedCellId: (cellId) =>
     set({
       selection: cellId ? { type: 'cell', cellId } : { type: 'none' },
-      placementInteraction: { type: 'idle' }
+      activeStorageWorkflow: null
     }),
   setSelectedContainerId: (containerId, sourceCellId = null) =>
     set({
       selection: containerId
         ? { type: 'container', containerId, sourceCellId }
         : { type: 'none' },
-      placementInteraction: { type: 'idle' }
+      activeStorageWorkflow: null
     }),
+  startPlaceContainerWorkflow: (cellId) =>
+    set((state) => ({
+      selection: { type: 'cell', cellId },
+      activeStorageWorkflow:
+        state.viewMode === 'storage'
+          ? {
+              kind: 'place-container',
+              cellId,
+              status: 'editing',
+              errorMessage: null
+            }
+          : state.activeStorageWorkflow
+    })),
+  startCreateAndPlaceWorkflow: (cellId) =>
+    set((state) => ({
+      selection: { type: 'cell', cellId },
+      activeStorageWorkflow:
+        state.viewMode === 'storage'
+          ? {
+              kind: 'create-and-place',
+              cellId,
+              status: 'editing',
+              errorMessage: null,
+              createdContainer: null
+            }
+          : state.activeStorageWorkflow
+    })),
   startPlacementMove: (containerId, fromCellId) =>
-    set({
-      placementInteraction: {
-        type: 'move-container',
-        containerId,
-        fromCellId,
-        targetCellId: null
-      }
-    }),
+    set((state) => ({
+      activeStorageWorkflow:
+        state.viewMode === 'storage'
+          ? {
+              kind: 'move-container',
+              containerId,
+              sourceCellId: fromCellId,
+              targetCellId: null,
+              status: 'targeting',
+              errorMessage: null
+            }
+          : state.activeStorageWorkflow
+    })),
   setPlacementMoveTargetCellId: (cellId) =>
     set((state) => ({
-      placementInteraction:
-        state.placementInteraction.type === 'move-container'
-          ? { ...state.placementInteraction, targetCellId: cellId }
-          : state.placementInteraction
+      activeStorageWorkflow:
+        state.activeStorageWorkflow?.kind === 'move-container' &&
+        state.activeStorageWorkflow.status !== 'submitting'
+          ? {
+              ...state.activeStorageWorkflow,
+              targetCellId: cellId,
+              status: 'targeting',
+              errorMessage: null
+            }
+          : state.activeStorageWorkflow
     })),
-  cancelPlacementInteraction: () => set({ placementInteraction: { type: 'idle' } }),
+  cancelPlacementInteraction: () => set({ activeStorageWorkflow: null }),
+  setActiveStorageWorkflowError: (errorMessage) =>
+    set((state) => {
+      if (state.activeStorageWorkflow === null) {
+        return state;
+      }
+
+      if (errorMessage === null) {
+        if (state.activeStorageWorkflow.kind === 'move-container') {
+          return {
+            activeStorageWorkflow: {
+              ...state.activeStorageWorkflow,
+              status: 'targeting',
+              errorMessage: null
+            }
+          };
+        }
+
+        if (state.activeStorageWorkflow.kind === 'place-container') {
+          return {
+            activeStorageWorkflow: {
+              ...state.activeStorageWorkflow,
+              status: 'editing',
+              errorMessage: null
+            }
+          };
+        }
+
+        return {
+          activeStorageWorkflow: {
+            ...state.activeStorageWorkflow,
+            status:
+              state.activeStorageWorkflow.createdContainer !== null
+                ? 'placement-retry'
+                : 'editing',
+            errorMessage: null
+          }
+        };
+      }
+
+      return {
+        activeStorageWorkflow: {
+          ...state.activeStorageWorkflow,
+          status: 'error',
+          errorMessage
+        }
+      };
+    }),
+  setCreateAndPlacePlacementRetry: (createdContainer, errorMessage) =>
+    set((state) => {
+      if (state.activeStorageWorkflow?.kind !== 'create-and-place') {
+        return state;
+      }
+
+      return {
+        activeStorageWorkflow: {
+          ...state.activeStorageWorkflow,
+          status: 'placement-retry',
+          errorMessage,
+          createdContainer
+        }
+      };
+    }),
+  markActiveStorageWorkflowSubmitting: () =>
+    set((state) => {
+      if (state.activeStorageWorkflow === null) {
+        return state;
+      }
+
+      return {
+        activeStorageWorkflow: {
+          ...state.activeStorageWorkflow,
+          status: 'submitting',
+          errorMessage: null
+        }
+      };
+    }),
+  setContextPanelMode: (contextPanelMode) => set({ contextPanelMode }),
+  toggleContextPanelMode: () =>
+    set((state) => ({
+      contextPanelMode: state.contextPanelMode === 'compact' ? 'expanded' : 'compact'
+    })),
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setHighlightedCellIds: (cellIds) => set({ highlightedCellIds: [...new Set(cellIds)] }),
@@ -373,16 +607,17 @@ export const useEditorStore = create<EditorStore>((set) => ({
         console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
       }
       return {
-      draft: null,
-      draftSourceVersionId: null,
-      selection: { type: 'none' },
-      placementInteraction: { type: 'idle' },
-      highlightedCellIds: [],
-      hoveredRackId: null,
-      creatingRackId: null,
-      isDraftDirty: false,
-      editorMode: 'select',
-      viewMode: 'layout'
+        draft: null,
+        draftSourceVersionId: null,
+        selection: { type: 'none' },
+        activeStorageWorkflow: null,
+        contextPanelMode: 'compact',
+        highlightedCellIds: [],
+        hoveredRackId: null,
+        creatingRackId: null,
+        isDraftDirty: false,
+        editorMode: 'select',
+        viewMode: 'layout'
       };
     }),
   initializeDraft: (draft) =>
@@ -442,10 +677,18 @@ export const useEditorStore = create<EditorStore>((set) => ({
         currentRackIds.length > 0 && currentRackIds.every(id => nextDraftState.racks[id])
           ? currentRackIds
           : [];
-      const nextSelection =
+      const nextFocus =
+        nextRackIds.length === 1 && currentRackIds.length === 1 && nextRackIds[0] === currentRackIds[0]
+          ? getRackSelectionFocus(state.selection)
+          : { type: 'body' as const };
+      const nextSelection: EditorSelection =
         state.selection.type === 'rack'
-          ? makeRackSelection(nextRackIds)
-          : state.selection;
+          ? makeRackSelection(nextRackIds, nextFocus)
+          : state.selection.type === 'zone'
+            ? nextDraftState.zones[state.selection.zoneId]
+              ? state.selection
+              : { type: 'none' }
+            : state.selection;
 
       return {
         draft: nextDraftState,
@@ -476,8 +719,24 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selection: { type: 'rack', rackIds: [newRack.id] },
+        selection: { type: 'rack', rackIds: [newRack.id], focus: { type: 'body' } },
         creatingRackId: newRack.id,
+        editorMode: 'select',
+        isDraftDirty: true
+      };
+    }),
+  createZone: (rect) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      const newZone = buildNewZone(state.draft.zones, rect);
+      const nextDraft = cloneDraft(state.draft);
+      nextDraft.zoneIds = [...nextDraft.zoneIds, newZone.id];
+      nextDraft.zones[newZone.id] = newZone;
+
+      return {
+        draft: nextDraft,
+        selection: { type: 'zone', zoneId: newZone.id },
         editorMode: 'select',
         isDraftDirty: true
       };
@@ -494,6 +753,23 @@ export const useEditorStore = create<EditorStore>((set) => ({
         draft: nextDraft,
         selection: makeRackSelection(getSelectedRackIds(state.selection).filter(id => id !== rackId)),
         creatingRackId: state.creatingRackId === rackId ? null : state.creatingRackId,
+        isDraftDirty: true
+      };
+    }),
+  deleteZone: (zoneId) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      const nextDraft = cloneDraft(state.draft);
+      delete nextDraft.zones[zoneId];
+      nextDraft.zoneIds = nextDraft.zoneIds.filter((id) => id !== zoneId);
+
+      return {
+        draft: nextDraft,
+        selection:
+          state.selection.type === 'zone' && state.selection.zoneId === zoneId
+            ? { type: 'none' }
+            : state.selection,
         isDraftDirty: true
       };
     }),
@@ -535,7 +811,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: nextDraft,
-        selection: { type: 'rack', rackIds: [newRackId] },
+        selection: { type: 'rack', rackIds: [newRackId], focus: { type: 'body' } },
         isDraftDirty: true
       };
     }),
@@ -557,6 +833,35 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       return {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({ ...rack, x, y })),
+        isDraftDirty: true
+      };
+    }),
+  updateZoneRect: (zoneId, rect) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      return {
+        draft: updateZoneInDraft(state.draft, zoneId, (zone) => ({
+          ...zone,
+          x: clampZoneCoordinate(rect.x),
+          y: clampZoneCoordinate(rect.y),
+          width: clampZoneSize(rect.width),
+          height: clampZoneSize(rect.height)
+        })),
+        isDraftDirty: true
+      };
+    }),
+  updateZoneDetails: (zoneId, patch) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      return {
+        draft: updateZoneInDraft(state.draft, zoneId, (zone) => ({
+          ...zone,
+          name: patch.name !== undefined ? patch.name : zone.name,
+          category: patch.category !== undefined ? patch.category : zone.category,
+          color: patch.color !== undefined ? patch.color : zone.color
+        })),
         isDraftDirty: true
       };
     }),

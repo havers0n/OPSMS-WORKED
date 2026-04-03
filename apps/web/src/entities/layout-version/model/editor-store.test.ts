@@ -11,7 +11,8 @@ function resetStore() {
     viewMode: 'layout',
     editorMode: 'select',
     selection: { type: 'none' },
-    placementInteraction: { type: 'idle' },
+    activeStorageWorkflow: null,
+    contextPanelMode: 'compact',
     hoveredRackId: null,
     creatingRackId: null,
     highlightedCellIds: [],
@@ -29,7 +30,9 @@ function createUuidLayoutDraftFixture() {
     floorId: crypto.randomUUID(),
     state: 'draft' as const,
     rackIds: [],
-    racks: {}
+    racks: {},
+    zoneIds: [],
+    zones: {}
   };
 }
 
@@ -114,6 +117,53 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
   });
 
+  it('creates, updates, and deletes a zone as first-class draft state', () => {
+    const draft = createLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().createZone({ x: 40, y: 80, width: 200, height: 120 });
+
+    const createdZoneId = useEditorStore.getState().draft?.zoneIds[0] ?? null;
+    expect(createdZoneId).toBeTruthy();
+    expect(useEditorStore.getState().selection).toEqual({
+      type: 'zone',
+      zoneId: createdZoneId
+    });
+
+    useEditorStore.getState().updateZoneDetails(createdZoneId!, {
+      name: 'Inbound staging',
+      category: 'staging',
+      color: '#34d399'
+    });
+    useEditorStore.getState().updateZoneRect(createdZoneId!, {
+      x: 120,
+      y: 160,
+      width: 240,
+      height: 200
+    });
+
+    expect(useEditorStore.getState().draft?.zones[createdZoneId!]).toEqual(
+      expect.objectContaining({
+        id: createdZoneId,
+        code: 'Z01',
+        name: 'Inbound staging',
+        category: 'staging',
+        color: '#34d399',
+        x: 120,
+        y: 160,
+        width: 240,
+        height: 200
+      })
+    );
+
+    useEditorStore.getState().deleteZone(createdZoneId!);
+
+    expect(useEditorStore.getState().draft?.zoneIds).toEqual([]);
+    expect(useEditorStore.getState().draft?.zones).toEqual({});
+    expect(useEditorStore.getState().selection.type).toBe('none');
+    expect(useEditorStore.getState().isDraftDirty).toBe(true);
+  });
+
   it('preserves faceLength when initializing and saving an unchanged draft', () => {
     const draft = createLayoutDraftFixture();
     draft.racks[draft.rackIds[0]].faces[0].faceLength = 4.5;
@@ -134,6 +184,144 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().draft).toBeNull();
     expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
+    expect(useEditorStore.getState().contextPanelMode).toBe('compact');
+  });
+
+  it('stores Context Panel shell mode as in-session editor state', () => {
+    expect(useEditorStore.getState().contextPanelMode).toBe('compact');
+
+    useEditorStore.getState().setContextPanelMode('expanded');
+    expect(useEditorStore.getState().contextPanelMode).toBe('expanded');
+
+    useEditorStore.getState().toggleContextPanelMode();
+    expect(useEditorStore.getState().contextPanelMode).toBe('compact');
+  });
+
+  it('stores created-container details when create-and-place enters placement retry', () => {
+    useEditorStore.getState().setViewMode('storage');
+    useEditorStore.getState().startCreateAndPlaceWorkflow('cell-1');
+
+    useEditorStore.getState().setCreateAndPlacePlacementRetry(
+      { id: 'container-1', code: 'CNT-000123' },
+      'Container created, but placement failed. CNT-000123 remains unplaced. Target location is full.'
+    );
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'create-and-place',
+      cellId: 'cell-1',
+      status: 'placement-retry',
+      errorMessage:
+        'Container created, but placement failed. CNT-000123 remains unplaced. Target location is full.',
+      createdContainer: {
+        id: 'container-1',
+        code: 'CNT-000123'
+      }
+    });
+  });
+
+  it('clears stale workflow errors when a submit starts', () => {
+    useEditorStore.getState().setViewMode('storage');
+    useEditorStore.getState().startPlaceContainerWorkflow('cell-1');
+    useEditorStore
+      .getState()
+      .setActiveStorageWorkflowError('Could not place the container.');
+
+    useEditorStore.getState().markActiveStorageWorkflowSubmitting();
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'place-container',
+      cellId: 'cell-1',
+      status: 'submitting',
+      errorMessage: null
+    });
+  });
+
+  it('preserves placement-retry created-container details while clearing stale errors', () => {
+    useEditorStore.getState().setViewMode('storage');
+    useEditorStore.getState().startCreateAndPlaceWorkflow('cell-1');
+    useEditorStore.getState().setCreateAndPlacePlacementRetry(
+      { id: 'container-1', code: 'CNT-000123' },
+      'Container created, but placement failed. CNT-000123 remains unplaced. Target location is full.'
+    );
+
+    useEditorStore.getState().markActiveStorageWorkflowSubmitting();
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'create-and-place',
+      cellId: 'cell-1',
+      status: 'submitting',
+      errorMessage: null,
+      createdContainer: {
+        id: 'container-1',
+        code: 'CNT-000123'
+      }
+    });
+
+    useEditorStore
+      .getState()
+      .setActiveStorageWorkflowError('Placement failed again.');
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'create-and-place',
+      cellId: 'cell-1',
+      status: 'error',
+      errorMessage: 'Placement failed again.',
+      createdContainer: {
+        id: 'container-1',
+        code: 'CNT-000123'
+      }
+    });
+
+    useEditorStore.getState().setActiveStorageWorkflowError(null);
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'create-and-place',
+      cellId: 'cell-1',
+      status: 'placement-retry',
+      errorMessage: null,
+      createdContainer: {
+        id: 'container-1',
+        code: 'CNT-000123'
+      }
+    });
+  });
+
+  it('clears stale workflow errors and created-container details when a new create-and-place workflow starts', () => {
+    useEditorStore.getState().setViewMode('storage');
+    useEditorStore.getState().startCreateAndPlaceWorkflow('cell-1');
+    useEditorStore.getState().setCreateAndPlacePlacementRetry(
+      { id: 'container-1', code: 'CNT-000123' },
+      'Container created, but placement failed. CNT-000123 remains unplaced. Target location is full.'
+    );
+
+    useEditorStore.getState().startCreateAndPlaceWorkflow('cell-2');
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'create-and-place',
+      cellId: 'cell-2',
+      status: 'editing',
+      errorMessage: null,
+      createdContainer: null
+    });
+  });
+
+  it('clears move-container stale errors when the target cell changes', () => {
+    useEditorStore.getState().setViewMode('storage');
+    useEditorStore.getState().startPlacementMove('container-1', 'cell-1');
+    useEditorStore
+      .getState()
+      .setActiveStorageWorkflowError('Could not move the container.');
+
+    useEditorStore.getState().setPlacementMoveTargetCellId('cell-2');
+
+    expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+      kind: 'move-container',
+      containerId: 'container-1',
+      sourceCellId: 'cell-1',
+      targetCellId: 'cell-2',
+      status: 'targeting',
+      errorMessage: null
+    });
   });
 
   it('generates UUID ids for all new entities sent to save', () => {
