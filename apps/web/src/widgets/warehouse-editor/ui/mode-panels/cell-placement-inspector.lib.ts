@@ -1,4 +1,5 @@
 import type { ContainerType, LocationStorageSnapshotRow } from '@wos/domain';
+import type { LocationProductAssignment } from '@/entities/product-location-role/api/queries';
 
 /**
  * Returns only the container types that support storage placement.
@@ -16,6 +17,14 @@ export type InventorySummaryRow = {
   totalQuantity: number;
   uom: string;
   containerCount: number;
+};
+
+export type UnassignedStockPolicyCandidate = {
+  product: NonNullable<LocationStorageSnapshotRow['product']>;
+  rowCount: number;
+  containerCount: number;
+  missingPrimaryPick: boolean;
+  missingReserve: boolean;
 };
 
 /**
@@ -56,6 +65,89 @@ export function summarizeInventory(
   }
 
   return [...summary.values()];
+}
+
+/**
+ * Returns a single safe role-gap candidate for physically present stock.
+ * The helper stays product-unambiguous, but tracks which role(s) are missing
+ * for that one product so the bridge can expose only valid quick actions.
+ */
+export function getUnassignedStockPolicyCandidate(
+  rows: LocationStorageSnapshotRow[],
+  assignments: LocationProductAssignment[]
+): UnassignedStockPolicyCandidate | null {
+  const publishedRolesByProductId = new Map<
+    string,
+    Set<LocationProductAssignment['role']>
+  >();
+
+  for (const assignment of assignments) {
+    if (assignment.state !== 'published') {
+      continue;
+    }
+
+    const roles = publishedRolesByProductId.get(assignment.productId);
+    if (roles) {
+      roles.add(assignment.role);
+      continue;
+    }
+
+    publishedRolesByProductId.set(assignment.productId, new Set([assignment.role]));
+  }
+
+  const candidatesByProductId = new Map<
+    string,
+    {
+      product: NonNullable<LocationStorageSnapshotRow['product']>;
+      rowCount: number;
+      containerIds: Set<string>;
+    }
+  >();
+
+  for (const row of rows) {
+    if (
+      row.product === null ||
+      !row.product.isActive ||
+      row.quantity === null ||
+      row.quantity <= 0
+    ) {
+      continue;
+    }
+
+    const candidate = candidatesByProductId.get(row.product.id);
+    if (candidate) {
+      candidate.rowCount += 1;
+      candidate.containerIds.add(row.containerId);
+      continue;
+    }
+
+    candidatesByProductId.set(row.product.id, {
+      product: row.product,
+      rowCount: 1,
+      containerIds: new Set([row.containerId])
+    });
+  }
+
+  if (candidatesByProductId.size !== 1) {
+    return null;
+  }
+
+  const [candidate] = candidatesByProductId.values();
+  const publishedRoles = publishedRolesByProductId.get(candidate.product.id) ?? new Set();
+  const missingPrimaryPick = !publishedRoles.has('primary_pick');
+  const missingReserve = !publishedRoles.has('reserve');
+
+  if (!missingPrimaryPick && !missingReserve) {
+    return null;
+  }
+
+  return {
+    product: candidate.product,
+    rowCount: candidate.rowCount,
+    containerCount: candidate.containerIds.size,
+    missingPrimaryPick,
+    missingReserve
+  };
 }
 
 export function getContainerDisplayLabel(container: {
@@ -102,5 +194,5 @@ export function formatCreateAndPlacePlacementFailure(
   systemCode: string,
   placementErrorMessage: string
 ): string {
-  return `Container ${systemCode} was created, but it could not be placed into this cell and remains unplaced. ${placementErrorMessage}`;
+  return `Container created, but placement failed. ${systemCode} remains unplaced. ${placementErrorMessage}`;
 }

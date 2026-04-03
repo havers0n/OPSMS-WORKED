@@ -9,9 +9,12 @@ import {
   useLayoutDraftState,
   useResetDraft,
   useSelectedRackId,
+  useSelectedWallId,
+  useSelectedZoneId,
   useSetEditorMode,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
+import { ContextPanel } from './context-panel';
 import { EditorCanvas } from './editor-canvas';
 import { InspectorRouter } from './inspector-router';
 import { ToolRail } from './tool-rail';
@@ -26,6 +29,8 @@ export function WarehouseEditor() {
   const clearSelection = useClearSelection();
   const viewMode = useViewMode();
   const selectedRackId = useSelectedRackId();
+  const selectedWallId = useSelectedWallId();
+  const selectedZoneId = useSelectedZoneId();
   const creatingRackId = useCreatingRackId();
   const setEditorMode = useSetEditorMode();
 
@@ -35,10 +40,14 @@ export function WarehouseEditor() {
     if (viewMode === 'view' || viewMode === 'storage') {
       setInspectorOpen(true);
     } else {
-      // Layout mode opens only for rack selection or rack creation.
-      setInspectorOpen(selectedRackId !== null || creatingRackId !== null);
+      setInspectorOpen(
+        selectedRackId !== null ||
+        selectedZoneId !== null ||
+        selectedWallId !== null ||
+        creatingRackId !== null
+      );
     }
-  }, [viewMode, selectedRackId, creatingRackId]);
+  }, [viewMode, selectedRackId, selectedZoneId, selectedWallId, creatingRackId]);
 
   useEffect(() => {
     if (!activeFloorId) {
@@ -93,6 +102,11 @@ export function WarehouseEditor() {
     setEditorMode('place');
   };
 
+  const handleDrawZone = () => {
+    clearSelection();
+    setEditorMode('draw-zone');
+  };
+
   const handleCloseInspector = () => {
     setInspectorOpen(false);
     clearSelection();
@@ -113,7 +127,14 @@ export function WarehouseEditor() {
           onOpenInspector={() => setInspectorOpen(true)}
         />
 
-        {selectedRackId && !inspectorOpen && (
+        <ContextPanel
+          workspace={workspace ?? null}
+          onAddRack={handleAddRack}
+          onDrawZone={handleDrawZone}
+          onOpenInspector={() => setInspectorOpen(true)}
+        />
+
+        {(selectedRackId || selectedZoneId || selectedWallId) && !inspectorOpen && (
           <button
             type="button"
             onClick={() => setInspectorOpen(true)}

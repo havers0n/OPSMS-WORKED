@@ -4,9 +4,6 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
-  Copy,
-  RotateCcw,
-  Trash2,
   X,
   XCircle
 } from 'lucide-react';
@@ -19,16 +16,11 @@ import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevat
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
 import {
   useApplyFacePreset,
-  useDeleteRack,
   useDraftDirtyState,
   useIsLayoutEditable,
-  useDuplicateRack,
   useResetFaceB,
-  useRotateRack,
   useSelectedRackId,
-  useSetCreatingRackId,
   useSetFaceBMode,
-  useSetSelectedRackId,
   useUpdateFaceConfig
 } from '@/entities/layout-version/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
@@ -81,29 +73,6 @@ function AccordionHeader({
       </div>
       {badge}
     </button>
-  );
-}
-
-function StatusBadge({ issues }: { issues: LayoutValidationIssue[] }) {
-  const { errors, warnings } = validationSummary(issues);
-  if (errors.length > 0) {
-    return (
-      <span className="shrink-0 rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-semibold text-red-700">
-        {errors.length} error{errors.length > 1 ? 's' : ''}
-      </span>
-    );
-  }
-  if (warnings.length > 0) {
-    return (
-      <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-semibold text-amber-700">
-        {warnings.length} warning{warnings.length > 1 ? 's' : ''}
-      </span>
-    );
-  }
-  return (
-    <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-      Valid
-    </span>
   );
 }
 
@@ -238,7 +207,8 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpda
  * RackInspector — structural inspector for a single selected rack.
  *
  * Rendered only by InspectorRouter when:
- *   viewMode === 'layout' AND a rack is selected AND it is NOT being created.
+ *   - viewMode === 'layout' AND a rack is selected AND it is NOT being created.
+ *   - viewMode === 'view' | 'storage' AND a rack is selected in read-only scope.
  *
  * Wizard routing (rack-creation-wizard) and empty-state routing (layout-empty)
  * are handled by InspectorRouter. This component never renders those states.
@@ -251,7 +221,6 @@ export function RackInspector({
   onClose: () => void;
 }) {
   const [openSections, setOpenSections] = useState<Set<AccordionSection>>(new Set(['geometry', 'faceA']));
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const layoutDraft = useWorkspaceLayout(workspace);
   const isLayoutEditable = useIsLayoutEditable();
@@ -259,13 +228,8 @@ export function RackInspector({
   const selectedRackId = useSelectedRackId();
 
   const setFaceBMode = useSetFaceBMode();
-  const deleteRack = useDeleteRack();
-  const duplicateRack = useDuplicateRack();
-  const rotateRack = useRotateRack();
   const applyFacePreset = useApplyFacePreset();
   const resetFaceB = useResetFaceB();
-  const setSelectedRackId = useSetSelectedRackId();
-  const setCreatingRackId = useSetCreatingRackId();
   const updateFaceConfig = useUpdateFaceConfig();
 
   const cachedValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
@@ -328,25 +292,6 @@ export function RackInspector({
     setOpenSections((prev) => new Set([...prev, 'faceB']));
   };
 
-  const handleDeleteConfirm = () => {
-    deleteRack(rack.id);
-    setConfirmingDelete(false);
-    setSelectedRackId(null);
-    setCreatingRackId(null);
-  };
-
-  const handleDuplicate = () => {
-    duplicateRack(rack.id);
-  };
-
-  const handleRotate = () => {
-    rotateRack(rack.id);
-  };
-
-  // ─── stat bar values ─────────────────────────────────────────────────────────
-
-  const totalSections = rack.faces.reduce((sum, f) => sum + f.sections.length, 0);
-
   // ─── render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -367,84 +312,15 @@ export function RackInspector({
           </button>
         </div>
 
-        {/* title + badge */}
-        <div className="flex items-center justify-between gap-3 px-5 py-2">
+        {/* title */}
+        <div className="px-5 pt-2 pb-3">
           <div className="min-w-0">
             <div className="text-xl font-semibold text-slate-900">Rack {rack.displayCode}</div>
             <div className="mt-0.5 text-xs text-slate-500">
               {rack.kind === 'paired' ? 'Paired' : 'Single'} | {rack.totalLength.toFixed(1)} m x {rack.depth.toFixed(1)} m | {rack.rotationDeg} deg
             </div>
           </div>
-          <StatusBadge issues={rackIssues} />
         </div>
-
-        {/* stat chips */}
-        <div className="grid grid-cols-3 gap-1.5 px-5 pb-3">
-          {[
-            { label: 'Kind', value: rack.kind === 'paired' ? 'Paired' : 'Single' },
-            { label: 'Sections', value: String(totalSections) },
-            { label: 'Cells', value: String(rackCells.length) }
-          ].map(({ label, value }) => (
-            <div key={label} className="rounded-xl border border-[var(--border-muted)] bg-white p-2 text-center shadow-sm">
-              <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</div>
-              <div className="mt-0.5 text-sm font-semibold text-slate-800">{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* quick actions — only visible in editable (draft) mode */}
-        {isLayoutEditable && (
-          <div className="flex items-center gap-2 border-t border-[var(--border-muted)] px-5 py-2.5">
-            <button
-              type="button"
-              onClick={handleRotate}
-              title="Rotate 90 deg"
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Rotate
-            </button>
-            <button
-              type="button"
-              onClick={handleDuplicate}
-              title="Duplicate rack"
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Duplicate
-            </button>
-            <div className="flex-1" />
-            {!confirmingDelete ? (
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(true)}
-                title="Delete rack"
-                className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-red-600">Sure?</span>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteConfirm}
-                  className="rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
-                >
-                  Delete
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Validation strip (only when issues exist) ── */}
