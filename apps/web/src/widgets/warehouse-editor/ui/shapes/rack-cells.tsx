@@ -16,6 +16,10 @@ const CELL_STROKE_A_RACK_SELECTED = '#38bdf8';
 const CELL_STROKE_B_RACK_SELECTED = '#a78bfa';
 const CELL_FILL_SELECTED = '#fef3c7';
 const CELL_STROKE_SELECTED = '#f59e0b';
+const CELL_FILL_WORKFLOW_SOURCE = '#dbeafe';
+const CELL_STROKE_WORKFLOW_SOURCE = '#2563eb';
+const CELL_FILL_LOCKED = '#e2e8f0';
+const CELL_STROKE_LOCKED = '#cbd5e1';
 const CELL_FILL_OCCUPIED_A = '#bbf7d0';
 const CELL_FILL_OCCUPIED_B = '#c4b5fd';
 const CELL_STROKE_OCCUPIED_A = '#22c55e';
@@ -48,7 +52,10 @@ type FaceProps = {
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   highlightedCellIds: Set<string>;
   isInteractive: boolean;
+  isWorkflowScope: boolean;
+  isRackPassive: boolean;
   selectedCellId: string | null;
+  workflowSourceCellId: string | null;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
@@ -68,7 +75,10 @@ function FaceCells({
   cellRuntimeById,
   highlightedCellIds,
   isInteractive,
+  isWorkflowScope,
+  isRackPassive,
   selectedCellId,
+  workflowSourceCellId,
   onCellClick
 }: FaceProps) {
   if (!face.sections.length) return null;
@@ -110,9 +120,18 @@ function FaceCells({
             );
             const cellId = cell?.id ?? null;
             const isSelected = selectedCellId === cellId;
+            const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
             const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
             const runtime = cellId ? cellRuntimeById.get(cellId) : null;
             const isOccupied = cellId !== null && occupiedCellIds.has(cellId) && !isSelected;
+            const isWorkflowTargetLocked =
+              isWorkflowScope &&
+              cellId !== null &&
+              !isSelected &&
+              !isWorkflowSource &&
+              isOccupied;
+            const canSelectWorkflowTarget =
+              !isWorkflowScope || (cellId !== null && !isWorkflowSource && !isOccupied);
 
             const cellX = secX + slotIndex * slotW;
             const cellY = bandY + inset + levelIndex * levelH;
@@ -129,23 +148,45 @@ function FaceCells({
                       : { fill: CELL_FILL_EMPTY, stroke: CELL_STROKE_EMPTY }
               : null;
 
-            const fill = isSelected
-              ? CELL_FILL_SELECTED
-              : statusFillStroke
-                ? statusFillStroke.fill
-                : isOccupied
-                  ? occupiedCellFill
-                  : cellFill;
+            const fill = (() => {
+              if (isSelected) return CELL_FILL_SELECTED;
+              if (isWorkflowSource) return CELL_FILL_WORKFLOW_SOURCE;
+              if (isWorkflowTargetLocked) return CELL_FILL_LOCKED;
+              if (statusFillStroke) return statusFillStroke.fill;
+              if (isOccupied) return occupiedCellFill;
+              return cellFill;
+            })();
 
-            const stroke = isSelected
-              ? CELL_STROKE_SELECTED
-              : isHighlighted
-                ? CELL_STROKE_HIGHLIGHTED
-                : statusFillStroke
-                  ? statusFillStroke.stroke
-                  : isOccupied
-                    ? occupiedCellStroke
-                    : cellStroke;
+            const stroke = (() => {
+              if (isSelected) return CELL_STROKE_SELECTED;
+              if (isWorkflowSource) return CELL_STROKE_WORKFLOW_SOURCE;
+              if (isHighlighted) return CELL_STROKE_HIGHLIGHTED;
+              if (isWorkflowTargetLocked) return CELL_STROKE_LOCKED;
+              if (statusFillStroke) return statusFillStroke.stroke;
+              if (isOccupied) return occupiedCellStroke;
+              return cellStroke;
+            })();
+            const opacity = !cell
+              ? 0.18
+              : isSelected || isWorkflowSource || isHighlighted
+                ? 0.98
+                : isWorkflowTargetLocked
+                  ? 0.24
+                  : isRackPassive
+                    ? 0.4
+                    : isOccupied || runtime
+                      ? 0.98
+                      : isRackSelected
+                        ? 0.9
+                        : 0.72;
+            const strokeWidth = isSelected
+              ? 1.4
+              : isWorkflowSource || isHighlighted
+                ? 1.2
+                : isOccupied || isRackSelected
+                  ? 0.9
+                  : 0.5;
+            const cellClickable = isInteractive && cellId !== null && canSelectWorkflowTarget;
 
             return (
               <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
@@ -157,9 +198,9 @@ function FaceCells({
                   cornerRadius={1}
                   fill={fill}
                   stroke={stroke}
-                  strokeWidth={isSelected ? 1.4 : isHighlighted ? 1.2 : isOccupied ? 1 : isRackSelected ? 0.9 : 0.5}
-                  opacity={cell ? isSelected || isHighlighted || isOccupied || runtime ? 0.98 : isRackSelected ? 0.98 : 0.78 : 0.25}
-                  onClick={isInteractive && cellId ? (event) => {
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
+                  onClick={cellClickable ? (event) => {
                     event.cancelBubble = true;
                     onCellClick(cellId, { x: event.evt.clientX, y: event.evt.clientY });
                   } : undefined}
@@ -184,7 +225,10 @@ type Props = {
   cellRuntimeById?: Map<string, OperationsCellRuntime>;
   highlightedCellIds?: Set<string>;
   isInteractive?: boolean;
+  isWorkflowScope?: boolean;
+  isPassive?: boolean;
   selectedCellId?: string | null;
+  workflowSourceCellId?: string | null;
   onCellClick?: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
@@ -201,7 +245,10 @@ export function RackCells({
   cellRuntimeById = new Map<string, OperationsCellRuntime>(),
   highlightedCellIds = new Set<string>(),
   isInteractive = false,
+  isWorkflowScope = false,
+  isPassive = false,
   selectedCellId = null,
+  workflowSourceCellId = null,
   onCellClick = noop
 }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
@@ -225,7 +272,10 @@ export function RackCells({
         cellRuntimeById={cellRuntimeById}
         highlightedCellIds={highlightedCellIds}
         isInteractive={isInteractive}
+        isWorkflowScope={isWorkflowScope}
+        isRackPassive={isPassive}
         selectedCellId={selectedCellId}
+        workflowSourceCellId={workflowSourceCellId}
         onCellClick={onCellClick}
       />
       {isPaired && faceB && (
@@ -245,7 +295,10 @@ export function RackCells({
           cellRuntimeById={cellRuntimeById}
           highlightedCellIds={highlightedCellIds}
           isInteractive={isInteractive}
+          isWorkflowScope={isWorkflowScope}
+          isRackPassive={isPassive}
           selectedCellId={selectedCellId}
+          workflowSourceCellId={workflowSourceCellId}
           onCellClick={onCellClick}
         />
       )}

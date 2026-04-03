@@ -1,4 +1,4 @@
-import type { Rack } from '@wos/domain';
+import type { CellStructureIdentity, Rack, Zone } from '@wos/domain';
 
 // ─── Scale constants ────────────────────────────────────────────────────────
 export const RACK_LENGTH_SCALE = 28;   // px per metre (along the long axis)
@@ -15,13 +15,19 @@ export const MAX_CANVAS_ZOOM = 3.0;
 // LOD 2  zoom ≥ 1.3  → full cell grid (section × level slots)
 export const LOD_SECTION_THRESHOLD = 0.9;
 export const LOD_CELL_THRESHOLD    = 1.3;
+const CELL_RECT_INSET = 4;
 
 export type CanvasLOD = 0 | 1 | 2;
+export type CanvasInteractionLevel = 'L1' | 'L3';
 
 export function getCanvasLOD(zoom: number): CanvasLOD {
   if (zoom >= LOD_CELL_THRESHOLD)    return 2;
   if (zoom >= LOD_SECTION_THRESHOLD) return 1;
   return 0;
+}
+
+export function getCanvasInteractionLevel(lod: CanvasLOD): CanvasInteractionLevel {
+  return lod >= 2 ? 'L3' : 'L1';
 }
 
 // ─── Geometry types ──────────────────────────────────────────────────────────
@@ -41,6 +47,13 @@ export type CanvasRackGeometry = {
   isPaired: boolean;
   /** Y coordinate of the spine divider line (only meaningful when isPaired=true) */
   spineY: number;
+};
+
+export type CanvasRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -93,6 +106,150 @@ export function getRackGeometry(rack: Rack): CanvasRackGeometry {
     isPaired,
     spineY: height / 2,
   };
+}
+
+function getRotatedBounds(rect: CanvasRect, rotationDeg: number, pivot: { x: number; y: number }): CanvasRect {
+  const normalizedDeg = ((rotationDeg % 360) + 360) % 360;
+
+  if (normalizedDeg === 0) {
+    return rect;
+  }
+
+  const radians = (normalizedDeg * Math.PI) / 180;
+  const sin = Math.sin(radians);
+  const cos = Math.cos(radians);
+  const corners = [
+    { x: rect.x, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y },
+    { x: rect.x + rect.width, y: rect.y + rect.height },
+    { x: rect.x, y: rect.y + rect.height }
+  ].map((point) => {
+    const dx = point.x - pivot.x;
+    const dy = point.y - pivot.y;
+
+    return {
+      x: pivot.x + dx * cos - dy * sin,
+      y: pivot.y + dx * sin + dy * cos
+    };
+  });
+
+  const minX = Math.min(...corners.map((point) => point.x));
+  const maxX = Math.max(...corners.map((point) => point.x));
+  const minY = Math.min(...corners.map((point) => point.y));
+  const maxY = Math.max(...corners.map((point) => point.y));
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
+
+export function projectCanvasRectToViewport(
+  rect: CanvasRect,
+  zoom: number,
+  canvasOffset: { x: number; y: number }
+): CanvasRect {
+  return {
+    x: rect.x * zoom + canvasOffset.x,
+    y: rect.y * zoom + canvasOffset.y,
+    width: rect.width * zoom,
+    height: rect.height * zoom
+  };
+}
+
+export function getRackCanvasRect(rack: Rack): CanvasRect {
+  const geometry = getRackGeometry(rack);
+  return getRotatedBounds(
+    {
+      x: geometry.x,
+      y: geometry.y,
+      width: geometry.width,
+      height: geometry.height
+    },
+    rack.rotationDeg,
+    {
+      x: geometry.x + geometry.centerX,
+      y: geometry.y + geometry.centerY
+    }
+  );
+}
+
+export function getZoneCanvasRect(zone: Zone): CanvasRect {
+  return {
+    x: zone.x,
+    y: zone.y,
+    width: zone.width,
+    height: zone.height
+  };
+}
+
+export function getCellCanvasRect(rack: Rack, cell: CellStructureIdentity): CanvasRect | null {
+  const geometry = getRackGeometry(rack);
+  const face = rack.faces.find((candidate) => candidate.id === cell.rackFaceId) ?? null;
+
+  if (!face || !face.enabled || face.sections.length === 0) {
+    return null;
+  }
+
+  const orderedSections =
+    face.slotNumberingDirection === 'rtl' ? [...face.sections].reverse() : face.sections;
+  const sectionIndex = orderedSections.findIndex(
+    (section) => section.id === cell.rackSectionId
+  );
+  const section = sectionIndex >= 0 ? orderedSections[sectionIndex] : null;
+
+  if (!section) {
+    return null;
+  }
+
+  const orderedLevels = [...section.levels].sort((left, right) => right.ordinal - left.ordinal);
+  const levelIndex = orderedLevels.findIndex((level) => level.id === cell.rackLevelId);
+  const slotCount = orderedLevels[0]?.slotCount ?? 0;
+  const slotIndex =
+    face.slotNumberingDirection === 'rtl'
+      ? slotCount - cell.slotNo
+      : cell.slotNo - 1;
+
+  if (levelIndex < 0 || slotCount <= 0 || slotIndex < 0 || slotIndex >= slotCount) {
+    return null;
+  }
+
+  const sectionOffsets = getSectionWidths(
+    face.side === 'B' ? geometry.faceBWidth : geometry.faceAWidth,
+    orderedSections
+  );
+  const sectionX = sectionOffsets[sectionIndex];
+  const sectionWidth = sectionOffsets[sectionIndex + 1] - sectionX;
+  const bandY = geometry.isPaired && face.side === 'B' ? geometry.spineY : 0;
+  const bandHeight = geometry.isPaired ? geometry.spineY : geometry.height;
+  const cellHeight = bandHeight - CELL_RECT_INSET * 2;
+
+  if (sectionWidth <= 0 || cellHeight <= 0 || orderedLevels.length === 0) {
+    return null;
+  }
+
+  const slotWidth = sectionWidth / slotCount;
+  const levelHeight = cellHeight / orderedLevels.length;
+
+  if (slotWidth <= 0 || levelHeight <= 0) {
+    return null;
+  }
+
+  return getRotatedBounds(
+    {
+      x: geometry.x + sectionX + slotIndex * slotWidth + 0.5,
+      y: geometry.y + bandY + CELL_RECT_INSET + levelIndex * levelHeight + 0.5,
+      width: Math.max(1, slotWidth - 1),
+      height: Math.max(1, levelHeight - 1)
+    },
+    rack.rotationDeg,
+    {
+      x: geometry.x + geometry.centerX,
+      y: geometry.y + geometry.centerY
+    }
+  );
 }
 
 /**

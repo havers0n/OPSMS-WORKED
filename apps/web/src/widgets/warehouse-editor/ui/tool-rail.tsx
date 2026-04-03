@@ -1,20 +1,21 @@
-import { Menu, MousePointer2, PlusSquare } from 'lucide-react';
+import { Menu, MousePointer2, PlusSquare, Square } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useToggleDrawer } from '@/app/store/ui-selectors';
 import {
+  useClearSelection,
   useEditorMode,
   useIsLayoutEditable,
   useLayoutDraftState,
   useSetEditorMode,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import type { ViewMode } from '@/entities/layout-version/model/editor-types';
+import type { EditorMode, ViewMode } from '@/entities/layout-version/model/editor-types';
 
 type Tool = {
   id: string;
   icon: LucideIcon;
   label: string;
-  editorMode?: 'select' | 'place';
+  editorMode?: EditorMode;
   disabled?: boolean;
 };
 
@@ -27,7 +28,8 @@ const TOOLS_BY_VIEW: Record<ViewMode, Tool[]> = {
   ],
   layout: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' },
-    { id: 'rack', icon: PlusSquare, label: 'Add Rack', editorMode: 'place' }
+    { id: 'rack', icon: PlusSquare, label: 'Add Rack', editorMode: 'place' },
+    { id: 'zone', icon: Square, label: 'Draw Zone', editorMode: 'draw-zone' }
   ]
 };
 
@@ -39,6 +41,7 @@ const MODE_LABELS: Record<ViewMode, string> = {
 
 export function ToolRail() {
   const viewMode = useViewMode();
+  const clearSelection = useClearSelection();
   const editorMode = useEditorMode();
   const setEditorMode = useSetEditorMode();
   const layoutDraft = useLayoutDraftState();
@@ -48,7 +51,12 @@ export function ToolRail() {
 
   const tools = TOOLS_BY_VIEW[viewMode] ?? TOOLS_BY_VIEW.layout;
 
-  const activeToolId = editorMode === 'place' ? 'rack' : 'select';
+  const activeToolId =
+    editorMode === 'place'
+      ? 'rack'
+      : editorMode === 'draw-zone'
+        ? 'zone'
+        : 'select';
 
   return (
     <aside
@@ -77,7 +85,7 @@ export function ToolRail() {
           const isDisabled =
             !hasLayout ||
             tool.disabled ||
-            (tool.editorMode === 'place' && !isLayoutEditable);
+            (tool.editorMode !== 'select' && !isLayoutEditable);
 
           return (
             <button
@@ -86,7 +94,11 @@ export function ToolRail() {
               title={tool.label}
               disabled={isDisabled}
               onClick={() => {
-                if (tool.editorMode) setEditorMode(tool.editorMode);
+                if (!tool.editorMode) return;
+                if (tool.editorMode !== 'select') {
+                  clearSelection();
+                }
+                setEditorMode(tool.editorMode);
               }}
               className="group relative flex h-9 w-9 flex-col items-center justify-center rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-30"
               style={

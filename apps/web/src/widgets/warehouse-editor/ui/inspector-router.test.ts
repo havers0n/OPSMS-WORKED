@@ -7,6 +7,8 @@ import type { EditorSelection } from '../../../entities/layout-version/model/edi
 
 const noSelection: EditorSelection = { type: 'none' };
 const rackSelection = (ids: string[]): EditorSelection => ({ type: 'rack', rackIds: ids });
+const zoneSelection = (zoneId: string): EditorSelection => ({ type: 'zone', zoneId });
+const wallSelection = (wallId: string): EditorSelection => ({ type: 'wall', wallId });
 const cellSelection = (cellId: string): EditorSelection => ({ type: 'cell', cellId });
 const containerSelection = (containerId: string): EditorSelection => ({ type: 'container', containerId });
 
@@ -34,6 +36,14 @@ describe('resolveInspectorKind — layout mode, single-rack', () => {
     const containerSel: EditorSelection = { type: 'container', containerId: 'ct-1' };
     expect(resolveInspectorKind('layout', cellSel, null)).toBe('layout-empty');
     expect(resolveInspectorKind('layout', containerSel, null)).toBe('layout-empty');
+  });
+
+  it('returns zone-detail for a zone selection in layout mode', () => {
+    expect(resolveInspectorKind('layout', zoneSelection('zone-1'), null)).toBe('zone-detail');
+  });
+
+  it('returns wall-detail for a wall selection in layout mode', () => {
+    expect(resolveInspectorKind('layout', wallSelection('wall-1'), null)).toBe('wall-detail');
   });
 });
 
@@ -66,12 +76,12 @@ describe('resolveInspectorKind — storage mode, placeholder', () => {
     expect(resolveInspectorKind('storage', noSelection, null)).toBe('placement-placeholder');
   });
 
-  it('returns placement-placeholder for rack selection in storage mode', () => {
-    expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('placement-placeholder');
+  it('routes rack selection to rack-structure in storage mode', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('rack-structure');
   });
 
-  it('placement-placeholder is unaffected by creatingRackId', () => {
-    expect(resolveInspectorKind('storage', rackSelection(['r1']), 'r1')).toBe('placement-placeholder');
+  it('storage rack routing is unaffected by creatingRackId', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), 'r1')).toBe('rack-structure');
   });
 });
 
@@ -93,8 +103,8 @@ describe('resolveInspectorKind — storage mode, cell selection', () => {
     expect(resolveInspectorKind('storage', noSelection, null)).toBe('placement-placeholder');
   });
 
-  it('returns placement-placeholder for rack selection in storage mode (not cell)', () => {
-    expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('placement-placeholder');
+  it('routes rack selection in storage mode to the rack inspector, not the cell inspector', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('rack-structure');
   });
 
   it('cell selection in layout mode still returns layout-empty (layout ignores cell)', () => {

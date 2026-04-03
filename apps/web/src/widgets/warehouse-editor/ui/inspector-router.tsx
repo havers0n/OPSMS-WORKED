@@ -8,6 +8,7 @@ import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wiza
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
+import { ZoneInspector } from './zone-inspector';
 import { LayoutEmptyPanel } from './mode-panels/layout-empty-panel';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
 import { CellPlacementInspector } from './mode-panels/cell-placement-inspector';
@@ -40,6 +41,7 @@ type InspectorRouterProps = {
  *   layout  + rack(≥2)         → RackMultiInspector (spacing/alignment)
  *   layout  + none             → LayoutEmptyPanel
  *   view    + rack             → RackInspector (read-only)
+ *   storage + rack             → RackInspector (read-only)
  *   view    + cell             → CellPlacementInspector (read-only)
  *   view    + container        → ContainerPlacementInspector (read-only)
  *   storage + cell             → CellPlacementInspector
@@ -69,6 +71,9 @@ export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRout
 
     case 'rack-multi':
       return <RackMultiInspector onClose={onClose} />;
+
+    case 'zone-detail':
+      return <ZoneInspector workspace={workspace} onClose={onClose} />;
 
     case 'layout-empty':
       return <LayoutEmptyPanel workspace={workspace} onAddRack={onAddRack} />;

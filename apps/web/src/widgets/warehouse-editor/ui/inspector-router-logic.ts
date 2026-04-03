@@ -8,6 +8,8 @@ export type InspectorKind =
   | 'rack-creation-wizard'   // layout + single rack being created
   | 'rack-structure'         // layout/view + single rack selected (existing)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
+  | 'zone-detail'            // layout + single zone selected
+  | 'wall-detail'            // layout + single wall selected
   | 'layout-empty'           // layout + nothing selected
   | 'placement-placeholder'  // view/storage mode + no selection
   | 'placement-cell'         // view/storage mode + cell selected
@@ -22,6 +24,8 @@ export type InspectorKind =
  *   layout + rack(1) + creating → rack-creation-wizard
  *   layout + rack(1)            → rack-structure
  *   layout + rack(≥2)           → rack-multi
+ *   layout + zone               → zone-detail
+ *   layout + wall               → wall-detail
  *
  * View routing contract:
  *   view + rack                 → rack-structure
@@ -30,6 +34,7 @@ export type InspectorKind =
  *   view + none                 → placement-placeholder
  *
  * Storage routing contract:
+ *   storage + rack              → rack-structure
  *   storage + cell              → placement-cell
  *   storage + container         → placement-container
  *   storage + anything else     → placement-placeholder
@@ -46,10 +51,16 @@ export function resolveInspectorKind(
       if (primaryId && primaryId === creatingRackId) return 'rack-creation-wizard';
       return 'rack-structure';
     }
+    if (selection.type === 'zone') {
+      return 'zone-detail';
+    }
+    if (selection.type === 'wall') {
+      return 'wall-detail';
+    }
     return 'layout-empty';
   }
 
-  if (viewMode === 'view' && selection.type === 'rack') {
+  if ((viewMode === 'view' || viewMode === 'storage') && selection.type === 'rack') {
     return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
   }
 

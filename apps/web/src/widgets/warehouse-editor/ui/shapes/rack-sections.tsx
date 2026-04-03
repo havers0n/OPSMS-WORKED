@@ -7,6 +7,7 @@ type Props = {
   faceA: RackFace;
   faceB: RackFace | null;
   isSelected: boolean;
+  isPassive?: boolean;
 };
 
 const DIVIDER_STROKE = '#94a3b8';
@@ -14,7 +15,7 @@ const DIVIDER_STROKE_SEL = '#0f6a8e';
 const SECTION_FILL_A_SEL = 'rgba(14, 165, 233, 0.12)';
 const SECTION_FILL_B_SEL = 'rgba(124, 58, 237, 0.12)';
 
-export function RackSections({ geometry, faceA, faceB, isSelected }: Props) {
+export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = false }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const divider = isSelected ? DIVIDER_STROKE_SEL : DIVIDER_STROKE;
 
@@ -27,7 +28,7 @@ export function RackSections({ geometry, faceA, faceB, isSelected }: Props) {
   const faceBTop = spineY;
 
   return (
-    <Group listening={false}>
+    <Group listening={false} opacity={isPassive && !isSelected ? 0.45 : 1}>
       {isSelected && faceA.sections.map((sec, i) => {
         const x0 = faceAOffsets[i];
         const x1 = faceAOffsets[i + 1];

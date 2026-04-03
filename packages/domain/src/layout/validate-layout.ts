@@ -111,6 +111,34 @@ export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutValidationR
     }
   }
 
+  for (const wallId of layoutDraft.wallIds) {
+    const wall = layoutDraft.walls[wallId];
+    if (!wall) {
+      continue;
+    }
+
+    const isHorizontal = wall.y1 === wall.y2;
+    const isVertical = wall.x1 === wall.x2;
+
+    if (!isHorizontal && !isVertical) {
+      issues.push({
+        code: 'wall.axis_alignment_required',
+        severity: 'error',
+        message: `Wall ${wall.code} must be axis-aligned.`,
+        entityId: wall.id
+      });
+    }
+
+    if (wall.x1 === wall.x2 && wall.y1 === wall.y2) {
+      issues.push({
+        code: 'wall.zero_length_forbidden',
+        severity: 'error',
+        message: `Wall ${wall.code} must have non-zero length.`,
+        entityId: wall.id
+      });
+    }
+  }
+
   for (const cell of generatedCells) {
     if (addressSet.has(cell.address.raw)) {
       issues.push({

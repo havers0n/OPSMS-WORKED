@@ -1,5 +1,5 @@
 import { layoutDraftSchema, type LayoutDraft } from '@wos/domain';
-import type { LayoutDraftRowBundle, RackFaceRow, RackLevelRow, RackRow, RackSectionRow } from './types';
+import type { LayoutDraftRowBundle, LayoutZoneRow, RackFaceRow, RackLevelRow, RackRow, RackSectionRow } from './types';
 
 function buildRackLevel(row: RackLevelRow) {
   return {
@@ -55,10 +55,27 @@ function buildRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSecti
   };
 }
 
+function buildZone(row: LayoutZoneRow) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    category: row.category,
+    color: row.color,
+    x: row.x,
+    y: row.y,
+    width: row.width,
+    height: row.height
+  };
+}
+
 export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): LayoutDraft {
   const racks = bundle.racks
     .sort((a, b) => a.display_code.localeCompare(b.display_code))
     .map((row) => buildRack(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels));
+  const zones = (bundle.zones ?? [])
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map(buildZone);
 
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
@@ -66,6 +83,8 @@ export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): Layo
     state: bundle.layoutVersion.state,
     versionNo: bundle.layoutVersion.version_no,
     rackIds: racks.map((rack) => rack.id),
-    racks: Object.fromEntries(racks.map((rack) => [rack.id, rack]))
+    racks: Object.fromEntries(racks.map((rack) => [rack.id, rack])),
+    zoneIds: zones.map((zone) => zone.id),
+    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone]))
   });
 }

@@ -71,6 +71,20 @@ describe('mapLayoutDraftToSavePayload', () => {
           slot_count: 2,
           updated_at: '2026-03-13T00:00:00.000Z'
         }
+      ],
+      zones: [
+        {
+          id: '99999999-9999-9999-9999-999999999999',
+          layout_version_id: '11111111-1111-1111-1111-111111111111',
+          code: 'Z01',
+          name: 'Inbound staging',
+          category: 'staging',
+          color: '#38bdf8',
+          x: 40,
+          y: 80,
+          width: 200,
+          height: 120
+        }
       ]
     } satisfies LayoutDraftRowBundle);
 
@@ -88,5 +102,16 @@ describe('mapLayoutDraftToSavePayload', () => {
       })
     );
     expect(payload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
+    expect(payload.zones[0]).toEqual({
+      id: '99999999-9999-9999-9999-999999999999',
+      code: 'Z01',
+      name: 'Inbound staging',
+      category: 'staging',
+      color: '#38bdf8',
+      x: 40,
+      y: 80,
+      width: 200,
+      height: 120
+    });
   });
 });

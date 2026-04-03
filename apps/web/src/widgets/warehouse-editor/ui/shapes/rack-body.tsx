@@ -24,10 +24,19 @@ type Props = {
   rotationDeg: 0 | 90 | 180 | 270;
   isSelected: boolean;
   isHovered: boolean;
+  isPassive?: boolean;
   lod: 0 | 1 | 2;
 };
 
-export function RackBody({ geometry, displayCode, rotationDeg, isSelected, isHovered, lod }: Props) {
+export function RackBody({
+  geometry,
+  displayCode,
+  rotationDeg,
+  isSelected,
+  isHovered,
+  isPassive = false,
+  lod
+}: Props) {
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
 
   const fill = isSelected ? C.fillSelected : isHovered ? C.fillHovered : C.fillDefault;
@@ -54,7 +63,7 @@ export function RackBody({ geometry, displayCode, rotationDeg, isSelected, isHov
       : height / 2;
 
   return (
-    <Group listening={false}>
+    <Group listening={false} opacity={isPassive && !isSelected ? 0.5 : 1}>
       <Rect
         x={0}
         y={0}

@@ -10,6 +10,10 @@ export function createLayoutDraftFixture(): LayoutDraft {
     floorId: 'floor-1',
     state: 'draft',
     versionNo: 1,
+    zoneIds: [],
+    zones: {},
+    wallIds: [],
+    walls: {},
     rackIds: [rackId],
     racks: {
       [rackId]: {
