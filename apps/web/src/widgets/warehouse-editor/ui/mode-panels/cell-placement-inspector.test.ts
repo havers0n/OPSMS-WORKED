@@ -11,6 +11,7 @@ import {
   getContainerDisplayLabel,
   getContainerDisplaySecondary,
   getCreateAndPlaceDisabledReasons,
+  getUnassignedStockPolicyCandidate,
   summarizeInventory
 } from './cell-placement-inspector.lib';
 
@@ -28,8 +29,6 @@ let mockStorageData: LocationStorageSnapshotRow[] = [];
 let mockContainerTypes: ContainerType[] = [];
 let mockPolicyAssignments: LocationProductAssignment[] = [];
 let mockProductSearchResults: Array<{ id: string; name: string; sku: string | null }> = [];
-const mockCreateContainerMutateAsync = vi.fn();
-const mockPlaceContainerMutateAsync = vi.fn();
 const mockCreatePolicyMutateAsync = vi.fn();
 const mockDeletePolicyMutateAsync = vi.fn();
 
@@ -62,24 +61,6 @@ vi.mock('@/entities/container/api/use-container-types', () => ({
 
 vi.mock('@/entities/cell/api/use-published-cells', () => ({
   usePublishedCells: () => ({ data: mockPublishedCells })
-}));
-
-vi.mock('@/features/container-create/model/use-create-container', () => ({
-  useCreateContainer: () => ({
-    isPending: false,
-    status: 'idle',
-    error: null,
-    mutateAsync: mockCreateContainerMutateAsync
-  })
-}));
-
-vi.mock('@/features/placement-actions/model/use-place-container', () => ({
-  usePlaceContainer: () => ({
-    isPending: false,
-    status: 'idle',
-    error: null,
-    mutateAsync: mockPlaceContainerMutateAsync
-  })
 }));
 
 vi.mock('@/entities/product-location-role/api/use-location-product-assignments', () => ({
@@ -254,14 +235,12 @@ beforeEach(() => {
   mockPolicyAssignments = [];
   mockProductSearchResults = [];
   vi.spyOn(console, 'debug').mockImplementation(() => {});
-  mockCreateContainerMutateAsync.mockReset();
-  mockPlaceContainerMutateAsync.mockReset();
   mockCreatePolicyMutateAsync.mockReset();
   mockDeletePolicyMutateAsync.mockReset();
 });
 
 describe('CellPlacementInspector render hierarchy', () => {
-  it('renders current containers and inventory before placement actions for occupied locations', () => {
+  it('renders current containers and inventory before policy summary for occupied locations', () => {
     mockStorageData = [
       makeStorageRow({
         containerId: 'c1',
@@ -272,9 +251,9 @@ describe('CellPlacementInspector render hierarchy', () => {
 
     const markup = renderInspector();
 
-    expectTextOrder(markup, 'Current containers', 'Placement actions');
-    expectTextOrder(markup, 'Current inventory', 'Placement actions');
-    expectTextOrder(markup, 'Placement actions', 'Location Policy');
+    expectTextOrder(markup, 'Current containers', 'Location Policy');
+    expectTextOrder(markup, 'Current inventory', 'Location Policy');
+    expect(markup).not.toContain('Placement actions');
   });
 });
 
@@ -336,14 +315,16 @@ describe('CellPlacementInspector placement mode transitions', () => {
     mockContainerTypes = [pallet];
   });
 
-  it('defaults to details mode and hides placement task forms', () => {
+  it('defaults to details mode and hides workflow task forms', () => {
     const view = renderInteractiveInspector();
 
     expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-view')).toBeNull();
     expect(view.text()).toContain('Current containers');
     expect(view.text()).toContain('Current inventory');
-    expect(view.text()).toContain('Placement actions');
+    expect(view.text()).not.toContain('Placement actions');
+    expect(view.text()).not.toContain('Place existing container');
+    expect(view.text()).not.toContain('+ Create container');
     expect(view.text()).toContain('Location Policy');
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
@@ -354,77 +335,8 @@ describe('CellPlacementInspector placement mode transitions', () => {
     view.unmount();
   });
 
-  it('opens only the place-existing task body from the launcher', () => {
-    const view = renderInteractiveInspector();
-
-    const openPlace = view.findButtonByText('Place existing container');
-    expect(openPlace).not.toBeNull();
-
-    act(() => {
-      openPlace?.props.onClick();
-    });
-
-    expect(view.findByTestId('cell-placement-task-view')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-shell')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-body')).not.toBeNull();
-    expect(view.text()).toContain('Inspector task');
-    expect(view.text()).toContain('Place existing container');
-    expect(view.findByTestId('cell-placement-task-place-existing')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
-    expect(view.text()).not.toContain('Current containers');
-    expect(view.text()).not.toContain('Location Policy');
-
-    view.unmount();
-  });
-
-  it('opens only the create-and-place task body from the launcher', () => {
-    const view = renderInteractiveInspector();
-
-    const openCreate = view.findButtonByText('+ Create container');
-    expect(openCreate).not.toBeNull();
-
-    act(() => {
-      openCreate?.props.onClick();
-    });
-
-    expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
-    expect(view.text()).toContain('Inspector task');
-    expect(view.text()).toContain('Create new container');
-    expect(view.findByTestId('cell-placement-task-create-and-place')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
-    expect(view.text()).not.toContain('Current containers');
-    expect(view.text()).not.toContain('Location Policy');
-
-    view.unmount();
-  });
-
-  it('returns to details mode when backing out of a task', () => {
-    const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('Place existing container')?.props.onClick();
-    });
-
-    act(() => {
-      view.findButtonByText('Back')?.props.onClick();
-    });
-
-    expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-view')).toBeNull();
-    expect(view.text()).toContain('Current containers');
-    expect(view.text()).toContain('Current inventory');
-    expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
-
-    view.unmount();
-  });
-
   it('resets to details mode when the selected cell changes', () => {
     const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('+ Create container')?.props.onClick();
-    });
 
     mockSelection = { type: 'cell', cellId: 'cell-2' };
     mockPublishedCells = [{ id: 'cell-2', address: { raw: 'A-01-02' } }];
@@ -435,43 +347,6 @@ describe('CellPlacementInspector placement mode transitions', () => {
     expect(view.text()).toContain('A-01-02');
     expect(view.text()).toContain('Current containers');
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
-
-    view.unmount();
-  });
-
-  it('returns to details mode after successful place-existing completion', async () => {
-    mockPlaceContainerMutateAsync.mockResolvedValue({
-      ok: true,
-      containerId: 'container-1',
-      locationId: 'loc-1'
-    });
-
-    const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('Place existing container')?.props.onClick();
-    });
-
-    const input = view.findInput();
-    expect(input).not.toBeNull();
-
-    act(() => {
-      input?.props.onChange({ target: { value: 'CNT-000001' } });
-    });
-
-    const confirmPlace = view.findButtonByText('Confirm place');
-    expect(confirmPlace).not.toBeNull();
-
-    await act(async () => {
-      await confirmPlace?.props.onClick();
-    });
-
-    expect(mockPlaceContainerMutateAsync).toHaveBeenCalledWith({
-      containerId: 'CNT-000001',
-      locationId: 'loc-1'
-    });
-    expect(view.text()).toContain('Current containers');
-    expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
 
     view.unmount();
   });
@@ -524,7 +399,7 @@ describe('CellPlacementInspector placement mode transitions', () => {
 
     expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-body')).not.toBeNull();
-    expect(view.text()).toContain('Inspector task');
+    expect(view.text()).toContain('Policy editor');
     expect(view.text()).toContain('Edit location policy');
     expect(view.findByTestId('cell-placement-task-edit-policy')).not.toBeNull();
     expect(view.findByTestId('cell-placement-policy-editor')).not.toBeNull();
@@ -575,44 +450,20 @@ describe('CellPlacementInspector placement mode transitions', () => {
     view.unmount();
   });
 
-  it('keeps details sections out of the task body while task mode is active', () => {
+  it('keeps details sections out of the task body while policy editing is active', () => {
     const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('Place existing container')?.props.onClick();
-    });
-
-    expect(view.findByTestId('cell-placement-task-view')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-body')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-details-view')).toBeNull();
-    expect(view.findByTestId('cell-placement-task-place-existing')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-policy-summary')).toBeNull();
-    expect(view.text()).not.toContain('Current containers');
-    expect(view.text()).not.toContain('Current inventory');
-    expect(view.text()).not.toContain('Placement actions');
-    expect(view.text()).not.toContain('Location Policy');
-
-    view.unmount();
-  });
-
-  it('supports switching directly between task modes without returning to details first', () => {
-    const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('Place existing container')?.props.onClick();
-    });
-
-    act(() => {
-      view.findButtonByText('Back')?.props.onClick();
-    });
 
     act(() => {
       view.findButtonByText('Edit policy')?.props.onClick();
     });
 
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
+    expect(view.findByTestId('cell-placement-details-view')).toBeNull();
     expect(view.findByTestId('cell-placement-task-edit-policy')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
+    expect(view.findByTestId('cell-placement-policy-summary')).toBeNull();
+    expect(view.text()).not.toContain('Current containers');
+    expect(view.text()).not.toContain('Current inventory');
 
     view.unmount();
   });
@@ -723,6 +574,309 @@ describe('summarizeInventory', () => {
   });
 });
 
+describe('getUnassignedStockPolicyCandidate', () => {
+  it('returns a single active product-backed stock candidate with no published assignment', () => {
+    const product = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Widget',
+      sku: 'W-1'
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        [
+          makeStorageRow({
+            containerId: 'c1',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product,
+            quantity: 4,
+            uom: 'ea'
+          }),
+          makeStorageRow({
+            containerId: 'c2',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product,
+            quantity: 6,
+            uom: 'box'
+          })
+        ],
+        []
+      )
+    ).toEqual({
+      product,
+      rowCount: 2,
+      containerCount: 2,
+      missingPrimaryPick: true,
+      missingReserve: true
+    });
+  });
+
+  it('treats only published assignments as existing roles', () => {
+    const product = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Widget'
+    });
+    const rows = [
+      makeStorageRow({
+        containerId: 'c1',
+        itemRef: 'product:55555555-5555-5555-5555-555555555555',
+        product,
+        quantity: 4,
+        uom: 'ea'
+      })
+    ];
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        rows,
+        [
+          makePolicyAssignment({
+            id: 'draft-role',
+            state: 'draft',
+            product: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              imageUrl: null
+            }
+          })
+        ]
+      )
+    ).toEqual({
+      product,
+      rowCount: 1,
+      containerCount: 1,
+      missingPrimaryPick: true,
+      missingReserve: true
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        rows,
+        [
+          makePolicyAssignment({
+            id: 'published-role',
+            state: 'published',
+            product: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              imageUrl: null
+            }
+          })
+        ]
+      )
+    ).toEqual({
+      product,
+      rowCount: 1,
+      containerCount: 1,
+      missingPrimaryPick: false,
+      missingReserve: true
+    });
+  });
+
+  it('returns only primary_pick missing when reserve already exists', () => {
+    const product = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Widget',
+      sku: 'W-1'
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        [
+          makeStorageRow({
+            containerId: 'c1',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product,
+            quantity: 4,
+            uom: 'ea'
+          })
+        ],
+        [
+          makePolicyAssignment({
+            id: 'reserve-role',
+            role: 'reserve',
+            state: 'published',
+            product: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              imageUrl: null
+            }
+          })
+        ]
+      )
+    ).toEqual({
+      product,
+      rowCount: 1,
+      containerCount: 1,
+      missingPrimaryPick: true,
+      missingReserve: false
+    });
+  });
+
+  it('returns only reserve missing when primary_pick already exists', () => {
+    const product = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Widget',
+      sku: 'W-1'
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        [
+          makeStorageRow({
+            containerId: 'c1',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product,
+            quantity: 4,
+            uom: 'ea'
+          })
+        ],
+        [
+          makePolicyAssignment({
+            id: 'pick-role',
+            role: 'primary_pick',
+            state: 'published',
+            product: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              imageUrl: null
+            }
+          })
+        ]
+      )
+    ).toEqual({
+      product,
+      rowCount: 1,
+      containerCount: 1,
+      missingPrimaryPick: false,
+      missingReserve: true
+    });
+  });
+
+  it('returns null when both published roles already exist for the candidate product', () => {
+    const product = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Widget',
+      sku: 'W-1'
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        [
+          makeStorageRow({
+            containerId: 'c1',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product,
+            quantity: 4,
+            uom: 'ea'
+          })
+        ],
+        [
+          makePolicyAssignment({
+            id: 'pick-role',
+            role: 'primary_pick',
+            state: 'published',
+            product: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              imageUrl: null
+            }
+          }),
+          makePolicyAssignment({
+            id: 'reserve-role',
+            role: 'reserve',
+            state: 'published',
+            product: {
+              id: product.id,
+              name: product.name,
+              sku: product.sku,
+              imageUrl: null
+            }
+          })
+        ]
+      )
+    ).toBeNull();
+  });
+
+  it('ignores null-product, inactive-product, and non-positive quantity rows', () => {
+    const inactiveProduct = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Inactive Widget',
+      isActive: false
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        [
+          makeStorageRow({
+            containerId: 'c1',
+            itemRef: 'LEGACY-ITEM-42',
+            product: null,
+            quantity: 3,
+            uom: 'ea'
+          }),
+          makeStorageRow({
+            containerId: 'c2',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product: inactiveProduct,
+            quantity: 5,
+            uom: 'ea'
+          }),
+          makeStorageRow({
+            containerId: 'c3',
+            itemRef: 'product:66666666-6666-6666-6666-666666666666',
+            product: makeProduct({
+              id: '66666666-6666-6666-6666-666666666666',
+              name: 'Zero Qty Widget'
+            }),
+            quantity: 0,
+            uom: 'ea'
+          })
+        ],
+        []
+      )
+    ).toBeNull();
+  });
+
+  it('returns null for ambiguous multiple unassigned products', () => {
+    const productA = makeProduct({
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'Widget A'
+    });
+    const productB = makeProduct({
+      id: '66666666-6666-6666-6666-666666666666',
+      name: 'Widget B'
+    });
+
+    expect(
+      getUnassignedStockPolicyCandidate(
+        [
+          makeStorageRow({
+            containerId: 'c1',
+            itemRef: 'product:55555555-5555-5555-5555-555555555555',
+            product: productA,
+            quantity: 2,
+            uom: 'ea'
+          }),
+          makeStorageRow({
+            containerId: 'c2',
+            itemRef: 'product:66666666-6666-6666-6666-666666666666',
+            product: productB,
+            quantity: 3,
+            uom: 'ea'
+          })
+        ],
+        []
+      )
+    ).toBeNull();
+  });
+});
+
 describe('getCreateAndPlaceDisabledReasons', () => {
   it('does not require container code to enable create-and-place', () => {
     expect(
@@ -752,7 +906,7 @@ describe('formatCreateAndPlacePlacementFailure', () => {
     expect(
       formatCreateAndPlacePlacementFailure('CNT-000123', 'Placement failed.')
     ).toBe(
-      'Container CNT-000123 was created, but it could not be placed into this cell and remains unplaced. Placement failed.'
+      'Container created, but placement failed. CNT-000123 remains unplaced. Placement failed.'
     );
   });
 });

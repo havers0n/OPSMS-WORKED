@@ -32,7 +32,9 @@ function createUuidLayoutDraftFixture() {
     rackIds: [],
     racks: {},
     zoneIds: [],
-    zones: {}
+    zones: {},
+    wallIds: [],
+    walls: {}
   };
 }
 
