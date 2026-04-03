@@ -9,17 +9,11 @@ import {
 } from '@/entities/layout-version/model/editor-selectors';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
-import { useContainerTypes } from '@/entities/container/api/use-container-types';
 import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
-import { useCreateContainer } from '@/features/container-create/model/use-create-container';
-import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
 import {
-  filterStorableTypes,
-  formatCreateAndPlacePlacementFailure,
   getContainerDisplayLabel,
   getContainerDisplaySecondary,
-  getCreateAndPlaceDisabledReasons,
   summarizeInventory
 } from './cell-placement-inspector.lib';
 import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
@@ -27,7 +21,7 @@ import { useCreateProductLocationRole, useDeleteProductLocationRole } from '@/en
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 
 type PlacementPanelMode = 'details' | 'task';
-type PlacementTaskType = 'place-existing' | 'create-and-place' | 'edit-policy' | null;
+type PlacementTaskType = 'edit-policy' | null;
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
   active: { label: 'Active', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -101,10 +95,6 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
-}
-
-function formatMutationError(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }
 
 type ContainerCardProps = {
@@ -611,10 +601,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const viewMode = useViewMode();
   const [panelMode, setPanelMode] = useState<PlacementPanelMode>('details');
   const [taskType, setTaskType] = useState<PlacementTaskType>(null);
-  const [containerIdInput, setContainerIdInput] = useState('');
-  const [placeError, setPlaceError] = useState<string | null>(null);
-  const [containerTypeIdInput, setContainerTypeIdInput] = useState('');
-  const [createError, setCreateError] = useState<string | null>(null);
 
   const cellId = selection.type === 'cell' ? selection.cellId : null;
   const isReadOnlyView = viewMode === 'view';
@@ -655,19 +641,10 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   // React Query's initial-pending state, not a real load. Gate on locationId to avoid infinite spinner.
   const isPending = isStoragePending && locationId !== null;
 
-  const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } = useContainerTypes();
-  const storableTypes = filterStorableTypes(containerTypes);
   const bffError = error instanceof BffRequestError ? error : null;
   const locationBffError = locationQueryError instanceof BffRequestError ? locationQueryError : null;
   const containers = groupByContainer(data);
   const isOccupied = containers.length > 0;
-
-  const createContainer = useCreateContainer();
-  const placeContainer = usePlaceContainer({
-    floorId: workspace?.floorId ?? null,
-    locationId
-  });
-  const isActionPending = placeContainer.isPending || createContainer.isPending;
 
   const enterTaskMode = (nextTaskType: Exclude<PlacementTaskType, null>) => {
     setPanelMode('task');
@@ -677,15 +654,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
   const returnToDetails = () => {
     setPanelMode('details');
     setTaskType(null);
-    setPlaceError(null);
-    setCreateError(null);
   };
-
-  useEffect(() => {
-    if (containerTypeIdInput.length === 0 && storableTypes.length > 0) {
-      setContainerTypeIdInput(storableTypes[0].id);
-    }
-  }, [containerTypeIdInput, storableTypes]);
 
   useEffect(() => {
     setPanelMode('details');
@@ -696,140 +665,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     if (!isReadOnlyView) return;
     setPanelMode('details');
     setTaskType(null);
-    setPlaceError(null);
-    setCreateError(null);
   }, [isReadOnlyView]);
-
-  const handlePlace = async () => {
-    const nextContainerId = containerIdInput.trim();
-    if (!selectedCell || !locationId || nextContainerId.length === 0) {
-      return;
-    }
-
-    setPlaceError(null);
-
-    // Debug instrumentation
-    console.debug('[PLACEMENT] before placeContainer.mutateAsync', {
-      containerId: nextContainerId,
-      locationId,
-      selectedCellId: cellId
-    });
-
-    try {
-      await placeContainer.mutateAsync({
-        containerId: nextContainerId,
-        locationId
-      });
-      console.debug('[PLACEMENT] placeContainer success');
-      setContainerIdInput('');
-      returnToDetails();
-    } catch (mutationError) {
-      console.error('[PLACEMENT] placeContainer error', mutationError);
-      setPlaceError(formatMutationError(mutationError, 'Could not place the container.'));
-    }
-  };
-
-  const handleCreateAndPlace = async () => {
-    if (!selectedCell || !locationId || containerTypeIdInput.length === 0) {
-      console.debug('[PLACEMENT] handleCreateAndPlace guard failed', {
-        hasSelectedCell: !!selectedCell,
-        hasLocationId: !!locationId,
-        typeLength: containerTypeIdInput.length
-      });
-      return;
-    }
-
-    setCreateError(null);
-
-    // Debug instrumentation
-    console.debug('[PLACEMENT] before createContainer.mutateAsync', {
-      containerTypeId: containerTypeIdInput,
-      locationId,
-      selectedCellId: cellId
-    });
-
-    try {
-      const container = await createContainer.mutateAsync({
-        containerTypeId: containerTypeIdInput,
-        operationalRole: 'storage'
-      });
-
-      console.debug('[PLACEMENT] createContainer success', {
-        containerId: container.containerId,
-        externalCode: container.externalCode
-      });
-
-      console.debug('[PLACEMENT] before placeContainer.mutateAsync (after create)', {
-        containerId: container.containerId,
-        locationId
-      });
-
-      try {
-        await placeContainer.mutateAsync({
-          containerId: container.containerId,
-          locationId
-        });
-        console.debug('[PLACEMENT] placeContainer success (after create)');
-      } catch (placementError) {
-        console.error('[PLACEMENT] placeContainer error (after create)', placementError);
-        setCreateError(
-          formatCreateAndPlacePlacementFailure(
-            container.systemCode,
-            formatMutationError(placementError, 'Placement failed.')
-          )
-        );
-        return;
-      }
-
-      setContainerTypeIdInput(storableTypes[0]?.id ?? '');
-      returnToDetails();
-    } catch (mutationError) {
-      console.error('[PLACEMENT] createContainer error', mutationError);
-      setCreateError(formatMutationError(mutationError, 'Could not create the container.'));
-    }
-  };
-
-  const placementActionsBlock = selectedCell && !isReadOnlyView ? (
-    <div
-      className="rounded-lg"
-      style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
-    >
-      <div className="px-3 py-2.5">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-          Placement actions
-        </div>
-        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
-          Use these actions to place physical containers at this location.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ background: 'var(--accent)' }}
-            onClick={() => {
-              setPlaceError(null);
-              enterTaskMode('place-existing');
-            }}
-            disabled={isActionPending}
-          >
-            Place existing container
-          </button>
-          <button
-            type="button"
-            className="rounded-md border px-3 py-2 text-xs font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
-            onClick={() => {
-              setCreateError(null);
-              enterTaskMode('create-and-place');
-            }}
-            disabled={isActionPending}
-          >
-            + Create container
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
 
   const currentStateSections =
     selectedCell && locationId && !isPending && !isError ? (
@@ -844,13 +680,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
     ) : null;
 
   const taskTitle =
-    taskType === 'place-existing'
-      ? 'Place existing container'
-      : taskType === 'create-and-place'
-        ? 'Create new container'
-        : taskType === 'edit-policy'
-          ? 'Edit location policy'
-        : '';
+    taskType === 'edit-policy' ? 'Edit location policy' : '';
 
   const showDetailsMode = isReadOnlyView || panelMode === 'details';
   const showTaskMode = !isReadOnlyView && panelMode === 'task' && taskType !== null;
@@ -888,7 +718,7 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             >
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  Inspector task
+                  Policy editor
                 </p>
                 <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{taskTitle}</p>
               </div>
@@ -897,119 +727,12 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
                 className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--text-muted)]"
                 style={{ borderColor: 'var(--border-muted)' }}
                 onClick={returnToDetails}
-                disabled={isActionPending}
               >
                 Back
               </button>
             </div>
 
             <div className="flex-1 px-4 py-4" data-testid="cell-placement-task-body">
-              {taskType === 'place-existing' && (
-                <div className="space-y-3" data-testid="cell-placement-task-place-existing">
-                  <label className="block text-xs text-[var(--text-primary)]">
-                    Container ID or code
-                    <input
-                      value={containerIdInput}
-                      onChange={(event) => setContainerIdInput(event.target.value)}
-                      placeholder="PLT-23901"
-                      className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
-                      style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                    />
-                  </label>
-                  {placeError && <p className="mt-2 text-xs text-red-500">{placeError}</p>}
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ background: 'var(--accent)' }}
-                      onClick={() => void handlePlace()}
-                      disabled={isActionPending || containerIdInput.trim().length === 0}
-                    >
-                      {placeContainer.isPending ? 'Placing...' : 'Confirm place'}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
-                      style={{ borderColor: 'var(--border-muted)' }}
-                      onClick={returnToDetails}
-                      disabled={isActionPending}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {taskType === 'create-and-place' && (
-                <div className="space-y-3" data-testid="cell-placement-task-create-and-place">
-                  <label className="block text-xs text-[var(--text-primary)]">
-                    Container type
-                    <select
-                      value={containerTypeIdInput}
-                      onChange={(event) => setContainerTypeIdInput(event.target.value)}
-                      className="mt-1 w-full rounded-md border px-2.5 py-2 text-sm outline-none"
-                      style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-                      disabled={isContainerTypesPending || isActionPending || storableTypes.length === 0}
-                    >
-                      {storableTypes.length === 0 && (
-                        <option value="">
-                          {isContainerTypesPending ? 'Loading container types...' : 'No storage-capable container types available'}
-                        </option>
-                      )}
-                      {storableTypes.map((containerType) => (
-                        <option key={containerType.id} value={containerType.id}>
-                          {containerType.code}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {isContainerTypesError && (
-                    <p className="mt-2 text-xs text-red-500">Could not load container types.</p>
-                  )}
-                  {createError && <p className="mt-2 text-xs text-red-500">{createError}</p>}
-
-                  <div className="mt-3 flex items-center gap-2">
-                    {(() => {
-                      const disabledReasons = getCreateAndPlaceDisabledReasons({
-                        isActionPending,
-                        locationId,
-                        containerTypeId: containerTypeIdInput,
-                        storableTypeCount: storableTypes.length
-                      });
-                      const buttonDisabled = disabledReasons.length > 0;
-
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                            style={{ background: 'var(--accent)' }}
-                            onClick={() => void handleCreateAndPlace()}
-                            disabled={buttonDisabled}
-                            title={buttonDisabled ? `Disabled: ${disabledReasons.join(', ')}` : ''}
-                          >
-                            {createContainer.isPending
-                              ? 'Creating...'
-                              : placeContainer.isPending
-                                ? 'Placing...'
-                                : 'Create and place'}
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
-                            style={{ borderColor: 'var(--border-muted)' }}
-                            onClick={returnToDetails}
-                            disabled={isActionPending}
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
               {taskType === 'edit-policy' && locationId && (
                 <div data-testid="cell-placement-task-edit-policy">
                   <LocationPolicySection locationId={locationId} mode="editor" />
@@ -1020,7 +743,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
         )}
 
         {showDetailsMode && currentStateSections}
-        {showDetailsMode && placementActionsBlock}
         {showDetailsMode && selectedCell && locationId && (
           <LocationPolicySection
             locationId={locationId}

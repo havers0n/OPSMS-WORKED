@@ -5,28 +5,22 @@ import {
   ArrowLeft,
   Box,
   Loader2,
-  MoveRight,
   PackageOpen,
-  Search,
-  X
+  Search
 } from 'lucide-react';
 import {
   useCancelPlacementInteraction,
   useEditorSelection,
-  usePlacementInteraction,
   useSetSelectedCellId,
   useSetSelectedContainerId,
-  useStartPlacementMove,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
-import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useContainerStorage } from '@/entities/container/api/use-container-storage';
 import { useProduct } from '@/entities/product/api/use-product';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';
 import { useAddInventoryItem } from '@/features/inventory-add/model/use-add-inventory-item';
-import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
 import { useRemoveContainer } from '@/features/placement-actions/model/use-remove-container';
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
@@ -83,16 +77,13 @@ function canReceiveInventory(status: string | null | undefined) {
 
 export function ContainerPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
-  const placementInteraction = usePlacementInteraction();
   const setSelectedContainerId = useSetSelectedContainerId();
   const setSelectedCellId = useSetSelectedCellId();
-  const startPlacementMove = useStartPlacementMove();
   const cancelPlacementInteraction = useCancelPlacementInteraction();
   const viewMode = useViewMode();
   const [isRemoveConfirmOpen, setIsRemoveConfirmOpen] = useState(false);
   const [isAddInventoryOpen, setIsAddInventoryOpen] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
-  const [moveError, setMoveError] = useState<string | null>(null);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
@@ -102,18 +93,10 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
   const containerId = selection.type === 'container' ? selection.containerId : null;
   const sourceCellId = selection.type === 'container' ? selection.sourceCellId ?? null : null;
   const isReadOnlyView = viewMode === 'view';
-  const isMoveMode =
-    placementInteraction.type === 'move-container' &&
-    placementInteraction.containerId === containerId &&
-    placementInteraction.fromCellId === sourceCellId;
-  const targetCellId = isMoveMode ? placementInteraction.targetCellId : null;
 
   const deferredProductSearch = useDeferredValue(productSearch);
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const sourceCell = publishedCells.find((cell) => cell.id === sourceCellId) ?? null;
-  const targetCell = publishedCells.find((cell) => cell.id === targetCellId) ?? null;
-  const { data: targetLocationRef } = useLocationByCell(targetCellId);
-  const targetLocationId = targetLocationRef?.locationId ?? null;
   const { data: rows, isPending, isError } = useContainerStorage(containerId);
   const {
     data: productResults = [],
@@ -134,27 +117,11 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
     floorId: workspace?.floorId ?? null,
     containerId
   });
-  const moveContainer = useMoveContainer({
-    floorId: workspace?.floorId ?? null,
-    sourceCellId,
-    containerId
-  });
   const addInventoryItem = useAddInventoryItem({
     floorId: workspace?.floorId ?? null,
     sourceCellId,
     containerId
   });
-
-  const targetValidationMessage =
-    !isMoveMode
-      ? null
-      : !targetCellId
-        ? 'Click a destination cell on the canvas.'
-        : targetCellId === sourceCellId
-          ? 'Target cell must differ from the current source cell.'
-          : !targetCell
-            ? 'Selected target cell is not available in the published structure.'
-            : null;
 
   const handleRemove = async () => {
     if (isReadOnlyView) {
@@ -175,51 +142,6 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
         mutationError instanceof Error
           ? mutationError.message
           : 'Could not remove the container from its cell.'
-      );
-    }
-  };
-
-  const handleStartMove = () => {
-    if (isReadOnlyView) {
-      return;
-    }
-
-    if (!containerId || !sourceCellId) {
-      return;
-    }
-
-    setMoveError(null);
-    setIsRemoveConfirmOpen(false);
-    setIsAddInventoryOpen(false);
-    startPlacementMove(containerId, sourceCellId);
-  };
-
-  const handleCancelMove = () => {
-    if (isReadOnlyView) {
-      return;
-    }
-
-    cancelPlacementInteraction();
-    setMoveError(null);
-  };
-
-  const handleConfirmMove = async () => {
-    if (isReadOnlyView) {
-      return;
-    }
-
-    if (!containerId || !sourceCellId || !targetCellId || !targetLocationId || targetValidationMessage) {
-      return;
-    }
-
-    setMoveError(null);
-
-    try {
-      await moveContainer.mutateAsync({ containerId, targetLocationId });
-      setSelectedCellId(targetCellId);
-    } catch (mutationError) {
-      setMoveError(
-        mutationError instanceof Error ? mutationError.message : 'Could not move the container.'
       );
     }
   };
@@ -311,9 +233,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
               style={{ borderColor: 'var(--border-muted)' }}
               onClick={handleToggleAddInventory}
               disabled={
-                isMoveMode ||
                 removeContainer.isPending ||
-                moveContainer.isPending ||
                 !isInventoryReceivable
               }
             >
@@ -325,15 +245,6 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
             </button>
             <button
               type="button"
-              className="rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: 'var(--accent)' }}
-              onClick={handleStartMove}
-              disabled={removeContainer.isPending || moveContainer.isPending || addInventoryItem.isPending}
-            >
-              {isMoveMode ? 'Move target active' : 'Move container'}
-            </button>
-            <button
-              type="button"
               className="rounded-md border px-3 py-2 text-xs font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
               style={{ borderColor: 'var(--border-muted)', color: 'var(--text-primary)' }}
               onClick={() => {
@@ -341,7 +252,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                 setIsRemoveConfirmOpen(false);
                 setIsAddInventoryOpen((current) => !current);
               }}
-              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending}
+              disabled={removeContainer.isPending}
             >
               Add inventory
             </button>
@@ -354,7 +265,7 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
                 setIsAddInventoryOpen(false);
                 setIsRemoveConfirmOpen((current) => !current);
               }}
-              disabled={isMoveMode || removeContainer.isPending || moveContainer.isPending || addInventoryItem.isPending}
+              disabled={removeContainer.isPending || addInventoryItem.isPending}
             >
               {removeContainer.isPending ? 'Removing...' : 'Remove from cell'}
             </button>
@@ -368,67 +279,6 @@ export function ContainerPlacementInspector({ workspace }: { workspace: FloorWor
       </div>
 
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {!isReadOnlyView && isMoveMode && sourceCellId && (
-          <div
-            className="rounded-lg p-3"
-            style={{ background: 'var(--surface-subtle)', border: '1px solid var(--accent)' }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent)]">
-                  Move target selection active
-                </p>
-                <p className="mt-1 text-xs text-[var(--text-primary)]">
-                  Select an explicit destination cell on the canvas, then confirm the move.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="rounded-md border p-1.5 text-[var(--text-muted)]"
-                style={{ borderColor: 'var(--border-muted)' }}
-                onClick={handleCancelMove}
-                disabled={moveContainer.isPending}
-                title="Cancel move"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            <div className="mt-3 rounded-md border border-[var(--border-muted)] bg-[var(--surface-primary)] px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">Target cell</p>
-              <p className="mt-1 font-mono text-sm text-[var(--text-primary)]">
-                {targetCell?.address.raw ?? targetCellId ?? 'No target selected'}
-              </p>
-              {targetValidationMessage && (
-                <p className="mt-1 text-xs text-amber-600">{targetValidationMessage}</p>
-              )}
-              {moveError && <p className="mt-1 text-xs text-red-500">{moveError}</p>}
-            </div>
-
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-xs font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ background: 'var(--accent)' }}
-                onClick={() => void handleConfirmMove()}
-                disabled={moveContainer.isPending || Boolean(targetValidationMessage)}
-              >
-                <MoveRight className="h-3.5 w-3.5" />
-                {moveContainer.isPending ? 'Moving...' : 'Confirm move'}
-              </button>
-              <button
-                type="button"
-                className="rounded-md border px-3 py-2 text-xs font-medium text-[var(--text-muted)]"
-                style={{ borderColor: 'var(--border-muted)' }}
-                onClick={handleCancelMove}
-                disabled={moveContainer.isPending}
-              >
-                Cancel move
-              </button>
-            </div>
-          </div>
-        )}
-
         {!isReadOnlyView && isAddInventoryOpen && containerId && (
           <div
             className="rounded-lg p-3"
