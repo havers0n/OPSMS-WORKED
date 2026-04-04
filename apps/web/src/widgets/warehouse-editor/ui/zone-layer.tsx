@@ -1,7 +1,7 @@
 import type { Zone } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect, Text } from 'react-konva';
-import { type CanvasRect, GRID_SIZE } from '../lib/canvas-geometry';
+import { type CanvasRect, GRID_SIZE, WORLD_SCALE } from '../lib/canvas-geometry';
 
 type ZoneLayerProps = {
   canSelectZone: boolean;
@@ -17,28 +17,33 @@ type ZoneLayerProps = {
 
 type ZoneResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
 
-export const MIN_ZONE_SIZE = GRID_SIZE;
+// 1 metre minimum zone size
+export const MIN_ZONE_SIZE = 1;
 
 const ZONE_RESIZE_HANDLE_SIZE = 10;
 
+// Returns pixel offsets (local to the Zone Group) for resize handles
 function getZoneResizeHandlePosition(zone: Zone, handle: ZoneResizeHandle) {
+  const widthPx = zone.width * WORLD_SCALE;
+  const heightPx = zone.height * WORLD_SCALE;
   const points: Record<ZoneResizeHandle, { x: number; y: number }> = {
     nw: { x: 0, y: 0 },
-    ne: { x: zone.width, y: 0 },
-    sw: { x: 0, y: zone.height },
-    se: { x: zone.width, y: zone.height }
+    ne: { x: widthPx, y: 0 },
+    sw: { x: 0, y: heightPx },
+    se: { x: widthPx, y: heightPx }
   };
-
   return points[handle];
 }
 
+// Returns zone rect in metres, all values snapped to 1 m grid
 function resizeZoneFromHandle(
   zone: Zone,
   handle: ZoneResizeHandle,
   pointer: { x: number; y: number }
 ) {
-  const snappedX = Math.round(pointer.x / GRID_SIZE) * GRID_SIZE;
-  const snappedY = Math.round(pointer.y / GRID_SIZE) * GRID_SIZE;
+  // pointer is canvas pixels → convert to metres, snap to 1 m
+  const snappedX = Math.round(pointer.x / WORLD_SCALE);
+  const snappedY = Math.round(pointer.y / WORLD_SCALE);
   const right = zone.x + zone.width;
   const bottom = zone.y + zone.height;
 
@@ -98,8 +103,9 @@ export function ZoneLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
-    const x = Math.round(node.x() / GRID_SIZE) * GRID_SIZE;
-    const y = Math.round(node.y() / GRID_SIZE) * GRID_SIZE;
+    // node.x()/y() are canvas pixels; convert to metres, snap to 1 m grid
+    const x = Math.round(node.x() / WORLD_SCALE);
+    const y = Math.round(node.y() / WORLD_SCALE);
 
     updateZoneRect(zone.id, {
       x,
@@ -127,12 +133,14 @@ export function ZoneLayer({
     <Layer>
       {zones.map((zone) => {
         const isSelectedZone = selectedZoneId === zone.id;
+        const widthPx = zone.width * WORLD_SCALE;
+        const heightPx = zone.height * WORLD_SCALE;
 
         return (
           <Group
             key={zone.id}
-            x={zone.x}
-            y={zone.y}
+            x={zone.x * WORLD_SCALE}
+            y={zone.y * WORLD_SCALE}
             draggable={isLayoutEditable && canSelectZone}
             onMouseDown={(event) => {
               event.cancelBubble = true;
@@ -156,16 +164,16 @@ export function ZoneLayer({
             onDragEnd={(event) => {
               const currentZone = zoneLookup[zone.id] ?? zone;
               event.target.position({
-                x: currentZone.x,
-                y: currentZone.y
+                x: currentZone.x * WORLD_SCALE,
+                y: currentZone.y * WORLD_SCALE
               });
             }}
           >
             <Rect
               x={0}
               y={0}
-              width={zone.width}
-              height={zone.height}
+              width={widthPx}
+              height={heightPx}
               fill={zone.color}
               opacity={0.16}
               stroke={isSelectedZone ? '#0f172a' : zone.color}
@@ -178,7 +186,7 @@ export function ZoneLayer({
             <Text
               x={10}
               y={10}
-              width={Math.max(24, zone.width - 20)}
+              width={Math.max(24, widthPx - 20)}
               text={`${zone.name} · ${zone.code}`}
               fontSize={12}
               fontStyle="bold"
@@ -217,10 +225,10 @@ export function ZoneLayer({
                     }
                     onDragEnd={(event) => {
                       const currentZone = zoneLookup[zone.id] ?? zone;
-                      const point = getZoneResizeHandlePosition(currentZone, handle);
+                      const pt = getZoneResizeHandlePosition(currentZone, handle);
                       event.target.position({
-                        x: point.x - ZONE_RESIZE_HANDLE_SIZE / 2,
-                        y: point.y - ZONE_RESIZE_HANDLE_SIZE / 2
+                        x: pt.x - ZONE_RESIZE_HANDLE_SIZE / 2,
+                        y: pt.y - ZONE_RESIZE_HANDLE_SIZE / 2
                       });
                     }}
                   />
@@ -232,10 +240,10 @@ export function ZoneLayer({
 
       {draftZoneRect && (
         <Rect
-          x={draftZoneRect.x}
-          y={draftZoneRect.y}
-          width={draftZoneRect.width}
-          height={draftZoneRect.height}
+          x={draftZoneRect.x * WORLD_SCALE}
+          y={draftZoneRect.y * WORLD_SCALE}
+          width={draftZoneRect.width * WORLD_SCALE}
+          height={draftZoneRect.height * WORLD_SCALE}
           fill="#22c55e"
           opacity={0.12}
           stroke="#16a34a"

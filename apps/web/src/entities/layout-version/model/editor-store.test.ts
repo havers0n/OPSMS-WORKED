@@ -187,10 +187,10 @@ describe('editor-store', () => {
         code: 'W01',
         wallType: 'generic',
         blocksRackPlacement: true,
-        x1: 172,
-        x2: 172,
+        x1: 25,
+        x2: 25,
         y1: 30,
-        y2: 70
+        y2: 31
       })
     );
 
@@ -303,8 +303,8 @@ describe('editor-store', () => {
     const draft = createUuidLayoutDraftFixture();
     useEditorStore.getState().initializeDraft(draft);
 
-    // 10px drag — snaps to 0, producing zero length, well below MIN_WALL_LENGTH (40px)
-    useEditorStore.getState().createFreeWall(0, 0, 10, 0);
+    // 0.4 m drag — rounds to 0, producing zero length, below MIN_WALL_LENGTH (1 m)
+    useEditorStore.getState().createFreeWall(0, 0, 0.4, 0);
 
     expect(useEditorStore.getState().draft?.wallIds).toHaveLength(0);
     expect(useEditorStore.getState().selection.type).toBe('none');
@@ -360,14 +360,14 @@ describe('editor-store', () => {
     const draft = createUuidLayoutDraftFixture();
     useEditorStore.getState().initializeDraft(draft);
 
-    // Slightly off-grid inputs; expect snapping to nearest 40px grid cell
-    useEditorStore.getState().createFreeWall(3, 7, 123, 12);
+    // Slightly off-grid inputs (metres); expect snapping to nearest 1 m grid cell
+    useEditorStore.getState().createFreeWall(3.4, 7.1, 123.4, 7.6);
 
     const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
     const wall = useEditorStore.getState().draft?.walls[wallId!];
-    // x: 3 → 0, y: 7 → 0, x2: 123 → 120, y2 axis-locked → 0
+    // x1: 3.4 → 3, y1: 7.1 → 7, x2: 123.4 → 123, y2 axis-locked → 7
     expect(wall).toEqual(
-      expect.objectContaining({ x1: 0, y1: 0, x2: 120, y2: 0 })
+      expect.objectContaining({ x1: 3, y1: 7, x2: 123, y2: 7 })
     );
   });
 

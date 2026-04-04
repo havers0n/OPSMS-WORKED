@@ -180,7 +180,7 @@ export function WallInspector({
               Geometry
             </div>
             <div className="font-mono text-[11px] font-semibold text-slate-500">
-              {Math.round(wallLength)} px
+              {wallLength.toFixed(1)} m
             </div>
           </div>
 

@@ -43,7 +43,7 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import { GRID_SIZE } from '../lib/canvas-geometry';
+import { GRID_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_ZOOM_THRESHOLD } from '../lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { RackLayer } from './rack-layer';
@@ -285,9 +285,10 @@ export function EditorCanvas({
     }
   }, [canSelectRack, hoveredRackId, setHoveredRackId]);
 
-  const gridLines = useMemo(() => {
+  const gridLineData = useMemo(() => {
     if (!viewport.width || !viewport.height) {
-      return { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+      const empty = { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+      return { major: empty, minor: null as typeof empty | null };
     }
 
     const offsetX = canvasOffset.x / zoom;
@@ -295,18 +296,27 @@ export function EditorCanvas({
     const visibleW = viewport.width / zoom;
     const visibleH = viewport.height / zoom;
 
-    const startX = Math.floor(-offsetX / GRID_SIZE) * GRID_SIZE;
-    const endX = startX + visibleW + GRID_SIZE * 2;
-    const startY = Math.floor(-offsetY / GRID_SIZE) * GRID_SIZE;
-    const endY = startY + visibleH + GRID_SIZE * 2;
+    const calcGrid = (step: number) => {
+      const startX = Math.floor(-offsetX / step) * step;
+      const endX = startX + visibleW + step * 2;
+      const startY = Math.floor(-offsetY / step) * step;
+      const endY = startY + visibleH + step * 2;
+      const v: number[] = [];
+      for (let x = startX; x <= endX; x += step) v.push(x);
+      const h: number[] = [];
+      for (let y = startY; y <= endY; y += step) h.push(y);
+      return { v, h, startX, endX, startY, endY };
+    };
 
-    const vertical: number[] = [];
-    for (let x = startX; x <= endX; x += GRID_SIZE) vertical.push(x);
-    const horizontal: number[] = [];
-    for (let y = startY; y <= endY; y += GRID_SIZE) horizontal.push(y);
-
-    return { v: vertical, h: horizontal, startX, endX, startY, endY };
+    return {
+      major: calcGrid(MAJOR_GRID_SIZE),
+      // Minor 1 m grid only visible when zoomed in enough
+      minor: zoom >= MINOR_GRID_ZOOM_THRESHOLD ? calcGrid(GRID_SIZE) : null
+    };
   }, [zoom, viewport.width, viewport.height, canvasOffset]);
+
+  // Alias for SnapGuides — always use major grid span as the guide extent
+  const gridLines = gridLineData.major;
 
   return (
     <div
@@ -380,26 +390,51 @@ export function EditorCanvas({
               onMouseUp={onMouseUp}
             >
               <Layer listening={false}>
-                {gridLines.v.map((x) => (
+                {/* Minor grid: 1 m lines — visible when zoom >= MINOR_GRID_ZOOM_THRESHOLD */}
+                {gridLineData.minor && gridLineData.minor.v.map((x) => (
                   <Line
-                    key={`v-${x}`}
-                    points={[x, gridLines.startY, x, gridLines.endY]}
+                    key={`mn-v-${x}`}
+                    points={[x, gridLineData.minor!.startY, x, gridLineData.minor!.endY]}
+                    stroke={isPlacing ? '#a5f3fc' : '#e2e8f0'}
+                    strokeWidth={1}
+                    strokeScaleEnabled={false}
+                    opacity={0.6}
+                  />
+                ))}
+                {gridLineData.minor && gridLineData.minor.h.map((y) => (
+                  <Line
+                    key={`mn-h-${y}`}
+                    points={[gridLineData.minor!.startX, y, gridLineData.minor!.endX, y]}
+                    stroke={isPlacing ? '#a5f3fc' : '#e2e8f0'}
+                    strokeWidth={1}
+                    strokeScaleEnabled={false}
+                    opacity={0.6}
+                  />
+                ))}
+                {/* Major grid: 5 m lines — always visible */}
+                {gridLineData.major.v.map((x) => (
+                  <Line
+                    key={`mj-v-${x}`}
+                    points={[x, gridLineData.major.startY, x, gridLineData.major.endY]}
                     stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
-                    opacity={0.55}
+                    opacity={0.7}
                   />
                 ))}
-                {gridLines.h.map((y) => (
+                {gridLineData.major.h.map((y) => (
                   <Line
-                    key={`h-${y}`}
-                    points={[gridLines.startX, y, gridLines.endX, y]}
+                    key={`mj-h-${y}`}
+                    points={[gridLineData.major.startX, y, gridLineData.major.endX, y]}
                     stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
-                    opacity={0.55}
+                    opacity={0.7}
                   />
                 ))}
+                {/* Origin marker at world (0, 0) */}
+                <Line points={[-14, 0, 14, 0]} stroke="#94a3b8" strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
+                <Line points={[0, -14, 0, 14]} stroke="#94a3b8" strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
               </Layer>
 
               <ZoneLayer

@@ -12,7 +12,8 @@ import type {
 } from './editor-types';
 import {
   getRackCanvasRect,
-  GRID_SIZE
+  GRID_SIZE,
+  WORLD_SCALE
 } from '../lib/canvas-geometry';
 
 export function makeRackSelection(
@@ -202,12 +203,12 @@ export function clampZoneCoordinate(value: number) {
 }
 
 export function clampZoneSize(value: number) {
-  return Math.max(40, Math.round(value));
+  return Math.max(1, Math.round(value));
 }
 
 const DEFAULT_ZONE_COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#a78bfa'];
 const WALL_SIDE_OFFSET = 12;
-const MIN_WALL_LENGTH = GRID_SIZE;
+const MIN_WALL_LENGTH = 1; // minimum wall length in metres
 
 export function buildNewZone(
   zones: Record<string, Zone>,
@@ -345,44 +346,52 @@ function buildWallSeedFromRackSide(
   rack: Rack,
   side: RackSideFocus
 ): Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'> {
-  const rackRect = getRackCanvasRect(rack);
+  // getRackCanvasRect returns pixels; convert to metres for domain storage.
+  const rPx = getRackCanvasRect(rack);
+  const r = {
+    x: rPx.x / WORLD_SCALE,
+    y: rPx.y / WORLD_SCALE,
+    width: rPx.width / WORLD_SCALE,
+    height: rPx.height / WORLD_SCALE
+  };
+  const offsetM = WALL_SIDE_OFFSET / WORLD_SCALE; // px → metres (0.3 m)
 
   if (side === 'north') {
-    const y = Math.max(0, Math.round(rackRect.y - WALL_SIDE_OFFSET));
+    const y = Math.max(0, Math.round(r.y - offsetM));
     return normalizeWallGeometry({
-      x1: rackRect.x,
+      x1: r.x,
       y1: y,
-      x2: rackRect.x + Math.max(MIN_WALL_LENGTH, rackRect.width),
+      x2: r.x + Math.max(MIN_WALL_LENGTH, r.width),
       y2: y
     });
   }
 
   if (side === 'south') {
-    const y = Math.round(rackRect.y + rackRect.height + WALL_SIDE_OFFSET);
+    const y = Math.round(r.y + r.height + offsetM);
     return normalizeWallGeometry({
-      x1: rackRect.x,
+      x1: r.x,
       y1: y,
-      x2: rackRect.x + Math.max(MIN_WALL_LENGTH, rackRect.width),
+      x2: r.x + Math.max(MIN_WALL_LENGTH, r.width),
       y2: y
     });
   }
 
   if (side === 'west') {
-    const x = Math.max(0, Math.round(rackRect.x - WALL_SIDE_OFFSET));
+    const x = Math.max(0, Math.round(r.x - offsetM));
     return normalizeWallGeometry({
       x1: x,
-      y1: rackRect.y,
+      y1: r.y,
       x2: x,
-      y2: rackRect.y + Math.max(MIN_WALL_LENGTH, rackRect.height)
+      y2: r.y + Math.max(MIN_WALL_LENGTH, r.height)
     });
   }
 
-  const x = Math.round(rackRect.x + rackRect.width + WALL_SIDE_OFFSET);
+  const x = Math.round(r.x + r.width + offsetM);
   return normalizeWallGeometry({
     x1: x,
-    y1: rackRect.y,
+    y1: r.y,
     x2: x,
-    y2: rackRect.y + Math.max(MIN_WALL_LENGTH, rackRect.height)
+    y2: r.y + Math.max(MIN_WALL_LENGTH, r.height)
   });
 }
 
@@ -419,10 +428,12 @@ export function buildNewFreeWall(
   x2: number,
   y2: number
 ): Wall | null {
-  const snapX1 = Math.round(x1 / GRID_SIZE) * GRID_SIZE;
-  const snapY1 = Math.round(y1 / GRID_SIZE) * GRID_SIZE;
-  const snapX2 = Math.round(x2 / GRID_SIZE) * GRID_SIZE;
-  const snapY2 = Math.round(y2 / GRID_SIZE) * GRID_SIZE;
+  // Inputs are in metres (already snapped to 1 m grid at the interaction layer).
+  // Re-snap here as a safety net: round to nearest metre.
+  const snapX1 = Math.round(x1);
+  const snapY1 = Math.round(y1);
+  const snapX2 = Math.round(x2);
+  const snapY2 = Math.round(y2);
 
   const absDx = Math.abs(snapX2 - snapX1);
   const absDy = Math.abs(snapY2 - snapY1);

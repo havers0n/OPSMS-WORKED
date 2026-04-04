@@ -1,7 +1,7 @@
 import type { Wall } from '@wos/domain';
 import type Konva from 'konva';
 import { Circle, Group, Layer, Line } from 'react-konva';
-import { GRID_SIZE } from '../lib/canvas-geometry';
+import { WORLD_SCALE } from '../lib/canvas-geometry';
 
 type DraftWallLine = {
   x1: number;
@@ -29,12 +29,14 @@ type WallEndpointHandle = 'start' | 'end';
 
 const WALL_HANDLE_RADIUS = 6;
 
+// Returns wall endpoint in metres (world space)
 function getWallEndpointPosition(wall: Wall, handle: WallEndpointHandle) {
   return handle === 'start'
     ? { x: wall.x1, y: wall.y1 }
     : { x: wall.x2, y: wall.y2 };
 }
 
+// nextStart is in metres; returns wall geometry in metres
 function moveWallByDelta(
   wall: Wall,
   nextStart: { x: number; y: number }
@@ -50,13 +52,15 @@ function moveWallByDelta(
   };
 }
 
+// Returns wall geometry in metres, pointer is canvas pixels
 function resizeWallFromEndpoint(
   wall: Wall,
   handle: WallEndpointHandle,
   pointer: { x: number; y: number }
 ): Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'> {
-  const snappedX = Math.round(pointer.x / GRID_SIZE) * GRID_SIZE;
-  const snappedY = Math.round(pointer.y / GRID_SIZE) * GRID_SIZE;
+  // pointer is canvas pixels → metres, snapped to 1 m grid
+  const snappedX = Math.round(pointer.x / WORLD_SCALE);
+  const snappedY = Math.round(pointer.y / WORLD_SCALE);
   const isHorizontal = wall.y1 === wall.y2;
 
   if (handle === 'start') {
@@ -85,10 +89,11 @@ export function WallLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
-    const x = Math.round(node.x() / GRID_SIZE) * GRID_SIZE;
-    const y = Math.round(node.y() / GRID_SIZE) * GRID_SIZE;
+    // node.x()/y() are canvas pixels; convert to metres, snap to 1 m grid
+    const xM = Math.round(node.x() / WORLD_SCALE);
+    const yM = Math.round(node.y() / WORLD_SCALE);
 
-    updateWallGeometry(wall.id, moveWallByDelta(wall, { x, y }));
+    updateWallGeometry(wall.id, moveWallByDelta(wall, { x: xM, y: yM }));
   };
 
   const handleWallEndpointDragMove = (
@@ -109,7 +114,12 @@ export function WallLayer({
     <Layer>
       {draftWallLine && (
         <Line
-          points={[draftWallLine.x1, draftWallLine.y1, draftWallLine.x2, draftWallLine.y2]}
+          points={[
+            draftWallLine.x1 * WORLD_SCALE,
+            draftWallLine.y1 * WORLD_SCALE,
+            draftWallLine.x2 * WORLD_SCALE,
+            draftWallLine.y2 * WORLD_SCALE
+          ]}
           stroke="#64748b"
           strokeWidth={4}
           strokeScaleEnabled={false}
@@ -121,14 +131,15 @@ export function WallLayer({
       )}
       {walls.map((wall) => {
         const isSelectedWall = selectedWallId === wall.id;
-        const lineDx = wall.x2 - wall.x1;
-        const lineDy = wall.y2 - wall.y1;
+        // Wall extent in pixels (local to Group)
+        const lineDxPx = (wall.x2 - wall.x1) * WORLD_SCALE;
+        const lineDyPx = (wall.y2 - wall.y1) * WORLD_SCALE;
 
         return (
           <Group
             key={wall.id}
-            x={wall.x1}
-            y={wall.y1}
+            x={wall.x1 * WORLD_SCALE}
+            y={wall.y1 * WORLD_SCALE}
             draggable={isLayoutEditable && canSelectWall}
             onMouseDown={(event) => {
               event.cancelBubble = true;
@@ -152,20 +163,20 @@ export function WallLayer({
             onDragEnd={(event) => {
               const currentWall = wallLookup[wall.id] ?? wall;
               event.target.position({
-                x: currentWall.x1,
-                y: currentWall.y1
+                x: currentWall.x1 * WORLD_SCALE,
+                y: currentWall.y1 * WORLD_SCALE
               });
             }}
           >
             <Line
-              points={[0, 0, lineDx, lineDy]}
+              points={[0, 0, lineDxPx, lineDyPx]}
               stroke="transparent"
               strokeWidth={18}
               strokeScaleEnabled={false}
               lineCap="round"
             />
             <Line
-              points={[0, 0, lineDx, lineDy]}
+              points={[0, 0, lineDxPx, lineDyPx]}
               stroke={isSelectedWall ? '#0f172a' : '#64748b'}
               strokeWidth={isSelectedWall ? 5 : 4}
               strokeScaleEnabled={false}
@@ -180,14 +191,15 @@ export function WallLayer({
               canSelectWall &&
               (['start', 'end'] as WallEndpointHandle[]).map((handle) => {
                 const point = getWallEndpointPosition(wall, handle);
-                const localX = point.x - wall.x1;
-                const localY = point.y - wall.y1;
+                // Local pixel offset from the Group origin (wall.x1, wall.y1)
+                const localXPx = (point.x - wall.x1) * WORLD_SCALE;
+                const localYPx = (point.y - wall.y1) * WORLD_SCALE;
 
                 return (
                   <Circle
                     key={`${wall.id}-${handle}`}
-                    x={localX}
-                    y={localY}
+                    x={localXPx}
+                    y={localYPx}
                     radius={WALL_HANDLE_RADIUS}
                     fill="#ffffff"
                     stroke="#0f172a"
@@ -207,10 +219,10 @@ export function WallLayer({
                     }
                     onDragEnd={(event) => {
                       const currentWall = wallLookup[wall.id] ?? wall;
-                      const point = getWallEndpointPosition(currentWall, handle);
+                      const pt = getWallEndpointPosition(currentWall, handle);
                       event.target.position({
-                        x: point.x - currentWall.x1,
-                        y: point.y - currentWall.y1
+                        x: (pt.x - currentWall.x1) * WORLD_SCALE,
+                        y: (pt.y - currentWall.y1) * WORLD_SCALE
                       });
                     }}
                   />

@@ -1,7 +1,7 @@
 import type { Cell, OperationsCellRuntime, Rack } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
-import { getRackGeometry } from '../lib/canvas-geometry';
+import { getRackGeometry, WORLD_SCALE } from '../lib/canvas-geometry';
 import { getSnapPosition } from '../lib/rack-spacing';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
@@ -87,27 +87,30 @@ export function RackLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
-    let x = node.x() - node.offsetX();
-    let y = node.y() - node.offsetY();
+    // node.x() / node.offsetX() are canvas pixels; convert to metres
+    const xM = (node.x() - node.offsetX()) / WORLD_SCALE;
+    const yM = (node.y() - node.offsetY()) / WORLD_SCALE;
 
     const rack = rackLookup[rackId];
     const otherRacks = Object.values(rackLookup).filter((item) => item.id !== rackId);
-    const snapInfo = getSnapPosition(rack, x, y, otherRacks, minRackDistance, 0.5);
+    // getSnapPosition operates in metres; threshold 0.1 m
+    const snapInfo = getSnapPosition(rack, xM, yM, otherRacks, minRackDistance);
 
     if (snapInfo.snappedToX || snapInfo.snappedToY) {
-      x = snapInfo.snappedX;
-      y = snapInfo.snappedY;
+      const finalXM = snapInfo.snappedToX ? snapInfo.snappedX : xM;
+      const finalYM = snapInfo.snappedToY ? snapInfo.snappedY : yM;
       setSnapGuides(
         [
-          snapInfo.snappedToX && { type: 'x' as const, position: x },
-          snapInfo.snappedToY && { type: 'y' as const, position: y }
+          // snap guide positions must be canvas pixels for Konva rendering
+          snapInfo.snappedToX && { type: 'x' as const, position: snapInfo.snappedX * WORLD_SCALE },
+          snapInfo.snappedToY && { type: 'y' as const, position: snapInfo.snappedY * WORLD_SCALE }
         ].filter(Boolean) as SnapGuide[]
       );
+      updateRackPosition(rackId, finalXM, finalYM);
     } else {
       setSnapGuides([]);
+      updateRackPosition(rackId, xM, yM);
     }
-
-    updateRackPosition(rackId, x, y);
   };
 
   const handleCellClick = (cellId: string, anchor: { x: number; y: number }) => {

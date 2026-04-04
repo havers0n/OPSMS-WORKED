@@ -1,8 +1,9 @@
 import { Rack } from '@wos/domain';
-import { getRackGeometry } from './canvas-geometry';
+import { getRackGeometry, WORLD_SCALE } from './canvas-geometry';
 
 /**
- * Get bounding box of a rack in world space (metres)
+ * Get bounding box of a rack in world space (metres).
+ * getRackGeometry returns canvas pixels; divide by WORLD_SCALE to get metres.
  */
 export function getRackBoundingBox(
   rack: Rack
@@ -10,10 +11,10 @@ export function getRackBoundingBox(
   const geometry = getRackGeometry(rack);
 
   return {
-    minX: geometry.x,
-    maxX: geometry.x + geometry.width,
-    minY: geometry.y,
-    maxY: geometry.y + geometry.height,
+    minX: geometry.x / WORLD_SCALE,
+    maxX: (geometry.x + geometry.width) / WORLD_SCALE,
+    minY: geometry.y / WORLD_SCALE,
+    maxY: (geometry.y + geometry.height) / WORLD_SCALE,
   };
 }
 
@@ -118,54 +119,35 @@ export function alignRacksToLine(
 }
 
 /**
- * Distribute racks equally along an axis with minimum distance
+ * Distribute racks equally along an axis with minimum distance.
+ * All positions and distances are in metres.
  */
 export function distributeRacksEqually(
   racks: Rack[],
   axis: 'x' | 'y',
-  minDistance: number,
-  canvasScale: { lengthScale: number; depthScale: number } = {
-    lengthScale: 28,
-    depthScale: 44,
-  }
+  minDistance: number
 ): Record<string, { x: number; y: number }> {
   if (racks.length < 2) {
-    // Single rack - no distribution needed
     return Object.fromEntries(racks.map((r) => [r.id, { x: r.x, y: r.y }]));
   }
 
   const updates: Record<string, { x: number; y: number }> = {};
 
-  // Sort racks by position along the axis
   const sorted = [...racks].sort((a, b) =>
     axis === 'x' ? a.x - b.x : a.y - b.y
   );
 
-  // Calculate spacing: we have N racks with N-1 gaps
-  let totalContent = 0;
-  for (const rack of sorted) {
-    const geo = getRackGeometry(rack);
-    if (axis === 'x') {
-      totalContent += geo.width;
-    } else {
-      totalContent += geo.height;
-    }
-  }
-
-  const totalGaps = (sorted.length - 1) * minDistance;
-  const totalSpan = totalContent + totalGaps;
-
-  // Position racks with equal spacing
-  let position = sorted[0][axis]; // Start from first rack's position
+  // Position racks with equal spacing; convert pixel sizes to metres
+  let position = sorted[0][axis];
   for (const rack of sorted) {
     if (axis === 'x') {
       updates[rack.id] = { x: position, y: rack.y };
       const geo = getRackGeometry(rack);
-      position += geo.width + minDistance;
+      position += geo.width / WORLD_SCALE + minDistance;
     } else {
       updates[rack.id] = { x: rack.x, y: position };
       const geo = getRackGeometry(rack);
-      position += geo.height + minDistance;
+      position += geo.height / WORLD_SCALE + minDistance;
     }
   }
 
@@ -190,7 +172,7 @@ export function getSnapPosition(
   currentY: number,
   otherRacks: Rack[],
   minDistance: number,
-  snapThreshold: number = 0.5
+  snapThreshold: number = 0.1
 ): {
   snappedX: number;
   snappedY: number;

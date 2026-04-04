@@ -12,32 +12,33 @@ import {
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
   projectCanvasRectToViewport,
-  RACK_DEPTH_SCALE,
-  RACK_LENGTH_SCALE
+  WORLD_SCALE
 } from './canvas-geometry';
 
+// Rack position in metres. WORLD_SCALE=40 → canvas x=120px, y=80px.
 const rack: Rack = {
   id: 'rack-1',
   displayCode: '03',
   kind: 'paired',
   axis: 'NS',
-  x: 120,
-  y: 80,
+  x: 3,   // 3 m → 120 px
+  y: 2,   // 2 m → 80 px
   totalLength: 6,
   depth: 1.4,
   rotationDeg: 90,
   faces: []
 };
 
+// Wall endpoints in metres. WORLD_SCALE=40 → same pixel rect as the old pixel fixture.
 const wall: Wall = {
   id: 'wall-1',
   code: 'W01',
   name: 'Wall 1',
   wallType: 'generic',
-  x1: 80,
-  y1: 160,
-  x2: 200,
-  y2: 160,
+  x1: 2,   // 2 m → 80 px
+  y1: 4,   // 4 m → 160 px
+  x2: 5,   // 5 m → 200 px
+  y2: 4,   // 4 m → 160 px
   blocksRackPlacement: true
 };
 
@@ -45,13 +46,16 @@ describe('canvas geometry helpers', () => {
   it('maps rack dimensions into canvas pixels', () => {
     const geometry = getRackGeometry(rack);
 
-    expect(geometry.width).toBe(6 * RACK_LENGTH_SCALE);
-    expect(geometry.height).toBe(1.4 * RACK_DEPTH_SCALE);
+    expect(geometry.width).toBe(6 * WORLD_SCALE);          // 240 px
+    expect(geometry.height).toBe(1.4 * WORLD_SCALE);       // 56 px
     expect(geometry.centerX).toBe(geometry.width / 2);
     expect(geometry.centerY).toBe(geometry.height / 2);
     // faceAWidth and faceBWidth both equal rack.totalLength when no per-face override is set
-    expect(geometry.faceAWidth).toBe(6 * RACK_LENGTH_SCALE);
-    expect(geometry.faceBWidth).toBe(6 * RACK_LENGTH_SCALE);
+    expect(geometry.faceAWidth).toBe(6 * WORLD_SCALE);
+    expect(geometry.faceBWidth).toBe(6 * WORLD_SCALE);
+    // position: metres × WORLD_SCALE → pixels
+    expect(geometry.x).toBe(3 * WORLD_SCALE);              // 120 px
+    expect(geometry.y).toBe(2 * WORLD_SCALE);              // 80 px
   });
 
   it('keeps the non-negative floor helper behavior for placement-only callers', () => {
@@ -72,10 +76,16 @@ describe('canvas geometry helpers', () => {
   });
 
   it('derives a selected cell rect from rack/face/section/level structure', () => {
+    // Rack at origin (0 m, 0 m), kind=paired, totalLength=6 m, depth=1.4 m
+    // WORLD_SCALE=40: geometry.x=0, y=0, width=240 px, height=56 px
+    // Face A: bandY=0, bandHeight=spineY=28, cellHeight=28-8=20
+    // 1 section of 6 m → full width 240 px; 1 level; 3 slots
+    // slotNo=2 (ltr) → slotIndex=1; slotWidth=80 px
+    // cellRect.x = 0 + 0 + 1*80 + 0.5 = 80.5; cellRect.y = 0 + 0 + 4 + 0 + 0.5 = 4.5
     const cellRack: Rack = {
       ...rack,
-      x: 100,
-      y: 60,
+      x: 0,
+      y: 0,
       rotationDeg: 0,
       faces: [
         {
@@ -115,26 +125,32 @@ describe('canvas geometry helpers', () => {
       });
 
     expect(cellRect).not.toBeNull();
-    expect(cellRect?.x).toBeCloseTo(156.5);
-    expect(cellRect?.y).toBeCloseTo(64.5);
-    expect(cellRect?.width).toBeCloseTo(55);
-    expect(cellRect?.height).toBeCloseTo(21.8);
+    expect(cellRect?.x).toBeCloseTo(80.5);
+    expect(cellRect?.y).toBeCloseTo(4.5);
+    expect(cellRect?.width).toBeCloseTo(79);
+    expect(cellRect?.height).toBeCloseTo(19);
   });
 
   it('projects rotated rack bounds into viewport coordinates', () => {
+    // rack at (3 m, 2 m) = (120 px, 80 px), 6 m × 1.4 m = 240 × 56 px, rotated 90°
+    // After rotation around centre (240, 108): canvas rect ≈ {x:212, y:-12, w:56, h:240}
+    // After projectCanvasRectToViewport(zoom=2, offset={x:12,y:20}):
+    //   x = 212*2+12 = 436, y = -12*2+20 = -4, w = 56*2 = 112, h = 240*2 = 480
     const rect = projectCanvasRectToViewport(
       getRackCanvasRect(rack),
       2,
       { x: 12, y: 20 }
     );
 
-    expect(rect.x).toBeCloseTo(358.4);
-    expect(rect.y).toBeCloseTo(73.6);
-    expect(rect.width).toBeCloseTo(123.2);
-    expect(rect.height).toBeCloseTo(336);
+    expect(rect.x).toBeCloseTo(436);
+    expect(rect.y).toBeCloseTo(-4);
+    expect(rect.width).toBeCloseTo(112);
+    expect(rect.height).toBeCloseTo(480);
   });
 
   it('derives a wall bounds rect from segment endpoints', () => {
+    // wall: x1=2m→80px, y1=4m→160px, x2=5m→200px, y2=4m→160px
+    // getWallCanvasRect multiplies by WORLD_SCALE
     expect(getWallCanvasRect(wall)).toEqual({
       x: 80,
       y: 160,

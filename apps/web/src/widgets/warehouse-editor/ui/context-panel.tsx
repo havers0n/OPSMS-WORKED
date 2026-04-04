@@ -474,7 +474,7 @@ function WallContextPanel({
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           {[
-            { label: 'Length', value: `${Math.round(wallLength)} px` },
+            { label: 'Length', value: `${wallLength.toFixed(1)} m` },
             { label: 'Axis', value: orientation }
           ].map(({ label, value }) => (
             <div

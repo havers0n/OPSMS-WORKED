@@ -1,10 +1,12 @@
 import type { CellStructureIdentity, Rack, Wall, Zone } from '@wos/domain';
 
 // ─── Scale constants ────────────────────────────────────────────────────────
-export const RACK_LENGTH_SCALE = 28;   // px per metre (along the long axis)
-export const RACK_DEPTH_SCALE  = 44;   // px per metre for a PAIRED rack (two faces back-to-back)
-export const SINGLE_DEPTH_PX   = 22;   // fixed visual depth for a SINGLE-face rack
-export const GRID_SIZE         = 40;
+// All world coordinates (rack.x/y, wall.x1/y1, zone.x/y, dimensions) are in metres.
+// WORLD_SCALE converts metres → canvas pixels for rendering.
+export const WORLD_SCALE       = 40;   // px per metre — unified scale for all world coords
+export const GRID_SIZE         = WORLD_SCALE; // minor grid step = 1 m = 40 px
+export const MAJOR_GRID_SIZE   = WORLD_SCALE * 5; // major grid step = 5 m = 200 px
+export const MINOR_GRID_ZOOM_THRESHOLD = 1.2; // zoom level at which 1 m minor grid appears
 export const ROTATE_HANDLE_SIZE = 28;
 export const MIN_CANVAS_ZOOM = 0.5;
 export const MAX_CANVAS_ZOOM = 3.0;
@@ -68,15 +70,11 @@ export function clampCanvasZoom(value: number) {
 /**
  * getRackGeometry
  *
- * Visual depth rules:
- *  - kind = 'single'  → SINGLE_DEPTH_PX (one face, thin bar)
- *  - kind = 'paired'  → rack.depth * RACK_DEPTH_SCALE (two faces, full block)
+ * Converts rack domain model (metres) to canvas pixel geometry.
  *
- * Width rules:
- *  - Single rack: faceAWidth = rack.totalLength * scale
- *  - Paired rack: each face can have an independent faceLength override.
- *    The bounding box spans max(faceAWidth, faceBWidth).
- *
+ * rack.x / rack.y are in metres → multiplied by WORLD_SCALE for canvas x/y.
+ * rack.totalLength / rack.depth are in metres → multiplied by WORLD_SCALE for width/height.
+ * Both single and paired racks use rack.depth * WORLD_SCALE for height.
  * The spine divider for paired racks sits at height / 2.
  */
 export function getRackGeometry(rack: Rack): CanvasRackGeometry {
@@ -88,15 +86,14 @@ export function getRackGeometry(rack: Rack): CanvasRackGeometry {
   const faceALength = faceA?.faceLength ?? rack.totalLength;
   const faceBLength = isPaired ? (faceB?.faceLength ?? rack.totalLength) : faceALength;
 
-  const faceAWidth = faceALength * RACK_LENGTH_SCALE;
-  const faceBWidth = faceBLength * RACK_LENGTH_SCALE;
+  const faceAWidth = faceALength * WORLD_SCALE;
+  const faceBWidth = faceBLength * WORLD_SCALE;
   const width      = Math.max(faceAWidth, faceBWidth);
-
-  const height = isPaired ? rack.depth * RACK_DEPTH_SCALE : SINGLE_DEPTH_PX;
+  const height     = rack.depth * WORLD_SCALE;
 
   return {
-    x: rack.x,
-    y: rack.y,
+    x: rack.x * WORLD_SCALE,
+    y: rack.y * WORLD_SCALE,
     width,
     height,
     faceAWidth,
@@ -178,10 +175,10 @@ export function getRackCanvasRect(rack: Rack): CanvasRect {
 
 export function getZoneCanvasRect(zone: Zone): CanvasRect {
   return {
-    x: zone.x,
-    y: zone.y,
-    width: zone.width,
-    height: zone.height
+    x: zone.x * WORLD_SCALE,
+    y: zone.y * WORLD_SCALE,
+    width: zone.width * WORLD_SCALE,
+    height: zone.height * WORLD_SCALE
   };
 }
 
@@ -190,10 +187,10 @@ export function getWallCanvasRect(wall: Wall): CanvasRect {
   const minY = Math.min(wall.y1, wall.y2);
 
   return {
-    x: minX,
-    y: minY,
-    width: Math.abs(wall.x2 - wall.x1),
-    height: Math.abs(wall.y2 - wall.y1)
+    x: minX * WORLD_SCALE,
+    y: minY * WORLD_SCALE,
+    width: Math.abs(wall.x2 - wall.x1) * WORLD_SCALE,
+    height: Math.abs(wall.y2 - wall.y1) * WORLD_SCALE
   };
 }
 

@@ -98,8 +98,8 @@ export function SummaryTab({
           <div className="flex justify-between"><span className="text-slate-500">Rotation</span><span className="font-medium text-slate-800">{rack.rotationDeg}°</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Length</span><span className="font-medium text-slate-800">{rack.totalLength.toFixed(1)} m</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Depth</span><span className="font-medium text-slate-800">{rack.depth.toFixed(1)} m</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Position X</span><span className="font-mono font-medium text-slate-800">{Math.round(rack.x)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Position Y</span><span className="font-mono font-medium text-slate-800">{Math.round(rack.y)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Position X</span><span className="font-mono font-medium text-slate-800">{rack.x.toFixed(1)} m</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Position Y</span><span className="font-mono font-medium text-slate-800">{rack.y.toFixed(1)} m</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Sections</span><span className="font-medium text-slate-800">{totalSections}</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Generated Cells</span><span className="font-mono font-medium text-slate-800">{generatedCellCount}</span></div>
         </div>

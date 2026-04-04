@@ -6,7 +6,8 @@ import type { InteractionScope } from '@/entities/layout-version/model/editor-ty
 import {
   type CanvasRect,
   getRackGeometry,
-  GRID_SIZE
+  GRID_SIZE,
+  WORLD_SCALE
 } from '../lib/canvas-geometry';
 import { MIN_ZONE_SIZE } from './zone-layer';
 
@@ -122,9 +123,10 @@ export function useCanvasStageInteractions({
       if (!pos) return;
 
       if (isPlacingRef.current) {
+        // Convert canvas pixels → metres, snapped to 1 m grid
         createRackRef.current(
-          Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
-          Math.round(pos.y / GRID_SIZE) * GRID_SIZE
+          Math.round(pos.x / WORLD_SCALE),
+          Math.round(pos.y / WORLD_SCALE)
         );
       } else if (isDrawingZoneRef.current || isDrawingWallRef.current) {
         return;
@@ -154,8 +156,9 @@ export function useCanvasStageInteractions({
     if (!pos) return;
 
     if (isDrawingZone) {
-      const x = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
-      const y = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
+      // snap to 1 m grid in metres
+      const x = Math.round(pos.x / WORLD_SCALE);
+      const y = Math.round(pos.y / WORLD_SCALE);
       draftZoneStartRef.current = { x, y };
       const initialRect = {
         x,
@@ -170,8 +173,9 @@ export function useCanvasStageInteractions({
     }
 
     if (isDrawingWall) {
-      const x = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
-      const y = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
+      // snap to 1 m grid in metres
+      const x = Math.round(pos.x / WORLD_SCALE);
+      const y = Math.round(pos.y / WORLD_SCALE);
       draftWallStartRef.current = { x, y };
       dragDidHappenRef.current = false;
       return;
@@ -191,8 +195,9 @@ export function useCanvasStageInteractions({
         return;
       }
       dragDidHappenRef.current = true;
-      const x2 = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
-      const y2 = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
+      // metres, snapped to 1 m grid
+      const x2 = Math.round(pos.x / WORLD_SCALE);
+      const y2 = Math.round(pos.y / WORLD_SCALE);
       const nextRect = {
         x: Math.min(draftZoneStartRef.current.x, x2),
         y: Math.min(draftZoneStartRef.current.y, y2),
@@ -211,8 +216,9 @@ export function useCanvasStageInteractions({
       const dy = pos.y - draftWallStartRef.current.y;
       if (!dragDidHappenRef.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
       dragDidHappenRef.current = true;
-      const snapX2 = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
-      const snapY2 = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
+      // metres, snapped to 1 m grid
+      const snapX2 = Math.round(pos.x / WORLD_SCALE);
+      const snapY2 = Math.round(pos.y / WORLD_SCALE);
       const absDx = Math.abs(snapX2 - draftWallStartRef.current.x);
       const absDy = Math.abs(snapY2 - draftWallStartRef.current.y);
       const isHorizontal = absDx >= absDy;

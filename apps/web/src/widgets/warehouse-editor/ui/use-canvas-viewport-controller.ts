@@ -3,7 +3,8 @@ import type { Rack } from '@wos/domain';
 import type { ViewMode } from '@/entities/layout-version/model/editor-types';
 import {
   clampCanvasZoom,
-  LOD_CELL_THRESHOLD
+  LOD_CELL_THRESHOLD,
+  WORLD_SCALE
 } from '../lib/canvas-geometry';
 import { getRackBoundingBox } from '../lib/rack-spacing';
 
@@ -80,24 +81,25 @@ export function useCanvasViewportController({
       return;
     }
 
+    // getRackBoundingBox returns metres; convert to pixels for viewport math
     const boxes = racks.map(getRackBoundingBox);
-    const minX = Math.min(...boxes.map((b) => b.minX));
-    const maxX = Math.max(...boxes.map((b) => b.maxX));
-    const minY = Math.min(...boxes.map((b) => b.minY));
-    const maxY = Math.max(...boxes.map((b) => b.maxY));
+    const minXm = Math.min(...boxes.map((b) => b.minX));
+    const maxXm = Math.max(...boxes.map((b) => b.maxX));
+    const minYm = Math.min(...boxes.map((b) => b.minY));
+    const maxYm = Math.max(...boxes.map((b) => b.maxY));
 
     const PADDING = 80; // px on each side
-    const bboxW = maxX - minX;
-    const bboxH = maxY - minY;
+    const bboxWPx = (maxXm - minXm) * WORLD_SCALE;
+    const bboxHPx = (maxYm - minYm) * WORLD_SCALE;
 
-    const scaleX = bboxW > 0 ? (viewport.width - PADDING * 2) / bboxW : LOD_CELL_THRESHOLD;
-    const scaleY = bboxH > 0 ? (viewport.height - PADDING * 2) / bboxH : LOD_CELL_THRESHOLD;
+    const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : LOD_CELL_THRESHOLD;
+    const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : LOD_CELL_THRESHOLD;
 
     // Never go below LOD_CELL_THRESHOLD — cells must be visible in this mode.
     const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_THRESHOLD));
 
-    const offsetX = (viewport.width - bboxW * targetZoom) / 2 - minX * targetZoom;
-    const offsetY = (viewport.height - bboxH * targetZoom) / 2 - minY * targetZoom;
+    const offsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
+    const offsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;
 
     setCanvasZoom(targetZoom);
     setCanvasOffset({ x: offsetX, y: offsetY });
