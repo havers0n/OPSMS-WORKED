@@ -23,11 +23,11 @@ import {
   checkMinimumDistance,
   alignRacksToLine,
   distributeRacksEqually
-} from '../../../widgets/warehouse-editor/lib/rack-spacing';
+} from '../lib/rack-spacing';
 import {
   getRackCanvasRect,
   GRID_SIZE
-} from '../../../widgets/warehouse-editor/lib/canvas-geometry';
+} from '../lib/canvas-geometry';
 
 const TRACE = import.meta.env.DEV;
 
