@@ -3,8 +3,16 @@ import type Konva from 'konva';
 import { Circle, Group, Layer, Line } from 'react-konva';
 import { GRID_SIZE } from '../lib/canvas-geometry';
 
+type DraftWallLine = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
 type WallLayerProps = {
   canSelectWall: boolean;
+  draftWallLine?: DraftWallLine | null;
   getRelativePointerPosition: () => { x: number; y: number } | null;
   isLayoutEditable: boolean;
   selectedWallId: string | null;
@@ -64,6 +72,7 @@ function resizeWallFromEndpoint(
 
 export function WallLayer({
   canSelectWall,
+  draftWallLine,
   getRelativePointerPosition,
   isLayoutEditable,
   selectedWallId,
@@ -98,6 +107,18 @@ export function WallLayer({
 
   return (
     <Layer>
+      {draftWallLine && (
+        <Line
+          points={[draftWallLine.x1, draftWallLine.y1, draftWallLine.x2, draftWallLine.y2]}
+          stroke="#64748b"
+          strokeWidth={4}
+          strokeScaleEnabled={false}
+          lineCap="round"
+          opacity={0.45}
+          dash={[6, 5]}
+          listening={false}
+        />
+      )}
       {walls.map((wall) => {
         const isSelectedWall = selectedWallId === wall.id;
         const lineDx = wall.x2 - wall.x1;

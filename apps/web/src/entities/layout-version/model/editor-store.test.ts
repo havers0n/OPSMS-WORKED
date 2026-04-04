@@ -247,6 +247,130 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().selection.type).toBe('none');
   });
 
+  it('createFreeWall creates a horizontal wall from a left-to-right drag', () => {
+    const draft = createUuidLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setEditorMode('draw-wall');
+
+    // 120px horizontal drag (>= MIN_WALL_LENGTH of 40px)
+    useEditorStore.getState().createFreeWall(0, 40, 120, 55);
+
+    const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
+    expect(wallId).toBeTruthy();
+
+    const wall = useEditorStore.getState().draft?.walls[wallId!];
+    expect(wall).toEqual(
+      expect.objectContaining({
+        code: 'W01',
+        wallType: 'generic',
+        blocksRackPlacement: true,
+        x1: 0,
+        y1: 40,
+        x2: 120,
+        y2: 40  // axis-locked to start Y
+      })
+    );
+    expect(useEditorStore.getState().selection).toEqual({ type: 'wall', wallId });
+    expect(useEditorStore.getState().editorMode).toBe('select');
+    expect(useEditorStore.getState().isDraftDirty).toBe(true);
+  });
+
+  it('createFreeWall creates a vertical wall from a top-to-bottom drag', () => {
+    const draft = createUuidLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+
+    // 160px vertical drag (dy > dx)
+    useEditorStore.getState().createFreeWall(80, 0, 85, 160);
+
+    const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
+    expect(wallId).toBeTruthy();
+
+    const wall = useEditorStore.getState().draft?.walls[wallId!];
+    expect(wall).toEqual(
+      expect.objectContaining({
+        code: 'W01',
+        wallType: 'generic',
+        blocksRackPlacement: true,
+        x1: 80,
+        y1: 0,
+        x2: 80,  // axis-locked to start X
+        y2: 160
+      })
+    );
+  });
+
+  it('createFreeWall is a no-op when the drag is shorter than MIN_WALL_LENGTH', () => {
+    const draft = createUuidLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+
+    // 10px drag — snaps to 0, producing zero length, well below MIN_WALL_LENGTH (40px)
+    useEditorStore.getState().createFreeWall(0, 0, 10, 0);
+
+    expect(useEditorStore.getState().draft?.wallIds).toHaveLength(0);
+    expect(useEditorStore.getState().selection.type).toBe('none');
+    expect(useEditorStore.getState().isDraftDirty).toBe(false);
+  });
+
+  it('createFreeWall is a no-op for a zero-length gesture', () => {
+    const draft = createUuidLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().createFreeWall(40, 40, 40, 40);
+
+    expect(useEditorStore.getState().draft?.wallIds).toHaveLength(0);
+  });
+
+  it('createFreeWall assigns next wall code correctly after existing walls', () => {
+    // Insert a pre-existing wall manually to seed code sequence
+    const existingWallId = crypto.randomUUID();
+    const existingWall = {
+      id: existingWallId,
+      code: 'W01',
+      name: 'Wall 01',
+      wallType: 'generic' as const,
+      x1: 0, y1: 0, x2: 80, y2: 0,
+      blocksRackPlacement: true
+    };
+    const draft = {
+      ...createUuidLayoutDraftFixture(),
+      wallIds: [existingWallId],
+      walls: { [existingWallId]: existingWall }
+    };
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().createFreeWall(0, 80, 120, 80);
+
+    const newWallId = useEditorStore.getState().draft?.wallIds[1] ?? null;
+    expect(newWallId).toBeTruthy();
+    expect(useEditorStore.getState().draft?.walls[newWallId!]?.code).toBe('W02');
+  });
+
+  it('createFreeWall exits draw-wall mode back to select after creation', () => {
+    const draft = createUuidLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setEditorMode('draw-wall');
+    expect(useEditorStore.getState().editorMode).toBe('draw-wall');
+
+    useEditorStore.getState().createFreeWall(0, 0, 120, 0);
+
+    expect(useEditorStore.getState().editorMode).toBe('select');
+  });
+
+  it('createFreeWall grid-snaps input coordinates before building the wall', () => {
+    const draft = createUuidLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+
+    // Slightly off-grid inputs; expect snapping to nearest 40px grid cell
+    useEditorStore.getState().createFreeWall(3, 7, 123, 12);
+
+    const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
+    const wall = useEditorStore.getState().draft?.walls[wallId!];
+    // x: 3 → 0, y: 7 → 0, x2: 123 → 120, y2 axis-locked → 0
+    expect(wall).toEqual(
+      expect.objectContaining({ x1: 0, y1: 0, x2: 120, y2: 0 })
+    );
+  });
+
   it('preserves faceLength when initializing and saving an unchanged draft', () => {
     const draft = createLayoutDraftFixture();
     draft.racks[draft.rackIds[0]].faces[0].faceLength = 4.5;

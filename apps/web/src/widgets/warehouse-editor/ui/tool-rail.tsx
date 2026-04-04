@@ -1,4 +1,4 @@
-import { Menu, MousePointer2, PlusSquare, Square } from 'lucide-react';
+import { Minus, Menu, MousePointer2, PlusSquare, Square } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useToggleDrawer } from '@/app/store/ui-selectors';
 import {
@@ -29,7 +29,8 @@ const TOOLS_BY_VIEW: Record<ViewMode, Tool[]> = {
   layout: [
     { id: 'select', icon: MousePointer2, label: 'Select', editorMode: 'select' },
     { id: 'rack', icon: PlusSquare, label: 'Add Rack', editorMode: 'place' },
-    { id: 'zone', icon: Square, label: 'Draw Zone', editorMode: 'draw-zone' }
+    { id: 'zone', icon: Square, label: 'Draw Zone', editorMode: 'draw-zone' },
+    { id: 'wall', icon: Minus, label: 'Draw Wall', editorMode: 'draw-wall' }
   ]
 };
 
@@ -56,7 +57,9 @@ export function ToolRail() {
       ? 'rack'
       : editorMode === 'draw-zone'
         ? 'zone'
-        : 'select';
+        : editorMode === 'draw-wall'
+          ? 'wall'
+          : 'select';
 
   return (
     <aside

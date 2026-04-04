@@ -23,6 +23,7 @@ import { createStorageWorkflowActions } from './storage-workflow-actions';
 import {
   buildEmptySection,
   buildNewRack,
+  buildNewFreeWall,
   buildNewWallFromRackSide,
   buildNewZone,
   canEditDraft,
@@ -126,6 +127,7 @@ type EditorStore = {
   markDraftSaved: (layoutVersionId: string) => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: { x: number; y: number; width: number; height: number }) => void;
+  createFreeWall: (x1: number, y1: number, x2: number, y2: number) => void;
   createWallFromRackSide: (rackId: string, side: RackSideFocus) => void;
   deleteRack: (rackId: string) => void;
   deleteZone: (zoneId: string) => void;
@@ -452,6 +454,24 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraft,
         selection: { type: 'zone', zoneId: newZone.id },
+        editorMode: 'select',
+        isDraftDirty: true
+      };
+    }),
+  createFreeWall: (x1, y1, x2, y2) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      const newWall = buildNewFreeWall(state.draft.walls, x1, y1, x2, y2);
+      if (!newWall) return state;
+
+      const nextDraft = cloneDraft(state.draft);
+      nextDraft.wallIds = [...nextDraft.wallIds, newWall.id];
+      nextDraft.walls[newWall.id] = newWall;
+
+      return {
+        draft: nextDraft,
+        selection: { type: 'wall', wallId: newWall.id },
         editorMode: 'select',
         isDraftDirty: true
       };

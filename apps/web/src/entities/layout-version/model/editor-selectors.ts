@@ -62,6 +62,7 @@ export const useInitializeDraft = () => useEditorStore((state) => state.initiali
 export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraftSaved);
 export const useCreateRack = () => useEditorStore((state) => state.createRack);
 export const useCreateZone = () => useEditorStore((state) => state.createZone);
+export const useCreateFreeWall = () => useEditorStore((state) => state.createFreeWall);
 export const useCreateWallFromRackSide = () =>
   useEditorStore((state) => state.createWallFromRackSide);
 export const useDeleteRack = () => useEditorStore((state) => state.deleteRack);

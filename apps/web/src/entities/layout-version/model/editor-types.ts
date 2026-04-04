@@ -1,4 +1,4 @@
-export type EditorMode = 'select' | 'place' | 'draw-zone';
+export type EditorMode = 'select' | 'place' | 'draw-zone' | 'draw-wall';
 
 /** Top-level editing perspective — controls which tools, overlays and inspector sections are active */
 export type ViewMode = 'view' | 'storage' | 'layout';

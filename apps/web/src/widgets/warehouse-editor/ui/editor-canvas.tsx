@@ -6,6 +6,7 @@ import {
   useActiveStorageWorkflow,
   useCanvasZoom,
   useCancelPlacementInteraction,
+  useCreateFreeWall,
   useCreateRack,
   useDeleteWall,
   useCreateZone,
@@ -101,6 +102,7 @@ export function EditorCanvas({
   const updateWallGeometry = useUpdateWallGeometry();
   const updateZoneRect = useUpdateZoneRect();
   const createRack = useCreateRack();
+  const createFreeWall = useCreateFreeWall();
   const minRackDistance = useMinRackDistance();
 
   const isViewMode = viewMode === 'view';
@@ -162,6 +164,7 @@ export function EditorCanvas({
     canSelectRack,
     canSelectWall,
     canSelectZone,
+    isDrawingWall,
     isDrawingZone,
     isLayoutDrawToolActive,
     isLayoutMode,
@@ -205,6 +208,8 @@ export function EditorCanvas({
   isPlacingRef.current = isPlacing;
   const isDrawingZoneRef = useRef(isDrawingZone);
   isDrawingZoneRef.current = isDrawingZone;
+  const isDrawingWallRef = useRef(isDrawingWall);
+  isDrawingWallRef.current = isDrawingWall;
   const interactionScopeRef = useRef(interactionScope);
   interactionScopeRef.current = interactionScope;
   const selectedZoneIdRef = useRef(selectedZoneId);
@@ -223,7 +228,9 @@ export function EditorCanvas({
   deleteWallRef.current = deleteWall;
 
   const {
+    cancelDrawWall,
     cancelDrawZone,
+    draftWallLine,
     draftZoneRect,
     marquee,
     onMouseDown,
@@ -235,7 +242,9 @@ export function EditorCanvas({
     clearSelection,
     createRack,
     createZone,
+    createFreeWall,
     interactionScope,
+    isDrawingWall,
     isDrawingZone,
     isLayoutMode,
     isPlacing,
@@ -249,6 +258,7 @@ export function EditorCanvas({
     isLayoutEditable,
     isPlacingRef,
     isDrawingZoneRef,
+    isDrawingWallRef,
     interactionScopeRef,
     cancelPlacementInteractionRef,
     clearSelectionRef,
@@ -258,6 +268,7 @@ export function EditorCanvas({
     deleteZoneRef,
     deleteWallRef,
     cancelDrawZone,
+    cancelDrawWall,
     setEditorMode,
     clearHighlightedCellIds
   });
@@ -307,7 +318,7 @@ export function EditorCanvas({
           : isLayoutDrawToolActive
             ? 'crosshair'
             : 'default',
-        background: isPlacing ? '#f0fdfe' : isDrawingZone ? '#f0fdf4' : '#f1f5f9'
+        background: isPlacing ? '#f0fdfe' : isDrawingZone ? '#f0fdf4' : isDrawingWall ? '#fef9f0' : '#f1f5f9'
       }}
     >
       {!layoutDraft && (
@@ -407,6 +418,7 @@ export function EditorCanvas({
 
               <WallLayer
                 canSelectWall={canSelectWall}
+                draftWallLine={draftWallLine}
                 getRelativePointerPosition={() =>
                   stageRef.current?.getRelativePointerPosition() ?? null
                 }

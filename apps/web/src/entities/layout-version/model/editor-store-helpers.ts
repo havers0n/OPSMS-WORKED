@@ -402,3 +402,60 @@ export function buildNewWallFromRackSide(
     blocksRackPlacement: true
   };
 }
+
+/**
+ * Builds a new free-form wall from two canvas points (e.g. a click-drag gesture).
+ *
+ * Applies axis-lock based on the dominant drag direction, grid-snaps coordinates,
+ * and rejects gestures that are shorter than MIN_WALL_LENGTH.
+ *
+ * Returns null when the gesture is too short to produce a valid wall — callers
+ * should treat null as a no-op (don't create a wall).
+ */
+export function buildNewFreeWall(
+  walls: Record<string, Wall>,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): Wall | null {
+  const snapX1 = Math.round(x1 / GRID_SIZE) * GRID_SIZE;
+  const snapY1 = Math.round(y1 / GRID_SIZE) * GRID_SIZE;
+  const snapX2 = Math.round(x2 / GRID_SIZE) * GRID_SIZE;
+  const snapY2 = Math.round(y2 / GRID_SIZE) * GRID_SIZE;
+
+  const absDx = Math.abs(snapX2 - snapX1);
+  const absDy = Math.abs(snapY2 - snapY1);
+
+  let finalX1: number, finalY1: number, finalX2: number, finalY2: number;
+
+  if (absDx >= absDy) {
+    // Horizontal — lock Y to start row
+    if (absDx < MIN_WALL_LENGTH) return null;
+    finalX1 = snapX1;
+    finalY1 = snapY1;
+    finalX2 = snapX2;
+    finalY2 = snapY1;
+  } else {
+    // Vertical — lock X to start column
+    if (absDy < MIN_WALL_LENGTH) return null;
+    finalX1 = snapX1;
+    finalY1 = snapY1;
+    finalX2 = snapX1;
+    finalY2 = snapY2;
+  }
+
+  const code = nextWallCode(walls);
+
+  return {
+    id: newEntityId(),
+    code,
+    name: `Wall ${code.replace(/^W/i, '')}`,
+    wallType: 'generic',
+    x1: finalX1,
+    y1: finalY1,
+    x2: finalX2,
+    y2: finalY2,
+    blocksRackPlacement: true
+  };
+}

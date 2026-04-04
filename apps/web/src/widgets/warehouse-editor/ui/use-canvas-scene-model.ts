@@ -82,7 +82,8 @@ export function useCanvasSceneModel({
   const isPlacementMoveMode = activeStorageWorkflow?.kind === 'move-container';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
   const isDrawingZone = editorMode === 'draw-zone' && isLayoutEditable;
-  const isLayoutDrawToolActive = isPlacing || isDrawingZone;
+  const isDrawingWall = editorMode === 'draw-wall' && isLayoutEditable;
+  const isLayoutDrawToolActive = isPlacing || isDrawingZone || isDrawingWall;
   const placementFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
   const runtimeFloorId = isViewMode ? workspace?.floorId ?? null : null;
   const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
@@ -230,7 +231,9 @@ export function useCanvasSceneModel({
         ? 'Storage L3 · Click cell to inspect · Esc clear · MMB pan · Scroll zoom'
         : 'Storage L1 · Click rack to inspect · Esc clear · MMB pan · Scroll zoom'
     : isLayoutEditable
-      ? 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del'
+      ? isDrawingWall
+        ? 'Click and drag to draw a wall · Esc to cancel'
+        : 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del'
       : 'Read-only · MMB pan · Scroll zoom';
 
   return useMemo(
@@ -254,6 +257,7 @@ export function useCanvasSceneModel({
         canSelectWall,
         canSelectZone,
         interactionLevel,
+        isDrawingWall,
         isDrawingZone,
         isLayoutDrawToolActive,
         isLayoutMode,
@@ -299,6 +303,7 @@ export function useCanvasSceneModel({
       highlightedCellIdSet,
       hintText,
       interactionLevel,
+      isDrawingWall,
       isDrawingZone,
       isLayoutDrawToolActive,
       isLayoutMode,

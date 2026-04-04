@@ -17,13 +17,22 @@ type MarqueeRect = {
   y2: number;
 };
 
+type DraftWallLine = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
 type UseCanvasStageInteractionsParams = {
   cancelPlacementInteraction: () => void;
   clearHighlightedCellIds: () => void;
   clearSelection: () => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: CanvasRect) => void;
+  createFreeWall: (x1: number, y1: number, x2: number, y2: number) => void;
   interactionScope: InteractionScope;
+  isDrawingWall: boolean;
   isDrawingZone: boolean;
   isLayoutMode: boolean;
   isPlacing: boolean;
@@ -39,7 +48,9 @@ export function useCanvasStageInteractions({
   clearSelection,
   createRack,
   createZone,
+  createFreeWall,
   interactionScope,
+  isDrawingWall,
   isDrawingZone,
   isLayoutMode,
   isPlacing,
@@ -56,6 +67,9 @@ export function useCanvasStageInteractions({
   const [draftZoneRect, setDraftZoneRect] = useState<CanvasRect | null>(null);
   const draftZoneRectRef = useRef<CanvasRect | null>(null);
   const draftZoneStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [draftWallLine, setDraftWallLine] = useState<DraftWallLine | null>(null);
+  const draftWallLineRef = useRef<DraftWallLine | null>(null);
+  const draftWallStartRef = useRef<{ x: number; y: number } | null>(null);
   // Set to true on the first mousemove past threshold; cleared by click.canvas handler.
   const dragDidHappenRef = useRef(false);
 
@@ -63,12 +77,16 @@ export function useCanvasStageInteractions({
   isPlacingRef.current = isPlacing;
   const isDrawingZoneRef = useRef(isDrawingZone);
   isDrawingZoneRef.current = isDrawingZone;
+  const isDrawingWallRef = useRef(isDrawingWall);
+  isDrawingWallRef.current = isDrawingWall;
   const interactionScopeRef = useRef(interactionScope);
   interactionScopeRef.current = interactionScope;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
   const createZoneRef = useRef(createZone);
   createZoneRef.current = createZone;
+  const createFreeWallRef = useRef(createFreeWall);
+  createFreeWallRef.current = createFreeWall;
   const setSelectedRackIdsRef = useRef(setSelectedRackIds);
   setSelectedRackIdsRef.current = setSelectedRackIds;
   const clearSelectionRef = useRef(clearSelection);
@@ -80,6 +98,12 @@ export function useCanvasStageInteractions({
     draftZoneStartRef.current = null;
     draftZoneRectRef.current = null;
     setDraftZoneRect(null);
+  }, []);
+
+  const cancelDrawWall = useCallback(() => {
+    draftWallStartRef.current = null;
+    draftWallLineRef.current = null;
+    setDraftWallLine(null);
   }, []);
 
   useEffect(() => {
@@ -102,7 +126,7 @@ export function useCanvasStageInteractions({
           Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
           Math.round(pos.y / GRID_SIZE) * GRID_SIZE
         );
-      } else if (isDrawingZoneRef.current) {
+      } else if (isDrawingZoneRef.current || isDrawingWallRef.current) {
         return;
       } else {
         if (interactionScopeRef.current === 'workflow') {
@@ -123,8 +147,8 @@ export function useCanvasStageInteractions({
   }, [viewport]);
 
   const onMouseDown = useCallback((event: Konva.KonvaEventObject<MouseEvent>) => {
-    // Empty-canvas drags in layout mode are either zone creation or marquee selection.
-    // Rack/zone groups suppress this via cancelBubble on their own onMouseDown.
+    // Empty-canvas drags in layout mode are either zone/wall creation or marquee selection.
+    // Rack/zone/wall groups suppress this via cancelBubble on their own onMouseDown.
     if (event.evt.button !== 0 || !isLayoutMode || isPlacing) return;
     const pos = stageRef.current?.getRelativePointerPosition();
     if (!pos) return;
@@ -145,9 +169,17 @@ export function useCanvasStageInteractions({
       return;
     }
 
+    if (isDrawingWall) {
+      const x = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
+      const y = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
+      draftWallStartRef.current = { x, y };
+      dragDidHappenRef.current = false;
+      return;
+    }
+
     marqueeStartRef.current = { x: pos.x, y: pos.y };
     dragDidHappenRef.current = false;
-  }, [isDrawingZone, isLayoutMode, isPlacing, stageRef]);
+  }, [isDrawingWall, isDrawingZone, isLayoutMode, isPlacing, stageRef]);
 
   const onMouseMove = useCallback(() => {
     if (draftZoneStartRef.current) {
@@ -169,6 +201,26 @@ export function useCanvasStageInteractions({
       };
       draftZoneRectRef.current = nextRect;
       setDraftZoneRect(nextRect);
+      return;
+    }
+
+    if (draftWallStartRef.current) {
+      const pos = stageRef.current?.getRelativePointerPosition();
+      if (!pos) return;
+      const dx = pos.x - draftWallStartRef.current.x;
+      const dy = pos.y - draftWallStartRef.current.y;
+      if (!dragDidHappenRef.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      dragDidHappenRef.current = true;
+      const snapX2 = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
+      const snapY2 = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
+      const absDx = Math.abs(snapX2 - draftWallStartRef.current.x);
+      const absDy = Math.abs(snapY2 - draftWallStartRef.current.y);
+      const isHorizontal = absDx >= absDy;
+      const nextLine: DraftWallLine = isHorizontal
+        ? { x1: draftWallStartRef.current.x, y1: draftWallStartRef.current.y, x2: snapX2, y2: draftWallStartRef.current.y }
+        : { x1: draftWallStartRef.current.x, y1: draftWallStartRef.current.y, x2: draftWallStartRef.current.x, y2: snapY2 };
+      draftWallLineRef.current = nextLine;
+      setDraftWallLine(nextLine);
       return;
     }
 
@@ -195,6 +247,16 @@ export function useCanvasStageInteractions({
       return;
     }
 
+    if (draftWallStartRef.current) {
+      draftWallStartRef.current = null;
+      const line = draftWallLineRef.current;
+      draftWallLineRef.current = null;
+      setDraftWallLine(null);
+      if (!dragDidHappenRef.current || !line) return;
+      createFreeWallRef.current(line.x1, line.y1, line.x2, line.y2);
+      return;
+    }
+
     if (!marqueeStartRef.current) return;
     marqueeStartRef.current = null;
     const current = marqueeRef.current;
@@ -216,7 +278,9 @@ export function useCanvasStageInteractions({
   }, [layoutDraft]);
 
   return {
+    cancelDrawWall,
     cancelDrawZone,
+    draftWallLine,
     draftZoneRect,
     marquee,
     onMouseDown,
