@@ -42,20 +42,17 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import {
-  type CanvasRect,
-  getRackGeometry,
-  GRID_SIZE
-} from '../lib/canvas-geometry';
+import { GRID_SIZE } from '../lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { RackLayer } from './rack-layer';
 import { SnapGuides } from './shapes/snap-guides';
 import { useCanvasSceneModel } from './use-canvas-scene-model';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
+import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
-import { MIN_ZONE_SIZE, ZoneLayer } from './zone-layer';
+import { ZoneLayer } from './zone-layer';
 
 export function EditorCanvas({
   workspace,
@@ -124,18 +121,6 @@ export function EditorCanvas({
   }, [placementLayout, layoutDraft]);
 
   const stageRef = useRef<Konva.Stage | null>(null);
-
-  // ── Marquee (box) selection ──────────────────────────────────────────────
-  // marquee drives the Konva Rect visual; marqueeRef is readable in event handlers
-  // without stale closure issues.
-  const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const marqueeRef = useRef<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [draftZoneRect, setDraftZoneRect] = useState<CanvasRect | null>(null);
-  const draftZoneRectRef = useRef<CanvasRect | null>(null);
-  const draftZoneStartRef = useRef<{ x: number; y: number } | null>(null);
-  // Set to true on the first mousemove past threshold; cleared by click.canvas handler.
-  const dragDidHappenRef = useRef(false);
 
   const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
 
@@ -222,12 +207,6 @@ export function EditorCanvas({
   isDrawingZoneRef.current = isDrawingZone;
   const interactionScopeRef = useRef(interactionScope);
   interactionScopeRef.current = interactionScope;
-  const createRackRef = useRef(createRack);
-  createRackRef.current = createRack;
-  const createZoneRef = useRef(createZone);
-  createZoneRef.current = createZone;
-  const setSelectedRackIdsRef = useRef(setSelectedRackIds);
-  setSelectedRackIdsRef.current = setSelectedRackIds;
   const selectedZoneIdRef = useRef(selectedZoneId);
   selectedZoneIdRef.current = selectedZoneId;
   const selectedWallIdRef = useRef(selectedWallId);
@@ -243,6 +222,29 @@ export function EditorCanvas({
   const deleteWallRef = useRef(deleteWall);
   deleteWallRef.current = deleteWall;
 
+  const {
+    cancelDrawZone,
+    draftZoneRect,
+    marquee,
+    onMouseDown,
+    onMouseMove,
+    onMouseUp
+  } = useCanvasStageInteractions({
+    cancelPlacementInteraction,
+    clearHighlightedCellIds,
+    clearSelection,
+    createRack,
+    createZone,
+    interactionScope,
+    isDrawingZone,
+    isLayoutMode,
+    isPlacing,
+    layoutDraft,
+    setSelectedRackIds,
+    stageRef,
+    viewport
+  });
+
   useCanvasKeyboardShortcuts({
     isLayoutEditable,
     isPlacingRef,
@@ -255,9 +257,8 @@ export function EditorCanvas({
     selectedWallIdRef,
     deleteZoneRef,
     deleteWallRef,
-    draftZoneStartRef,
+    cancelDrawZone,
     setEditorMode,
-    setDraftZoneRect,
     clearHighlightedCellIds
   });
 
@@ -272,46 +273,6 @@ export function EditorCanvas({
       setHoveredRackId(null);
     }
   }, [canSelectRack, hoveredRackId, setHoveredRackId]);
-
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const handler = () => {
-      // A marquee drag just completed — mouseup already applied the selection.
-      // Suppress this click so we don't immediately clear it.
-      if (dragDidHappenRef.current) {
-        dragDidHappenRef.current = false;
-        return;
-      }
-
-      const pos = stage.getRelativePointerPosition();
-      if (!pos) return;
-
-      if (isPlacingRef.current) {
-        createRackRef.current(
-          Math.round(pos.x / GRID_SIZE) * GRID_SIZE,
-          Math.round(pos.y / GRID_SIZE) * GRID_SIZE
-        );
-      } else if (isDrawingZoneRef.current) {
-        return;
-      } else {
-        if (interactionScopeRef.current === 'workflow') {
-          cancelPlacementInteractionRef.current();
-          clearHighlightedCellIds();
-          return;
-        }
-
-        clearSelectionRef.current();
-        clearHighlightedCellIds();
-      }
-    };
-
-    stage.on('click.canvas', handler);
-    return () => {
-      stage.off('click.canvas');
-    };
-  }, [viewport]);
 
   const gridLines = useMemo(() => {
     if (!viewport.width || !viewport.height) {
@@ -403,96 +364,9 @@ export function EditorCanvas({
                 const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
                 handleZoom(delta);
               }}
-              onMouseDown={(event) => {
-                // Empty-canvas drags in layout mode are either zone creation or marquee selection.
-                // Rack/zone groups suppress this via cancelBubble on their own onMouseDown.
-                if (event.evt.button !== 0 || !isLayoutMode || isPlacing) return;
-                const pos = stageRef.current?.getRelativePointerPosition();
-                if (!pos) return;
-
-                if (isDrawingZone) {
-                  const x = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
-                  const y = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
-                  draftZoneStartRef.current = { x, y };
-                  const initialRect = {
-                    x,
-                    y,
-                    width: MIN_ZONE_SIZE,
-                    height: MIN_ZONE_SIZE
-                  };
-                  draftZoneRectRef.current = initialRect;
-                  setDraftZoneRect(initialRect);
-                  dragDidHappenRef.current = false;
-                  return;
-                }
-
-                marqueeStartRef.current = { x: pos.x, y: pos.y };
-                dragDidHappenRef.current = false;
-              }}
-              onMouseMove={() => {
-                if (draftZoneStartRef.current) {
-                  const pos = stageRef.current?.getRelativePointerPosition();
-                  if (!pos) return;
-                  const dx = pos.x - draftZoneStartRef.current.x;
-                  const dy = pos.y - draftZoneStartRef.current.y;
-                  if (!dragDidHappenRef.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) {
-                    return;
-                  }
-                  dragDidHappenRef.current = true;
-                  const x2 = Math.round(pos.x / GRID_SIZE) * GRID_SIZE;
-                  const y2 = Math.round(pos.y / GRID_SIZE) * GRID_SIZE;
-                  const nextRect = {
-                    x: Math.min(draftZoneStartRef.current.x, x2),
-                    y: Math.min(draftZoneStartRef.current.y, y2),
-                    width: Math.max(MIN_ZONE_SIZE, Math.abs(x2 - draftZoneStartRef.current.x)),
-                    height: Math.max(MIN_ZONE_SIZE, Math.abs(y2 - draftZoneStartRef.current.y))
-                  };
-                  draftZoneRectRef.current = nextRect;
-                  setDraftZoneRect(nextRect);
-                  return;
-                }
-
-                if (!marqueeStartRef.current) return;
-                const pos = stageRef.current?.getRelativePointerPosition();
-                if (!pos) return;
-                const dx = pos.x - marqueeStartRef.current.x;
-                const dy = pos.y - marqueeStartRef.current.y;
-                if (!dragDidHappenRef.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-                dragDidHappenRef.current = true;
-                const next = { x1: marqueeStartRef.current.x, y1: marqueeStartRef.current.y, x2: pos.x, y2: pos.y };
-                marqueeRef.current = next;
-                setMarquee(next);
-              }}
-              onMouseUp={() => {
-                if (draftZoneStartRef.current) {
-                  draftZoneStartRef.current = null;
-                  const createdRect = draftZoneRectRef.current;
-                  draftZoneRectRef.current = null;
-                  setDraftZoneRect(null);
-                  if (!dragDidHappenRef.current || !createdRect) return;
-                  createZoneRef.current(createdRect);
-                  return;
-                }
-
-                if (!marqueeStartRef.current) return;
-                marqueeStartRef.current = null;
-                const current = marqueeRef.current;
-                marqueeRef.current = null;
-                setMarquee(null);
-                if (!dragDidHappenRef.current || !current || !layoutDraft) return;
-                const nx = Math.min(current.x1, current.x2);
-                const ny = Math.min(current.y1, current.y2);
-                const nw = Math.abs(current.x2 - current.x1);
-                const nh = Math.abs(current.y2 - current.y1);
-                if (nw < 4 || nh < 4) return;
-                const matched = Object.values(layoutDraft.racks)
-                  .filter((rack) => {
-                    const g = getRackGeometry(rack);
-                    return g.x < nx + nw && g.x + g.width > nx && g.y < ny + nh && g.y + g.height > ny;
-                  })
-                  .map((rack) => rack.id);
-                setSelectedRackIdsRef.current(matched);
-              }}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
             >
               <Layer listening={false}>
                 {gridLines.v.map((x) => (

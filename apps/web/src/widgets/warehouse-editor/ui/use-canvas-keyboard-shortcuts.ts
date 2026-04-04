@@ -14,9 +14,8 @@ type UseCanvasKeyboardShortcutsParams = {
   selectedWallIdRef: MutableRefObject<string | null>;
   deleteZoneRef: MutableRefObject<(id: string) => void>;
   deleteWallRef: MutableRefObject<(id: string) => void>;
-  draftZoneStartRef: MutableRefObject<{ x: number; y: number } | null>;
+  cancelDrawZone: () => void;
   setEditorMode: (mode: 'select' | 'place' | 'draw-zone') => void;
-  setDraftZoneRect: (rect: null) => void;
   clearHighlightedCellIds: () => void;
 };
 
@@ -45,9 +44,8 @@ export function useCanvasKeyboardShortcuts({
   selectedWallIdRef,
   deleteZoneRef,
   deleteWallRef,
-  draftZoneStartRef,
+  cancelDrawZone,
   setEditorMode,
-  setDraftZoneRect,
   clearHighlightedCellIds
 }: UseCanvasKeyboardShortcutsParams) {
   useEffect(() => {
@@ -55,8 +53,7 @@ export function useCanvasKeyboardShortcuts({
       if (event.key === 'Escape') {
         if (isPlacingRef.current || isDrawingZoneRef.current) {
           setEditorMode('select');
-          setDraftZoneRect(null);
-          draftZoneStartRef.current = null;
+          cancelDrawZone();
           return;
         }
 
@@ -108,11 +105,11 @@ export function useCanvasKeyboardShortcuts({
     return () => window.removeEventListener('keydown', onKey);
   }, [
     cancelPlacementInteractionRef,
+    cancelDrawZone,
     clearHighlightedCellIds,
     clearSelectionRef,
     deleteWallRef,
     deleteZoneRef,
-    draftZoneStartRef,
     interactionScopeRef,
     isDrawingZoneRef,
     isLayoutEditable,
@@ -120,7 +117,6 @@ export function useCanvasKeyboardShortcuts({
     selectedRackIdsRef,
     selectedWallIdRef,
     selectedZoneIdRef,
-    setDraftZoneRect,
     setEditorMode
   ]);
 }
