@@ -1,6 +1,6 @@
 import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
 import { AlertTriangle, CheckCircle2, Loader2, MoveRight, Package, PackagePlus, RotateCcw, ShieldCheck } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   useSelectedCellId,
   useSetSelectedContainerId,
@@ -14,7 +14,7 @@ import { useLocationByCell } from '@/entities/location/api/use-location-by-cell'
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
 import { useCreateProductLocationRole } from '@/entities/product-location-role/api/mutations';
-import { getUnassignedStockPolicyCandidate } from './cell-placement-inspector.lib';
+import { usePolicyBridgeActions } from './use-policy-bridge-actions';
 
 function getUniqueContainerIds(rows: LocationStorageSnapshotRow[]) {
   return [...new Set(rows.map((row) => row.containerId))];
@@ -96,10 +96,6 @@ export function StorageCellContextPanel({
   const setSelectedContainerId = useSetSelectedContainerId();
   const startPlacementMove = useStartPlacementMove();
   const createProductLocationRole = useCreateProductLocationRole();
-  const [policyBridgeError, setPolicyBridgeError] = useState<string | null>(null);
-  const [optimisticPolicyBridgeRoles, setOptimisticPolicyBridgeRoles] = useState<
-    Array<'primary_pick' | 'reserve'>
-  >([]);
 
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const selectedCell =
@@ -130,37 +126,18 @@ export function StorageCellContextPanel({
     () => countInventoryRows(locationRows),
     [locationRows]
   );
-  const basePolicyBridgeCandidate = useMemo(
-    () => getUnassignedStockPolicyCandidate(locationRows, policyAssignments),
-    [locationRows, policyAssignments]
-  );
-  const policyBridgeCandidate = useMemo(() => {
-    if (!basePolicyBridgeCandidate) {
-      return null;
-    }
-
-    const missingPrimaryPick =
-      basePolicyBridgeCandidate.missingPrimaryPick &&
-      !optimisticPolicyBridgeRoles.includes('primary_pick');
-    const missingReserve =
-      basePolicyBridgeCandidate.missingReserve &&
-      !optimisticPolicyBridgeRoles.includes('reserve');
-
-    if (!missingPrimaryPick && !missingReserve) {
-      return null;
-    }
-
-    return {
-      ...basePolicyBridgeCandidate,
-      missingPrimaryPick,
-      missingReserve
-    };
-  }, [basePolicyBridgeCandidate, optimisticPolicyBridgeRoles]);
-
-  useEffect(() => {
-    setPolicyBridgeError(null);
-    setOptimisticPolicyBridgeRoles([]);
-  }, [selectedCellId, locationId, basePolicyBridgeCandidate?.product.id]);
+  const {
+    policyBridgeCandidate,
+    policyBridgeError,
+    isAssignPending,
+    handleAssignPolicyRole
+  } = usePolicyBridgeActions({
+    selectedCellId,
+    locationId,
+    locationRows,
+    policyAssignments,
+    createProductLocationRole
+  });
 
   if (!selectedCellId || !selectedCell) {
     return <PlaceholderContent description="Cell context is unavailable for the current selection." />;
@@ -193,31 +170,6 @@ export function StorageCellContextPanel({
     !isPolicyAssignmentsError &&
     locationId !== null &&
     policyBridgeCandidate !== null;
-
-  const handleAssignPolicyRole = async (role: 'primary_pick' | 'reserve') => {
-    if (!locationId || !policyBridgeCandidate || createProductLocationRole.isPending) {
-      return;
-    }
-
-    setPolicyBridgeError(null);
-
-    try {
-      await createProductLocationRole.mutateAsync({
-        locationId,
-        productId: policyBridgeCandidate.product.id,
-        role
-      });
-      setOptimisticPolicyBridgeRoles((current) =>
-        current.includes(role) ? current : [...current, role]
-      );
-    } catch (error) {
-      setPolicyBridgeError(
-        error instanceof Error
-          ? error.message
-          : 'Could not assign a location role for this product.'
-      );
-    }
-  };
 
   return (
     <div className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}>
@@ -307,9 +259,9 @@ export function StorageCellContextPanel({
                 type="button"
                 className="rounded-lg border border-cyan-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-cyan-700 shadow-sm transition-colors hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => void handleAssignPolicyRole('primary_pick')}
-                disabled={createProductLocationRole.isPending}
+                disabled={isAssignPending}
               >
-                {createProductLocationRole.isPending ? 'Assigning...' : 'Assign primary pick'}
+                {isAssignPending ? 'Assigning...' : 'Assign primary pick'}
               </button>
             )}
             {policyBridgeCandidate.missingReserve && (
@@ -317,9 +269,9 @@ export function StorageCellContextPanel({
                 type="button"
                 className="rounded-lg border border-amber-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => void handleAssignPolicyRole('reserve')}
-                disabled={createProductLocationRole.isPending}
+                disabled={isAssignPending}
               >
-                {createProductLocationRole.isPending ? 'Assigning...' : 'Assign reserve'}
+                {isAssignPending ? 'Assigning...' : 'Assign reserve'}
               </button>
             )}
           </div>
