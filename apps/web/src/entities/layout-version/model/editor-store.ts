@@ -19,6 +19,7 @@ import {
   type RackSideFocus,
   type ViewMode
 } from './editor-types';
+import { createStorageWorkflowActions } from './storage-workflow-actions';
 import {
   buildEmptySection,
   buildNewRack,
@@ -295,96 +296,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
             }
           : state.activeStorageWorkflow
     })),
-  setPlacementMoveTargetCellId: (cellId) =>
-    set((state) => ({
-      activeStorageWorkflow:
-        state.activeStorageWorkflow?.kind === 'move-container' &&
-        state.activeStorageWorkflow.status !== 'submitting'
-          ? {
-              ...state.activeStorageWorkflow,
-              targetCellId: cellId,
-              status: 'targeting',
-              errorMessage: null
-            }
-          : state.activeStorageWorkflow
-    })),
-  cancelPlacementInteraction: () => set({ activeStorageWorkflow: null }),
-  setActiveStorageWorkflowError: (errorMessage) =>
-    set((state) => {
-      if (state.activeStorageWorkflow === null) {
-        return state;
-      }
-
-      if (errorMessage === null) {
-        if (state.activeStorageWorkflow.kind === 'move-container') {
-          return {
-            activeStorageWorkflow: {
-              ...state.activeStorageWorkflow,
-              status: 'targeting',
-              errorMessage: null
-            }
-          };
-        }
-
-        if (state.activeStorageWorkflow.kind === 'place-container') {
-          return {
-            activeStorageWorkflow: {
-              ...state.activeStorageWorkflow,
-              status: 'editing',
-              errorMessage: null
-            }
-          };
-        }
-
-        return {
-          activeStorageWorkflow: {
-            ...state.activeStorageWorkflow,
-            status:
-              state.activeStorageWorkflow.createdContainer !== null
-                ? 'placement-retry'
-                : 'editing',
-            errorMessage: null
-          }
-        };
-      }
-
-      return {
-        activeStorageWorkflow: {
-          ...state.activeStorageWorkflow,
-          status: 'error',
-          errorMessage
-        }
-      };
-    }),
-  setCreateAndPlacePlacementRetry: (createdContainer, errorMessage) =>
-    set((state) => {
-      if (state.activeStorageWorkflow?.kind !== 'create-and-place') {
-        return state;
-      }
-
-      return {
-        activeStorageWorkflow: {
-          ...state.activeStorageWorkflow,
-          status: 'placement-retry',
-          errorMessage,
-          createdContainer
-        }
-      };
-    }),
-  markActiveStorageWorkflowSubmitting: () =>
-    set((state) => {
-      if (state.activeStorageWorkflow === null) {
-        return state;
-      }
-
-      return {
-        activeStorageWorkflow: {
-          ...state.activeStorageWorkflow,
-          status: 'submitting',
-          errorMessage: null
-        }
-      };
-    }),
+  ...createStorageWorkflowActions(set),
   setContextPanelMode: (contextPanelMode) => set({ contextPanelMode }),
   toggleContextPanelMode: () =>
     set((state) => ({
