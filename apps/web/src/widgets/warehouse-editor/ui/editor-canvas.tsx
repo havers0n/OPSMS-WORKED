@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Cell, FloorWorkspace, Wall, Zone } from '@wos/domain';
-import { Circle, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { Circle, Group, Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import {
   useActiveStorageWorkflow,
@@ -69,74 +69,10 @@ import { RackSections } from './shapes/rack-sections';
 import { SnapGuides } from './shapes/snap-guides';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
+import { MIN_ZONE_SIZE, ZoneLayer } from './zone-layer';
 
-type ZoneResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
-const ZONE_RESIZE_HANDLE_SIZE = 10;
-const MIN_ZONE_SIZE = GRID_SIZE;
 type WallEndpointHandle = 'start' | 'end';
 const WALL_HANDLE_RADIUS = 6;
-
-function getZoneResizeHandlePosition(zone: Zone, handle: ZoneResizeHandle) {
-  const points: Record<ZoneResizeHandle, { x: number; y: number }> = {
-    nw: { x: 0, y: 0 },
-    ne: { x: zone.width, y: 0 },
-    sw: { x: 0, y: zone.height },
-    se: { x: zone.width, y: zone.height }
-  };
-
-  return points[handle];
-}
-
-function resizeZoneFromHandle(
-  zone: Zone,
-  handle: ZoneResizeHandle,
-  pointer: { x: number; y: number }
-) {
-  const snappedX = Math.round(pointer.x / GRID_SIZE) * GRID_SIZE;
-  const snappedY = Math.round(pointer.y / GRID_SIZE) * GRID_SIZE;
-  const right = zone.x + zone.width;
-  const bottom = zone.y + zone.height;
-
-  switch (handle) {
-    case 'nw': {
-      const nextX = Math.min(right - MIN_ZONE_SIZE, snappedX);
-      const nextY = Math.min(bottom - MIN_ZONE_SIZE, snappedY);
-      return {
-        x: clampCanvasPosition(nextX),
-        y: clampCanvasPosition(nextY),
-        width: right - nextX,
-        height: bottom - nextY
-      };
-    }
-    case 'ne': {
-      const nextRight = Math.max(zone.x + MIN_ZONE_SIZE, snappedX);
-      const nextY = Math.min(bottom - MIN_ZONE_SIZE, snappedY);
-      return {
-        x: zone.x,
-        y: clampCanvasPosition(nextY),
-        width: nextRight - zone.x,
-        height: bottom - nextY
-      };
-    }
-    case 'sw': {
-      const nextX = Math.min(right - MIN_ZONE_SIZE, snappedX);
-      const nextBottom = Math.max(zone.y + MIN_ZONE_SIZE, snappedY);
-      return {
-        x: clampCanvasPosition(nextX),
-        y: zone.y,
-        width: right - nextX,
-        height: nextBottom - zone.y
-      };
-    }
-    case 'se':
-      return {
-        x: zone.x,
-        y: zone.y,
-        width: Math.max(MIN_ZONE_SIZE, snappedX - zone.x),
-        height: Math.max(MIN_ZONE_SIZE, snappedY - zone.y)
-      };
-  }
-}
 
 function getWallEndpointPosition(wall: Wall, handle: WallEndpointHandle) {
   return handle === 'start'
@@ -371,8 +307,6 @@ export function EditorCanvas({
   setSelectedRackIdsRef.current = setSelectedRackIds;
   const setSelectedRackIdRef = useRef(setSelectedRackId);
   setSelectedRackIdRef.current = setSelectedRackId;
-  const setSelectedZoneIdRef = useRef(setSelectedZoneId);
-  setSelectedZoneIdRef.current = setSelectedZoneId;
   const setSelectedWallIdRef = useRef(setSelectedWallId);
   setSelectedWallIdRef.current = setSelectedWallId;
   const selectedZoneIdRef = useRef(selectedZoneId);
@@ -391,8 +325,6 @@ export function EditorCanvas({
   minRackDistanceRef.current = minRackDistance;
   const updateRackPositionRef = useRef(updateRackPosition);
   updateRackPositionRef.current = updateRackPosition;
-  const updateZoneRectRef = useRef(updateZoneRect);
-  updateZoneRectRef.current = updateZoneRect;
   const deleteZoneRef = useRef(deleteZone);
   deleteZoneRef.current = deleteZone;
   const updateWallGeometryRef = useRef(updateWallGeometry);
@@ -594,39 +526,6 @@ export function EditorCanvas({
     }
 
     updateRackPositionRef.current(rackId, x, y);
-  };
-
-  const handleZoneDragMove = (zone: Zone, event: Konva.KonvaEventObject<DragEvent>) => {
-    if (!layoutDraft || !isLayoutEditable) return;
-
-    const node = event.target;
-    const x = clampCanvasPosition(
-      Math.round(node.x() / GRID_SIZE) * GRID_SIZE
-    );
-    const y = clampCanvasPosition(
-      Math.round(node.y() / GRID_SIZE) * GRID_SIZE
-    );
-
-    updateZoneRectRef.current(zone.id, {
-      x,
-      y,
-      width: zone.width,
-      height: zone.height
-    });
-  };
-
-  const handleZoneResizeDragMove = (
-    zone: Zone,
-    handle: ZoneResizeHandle,
-    event: Konva.KonvaEventObject<DragEvent>
-  ) => {
-    if (!layoutDraft || !isLayoutEditable) return;
-
-    const pointer = stageRef.current?.getRelativePointerPosition();
-    if (!pointer) return;
-
-    event.cancelBubble = true;
-    updateZoneRectRef.current(zone.id, resizeZoneFromHandle(zone, handle, pointer));
   };
 
   const handleWallDragMove = (wall: Wall, event: Konva.KonvaEventObject<DragEvent>) => {
@@ -857,128 +756,19 @@ export function EditorCanvas({
                 ))}
               </Layer>
 
-              <Layer>
-                {zones.map((zone) => {
-                  const isSelectedZone = selectedZoneId === zone.id;
-
-                  return (
-                    <Group
-                      key={zone.id}
-                      x={zone.x}
-                      y={zone.y}
-                      draggable={isLayoutEditable && canSelectZone}
-                      onMouseDown={(event) => {
-                        event.cancelBubble = true;
-                      }}
-                      onClick={(event) => {
-                        event.cancelBubble = true;
-                        if (!canSelectZone) return;
-                        setSelectedZoneIdRef.current(zone.id);
-                      }}
-                      onTap={(event) => {
-                        event.cancelBubble = true;
-                        if (!canSelectZone) return;
-                        setSelectedZoneIdRef.current(zone.id);
-                      }}
-                      onDragStart={() => {
-                        if (canSelectZone) {
-                          setSelectedZoneIdRef.current(zone.id);
-                        }
-                      }}
-                      onDragMove={(event) => handleZoneDragMove(zone, event)}
-                      onDragEnd={(event) => {
-                        const currentZone = layoutDraft?.zones[zone.id] ?? zone;
-                        event.target.position({
-                          x: currentZone.x,
-                          y: currentZone.y
-                        });
-                      }}
-                    >
-                      <Rect
-                        x={0}
-                        y={0}
-                        width={zone.width}
-                        height={zone.height}
-                        fill={zone.color}
-                        opacity={0.16}
-                        stroke={isSelectedZone ? '#0f172a' : zone.color}
-                        strokeWidth={isSelectedZone ? 2 : 1}
-                        strokeScaleEnabled={false}
-                        dash={isSelectedZone ? [6, 4] : undefined}
-                        cornerRadius={8}
-                      />
-
-                      <Text
-                        x={10}
-                        y={10}
-                        width={Math.max(24, zone.width - 20)}
-                        text={`${zone.name} · ${zone.code}`}
-                        fontSize={12}
-                        fontStyle="bold"
-                        fill="#0f172a"
-                        ellipsis
-                        listening={false}
-                      />
-
-                      {isSelectedZone &&
-                        isLayoutEditable &&
-                        canSelectZone &&
-                        (['nw', 'ne', 'sw', 'se'] as ZoneResizeHandle[]).map((handle) => {
-                          const point = getZoneResizeHandlePosition(zone, handle);
-
-                          return (
-                            <Rect
-                              key={`${zone.id}-${handle}`}
-                              x={point.x - ZONE_RESIZE_HANDLE_SIZE / 2}
-                              y={point.y - ZONE_RESIZE_HANDLE_SIZE / 2}
-                              width={ZONE_RESIZE_HANDLE_SIZE}
-                              height={ZONE_RESIZE_HANDLE_SIZE}
-                              fill="#ffffff"
-                              stroke="#0f172a"
-                              strokeWidth={1.5}
-                              strokeScaleEnabled={false}
-                              cornerRadius={2}
-                              draggable
-                              onMouseDown={(event) => {
-                                event.cancelBubble = true;
-                              }}
-                              onClick={(event) => {
-                                event.cancelBubble = true;
-                              }}
-                              onDragMove={(event) =>
-                                handleZoneResizeDragMove(zone, handle, event)
-                              }
-                              onDragEnd={(event) => {
-                                const currentZone = layoutDraft?.zones[zone.id] ?? zone;
-                                const point = getZoneResizeHandlePosition(currentZone, handle);
-                                event.target.position({
-                                  x: point.x - ZONE_RESIZE_HANDLE_SIZE / 2,
-                                  y: point.y - ZONE_RESIZE_HANDLE_SIZE / 2
-                                });
-                              }}
-                            />
-                          );
-                        })}
-                    </Group>
-                  );
-                })}
-
-                {draftZoneRect && (
-                  <Rect
-                    x={draftZoneRect.x}
-                    y={draftZoneRect.y}
-                    width={draftZoneRect.width}
-                    height={draftZoneRect.height}
-                    fill="#22c55e"
-                    opacity={0.12}
-                    stroke="#16a34a"
-                    strokeWidth={2}
-                    strokeScaleEnabled={false}
-                    dash={[6, 4]}
-                    cornerRadius={8}
-                  />
-                )}
-              </Layer>
+              <ZoneLayer
+                canSelectZone={canSelectZone}
+                draftZoneRect={draftZoneRect}
+                getRelativePointerPosition={() =>
+                  stageRef.current?.getRelativePointerPosition() ?? null
+                }
+                isLayoutEditable={isLayoutEditable}
+                selectedZoneId={selectedZoneId}
+                setSelectedZoneId={setSelectedZoneId}
+                updateZoneRect={updateZoneRect}
+                zoneLookup={layoutDraft.zones}
+                zones={zones}
+              />
 
               <Layer>
                 {walls.map((wall) => {
