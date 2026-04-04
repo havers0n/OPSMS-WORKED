@@ -14,6 +14,7 @@ import type {
   LayoutValidationIssue,
   LocationStorageSnapshotRow,
   Rack,
+  Wall,
   Zone
 } from '@wos/domain';
 import {
@@ -44,7 +45,9 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   useActiveStorageWorkflow,
+  useCreateWallFromRackSide,
   useDeleteRack,
+  useDeleteWall,
   useDeleteZone,
   useDraftDirtyState,
   useDuplicateRack,
@@ -59,6 +62,7 @@ import {
   useSelectedCellId,
   useSelectedRackFocus,
   useSelectedRackId,
+  useSelectedWallId,
   useSelectedZoneId,
   useSetActiveStorageWorkflowError,
   useSetCreateAndPlacePlacementRetry,
@@ -124,6 +128,11 @@ const INTENT_CONFIG: Record<
     label: 'Zone context',
     description: 'Zone summary and next-step actions will appear here.'
   },
+  'wall-context': {
+    icon: Layers,
+    label: 'Wall context',
+    description: 'Wall summary and next-step actions will appear here.'
+  },
   'cell-context': {
     icon: Package,
     label: 'Cell context',
@@ -170,6 +179,14 @@ function formatZoneCategory(category: Zone['category']) {
   }
 
   return `${category.slice(0, 1).toUpperCase()}${category.slice(1)}`;
+}
+
+function formatWallType(wallType: Wall['wallType']) {
+  if (!wallType) {
+    return 'No type';
+  }
+
+  return `${wallType.slice(0, 1).toUpperCase()}${wallType.slice(1)}`;
 }
 
 function filterRackIssues(rack: Rack, issues: LayoutValidationIssue[]) {
@@ -445,6 +462,7 @@ function RackSideContextPanel({
   const selectedRackId = useSelectedRackId();
   const selectedRackFocus = useSelectedRackFocus();
   const isLayoutEditable = useIsLayoutEditable();
+  const createWallFromRackSide = useCreateWallFromRackSide();
   const setEditorMode = useSetEditorMode();
   const setSelectedRackId = useSetSelectedRackId();
 
@@ -487,8 +505,8 @@ function RackSideContextPanel({
         <ContextActionButton
           label="Add wall here"
           icon={Layers}
-          disabled
-          onClick={() => undefined}
+          disabled={!isLayoutEditable}
+          onClick={() => createWallFromRackSide(rack.id, side)}
         />
         <ContextActionButton
           label="Mark aisle/access"
@@ -496,6 +514,119 @@ function RackSideContextPanel({
           disabled
           onClick={() => undefined}
         />
+      </div>
+    </div>
+  );
+}
+
+function WallContextPanel({
+  workspace,
+  onOpenInspector
+}: {
+  workspace: FloorWorkspace | null;
+  onOpenInspector: () => void;
+}) {
+  const layoutDraft = useWorkspaceLayout(workspace);
+  const selectedWallId = useSelectedWallId();
+  const deleteWall = useDeleteWall();
+  const isLayoutEditable = useIsLayoutEditable();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const wall = layoutDraft && selectedWallId ? layoutDraft.walls[selectedWallId] : null;
+
+  useEffect(() => {
+    setConfirmingDelete(false);
+  }, [selectedWallId]);
+
+  if (!wall) {
+    return <PlaceholderContent description="Wall context is unavailable for the current selection." />;
+  }
+
+  const wallLength = Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
+  const orientation = wall.y1 === wall.y2 ? 'Horizontal' : 'Vertical';
+
+  return (
+    <div className="px-3 py-3">
+      <div className="rounded-xl border border-[var(--border-muted)] bg-white p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-900" title={wall.name ?? wall.code}>
+              {wall.name ?? wall.code}
+            </div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              {wall.code} | {formatWallType(wall.wallType)}
+            </div>
+          </div>
+
+          <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">
+            {wall.blocksRackPlacement ? 'Blocking' : 'Non-blocking'}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {[
+            { label: 'Length', value: `${Math.round(wallLength)} px` },
+            { label: 'Axis', value: orientation }
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-secondary)] px-2.5 py-2"
+            >
+              <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                {label}
+              </div>
+              <div className="mt-0.5 text-sm font-semibold text-slate-800">{value}</div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+          Drag the segment or its endpoints on the canvas. Stable metadata and coordinates stay in the inspector.
+        </p>
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        <ContextActionButton
+          label="Inspect wall"
+          icon={SlidersHorizontal}
+          onClick={onOpenInspector}
+        />
+
+        {isLayoutEditable && (
+          !confirmingDelete ? (
+            <ContextActionButton
+              label="Delete wall"
+              icon={Trash2}
+              variant="danger"
+              onClick={() => setConfirmingDelete(true)}
+            />
+          ) : (
+            <div className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-red-200 bg-red-50 p-2">
+              <div className="self-center px-1 text-[11px] font-medium text-red-600">
+                Delete this wall?
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteWall(wall.id);
+                    setConfirmingDelete(false);
+                  }}
+                  className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          )
+        )}
       </div>
     </div>
   );
@@ -1385,8 +1516,8 @@ function IdleContextPanel({
       summary: isPublishedOnly ? 'Read-only structure' : 'No rack selected',
       detail: isPublishedOnly
         ? 'Create a draft to edit rack geometry. Published structure remains inspectable.'
-        : 'Select a rack or zone to inspect geometry, or draw a new object.',
-      footer: 'Rack, rack-side, and zone context appear here after selection.'
+        : 'Select a rack, zone, or wall to inspect geometry, or draw a new object.',
+      footer: 'Rack, rack-side, zone, and wall context appear here after selection.'
     }
   }[viewMode];
 
@@ -1589,6 +1720,12 @@ export function ContextPanel({
             onOpenInspector={onOpenInspector}
           />
         )}
+        {intent === 'wall-context' && viewMode === 'layout' && (
+          <WallContextPanel
+            workspace={workspace}
+            onOpenInspector={onOpenInspector}
+          />
+        )}
         {intent === 'cell-context' && viewMode === 'storage' && (
           <StorageCellContextPanel
             workspace={workspace}
@@ -1631,12 +1768,14 @@ export function ContextPanel({
         {((intent === 'rack-context' && viewMode !== 'layout') ||
           (intent === 'rack-side-context' && viewMode !== 'layout') ||
           (intent === 'zone-context' && viewMode !== 'layout') ||
+          (intent === 'wall-context' && viewMode !== 'layout') ||
           (intent === 'cell-context' && viewMode !== 'storage') ||
           (intent === 'container-context' && viewMode !== 'storage') ||
           (intent === 'workflow' && viewMode !== 'storage') ||
           (intent !== 'rack-context' &&
             intent !== 'rack-side-context' &&
             intent !== 'zone-context' &&
+            intent !== 'wall-context' &&
             intent !== 'cell-context' &&
             intent !== 'container-context' &&
             intent !== 'idle-view' &&

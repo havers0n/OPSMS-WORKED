@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Cell, FloorWorkspace, Zone } from '@wos/domain';
-import { Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import type { Cell, FloorWorkspace, Wall, Zone } from '@wos/domain';
+import { Circle, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
 import {
   Minus,
@@ -12,6 +12,7 @@ import {
   useCanvasZoom,
   useCancelPlacementInteraction,
   useCreateRack,
+  useDeleteWall,
   useCreateZone,
   useClearSelection,
   useDeleteZone,
@@ -24,9 +25,11 @@ import {
   useSelectedCellId,
   useSelectedRackFocus,
   useSelectedZoneId,
+  useSelectedWallId,
   useSetPlacementMoveTargetCellId,
   useSelectedRackId,
   useSetSelectedRackId,
+  useSetSelectedWallId,
   useSetSelectedZoneId,
   useSelectedRackIds,
   useSetCanvasZoom,
@@ -39,6 +42,7 @@ import {
   useSetSelectedRackIds,
   useToggleRackSelection,
   useUpdateRackPosition,
+  useUpdateWallGeometry,
   useUpdateZoneRect,
   useMinRackDistance,
   useViewMode
@@ -58,6 +62,7 @@ import {
   getCanvasLOD,
   getRackCanvasRect,
   getRackGeometry,
+  getWallCanvasRect,
   getZoneCanvasRect,
   GRID_SIZE,
   LOD_CELL_THRESHOLD,
@@ -256,9 +261,40 @@ function LayoutZoneAffordanceBar({
   );
 }
 
+type LayoutWallAffordanceBarProps = {
+  wall: Wall;
+  anchorRect: CanvasRect;
+  viewport: { width: number; height: number };
+  onOpenInspector: () => void;
+};
+
+function LayoutWallAffordanceBar({
+  wall,
+  anchorRect,
+  viewport,
+  onOpenInspector
+}: LayoutWallAffordanceBarProps) {
+  return (
+    <ObjectLocalAffordanceBar
+      anchorRect={anchorRect}
+      viewport={viewport}
+      label={wall.code}
+    >
+      <ObjectLocalAffordanceButton
+        icon={SlidersHorizontal}
+        label="Inspect"
+        variant="accent"
+        onClick={onOpenInspector}
+      />
+    </ObjectLocalAffordanceBar>
+  );
+}
+
 type ZoneResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
 const ZONE_RESIZE_HANDLE_SIZE = 10;
 const MIN_ZONE_SIZE = GRID_SIZE;
+type WallEndpointHandle = 'start' | 'end';
+const WALL_HANDLE_RADIUS = 6;
 
 function getZoneResizeHandlePosition(zone: Zone, handle: ZoneResizeHandle) {
   const points: Record<ZoneResizeHandle, { x: number; y: number }> = {
@@ -322,6 +358,47 @@ function resizeZoneFromHandle(
   }
 }
 
+function getWallEndpointPosition(wall: Wall, handle: WallEndpointHandle) {
+  return handle === 'start'
+    ? { x: wall.x1, y: wall.y1 }
+    : { x: wall.x2, y: wall.y2 };
+}
+
+function moveWallByDelta(
+  wall: Wall,
+  nextStart: { x: number; y: number }
+): Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'> {
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+
+  return {
+    x1: nextStart.x,
+    y1: nextStart.y,
+    x2: nextStart.x + dx,
+    y2: nextStart.y + dy
+  };
+}
+
+function resizeWallFromEndpoint(
+  wall: Wall,
+  handle: WallEndpointHandle,
+  pointer: { x: number; y: number }
+): Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'> {
+  const snappedX = Math.round(pointer.x / GRID_SIZE) * GRID_SIZE;
+  const snappedY = Math.round(pointer.y / GRID_SIZE) * GRID_SIZE;
+  const isHorizontal = wall.y1 === wall.y2;
+
+  if (handle === 'start') {
+    return isHorizontal
+      ? { x1: snappedX, y1: wall.y1, x2: wall.x2, y2: wall.y2 }
+      : { x1: wall.x1, y1: snappedY, x2: wall.x2, y2: wall.y2 };
+  }
+
+  return isHorizontal
+    ? { x1: wall.x1, y1: wall.y1, x2: snappedX, y2: wall.y2 }
+    : { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: snappedY };
+}
+
 function isEditableDomTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -359,13 +436,16 @@ export function EditorCanvas({
   const activeStorageWorkflow = useActiveStorageWorkflow();
   const hoveredRackId = useHoveredRackId();
   const clearSelection = useClearSelection();
+  const deleteWall = useDeleteWall();
   const createZone = useCreateZone();
   const deleteZone = useDeleteZone();
   const setSelectedRackIds = useSetSelectedRackIds();
   const setSelectedRackId = useSetSelectedRackId();
   const setSelectedRackSide = useSetSelectedRackSide();
   const selectedZoneId = useSelectedZoneId();
+  const selectedWallId = useSelectedWallId();
   const setSelectedZoneId = useSetSelectedZoneId();
+  const setSelectedWallId = useSetSelectedWallId();
   const setSelectedCellId = useSetSelectedCellId();
   const setPlacementMoveTargetCellId = useSetPlacementMoveTargetCellId();
   const cancelPlacementInteraction = useCancelPlacementInteraction();
@@ -376,6 +456,7 @@ export function EditorCanvas({
   const setCanvasZoom = useSetCanvasZoom();
   const setEditorMode = useSetEditorMode();
   const updateRackPosition = useUpdateRackPosition();
+  const updateWallGeometry = useUpdateWallGeometry();
   const updateZoneRect = useUpdateZoneRect();
   const createRack = useCreateRack();
   const minRackDistance = useMinRackDistance();
@@ -452,6 +533,14 @@ export function EditorCanvas({
       : []),
     [layoutDraft]
   );
+  const walls = useMemo(
+    () => (layoutDraft
+      ? layoutDraft.wallIds
+        .map((id) => layoutDraft.walls[id])
+        .filter((wall): wall is Wall => Boolean(wall))
+      : []),
+    [layoutDraft]
+  );
   const publishedCellsByStructure = useMemo(
     () => indexPublishedCellsByStructure(publishedCells),
     [publishedCells]
@@ -475,6 +564,10 @@ export function EditorCanvas({
     !isPlacementMoveMode &&
     (isLayoutMode || ((isViewMode || isStorageMode) && interactionLevel === 'L1'));
   const canSelectZone =
+    isLayoutMode &&
+    !isLayoutDrawToolActive &&
+    !isPlacementMoveMode;
+  const canSelectWall =
     isLayoutMode &&
     !isLayoutDrawToolActive &&
     !isPlacementMoveMode;
@@ -515,8 +608,12 @@ export function EditorCanvas({
   setSelectedRackIdRef.current = setSelectedRackId;
   const setSelectedZoneIdRef = useRef(setSelectedZoneId);
   setSelectedZoneIdRef.current = setSelectedZoneId;
+  const setSelectedWallIdRef = useRef(setSelectedWallId);
+  setSelectedWallIdRef.current = setSelectedWallId;
   const selectedZoneIdRef = useRef(selectedZoneId);
   selectedZoneIdRef.current = selectedZoneId;
+  const selectedWallIdRef = useRef(selectedWallId);
+  selectedWallIdRef.current = selectedWallId;
   const clearSelectionRef = useRef(clearSelection);
   clearSelectionRef.current = clearSelection;
   const cancelPlacementInteractionRef = useRef(cancelPlacementInteraction);
@@ -537,6 +634,10 @@ export function EditorCanvas({
   updateZoneRectRef.current = updateZoneRect;
   const deleteZoneRef = useRef(deleteZone);
   deleteZoneRef.current = deleteZone;
+  const updateWallGeometryRef = useRef(updateWallGeometry);
+  updateWallGeometryRef.current = updateWallGeometry;
+  const deleteWallRef = useRef(deleteWall);
+  deleteWallRef.current = deleteWall;
 
   const selectedRack =
     selectedRackId && !isLayoutDrawToolActive && layoutDraft
@@ -551,6 +652,13 @@ export function EditorCanvas({
     selectedZoneId && !isDrawingZone && layoutDraft ? layoutDraft.zones[selectedZoneId] : null;
   const selectedZoneAnchorRect = selectedZone
     ? projectCanvasRectToViewport(getZoneCanvasRect(selectedZone), zoom, canvasOffset)
+    : null;
+  const selectedWall =
+    selectedWallId && !isLayoutDrawToolActive && layoutDraft
+      ? layoutDraft.walls[selectedWallId] ?? null
+      : null;
+  const selectedWallAnchorRect = selectedWall
+    ? projectCanvasRectToViewport(getWallCanvasRect(selectedWall), zoom, canvasOffset)
     : null;
   const selectedStorageCellRack =
     isStorageMode && selectedStorageCell && placementLayout
@@ -575,6 +683,11 @@ export function EditorCanvas({
     isLayoutEditable &&
     selectedZone !== null &&
     selectedZoneAnchorRect !== null;
+  const shouldShowLayoutWallBar =
+    interactionScope === 'object' &&
+    isLayoutEditable &&
+    selectedWall !== null &&
+    selectedWallAnchorRect !== null;
   const shouldShowLayoutRackSideHandles =
     interactionScope === 'object' &&
     isLayoutMode &&
@@ -781,6 +894,12 @@ export function EditorCanvas({
         const zoneId = selectedZoneIdRef.current;
         if (zoneId) {
           deleteZoneRef.current(zoneId);
+          return;
+        }
+
+        const wallId = selectedWallIdRef.current;
+        if (wallId) {
+          deleteWallRef.current(wallId);
         }
       }
     };
@@ -870,6 +989,34 @@ export function EditorCanvas({
 
     event.cancelBubble = true;
     updateZoneRectRef.current(zone.id, resizeZoneFromHandle(zone, handle, pointer));
+  };
+
+  const handleWallDragMove = (wall: Wall, event: Konva.KonvaEventObject<DragEvent>) => {
+    if (!layoutDraft || !isLayoutEditable) return;
+
+    const node = event.target;
+    const x = clampCanvasPosition(
+      Math.round(node.x() / GRID_SIZE) * GRID_SIZE
+    );
+    const y = clampCanvasPosition(
+      Math.round(node.y() / GRID_SIZE) * GRID_SIZE
+    );
+
+    updateWallGeometryRef.current(wall.id, moveWallByDelta(wall, { x, y }));
+  };
+
+  const handleWallEndpointDragMove = (
+    wall: Wall,
+    handle: WallEndpointHandle,
+    event: Konva.KonvaEventObject<DragEvent>
+  ) => {
+    if (!layoutDraft || !isLayoutEditable) return;
+
+    const pointer = stageRef.current?.getRelativePointerPosition();
+    if (!pointer) return;
+
+    event.cancelBubble = true;
+    updateWallGeometryRef.current(wall.id, resizeWallFromEndpoint(wall, handle, pointer));
   };
 
   const handleCellClick = (cellId: string, anchor: { x: number; y: number }) => {
@@ -989,6 +1136,15 @@ export function EditorCanvas({
             <LayoutZoneAffordanceBar
               zone={selectedZone}
               anchorRect={selectedZoneAnchorRect}
+              viewport={viewport}
+              onOpenInspector={onOpenInspector}
+            />
+          )}
+
+          {shouldShowLayoutWallBar && selectedWall && selectedWallAnchorRect && (
+            <LayoutWallAffordanceBar
+              wall={selectedWall}
+              anchorRect={selectedWallAnchorRect}
               viewport={viewport}
               onOpenInspector={onOpenInspector}
             />
@@ -1251,6 +1407,109 @@ export function EditorCanvas({
                     cornerRadius={8}
                   />
                 )}
+              </Layer>
+
+              <Layer>
+                {walls.map((wall) => {
+                  const isSelectedWall = selectedWallId === wall.id;
+                  const lineDx = wall.x2 - wall.x1;
+                  const lineDy = wall.y2 - wall.y1;
+
+                  return (
+                    <Group
+                      key={wall.id}
+                      x={wall.x1}
+                      y={wall.y1}
+                      draggable={isLayoutEditable && canSelectWall}
+                      onMouseDown={(event) => {
+                        event.cancelBubble = true;
+                      }}
+                      onClick={(event) => {
+                        event.cancelBubble = true;
+                        if (!canSelectWall) return;
+                        setSelectedWallIdRef.current(wall.id);
+                      }}
+                      onTap={(event) => {
+                        event.cancelBubble = true;
+                        if (!canSelectWall) return;
+                        setSelectedWallIdRef.current(wall.id);
+                      }}
+                      onDragStart={() => {
+                        if (canSelectWall) {
+                          setSelectedWallIdRef.current(wall.id);
+                        }
+                      }}
+                      onDragMove={(event) => handleWallDragMove(wall, event)}
+                      onDragEnd={(event) => {
+                        const currentWall = layoutDraft?.walls[wall.id] ?? wall;
+                        event.target.position({
+                          x: currentWall.x1,
+                          y: currentWall.y1
+                        });
+                      }}
+                    >
+                      <Line
+                        points={[0, 0, lineDx, lineDy]}
+                        stroke="transparent"
+                        strokeWidth={18}
+                        strokeScaleEnabled={false}
+                        lineCap="round"
+                      />
+                      <Line
+                        points={[0, 0, lineDx, lineDy]}
+                        stroke={isSelectedWall ? '#0f172a' : '#64748b'}
+                        strokeWidth={isSelectedWall ? 5 : 4}
+                        strokeScaleEnabled={false}
+                        lineCap="round"
+                        dash={wall.blocksRackPlacement ? undefined : [8, 6]}
+                        shadowColor={isSelectedWall ? 'rgba(15,23,42,0.18)' : 'transparent'}
+                        shadowBlur={isSelectedWall ? 8 : 0}
+                      />
+
+                      {isSelectedWall &&
+                        isLayoutEditable &&
+                        canSelectWall &&
+                        (['start', 'end'] as WallEndpointHandle[]).map((handle) => {
+                          const point = getWallEndpointPosition(wall, handle);
+                          const localX = point.x - wall.x1;
+                          const localY = point.y - wall.y1;
+
+                          return (
+                            <Circle
+                              key={`${wall.id}-${handle}`}
+                              x={localX}
+                              y={localY}
+                              radius={WALL_HANDLE_RADIUS}
+                              fill="#ffffff"
+                              stroke="#0f172a"
+                              strokeWidth={1.5}
+                              strokeScaleEnabled={false}
+                              draggable
+                              onMouseDown={(event) => {
+                                event.cancelBubble = true;
+                              }}
+                              onClick={(event) => {
+                                event.cancelBubble = true;
+                                if (!canSelectWall) return;
+                                setSelectedWallIdRef.current(wall.id);
+                              }}
+                              onDragMove={(event) =>
+                                handleWallEndpointDragMove(wall, handle, event)
+                              }
+                              onDragEnd={(event) => {
+                                const currentWall = layoutDraft?.walls[wall.id] ?? wall;
+                                const point = getWallEndpointPosition(currentWall, handle);
+                                event.target.position({
+                                  x: point.x - currentWall.x1,
+                                  y: point.y - currentWall.y1
+                                });
+                              }}
+                            />
+                          );
+                        })}
+                    </Group>
+                  );
+                })}
               </Layer>
 
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
