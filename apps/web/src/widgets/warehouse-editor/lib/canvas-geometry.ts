@@ -1,4 +1,4 @@
-import type { CellStructureIdentity, Rack, Zone } from '@wos/domain';
+import type { CellStructureIdentity, Rack, Wall, Zone } from '@wos/domain';
 
 // ─── Scale constants ────────────────────────────────────────────────────────
 export const RACK_LENGTH_SCALE = 28;   // px per metre (along the long axis)
@@ -182,6 +182,18 @@ export function getZoneCanvasRect(zone: Zone): CanvasRect {
     y: zone.y,
     width: zone.width,
     height: zone.height
+  };
+}
+
+export function getWallCanvasRect(wall: Wall): CanvasRect {
+  const minX = Math.min(wall.x1, wall.x2);
+  const minY = Math.min(wall.y1, wall.y2);
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.abs(wall.x2 - wall.x1),
+    height: Math.abs(wall.y2 - wall.y1)
   };
 }
 

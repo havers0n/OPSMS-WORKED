@@ -30,6 +30,10 @@ export const useSelectedZoneId = () =>
   useEditorStore((state) =>
     state.selection.type === 'zone' ? state.selection.zoneId : null
   );
+export const useSelectedWallId = () =>
+  useEditorStore((state) =>
+    state.selection.type === 'wall' ? state.selection.wallId : null
+  );
 export const useSelectedRackFocus = (): RackSelectionFocus =>
   useEditorStore((state) =>
     state.selection.type === 'rack'
@@ -58,11 +62,15 @@ export const useInitializeDraft = () => useEditorStore((state) => state.initiali
 export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraftSaved);
 export const useCreateRack = () => useEditorStore((state) => state.createRack);
 export const useCreateZone = () => useEditorStore((state) => state.createZone);
+export const useCreateWallFromRackSide = () =>
+  useEditorStore((state) => state.createWallFromRackSide);
 export const useDeleteRack = () => useEditorStore((state) => state.deleteRack);
 export const useDeleteZone = () => useEditorStore((state) => state.deleteZone);
+export const useDeleteWall = () => useEditorStore((state) => state.deleteWall);
 export const useDuplicateRack = () => useEditorStore((state) => state.duplicateRack);
 export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackId);
 export const useSetSelectedZoneId = () => useEditorStore((state) => state.setSelectedZoneId);
+export const useSetSelectedWallId = () => useEditorStore((state) => state.setSelectedWallId);
 export const useSetSelectedRackSide = () =>
   useEditorStore((state) => state.setSelectedRackSide);
 export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
@@ -70,6 +78,8 @@ export const useSetCanvasZoom = () => useEditorStore((state) => state.setZoom);
 export const useUpdateRackPosition = () => useEditorStore((state) => state.updateRackPosition);
 export const useUpdateZoneRect = () => useEditorStore((state) => state.updateZoneRect);
 export const useUpdateZoneDetails = () => useEditorStore((state) => state.updateZoneDetails);
+export const useUpdateWallGeometry = () => useEditorStore((state) => state.updateWallGeometry);
+export const useUpdateWallDetails = () => useEditorStore((state) => state.updateWallDetails);
 export const useRotateRack = () => useEditorStore((state) => state.rotateRack);
 export const useUpdateRackGeneral = () => useEditorStore((state) => state.updateRackGeneral);
 export const useUpdateFaceConfig = () => useEditorStore((state) => state.updateFaceConfig);

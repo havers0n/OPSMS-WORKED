@@ -50,4 +50,42 @@ describe('validateLayoutDraft', () => {
     expect(result.isValid).toBe(false);
     expect(result.issues.some((issue) => issue.code === 'rack.single_face_b_forbidden')).toBe(true);
   });
+
+  it('rejects non-axis-aligned or zero-length walls', () => {
+    const draft = createValidLayoutDraftFixture();
+    const diagonalWallId = '99999999-9999-9999-9999-999999999901';
+    const zeroLengthWallId = '99999999-9999-9999-9999-999999999902';
+
+    draft.wallIds = [diagonalWallId, zeroLengthWallId];
+    draft.walls = {
+      [diagonalWallId]: {
+        id: diagonalWallId,
+        code: 'W01',
+        name: 'Diagonal wall',
+        wallType: 'generic',
+        x1: 10,
+        y1: 10,
+        x2: 40,
+        y2: 50,
+        blocksRackPlacement: true
+      },
+      [zeroLengthWallId]: {
+        id: zeroLengthWallId,
+        code: 'W02',
+        name: 'Point wall',
+        wallType: 'generic',
+        x1: 80,
+        y1: 120,
+        x2: 80,
+        y2: 120,
+        blocksRackPlacement: true
+      }
+    };
+
+    const result = validateLayoutDraft(draft);
+
+    expect(result.isValid).toBe(false);
+    expect(result.issues.some((issue) => issue.code === 'wall.axis_alignment_required')).toBe(true);
+    expect(result.issues.some((issue) => issue.code === 'wall.zero_length_forbidden')).toBe(true);
+  });
 });

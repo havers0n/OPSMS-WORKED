@@ -166,6 +166,87 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().isDraftDirty).toBe(true);
   });
 
+  it('creates a standalone wall from a selected rack side seed and keeps the rack independent', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().createWallFromRackSide(rackId, 'east');
+
+    const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
+    expect(wallId).toBeTruthy();
+    expect(useEditorStore.getState().selection).toEqual({
+      type: 'wall',
+      wallId
+    });
+
+    const createdWall = useEditorStore.getState().draft?.walls[wallId!];
+    expect(createdWall).toEqual(
+      expect.objectContaining({
+        id: wallId,
+        code: 'W01',
+        wallType: 'generic',
+        blocksRackPlacement: true,
+        x1: 172,
+        x2: 172,
+        y1: 30,
+        y2: 70
+      })
+    );
+
+    useEditorStore.getState().updateRackPosition(rackId, 500, 600);
+
+    expect(useEditorStore.getState().draft?.walls[wallId!]).toEqual(createdWall);
+    expect(useEditorStore.getState().draft?.racks[rackId]).toEqual(
+      expect.objectContaining({
+        x: 500,
+        y: 600
+      })
+    );
+  });
+
+  it('keeps wall endpoint edits axis-aligned and supports deletion', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().createWallFromRackSide(rackId, 'north');
+
+    const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
+    expect(wallId).toBeTruthy();
+
+    useEditorStore.getState().updateWallGeometry(wallId!, {
+      x1: 40,
+      y1: 8,
+      x2: 240,
+      y2: 180
+    });
+    useEditorStore.getState().updateWallDetails(wallId!, {
+      code: 'W99',
+      name: 'North divider',
+      wallType: 'partition',
+      blocksRackPlacement: false
+    });
+
+    expect(useEditorStore.getState().draft?.walls[wallId!]).toEqual(
+      expect.objectContaining({
+        code: 'W99',
+        name: 'North divider',
+        wallType: 'partition',
+        blocksRackPlacement: false,
+        x1: 40,
+        y1: 8,
+        x2: 240,
+        y2: 8
+      })
+    );
+
+    useEditorStore.getState().deleteWall(wallId!);
+
+    expect(useEditorStore.getState().draft?.wallIds).toEqual([]);
+    expect(useEditorStore.getState().draft?.walls).toEqual({});
+    expect(useEditorStore.getState().selection.type).toBe('none');
+  });
+
   it('preserves faceLength when initializing and saving an unchanged draft', () => {
     const draft = createLayoutDraftFixture();
     draft.racks[draft.rackIds[0]].faces[0].faceLength = 4.5;

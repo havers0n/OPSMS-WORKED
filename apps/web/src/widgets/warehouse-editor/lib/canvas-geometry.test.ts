@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Rack } from '@wos/domain';
+import type { Rack, Wall } from '@wos/domain';
 import {
   clampCanvasPosition,
   clampCanvasZoom,
@@ -8,6 +8,7 @@ import {
   getCanvasLOD,
   getRackCanvasRect,
   getRackGeometry,
+  getWallCanvasRect,
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
   projectCanvasRectToViewport,
@@ -26,6 +27,18 @@ const rack: Rack = {
   depth: 1.4,
   rotationDeg: 90,
   faces: []
+};
+
+const wall: Wall = {
+  id: 'wall-1',
+  code: 'W01',
+  name: 'Wall 1',
+  wallType: 'generic',
+  x1: 80,
+  y1: 160,
+  x2: 200,
+  y2: 160,
+  blocksRackPlacement: true
 };
 
 describe('canvas geometry helpers', () => {
@@ -119,5 +132,14 @@ describe('canvas geometry helpers', () => {
     expect(rect.y).toBeCloseTo(73.6);
     expect(rect.width).toBeCloseTo(123.2);
     expect(rect.height).toBeCloseTo(336);
+  });
+
+  it('derives a wall bounds rect from segment endpoints', () => {
+    expect(getWallCanvasRect(wall)).toEqual({
+      x: 80,
+      y: 160,
+      width: 120,
+      height: 0
+    });
   });
 });

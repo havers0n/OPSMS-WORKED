@@ -7,7 +7,11 @@ const layoutDraft = {
   state: 'draft' as const,
   versionNo: 1,
   rackIds: [],
-  racks: {}
+  racks: {},
+  zoneIds: [],
+  zones: {},
+  wallIds: [],
+  walls: {}
 };
 
 describe('layout-context helpers', () => {

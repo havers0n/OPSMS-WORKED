@@ -21,6 +21,7 @@ export function normalizeViewMode(mode: AnyViewMode): ViewMode {
  *
  * - 'rack'      — one or more racks selected (layout mode)
  * - 'zone'      — a single floor zone selected (layout mode)
+ * - 'wall'      — a single floor wall selected (layout mode)
  * - 'cell'      — a single cell selected (view/storage mode)
  * - 'container' — a container selected (view/storage mode)
  * - 'none'      — nothing selected
@@ -36,6 +37,7 @@ export type EditorSelection =
       focus?: RackSelectionFocus;
     }
   | { type: 'zone'; zoneId: string }
+  | { type: 'wall'; wallId: string }
   | { type: 'cell'; cellId: string }
   | { type: 'container'; containerId: string; sourceCellId?: string | null };
 

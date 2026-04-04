@@ -4,6 +4,7 @@ import type {
   RackFace,
   RackKind,
   SlotNumberingDirection,
+  Wall,
   Zone
 } from '@wos/domain';
 import { create } from 'zustand';
@@ -23,6 +24,10 @@ import {
   alignRacksToLine,
   distributeRacksEqually
 } from '../../../widgets/warehouse-editor/lib/rack-spacing';
+import {
+  getRackCanvasRect,
+  GRID_SIZE
+} from '../../../widgets/warehouse-editor/lib/canvas-geometry';
 
 const TRACE = import.meta.env.DEV;
 
@@ -42,6 +47,7 @@ function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
     state: draft.state,
     rackCount: draft.rackIds.length,
     zoneCount: draft.zoneIds.length,
+    wallCount: draft.wallIds.length,
     sample
   };
 }
@@ -74,6 +80,7 @@ type EditorStore = {
   setSelectedRackSide: (rackId: string, side: RackSideFocus) => void;
   toggleRackSelection: (rackId: string) => void;
   setSelectedZoneId: (zoneId: string | null) => void;
+  setSelectedWallId: (wallId: string | null) => void;
   /** Convenience wrapper — sets a cell-type selection, or clears if null. */
   setSelectedCellId: (cellId: string | null) => void;
   /** Convenience wrapper — sets a container-type selection, or clears if null. */
@@ -99,12 +106,22 @@ type EditorStore = {
   markDraftSaved: (layoutVersionId: string) => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: { x: number; y: number; width: number; height: number }) => void;
+  createWallFromRackSide: (rackId: string, side: RackSideFocus) => void;
   deleteRack: (rackId: string) => void;
   deleteZone: (zoneId: string) => void;
+  deleteWall: (wallId: string) => void;
   duplicateRack: (rackId: string) => void;
   updateRackPosition: (rackId: string, x: number, y: number) => void;
   updateZoneRect: (zoneId: string, rect: { x: number; y: number; width: number; height: number }) => void;
   updateZoneDetails: (zoneId: string, patch: Partial<Pick<Zone, 'name' | 'category' | 'color'>>) => void;
+  updateWallGeometry: (
+    wallId: string,
+    geometry: Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'>
+  ) => void;
+  updateWallDetails: (
+    wallId: string,
+    patch: Partial<Pick<Wall, 'code' | 'name' | 'wallType' | 'blocksRackPlacement'>>
+  ) => void;
   rotateRack: (rackId: string) => void;
   updateRackGeneral: (rackId: string, patch: Partial<Pick<Rack, 'displayCode' | 'kind' | 'axis' | 'totalLength' | 'depth'>>) => void;
   updateFaceConfig: (rackId: string, side: 'A' | 'B', patch: Partial<Pick<RackFace, 'slotNumberingDirection' | 'enabled'>>) => void;
@@ -183,6 +200,17 @@ function updateZoneInDraft(draft: LayoutDraft, zoneId: string, updater: (zone: Z
   }
 
   nextDraft.zones[zoneId] = updater(zone);
+  return nextDraft;
+}
+
+function updateWallInDraft(draft: LayoutDraft, wallId: string, updater: (wall: Wall) => Wall): LayoutDraft {
+  const nextDraft = cloneDraft(draft);
+  const wall = nextDraft.walls[wallId];
+  if (!wall) {
+    return draft;
+  }
+
+  nextDraft.walls[wallId] = updater(wall);
   return nextDraft;
 }
 
@@ -323,6 +351,8 @@ function clampZoneSize(value: number) {
 }
 
 const DEFAULT_ZONE_COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#a78bfa'];
+const WALL_SIDE_OFFSET = 12;
+const MIN_WALL_LENGTH = GRID_SIZE;
 
 function buildNewZone(
   zones: Record<string, Zone>,
@@ -387,6 +417,137 @@ function buildNewRack(racks: Record<string, Rack>, x: number, y: number): Rack {
   };
 }
 
+function nextWallCode(walls: Record<string, Wall>): string {
+  const numerics = Object.values(walls)
+    .map((wall) => parseInt(wall.code.replace(/^W/i, ''), 10))
+    .filter((value) => !Number.isNaN(value));
+  const max = numerics.length > 0 ? Math.max(...numerics) : 0;
+  return `W${String(max + 1).padStart(2, '0')}`;
+}
+
+function roundWallCoordinate(value: number) {
+  return Math.max(0, Math.round(value));
+}
+
+function getWallOrientation(wall: Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'>): 'horizontal' | 'vertical' {
+  if (wall.x1 === wall.x2 && wall.y1 !== wall.y2) {
+    return 'vertical';
+  }
+
+  if (wall.y1 === wall.y2 && wall.x1 !== wall.x2) {
+    return 'horizontal';
+  }
+
+  const dx = Math.abs(wall.x2 - wall.x1);
+  const dy = Math.abs(wall.y2 - wall.y1);
+  return dx >= dy ? 'horizontal' : 'vertical';
+}
+
+function normalizeWallGeometry(
+  geometry: Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'>,
+  previousWall?: Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'>
+) {
+  const orientation = previousWall
+    ? getWallOrientation(previousWall)
+    : getWallOrientation(geometry);
+  const x1 = roundWallCoordinate(geometry.x1);
+  const y1 = roundWallCoordinate(geometry.y1);
+  const x2 = roundWallCoordinate(geometry.x2);
+  const y2 = roundWallCoordinate(geometry.y2);
+
+  if (orientation === 'horizontal') {
+    const y =
+      previousWall &&
+      geometry.y1 === previousWall.y1 &&
+      geometry.y2 !== previousWall.y2
+        ? y2
+        : y1;
+    const nextX2 = x2 === x1 ? x1 + MIN_WALL_LENGTH : x2;
+    return {
+      x1,
+      y1: y,
+      x2: roundWallCoordinate(nextX2),
+      y2: y
+    };
+  }
+
+  const x =
+    previousWall &&
+    geometry.x1 === previousWall.x1 &&
+    geometry.x2 !== previousWall.x2
+      ? x2
+      : x1;
+  const nextY2 = y2 === y1 ? y1 + MIN_WALL_LENGTH : y2;
+  return {
+    x1: x,
+    y1,
+    x2: x,
+    y2: roundWallCoordinate(nextY2)
+  };
+}
+
+function buildWallSeedFromRackSide(
+  rack: Rack,
+  side: RackSideFocus
+): Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'> {
+  const rackRect = getRackCanvasRect(rack);
+
+  if (side === 'north') {
+    const y = Math.max(0, Math.round(rackRect.y - WALL_SIDE_OFFSET));
+    return normalizeWallGeometry({
+      x1: rackRect.x,
+      y1: y,
+      x2: rackRect.x + Math.max(MIN_WALL_LENGTH, rackRect.width),
+      y2: y
+    });
+  }
+
+  if (side === 'south') {
+    const y = Math.round(rackRect.y + rackRect.height + WALL_SIDE_OFFSET);
+    return normalizeWallGeometry({
+      x1: rackRect.x,
+      y1: y,
+      x2: rackRect.x + Math.max(MIN_WALL_LENGTH, rackRect.width),
+      y2: y
+    });
+  }
+
+  if (side === 'west') {
+    const x = Math.max(0, Math.round(rackRect.x - WALL_SIDE_OFFSET));
+    return normalizeWallGeometry({
+      x1: x,
+      y1: rackRect.y,
+      x2: x,
+      y2: rackRect.y + Math.max(MIN_WALL_LENGTH, rackRect.height)
+    });
+  }
+
+  const x = Math.round(rackRect.x + rackRect.width + WALL_SIDE_OFFSET);
+  return normalizeWallGeometry({
+    x1: x,
+    y1: rackRect.y,
+    x2: x,
+    y2: rackRect.y + Math.max(MIN_WALL_LENGTH, rackRect.height)
+  });
+}
+
+function buildNewWallFromRackSide(
+  walls: Record<string, Wall>,
+  rack: Rack,
+  side: RackSideFocus
+): Wall {
+  const code = nextWallCode(walls);
+
+  return {
+    id: newEntityId(),
+    code,
+    name: `Wall ${code.replace(/^W/i, '')}`,
+    wallType: 'generic',
+    ...buildWallSeedFromRackSide(rack, side),
+    blocksRackPlacement: true
+  };
+}
+
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
   setViewMode: (nextViewMode) =>
@@ -445,6 +606,11 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setSelectedZoneId: (zoneId) =>
     set({
       selection: zoneId ? { type: 'zone', zoneId } : { type: 'none' },
+      activeStorageWorkflow: null
+    }),
+  setSelectedWallId: (wallId) =>
+    set({
+      selection: wallId ? { type: 'wall', wallId } : { type: 'none' },
       activeStorageWorkflow: null
     }),
   setSelectedCellId: (cellId) =>
@@ -688,6 +854,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
             ? nextDraftState.zones[state.selection.zoneId]
               ? state.selection
               : { type: 'none' }
+            : state.selection.type === 'wall'
+              ? nextDraftState.walls[state.selection.wallId]
+                ? state.selection
+                : { type: 'none' }
             : state.selection;
 
       return {
@@ -741,6 +911,25 @@ export const useEditorStore = create<EditorStore>((set) => ({
         isDraftDirty: true
       };
     }),
+  createWallFromRackSide: (rackId, side) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      const rack = state.draft.racks[rackId];
+      if (!rack) return state;
+
+      const newWall = buildNewWallFromRackSide(state.draft.walls, rack, side);
+      const nextDraft = cloneDraft(state.draft);
+      nextDraft.wallIds = [...nextDraft.wallIds, newWall.id];
+      nextDraft.walls[newWall.id] = newWall;
+
+      return {
+        draft: nextDraft,
+        selection: { type: 'wall', wallId: newWall.id },
+        editorMode: 'select',
+        isDraftDirty: true
+      };
+    }),
   deleteRack: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
@@ -768,6 +957,23 @@ export const useEditorStore = create<EditorStore>((set) => ({
         draft: nextDraft,
         selection:
           state.selection.type === 'zone' && state.selection.zoneId === zoneId
+            ? { type: 'none' }
+            : state.selection,
+        isDraftDirty: true
+      };
+    }),
+  deleteWall: (wallId) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      const nextDraft = cloneDraft(state.draft);
+      delete nextDraft.walls[wallId];
+      nextDraft.wallIds = nextDraft.wallIds.filter((id) => id !== wallId);
+
+      return {
+        draft: nextDraft,
+        selection:
+          state.selection.type === 'wall' && state.selection.wallId === wallId
             ? { type: 'none' }
             : state.selection,
         isDraftDirty: true
@@ -861,6 +1067,47 @@ export const useEditorStore = create<EditorStore>((set) => ({
           name: patch.name !== undefined ? patch.name : zone.name,
           category: patch.category !== undefined ? patch.category : zone.category,
           color: patch.color !== undefined ? patch.color : zone.color
+        })),
+        isDraftDirty: true
+      };
+    }),
+  updateWallGeometry: (wallId, geometry) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      return {
+        draft: updateWallInDraft(state.draft, wallId, (wall) => ({
+          ...wall,
+          ...normalizeWallGeometry(geometry, wall)
+        })),
+        isDraftDirty: true
+      };
+    }),
+  updateWallDetails: (wallId, patch) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      return {
+        draft: updateWallInDraft(state.draft, wallId, (wall) => ({
+          ...wall,
+          code:
+            patch.code !== undefined && patch.code.trim().length > 0
+              ? patch.code.trim()
+              : wall.code,
+          name:
+            patch.name !== undefined
+              ? patch.name === null
+                ? null
+                : patch.name.trim().length > 0
+                  ? patch.name.trim()
+                  : null
+              : wall.name,
+          wallType:
+            patch.wallType !== undefined ? patch.wallType : wall.wallType,
+          blocksRackPlacement:
+            patch.blocksRackPlacement !== undefined
+              ? patch.blocksRackPlacement
+              : wall.blocksRackPlacement
         })),
         isDraftDirty: true
       };

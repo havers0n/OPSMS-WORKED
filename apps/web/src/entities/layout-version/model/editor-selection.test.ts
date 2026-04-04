@@ -74,6 +74,14 @@ describe('EditorSelection — canonical store field', () => {
     expect(useEditorStore.getState().selection).toEqual(sel);
   });
 
+  it('setSelectedWallId(id) produces a wall selection', () => {
+    useEditorStore.getState().setSelectedWallId('wall-abc');
+    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+      type: 'wall',
+      wallId: 'wall-abc'
+    });
+  });
+
   it('clearSelection() resets to { type: none }', () => {
     useEditorStore.getState().setSelectedRackId('r1');
     useEditorStore.getState().clearSelection();
