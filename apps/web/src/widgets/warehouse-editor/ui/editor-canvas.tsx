@@ -55,7 +55,6 @@ import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
 import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
   clampCanvasPosition,
-  clampCanvasZoom,
   type CanvasRect,
   getCellCanvasRect,
   getCanvasInteractionLevel,
@@ -65,10 +64,9 @@ import {
   getWallCanvasRect,
   getZoneCanvasRect,
   GRID_SIZE,
-  LOD_CELL_THRESHOLD,
   projectCanvasRectToViewport
 } from '../lib/canvas-geometry';
-import { getRackBoundingBox, getSnapPosition } from '../lib/rack-spacing';
+import { getSnapPosition } from '../lib/rack-spacing';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import {
   ObjectLocalAffordanceBar,
@@ -79,6 +77,7 @@ import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
 import { SnapGuides } from './shapes/snap-guides';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
+import { useCanvasViewportController } from './use-canvas-viewport-controller';
 
 type LayoutRackAffordanceBarProps = {
   displayCode: string;
@@ -479,21 +478,7 @@ export function EditorCanvas({
     placementFloorId
   );
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
-  const [viewport, setViewport] = useState({ width: 0, height: 0 });
-
-  const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
-  const canvasOffsetRef = useRef({ x: 0, y: 0 });
-  canvasOffsetRef.current = canvasOffset;
-
-  const [isPanning, setIsPanning] = useState(false);
-  const isPanningRef = useRef(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
-  const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
-
-  // Track previous viewMode so we can detect the transition TO placement.
-  const prevViewModeRef = useRef(viewMode);
 
   // ── Marquee (box) selection ──────────────────────────────────────────────
   // marquee drives the Konva Rect visual; marqueeRef is readable in event handlers
@@ -513,6 +498,18 @@ export function EditorCanvas({
     const layout = placementLayout ?? layoutDraft;
     return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
   }, [placementLayout, layoutDraft]);
+  const {
+    containerRef,
+    viewport,
+    canvasOffset,
+    isPanning,
+    handleZoom
+  } = useCanvasViewportController({
+    autoFitRacks: racks,
+    setCanvasZoom,
+    viewMode,
+    zoom
+  });
   const zones = useMemo(
     () => (layoutDraft
       ? layoutDraft.zoneIds
@@ -608,10 +605,6 @@ export function EditorCanvas({
   cancelPlacementInteractionRef.current = cancelPlacementInteraction;
   const toggleRackSelectionRef = useRef(toggleRackSelection);
   toggleRackSelectionRef.current = toggleRackSelection;
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
-  const setCanvasZoomRef = useRef(setCanvasZoom);
-  setCanvasZoomRef.current = setCanvasZoom;
   const selectedRackIdsRef = useRef(selectedRackIds);
   selectedRackIdsRef.current = selectedRackIds;
   const minRackDistanceRef = useRef(minRackDistance);
@@ -709,62 +702,6 @@ export function EditorCanvas({
     selectedStorageCellAnchorRect !== null;
 
   useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    const update = () => setViewport({ width: node.clientWidth, height: node.clientHeight });
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(node);
-    return () => ro.disconnect();
-  }, []);
-
-  // Auto-zoom to cell-visible level when entering View/Storage.
-  // Ensures cells are always visible on mode entry without requiring manual zoom.
-  useEffect(() => {
-    const prevMode = prevViewModeRef.current;
-    prevViewModeRef.current = viewMode;
-
-    // Only fire on the transition from Layout to View/Storage, not on every render.
-    if ((viewMode !== 'view' && viewMode !== 'storage') || prevMode !== 'layout') return;
-    if (viewport.width === 0) return;
-
-    // Selection is already cleared by setViewMode() in the store.
-    // This effect only handles the auto-zoom to cell-visible level.
-    const layout = placementLayout ?? layoutDraft;
-    const racks = layout ? Object.values(layout.racks) : [];
-
-    if (racks.length === 0) {
-      // No racks yet — just ensure cells would be visible if any appear.
-      setCanvasZoom(clampCanvasZoom(Math.max(zoom, LOD_CELL_THRESHOLD)));
-      return;
-    }
-
-    const boxes = racks.map(getRackBoundingBox);
-    const minX = Math.min(...boxes.map((b) => b.minX));
-    const maxX = Math.max(...boxes.map((b) => b.maxX));
-    const minY = Math.min(...boxes.map((b) => b.minY));
-    const maxY = Math.max(...boxes.map((b) => b.maxY));
-
-    const PADDING = 80; // px on each side
-    const bboxW = maxX - minX;
-    const bboxH = maxY - minY;
-
-    const scaleX = bboxW > 0 ? (viewport.width  - PADDING * 2) / bboxW : LOD_CELL_THRESHOLD;
-    const scaleY = bboxH > 0 ? (viewport.height - PADDING * 2) / bboxH : LOD_CELL_THRESHOLD;
-
-    // Never go below LOD_CELL_THRESHOLD — cells must be visible in this mode.
-    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_THRESHOLD));
-
-    const offsetX = (viewport.width  - bboxW * targetZoom) / 2 - minX * targetZoom;
-    const offsetY = (viewport.height - bboxH * targetZoom) / 2 - minY * targetZoom;
-
-    setCanvasZoom(targetZoom);
-    setCanvasOffset({ x: offsetX, y: offsetY });
-  }, [viewMode]);
-  // Intentionally reads viewport/layoutDraft/zoom via closure at transition time —
-  // re-running on their changes would fight the user's manual zoom adjustments.
-
-  useEffect(() => {
     if (!isViewMode) {
       clearHighlightedCellIds();
     }
@@ -775,46 +712,6 @@ export function EditorCanvas({
       setHoveredRackId(null);
     }
   }, [canSelectRack, hoveredRackId, setHoveredRackId]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const onMouseDown = (event: MouseEvent) => {
-      if (event.button !== 1) return;
-      isPanningRef.current = true;
-      panStartRef.current = { x: event.clientX, y: event.clientY };
-      offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
-      setIsPanning(true);
-      event.preventDefault();
-    };
-
-    const onMouseMove = (event: MouseEvent) => {
-      if (!isPanningRef.current) return;
-      const dx = event.clientX - panStartRef.current.x;
-      const dy = event.clientY - panStartRef.current.y;
-      setCanvasOffset({
-        x: offsetAtPanStartRef.current.x + dx,
-        y: offsetAtPanStartRef.current.y + dy
-      });
-    };
-
-    const onMouseUp = (event: MouseEvent) => {
-      if (event.button !== 1) return;
-      isPanningRef.current = false;
-      setIsPanning(false);
-    };
-
-    container.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-
-    return () => {
-      container.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -986,8 +883,6 @@ export function EditorCanvas({
     }
   };
 
-  const handleZoom = (delta: number) => setCanvasZoom(clampCanvasZoom(Number((zoom + delta).toFixed(2))));
-
   return (
     <div
       ref={containerRef}
@@ -1118,7 +1013,7 @@ export function EditorCanvas({
               onWheel={(event) => {
                 event.evt.preventDefault();
                 const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
-                setCanvasZoomRef.current(clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2))));
+                handleZoom(delta);
               }}
               onMouseDown={(event) => {
                 // Empty-canvas drags in layout mode are either zone creation or marquee selection.
