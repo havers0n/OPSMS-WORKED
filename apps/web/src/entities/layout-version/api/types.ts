@@ -18,6 +18,19 @@ export type LayoutZoneRow = {
   height: number;
 };
 
+export type LayoutWallRow = {
+  id: string;
+  layout_version_id: string;
+  code: string;
+  name: string | null;
+  wall_type: 'generic' | 'partition' | 'safety' | 'perimeter' | 'custom' | null;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  blocks_rack_placement: boolean;
+};
+
 export type LayoutDraftRowBundle = {
   layoutVersion: LayoutVersionRow;
   racks: RackRow[];
@@ -25,4 +38,5 @@ export type LayoutDraftRowBundle = {
   rackSections: RackSectionRow[];
   rackLevels: RackLevelRow[];
   zones?: LayoutZoneRow[];
+  walls?: LayoutWallRow[];
 };

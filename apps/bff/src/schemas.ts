@@ -32,6 +32,8 @@ import {
   rackKindSchema,
   siteSchema,
   slotNumberingDirectionSchema,
+  wallTypeSchema,
+  zoneCategorySchema,
   orderSchema,
   orderSummarySchema,
   orderStatusSchema,
@@ -130,10 +132,42 @@ const saveRackPayloadSchema = z.object({
   faces: z.array(saveRackFacePayloadSchema)
 });
 
+const saveZonePayloadSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  category: zoneCategorySchema.optional().nullable(),
+  color: z.string().trim().min(1),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive(),
+  height: z.number().positive()
+});
+
+const saveWallPayloadSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string().trim().min(1),
+  name: z.string().trim().min(1).optional().nullable(),
+  wallType: wallTypeSchema.optional().nullable(),
+  x1: z.number(),
+  y1: z.number(),
+  x2: z.number(),
+  y2: z.number(),
+  blocksRackPlacement: z.boolean()
+}).refine(
+  (wall) => wall.x1 === wall.x2 || wall.y1 === wall.y2,
+  'Walls must be axis-aligned.'
+).refine(
+  (wall) => wall.x1 !== wall.x2 || wall.y1 !== wall.y2,
+  'Walls must have non-zero length.'
+);
+
 export const saveLayoutDraftBodySchema = z.object({
   layoutDraft: z.object({
     layoutVersionId: z.string().uuid(),
-    racks: z.array(saveRackPayloadSchema)
+    racks: z.array(saveRackPayloadSchema),
+    zones: z.array(saveZonePayloadSchema).default([]),
+    walls: z.array(saveWallPayloadSchema).default([])
   })
 });
 

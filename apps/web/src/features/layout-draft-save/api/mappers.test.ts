@@ -85,6 +85,20 @@ describe('mapLayoutDraftToSavePayload', () => {
           width: 200,
           height: 120
         }
+      ],
+      walls: [
+        {
+          id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          layout_version_id: '11111111-1111-1111-1111-111111111111',
+          code: 'W01',
+          name: 'Divider',
+          wall_type: 'partition',
+          x1: 120,
+          y1: 160,
+          x2: 320,
+          y2: 160,
+          blocks_rack_placement: true
+        }
       ]
     } satisfies LayoutDraftRowBundle);
 
@@ -112,6 +126,17 @@ describe('mapLayoutDraftToSavePayload', () => {
       y: 80,
       width: 200,
       height: 120
+    });
+    expect(payload.walls[0]).toEqual({
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      code: 'W01',
+      name: 'Divider',
+      wallType: 'partition',
+      x1: 120,
+      y1: 160,
+      x2: 320,
+      y2: 160,
+      blocksRackPlacement: true
     });
   });
 });

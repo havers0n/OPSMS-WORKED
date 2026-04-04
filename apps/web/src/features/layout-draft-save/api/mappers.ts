@@ -1,5 +1,5 @@
 import type { LayoutDraft } from '@wos/domain';
-import type { ZoneCategory } from '@wos/domain';
+import type { WallType, ZoneCategory } from '@wos/domain';
 
 type SaveRackLevelPayload = {
   id: string;
@@ -50,10 +50,23 @@ type SaveZonePayload = {
   height: number;
 };
 
+type SaveWallPayload = {
+  id: string;
+  code: string;
+  name?: string | null;
+  wallType?: WallType | null;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  blocksRackPlacement: boolean;
+};
+
 export type SaveLayoutDraftPayload = {
   layoutVersionId: string;
   racks: SaveRackPayload[];
   zones: SaveZonePayload[];
+  walls: SaveWallPayload[];
 };
 
 export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraftPayload {
@@ -104,6 +117,20 @@ export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraft
         y: zone.y,
         width: zone.width,
         height: zone.height
+      };
+    }),
+    walls: draft.wallIds.map((id) => {
+      const wall = draft.walls[id];
+      return {
+        id: wall.id,
+        code: wall.code,
+        name: wall.name,
+        wallType: wall.wallType,
+        x1: wall.x1,
+        y1: wall.y1,
+        x2: wall.x2,
+        y2: wall.y2,
+        blocksRackPlacement: wall.blocksRackPlacement
       };
     })
   };

@@ -830,6 +830,7 @@ function createValidSaveLayoutDraftPayload() {
   return {
     layoutDraft: {
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      zones: [],
       racks: [
         {
           id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951',
@@ -975,8 +976,32 @@ function createActiveDraftSupabaseStub() {
         };
       }
 
+      if (table === 'layout_zones') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'layout_walls') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [],
+              error: null
+            }))
+          }))
+        };
+      }
+
       return {
         select: vi.fn(() => ({
+          eq: vi.fn(async () => ({ data: [], error: null })),
+          in: vi.fn(async () => ({ data: [], error: null })),
           limit: vi.fn(async () => ({ data: [], error: null }))
         }))
       };
@@ -1160,6 +1185,28 @@ function createFloorWorkspaceSupabaseStub() {
         };
       }
 
+      if (table === 'layout_zones') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [],
+              error: null
+            }))
+          }))
+        };
+      }
+
+      if (table === 'layout_walls') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({
+              data: [],
+              error: null
+            }))
+          }))
+        };
+      }
+
       return {
         select: vi.fn(() => ({
           eq: vi.fn(async () => ({ data: [], error: null })),
@@ -1168,7 +1215,7 @@ function createFloorWorkspaceSupabaseStub() {
         }))
       };
     }),
-    rpc: vi.fn()
+    rpc: vi.fn(async () => ({ data: null, error: null }))
   };
 }
 
@@ -2249,14 +2296,22 @@ describe('buildApp', () => {
         floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
         state: 'draft',
         rackIds: ['33333333-3333-4333-8333-333333333333'],
-        racks: expect.any(Object)
+        racks: expect.any(Object),
+        zoneIds: [],
+        zones: {},
+        wallIds: [],
+        walls: {}
       },
       latestPublished: {
         layoutVersionId: '22222222-2222-4222-8222-222222222222',
         floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
         state: 'published',
         rackIds: ['44444444-4444-4444-8444-444444444444'],
-        racks: expect.any(Object)
+        racks: expect.any(Object),
+        zoneIds: [],
+        zones: {},
+        wallIds: [],
+        walls: {}
       }
     });
 
@@ -2284,7 +2339,11 @@ describe('buildApp', () => {
       floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
       state: 'draft',
       rackIds: ['f38510b5-d5c5-4657-8d7e-a4154cb74951'],
-      racks: expect.any(Object)
+      racks: expect.any(Object),
+      zoneIds: [],
+      zones: {},
+      wallIds: [],
+      walls: {}
     });
 
     await app.close();
@@ -2314,7 +2373,11 @@ describe('buildApp', () => {
         floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
         state: 'published',
         rackIds: [],
-        racks: {}
+        racks: {},
+        zoneIds: [],
+        zones: {},
+        wallIds: [],
+        walls: {}
       }
     });
 
@@ -2394,8 +2457,21 @@ describe('buildApp', () => {
           };
         }
 
+        if (table === 'layout_zones') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(async () => ({
+                data: [],
+                error: null
+              }))
+            }))
+          };
+        }
+
         return {
           select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: [], error: null })),
+            in: vi.fn(async () => ({ data: [], error: null })),
             limit: vi.fn(async () => ({ data: [], error: null }))
           }))
         };
@@ -2422,7 +2498,11 @@ describe('buildApp', () => {
       floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
       state: 'draft',
       rackIds: [],
-      racks: {}
+      racks: {},
+      zoneIds: [],
+      zones: {},
+      wallIds: [],
+      walls: {}
     });
 
     await app.close();
@@ -3850,6 +3930,8 @@ describe('buildApp', () => {
     expect(supabase.rpc).toHaveBeenCalledWith('save_layout_draft', {
       layout_payload: {
         layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+        zones: [],
+        walls: [],
         racks: [
           expect.objectContaining({
             id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'

@@ -1,5 +1,13 @@
 import { layoutDraftSchema, type LayoutDraft } from '@wos/domain';
-import type { LayoutDraftRowBundle, LayoutZoneRow, RackFaceRow, RackLevelRow, RackRow, RackSectionRow } from './types';
+import type {
+  LayoutDraftRowBundle,
+  LayoutWallRow,
+  LayoutZoneRow,
+  RackFaceRow,
+  RackLevelRow,
+  RackRow,
+  RackSectionRow
+} from './types';
 
 function buildRackLevel(row: RackLevelRow) {
   return {
@@ -69,6 +77,20 @@ function buildZone(row: LayoutZoneRow) {
   };
 }
 
+function buildWall(row: LayoutWallRow) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    wallType: row.wall_type,
+    x1: row.x1,
+    y1: row.y1,
+    x2: row.x2,
+    y2: row.y2,
+    blocksRackPlacement: row.blocks_rack_placement
+  };
+}
+
 export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): LayoutDraft {
   const racks = bundle.racks
     .sort((a, b) => a.display_code.localeCompare(b.display_code))
@@ -76,6 +98,9 @@ export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): Layo
   const zones = (bundle.zones ?? [])
     .sort((a, b) => a.code.localeCompare(b.code))
     .map(buildZone);
+  const walls = (bundle.walls ?? [])
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map(buildWall);
 
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
@@ -85,6 +110,8 @@ export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): Layo
     rackIds: racks.map((rack) => rack.id),
     racks: Object.fromEntries(racks.map((rack) => [rack.id, rack])),
     zoneIds: zones.map((zone) => zone.id),
-    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone]))
+    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone])),
+    wallIds: walls.map((wall) => wall.id),
+    walls: Object.fromEntries(walls.map((wall) => [wall.id, wall]))
   });
 }

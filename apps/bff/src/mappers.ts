@@ -46,7 +46,11 @@ import {
   type PickStep,
   type Wave,
   type WaveSummary,
-  type Product
+  type Product,
+  type Wall,
+  type WallType,
+  type Zone,
+  type ZoneCategory
 } from '@wos/domain';
 
 type LayoutVersionRow = {
@@ -92,6 +96,32 @@ type RackLevelRow = {
   rack_section_id: string;
   ordinal: number;
   slot_count: number;
+};
+
+type LayoutZoneRow = {
+  id: string;
+  layout_version_id: string;
+  code: string;
+  name: string;
+  category: ZoneCategory | null;
+  color: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type LayoutWallRow = {
+  id: string;
+  layout_version_id: string;
+  code: string;
+  name: string | null;
+  wall_type: WallType | null;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  blocks_rack_placement: boolean;
 };
 
 type ProductRow = {
@@ -504,16 +534,52 @@ function buildRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSecti
   };
 }
 
+function buildZone(row: LayoutZoneRow): Zone {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    category: row.category,
+    color: row.color,
+    x: row.x,
+    y: row.y,
+    width: row.width,
+    height: row.height
+  };
+}
+
+function buildWall(row: LayoutWallRow): Wall {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    wallType: row.wall_type,
+    x1: row.x1,
+    y1: row.y1,
+    x2: row.x2,
+    y2: row.y2,
+    blocksRackPlacement: row.blocks_rack_placement
+  };
+}
+
 export function mapLayoutDraftBundleToDomain(bundle: {
   layoutVersion: LayoutVersionRow;
   racks: RackRow[];
   rackFaces: RackFaceRow[];
   rackSections: RackSectionRow[];
   rackLevels: RackLevelRow[];
+  zones?: LayoutZoneRow[];
+  walls?: LayoutWallRow[];
 }): LayoutDraft {
   const racks = bundle.racks
     .sort((a, b) => a.display_code.localeCompare(b.display_code))
     .map((row) => buildRack(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels));
+  const zones = (bundle.zones ?? [])
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map(buildZone);
+  const walls = (bundle.walls ?? [])
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map(buildWall);
 
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
@@ -521,7 +587,11 @@ export function mapLayoutDraftBundleToDomain(bundle: {
     state: bundle.layoutVersion.state,
     versionNo: bundle.layoutVersion.version_no,
     rackIds: racks.map((rack) => rack.id),
-    racks: Object.fromEntries(racks.map((rack) => [rack.id, rack]))
+    racks: Object.fromEntries(racks.map((rack) => [rack.id, rack])),
+    zoneIds: zones.map((zone) => zone.id),
+    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone])),
+    wallIds: walls.map((wall) => wall.id),
+    walls: Object.fromEntries(walls.map((wall) => [wall.id, wall]))
   });
 }
 
@@ -563,6 +633,28 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
         }>;
       }>;
     }>;
+    zones?: Array<{
+      id: string;
+      code: string;
+      name: string;
+      category: ZoneCategory | null;
+      color: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }>;
+    walls?: Array<{
+      id: string;
+      code: string;
+      name: string | null;
+      wallType: WallType | null;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      blocksRackPlacement: boolean;
+    }>;
   };
 
   const racks = bundle.racks.map((r) => ({
@@ -596,13 +688,41 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
     }))
   }));
 
+  const zones = (bundle.zones ?? []).map((zone) => ({
+    id: zone.id,
+    code: zone.code,
+    name: zone.name,
+    category: zone.category,
+    color: zone.color,
+    x: zone.x,
+    y: zone.y,
+    width: zone.width,
+    height: zone.height
+  }));
+
+  const walls = (bundle.walls ?? []).map((wall) => ({
+    id: wall.id,
+    code: wall.code,
+    name: wall.name,
+    wallType: wall.wallType,
+    x1: wall.x1,
+    y1: wall.y1,
+    x2: wall.x2,
+    y2: wall.y2,
+    blocksRackPlacement: wall.blocksRackPlacement
+  }));
+
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersionId,
     floorId: bundle.floorId,
     state: bundle.state,
     versionNo: bundle.versionNo,
     rackIds: racks.map((r) => r.id),
-    racks: Object.fromEntries(racks.map((r) => [r.id, r]))
+    racks: Object.fromEntries(racks.map((r) => [r.id, r])),
+    zoneIds: zones.map((zone) => zone.id),
+    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone])),
+    wallIds: walls.map((wall) => wall.id),
+    walls: Object.fromEntries(walls.map((wall) => [wall.id, wall]))
   });
 }
 

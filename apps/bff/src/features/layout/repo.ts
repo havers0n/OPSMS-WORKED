@@ -64,6 +64,32 @@ type RackLevelRow = {
   slot_count: number;
 };
 
+type LayoutZoneRow = {
+  id: string;
+  layout_version_id: string;
+  code: string;
+  name: string;
+  category: 'generic' | 'storage' | 'staging' | 'packing' | 'receiving' | 'custom' | null;
+  color: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type LayoutWallRow = {
+  id: string;
+  layout_version_id: string;
+  code: string;
+  name: string | null;
+  wall_type: 'generic' | 'partition' | 'safety' | 'perimeter' | 'custom' | null;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  blocks_rack_placement: boolean;
+};
+
 const publishedCellSelectColumns =
   'id,layout_version_id,rack_id,rack_face_id,rack_section_id,rack_level_id,slot_no,address,address_sort_key,cell_code,x,y,status';
 
@@ -194,12 +220,36 @@ async function fetchLayoutVersionBundleFromTables(
 
   const rackLevels = (levelsData ?? []) as RackLevelRow[];
 
+  const { data: zonesData, error: zonesError } = await supabase
+    .from('layout_zones')
+    .select('id,layout_version_id,code,name,category,color,x,y,width,height')
+    .eq('layout_version_id', layoutVersion.id);
+
+  if (zonesError) {
+    throw zonesError;
+  }
+
+  const zones = (zonesData ?? []) as LayoutZoneRow[];
+
+  const { data: wallsData, error: wallsError } = await supabase
+    .from('layout_walls')
+    .select('id,layout_version_id,code,name,wall_type,x1,y1,x2,y2,blocks_rack_placement')
+    .eq('layout_version_id', layoutVersion.id);
+
+  if (wallsError) {
+    throw wallsError;
+  }
+
+  const walls = (wallsData ?? []) as LayoutWallRow[];
+
   return mapLayoutDraftBundleToDomain({
     layoutVersion: layoutVersion as never,
     racks: racks as never,
     rackFaces: rackFaces as never,
     rackSections: rackSections as never,
-    rackLevels: rackLevels as never
+    rackLevels: rackLevels as never,
+    zones: zones as never,
+    walls: walls as never
   });
 }
 
