@@ -1,10 +1,7 @@
 import type { Cell, OperationsCellRuntime, Rack } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
-import {
-  clampCanvasPosition,
-  getRackGeometry
-} from '../lib/canvas-geometry';
+import { getRackGeometry } from '../lib/canvas-geometry';
 import { getSnapPosition } from '../lib/rack-spacing';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
@@ -90,8 +87,8 @@ export function RackLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
-    let x = clampCanvasPosition(node.x() - node.offsetX());
-    let y = clampCanvasPosition(node.y() - node.offsetY());
+    let x = node.x() - node.offsetX();
+    let y = node.y() - node.offsetY();
 
     const rack = rackLookup[rackId];
     const otherRacks = Object.values(rackLookup).filter((item) => item.id !== rackId);

@@ -138,8 +138,8 @@ describe('editor-store', () => {
       color: '#34d399'
     });
     useEditorStore.getState().updateZoneRect(createdZoneId!, {
-      x: 120,
-      y: 160,
+      x: -120,
+      y: -160,
       width: 240,
       height: 200
     });
@@ -151,8 +151,8 @@ describe('editor-store', () => {
         name: 'Inbound staging',
         category: 'staging',
         color: '#34d399',
-        x: 120,
-        y: 160,
+        x: -120,
+        y: -160,
         width: 240,
         height: 200
       })
@@ -215,8 +215,8 @@ describe('editor-store', () => {
     expect(wallId).toBeTruthy();
 
     useEditorStore.getState().updateWallGeometry(wallId!, {
-      x1: 40,
-      y1: 8,
+      x1: -40,
+      y1: -8,
       x2: 240,
       y2: 180
     });
@@ -233,10 +233,10 @@ describe('editor-store', () => {
         name: 'North divider',
         wallType: 'partition',
         blocksRackPlacement: false,
-        x1: 40,
-        y1: 8,
+        x1: -40,
+        y1: -8,
         x2: 240,
-        y2: 8
+        y2: -8
       })
     );
 

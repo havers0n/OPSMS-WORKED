@@ -1,7 +1,7 @@
 import type { Wall } from '@wos/domain';
 import type Konva from 'konva';
 import { Circle, Group, Layer, Line } from 'react-konva';
-import { clampCanvasPosition, GRID_SIZE } from '../lib/canvas-geometry';
+import { GRID_SIZE } from '../lib/canvas-geometry';
 
 type WallLayerProps = {
   canSelectWall: boolean;
@@ -76,12 +76,8 @@ export function WallLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
-    const x = clampCanvasPosition(
-      Math.round(node.x() / GRID_SIZE) * GRID_SIZE
-    );
-    const y = clampCanvasPosition(
-      Math.round(node.y() / GRID_SIZE) * GRID_SIZE
-    );
+    const x = Math.round(node.x() / GRID_SIZE) * GRID_SIZE;
+    const y = Math.round(node.y() / GRID_SIZE) * GRID_SIZE;
 
     updateWallGeometry(wall.id, moveWallByDelta(wall, { x, y }));
   };

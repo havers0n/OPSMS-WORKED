@@ -343,7 +343,7 @@ function nextZoneCode(zones: Record<string, Zone>): string {
 }
 
 function clampZoneCoordinate(value: number) {
-  return Math.max(0, Math.round(value));
+  return Math.round(value);
 }
 
 function clampZoneSize(value: number) {
@@ -426,7 +426,7 @@ function nextWallCode(walls: Record<string, Wall>): string {
 }
 
 function roundWallCoordinate(value: number) {
-  return Math.max(0, Math.round(value));
+  return Math.round(value);
 }
 
 function getWallOrientation(wall: Pick<Wall, 'x1' | 'y1' | 'x2' | 'y2'>): 'horizontal' | 'vertical' {

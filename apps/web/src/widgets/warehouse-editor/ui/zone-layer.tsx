@@ -1,11 +1,7 @@
 import type { Zone } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect, Text } from 'react-konva';
-import {
-  clampCanvasPosition,
-  type CanvasRect,
-  GRID_SIZE
-} from '../lib/canvas-geometry';
+import { type CanvasRect, GRID_SIZE } from '../lib/canvas-geometry';
 
 type ZoneLayerProps = {
   canSelectZone: boolean;
@@ -51,8 +47,8 @@ function resizeZoneFromHandle(
       const nextX = Math.min(right - MIN_ZONE_SIZE, snappedX);
       const nextY = Math.min(bottom - MIN_ZONE_SIZE, snappedY);
       return {
-        x: clampCanvasPosition(nextX),
-        y: clampCanvasPosition(nextY),
+        x: nextX,
+        y: nextY,
         width: right - nextX,
         height: bottom - nextY
       };
@@ -62,7 +58,7 @@ function resizeZoneFromHandle(
       const nextY = Math.min(bottom - MIN_ZONE_SIZE, snappedY);
       return {
         x: zone.x,
-        y: clampCanvasPosition(nextY),
+        y: nextY,
         width: nextRight - zone.x,
         height: bottom - nextY
       };
@@ -71,7 +67,7 @@ function resizeZoneFromHandle(
       const nextX = Math.min(right - MIN_ZONE_SIZE, snappedX);
       const nextBottom = Math.max(zone.y + MIN_ZONE_SIZE, snappedY);
       return {
-        x: clampCanvasPosition(nextX),
+        x: nextX,
         y: zone.y,
         width: right - nextX,
         height: nextBottom - zone.y
@@ -102,12 +98,8 @@ export function ZoneLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
-    const x = clampCanvasPosition(
-      Math.round(node.x() / GRID_SIZE) * GRID_SIZE
-    );
-    const y = clampCanvasPosition(
-      Math.round(node.y() / GRID_SIZE) * GRID_SIZE
-    );
+    const x = Math.round(node.x() / GRID_SIZE) * GRID_SIZE;
+    const y = Math.round(node.y() / GRID_SIZE) * GRID_SIZE;
 
     updateZoneRect(zone.id, {
       x,

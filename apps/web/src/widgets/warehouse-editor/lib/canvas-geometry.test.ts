@@ -54,7 +54,7 @@ describe('canvas geometry helpers', () => {
     expect(geometry.faceBWidth).toBe(6 * RACK_LENGTH_SCALE);
   });
 
-  it('clamps drag coordinates to non-negative values', () => {
+  it('keeps the non-negative floor helper behavior for placement-only callers', () => {
     expect(clampCanvasPosition(42)).toBe(42);
     expect(clampCanvasPosition(-5)).toBe(0);
   });
