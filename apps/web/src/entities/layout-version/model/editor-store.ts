@@ -178,6 +178,10 @@ const initialEditorState = {
   isDraftDirty: false
 };
 
+const WORKFLOW_RESET = {
+  activeStorageWorkflow: null as ActiveStorageWorkflow
+};
+
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
   setViewMode: (nextViewMode) =>
@@ -187,7 +191,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Clear selection on every mode switch — stale rack/cell selections from
       // the previous mode should never bleed into the new one.
       selection: { type: 'none' },
-      activeStorageWorkflow: null,
+      ...WORKFLOW_RESET,
       creatingRackId: null,
       highlightedCellIds: []
     }),
@@ -195,24 +199,24 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setSelection: (selection) =>
     set({
       selection,
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   clearSelection: () =>
     set({
       selection: { type: 'none' },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   setSelectedRackIds: (rackIds) =>
     set({
       selection: makeRackSelection(rackIds),
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   setSelectedRackId: (rackId) =>
     set({
       selection: rackId
         ? { type: 'rack', rackIds: [rackId], focus: { type: 'body' } }
         : { type: 'none' },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   setSelectedRackSide: (rackId, side) =>
     set({
@@ -221,7 +225,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         rackIds: [rackId],
         focus: { type: 'side', side }
       },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   toggleRackSelection: (rackId) => set((state) => {
     const current = getSelectedRackIds(state.selection);
@@ -230,30 +234,30 @@ export const useEditorStore = create<EditorStore>((set) => ({
       : [...current, rackId];
     return {
       selection: makeRackSelection(next),
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     };
   }),
   setSelectedZoneId: (zoneId) =>
     set({
       selection: zoneId ? { type: 'zone', zoneId } : { type: 'none' },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   setSelectedWallId: (wallId) =>
     set({
       selection: wallId ? { type: 'wall', wallId } : { type: 'none' },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   setSelectedCellId: (cellId) =>
     set({
       selection: cellId ? { type: 'cell', cellId } : { type: 'none' },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   setSelectedContainerId: (containerId, sourceCellId = null) =>
     set({
       selection: containerId
         ? { type: 'container', containerId, sourceCellId }
         : { type: 'none' },
-      activeStorageWorkflow: null
+      ...WORKFLOW_RESET
     }),
   startPlaceContainerWorkflow: (cellId) =>
     set((state) => ({
@@ -317,7 +321,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         draft: null,
         draftSourceVersionId: null,
         selection: { type: 'none' },
-        activeStorageWorkflow: null,
+        ...WORKFLOW_RESET,
         contextPanelMode: 'compact',
         highlightedCellIds: [],
         hoveredRackId: null,
