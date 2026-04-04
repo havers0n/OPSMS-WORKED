@@ -13,14 +13,11 @@ import type { ContextPanelMode } from '@/entities/layout-version/model/editor-ty
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
-import { useCreateContainer } from '@/features/container-create/model/use-create-container';
-import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
-import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
 import {
   filterStorableTypes,
-  formatCreateAndPlacePlacementFailure,
   getCreateAndPlaceDisabledReasons
 } from './cell-placement-inspector.lib';
+import { useStorageWorkflowActions } from './use-storage-workflow-actions';
 
 export function StorageWorkflowContextPanel({
   workspace,
@@ -41,7 +38,6 @@ export function StorageWorkflowContextPanel({
   const { data: containerTypes = [], isPending: isContainerTypesPending, isError: isContainerTypesError } =
     useContainerTypes();
   const storableTypes = useMemo(() => filterStorableTypes(containerTypes), [containerTypes]);
-  const createContainer = useCreateContainer();
 
   const workflowCellId =
     activeStorageWorkflow?.kind === 'place-container' || activeStorageWorkflow?.kind === 'create-and-place'
@@ -50,20 +46,45 @@ export function StorageWorkflowContextPanel({
         ? activeStorageWorkflow.targetCellId
         : null;
   const { data: workflowLocationRef } = useLocationByCell(workflowCellId);
-  const placeContainer = usePlaceContainer({
+  const workflowLocationId = workflowLocationRef?.locationId ?? null;
+  const sourceCell =
+    activeStorageWorkflow?.kind === 'move-container'
+      ? (publishedCells.find((cell) => cell.id === activeStorageWorkflow.sourceCellId) ?? null)
+      : null;
+  const targetCell =
+    activeStorageWorkflow?.kind === 'move-container' && activeStorageWorkflow.targetCellId
+      ? (publishedCells.find((cell) => cell.id === activeStorageWorkflow.targetCellId) ?? null)
+      : null;
+  const targetValidationMessage =
+    activeStorageWorkflow?.kind !== 'move-container'
+      ? null
+      : !activeStorageWorkflow.targetCellId
+        ? 'Click a destination cell on the canvas.'
+        : activeStorageWorkflow.targetCellId === activeStorageWorkflow.sourceCellId
+          ? 'Target cell must differ from the source cell.'
+          : !targetCell
+            ? 'Selected target cell is unavailable in the published layout.'
+            : !workflowLocationRef?.locationId
+              ? 'Resolving destination location...'
+              : null;
+  const {
+    isSubmitting,
+    handleConfirmMove,
+    handleConfirmPlace,
+    handleCreateAndPlace,
+    handleRetryCreatedContainerPlacement
+  } = useStorageWorkflowActions({
     floorId: workspace?.floorId ?? null,
-    locationId: workflowLocationRef?.locationId ?? null
-  });
-  const moveContainer = useMoveContainer({
-    floorId: workspace?.floorId ?? null,
-    sourceCellId:
-      activeStorageWorkflow?.kind === 'move-container'
-        ? activeStorageWorkflow.sourceCellId
-        : null,
-    containerId:
-      activeStorageWorkflow?.kind === 'move-container'
-        ? activeStorageWorkflow.containerId
-        : null
+    activeStorageWorkflow,
+    workflowLocationId,
+    placeContainerIdInput,
+    containerTypeIdInput,
+    targetValidationMessage,
+    cancelPlacementInteraction,
+    markActiveStorageWorkflowSubmitting,
+    setActiveStorageWorkflowError,
+    setCreateAndPlacePlacementRetry,
+    setSelectedCellId
   });
 
   useEffect(() => {
@@ -86,50 +107,6 @@ export function StorageWorkflowContextPanel({
   }
 
   if (activeStorageWorkflow.kind === 'move-container') {
-    const sourceCell =
-      publishedCells.find((cell) => cell.id === activeStorageWorkflow.sourceCellId) ?? null;
-    const targetCell =
-      activeStorageWorkflow.targetCellId
-        ? (publishedCells.find((cell) => cell.id === activeStorageWorkflow.targetCellId) ?? null)
-        : null;
-    const targetValidationMessage =
-      !activeStorageWorkflow.targetCellId
-        ? 'Click a destination cell on the canvas.'
-        : activeStorageWorkflow.targetCellId === activeStorageWorkflow.sourceCellId
-          ? 'Target cell must differ from the source cell.'
-          : !targetCell
-            ? 'Selected target cell is unavailable in the published layout.'
-            : !workflowLocationRef?.locationId
-              ? 'Resolving destination location...'
-              : null;
-    const isSubmitting =
-      activeStorageWorkflow.status === 'submitting' || moveContainer.isPending;
-
-    const handleConfirmMove = async () => {
-      if (
-        !activeStorageWorkflow.targetCellId ||
-        !workflowLocationRef?.locationId ||
-        targetValidationMessage
-      ) {
-        return;
-      }
-
-      markActiveStorageWorkflowSubmitting();
-
-      try {
-        await moveContainer.mutateAsync({
-          containerId: activeStorageWorkflow.containerId,
-          targetLocationId: workflowLocationRef.locationId
-        });
-        setSelectedCellId(activeStorageWorkflow.targetCellId);
-        cancelPlacementInteraction();
-      } catch (error) {
-        setActiveStorageWorkflowError(
-          error instanceof Error ? error.message : 'Could not move the container.'
-        );
-      }
-    };
-
     return (
       <div className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}>
         <div
@@ -201,7 +178,7 @@ export function StorageWorkflowContextPanel({
 
   const workflowCell =
     publishedCells.find((cell) => cell.id === activeStorageWorkflow.cellId) ?? null;
-  const locationId = workflowLocationRef?.locationId ?? null;
+  const locationId = workflowLocationId;
   const isPlaceWorkflow = activeStorageWorkflow.kind === 'place-container';
   const createdContainer =
     activeStorageWorkflow.kind === 'create-and-place'
@@ -210,103 +187,6 @@ export function StorageWorkflowContextPanel({
   const isPlacementRetry =
     activeStorageWorkflow.kind === 'create-and-place' &&
     activeStorageWorkflow.status === 'placement-retry';
-  const isSubmitting =
-    activeStorageWorkflow.status === 'submitting' ||
-    placeContainer.isPending ||
-    createContainer.isPending;
-
-  const handleConfirmPlace = async () => {
-    const nextContainerId = placeContainerIdInput.trim();
-    if (!locationId || nextContainerId.length === 0) {
-      return;
-    }
-
-    markActiveStorageWorkflowSubmitting();
-
-    try {
-      await placeContainer.mutateAsync({
-        containerId: nextContainerId,
-        locationId
-      });
-      cancelPlacementInteraction();
-    } catch (error) {
-      setActiveStorageWorkflowError(
-        error instanceof Error ? error.message : 'Could not place the container.'
-      );
-    }
-  };
-
-  const handleCreateAndPlace = async () => {
-    if (
-      activeStorageWorkflow.kind !== 'create-and-place' ||
-      activeStorageWorkflow.status === 'placement-retry' ||
-      !locationId ||
-      containerTypeIdInput.length === 0
-    ) {
-      return;
-    }
-
-    markActiveStorageWorkflowSubmitting();
-
-    try {
-      const container = await createContainer.mutateAsync({
-        containerTypeId: containerTypeIdInput,
-        operationalRole: 'storage'
-      });
-
-      try {
-        await placeContainer.mutateAsync({
-          containerId: container.containerId,
-          locationId
-        });
-        cancelPlacementInteraction();
-      } catch (error) {
-        setCreateAndPlacePlacementRetry(
-          {
-            id: container.containerId,
-            code: container.systemCode
-          },
-          formatCreateAndPlacePlacementFailure(
-            container.systemCode,
-            error instanceof Error ? error.message : 'Placement failed.'
-          )
-        );
-      }
-    } catch (error) {
-      setActiveStorageWorkflowError(
-        error instanceof Error ? error.message : 'Could not create the container.'
-      );
-    }
-  };
-
-  const handleRetryCreatedContainerPlacement = async () => {
-    if (
-      activeStorageWorkflow.kind !== 'create-and-place' ||
-      activeStorageWorkflow.status !== 'placement-retry' ||
-      !activeStorageWorkflow.createdContainer ||
-      !locationId
-    ) {
-      return;
-    }
-
-    markActiveStorageWorkflowSubmitting();
-
-    try {
-      await placeContainer.mutateAsync({
-        containerId: activeStorageWorkflow.createdContainer.id,
-        locationId
-      });
-      cancelPlacementInteraction();
-    } catch (error) {
-      setCreateAndPlacePlacementRetry(
-        activeStorageWorkflow.createdContainer,
-        formatCreateAndPlacePlacementFailure(
-          activeStorageWorkflow.createdContainer.code,
-          error instanceof Error ? error.message : 'Placement failed.'
-        )
-      );
-    }
-  };
 
   return (
     <div className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}>
