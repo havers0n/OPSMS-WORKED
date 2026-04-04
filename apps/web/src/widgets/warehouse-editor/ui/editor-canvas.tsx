@@ -78,6 +78,7 @@ import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
 import { SnapGuides } from './shapes/snap-guides';
+import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 
 type LayoutRackAffordanceBarProps = {
   displayCode: string;
@@ -399,19 +400,6 @@ function resizeWallFromEndpoint(
     : { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: snappedY };
 }
 
-function isEditableDomTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return (
-    target.isContentEditable ||
-    target.tagName === 'INPUT' ||
-    target.tagName === 'TEXTAREA' ||
-    target.tagName === 'SELECT'
-  );
-}
-
 export function EditorCanvas({
   workspace,
   onAddRack: _onAddRack,
@@ -639,6 +627,24 @@ export function EditorCanvas({
   const deleteWallRef = useRef(deleteWall);
   deleteWallRef.current = deleteWall;
 
+  useCanvasKeyboardShortcuts({
+    isLayoutEditable,
+    isPlacingRef,
+    isDrawingZoneRef,
+    interactionScopeRef,
+    cancelPlacementInteractionRef,
+    clearSelectionRef,
+    selectedRackIdsRef,
+    selectedZoneIdRef,
+    selectedWallIdRef,
+    deleteZoneRef,
+    deleteWallRef,
+    draftZoneStartRef,
+    setEditorMode,
+    setDraftZoneRect,
+    clearHighlightedCellIds
+  });
+
   const selectedRack =
     selectedRackId && !isLayoutDrawToolActive && layoutDraft
       ? layoutDraft.racks[selectedRackId]
@@ -849,64 +855,6 @@ export function EditorCanvas({
       stage.off('click.canvas');
     };
   }, [viewport]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (isPlacingRef.current || isDrawingZoneRef.current) {
-          setEditorMode('select');
-          setDraftZoneRect(null);
-          draftZoneStartRef.current = null;
-          return;
-        }
-
-        if (isEditableDomTarget(event.target)) {
-          return;
-        }
-
-        if (interactionScopeRef.current === 'workflow') {
-          cancelPlacementInteractionRef.current();
-          clearHighlightedCellIds();
-          return;
-        }
-
-        if (interactionScopeRef.current === 'object') {
-          clearSelectionRef.current();
-          clearHighlightedCellIds();
-        }
-
-        return;
-      }
-
-      if (
-        (event.key === 'Delete' || event.key === 'Backspace') &&
-        !isPlacingRef.current &&
-        !isDrawingZoneRef.current &&
-        isLayoutEditable &&
-        !isEditableDomTarget(event.target)
-      ) {
-        const rackId = selectedRackIdsRef.current[0];
-        if (rackId) {
-          window.dispatchEvent(new CustomEvent('rack:request-delete', { detail: { rackId } }));
-          return;
-        }
-
-        const zoneId = selectedZoneIdRef.current;
-        if (zoneId) {
-          deleteZoneRef.current(zoneId);
-          return;
-        }
-
-        const wallId = selectedWallIdRef.current;
-        if (wallId) {
-          deleteWallRef.current(wallId);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [clearHighlightedCellIds, isLayoutEditable, setEditorMode]);
 
   const gridLines = useMemo(() => {
     if (!viewport.width || !viewport.height) {
