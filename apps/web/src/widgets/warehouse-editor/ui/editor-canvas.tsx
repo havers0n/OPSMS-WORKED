@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Cell, FloorWorkspace, Wall, Zone } from '@wos/domain';
-import { Group, Layer, Line, Rect, Stage } from 'react-konva';
+import { Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import {
   useActiveStorageWorkflow,
@@ -48,7 +48,6 @@ import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
 import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
-  clampCanvasPosition,
   type CanvasRect,
   getCellCanvasRect,
   getCanvasInteractionLevel,
@@ -60,12 +59,9 @@ import {
   GRID_SIZE,
   projectCanvasRectToViewport
 } from '../lib/canvas-geometry';
-import { getSnapPosition } from '../lib/rack-spacing';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
-import { RackBody } from './shapes/rack-body';
-import { RackCells } from './shapes/rack-cells';
-import { RackSections } from './shapes/rack-sections';
+import { RackLayer } from './rack-layer';
 import { SnapGuides } from './shapes/snap-guides';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
@@ -262,8 +258,6 @@ export function EditorCanvas({
   createZoneRef.current = createZone;
   const setSelectedRackIdsRef = useRef(setSelectedRackIds);
   setSelectedRackIdsRef.current = setSelectedRackIds;
-  const setSelectedRackIdRef = useRef(setSelectedRackId);
-  setSelectedRackIdRef.current = setSelectedRackId;
   const selectedZoneIdRef = useRef(selectedZoneId);
   selectedZoneIdRef.current = selectedZoneId;
   const selectedWallIdRef = useRef(selectedWallId);
@@ -272,14 +266,8 @@ export function EditorCanvas({
   clearSelectionRef.current = clearSelection;
   const cancelPlacementInteractionRef = useRef(cancelPlacementInteraction);
   cancelPlacementInteractionRef.current = cancelPlacementInteraction;
-  const toggleRackSelectionRef = useRef(toggleRackSelection);
-  toggleRackSelectionRef.current = toggleRackSelection;
   const selectedRackIdsRef = useRef(selectedRackIds);
   selectedRackIdsRef.current = selectedRackIds;
-  const minRackDistanceRef = useRef(minRackDistance);
-  minRackDistanceRef.current = minRackDistance;
-  const updateRackPositionRef = useRef(updateRackPosition);
-  updateRackPositionRef.current = updateRackPosition;
   const deleteZoneRef = useRef(deleteZone);
   deleteZoneRef.current = deleteZone;
   const deleteWallRef = useRef(deleteWall);
@@ -453,52 +441,6 @@ export function EditorCanvas({
 
     return { v: vertical, h: horizontal, startX, endX, startY, endY };
   }, [zoom, viewport.width, viewport.height, canvasOffset]);
-
-  const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
-    if (!layoutDraft || !isLayoutEditable) return;
-
-    const node = event.target;
-    let x = clampCanvasPosition(node.x() - node.offsetX());
-    let y = clampCanvasPosition(node.y() - node.offsetY());
-
-    const rack = layoutDraft.racks[rackId];
-    const otherRacks = Object.values(layoutDraft.racks).filter((item) => item.id !== rackId);
-    const snapInfo = getSnapPosition(rack, x, y, otherRacks, minRackDistanceRef.current, 0.5);
-
-    if (snapInfo.snappedToX || snapInfo.snappedToY) {
-      x = snapInfo.snappedX;
-      y = snapInfo.snappedY;
-      setSnapGuides(
-        [
-          snapInfo.snappedToX && { type: 'x' as const, position: x },
-          snapInfo.snappedToY && { type: 'y' as const, position: y }
-        ].filter(Boolean) as Array<{ type: 'x' | 'y'; position: number }>
-      );
-    } else {
-      setSnapGuides([]);
-    }
-
-    updateRackPositionRef.current(rackId, x, y);
-  };
-
-  const handleCellClick = (cellId: string, anchor: { x: number; y: number }) => {
-    void anchor;
-
-    if (isStorageMode) {
-      if (activeStorageWorkflow?.kind === 'move-container') {
-        setPlacementMoveTargetCellId(cellId);
-        return;
-      }
-
-      setSelectedCellId(cellId);
-      return;
-    }
-
-    if (isViewMode) {
-      setSelectedCellId(cellId);
-      setHighlightedCellIds([cellId]);
-    }
-  };
 
   return (
     <div
@@ -710,135 +652,41 @@ export function EditorCanvas({
 
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
 
-              <Layer>
-                {racks.map((rack) => {
-                  const geometry = getRackGeometry(rack);
-                  const isSelected = selectedRackIds.includes(rack.id);
-                  const isHovered = hoveredRackId === rack.id;
-                  const isRackPassive =
-                    interactionScope !== 'idle' &&
-                    !isSelected &&
-                    activeCellRackId !== rack.id &&
-                    moveSourceRackId !== rack.id;
-                  const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
-                  const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
-
-                  return (
-                    <Group
-                      key={rack.id}
-                      x={geometry.x + geometry.centerX}
-                      y={geometry.y + geometry.centerY}
-                      offsetX={geometry.centerX}
-                      offsetY={geometry.centerY}
-                      rotation={rack.rotationDeg}
-                      draggable={isLayoutEditable && !isPlacing}
-                      onMouseDown={(event) => {
-                        // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
-                        event.cancelBubble = true;
-                      }}
-                      onClick={(event) => {
-                        event.cancelBubble = true;
-                        if (!canSelectRack) return;
-
-                        if (!isLayoutMode) {
-                          clearHighlightedCellIds();
-                          setSelectedRackIdsRef.current([rack.id]);
-                          return;
-                        }
-
-                        const pointerEvent = event.evt as unknown as PointerEvent;
-                        if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
-                          toggleRackSelectionRef.current(rack.id);
-                        } else {
-                          setSelectedRackIdRef.current(rack.id);
-                        }
-                      }}
-                      onTap={(event) => {
-                        event.cancelBubble = true;
-                        if (!canSelectRack) return;
-
-                        if (!isLayoutMode) {
-                          clearHighlightedCellIds();
-                          setSelectedRackIdsRef.current([rack.id]);
-                          return;
-                        }
-
-                        const pointerEvent = event.evt as unknown as PointerEvent;
-                        if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
-                          toggleRackSelectionRef.current(rack.id);
-                        } else {
-                          setSelectedRackIdRef.current(rack.id);
-                        }
-                      }}
-                      onMouseEnter={() => {
-                        if (canSelectRack) setHoveredRackId(rack.id);
-                      }}
-                      onMouseLeave={() => {
-                        if (canSelectRack) setHoveredRackId(null);
-                      }}
-                      onDragStart={() => {
-                        if (isLayoutEditable && !selectedRackIds.includes(rack.id)) {
-                          setSelectedRackIds([rack.id]);
-                        }
-                      }}
-                      onDragMove={(event) => handleDragMove(rack.id, event)}
-                      onDragEnd={(e) => {
-                        setSnapGuides([]);
-                        const node = e.target;
-                        if (layoutDraft && layoutDraft.racks[rack.id]) {
-                          const geometry = getRackGeometry(layoutDraft.racks[rack.id]);
-                          node.position({
-                            x: geometry.x + geometry.centerX,
-                            y: geometry.y + geometry.centerY
-                          });
-                        }
-                      }}
-                    >
-                      <Rect x={0} y={0} width={geometry.width} height={geometry.height} fill="transparent" />
-
-                      <RackBody
-                        geometry={geometry}
-                        displayCode={rack.displayCode}
-                        rotationDeg={rack.rotationDeg}
-                        isSelected={isSelected}
-                        isHovered={isHovered}
-                        isPassive={isRackPassive}
-                        lod={lod}
-                      />
-
-                      {lod >= 1 && faceA && (
-                        <RackSections
-                          geometry={geometry}
-                          faceA={faceA}
-                          faceB={geometry.isPaired ? faceB : null}
-                          isSelected={isSelected}
-                          isPassive={isRackPassive}
-                        />
-                      )}
-
-                      {(lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
-                        <RackCells
-                          geometry={geometry}
-                          rackId={rack.id}
-                          faceA={faceA}
-                          faceB={geometry.isPaired ? faceB : null}
-                          isSelected={isSelected}
-                          publishedCellsByStructure={publishedCellsByStructure}
-                          occupiedCellIds={occupiedCellIds}
-                          cellRuntimeById={floorOperationsCellsById}
-                          highlightedCellIds={highlightedCellIdSet}
-                          isInteractive={canSelectCells}
-                          isWorkflowScope={isPlacementMoveMode}
-                          isPassive={isRackPassive}
-                          selectedCellId={canvasSelectedCellId}
-                          workflowSourceCellId={moveSourceCellId}
-                          onCellClick={handleCellClick}
-                        />
-                      )}
-                    </Group>
-                  );
-                })}
-              </Layer>
+              <RackLayer
+                activeCellRackId={activeCellRackId}
+                canSelectCells={canSelectCells}
+                canSelectRack={canSelectRack}
+                canvasSelectedCellId={canvasSelectedCellId}
+                cellRuntimeById={floorOperationsCellsById}
+                clearHighlightedCellIds={clearHighlightedCellIds}
+                highlightedCellIds={highlightedCellIdSet}
+                hoveredRackId={hoveredRackId}
+                isLayoutEditable={isLayoutEditable}
+                isLayoutMode={isLayoutMode}
+                isPlacing={isPlacing}
+                isRackPassiveScopeActive={interactionScope !== 'idle'}
+                isStorageMode={isStorageMode}
+                isViewMode={isViewMode}
+                isWorkflowScope={isPlacementMoveMode}
+                lod={lod}
+                minRackDistance={minRackDistance}
+                moveSourceCellId={moveSourceCellId}
+                moveSourceRackId={moveSourceRackId}
+                occupiedCellIds={occupiedCellIds}
+                publishedCellsByStructure={publishedCellsByStructure}
+                rackLookup={layoutDraft.racks}
+                racks={racks}
+                selectedRackIds={selectedRackIds}
+                setHighlightedCellIds={setHighlightedCellIds}
+                setHoveredRackId={setHoveredRackId}
+                setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}
+                setSelectedCellId={setSelectedCellId}
+                setSelectedRackId={setSelectedRackId}
+                setSelectedRackIds={setSelectedRackIds}
+                setSnapGuides={setSnapGuides}
+                toggleRackSelection={toggleRackSelection}
+                updateRackPosition={updateRackPosition}
+              />
 
               {/* ── Marquee selection overlay (topmost, non-interactive) ── */}
               <Layer listening={false}>
