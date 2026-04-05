@@ -1,4 +1,5 @@
-import type { FloorWorkspace, ZoneCategory } from '@wos/domain';
+import type { FloorWorkspace, ZoneCategory, ZonePlacementBehavior } from '@wos/domain';
+import { getZonePlacementBehavior } from '@wos/domain';
 import { SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
@@ -18,6 +19,27 @@ const ZONE_CATEGORY_OPTIONS: Array<{ value: ZoneCategory; label: string }> = [
   { value: 'receiving', label: 'Receiving' },
   { value: 'custom', label: 'Custom' }
 ];
+
+const PLACEMENT_BEHAVIOR_DISPLAY: Record<
+  ZonePlacementBehavior,
+  { label: string; description: string }
+> = {
+  none: {
+    label: 'Context only',
+    description:
+      'This zone marks an operational area. No containers are placed here directly — it holds no rack cells or floor locations.'
+  },
+  children_only: {
+    label: 'Via rack cells',
+    description:
+      'Containers are placed inside rack cells within this zone. The zone boundary itself is not a placement target.'
+  },
+  direct: {
+    label: 'Direct placement',
+    description:
+      'This zone type is designed for direct container placement (staging, dock). Floor-level location support is planned.'
+  }
+};
 
 function parseGeometryInput(value: string, fallback: number, min: number) {
   const parsed = Number(value);
@@ -158,6 +180,24 @@ export function ZoneInspector({
               className="w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-xs text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-70"
             />
           </div>
+
+          {(() => {
+            const behavior = getZonePlacementBehavior(zone.category);
+            const display = PLACEMENT_BEHAVIOR_DISPLAY[behavior];
+            return (
+              <div className="mt-4">
+                <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Placement behavior
+                </label>
+                <div className="mt-2 rounded-lg border border-[var(--border-muted)] bg-[var(--surface-secondary)] px-3 py-2">
+                  <div className="text-xs font-semibold text-slate-700">{display.label}</div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                    {display.description}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="rounded-xl border border-[var(--border-muted)] p-3">

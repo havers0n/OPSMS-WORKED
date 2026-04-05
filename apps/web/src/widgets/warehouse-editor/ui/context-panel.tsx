@@ -8,7 +8,7 @@
  * PR-4: Layout rack body/side branches plus Storage `cell-context` and workflow
  * branches for selected cells and container moves.
  */
-import { generatePreviewCells, validateLayoutDraft } from '@wos/domain';
+import { generatePreviewCells, getZonePlacementBehavior, validateLayoutDraft } from '@wos/domain';
 import type {
   FloorWorkspace,
   LayoutValidationIssue,
@@ -564,6 +564,20 @@ function ZoneContextPanel({
     return <PlaceholderContent description="Zone context is unavailable for the current selection." />;
   }
 
+  const behavior = getZonePlacementBehavior(zone.category);
+
+  const behaviorBadge = {
+    none: { label: 'Context only', className: 'bg-slate-100 text-slate-600' },
+    children_only: { label: 'Via rack cells', className: 'bg-blue-50 text-blue-700' },
+    direct: { label: 'Direct placement', className: 'bg-amber-50 text-amber-700' }
+  }[behavior];
+
+  const behaviorNote = {
+    none: 'Operational area only — not a container placement target.',
+    children_only: 'Containers are placed in rack cells inside this zone, not in the zone itself.',
+    direct: 'Designed for direct staging placement. Floor-level locations are planned.'
+  }[behavior];
+
   return (
     <div className="px-3 py-3">
       <div className="rounded-xl border border-[var(--border-muted)] bg-white p-3">
@@ -601,8 +615,16 @@ function ZoneContextPanel({
           ))}
         </div>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          Rename, recolor, and fine-tune geometry in the inspector.
+        <div className="mt-3 flex items-center gap-2">
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${behaviorBadge.className}`}
+          >
+            {behaviorBadge.label}
+          </span>
+        </div>
+
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          {behaviorNote} Rename, recolor, and fine-tune geometry in the inspector.
         </p>
       </div>
 

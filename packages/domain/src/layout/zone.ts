@@ -22,3 +22,36 @@ export const zoneSchema = z.object({
   height: z.number().positive()
 });
 export type Zone = z.infer<typeof zoneSchema>;
+
+/**
+ * Describes how a zone relates to container placement.
+ *
+ * This is intentionally computed from category — not persisted — so the
+ * contract can evolve without a schema migration.
+ *
+ * 'none'          — zone is an operational context area only; containers are
+ *                   not placed here directly or via children.
+ * 'children_only' — containers live in addressed locations (rack cells) inside
+ *                   this zone; the zone boundary itself is not a placement target.
+ * 'direct'        — zone may contain floor/staging locations that accept direct
+ *                   container placement (semantics established; UI not yet built).
+ */
+export type ZonePlacementBehavior = 'none' | 'children_only' | 'direct';
+
+export function getZonePlacementBehavior(
+  category: ZoneCategory | null | undefined
+): ZonePlacementBehavior {
+  switch (category) {
+    case 'storage':
+      return 'children_only';
+    case 'staging':
+    case 'receiving':
+      return 'direct';
+    case 'packing':
+    case 'generic':
+    case 'custom':
+    case null:
+    case undefined:
+      return 'none';
+  }
+}

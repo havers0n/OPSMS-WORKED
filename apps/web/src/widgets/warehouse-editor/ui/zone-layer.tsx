@@ -1,4 +1,5 @@
 import type { Zone } from '@wos/domain';
+import { getZonePlacementBehavior } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect, Text } from 'react-konva';
 import { type CanvasRect, GRID_SIZE, WORLD_SCALE } from '../lib/canvas-geometry';
@@ -19,6 +20,15 @@ type ZoneResizeHandle = 'nw' | 'ne' | 'sw' | 'se';
 
 // 1 metre minimum zone size
 export const MIN_ZONE_SIZE = 1;
+
+const ZONE_CATEGORY_BADGE: Record<string, string> = {
+  generic: 'Generic',
+  storage: 'Storage · rack cells',
+  staging: 'Staging · direct',
+  packing: 'Packing',
+  receiving: 'Receiving · direct',
+  custom: 'Custom'
+};
 
 const ZONE_RESIZE_HANDLE_SIZE = 10;
 
@@ -143,7 +153,12 @@ export function ZoneLayer({
             y={zone.y * WORLD_SCALE}
             draggable={isLayoutEditable && canSelectZone}
             onMouseDown={(event) => {
-              event.cancelBubble = true;
+              // Only stop propagation in layout mode where zone is selectable.
+              // In storage/view modes we must let the event reach the stage so
+              // that background-click deselection works correctly.
+              if (canSelectZone) {
+                event.cancelBubble = true;
+              }
             }}
             onClick={(event) => {
               event.cancelBubble = true;
@@ -194,6 +209,19 @@ export function ZoneLayer({
               ellipsis
               listening={false}
             />
+
+            {zone.category && heightPx > 44 && (
+              <Text
+                x={10}
+                y={27}
+                width={Math.max(24, widthPx - 20)}
+                text={ZONE_CATEGORY_BADGE[zone.category] ?? zone.category}
+                fontSize={10}
+                fill="#475569"
+                ellipsis
+                listening={false}
+              />
+            )}
 
             {isSelectedZone &&
               isLayoutEditable &&
