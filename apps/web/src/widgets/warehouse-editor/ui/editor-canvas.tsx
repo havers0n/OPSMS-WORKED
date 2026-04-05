@@ -19,11 +19,13 @@ import {
   useHoveredRackId,
   useIsLayoutEditable,
   useSelectedCellId,
+  useSelectedLocationId,
   useSelectedRackFocus,
   useSelectedZoneId,
   useSelectedWallId,
   useSetPlacementMoveTargetCellId,
   useSelectedRackId,
+  useSetSelectedLocationId,
   useSetSelectedRackId,
   useSetSelectedWallId,
   useSetSelectedZoneId,
@@ -52,6 +54,7 @@ import { useCanvasSceneModel } from './use-canvas-scene-model';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
+import { LocationLayer } from './location-layer';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
 
@@ -73,6 +76,8 @@ export function EditorCanvas({
   const selectedRackId = useSelectedRackId();
   const selectedRackFocus = useSelectedRackFocus();
   const selectedCellId = useSelectedCellId();
+  const selectedLocationId = useSelectedLocationId();
+  const setSelectedLocationId = useSetSelectedLocationId();
   const selection = useEditorSelection();
   const interactionScope = useInteractionScope();
   const highlightedCellIds = useHighlightedCellIds();
@@ -202,7 +207,7 @@ export function EditorCanvas({
     shouldShowLayoutZoneBar,
     shouldShowStorageCellBar
   } = scene.hud;
-  const { walls, zones } = scene.layers;
+  const { nonRackLocationMarkers, walls, zones } = scene.layers;
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
@@ -466,6 +471,14 @@ export function EditorCanvas({
               />
 
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
+
+              {isStorageMode && (
+                <LocationLayer
+                  markers={nonRackLocationMarkers}
+                  selectedLocationId={selectedLocationId}
+                  setSelectedLocationId={setSelectedLocationId}
+                />
+              )}
 
               <RackLayer
                 activeCellRackId={activeCellRackId}

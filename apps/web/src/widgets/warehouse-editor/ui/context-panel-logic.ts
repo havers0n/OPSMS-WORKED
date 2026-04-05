@@ -42,6 +42,7 @@ export type ContextPanelIntent =
   | 'wall-context'
   | 'cell-context'
   | 'container-context'
+  | 'location-context'
   | 'workflow';
 
 /**
@@ -111,6 +112,8 @@ export function resolveContextPanelIntent(params: {
       return 'cell-context';
     case 'container':
       return 'container-context';
+    case 'location':
+      return 'location-context';
     default:
       return 'hidden';
   }

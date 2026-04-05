@@ -1,11 +1,12 @@
-import type { FloorWorkspace } from '@wos/domain';
+import type { FloorWorkspace, LocationType } from '@wos/domain';
 import { getZonePlacementBehavior } from '@wos/domain';
-import { MapPin, X } from 'lucide-react';
+import { MapPin, Package, X } from 'lucide-react';
 import {
   useCreatingRackId,
   useEditorSelection,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
+import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wizard';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
@@ -152,6 +153,113 @@ function ZoneReadonlyPanel({
   );
 }
 
+// ─── non-rack location detail panel ──────────────────────────────────────────
+
+const LOCATION_TYPE_DISPLAY: Record<LocationType, { label: string; color: string }> = {
+  rack_slot: { label: 'Rack slot', color: 'bg-slate-100 text-slate-600' },
+  floor:     { label: 'Floor',     color: 'bg-green-50 text-green-700' },
+  staging:   { label: 'Staging',   color: 'bg-amber-50 text-amber-700' },
+  dock:      { label: 'Dock',      color: 'bg-blue-50 text-blue-700' },
+  buffer:    { label: 'Buffer',    color: 'bg-purple-50 text-purple-700' }
+};
+
+function LocationDetailPanel({
+  workspace,
+  onClose
+}: {
+  workspace: FloorWorkspace | null;
+  onClose: () => void;
+}) {
+  const selection = useEditorSelection();
+  const locationId = selection.type === 'location' ? selection.locationId : null;
+  const { data: occupancy = [] } = useFloorLocationOccupancy(
+    workspace?.floorId ?? null
+  );
+
+  const rows = occupancy.filter((r) => r.locationId === locationId);
+  const first = rows[0] ?? null;
+
+  if (!first) {
+    return (
+      <aside className="flex h-full w-full flex-col bg-white">
+        <div className="flex items-center justify-between border-b border-[var(--border-muted)] px-5 py-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
+            Location
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-slate-400">
+          Location data not available.
+        </div>
+      </aside>
+    );
+  }
+
+  const display = LOCATION_TYPE_DISPLAY[first.locationType] ?? LOCATION_TYPE_DISPLAY.floor;
+
+  return (
+    <aside className="flex h-full w-full flex-col overflow-hidden bg-white">
+      <div className="flex items-center justify-between border-b border-[var(--border-muted)] px-5 py-4">
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4 text-[var(--accent)]" />
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
+              Location
+            </div>
+            <div className="mt-0.5 text-sm font-semibold text-slate-800">{first.locationCode}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="space-y-4 overflow-y-auto px-5 py-4">
+        <div className="rounded-xl border border-[var(--border-muted)] p-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-800">{first.locationCode}</div>
+            <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${display.color}`}>
+              {display.label}
+            </span>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-500">
+            {rows.length} container{rows.length !== 1 ? 's' : ''} placed
+          </div>
+        </div>
+
+        {rows.length > 0 && (
+          <div className="rounded-xl border border-[var(--border-muted)] p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Containers
+            </div>
+            <ul className="mt-2 space-y-1.5">
+              {rows.map((row) => (
+                <li key={row.containerId} className="flex items-center justify-between rounded-lg bg-[var(--surface-secondary)] px-2.5 py-2">
+                  <div className="text-xs font-semibold text-slate-700">
+                    {row.externalCode ?? row.containerId.slice(0, 8)}
+                  </div>
+                  <div className="text-[10px] text-slate-400">{row.containerType}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 // ─── router component ─────────────────────────────────────────────────────────
 
 type InspectorRouterProps = {
@@ -180,6 +288,7 @@ type InspectorRouterProps = {
  *   storage + cell             → CellPlacementInspector
  *   storage + container        → ContainerPlacementInspector
  *   view/storage + none        → PlacementModePanel
+ *   storage + location         → LocationDetailPanel (non-rack location detail)
  */
 export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRouterProps) {
   const viewMode = useViewMode();
@@ -222,6 +331,9 @@ export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRout
 
     case 'placement-container':
       return <ContainerPlacementInspector workspace={workspace} />;
+
+    case 'location-detail':
+      return <LocationDetailPanel workspace={workspace} onClose={onClose} />;
 
     case 'placement-placeholder':
       return <PlacementModePanel />;

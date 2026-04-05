@@ -24,6 +24,7 @@ export function normalizeViewMode(mode: AnyViewMode): ViewMode {
  * - 'wall'      — a single floor wall selected (layout mode)
  * - 'cell'      — a single cell selected (view/storage mode)
  * - 'container' — a container selected (view/storage mode)
+ * - 'location'  — a non-rack floor location selected (storage mode)
  * - 'none'      — nothing selected
  *
  * Note: EditorMode 'place' (the rack-placement tool within layout) is unrelated
@@ -39,7 +40,8 @@ export type EditorSelection =
   | { type: 'zone'; zoneId: string }
   | { type: 'wall'; wallId: string }
   | { type: 'cell'; cellId: string }
-  | { type: 'container'; containerId: string; sourceCellId?: string | null };
+  | { type: 'container'; containerId: string; sourceCellId?: string | null }
+  | { type: 'location'; locationId: string };
 
 export type PlacementInteraction =
   | { type: 'idle' }

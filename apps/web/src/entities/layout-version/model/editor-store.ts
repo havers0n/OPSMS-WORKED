@@ -106,6 +106,8 @@ type EditorStore = {
   setSelectedCellId: (cellId: string | null) => void;
   /** Convenience wrapper — sets a container-type selection, or clears if null. */
   setSelectedContainerId: (containerId: string | null, sourceCellId?: string | null) => void;
+  /** Convenience wrapper — sets a non-rack location selection, or clears if null. */
+  setSelectedLocationId: (locationId: string | null) => void;
   startPlaceContainerWorkflow: (cellId: string) => void;
   startCreateAndPlaceWorkflow: (cellId: string) => void;
   startPlacementMove: (containerId: string, fromCellId: string) => void;
@@ -259,6 +261,11 @@ export const useEditorStore = create<EditorStore>((set) => ({
       selection: containerId
         ? { type: 'container', containerId, sourceCellId }
         : { type: 'none' },
+      ...WORKFLOW_RESET
+    }),
+  setSelectedLocationId: (locationId) =>
+    set({
+      selection: locationId ? { type: 'location', locationId } : { type: 'none' },
       ...WORKFLOW_RESET
     }),
   startPlaceContainerWorkflow: (cellId) =>

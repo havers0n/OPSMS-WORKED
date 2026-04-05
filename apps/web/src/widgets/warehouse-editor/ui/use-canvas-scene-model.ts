@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { FloorWorkspace, LayoutDraft, Rack } from '@wos/domain';
+import type { FloorWorkspace, LayoutDraft, LocationType, Rack, Zone } from '@wos/domain';
 import {
   type ActiveStorageWorkflow,
   type EditorMode,
@@ -23,6 +23,74 @@ import {
   projectCanvasRectToViewport
 } from '../lib/canvas-geometry';
 
+export type NonRackLocationMarker = {
+  locationId: string;
+  locationCode: string;
+  locationType: LocationType;
+  containerCount: number;
+  /** World position in metres; multiply by WORLD_SCALE for canvas pixels */
+  x: number;
+  y: number;
+};
+
+/** Maps a non-rack LocationType to the zone category most likely to contain it. */
+function getZoneCategoryForLocationType(locationType: LocationType): string | null {
+  switch (locationType) {
+    case 'staging': return 'staging';
+    case 'dock': return 'receiving';
+    case 'floor': return 'storage';
+    case 'buffer': return 'generic';
+    default: return null;
+  }
+}
+
+/**
+ * Anchors non-rack locations to their best-matching zone's centroid.
+ * Multiple locations of the same type within a zone are offset 2 m apart on the X axis.
+ * Returns null for any location whose type has no matching zone (marker not shown).
+ */
+function anchorLocationsToZones(
+  locations: Array<{ locationId: string; locationCode: string; locationType: LocationType; containerCount: number }>,
+  zones: Zone[]
+): NonRackLocationMarker[] {
+  const markers: NonRackLocationMarker[] = [];
+
+  // Group by locationType so we can assign per-type X offsets within each zone
+  const byType = new Map<string, typeof locations>();
+  for (const loc of locations) {
+    if (loc.locationType === 'rack_slot') continue;
+    const key = loc.locationType;
+    let group = byType.get(key);
+    if (!group) { group = []; byType.set(key, group); }
+    group.push(loc);
+  }
+
+  for (const [locationType, group] of byType) {
+    const targetCategory = getZoneCategoryForLocationType(locationType as LocationType);
+    const matchingZone = targetCategory
+      ? zones.find((z) => z.category === targetCategory) ?? null
+      : null;
+
+    if (!matchingZone) continue; // no zone anchor available — skip
+
+    const centerX = matchingZone.x + matchingZone.width / 2;
+    const centerY = matchingZone.y + matchingZone.height / 2;
+
+    for (let i = 0; i < group.length; i++) {
+      const loc = group[i]!;
+      markers.push({
+        locationId: loc.locationId,
+        locationCode: loc.locationCode,
+        locationType: loc.locationType as LocationType,
+        containerCount: loc.containerCount,
+        x: centerX + i * 2,
+        y: centerY
+      });
+    }
+  }
+
+  return markers;
+}
 type CanvasOffset = {
   x: number;
   y: number;
@@ -116,6 +184,26 @@ export function useCanvasSceneModel({
     () => indexOccupiedCellIds(floorCellOccupancy),
     [floorCellOccupancy]
   );
+  const nonRackLocationMarkers = useMemo((): NonRackLocationMarker[] => {
+    if (!isStorageMode) return [];
+    // Group non-rack occupancy rows by locationId
+    const byLocationId = new Map<string, { locationId: string; locationCode: string; locationType: LocationType; containerCount: number }>();
+    for (const row of floorCellOccupancy) {
+      if (row.locationType === 'rack_slot') continue;
+      const existing = byLocationId.get(row.locationId);
+      if (existing) {
+        existing.containerCount += 1;
+      } else {
+        byLocationId.set(row.locationId, {
+          locationId: row.locationId,
+          locationCode: row.locationCode,
+          locationType: row.locationType,
+          containerCount: 1
+        });
+      }
+    }
+    return anchorLocationsToZones(Array.from(byLocationId.values()), zones);
+  }, [isStorageMode, floorCellOccupancy, zones]);
   const floorOperationsCellsById = useMemo(
     () => new Map(floorOperationsCells.map((cell) => [cell.cellId, cell])),
     [floorOperationsCells]
@@ -268,6 +356,7 @@ export function useCanvasSceneModel({
         lod
       },
       layers: {
+        nonRackLocationMarkers,
         placementLayout,
         racks,
         walls,
@@ -314,6 +403,7 @@ export function useCanvasSceneModel({
       lod,
       moveSourceCellId,
       moveSourceRackId,
+      nonRackLocationMarkers,
       occupiedCellIds,
       placementLayout,
       publishedCellsByStructure,

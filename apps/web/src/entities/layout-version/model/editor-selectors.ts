@@ -109,6 +109,11 @@ export const useSelectedCellId = () =>
   );
 export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);
 export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);
+export const useSelectedLocationId = () =>
+  useEditorStore((state) =>
+    state.selection.type === 'location' ? state.selection.locationId : null
+  );
+export const useSetSelectedLocationId = () => useEditorStore((state) => state.setSelectedLocationId);
 export const useActiveStorageWorkflow = (): ActiveStorageWorkflow =>
   useEditorStore((state) => state.activeStorageWorkflow);
 export const useInteractionScope = (): InteractionScope =>
