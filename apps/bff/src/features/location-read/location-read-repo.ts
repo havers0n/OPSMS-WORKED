@@ -38,17 +38,28 @@ export type LocationReferenceRecord = {
   cellId: string | null;
 };
 
+export type NonRackLocationRefRecord = {
+  id: string;
+  code: string;
+  location_type: 'floor' | 'staging' | 'dock' | 'buffer';
+  floor_x: number | null;
+  floor_y: number | null;
+  status: 'active' | 'disabled' | 'draft';
+};
+
 export type LocationReadRepo = {
   locationExists(locationId: string): Promise<boolean>;
   getLocationByCell(cellId: string): Promise<LocationReferenceRecord | null>;
   listLocationContainers(locationId: string): Promise<LocationOccupancyRowRecord[]>;
   listCellContainers(cellId: string): Promise<LocationOccupancyRowRecord[]>;
   listFloorLocationOccupancy(floorId: string): Promise<LocationOccupancyRowRecord[]>;
+  listFloorNonRackLocations(floorId: string): Promise<NonRackLocationRefRecord[]>;
   listLocationStorage(locationId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorage(cellId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorageByIds(cellIds: string[]): Promise<LocationStorageSnapshotRowRecord[]>;
   getContainerCurrentLocation(containerId: string): Promise<ContainerCurrentLocationRecord | null>;
   containerExists(containerId: string): Promise<boolean>;
+  updateLocationGeometry(locationId: string, floorX: number | null, floorY: number | null): Promise<NonRackLocationRefRecord | null>;
 };
 
 export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRepo {
@@ -138,6 +149,37 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
       }
 
       return (data ?? []) as LocationOccupancyRowRecord[];
+    },
+
+    async listFloorNonRackLocations(floorId) {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id,code,location_type,floor_x,floor_y,status')
+        .eq('floor_id', floorId)
+        .neq('location_type', 'rack_slot')
+        .order('code', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as NonRackLocationRefRecord[];
+    },
+
+    async updateLocationGeometry(locationId, floorX, floorY) {
+      const { data, error } = await supabase
+        .from('locations')
+        .update({ floor_x: floorX, floor_y: floorY })
+        .eq('id', locationId)
+        .neq('location_type', 'rack_slot')
+        .select('id,code,location_type,floor_x,floor_y,status')
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as NonRackLocationRefRecord | null;
     },
 
     async listLocationStorage(locationId) {

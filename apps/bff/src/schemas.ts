@@ -16,6 +16,7 @@ import {
   locationReferenceSchema,
   locationStorageSnapshotResponseSchema,
   moveContainerToLocationBodySchema,
+  nonRackLocationRefsSchema,
   pickPartialInventoryUnitBodySchema,
   productSchema,
   removeContainerResultSchema,
@@ -239,6 +240,12 @@ export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const validationResponseSchema = layoutValidationResultSchema;
 export const publishResponseSchema = layoutPublishResultSchema;
+export const nonRackLocationsResponseSchema = nonRackLocationRefsSchema;
+
+export const patchLocationGeometryBodySchema = z.object({
+  floorX: z.number().nullable(),
+  floorY: z.number().nullable()
+});
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 

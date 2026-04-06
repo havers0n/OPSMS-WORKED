@@ -46,7 +46,9 @@ import {
   operationsCellsRuntimeResponseSchema,
   allocatePickStepsResponseSchema,
   executePickStepBodySchema,
-  executePickStepResponseSchema
+  executePickStepResponseSchema,
+  nonRackLocationsResponseSchema,
+  patchLocationGeometryBodySchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
@@ -399,6 +401,56 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const rows = await locationReadRepo.listFloorLocationOccupancy(floorId);
 
     return parseOrThrow(locationOccupancyRowsResponseSchema, rows.map(mapLocationOccupancyRowToDomain));
+  });
+
+  app.get('/api/floors/:floorId/non-rack-locations', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const rows = await locationReadRepo.listFloorNonRackLocations(floorId);
+
+    return parseOrThrow(
+      nonRackLocationsResponseSchema,
+      rows.map((row) => ({
+        id: row.id,
+        code: row.code,
+        locationType: row.location_type,
+        floorX: row.floor_x,
+        floorY: row.floor_y,
+        status: row.status
+      }))
+    );
+  });
+
+  app.patch('/api/locations/:locationId/geometry', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const locationId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { locationId: string }).locationId
+    }).id;
+    const body = parseOrThrow(patchLocationGeometryBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const row = await locationReadRepo.updateLocationGeometry(locationId, body.floorX, body.floorY);
+
+    if (!row) {
+      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Location not found or is a rack slot' });
+    }
+
+    return {
+      id: row.id,
+      code: row.code,
+      locationType: row.location_type,
+      floorX: row.floor_x,
+      floorY: row.floor_y,
+      status: row.status
+    };
   });
 
   app.get('/api/floors/:floorId/published-cells', async (request, reply) => {
