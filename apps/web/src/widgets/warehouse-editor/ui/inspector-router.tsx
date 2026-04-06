@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { FloorWorkspace, LocationType } from '@wos/domain';
 import { getZonePlacementBehavior } from '@wos/domain';
 import { MapPin, Package, X } from 'lucide-react';
@@ -7,6 +8,8 @@ import {
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
+import { useFloorNonRackLocations } from '@/entities/location/api/use-floor-non-rack-locations';
+import { usePatchLocationGeometry } from '@/entities/location/api/mutations';
 import { RackCreationWizard } from '@/features/rack-create/ui/rack-creation-wizard';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
@@ -172,14 +175,20 @@ function LocationDetailPanel({
 }) {
   const selection = useEditorSelection();
   const locationId = selection.type === 'location' ? selection.locationId : null;
-  const { data: occupancy = [] } = useFloorLocationOccupancy(
-    workspace?.floorId ?? null
-  );
+  const floorId = workspace?.floorId ?? null;
 
+  const { data: occupancy = [] } = useFloorLocationOccupancy(floorId);
+  const { data: nonRackLocations = [] } = useFloorNonRackLocations(floorId);
+  const patchGeometry = usePatchLocationGeometry();
+
+  const location = nonRackLocations.find((l) => l.id === locationId) ?? null;
   const rows = occupancy.filter((r) => r.locationId === locationId);
-  const first = rows[0] ?? null;
 
-  if (!first) {
+  const [xInput, setXInput] = useState<string>('');
+  const [yInput, setYInput] = useState<string>('');
+  const [isEditingPos, setIsEditingPos] = useState(false);
+
+  if (!location) {
     return (
       <aside className="flex h-full w-full flex-col bg-white">
         <div className="flex items-center justify-between border-b border-[var(--border-muted)] px-5 py-4">
@@ -201,7 +210,25 @@ function LocationDetailPanel({
     );
   }
 
-  const display = LOCATION_TYPE_DISPLAY[first.locationType] ?? LOCATION_TYPE_DISPLAY.floor;
+  const display = LOCATION_TYPE_DISPLAY[location.locationType] ?? LOCATION_TYPE_DISPLAY.floor;
+  const hasPosition = location.floorX !== null && location.floorY !== null;
+
+  function startEditingPos() {
+    setXInput(location!.floorX !== null ? String(location!.floorX) : '');
+    setYInput(location!.floorY !== null ? String(location!.floorY) : '');
+    setIsEditingPos(true);
+  }
+
+  function savePosition() {
+    const x = parseFloat(xInput);
+    const y = parseFloat(yInput);
+    if (Number.isFinite(x) && Number.isFinite(y) && floorId) {
+      patchGeometry.mutate(
+        { locationId: location!.id, floorX: x, floorY: y, floorId },
+        { onSuccess: () => setIsEditingPos(false) }
+      );
+    }
+  }
 
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden bg-white">
@@ -212,7 +239,7 @@ function LocationDetailPanel({
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">
               Location
             </div>
-            <div className="mt-0.5 text-sm font-semibold text-slate-800">{first.locationCode}</div>
+            <div className="mt-0.5 text-sm font-semibold text-slate-800">{location.code}</div>
           </div>
         </div>
         <button
@@ -228,7 +255,7 @@ function LocationDetailPanel({
       <div className="space-y-4 overflow-y-auto px-5 py-4">
         <div className="rounded-xl border border-[var(--border-muted)] p-3">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold text-slate-800">{first.locationCode}</div>
+            <div className="text-sm font-semibold text-slate-800">{location.code}</div>
             <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${display.color}`}>
               {display.label}
             </span>
@@ -236,6 +263,75 @@ function LocationDetailPanel({
           <div className="mt-2 text-[11px] text-slate-500">
             {rows.length} container{rows.length !== 1 ? 's' : ''} placed
           </div>
+        </div>
+
+        {/* Canvas position */}
+        <div className="rounded-xl border border-[var(--border-muted)] p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              <MapPin className="h-3 w-3" />
+              Canvas position
+            </div>
+            {!isEditingPos && (
+              <button
+                type="button"
+                onClick={startEditingPos}
+                className="text-[11px] text-[var(--accent)] hover:underline"
+              >
+                {hasPosition ? 'Edit' : 'Set position'}
+              </button>
+            )}
+          </div>
+
+          {isEditingPos ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                <label className="flex flex-1 flex-col gap-1">
+                  <span className="text-[10px] text-slate-400">X (m)</span>
+                  <input
+                    type="number"
+                    value={xInput}
+                    onChange={(e) => setXInput(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+                    step="0.1"
+                  />
+                </label>
+                <label className="flex flex-1 flex-col gap-1">
+                  <span className="text-[10px] text-slate-400">Y (m)</span>
+                  <input
+                    type="number"
+                    value={yInput}
+                    onChange={(e) => setYInput(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+                    step="0.1"
+                  />
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={savePosition}
+                  disabled={patchGeometry.isPending}
+                  className="flex-1 rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {patchGeometry.isPending ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPos(false)}
+                  className="flex-1 rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-500"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 text-xs text-slate-600">
+              {hasPosition
+                ? `X: ${location.floorX} m, Y: ${location.floorY} m`
+                : <span className="text-slate-400 italic">Not positioned — marker hidden on canvas</span>}
+            </div>
+          )}
         </div>
 
         {rows.length > 0 && (

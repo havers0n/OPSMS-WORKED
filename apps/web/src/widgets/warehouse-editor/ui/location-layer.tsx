@@ -1,12 +1,9 @@
 /**
  * LocationLayer — canvas layer for non-rack floor locations in storage mode.
  *
- * Shows a diamond marker per unique occupied non-rack location, anchored to
- * its corresponding zone centroid via zone-category matching.
- *
- * Limitations (transitional):
- *   - Only occupied locations are shown (no empty-location endpoint available yet).
- *   - Canvas position is derived from zone centroid, not a stored x/y coordinate.
+ * Shows a diamond marker per positioned non-rack location (both occupied and empty).
+ * Occupied locations render as filled diamonds; empty ones render as hollow outlines.
+ * Positions come from explicit floor_x / floor_y stored on each location row.
  */
 import type { LocationType } from '@wos/domain';
 import { Group, Layer, Line, Rect, Text } from 'react-konva';
@@ -75,11 +72,13 @@ export function LocationLayer({
               setSelectedLocationId(marker.locationId);
             }}
           >
-            {/* Diamond body */}
+            {/* Diamond body — filled when occupied, hollow when empty */}
             <Line
               points={DIAMOND_POINTS}
               closed
-              fill={isSelected ? color : `${color}cc`}
+              fill={marker.containerCount > 0
+                ? (isSelected ? color : `${color}cc`)
+                : (isSelected ? `${color}33` : 'transparent')}
               stroke={isSelected ? '#0f172a' : color}
               strokeWidth={isSelected ? 2 : 1.5}
               strokeScaleEnabled={false}
