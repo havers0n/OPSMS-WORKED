@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { FloorWorkspace, LayoutDraft, LocationType, Rack, Zone } from '@wos/domain';
+import type { FloorWorkspace, LayoutDraft, Rack } from '@wos/domain';
 import {
   type ActiveStorageWorkflow,
   type EditorMode,
@@ -8,12 +8,6 @@ import {
   type RackSelectionFocus,
   type ViewMode
 } from '@/entities/layout-version/model/editor-types';
-import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
-import { useFloorOperationsCells } from '@/entities/location/api/use-floor-operations-cells';
-import { useFloorNonRackLocations } from '@/entities/location/api/use-floor-non-rack-locations';
-import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
-import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
-import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
   getCellCanvasRect,
   getRackCanvasRect,
@@ -21,17 +15,12 @@ import {
   getZoneCanvasRect,
   projectCanvasRectToViewport
 } from '../lib/canvas-geometry';
-import { useSemanticZoom } from '@/entities/layout-version/model/use-semantic-zoom';
+import { useFloorSceneData } from './use-floor-scene-data';
+import { useCanvasCapabilities } from './use-canvas-capabilities';
 
-export type NonRackLocationMarker = {
-  locationId: string;
-  locationCode: string;
-  locationType: LocationType;
-  containerCount: number;
-  /** World position in metres; multiply by WORLD_SCALE for canvas pixels */
-  x: number;
-  y: number;
-};
+// Re-export for backward compat — location-layer.tsx imports this type from here
+export type { NonRackLocationMarker } from './use-floor-scene-data';
+
 type CanvasOffset = {
   x: number;
   y: number;
@@ -59,6 +48,23 @@ type UseCanvasSceneModelParams = {
   zoom: number;
 };
 
+/**
+ * Canvas scene model — thin orchestration wrapper.
+ *
+ * Composes:
+ *   - useFloorSceneData    → all server-state fetching + derived cell lookups
+ *   - useCanvasCapabilities → mode flags, capability permissions, semantic zoom
+ *
+ * Owns:
+ *   - layer list memos (zones, walls) from layoutDraft
+ *   - selection resolution (selectedRack, selectedZone, etc. from draft + selection IDs)
+ *   - HUD anchor projection math (world → viewport rect)
+ *   - HUD visibility decisions (shouldShow*)
+ *   - hint text generation
+ *   - final output composition
+ *
+ * Public contract (params + return shape) is unchanged — editor-canvas.tsx does not change.
+ */
 export function useCanvasSceneModel({
   activeStorageWorkflow,
   canvasOffset,
@@ -80,106 +86,59 @@ export function useCanvasSceneModel({
   workspace,
   zoom
 }: UseCanvasSceneModelParams) {
-  const isViewMode = viewMode === 'view';
-  const isStorageMode = viewMode === 'storage';
-  const isLayoutMode = viewMode === 'layout';
+  const {
+    floorOperationsCellsById,
+    nonRackLocationMarkers,
+    occupiedCellIds,
+    publishedCellsById,
+    publishedCellsByStructure
+  } = useFloorSceneData({ viewMode, workspace });
+
+  const {
+    isViewMode,
+    isStorageMode,
+    isLayoutMode,
+    isPlacing,
+    isDrawingZone,
+    isDrawingWall,
+    isLayoutDrawToolActive,
+    isPlacementMoveMode,
+    canSelectRack,
+    canSelectZone,
+    canSelectWall,
+    canSelectCells,
+    lod,
+    interactionLevel
+  } = useCanvasCapabilities({ activeStorageWorkflow, editorMode, isLayoutEditable, viewMode });
 
   const moveTargetCellId =
     activeStorageWorkflow?.kind === 'move-container' ? activeStorageWorkflow.targetCellId : null;
   const moveSourceCellId =
     activeStorageWorkflow?.kind === 'move-container' ? activeStorageWorkflow.sourceCellId : null;
-  const isPlacementMoveMode = activeStorageWorkflow?.kind === 'move-container';
-  const isPlacing = editorMode === 'place' && isLayoutEditable;
-  const isDrawingZone = editorMode === 'draw-zone' && isLayoutEditable;
-  const isDrawingWall = editorMode === 'draw-wall' && isLayoutEditable;
-  const isLayoutDrawToolActive = isPlacing || isDrawingZone || isDrawingWall;
-  const placementFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
-  const runtimeFloorId = isViewMode ? workspace?.floorId ?? null : null;
-  const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
-  const { data: floorOperationsCells = [] } = useFloorOperationsCells(runtimeFloorId);
-  const { data: publishedCells = [] } = usePublishedCells(placementFloorId);
-  const { data: floorNonRackLocations = [] } = useFloorNonRackLocations(
-    isStorageMode ? workspace?.floorId ?? null : null
-  );
 
+  // — Layer lists (from layoutDraft, not server state) —
   const zones = useMemo(
-    () => (layoutDraft
-      ? layoutDraft.zoneIds
-        .map((id) => layoutDraft.zones[id])
-        .filter((zone) => Boolean(zone))
-      : []),
+    () =>
+      layoutDraft
+        ? layoutDraft.zoneIds.map((id) => layoutDraft.zones[id]).filter((zone) => Boolean(zone))
+        : [],
     [layoutDraft]
   );
   const walls = useMemo(
-    () => (layoutDraft
-      ? layoutDraft.wallIds
-        .map((id) => layoutDraft.walls[id])
-        .filter((wall) => Boolean(wall))
-      : []),
+    () =>
+      layoutDraft
+        ? layoutDraft.wallIds.map((id) => layoutDraft.walls[id]).filter((wall) => Boolean(wall))
+        : [],
     [layoutDraft]
   );
-  const publishedCellsByStructure = useMemo(
-    () => indexPublishedCellsByStructure(publishedCells),
-    [publishedCells]
-  );
-  const occupiedCellIds = useMemo(
-    () => indexOccupiedCellIds(floorCellOccupancy),
-    [floorCellOccupancy]
-  );
-  const nonRackLocationMarkers = useMemo((): NonRackLocationMarker[] => {
-    if (!isStorageMode) return [];
-    // Count containers per non-rack location from occupancy data
-    const containerCounts = new Map<string, number>();
-    for (const row of floorCellOccupancy) {
-      if (row.locationType === 'rack_slot') continue;
-      containerCounts.set(row.locationId, (containerCounts.get(row.locationId) ?? 0) + 1);
-    }
-    // Render all positioned non-rack locations (including empty ones)
-    return floorNonRackLocations
-      .filter((loc) => loc.floorX !== null && loc.floorY !== null)
-      .map((loc) => ({
-        locationId: loc.id,
-        locationCode: loc.code,
-        locationType: loc.locationType,
-        containerCount: containerCounts.get(loc.id) ?? 0,
-        x: loc.floorX as number,
-        y: loc.floorY as number
-      }));
-  }, [isStorageMode, floorCellOccupancy, floorNonRackLocations]);
-  const floorOperationsCellsById = useMemo(
-    () => new Map(floorOperationsCells.map((cell) => [cell.cellId, cell])),
-    [floorOperationsCells]
-  );
-  const highlightedCellIdSet = useMemo(
-    () => new Set(highlightedCellIds),
-    [highlightedCellIds]
-  );
-  const { lod, interactionLevel } = useSemanticZoom();
-  const canSelectRack =
-    !isLayoutDrawToolActive &&
-    !isPlacementMoveMode &&
-    (isLayoutMode || ((isViewMode || isStorageMode) && interactionLevel === 'L1'));
-  const canSelectZone =
-    isLayoutMode &&
-    !isLayoutDrawToolActive &&
-    !isPlacementMoveMode;
-  const canSelectWall =
-    isLayoutMode &&
-    !isLayoutDrawToolActive &&
-    !isPlacementMoveMode;
-  const canSelectCells =
-    !isLayoutDrawToolActive &&
-    (isViewMode || isStorageMode) &&
-    interactionLevel === 'L3';
+  const highlightedCellIdSet = useMemo(() => new Set(highlightedCellIds), [highlightedCellIds]);
+
+  // — Selection resolution —
   const selectedContainerSourceCellId =
     selection.type === 'container' ? selection.sourceCellId ?? null : null;
   const canvasSelectedCellId = isPlacementMoveMode
     ? moveTargetCellId
     : selectedCellId ?? selectedContainerSourceCellId;
-  const publishedCellsById = useMemo(
-    () => new Map(publishedCells.map((cell) => [cell.id, cell])),
-    [publishedCells]
-  );
   const selectedStorageCell = selectedCellId
     ? publishedCellsById.get(selectedCellId) ?? null
     : null;
@@ -191,20 +150,22 @@ export function useCanvasSceneModel({
     selectedRackId && !isLayoutDrawToolActive && layoutDraft
       ? layoutDraft.racks[selectedRackId]
       : null;
-  const selectedRackAnchorRect = selectedRack
-    ? projectCanvasRectToViewport(getRackCanvasRect(selectedRack), zoom, canvasOffset)
-    : null;
   const selectedRackSideFocus =
     selectedRackFocus.type === 'side' ? selectedRackFocus.side : null;
   const selectedZone =
     selectedZoneId && !isDrawingZone && layoutDraft ? layoutDraft.zones[selectedZoneId] : null;
-  const selectedZoneAnchorRect = selectedZone
-    ? projectCanvasRectToViewport(getZoneCanvasRect(selectedZone), zoom, canvasOffset)
-    : null;
   const selectedWall =
     selectedWallId && !isLayoutDrawToolActive && layoutDraft
       ? layoutDraft.walls[selectedWallId] ?? null
       : null;
+
+  // — HUD anchor projection math (world → viewport) —
+  const selectedRackAnchorRect = selectedRack
+    ? projectCanvasRectToViewport(getRackCanvasRect(selectedRack), zoom, canvasOffset)
+    : null;
+  const selectedZoneAnchorRect = selectedZone
+    ? projectCanvasRectToViewport(getZoneCanvasRect(selectedZone), zoom, canvasOffset)
+    : null;
   const selectedWallAnchorRect = selectedWall
     ? projectCanvasRectToViewport(getWallCanvasRect(selectedWall), zoom, canvasOffset)
     : null;
@@ -216,10 +177,11 @@ export function useCanvasSceneModel({
     selectedStorageCell && selectedStorageCellRack
       ? getCellCanvasRect(selectedStorageCellRack, selectedStorageCell)
       : null;
-  const selectedStorageCellAnchorRect =
-    selectedStorageCellCanvasRect
-      ? projectCanvasRectToViewport(selectedStorageCellCanvasRect, zoom, canvasOffset)
-      : null;
+  const selectedStorageCellAnchorRect = selectedStorageCellCanvasRect
+    ? projectCanvasRectToViewport(selectedStorageCellCanvasRect, zoom, canvasOffset)
+    : null;
+
+  // — HUD visibility decisions —
   const shouldShowLayoutRackBar =
     interactionScope === 'object' &&
     isLayoutEditable &&
@@ -249,6 +211,8 @@ export function useCanvasSceneModel({
     interactionLevel === 'L3' &&
     selectedStorageCell !== null &&
     selectedStorageCellAnchorRect !== null;
+
+  // — Hint text —
   const hintText = isViewMode
     ? interactionLevel === 'L3'
       ? 'View L3 · Click cell to inspect · Esc clear · MMB pan · Scroll zoom'
