@@ -135,6 +135,8 @@ export const useStartPlaceContainerWorkflow = () =>
 export const useStartCreateAndPlaceWorkflow = () =>
   useEditorStore((state) => state.startCreateAndPlaceWorkflow);
 export const useStartPlacementMove = () => useEditorStore((state) => state.startPlacementMove);
+export const useStartPlaceLocationWorkflow = () =>
+  useEditorStore((state) => state.startPlaceLocationWorkflow);
 export const useSetPlacementMoveTargetCellId = () =>
   useEditorStore((state) => state.setPlacementMoveTargetCellId);
 export const useCancelPlacementInteraction = () =>

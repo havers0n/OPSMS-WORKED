@@ -105,6 +105,7 @@ type EditorStore = {
   startPlaceContainerWorkflow: (cellId: string) => void;
   startCreateAndPlaceWorkflow: (cellId: string) => void;
   startPlacementMove: (containerId: string, fromCellId: string) => void;
+  startPlaceLocationWorkflow: (locationId: string) => void;
   setPlacementMoveTargetCellId: (cellId: string | null) => void;
   cancelPlacementInteraction: () => void;
   setActiveStorageWorkflowError: (errorMessage: string | null) => void;
@@ -264,6 +265,16 @@ export const useEditorStore = create<EditorStore>((set) => ({
               status: 'targeting',
               errorMessage: null
             }
+          : state.activeStorageWorkflow
+      };
+    }),
+  startPlaceLocationWorkflow: (locationId) =>
+    set((state) => {
+      const isStorageMode = useModeStore.getState().viewMode === 'storage';
+      // Does not change selection — the location panel stays open.
+      return {
+        activeStorageWorkflow: isStorageMode
+          ? { kind: 'place-location', locationId, status: 'targeting', errorMessage: null }
           : state.activeStorageWorkflow
       };
     }),

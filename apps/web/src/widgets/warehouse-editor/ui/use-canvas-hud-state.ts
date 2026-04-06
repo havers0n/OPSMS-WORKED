@@ -73,6 +73,7 @@ export function useCanvasHudState({
     isLayoutDrawToolActive,
     isLayoutMode,
     isPlacementMoveMode,
+    isPlacingLocation,
     isStorageMode,
     isViewMode
   } = capabilities;
@@ -167,7 +168,9 @@ export function useCanvasHudState({
       ? 'View L3 · Click cell to inspect · Esc clear · MMB pan · Scroll zoom'
       : 'View L1 · Click rack to inspect · Esc clear · MMB pan · Scroll zoom'
     : isStorageMode
-    ? isPlacementMoveMode
+    ? isPlacingLocation
+      ? 'Click on canvas to place location · Esc to cancel'
+      : isPlacementMoveMode
       ? 'Workflow · Click valid empty target cell · Esc cancel move · MMB pan · Scroll zoom'
       : interactionLevel === 'L3'
         ? 'Storage L3 · Click cell to inspect · Esc clear · MMB pan · Scroll zoom'

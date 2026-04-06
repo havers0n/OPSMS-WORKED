@@ -176,6 +176,11 @@ export function StorageWorkflowContextPanel({
     );
   }
 
+  // place-location workflow is handled by the LocationDetailPanel inspector; nothing to render here
+  if (activeStorageWorkflow.kind === 'place-location') {
+    return null;
+  }
+
   const workflowCell =
     publishedCells.find((cell) => cell.id === activeStorageWorkflow.cellId) ?? null;
   const locationId = workflowLocationId;

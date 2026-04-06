@@ -20,6 +20,7 @@ export type CanvasCapabilities = {
   isDrawingWall: boolean;
   isLayoutDrawToolActive: boolean;
   isPlacementMoveMode: boolean;
+  isPlacingLocation: boolean;
   // — Selection permissions —
   canSelectRack: boolean;
   canSelectZone: boolean;
@@ -53,6 +54,7 @@ export function useCanvasCapabilities({
   const isLayoutMode = viewMode === 'layout';
 
   const isPlacementMoveMode = activeStorageWorkflow?.kind === 'move-container';
+  const isPlacingLocation = activeStorageWorkflow?.kind === 'place-location';
   const isPlacing = editorMode === 'place' && isLayoutEditable;
   const isDrawingZone = editorMode === 'draw-zone' && isLayoutEditable;
   const isDrawingWall = editorMode === 'draw-wall' && isLayoutEditable;
@@ -61,11 +63,15 @@ export function useCanvasCapabilities({
   const canSelectRack =
     !isLayoutDrawToolActive &&
     !isPlacementMoveMode &&
+    !isPlacingLocation &&
     (isLayoutMode || ((isViewMode || isStorageMode) && interactionLevel === 'L1'));
-  const canSelectZone = isLayoutMode && !isLayoutDrawToolActive && !isPlacementMoveMode;
-  const canSelectWall = isLayoutMode && !isLayoutDrawToolActive && !isPlacementMoveMode;
+  const canSelectZone =
+    isLayoutMode && !isLayoutDrawToolActive && !isPlacementMoveMode && !isPlacingLocation;
+  const canSelectWall =
+    isLayoutMode && !isLayoutDrawToolActive && !isPlacementMoveMode && !isPlacingLocation;
   const canSelectCells =
     !isLayoutDrawToolActive &&
+    !isPlacingLocation &&
     (isViewMode || isStorageMode) &&
     interactionLevel === 'L3';
 
@@ -78,6 +84,7 @@ export function useCanvasCapabilities({
     isDrawingWall,
     isLayoutDrawToolActive,
     isPlacementMoveMode,
+    isPlacingLocation,
     canSelectRack,
     canSelectZone,
     canSelectWall,

@@ -77,6 +77,13 @@ export type ActiveStorageWorkflow =
         code: string;
       };
     }
+  | {
+      /** Visual placement of a non-rack location on the canvas floor plan. */
+      kind: 'place-location';
+      locationId: string;
+      status: 'targeting';
+      errorMessage: string | null;
+    }
   | null;
 
 export type InteractionScope = 'idle' | 'object' | 'workflow';
