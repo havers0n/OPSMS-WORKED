@@ -12,19 +12,49 @@ export const MIN_CANVAS_ZOOM = 0.5;
 export const MAX_CANVAS_ZOOM = 3.0;
 
 // ─── Level-of-Detail thresholds ─────────────────────────────────────────────
-// LOD 0  zoom < 0.9  → plain block + code label only
-// LOD 1  zoom 0.9–1.3 → block + section dividers + face label
-// LOD 2  zoom ≥ 1.3  → full cell grid (section × level slots)
+// LOD 0  zoom < ~0.9  → plain block + code label only
+// LOD 1  zoom ~0.9–1.3 → block + section dividers + face label
+// LOD 2  zoom ≥ ~1.3  → full cell grid (section × level slots)
+//
+// LOD_HYSTERESIS is the total dead-band around each threshold.
+// Going up requires zoom ≥ threshold + half-band; going down allows zoom to
+// fall to threshold − half-band before switching. This prevents flickering
+// when the user hovers near a threshold boundary.
 export const LOD_SECTION_THRESHOLD = 0.9;
 export const LOD_CELL_THRESHOLD    = 1.3;
+export const LOD_HYSTERESIS        = 0.05; // total dead-band width (±0.025 per boundary)
 const CELL_RECT_INSET = 4;
 
 export type CanvasLOD = 0 | 1 | 2;
 export type CanvasInteractionLevel = 'L1' | 'L3';
 
-export function getCanvasLOD(zoom: number): CanvasLOD {
-  if (zoom >= LOD_CELL_THRESHOLD)    return 2;
-  if (zoom >= LOD_SECTION_THRESHOLD) return 1;
+/**
+ * Derives the current canvas LOD from zoom and the previous LOD.
+ *
+ * Pass `prevLod` to enable hysteresis: the effective threshold shifts by
+ * LOD_HYSTERESIS/2 in the direction of travel so that rapid oscillation near
+ * a boundary does not cause visible flickering.
+ *
+ * Callers without a prior LOD may omit `prevLod` (defaults to 0) — the result
+ * is identical to the hard-threshold behaviour except the initial up-crossing
+ * requires zoom ≥ threshold + half-band.
+ */
+export function getCanvasLOD(zoom: number, prevLod: CanvasLOD = 0): CanvasLOD {
+  const half = LOD_HYSTERESIS / 2;
+
+  // LOD 2 boundary: lower effective threshold when already at LOD 2 (going down),
+  // higher when below LOD 2 (going up).
+  const cellThreshold = prevLod >= 2
+    ? LOD_CELL_THRESHOLD - half
+    : LOD_CELL_THRESHOLD + half;
+  if (zoom >= cellThreshold) return 2;
+
+  // LOD 1 boundary: same asymmetric logic around LOD_SECTION_THRESHOLD.
+  const sectionThreshold = prevLod >= 1
+    ? LOD_SECTION_THRESHOLD - half
+    : LOD_SECTION_THRESHOLD + half;
+  if (zoom >= sectionThreshold) return 1;
+
   return 0;
 }
 

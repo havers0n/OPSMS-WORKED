@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { FloorWorkspace, LayoutDraft, LocationType, Rack, Zone } from '@wos/domain';
 import {
   type ActiveStorageWorkflow,
@@ -10,10 +10,12 @@ import {
 } from '@/entities/layout-version/model/editor-types';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { useFloorOperationsCells } from '@/entities/location/api/use-floor-operations-cells';
+import { useFloorNonRackLocations } from '@/entities/location/api/use-floor-non-rack-locations';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
 import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
+  type CanvasLOD,
   getCellCanvasRect,
   getCanvasInteractionLevel,
   getCanvasLOD,
@@ -32,65 +34,6 @@ export type NonRackLocationMarker = {
   x: number;
   y: number;
 };
-
-/** Maps a non-rack LocationType to the zone category most likely to contain it. */
-function getZoneCategoryForLocationType(locationType: LocationType): string | null {
-  switch (locationType) {
-    case 'staging': return 'staging';
-    case 'dock': return 'receiving';
-    case 'floor': return 'storage';
-    case 'buffer': return 'generic';
-    default: return null;
-  }
-}
-
-/**
- * Anchors non-rack locations to their best-matching zone's centroid.
- * Multiple locations of the same type within a zone are offset 2 m apart on the X axis.
- * Returns null for any location whose type has no matching zone (marker not shown).
- */
-function anchorLocationsToZones(
-  locations: Array<{ locationId: string; locationCode: string; locationType: LocationType; containerCount: number }>,
-  zones: Zone[]
-): NonRackLocationMarker[] {
-  const markers: NonRackLocationMarker[] = [];
-
-  // Group by locationType so we can assign per-type X offsets within each zone
-  const byType = new Map<string, typeof locations>();
-  for (const loc of locations) {
-    if (loc.locationType === 'rack_slot') continue;
-    const key = loc.locationType;
-    let group = byType.get(key);
-    if (!group) { group = []; byType.set(key, group); }
-    group.push(loc);
-  }
-
-  for (const [locationType, group] of byType) {
-    const targetCategory = getZoneCategoryForLocationType(locationType as LocationType);
-    const matchingZone = targetCategory
-      ? zones.find((z) => z.category === targetCategory) ?? null
-      : null;
-
-    if (!matchingZone) continue; // no zone anchor available — skip
-
-    const centerX = matchingZone.x + matchingZone.width / 2;
-    const centerY = matchingZone.y + matchingZone.height / 2;
-
-    for (let i = 0; i < group.length; i++) {
-      const loc = group[i]!;
-      markers.push({
-        locationId: loc.locationId,
-        locationCode: loc.locationCode,
-        locationType: loc.locationType as LocationType,
-        containerCount: loc.containerCount,
-        x: centerX + i * 2,
-        y: centerY
-      });
-    }
-  }
-
-  return markers;
-}
 type CanvasOffset = {
   x: number;
   y: number;
@@ -156,8 +99,9 @@ export function useCanvasSceneModel({
   const runtimeFloorId = isViewMode ? workspace?.floorId ?? null : null;
   const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
   const { data: floorOperationsCells = [] } = useFloorOperationsCells(runtimeFloorId);
-  const { data: publishedCells = [] } = usePublishedCells(
-    placementFloorId
+  const { data: publishedCells = [] } = usePublishedCells(placementFloorId);
+  const { data: floorNonRackLocations = [] } = useFloorNonRackLocations(
+    isStorageMode ? workspace?.floorId ?? null : null
   );
 
   const zones = useMemo(
@@ -186,24 +130,24 @@ export function useCanvasSceneModel({
   );
   const nonRackLocationMarkers = useMemo((): NonRackLocationMarker[] => {
     if (!isStorageMode) return [];
-    // Group non-rack occupancy rows by locationId
-    const byLocationId = new Map<string, { locationId: string; locationCode: string; locationType: LocationType; containerCount: number }>();
+    // Count containers per non-rack location from occupancy data
+    const containerCounts = new Map<string, number>();
     for (const row of floorCellOccupancy) {
       if (row.locationType === 'rack_slot') continue;
-      const existing = byLocationId.get(row.locationId);
-      if (existing) {
-        existing.containerCount += 1;
-      } else {
-        byLocationId.set(row.locationId, {
-          locationId: row.locationId,
-          locationCode: row.locationCode,
-          locationType: row.locationType,
-          containerCount: 1
-        });
-      }
+      containerCounts.set(row.locationId, (containerCounts.get(row.locationId) ?? 0) + 1);
     }
-    return anchorLocationsToZones(Array.from(byLocationId.values()), zones);
-  }, [isStorageMode, floorCellOccupancy, zones]);
+    // Render all positioned non-rack locations (including empty ones)
+    return floorNonRackLocations
+      .filter((loc) => loc.floorX !== null && loc.floorY !== null)
+      .map((loc) => ({
+        locationId: loc.id,
+        locationCode: loc.code,
+        locationType: loc.locationType,
+        containerCount: containerCounts.get(loc.id) ?? 0,
+        x: loc.floorX as number,
+        y: loc.floorY as number
+      }));
+  }, [isStorageMode, floorCellOccupancy, floorNonRackLocations]);
   const floorOperationsCellsById = useMemo(
     () => new Map(floorOperationsCells.map((cell) => [cell.cellId, cell])),
     [floorOperationsCells]
@@ -212,7 +156,12 @@ export function useCanvasSceneModel({
     () => new Set(highlightedCellIds),
     [highlightedCellIds]
   );
-  const lod = getCanvasLOD(zoom);
+  // prevLodRef persists the last computed LOD across renders so getCanvasLOD
+  // can apply hysteresis. Updated synchronously here — not inside useMemo —
+  // so every zoom change that triggers a re-render advances the ref.
+  const prevLodRef = useRef<CanvasLOD>(0);
+  const lod = getCanvasLOD(zoom, prevLodRef.current);
+  prevLodRef.current = lod;
   const interactionLevel = getCanvasInteractionLevel(lod);
   const canSelectRack =
     !isLayoutDrawToolActive &&

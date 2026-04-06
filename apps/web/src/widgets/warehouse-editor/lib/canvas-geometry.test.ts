@@ -9,6 +9,9 @@ import {
   getRackCanvasRect,
   getRackGeometry,
   getWallCanvasRect,
+  LOD_CELL_THRESHOLD,
+  LOD_HYSTERESIS,
+  LOD_SECTION_THRESHOLD,
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
   projectCanvasRectToViewport,
@@ -70,9 +73,44 @@ describe('canvas geometry helpers', () => {
   });
 
   it('maps rendering LOD to semantic interaction levels', () => {
-    expect(getCanvasInteractionLevel(getCanvasLOD(0.8))).toBe('L1');
-    expect(getCanvasInteractionLevel(getCanvasLOD(1.1))).toBe('L1');
-    expect(getCanvasInteractionLevel(getCanvasLOD(1.3))).toBe('L3');
+    expect(getCanvasInteractionLevel(getCanvasLOD(0.8))).toBe('L1');  // LOD 0
+    expect(getCanvasInteractionLevel(getCanvasLOD(1.1))).toBe('L1');  // LOD 1
+    // At exactly the old threshold (1.3) without prevLod, LOD stays at 1 —
+    // hysteresis requires 1.325 to upgrade from prevLod=0.
+    expect(getCanvasInteractionLevel(getCanvasLOD(1.3))).toBe('L1');
+    expect(getCanvasInteractionLevel(getCanvasLOD(1.4))).toBe('L3');  // LOD 2
+  });
+
+  describe('getCanvasLOD — hysteresis', () => {
+    const half = LOD_HYSTERESIS / 2;
+
+    it('requires zoom ≥ threshold + half-band to upgrade LOD 0 → 1', () => {
+      // Exactly at the old hard threshold: stays LOD 0 when coming from below.
+      expect(getCanvasLOD(LOD_SECTION_THRESHOLD, 0)).toBe(0);
+      // One epsilon above the up-crossing point: upgrades.
+      expect(getCanvasLOD(LOD_SECTION_THRESHOLD + half, 0)).toBe(1);
+    });
+
+    it('stays LOD 1 down to threshold − half-band when downgrading', () => {
+      // Just above the down-crossing point: remains LOD 1.
+      expect(getCanvasLOD(LOD_SECTION_THRESHOLD - half + 0.001, 1)).toBe(1);
+      // Just below the down-crossing point: drops to LOD 0.
+      expect(getCanvasLOD(LOD_SECTION_THRESHOLD - half - 0.001, 1)).toBe(0);
+    });
+
+    it('requires zoom ≥ threshold + half-band to upgrade LOD 1 → 2', () => {
+      // Exactly at the old hard threshold: stays LOD 1 when coming from below.
+      expect(getCanvasLOD(LOD_CELL_THRESHOLD, 1)).toBe(1);
+      // At the up-crossing point: upgrades.
+      expect(getCanvasLOD(LOD_CELL_THRESHOLD + half, 1)).toBe(2);
+    });
+
+    it('stays LOD 2 down to threshold − half-band when downgrading', () => {
+      // Just above the down-crossing point: remains LOD 2.
+      expect(getCanvasLOD(LOD_CELL_THRESHOLD - half + 0.001, 2)).toBe(2);
+      // Just below the down-crossing point: drops to LOD 1.
+      expect(getCanvasLOD(LOD_CELL_THRESHOLD - half - 0.001, 2)).toBe(1);
+    });
   });
 
   it('derives a selected cell rect from rack/face/section/level structure', () => {
