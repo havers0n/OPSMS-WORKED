@@ -398,6 +398,89 @@ describe('editor-store', () => {
     expect(useInteractionStore.getState().contextPanelMode).toBe('compact');
   });
 
+  it('resetDraft resets mode-store to layout/select and cancels any active workflow', () => {
+    useEditorStore.getState().setViewMode('storage');
+    useEditorStore.getState().startPlaceContainerWorkflow('cell-1');
+    expect(useModeStore.getState().viewMode).toBe('storage');
+    expect(useEditorStore.getState().activeStorageWorkflow).not.toBeNull();
+
+    useEditorStore.getState().resetDraft();
+
+    expect(useModeStore.getState().viewMode).toBe('layout');
+    expect(useModeStore.getState().editorMode).toBe('select');
+    expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+  });
+
+  describe('setViewMode — cross-store coordination invariants', () => {
+    it('resets editorMode to select, clears selection/highlights/creatingRackId, and cancels workflow', () => {
+      // Arrange: layout mode with an active draw tool, rack selected, stale workflow
+      useModeStore.setState({ viewMode: 'layout', editorMode: 'draw-wall' });
+      useInteractionStore.setState({
+        ...useInteractionStore.getState(),
+        selection: { type: 'rack', rackIds: ['r1'], focus: { type: 'body' } },
+        highlightedCellIds: ['cell-1', 'cell-2'],
+        creatingRackId: 'r1'
+      });
+      useEditorStore.setState({
+        ...useEditorStore.getState(),
+        activeStorageWorkflow: { kind: 'place-container', cellId: 'cell-1', status: 'editing', errorMessage: null }
+      });
+
+      useEditorStore.getState().setViewMode('storage');
+
+      // All three stores must be in sync
+      expect(useModeStore.getState().viewMode).toBe('storage');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+      expect(useInteractionStore.getState().highlightedCellIds).toEqual([]);
+      expect(useInteractionStore.getState().creatingRackId).toBeNull();
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+    });
+
+    it('storage→layout transition cancels active storage workflow and clears cell selection', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useEditorStore.getState().startPlaceContainerWorkflow('cell-abc');
+      expect(useEditorStore.getState().activeStorageWorkflow).not.toBeNull();
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'cell', cellId: 'cell-abc' });
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+    });
+
+    it('setViewMode to the current mode still resets editorMode and selection', () => {
+      // Repeated call (e.g. UI re-applies same mode) must still enforce clean state
+      useModeStore.setState({ viewMode: 'layout', editorMode: 'place' });
+      useInteractionStore.setState({
+        ...useInteractionStore.getState(),
+        selection: { type: 'rack', rackIds: ['r1'], focus: { type: 'body' } }
+      });
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+    });
+
+    it('storage workflow is a no-op when startPlaceContainerWorkflow is called outside storage mode', () => {
+      // viewMode defaults to 'layout' after reset
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      useEditorStore.getState().startPlaceContainerWorkflow('cell-1');
+
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+    });
+
+    it('storage workflow is a no-op when startPlacementMove is called outside storage mode', () => {
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      useEditorStore.getState().startPlacementMove('container-1', 'cell-1');
+
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+    });
+  });
+
   it('stores Context Panel shell mode as in-session editor state', () => {
     expect(useInteractionStore.getState().contextPanelMode).toBe('compact');
 

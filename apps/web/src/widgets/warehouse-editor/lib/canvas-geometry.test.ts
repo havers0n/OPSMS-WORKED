@@ -10,6 +10,7 @@ import {
   getRackGeometry,
   getZoomToCursorCamera,
   getWallCanvasRect,
+  LOD_CELL_ENTRY,
   LOD_CELL_THRESHOLD,
   LOD_HYSTERESIS,
   LOD_SECTION_THRESHOLD,
@@ -130,6 +131,14 @@ describe('canvas geometry helpers', () => {
       expect(getCanvasLOD(LOD_CELL_THRESHOLD - half + 0.001, 2)).toBe(2);
       // Just below the down-crossing point: drops to LOD 1.
       expect(getCanvasLOD(LOD_CELL_THRESHOLD - half - 0.001, 2)).toBe(1);
+    });
+
+    it('LOD_CELL_ENTRY guarantees LOD 2 entry from any previous LOD', () => {
+      // Auto-fit uses LOD_CELL_ENTRY as minimum zoom to ensure cells are visible.
+      // Must hold for prevLod 0 (skips LOD 1 entirely), 1 (normal up-crossing), and 2 (already there).
+      expect(getCanvasLOD(LOD_CELL_ENTRY, 0)).toBe(2);
+      expect(getCanvasLOD(LOD_CELL_ENTRY, 1)).toBe(2);
+      expect(getCanvasLOD(LOD_CELL_ENTRY, 2)).toBe(2);
     });
   });
 
