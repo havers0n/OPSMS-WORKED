@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { useEditorStore } from './editor-store';
+import { useModeStore } from './mode-store';
 import { resolveInteractionScope, type EditorSelection } from './editor-types';
 
 function resetStore() {
-  useEditorStore.setState({
+  // Reset mode-store
+  useModeStore.setState({
     viewMode: 'layout',
-    editorMode: 'select',
+    editorMode: 'select'
+  });
+
+  // Reset editor-store
+  useEditorStore.setState({
     selection: { type: 'none' },
     activeStorageWorkflow: null,
     contextPanelMode: 'compact',

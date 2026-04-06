@@ -1,5 +1,6 @@
 import { useEditorStore } from './editor-store';
 import { useCameraStore } from './camera-store';
+import { useModeStore } from './mode-store';
 import {
   resolveInteractionScope,
   type ActiveStorageWorkflow,
@@ -15,9 +16,9 @@ import {
 const EMPTY_RACK_IDS: string[] = [];
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 
-export const useViewMode = () => useEditorStore((state) => state.viewMode);
+export const useViewMode = () => useModeStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
-export const useEditorMode = () => useEditorStore((state) => state.editorMode);
+export const useEditorMode = () => useModeStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
 export const useSelectedRackIds = () =>
   useEditorStore((state) =>
@@ -55,8 +56,11 @@ export const useSetHighlightedCellIds = () => useEditorStore((state) => state.se
 export const useClearHighlightedCellIds = () => useEditorStore((state) => state.clearHighlightedCellIds);
 export const useCanvasZoom = () => useCameraStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
-export const useIsLayoutEditable = () =>
-  useEditorStore((state) => state.viewMode === 'layout' && state.draft?.state === 'draft');
+export const useIsLayoutEditable = () => {
+  const viewMode = useModeStore((state) => state.viewMode);
+  const draftState = useEditorStore((state) => state.draft?.state);
+  return viewMode === 'layout' && draftState === 'draft';
+};
 export const useDraftDirtyState = () => useEditorStore((state) => state.isDraftDirty);
 export const useResetDraft = () => useEditorStore((state) => state.resetDraft);
 export const useInitializeDraft = () => useEditorStore((state) => state.initializeDraft);

@@ -2,14 +2,20 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mapLayoutDraftToSavePayload } from '../../../features/layout-draft-save/api/mappers';
 import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
 import { useEditorStore } from './editor-store';
+import { useModeStore } from './mode-store';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function resetStore() {
-  useEditorStore.setState({
+  // Reset mode-store
+  useModeStore.setState({
     viewMode: 'layout',
-    editorMode: 'select',
+    editorMode: 'select'
+  });
+
+  // Reset editor-store
+  useEditorStore.setState({
     selection: { type: 'none' },
     activeStorageWorkflow: null,
     contextPanelMode: 'compact',
@@ -44,10 +50,10 @@ afterEach(() => {
 describe('editor-store', () => {
   it('normalizes legacy mode names onto the new mode model', () => {
     useEditorStore.getState().setViewMode('placement');
-    expect(useEditorStore.getState().viewMode).toBe('storage');
+    expect(useModeStore.getState().viewMode).toBe('storage');
 
     useEditorStore.getState().setViewMode('operations');
-    expect(useEditorStore.getState().viewMode).toBe('view');
+    expect(useModeStore.getState().viewMode).toBe('view');
   });
 
   it('initializes live draft into local state', () => {
@@ -270,7 +276,7 @@ describe('editor-store', () => {
       })
     );
     expect(useEditorStore.getState().selection).toEqual({ type: 'wall', wallId });
-    expect(useEditorStore.getState().editorMode).toBe('select');
+    expect(useModeStore.getState().editorMode).toBe('select');
     expect(useEditorStore.getState().isDraftDirty).toBe(true);
   });
 
@@ -348,11 +354,11 @@ describe('editor-store', () => {
     const draft = createUuidLayoutDraftFixture();
     useEditorStore.getState().initializeDraft(draft);
     useEditorStore.getState().setEditorMode('draw-wall');
-    expect(useEditorStore.getState().editorMode).toBe('draw-wall');
+    expect(useModeStore.getState().editorMode).toBe('draw-wall');
 
     useEditorStore.getState().createFreeWall(0, 0, 120, 0);
 
-    expect(useEditorStore.getState().editorMode).toBe('select');
+    expect(useModeStore.getState().editorMode).toBe('select');
   });
 
   it('createFreeWall grid-snaps input coordinates before building the wall', () => {

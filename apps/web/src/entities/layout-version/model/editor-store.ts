@@ -19,6 +19,7 @@ import {
   type RackSideFocus,
   type ViewMode
 } from './editor-types';
+import { useModeStore } from './mode-store';
 import { createStorageWorkflowActions } from './storage-workflow-actions';
 import {
   buildEmptySection,
@@ -74,8 +75,6 @@ function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
 }
 
 type EditorStore = {
-  viewMode: ViewMode;
-  editorMode: EditorMode;
   /** Canonical selection state. Use setSelection / clearSelection to mutate. */
   selection: EditorSelection;
   activeStorageWorkflow: ActiveStorageWorkflow;
@@ -165,8 +164,6 @@ type EditorStore = {
 };
 
 const initialEditorState = {
-  viewMode: 'layout' as ViewMode,
-  editorMode: 'select' as EditorMode,
   selection: { type: 'none' } as EditorSelection,
   activeStorageWorkflow: null as ActiveStorageWorkflow,
   contextPanelMode: 'compact' as ContextPanelMode,
@@ -185,18 +182,25 @@ const WORKFLOW_RESET = {
 
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
-  setViewMode: (nextViewMode) =>
+  setViewMode: (nextViewMode) => {
+    // Coordinate with mode-store: update viewMode + reset editorMode to 'select'
+    useModeStore.getState().setViewMode(nextViewMode);
+    useModeStore.getState().setEditorMode('select');
+
+    // Handle side effects in editor-store: clear stale selection and workflow
+    // when switching between mode groups (layout vs view/storage).
+    // Stale rack/cell selections from the previous mode should never bleed.
     set({
-      viewMode: normalizeViewMode(nextViewMode),
-      editorMode: 'select',
-      // Clear selection on every mode switch — stale rack/cell selections from
-      // the previous mode should never bleed into the new one.
       selection: { type: 'none' },
       ...WORKFLOW_RESET,
       creatingRackId: null,
       highlightedCellIds: []
-    }),
-  setEditorMode: (editorMode) => set({ editorMode }),
+    });
+  },
+  setEditorMode: (editorMode) => {
+    // Forward to mode-store
+    useModeStore.getState().setEditorMode(editorMode);
+  },
   setSelection: (selection) =>
     set({
       selection,
@@ -266,10 +270,11 @@ export const useEditorStore = create<EditorStore>((set) => ({
       ...WORKFLOW_RESET
     }),
   startPlaceContainerWorkflow: (cellId) =>
-    set((state) => ({
-      selection: { type: 'cell', cellId },
-      activeStorageWorkflow:
-        state.viewMode === 'storage'
+    set((state) => {
+      const isStorageMode = useModeStore.getState().viewMode === 'storage';
+      return {
+        selection: { type: 'cell', cellId },
+        activeStorageWorkflow: isStorageMode
           ? {
               kind: 'place-container',
               cellId,
@@ -277,12 +282,14 @@ export const useEditorStore = create<EditorStore>((set) => ({
               errorMessage: null
             }
           : state.activeStorageWorkflow
-    })),
+      };
+    }),
   startCreateAndPlaceWorkflow: (cellId) =>
-    set((state) => ({
-      selection: { type: 'cell', cellId },
-      activeStorageWorkflow:
-        state.viewMode === 'storage'
+    set((state) => {
+      const isStorageMode = useModeStore.getState().viewMode === 'storage';
+      return {
+        selection: { type: 'cell', cellId },
+        activeStorageWorkflow: isStorageMode
           ? {
               kind: 'create-and-place',
               cellId,
@@ -291,11 +298,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               createdContainer: null
             }
           : state.activeStorageWorkflow
-    })),
+      };
+    }),
   startPlacementMove: (containerId, fromCellId) =>
-    set((state) => ({
-      activeStorageWorkflow:
-        state.viewMode === 'storage'
+    set((state) => {
+      const isStorageMode = useModeStore.getState().viewMode === 'storage';
+      return {
+        activeStorageWorkflow: isStorageMode
           ? {
               kind: 'move-container',
               containerId,
@@ -305,7 +314,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
               errorMessage: null
             }
           : state.activeStorageWorkflow
-    })),
+      };
+    }),
   ...createStorageWorkflowActions(set),
   setContextPanelMode: (contextPanelMode) => set({ contextPanelMode }),
   toggleContextPanelMode: () =>
@@ -317,7 +327,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setHighlightedCellIds: (cellIds) => set({ highlightedCellIds: [...new Set(cellIds)] }),
   clearHighlightedCellIds: () => set({ highlightedCellIds: [] }),
   setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
-  resetDraft: () =>
+  resetDraft: () => {
+    // Reset mode state (side effect)
+    useModeStore.getState().setViewMode('layout');
+    useModeStore.getState().setEditorMode('select');
+
+    // Reset editor state
     set(() => {
       if (TRACE) {
         console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
@@ -331,11 +346,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
         highlightedCellIds: [],
         hoveredRackId: null,
         creatingRackId: null,
-        isDraftDirty: false,
-        editorMode: 'select',
-        viewMode: 'layout'
+        isDraftDirty: false
       };
-    }),
+    });
+  },
   initializeDraft: (draft) =>
     set((state) => {
       if (TRACE) {
@@ -428,7 +442,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         isDraftDirty: false
       };
     }),
-  createRack: (x, y) =>
+  createRack: (x, y) => {
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
@@ -441,11 +455,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
         draft: nextDraft,
         selection: { type: 'rack', rackIds: [newRack.id], focus: { type: 'body' } },
         creatingRackId: newRack.id,
-        editorMode: 'select',
         isDraftDirty: true
       };
-    }),
-  createZone: (rect) =>
+    });
+    // Exit draw mode
+    useModeStore.getState().setEditorMode('select');
+  },
+  createZone: (rect) => {
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
@@ -457,11 +473,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraft,
         selection: { type: 'zone', zoneId: newZone.id },
-        editorMode: 'select',
         isDraftDirty: true
       };
-    }),
-  createFreeWall: (x1, y1, x2, y2) =>
+    });
+    // Exit draw mode
+    useModeStore.getState().setEditorMode('select');
+  },
+  createFreeWall: (x1, y1, x2, y2) => {
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
@@ -475,11 +493,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraft,
         selection: { type: 'wall', wallId: newWall.id },
-        editorMode: 'select',
         isDraftDirty: true
       };
-    }),
-  createWallFromRackSide: (rackId, side) =>
+    });
+    // Exit draw mode
+    useModeStore.getState().setEditorMode('select');
+  },
+  createWallFromRackSide: (rackId, side) => {
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
@@ -494,10 +514,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraft,
         selection: { type: 'wall', wallId: newWall.id },
-        editorMode: 'select',
         isDraftDirty: true
       };
-    }),
+    });
+    // Exit draw mode
+    useModeStore.getState().setEditorMode('select');
+  },
   deleteRack: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
