@@ -2,6 +2,7 @@ import type {
   LocationOccupancyRow,
   LocationReference,
   LocationStorageSnapshotRow,
+  NonRackLocationRef,
   OperationsCellRuntime
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
@@ -18,7 +19,9 @@ export const locationKeys = {
   occupancyByFloor: (floorId: string | null) =>
     [...locationKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const,
   operationsCellsByFloor: (floorId: string | null) =>
-    [...locationKeys.all, 'operations-cells-by-floor', floorId ?? 'none'] as const
+    [...locationKeys.all, 'operations-cells-by-floor', floorId ?? 'none'] as const,
+  nonRackByFloor: (floorId: string | null) =>
+    [...locationKeys.all, 'non-rack-by-floor', floorId ?? 'none'] as const
 };
 
 async function fetchLocationByCell(cellId: string): Promise<LocationReference> {
@@ -77,6 +80,18 @@ export function floorOperationsCellsQueryOptions(floorId: string | null) {
   return queryOptions({
     queryKey: locationKeys.operationsCellsByFloor(floorId),
     queryFn: () => fetchFloorOperationsCells(floorId as string),
+    enabled: Boolean(floorId)
+  });
+}
+
+async function fetchFloorNonRackLocations(floorId: string): Promise<NonRackLocationRef[]> {
+  return bffRequest<NonRackLocationRef[]>(`/api/floors/${floorId}/non-rack-locations`);
+}
+
+export function floorNonRackLocationsQueryOptions(floorId: string | null) {
+  return queryOptions({
+    queryKey: locationKeys.nonRackByFloor(floorId),
+    queryFn: () => fetchFloorNonRackLocations(floorId as string),
     enabled: Boolean(floorId)
   });
 }
