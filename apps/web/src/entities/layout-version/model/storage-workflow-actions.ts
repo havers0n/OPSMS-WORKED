@@ -55,16 +55,6 @@ export function createStorageWorkflowActions(set: StorageWorkflowSetState) {
             };
           }
 
-          if (state.activeStorageWorkflow.kind === 'place-location') {
-            return {
-              activeStorageWorkflow: {
-                ...state.activeStorageWorkflow,
-                status: 'targeting',
-                errorMessage: null
-              }
-            };
-          }
-
           return {
             activeStorageWorkflow: {
               ...state.activeStorageWorkflow,
@@ -75,11 +65,6 @@ export function createStorageWorkflowActions(set: StorageWorkflowSetState) {
               errorMessage: null
             }
           };
-        }
-
-        if (state.activeStorageWorkflow.kind === 'place-location') {
-          // place-location has no error status; leave state unchanged
-          return state;
         }
 
         return {
@@ -111,11 +96,6 @@ export function createStorageWorkflowActions(set: StorageWorkflowSetState) {
     markActiveStorageWorkflowSubmitting: () =>
       set((state) => {
         if (state.activeStorageWorkflow === null) {
-          return state;
-        }
-
-        if (state.activeStorageWorkflow.kind === 'place-location') {
-          // place-location has no submitting status
           return state;
         }
 

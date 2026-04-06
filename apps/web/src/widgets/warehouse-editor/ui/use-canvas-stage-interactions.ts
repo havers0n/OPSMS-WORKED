@@ -37,9 +37,7 @@ type UseCanvasStageInteractionsParams = {
   isDrawingZone: boolean;
   isLayoutMode: boolean;
   isPlacing: boolean;
-  isPlacingLocation: boolean;
   layoutDraft: LayoutDraft | null;
-  onPlaceLocation: (worldX: number, worldY: number) => void;
   setSelectedRackIds: (rackIds: string[]) => void;
   stageRef: MutableRefObject<Konva.Stage | null>;
   viewport: { width: number; height: number };
@@ -54,8 +52,6 @@ export function useCanvasStageInteractions({
   createFreeWall,
   interactionScope,
   isDrawingWall,
-  isPlacingLocation,
-  onPlaceLocation,
   isDrawingZone,
   isLayoutMode,
   isPlacing,
@@ -80,10 +76,6 @@ export function useCanvasStageInteractions({
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
-  const isPlacingLocationRef = useRef(isPlacingLocation);
-  isPlacingLocationRef.current = isPlacingLocation;
-  const onPlaceLocationRef = useRef(onPlaceLocation);
-  onPlaceLocationRef.current = onPlaceLocation;
   const isDrawingZoneRef = useRef(isDrawingZone);
   isDrawingZoneRef.current = isDrawingZone;
   const isDrawingWallRef = useRef(isDrawingWall);
@@ -135,12 +127,6 @@ export function useCanvasStageInteractions({
         createRackRef.current(
           Math.round(pos.x / WORLD_SCALE),
           Math.round(pos.y / WORLD_SCALE)
-        );
-      } else if (isPlacingLocationRef.current) {
-        // Non-rack location visual placement — pass world coordinates (sub-metre precision)
-        onPlaceLocationRef.current(
-          Math.round(pos.x / WORLD_SCALE * 1000) / 1000,
-          Math.round(pos.y / WORLD_SCALE * 1000) / 1000
         );
       } else if (isDrawingZoneRef.current || isDrawingWallRef.current) {
         return;

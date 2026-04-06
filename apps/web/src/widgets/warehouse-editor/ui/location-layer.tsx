@@ -8,7 +8,15 @@
 import type { LocationType } from '@wos/domain';
 import { Group, Layer, Line, Rect, Text } from 'react-konva';
 import { WORLD_SCALE } from '../lib/canvas-geometry';
-import type { NonRackLocationMarker } from './use-canvas-scene-model';
+
+export type NonRackLocationMarker = {
+  locationId: string;
+  locationCode: string;
+  locationType: LocationType;
+  x: number;
+  y: number;
+  containerCount: number;
+};
 
 type LocationLayerProps = {
   markers: NonRackLocationMarker[];
@@ -55,8 +63,8 @@ export function LocationLayer({
         const cx = marker.x * WORLD_SCALE;
         const cy = marker.y * WORLD_SCALE;
         const isSelected = selectedLocationId === marker.locationId;
-        const color = LOCATION_TYPE_COLOR[marker.locationType] ?? '#94a3b8';
-        const label = LOCATION_TYPE_LABEL[marker.locationType] ?? marker.locationType;
+        const color = LOCATION_TYPE_COLOR[marker.locationType as LocationType] ?? '#94a3b8';
+        const label = LOCATION_TYPE_LABEL[marker.locationType as LocationType] ?? marker.locationType;
 
         return (
           <Group

@@ -49,7 +49,6 @@ type InteractionStore = {
   setSelectedWallId: (wallId: string | null) => void;
   setSelectedCellId: (cellId: string | null) => void;
   setSelectedContainerId: (containerId: string | null, sourceCellId?: string | null) => void;
-  setSelectedLocationId: (locationId: string | null) => void;
 
   // — Hover (pure, no side effects) —
   setHoveredRackId: (rackId: string | null) => void;
@@ -117,8 +116,6 @@ export const useInteractionStore = create<InteractionStore>((set, get) => ({
         ? { type: 'container', containerId, sourceCellId }
         : { type: 'none' }
     }),
-  setSelectedLocationId: (locationId) =>
-    set({ selection: locationId ? { type: 'location', locationId } : { type: 'none' } }),
 
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),

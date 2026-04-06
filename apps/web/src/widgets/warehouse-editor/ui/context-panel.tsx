@@ -119,11 +119,6 @@ const INTENT_CONFIG: Record<
     label: 'Container context',
     description: 'Container actions and details will appear here.'
   },
-  'location-context': {
-    icon: MapPin,
-    label: 'Location',
-    description: 'Non-rack floor location details. See the inspector for container list.'
-  },
   'idle-view': {
     icon: Eye,
     label: 'View idle',
@@ -983,9 +978,6 @@ export function ContextPanel({
         {intent === 'container-context' && viewMode === 'storage' && (
           <StorageContainerContextPanel workspace={workspace} />
         )}
-        {intent === 'location-context' && viewMode === 'storage' && (
-          <PlaceholderContent description={config.description} />
-        )}
         {intent === 'workflow' && viewMode === 'storage' && (
           <StorageWorkflowContextPanel
             workspace={workspace}
@@ -1022,7 +1014,6 @@ export function ContextPanel({
           (intent === 'wall-context' && viewMode !== 'layout') ||
           (intent === 'cell-context' && viewMode !== 'storage') ||
           (intent === 'container-context' && viewMode !== 'storage') ||
-          (intent === 'location-context' && viewMode !== 'storage') ||
           (intent === 'workflow' && viewMode !== 'storage') ||
           (intent !== 'rack-context' &&
             intent !== 'rack-side-context' &&
@@ -1030,7 +1021,6 @@ export function ContextPanel({
             intent !== 'wall-context' &&
             intent !== 'cell-context' &&
             intent !== 'container-context' &&
-            intent !== 'location-context' &&
             intent !== 'idle-view' &&
             intent !== 'idle-storage' &&
             intent !== 'idle-layout' &&

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
@@ -19,13 +19,11 @@ import {
   useHoveredRackId,
   useIsLayoutEditable,
   useSelectedCellId,
-  useSelectedLocationId,
   useSelectedRackFocus,
   useSelectedZoneId,
   useSelectedWallId,
   useSetPlacementMoveTargetCellId,
   useSelectedRackId,
-  useSetSelectedLocationId,
   useSetSelectedRackId,
   useSetSelectedWallId,
   useSetSelectedZoneId,
@@ -45,7 +43,6 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import { usePatchLocationGeometry } from '@/entities/location/api/mutations';
 import { GRID_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_ZOOM_THRESHOLD } from '../lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
@@ -55,7 +52,6 @@ import { useCanvasSceneModel } from './use-canvas-scene-model';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
-import { LocationLayer } from './location-layer';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
 
@@ -77,8 +73,6 @@ export function EditorCanvas({
   const selectedRackId = useSelectedRackId();
   const selectedRackFocus = useSelectedRackFocus();
   const selectedCellId = useSelectedCellId();
-  const selectedLocationId = useSelectedLocationId();
-  const setSelectedLocationId = useSetSelectedLocationId();
   const selection = useEditorSelection();
   const interactionScope = useInteractionScope();
   const highlightedCellIds = useHighlightedCellIds();
@@ -175,7 +169,6 @@ export function EditorCanvas({
     isLayoutDrawToolActive,
     isLayoutMode,
     isPlacementMoveMode,
-    isPlacingLocation,
     isPlacing,
     isStorageMode,
     lod
@@ -209,7 +202,7 @@ export function EditorCanvas({
     shouldShowLayoutZoneBar,
     shouldShowStorageCellBar
   } = scene.hud;
-  const { nonRackLocationMarkers, walls, zones } = scene.layers;
+  const { walls, zones } = scene.layers;
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
@@ -234,23 +227,6 @@ export function EditorCanvas({
   const deleteWallRef = useRef(deleteWall);
   deleteWallRef.current = deleteWall;
 
-  const patchLocationGeometry = usePatchLocationGeometry();
-  const onPlaceLocation = useCallback(
-    (worldX: number, worldY: number) => {
-      const locationId =
-        activeStorageWorkflow?.kind === 'place-location'
-          ? activeStorageWorkflow.locationId
-          : null;
-      const floorId = workspace?.floorId ?? null;
-      if (!locationId || !floorId) return;
-      patchLocationGeometry.mutate(
-        { locationId, floorX: worldX, floorY: worldY, floorId },
-        { onSuccess: () => cancelPlacementInteraction() }
-      );
-    },
-    [activeStorageWorkflow, workspace, patchLocationGeometry, cancelPlacementInteraction]
-  );
-
   const {
     cancelDrawWall,
     cancelDrawZone,
@@ -272,9 +248,7 @@ export function EditorCanvas({
     isDrawingZone,
     isLayoutMode,
     isPlacing,
-    isPlacingLocation,
     layoutDraft,
-    onPlaceLocation,
     setSelectedRackIds,
     stageRef,
     viewport
@@ -354,7 +328,7 @@ export function EditorCanvas({
           : isLayoutDrawToolActive
             ? 'crosshair'
             : 'default',
-        background: isPlacing ? '#f0fdfe' : isDrawingZone ? '#f0fdf4' : isDrawingWall ? '#fef9f0' : isPlacingLocation ? '#fffbeb' : '#f1f5f9'
+        background: isPlacing ? '#f0fdfe' : isDrawingZone ? '#f0fdf4' : isDrawingWall ? '#fef9f0' : '#f1f5f9'
       }}
     >
       {!layoutDraft && (
@@ -493,14 +467,6 @@ export function EditorCanvas({
               />
 
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
-
-              {isStorageMode && (
-                <LocationLayer
-                  markers={nonRackLocationMarkers}
-                  selectedLocationId={selectedLocationId}
-                  setSelectedLocationId={setSelectedLocationId}
-                />
-              )}
 
               <RackLayer
                 activeCellRackId={activeCellRackId}

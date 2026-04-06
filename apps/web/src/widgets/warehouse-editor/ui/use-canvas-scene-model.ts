@@ -12,8 +12,6 @@ import { useFloorSceneData } from './use-floor-scene-data';
 import { useCanvasCapabilities } from './use-canvas-capabilities';
 import { useCanvasHudState } from './use-canvas-hud-state';
 
-// Re-export for backward compat — location-layer.tsx imports this type from here
-export type { NonRackLocationMarker } from './use-floor-scene-data';
 
 type CanvasOffset = {
   x: number;
@@ -80,7 +78,6 @@ export function useCanvasSceneModel({
 }: UseCanvasSceneModelParams) {
   const {
     floorOperationsCellsById,
-    nonRackLocationMarkers,
     occupiedCellIds,
     publishedCellsById,
     publishedCellsByStructure
@@ -104,7 +101,6 @@ export function useCanvasSceneModel({
     isLayoutDrawToolActive,
     isLayoutMode,
     isPlacementMoveMode,
-    isPlacingLocation,
     isPlacing,
     isStorageMode,
     isViewMode,
@@ -161,14 +157,12 @@ export function useCanvasSceneModel({
         isLayoutDrawToolActive,
         isLayoutMode,
         isPlacementMoveMode,
-        isPlacingLocation,
         isPlacing,
         isStorageMode,
         isViewMode,
         lod
       },
       layers: {
-        nonRackLocationMarkers,
         placementLayout,
         racks,
         walls,
@@ -197,12 +191,10 @@ export function useCanvasSceneModel({
       isLayoutDrawToolActive,
       isLayoutMode,
       isPlacementMoveMode,
-      isPlacingLocation,
       isPlacing,
       isStorageMode,
       isViewMode,
       lod,
-      nonRackLocationMarkers,
       occupiedCellIds,
       placementLayout,
       publishedCellsByStructure,

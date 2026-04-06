@@ -14,8 +14,7 @@ export type InspectorKind =
   | 'layout-empty'           // layout + nothing selected
   | 'placement-placeholder'  // view/storage mode + no selection
   | 'placement-cell'         // view/storage mode + cell selected
-  | 'placement-container'    // view/storage mode + container selected
-  | 'location-detail';       // storage mode + non-rack location selected
+  | 'placement-container';   // view/storage mode + container selected
 
 /**
  * Maps (viewMode, selection, creatingRackId) → InspectorKind.
@@ -41,7 +40,6 @@ export type InspectorKind =
  *   storage + zone              → zone-readonly  (zone is not a placement target)
  *   storage + cell              → placement-cell
  *   storage + container         → placement-container
- *   storage + location          → location-detail (non-rack floor location)
  *   storage + anything else     → placement-placeholder
  *
  * Note: canSelectZone in use-canvas-scene-model.ts currently prevents zone
@@ -80,6 +78,5 @@ export function resolveInspectorKind(
   if (selection.type === 'zone') return 'zone-readonly';
   if (selection.type === 'cell') return 'placement-cell';
   if (selection.type === 'container') return 'placement-container';
-  if (selection.type === 'location') return 'location-detail';
   return 'placement-placeholder';
 }

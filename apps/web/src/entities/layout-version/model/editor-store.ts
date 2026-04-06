@@ -99,13 +99,10 @@ type EditorStore = {
   setSelectedCellId: (cellId: string | null) => void;
   /** Convenience wrapper — sets a container-type selection, or clears if null. */
   setSelectedContainerId: (containerId: string | null, sourceCellId?: string | null) => void;
-  /** Convenience wrapper — sets a non-rack location selection, or clears if null. */
-  setSelectedLocationId: (locationId: string | null) => void;
   // — Storage workflow (domain semantics) —
   startPlaceContainerWorkflow: (cellId: string) => void;
   startCreateAndPlaceWorkflow: (cellId: string) => void;
   startPlacementMove: (containerId: string, fromCellId: string) => void;
-  startPlaceLocationWorkflow: (locationId: string) => void;
   setPlacementMoveTargetCellId: (cellId: string | null) => void;
   cancelPlacementInteraction: () => void;
   setActiveStorageWorkflowError: (errorMessage: string | null) => void;
@@ -221,10 +218,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
     useInteractionStore.getState().setSelectedContainerId(containerId, sourceCellId);
     set(WORKFLOW_RESET);
   },
-  setSelectedLocationId: (locationId) => {
-    useInteractionStore.getState().setSelectedLocationId(locationId);
-    set(WORKFLOW_RESET);
-  },
   startPlaceContainerWorkflow: (cellId) =>
     set((state) => {
       const isStorageMode = useModeStore.getState().viewMode === 'storage';
@@ -265,16 +258,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
               status: 'targeting',
               errorMessage: null
             }
-          : state.activeStorageWorkflow
-      };
-    }),
-  startPlaceLocationWorkflow: (locationId) =>
-    set((state) => {
-      const isStorageMode = useModeStore.getState().viewMode === 'storage';
-      // Does not change selection — the location panel stays open.
-      return {
-        activeStorageWorkflow: isStorageMode
-          ? { kind: 'place-location', locationId, status: 'targeting', errorMessage: null }
           : state.activeStorageWorkflow
       };
     }),

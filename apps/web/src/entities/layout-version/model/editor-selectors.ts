@@ -118,11 +118,6 @@ export const useSelectedCellId = () =>
   );
 export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);
 export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);
-export const useSelectedLocationId = () =>
-  useInteractionStore((state) =>
-    state.selection.type === 'location' ? state.selection.locationId : null
-  );
-export const useSetSelectedLocationId = () => useEditorStore((state) => state.setSelectedLocationId);
 export const useActiveStorageWorkflow = (): ActiveStorageWorkflow =>
   useEditorStore((state) => state.activeStorageWorkflow);
 export const useInteractionScope = (): InteractionScope => {
@@ -135,8 +130,6 @@ export const useStartPlaceContainerWorkflow = () =>
 export const useStartCreateAndPlaceWorkflow = () =>
   useEditorStore((state) => state.startCreateAndPlaceWorkflow);
 export const useStartPlacementMove = () => useEditorStore((state) => state.startPlacementMove);
-export const useStartPlaceLocationWorkflow = () =>
-  useEditorStore((state) => state.startPlaceLocationWorkflow);
 export const useSetPlacementMoveTargetCellId = () =>
   useEditorStore((state) => state.setPlacementMoveTargetCellId);
 export const useCancelPlacementInteraction = () =>
