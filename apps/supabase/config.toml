@@ -2,19 +2,19 @@ project_id = "wos-local"
 
 [api]
 enabled = true
-port = 55421
+port = 55821
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
 [db]
-port = 55422
-shadow_port = 55429
+port = 55822
+shadow_port = 55829
 major_version = 17
 
 [db.pooler]
 enabled = false
-port = 55430
+port = 55830
 pool_mode = "transaction"
 default_pool_size = 20
 max_client_conn = 100
@@ -32,13 +32,13 @@ enabled = true
 
 [studio]
 enabled = true
-port = 55423
+port = 55823
 api_url = "http://127.0.0.1"
 openai_api_key = "env(OPENAI_API_KEY)"
 
 [inbucket]
 enabled = true
-port = 55424
+port = 55824
 
 [storage]
 enabled = true
@@ -62,5 +62,5 @@ password_requirements = ""
 
 [analytics]
 enabled = true
-port = 55427
+port = 55827
 backend = "postgres"

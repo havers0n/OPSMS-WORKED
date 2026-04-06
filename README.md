@@ -109,7 +109,7 @@ VITE_DEV_AUTH_PASSWORD=warehouse123
 
 For local frontend development, these values are enough:
 
-- `VITE_SUPABASE_URL=http://127.0.0.1:55421`
+- `VITE_SUPABASE_URL=http://127.0.0.1:55821`
 - `VITE_BFF_URL=http://127.0.0.1:8787/api`
 
 `apps/bff` can read:
@@ -132,9 +132,9 @@ supabase start
 
 Current local ports from `apps/supabase/config.toml`:
 
-- API: `http://127.0.0.1:55421`
-- Studio: `http://127.0.0.1:55423`
-- DB: `127.0.0.1:55422`
+- API: `http://127.0.0.1:55821`
+- Studio: `http://127.0.0.1:55823`
+- DB: `127.0.0.1:55822`
 
 2. Create `.env` in the repo root based on `.env.example`.
 
