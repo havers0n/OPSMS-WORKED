@@ -96,6 +96,17 @@ export type CanvasRect = {
   height: number;
 };
 
+export type CanvasPoint = {
+  x: number;
+  y: number;
+};
+
+export type CanvasCamera = {
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export function clampCanvasPosition(value: number) {
   return Math.max(0, value);
@@ -103,6 +114,21 @@ export function clampCanvasPosition(value: number) {
 
 export function clampCanvasZoom(value: number) {
   return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value));
+}
+
+export function getZoomToCursorCamera(
+  camera: CanvasCamera,
+  cursor: CanvasPoint,
+  nextZoom: number
+): CanvasCamera {
+  const worldX = (cursor.x - camera.offsetX) / camera.zoom;
+  const worldY = (cursor.y - camera.offsetY) / camera.zoom;
+
+  return {
+    zoom: nextZoom,
+    offsetX: cursor.x - worldX * nextZoom,
+    offsetY: cursor.y - worldY * nextZoom
+  };
 }
 
 /**

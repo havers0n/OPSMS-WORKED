@@ -8,6 +8,7 @@ import {
   getCanvasLOD,
   getRackCanvasRect,
   getRackGeometry,
+  getZoomToCursorCamera,
   getWallCanvasRect,
   LOD_CELL_THRESHOLD,
   LOD_HYSTERESIS,
@@ -70,6 +71,25 @@ describe('canvas geometry helpers', () => {
     expect(clampCanvasZoom(1)).toBe(1);
     expect(clampCanvasZoom(0.1)).toBe(MIN_CANVAS_ZOOM);
     expect(clampCanvasZoom(5)).toBe(MAX_CANVAS_ZOOM);
+  });
+
+  it('keeps the canvas point under the cursor stable after zoom', () => {
+    const camera = { zoom: 1, offsetX: 120, offsetY: -80 };
+    const cursor = { x: 350, y: 240 };
+    const nextCamera = getZoomToCursorCamera(camera, cursor, 1.4);
+
+    const worldBefore = {
+      x: (cursor.x - camera.offsetX) / camera.zoom,
+      y: (cursor.y - camera.offsetY) / camera.zoom
+    };
+    const worldAfter = {
+      x: (cursor.x - nextCamera.offsetX) / nextCamera.zoom,
+      y: (cursor.y - nextCamera.offsetY) / nextCamera.zoom
+    };
+
+    expect(nextCamera.zoom).toBe(1.4);
+    expect(worldAfter.x).toBeCloseTo(worldBefore.x);
+    expect(worldAfter.y).toBeCloseTo(worldBefore.y);
   });
 
   it('maps rendering LOD to semantic interaction levels', () => {

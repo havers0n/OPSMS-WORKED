@@ -3,7 +3,9 @@ import type { Rack } from '@wos/domain';
 import type { ViewMode } from '@/entities/layout-version/model/editor-types';
 import { useCameraStore } from '@/entities/layout-version/model/camera-store';
 import {
+  type CanvasPoint,
   clampCanvasZoom,
+  getZoomToCursorCamera,
   LOD_CELL_ENTRY,
   WORLD_SCALE
 } from '../lib/canvas-geometry';
@@ -158,10 +160,17 @@ export function useCanvasViewportController({
     };
   }, []);
 
-  const handleZoom = useCallback((delta: number) => {
-    setCanvasZoomRef.current(
-      clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)))
-    );
+  const handleZoom = useCallback((delta: number, cursor?: CanvasPoint) => {
+    const nextZoom = clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)));
+
+    if (!cursor) {
+      setCanvasZoomRef.current(nextZoom);
+      return;
+    }
+
+    const camera = useCameraStore.getState();
+    const nextCamera = getZoomToCursorCamera(camera, cursor, nextZoom);
+    camera.setCamera(nextCamera.zoom, nextCamera.offsetX, nextCamera.offsetY);
   }, []);
 
   return {

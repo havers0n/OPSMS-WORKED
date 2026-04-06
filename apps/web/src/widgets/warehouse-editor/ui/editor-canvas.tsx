@@ -388,7 +388,8 @@ export function EditorCanvas({
               onWheel={(event) => {
                 event.evt.preventDefault();
                 const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
-                handleZoom(delta);
+                const pointer = event.target.getStage()?.getPointerPosition();
+                handleZoom(delta, pointer ?? undefined);
               }}
               onMouseDown={onMouseDown}
               onMouseMove={onMouseMove}
