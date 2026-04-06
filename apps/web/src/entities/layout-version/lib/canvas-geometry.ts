@@ -23,6 +23,14 @@ export const MAX_CANVAS_ZOOM = 3.0;
 export const LOD_SECTION_THRESHOLD = 0.9;
 export const LOD_CELL_THRESHOLD    = 1.3;
 export const LOD_HYSTERESIS        = 0.05; // total dead-band width (±0.025 per boundary)
+/**
+ * Minimum zoom a programmatic auto-fit must target to guarantee LOD 2 entry
+ * regardless of the caller's prevLod. Equal to the up-crossing threshold
+ * (LOD_CELL_THRESHOLD + half-band). Using plain LOD_CELL_THRESHOLD is not
+ * sufficient after hysteresis was introduced — zoom=1.3 with prevLod<2 stays
+ * at LOD 1 until this value is reached.
+ */
+export const LOD_CELL_ENTRY = LOD_CELL_THRESHOLD + LOD_HYSTERESIS / 2; // 1.325
 const CELL_RECT_INSET = 4;
 
 export type CanvasLOD = 0 | 1 | 2;

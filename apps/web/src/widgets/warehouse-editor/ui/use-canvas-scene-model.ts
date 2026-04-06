@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import type { FloorWorkspace, LayoutDraft, LocationType, Rack, Zone } from '@wos/domain';
 import {
   type ActiveStorageWorkflow,
@@ -15,15 +15,13 @@ import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { indexOccupiedCellIds } from '@/entities/cell/lib/occupied-cell-lookup';
 import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-cell-lookup';
 import {
-  type CanvasLOD,
   getCellCanvasRect,
-  getCanvasInteractionLevel,
-  getCanvasLOD,
   getRackCanvasRect,
   getWallCanvasRect,
   getZoneCanvasRect,
   projectCanvasRectToViewport
 } from '../lib/canvas-geometry';
+import { useSemanticZoom } from '@/entities/layout-version/model/use-semantic-zoom';
 
 export type NonRackLocationMarker = {
   locationId: string;
@@ -156,13 +154,7 @@ export function useCanvasSceneModel({
     () => new Set(highlightedCellIds),
     [highlightedCellIds]
   );
-  // prevLodRef persists the last computed LOD across renders so getCanvasLOD
-  // can apply hysteresis. Updated synchronously here — not inside useMemo —
-  // so every zoom change that triggers a re-render advances the ref.
-  const prevLodRef = useRef<CanvasLOD>(0);
-  const lod = getCanvasLOD(zoom, prevLodRef.current);
-  prevLodRef.current = lod;
-  const interactionLevel = getCanvasInteractionLevel(lod);
+  const { lod, interactionLevel } = useSemanticZoom();
   const canSelectRack =
     !isLayoutDrawToolActive &&
     !isPlacementMoveMode &&

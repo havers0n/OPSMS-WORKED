@@ -4,7 +4,7 @@ import type { ViewMode } from '@/entities/layout-version/model/editor-types';
 import { useCameraStore } from '@/entities/layout-version/model/camera-store';
 import {
   clampCanvasZoom,
-  LOD_CELL_THRESHOLD,
+  LOD_CELL_ENTRY,
   WORLD_SCALE
 } from '../lib/canvas-geometry';
 import { getRackBoundingBox } from '../lib/rack-spacing';
@@ -85,7 +85,7 @@ export function useCanvasViewportController({
 
     if (racks.length === 0) {
       // No racks yet — just ensure cells would be visible if any appear.
-      setCanvasZoom(clampCanvasZoom(Math.max(zoom, LOD_CELL_THRESHOLD)));
+      setCanvasZoom(clampCanvasZoom(Math.max(zoom, LOD_CELL_ENTRY)));
       return;
     }
 
@@ -100,11 +100,11 @@ export function useCanvasViewportController({
     const bboxWPx = (maxXm - minXm) * WORLD_SCALE;
     const bboxHPx = (maxYm - minYm) * WORLD_SCALE;
 
-    const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : LOD_CELL_THRESHOLD;
-    const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : LOD_CELL_THRESHOLD;
+    const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : LOD_CELL_ENTRY;
+    const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : LOD_CELL_ENTRY;
 
-    // Never go below LOD_CELL_THRESHOLD — cells must be visible in this mode.
-    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_THRESHOLD));
+    // Never go below LOD_CELL_ENTRY — cells must be visible in this mode.
+    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_ENTRY));
 
     const newOffsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
     const newOffsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;
