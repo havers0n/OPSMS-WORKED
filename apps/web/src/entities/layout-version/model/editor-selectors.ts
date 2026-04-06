@@ -1,4 +1,5 @@
 import { useEditorStore } from './editor-store';
+import { useCameraStore } from './camera-store';
 import {
   resolveInteractionScope,
   type ActiveStorageWorkflow,
@@ -52,7 +53,7 @@ export const useSetCreatingRackId = () => useEditorStore((state) => state.setCre
 export const useHighlightedCellIds = () => useEditorStore((state) => state.highlightedCellIds);
 export const useSetHighlightedCellIds = () => useEditorStore((state) => state.setHighlightedCellIds);
 export const useClearHighlightedCellIds = () => useEditorStore((state) => state.clearHighlightedCellIds);
-export const useCanvasZoom = () => useEditorStore((state) => state.zoom);
+export const useCanvasZoom = () => useCameraStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
 export const useIsLayoutEditable = () =>
   useEditorStore((state) => state.viewMode === 'layout' && state.draft?.state === 'draft');
@@ -75,7 +76,7 @@ export const useSetSelectedWallId = () => useEditorStore((state) => state.setSel
 export const useSetSelectedRackSide = () =>
   useEditorStore((state) => state.setSelectedRackSide);
 export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
-export const useSetCanvasZoom = () => useEditorStore((state) => state.setZoom);
+export const useSetCanvasZoom = () => useCameraStore((state) => state.setZoom);
 export const useUpdateRackPosition = () => useEditorStore((state) => state.updateRackPosition);
 export const useUpdateZoneRect = () => useEditorStore((state) => state.updateZoneRect);
 export const useUpdateZoneDetails = () => useEditorStore((state) => state.updateZoneDetails);

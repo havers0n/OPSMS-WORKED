@@ -84,7 +84,6 @@ type EditorStore = {
   /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
   creatingRackId: string | null;
   highlightedCellIds: string[];
-  zoom: number;
   minRackDistance: number;
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
@@ -122,7 +121,6 @@ type EditorStore = {
   setCreatingRackId: (rackId: string | null) => void;
   setHighlightedCellIds: (cellIds: string[]) => void;
   clearHighlightedCellIds: () => void;
-  setZoom: (zoom: number) => void;
   setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
   initializeDraft: (draft: LayoutDraft) => void;
@@ -175,7 +173,6 @@ const initialEditorState = {
   hoveredRackId: null,
   creatingRackId: null,
   highlightedCellIds: [],
-  zoom: 1,
   minRackDistance: 0,
   draft: null,
   draftSourceVersionId: null,
@@ -319,7 +316,6 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
   setHighlightedCellIds: (cellIds) => set({ highlightedCellIds: [...new Set(cellIds)] }),
   clearHighlightedCellIds: () => set({ highlightedCellIds: [] }),
-  setZoom: (zoom) => set({ zoom }),
   setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
   resetDraft: () =>
     set(() => {

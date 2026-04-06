@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Rack } from '@wos/domain';
 import type { ViewMode } from '@/entities/layout-version/model/editor-types';
+import { useCameraStore } from '@/entities/layout-version/model/camera-store';
 import {
   clampCanvasZoom,
   LOD_CELL_THRESHOLD,
@@ -34,9 +35,16 @@ export function useCanvasViewportController({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState<CanvasViewport>({ width: 0, height: 0 });
 
-  const [canvasOffset, setCanvasOffset] = useState<CanvasOffset>({ x: 0, y: 0 });
-  const canvasOffsetRef = useRef<CanvasOffset>({ x: 0, y: 0 });
-  canvasOffsetRef.current = canvasOffset;
+  // Camera offset is now owned by useCameraStore. Subscribe to offsetX/offsetY
+  // with individual selectors so this hook only re-renders when values change.
+  const offsetX = useCameraStore((s) => s.offsetX);
+  const offsetY = useCameraStore((s) => s.offsetY);
+  // Stable object reference — only changes when the underlying values change,
+  // matching the previous useState behaviour.
+  const canvasOffset = useMemo<CanvasOffset>(
+    () => ({ x: offsetX, y: offsetY }),
+    [offsetX, offsetY]
+  );
 
   const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false);
@@ -98,11 +106,11 @@ export function useCanvasViewportController({
     // Never go below LOD_CELL_THRESHOLD — cells must be visible in this mode.
     const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_THRESHOLD));
 
-    const offsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
-    const offsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;
+    const newOffsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
+    const newOffsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;
 
-    setCanvasZoom(targetZoom);
-    setCanvasOffset({ x: offsetX, y: offsetY });
+    // Atomic camera update — zoom and offset written in a single store transaction.
+    useCameraStore.getState().setCamera(targetZoom, newOffsetX, newOffsetY);
   }, [viewMode]);
   // Intentionally reads viewport/autoFitRacks/zoom via closure at transition time —
   // re-running on their changes would fight the user's manual zoom adjustments.
@@ -115,7 +123,10 @@ export function useCanvasViewportController({
       if (event.button !== 1) return;
       isPanningRef.current = true;
       panStartRef.current = { x: event.clientX, y: event.clientY };
-      offsetAtPanStartRef.current = { ...canvasOffsetRef.current };
+      // Snapshot current offset at pan start via getState() — avoids stale closures
+      // without needing a ref that mirrors the store value.
+      const { offsetX: ox, offsetY: oy } = useCameraStore.getState();
+      offsetAtPanStartRef.current = { x: ox, y: oy };
       setIsPanning(true);
       event.preventDefault();
     };
@@ -124,10 +135,10 @@ export function useCanvasViewportController({
       if (!isPanningRef.current) return;
       const dx = event.clientX - panStartRef.current.x;
       const dy = event.clientY - panStartRef.current.y;
-      setCanvasOffset({
-        x: offsetAtPanStartRef.current.x + dx,
-        y: offsetAtPanStartRef.current.y + dy
-      });
+      useCameraStore.getState().setOffset(
+        offsetAtPanStartRef.current.x + dx,
+        offsetAtPanStartRef.current.y + dy
+      );
     };
 
     const onMouseUp = (event: MouseEvent) => {

@@ -12,7 +12,6 @@ function resetStore() {
     hoveredRackId: null,
     creatingRackId: null,
     highlightedCellIds: [],
-    zoom: 1,
     minRackDistance: 0,
     draft: null,
     draftSourceVersionId: null,
