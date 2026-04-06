@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { useEditorStore } from './editor-store';
+import { useInteractionStore } from './interaction-store';
 import { useModeStore } from './mode-store';
 import { resolveInteractionScope, type EditorSelection } from './editor-types';
 
@@ -12,17 +13,15 @@ function resetStore() {
 
   // Reset editor-store
   useEditorStore.setState({
-    selection: { type: 'none' },
     activeStorageWorkflow: null,
-    contextPanelMode: 'compact',
-    hoveredRackId: null,
-    creatingRackId: null,
-    highlightedCellIds: [],
     minRackDistance: 0,
     draft: null,
     draftSourceVersionId: null,
     isDraftDirty: false
   });
+
+  // Reset interaction-store
+  useInteractionStore.setState({ selection: { type: 'none' }, hoveredRackId: null, creatingRackId: null, highlightedCellIds: [], contextPanelMode: 'compact' });
 }
 
 afterEach(() => {
@@ -31,18 +30,18 @@ afterEach(() => {
 
 describe('EditorSelection — canonical store field', () => {
   it('defaults to { type: none }', () => {
-    const { selection } = useEditorStore.getState();
+    const { selection } = useInteractionStore.getState();
     expect(selection).toEqual({ type: 'none' });
   });
 
   it('setSelectedRackIds([]) produces { type: none }', () => {
     useEditorStore.getState().setSelectedRackIds([]);
-    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
   });
 
   it('setSelectedRackIds([...]) produces { type: rack, rackIds }', () => {
     useEditorStore.getState().setSelectedRackIds(['r1', 'r2']);
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'rack',
       rackIds: ['r1', 'r2'],
       focus: { type: 'body' }
@@ -51,7 +50,7 @@ describe('EditorSelection — canonical store field', () => {
 
   it('setSelectedRackId(id) produces a single-rack selection', () => {
     useEditorStore.getState().setSelectedRackId('rack-abc');
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'rack',
       rackIds: ['rack-abc'],
       focus: { type: 'body' }
@@ -60,7 +59,7 @@ describe('EditorSelection — canonical store field', () => {
 
   it('setSelectedRackSide(id, side) produces a side-focused single-rack selection', () => {
     useEditorStore.getState().setSelectedRackSide('rack-abc', 'east');
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'rack',
       rackIds: ['rack-abc'],
       focus: { type: 'side', side: 'east' }
@@ -70,18 +69,18 @@ describe('EditorSelection — canonical store field', () => {
   it('setSelectedRackId(null) clears selection', () => {
     useEditorStore.getState().setSelectedRackId('rack-abc');
     useEditorStore.getState().setSelectedRackId(null);
-    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
   });
 
   it('setSelection() accepts any EditorSelection variant', () => {
     const sel: EditorSelection = { type: 'rack', rackIds: ['x', 'y', 'z'] };
     useEditorStore.getState().setSelection(sel);
-    expect(useEditorStore.getState().selection).toEqual(sel);
+    expect(useInteractionStore.getState().selection).toEqual(sel);
   });
 
   it('setSelectedWallId(id) produces a wall selection', () => {
     useEditorStore.getState().setSelectedWallId('wall-abc');
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'wall',
       wallId: 'wall-abc'
     });
@@ -90,27 +89,27 @@ describe('EditorSelection — canonical store field', () => {
   it('clearSelection() resets to { type: none }', () => {
     useEditorStore.getState().setSelectedRackId('r1');
     useEditorStore.getState().clearSelection();
-    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
   });
 
   it('preserves Context Panel mode across selection and workflow changes', () => {
-    useEditorStore.getState().setContextPanelMode('expanded');
+    useInteractionStore.getState().setContextPanelMode('expanded');
 
     useEditorStore.getState().setSelectedRackId('rack-abc');
-    expect(useEditorStore.getState().contextPanelMode).toBe('expanded');
+    expect(useInteractionStore.getState().contextPanelMode).toBe('expanded');
 
     useEditorStore.getState().clearSelection();
-    expect(useEditorStore.getState().contextPanelMode).toBe('expanded');
+    expect(useInteractionStore.getState().contextPanelMode).toBe('expanded');
 
     useEditorStore.getState().setViewMode('storage');
     useEditorStore.getState().startPlaceContainerWorkflow('cell-1');
-    expect(useEditorStore.getState().contextPanelMode).toBe('expanded');
+    expect(useInteractionStore.getState().contextPanelMode).toBe('expanded');
   });
 
   it('toggleRackSelection builds a multi-rack selection', () => {
     useEditorStore.getState().toggleRackSelection('r1');
     useEditorStore.getState().toggleRackSelection('r2');
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'rack',
       rackIds: ['r1', 'r2'],
       focus: { type: 'body' }
@@ -121,7 +120,7 @@ describe('EditorSelection — canonical store field', () => {
     useEditorStore.getState().toggleRackSelection('r1');
     useEditorStore.getState().toggleRackSelection('r2');
     useEditorStore.getState().toggleRackSelection('r1');
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'rack',
       rackIds: ['r2'],
       focus: { type: 'body' }
@@ -131,12 +130,12 @@ describe('EditorSelection — canonical store field', () => {
   it('toggleRackSelection collapses to { type: none } when last rack is removed', () => {
     useEditorStore.getState().toggleRackSelection('r1');
     useEditorStore.getState().toggleRackSelection('r1');
-    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
   });
 
   it('selection rackIds[0] is still the primary rack id', () => {
     useEditorStore.getState().setSelectedRackIds(['primary', 'secondary']);
-    const sel = useEditorStore.getState().selection;
+    const sel = useInteractionStore.getState().selection;
     expect(sel.type === 'rack' ? sel.rackIds[0] : null).toBe('primary');
   });
 
@@ -144,7 +143,7 @@ describe('EditorSelection — canonical store field', () => {
     useEditorStore
       .getState()
       .setSelectedContainerId('container-uuid', '216f2dd6-8f17-4de4-aaba-657f9e0e1398');
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'container',
       containerId: 'container-uuid',
       sourceCellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398'
@@ -202,7 +201,7 @@ describe('EditorSelection — canonical store field', () => {
       .getState()
       .startPlaceContainerWorkflow('f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce');
 
-    expect(useEditorStore.getState().selection).toEqual<EditorSelection>({
+    expect(useInteractionStore.getState().selection).toEqual<EditorSelection>({
       type: 'cell',
       cellId: 'f06fbcba-a9eb-48df-bfa5-ee09c34dc1ce'
     });

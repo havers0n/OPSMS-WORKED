@@ -1,6 +1,7 @@
 import { useEditorStore } from './editor-store';
 import { useCameraStore } from './camera-store';
 import { useModeStore } from './mode-store';
+import { useInteractionStore } from './interaction-store';
 import {
   resolveInteractionScope,
   type ActiveStorageWorkflow,
@@ -20,40 +21,43 @@ export const useViewMode = () => useModeStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
 export const useEditorMode = () => useModeStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
+// — Selection state — reads from interaction-store
 export const useSelectedRackIds = () =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'rack' ? state.selection.rackIds : EMPTY_RACK_IDS
   );
 export const useSelectedRackId = () =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'rack' ? (state.selection.rackIds[0] ?? null) : null
   );
 export const useSelectedZoneId = () =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'zone' ? state.selection.zoneId : null
   );
 export const useSelectedWallId = () =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'wall' ? state.selection.wallId : null
   );
 export const useSelectedRackFocus = (): RackSelectionFocus =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'rack'
       ? (state.selection.focus ?? BODY_RACK_FOCUS)
       : BODY_RACK_FOCUS
   );
+// Selection setters stay in editor-store (they also reset activeStorageWorkflow)
 export const useSetSelection = () => useEditorStore((state) => state.setSelection);
 export const useClearSelection = () => useEditorStore((state) => state.clearSelection);
 export const useToggleRackSelection = () => useEditorStore((state) => state.toggleRackSelection);
 export const useSetSelectedRackIds = () => useEditorStore((state) => state.setSelectedRackIds);
 export const useMinRackDistance = () => useEditorStore((state) => state.minRackDistance);
 export const useSetMinRackDistance = () => useEditorStore((state) => state.setMinRackDistance);
-export const useHoveredRackId = () => useEditorStore((state) => state.hoveredRackId);
-export const useCreatingRackId = () => useEditorStore((state) => state.creatingRackId);
-export const useSetCreatingRackId = () => useEditorStore((state) => state.setCreatingRackId);
-export const useHighlightedCellIds = () => useEditorStore((state) => state.highlightedCellIds);
-export const useSetHighlightedCellIds = () => useEditorStore((state) => state.setHighlightedCellIds);
-export const useClearHighlightedCellIds = () => useEditorStore((state) => state.clearHighlightedCellIds);
+// — Pure interaction state — reads/writes directly from interaction-store
+export const useHoveredRackId = () => useInteractionStore((state) => state.hoveredRackId);
+export const useCreatingRackId = () => useInteractionStore((state) => state.creatingRackId);
+export const useSetCreatingRackId = () => useInteractionStore((state) => state.setCreatingRackId);
+export const useHighlightedCellIds = () => useInteractionStore((state) => state.highlightedCellIds);
+export const useSetHighlightedCellIds = () => useInteractionStore((state) => state.setHighlightedCellIds);
+export const useClearHighlightedCellIds = () => useInteractionStore((state) => state.clearHighlightedCellIds);
 export const useCanvasZoom = () => useCameraStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
 export const useIsLayoutEditable = () => {
@@ -79,7 +83,7 @@ export const useSetSelectedZoneId = () => useEditorStore((state) => state.setSel
 export const useSetSelectedWallId = () => useEditorStore((state) => state.setSelectedWallId);
 export const useSetSelectedRackSide = () =>
   useEditorStore((state) => state.setSelectedRackSide);
-export const useSetHoveredRackId = () => useEditorStore((state) => state.setHoveredRackId);
+export const useSetHoveredRackId = () => useInteractionStore((state) => state.setHoveredRackId);
 export const useSetCanvasZoom = () => useCameraStore((state) => state.setZoom);
 export const useUpdateRackPosition = () => useEditorStore((state) => state.updateRackPosition);
 export const useUpdateZoneRect = () => useEditorStore((state) => state.updateZoneRect);
@@ -103,28 +107,29 @@ export const useAlignRacksHorizontal = () => useEditorStore((state) => state.ali
 export const useAlignRacksVertical = () => useEditorStore((state) => state.alignRacksVertical);
 export const useDistributeRacksEqual = () => useEditorStore((state) => state.distributeRacksEqual);
 
-/** Canonical typed selection. Reads directly from the store's first-class selection field. */
+/** Canonical typed selection. Reads from interaction-store. */
 export const useEditorSelection = (): EditorSelection =>
-  useEditorStore((state) => state.selection);
+  useInteractionStore((state) => state.selection);
 
 /** Returns the selected cell ID if the current selection is a cell, otherwise null. */
 export const useSelectedCellId = () =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'cell' ? state.selection.cellId : null
   );
 export const useSetSelectedCellId = () => useEditorStore((state) => state.setSelectedCellId);
 export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);
 export const useSelectedLocationId = () =>
-  useEditorStore((state) =>
+  useInteractionStore((state) =>
     state.selection.type === 'location' ? state.selection.locationId : null
   );
 export const useSetSelectedLocationId = () => useEditorStore((state) => state.setSelectedLocationId);
 export const useActiveStorageWorkflow = (): ActiveStorageWorkflow =>
   useEditorStore((state) => state.activeStorageWorkflow);
-export const useInteractionScope = (): InteractionScope =>
-  useEditorStore((state) =>
-    resolveInteractionScope(state.selection, state.activeStorageWorkflow)
-  );
+export const useInteractionScope = (): InteractionScope => {
+  const selection = useInteractionStore((state) => state.selection);
+  const activeStorageWorkflow = useEditorStore((state) => state.activeStorageWorkflow);
+  return resolveInteractionScope(selection, activeStorageWorkflow);
+};
 export const useStartPlaceContainerWorkflow = () =>
   useEditorStore((state) => state.startPlaceContainerWorkflow);
 export const useStartCreateAndPlaceWorkflow = () =>
@@ -141,8 +146,8 @@ export const useSetCreateAndPlacePlacementRetry = () =>
 export const useMarkActiveStorageWorkflowSubmitting = () =>
   useEditorStore((state) => state.markActiveStorageWorkflowSubmitting);
 export const useContextPanelMode = () =>
-  useEditorStore((state) => state.contextPanelMode);
+  useInteractionStore((state) => state.contextPanelMode);
 export const useSetContextPanelMode = () =>
-  useEditorStore((state) => state.setContextPanelMode);
+  useInteractionStore((state) => state.setContextPanelMode);
 export const useToggleContextPanelMode = () =>
-  useEditorStore((state) => state.toggleContextPanelMode);
+  useInteractionStore((state) => state.toggleContextPanelMode);

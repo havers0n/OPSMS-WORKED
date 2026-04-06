@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mapLayoutDraftToSavePayload } from '../../../features/layout-draft-save/api/mappers';
 import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
 import { useEditorStore } from './editor-store';
+import { useInteractionStore } from './interaction-store';
 import { useModeStore } from './mode-store';
 
 const UUID_REGEX =
@@ -16,17 +17,15 @@ function resetStore() {
 
   // Reset editor-store
   useEditorStore.setState({
-    selection: { type: 'none' },
     activeStorageWorkflow: null,
-    contextPanelMode: 'compact',
-    hoveredRackId: null,
-    creatingRackId: null,
-    highlightedCellIds: [],
     minRackDistance: 0,
     draft: null,
     draftSourceVersionId: null,
     isDraftDirty: false
   });
+
+  // Reset interaction-store
+  useInteractionStore.setState({ selection: { type: 'none' }, hoveredRackId: null, creatingRackId: null, highlightedCellIds: [], contextPanelMode: 'compact' });
 }
 
 function createUuidLayoutDraftFixture() {
@@ -63,7 +62,7 @@ describe('editor-store', () => {
 
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
     expect(useEditorStore.getState().draft?.state).toBe('draft');
-    expect(useEditorStore.getState().selection.type).toBe('none');
+    expect(useInteractionStore.getState().selection.type).toBe('none');
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 
@@ -132,7 +131,7 @@ describe('editor-store', () => {
 
     const createdZoneId = useEditorStore.getState().draft?.zoneIds[0] ?? null;
     expect(createdZoneId).toBeTruthy();
-    expect(useEditorStore.getState().selection).toEqual({
+    expect(useInteractionStore.getState().selection).toEqual({
       type: 'zone',
       zoneId: createdZoneId
     });
@@ -167,7 +166,7 @@ describe('editor-store', () => {
 
     expect(useEditorStore.getState().draft?.zoneIds).toEqual([]);
     expect(useEditorStore.getState().draft?.zones).toEqual({});
-    expect(useEditorStore.getState().selection.type).toBe('none');
+    expect(useInteractionStore.getState().selection.type).toBe('none');
     expect(useEditorStore.getState().isDraftDirty).toBe(true);
   });
 
@@ -180,7 +179,7 @@ describe('editor-store', () => {
 
     const wallId = useEditorStore.getState().draft?.wallIds[0] ?? null;
     expect(wallId).toBeTruthy();
-    expect(useEditorStore.getState().selection).toEqual({
+    expect(useInteractionStore.getState().selection).toEqual({
       type: 'wall',
       wallId
     });
@@ -249,7 +248,7 @@ describe('editor-store', () => {
 
     expect(useEditorStore.getState().draft?.wallIds).toEqual([]);
     expect(useEditorStore.getState().draft?.walls).toEqual({});
-    expect(useEditorStore.getState().selection.type).toBe('none');
+    expect(useInteractionStore.getState().selection.type).toBe('none');
   });
 
   it('createFreeWall creates a horizontal wall from a left-to-right drag', () => {
@@ -275,7 +274,7 @@ describe('editor-store', () => {
         y2: 40  // axis-locked to start Y
       })
     );
-    expect(useEditorStore.getState().selection).toEqual({ type: 'wall', wallId });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'wall', wallId });
     expect(useModeStore.getState().editorMode).toBe('select');
     expect(useEditorStore.getState().isDraftDirty).toBe(true);
   });
@@ -312,7 +311,7 @@ describe('editor-store', () => {
     useEditorStore.getState().createFreeWall(0, 0, 0.4, 0);
 
     expect(useEditorStore.getState().draft?.wallIds).toHaveLength(0);
-    expect(useEditorStore.getState().selection.type).toBe('none');
+    expect(useInteractionStore.getState().selection.type).toBe('none');
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 
@@ -394,19 +393,19 @@ describe('editor-store', () => {
     useEditorStore.getState().resetDraft();
 
     expect(useEditorStore.getState().draft).toBeNull();
-    expect(useEditorStore.getState().selection).toEqual({ type: 'none' });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
-    expect(useEditorStore.getState().contextPanelMode).toBe('compact');
+    expect(useInteractionStore.getState().contextPanelMode).toBe('compact');
   });
 
   it('stores Context Panel shell mode as in-session editor state', () => {
-    expect(useEditorStore.getState().contextPanelMode).toBe('compact');
+    expect(useInteractionStore.getState().contextPanelMode).toBe('compact');
 
-    useEditorStore.getState().setContextPanelMode('expanded');
-    expect(useEditorStore.getState().contextPanelMode).toBe('expanded');
+    useInteractionStore.getState().setContextPanelMode('expanded');
+    expect(useInteractionStore.getState().contextPanelMode).toBe('expanded');
 
-    useEditorStore.getState().toggleContextPanelMode();
-    expect(useEditorStore.getState().contextPanelMode).toBe('compact');
+    useInteractionStore.getState().toggleContextPanelMode();
+    expect(useInteractionStore.getState().contextPanelMode).toBe('compact');
   });
 
   it('stores created-container details when create-and-place enters placement retry', () => {

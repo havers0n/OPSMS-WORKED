@@ -10,7 +10,6 @@ import type {
 import { create } from 'zustand';
 import {
   type ActiveStorageWorkflow,
-  type ContextPanelMode,
   normalizeViewMode,
   type AnyViewMode,
   type EditorMode,
@@ -20,6 +19,7 @@ import {
   type ViewMode
 } from './editor-types';
 import { useModeStore } from './mode-store';
+import { useInteractionStore } from './interaction-store';
 import { createStorageWorkflowActions } from './storage-workflow-actions';
 import {
   buildEmptySection,
@@ -75,20 +75,15 @@ function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
 }
 
 type EditorStore = {
-  /** Canonical selection state. Use setSelection / clearSelection to mutate. */
-  selection: EditorSelection;
   activeStorageWorkflow: ActiveStorageWorkflow;
-  contextPanelMode: ContextPanelMode;
-  hoveredRackId: string | null;
-  /** ID of the rack currently going through the creation wizard. Cleared on wizard finish/cancel. */
-  creatingRackId: string | null;
-  highlightedCellIds: string[];
   minRackDistance: number;
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
+  // — Mode (coordinates with mode-store) —
   setViewMode: (mode: AnyViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
+  // — Selection coordinators (also reset activeStorageWorkflow) —
   setSelection: (selection: EditorSelection) => void;
   clearSelection: () => void;
   /** Convenience wrapper — sets a rack-type selection from an id array. */
@@ -106,6 +101,7 @@ type EditorStore = {
   setSelectedContainerId: (containerId: string | null, sourceCellId?: string | null) => void;
   /** Convenience wrapper — sets a non-rack location selection, or clears if null. */
   setSelectedLocationId: (locationId: string | null) => void;
+  // — Storage workflow (domain semantics) —
   startPlaceContainerWorkflow: (cellId: string) => void;
   startCreateAndPlaceWorkflow: (cellId: string) => void;
   startPlacementMove: (containerId: string, fromCellId: string) => void;
@@ -114,12 +110,7 @@ type EditorStore = {
   setActiveStorageWorkflowError: (errorMessage: string | null) => void;
   setCreateAndPlacePlacementRetry: (createdContainer: { id: string; code: string }, errorMessage: string) => void;
   markActiveStorageWorkflowSubmitting: () => void;
-  setContextPanelMode: (mode: ContextPanelMode) => void;
-  toggleContextPanelMode: () => void;
-  setHoveredRackId: (rackId: string | null) => void;
-  setCreatingRackId: (rackId: string | null) => void;
-  setHighlightedCellIds: (cellIds: string[]) => void;
-  clearHighlightedCellIds: () => void;
+  // — Layout config —
   setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
   initializeDraft: (draft: LayoutDraft) => void;
@@ -164,12 +155,7 @@ type EditorStore = {
 };
 
 const initialEditorState = {
-  selection: { type: 'none' } as EditorSelection,
   activeStorageWorkflow: null as ActiveStorageWorkflow,
-  contextPanelMode: 'compact' as ContextPanelMode,
-  hoveredRackId: null,
-  creatingRackId: null,
-  highlightedCellIds: [],
   minRackDistance: 0,
   draft: null,
   draftSourceVersionId: null,
@@ -183,112 +169,77 @@ const WORKFLOW_RESET = {
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
   setViewMode: (nextViewMode) => {
-    // Coordinate with mode-store: update viewMode + reset editorMode to 'select'
+    // Coordinate: update mode-store, clear interaction, clear workflow
     useModeStore.getState().setViewMode(nextViewMode);
     useModeStore.getState().setEditorMode('select');
-
-    // Handle side effects in editor-store: clear stale selection and workflow
-    // when switching between mode groups (layout vs view/storage).
-    // Stale rack/cell selections from the previous mode should never bleed.
-    set({
-      selection: { type: 'none' },
-      ...WORKFLOW_RESET,
-      creatingRackId: null,
-      highlightedCellIds: []
-    });
+    // clearForModeSwitch: clears selection, creatingRackId, highlightedCellIds
+    useInteractionStore.getState().clearForModeSwitch();
+    set(WORKFLOW_RESET);
   },
   setEditorMode: (editorMode) => {
-    // Forward to mode-store
     useModeStore.getState().setEditorMode(editorMode);
   },
-  setSelection: (selection) =>
-    set({
-      selection,
-      ...WORKFLOW_RESET
-    }),
-  clearSelection: () =>
-    set({
-      selection: { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
-  setSelectedRackIds: (rackIds) =>
-    set({
-      selection: makeRackSelection(rackIds),
-      ...WORKFLOW_RESET
-    }),
-  setSelectedRackId: (rackId) =>
-    set({
-      selection: rackId
-        ? { type: 'rack', rackIds: [rackId], focus: { type: 'body' } }
-        : { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
-  setSelectedRackSide: (rackId, side) =>
-    set({
-      selection: {
-        type: 'rack',
-        rackIds: [rackId],
-        focus: { type: 'side', side }
-      },
-      ...WORKFLOW_RESET
-    }),
-  toggleRackSelection: (rackId) => set((state) => {
-    const current = getSelectedRackIds(state.selection);
-    const next = current.includes(rackId)
-      ? current.filter(id => id !== rackId)
-      : [...current, rackId];
-    return {
-      selection: makeRackSelection(next),
-      ...WORKFLOW_RESET
-    };
-  }),
-  setSelectedZoneId: (zoneId) =>
-    set({
-      selection: zoneId ? { type: 'zone', zoneId } : { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
-  setSelectedWallId: (wallId) =>
-    set({
-      selection: wallId ? { type: 'wall', wallId } : { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
-  setSelectedCellId: (cellId) =>
-    set({
-      selection: cellId ? { type: 'cell', cellId } : { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
-  setSelectedContainerId: (containerId, sourceCellId = null) =>
-    set({
-      selection: containerId
-        ? { type: 'container', containerId, sourceCellId }
-        : { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
-  setSelectedLocationId: (locationId) =>
-    set({
-      selection: locationId ? { type: 'location', locationId } : { type: 'none' },
-      ...WORKFLOW_RESET
-    }),
+  // — Selection coordinators: delegate to interaction-store + reset active workflow —
+  setSelection: (selection) => {
+    useInteractionStore.getState().setSelection(selection);
+    set(WORKFLOW_RESET);
+  },
+  clearSelection: () => {
+    useInteractionStore.getState().clearSelection();
+    set(WORKFLOW_RESET);
+  },
+  setSelectedRackIds: (rackIds) => {
+    useInteractionStore.getState().setSelectedRackIds(rackIds);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedRackId: (rackId) => {
+    useInteractionStore.getState().setSelectedRackId(rackId);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedRackSide: (rackId, side) => {
+    useInteractionStore.getState().setSelectedRackSide(rackId, side);
+    set(WORKFLOW_RESET);
+  },
+  toggleRackSelection: (rackId) => {
+    useInteractionStore.getState().toggleRackSelection(rackId);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedZoneId: (zoneId) => {
+    useInteractionStore.getState().setSelectedZoneId(zoneId);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedWallId: (wallId) => {
+    useInteractionStore.getState().setSelectedWallId(wallId);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedCellId: (cellId) => {
+    useInteractionStore.getState().setSelectedCellId(cellId);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedContainerId: (containerId, sourceCellId) => {
+    useInteractionStore.getState().setSelectedContainerId(containerId, sourceCellId);
+    set(WORKFLOW_RESET);
+  },
+  setSelectedLocationId: (locationId) => {
+    useInteractionStore.getState().setSelectedLocationId(locationId);
+    set(WORKFLOW_RESET);
+  },
   startPlaceContainerWorkflow: (cellId) =>
     set((state) => {
       const isStorageMode = useModeStore.getState().viewMode === 'storage';
+      // Selection update is a side effect here (drives inspector panel)
+      useInteractionStore.getState().setSelectedCellId(cellId);
       return {
-        selection: { type: 'cell', cellId },
         activeStorageWorkflow: isStorageMode
-          ? {
-              kind: 'place-container',
-              cellId,
-              status: 'editing',
-              errorMessage: null
-            }
+          ? { kind: 'place-container', cellId, status: 'editing', errorMessage: null }
           : state.activeStorageWorkflow
       };
     }),
   startCreateAndPlaceWorkflow: (cellId) =>
     set((state) => {
       const isStorageMode = useModeStore.getState().viewMode === 'storage';
+      useInteractionStore.getState().setSelectedCellId(cellId);
       return {
-        selection: { type: 'cell', cellId },
         activeStorageWorkflow: isStorageMode
           ? {
               kind: 'create-and-place',
@@ -317,37 +268,19 @@ export const useEditorStore = create<EditorStore>((set) => ({
       };
     }),
   ...createStorageWorkflowActions(set),
-  setContextPanelMode: (contextPanelMode) => set({ contextPanelMode }),
-  toggleContextPanelMode: () =>
-    set((state) => ({
-      contextPanelMode: state.contextPanelMode === 'compact' ? 'expanded' : 'compact'
-    })),
-  setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
-  setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
-  setHighlightedCellIds: (cellIds) => set({ highlightedCellIds: [...new Set(cellIds)] }),
-  clearHighlightedCellIds: () => set({ highlightedCellIds: [] }),
   setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
   resetDraft: () => {
-    // Reset mode state (side effect)
+    if (TRACE) {
+      console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
+    }
     useModeStore.getState().setViewMode('layout');
     useModeStore.getState().setEditorMode('select');
-
-    // Reset editor state
-    set(() => {
-      if (TRACE) {
-        console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
-      }
-      return {
-        draft: null,
-        draftSourceVersionId: null,
-        selection: { type: 'none' },
-        ...WORKFLOW_RESET,
-        contextPanelMode: 'compact',
-        highlightedCellIds: [],
-        hoveredRackId: null,
-        creatingRackId: null,
-        isDraftDirty: false
-      };
+    useInteractionStore.getState().resetAll();
+    set({
+      draft: null,
+      draftSourceVersionId: null,
+      ...WORKFLOW_RESET,
+      isDraftDirty: false
     });
   },
   initializeDraft: (draft) =>
@@ -402,32 +335,37 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Never auto-select the first rack — it overwrites cell/container selections that
       // happen to be live when a layout-version switch occurs (e.g. draft creation while
       // the user is in placement mode).
-      const currentRackIds = getSelectedRackIds(state.selection);
+      const currentSelection = useInteractionStore.getState().selection;
+      const currentRackIds = getSelectedRackIds(currentSelection);
       const nextRackIds =
         currentRackIds.length > 0 && currentRackIds.every(id => nextDraftState.racks[id])
           ? currentRackIds
           : [];
       const nextFocus =
         nextRackIds.length === 1 && currentRackIds.length === 1 && nextRackIds[0] === currentRackIds[0]
-          ? getRackSelectionFocus(state.selection)
+          ? getRackSelectionFocus(currentSelection)
           : { type: 'body' as const };
       const nextSelection: EditorSelection =
-        state.selection.type === 'rack'
+        currentSelection.type === 'rack'
           ? makeRackSelection(nextRackIds, nextFocus)
-          : state.selection.type === 'zone'
-            ? nextDraftState.zones[state.selection.zoneId]
-              ? state.selection
+          : currentSelection.type === 'zone'
+            ? nextDraftState.zones[currentSelection.zoneId]
+              ? currentSelection
               : { type: 'none' }
-            : state.selection.type === 'wall'
-              ? nextDraftState.walls[state.selection.wallId]
-                ? state.selection
+            : currentSelection.type === 'wall'
+              ? nextDraftState.walls[currentSelection.wallId]
+                ? currentSelection
                 : { type: 'none' }
-            : state.selection;
+            : currentSelection;
+
+      // Update selection in interaction-store if it changed
+      if (nextSelection !== currentSelection) {
+        useInteractionStore.getState().setSelection(nextSelection);
+      }
 
       return {
         draft: nextDraftState,
         draftSourceVersionId: nextDraftState.layoutVersionId,
-        selection: nextSelection,
         isDraftDirty: normalized.changed
       };
     }),
@@ -450,15 +388,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const nextDraft = cloneDraft(state.draft);
       nextDraft.rackIds = [...nextDraft.rackIds, newRack.id];
       nextDraft.racks[newRack.id] = newRack;
-
-      return {
-        draft: nextDraft,
-        selection: { type: 'rack', rackIds: [newRack.id], focus: { type: 'body' } },
-        creatingRackId: newRack.id,
-        isDraftDirty: true
-      };
+      // Update interaction state as a side effect inside set() — safe because
+      // Zustand's set() is synchronous and this fires before subscribers.
+      useInteractionStore.getState().setSelection({ type: 'rack', rackIds: [newRack.id], focus: { type: 'body' } });
+      useInteractionStore.getState().setCreatingRackId(newRack.id);
+      return { draft: nextDraft, isDraftDirty: true };
     });
-    // Exit draw mode
     useModeStore.getState().setEditorMode('select');
   },
   createZone: (rect) => {
@@ -469,14 +404,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const nextDraft = cloneDraft(state.draft);
       nextDraft.zoneIds = [...nextDraft.zoneIds, newZone.id];
       nextDraft.zones[newZone.id] = newZone;
-
-      return {
-        draft: nextDraft,
-        selection: { type: 'zone', zoneId: newZone.id },
-        isDraftDirty: true
-      };
+      useInteractionStore.getState().setSelection({ type: 'zone', zoneId: newZone.id });
+      return { draft: nextDraft, isDraftDirty: true };
     });
-    // Exit draw mode
     useModeStore.getState().setEditorMode('select');
   },
   createFreeWall: (x1, y1, x2, y2) => {
@@ -489,14 +419,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const nextDraft = cloneDraft(state.draft);
       nextDraft.wallIds = [...nextDraft.wallIds, newWall.id];
       nextDraft.walls[newWall.id] = newWall;
-
-      return {
-        draft: nextDraft,
-        selection: { type: 'wall', wallId: newWall.id },
-        isDraftDirty: true
-      };
+      useInteractionStore.getState().setSelection({ type: 'wall', wallId: newWall.id });
+      return { draft: nextDraft, isDraftDirty: true };
     });
-    // Exit draw mode
     useModeStore.getState().setEditorMode('select');
   },
   createWallFromRackSide: (rackId, side) => {
@@ -510,14 +435,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const nextDraft = cloneDraft(state.draft);
       nextDraft.wallIds = [...nextDraft.wallIds, newWall.id];
       nextDraft.walls[newWall.id] = newWall;
-
-      return {
-        draft: nextDraft,
-        selection: { type: 'wall', wallId: newWall.id },
-        isDraftDirty: true
-      };
+      useInteractionStore.getState().setSelection({ type: 'wall', wallId: newWall.id });
+      return { draft: nextDraft, isDraftDirty: true };
     });
-    // Exit draw mode
     useModeStore.getState().setEditorMode('select');
   },
   deleteRack: (rackId) =>
@@ -528,12 +448,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
       delete nextDraft.racks[rackId];
       nextDraft.rackIds = nextDraft.rackIds.filter((id) => id !== rackId);
 
-      return {
-        draft: nextDraft,
-        selection: makeRackSelection(getSelectedRackIds(state.selection).filter(id => id !== rackId)),
-        creatingRackId: state.creatingRackId === rackId ? null : state.creatingRackId,
-        isDraftDirty: true
-      };
+      const ix = useInteractionStore.getState();
+      const nextRackIds = getSelectedRackIds(ix.selection).filter(id => id !== rackId);
+      ix.setSelectedRackIds(nextRackIds);
+      if (ix.creatingRackId === rackId) ix.setCreatingRackId(null);
+
+      return { draft: nextDraft, isDraftDirty: true };
     }),
   deleteZone: (zoneId) =>
     set((state) => {
@@ -543,14 +463,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
       delete nextDraft.zones[zoneId];
       nextDraft.zoneIds = nextDraft.zoneIds.filter((id) => id !== zoneId);
 
-      return {
-        draft: nextDraft,
-        selection:
-          state.selection.type === 'zone' && state.selection.zoneId === zoneId
-            ? { type: 'none' }
-            : state.selection,
-        isDraftDirty: true
-      };
+      const ix = useInteractionStore.getState();
+      if (ix.selection.type === 'zone' && ix.selection.zoneId === zoneId) {
+        ix.clearSelection();
+      }
+
+      return { draft: nextDraft, isDraftDirty: true };
     }),
   deleteWall: (wallId) =>
     set((state) => {
@@ -560,14 +478,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
       delete nextDraft.walls[wallId];
       nextDraft.wallIds = nextDraft.wallIds.filter((id) => id !== wallId);
 
-      return {
-        draft: nextDraft,
-        selection:
-          state.selection.type === 'wall' && state.selection.wallId === wallId
-            ? { type: 'none' }
-            : state.selection,
-        isDraftDirty: true
-      };
+      const ix = useInteractionStore.getState();
+      if (ix.selection.type === 'wall' && ix.selection.wallId === wallId) {
+        ix.clearSelection();
+      }
+
+      return { draft: nextDraft, isDraftDirty: true };
     }),
   duplicateRack: (rackId) =>
     set((state) => {
@@ -604,12 +520,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
 
       nextDraft.rackIds = [...nextDraft.rackIds, newRackId];
       nextDraft.racks[newRackId] = duplicate;
-
-      return {
-        draft: nextDraft,
-        selection: { type: 'rack', rackIds: [newRackId], focus: { type: 'body' } },
-        isDraftDirty: true
-      };
+      useInteractionStore.getState().setSelection({ type: 'rack', rackIds: [newRackId], focus: { type: 'body' } });
+      return { draft: nextDraft, isDraftDirty: true };
     }),
   updateRackPosition: (rackId, x, y) =>
     set((state) => {
