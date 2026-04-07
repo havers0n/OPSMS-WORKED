@@ -123,8 +123,9 @@ export function OperationsPage() {
   }, [navigateToWave, navigate]);
 
   return (
-    <div className="flex h-full flex-col overflow-auto">
-      <div className="mx-auto w-full max-w-4xl space-y-8 p-6">
+    <div className="flex h-full w-full overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex-1 space-y-8 overflow-auto p-6">
 
         {/* ── Entry cards ───────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -324,11 +325,12 @@ export function OperationsPage() {
           )}
         </section>
 
+        </div>
       </div>
 
-      {/* Order detail panel */}
+      {/* Order detail panel — in-flow sibling, not fixed overlay */}
       {selectedOrderId && (
-        <div className="fixed inset-y-0 right-0 z-30 m-4 mt-[56px] w-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="m-4 ml-0 w-[420px] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <OrderDrawer orderId={selectedOrderId} onClose={() => setSearchParams((p) => { p.delete('order'); return p; })} />
         </div>
       )}
