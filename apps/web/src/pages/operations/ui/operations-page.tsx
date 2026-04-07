@@ -75,7 +75,10 @@ function CreateOrderModal({ onClose }: { onClose: () => void }) {
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
+type TabMode = 'waves' | 'orders';
+
 export function OperationsPage() {
+  const [activeTab, setActiveTab] = useState<TabMode>('waves');
   const [showCreateWave, setShowCreateWave] = useState(false);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -100,74 +103,78 @@ export function OperationsPage() {
   return (
     <div className="flex h-full w-full overflow-hidden">
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex-1 space-y-8 overflow-auto p-6">
-
-        {/* ── Entry cards ───────────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* Wave flow */}
-          <button
-            type="button"
-            onClick={() => setShowCreateWave(true)}
-            className="group flex flex-col items-start gap-3 rounded-2xl border-2 border-dashed border-cyan-200 bg-cyan-50/40 p-5 text-left transition hover:border-cyan-400 hover:bg-cyan-50"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700 transition group-hover:bg-cyan-200">
-              <WavesIcon className="h-5 w-5" />
+        {/* ── Compact Action Bar ────────────────────────────────── */}
+        <div className="border-b border-slate-200 bg-white px-6 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateWave(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+              >
+                <WavesIcon className="h-4 w-4" />
+                New wave
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateOrder(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Package className="h-4 w-4" />
+                Quick order
+              </button>
             </div>
-            <div>
-              <div className="font-semibold text-slate-900">Start a wave</div>
-              <div className="mt-0.5 text-sm text-slate-500">
-                Group multiple orders into a single picking run
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-xs font-medium text-cyan-700">
-              Create wave <ArrowRight className="h-3.5 w-3.5" />
-            </div>
-          </button>
-
-          {/* Quick order */}
-          <button
-            type="button"
-            onClick={() => setShowCreateOrder(true)}
-            className="group flex flex-col items-start gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-5 text-left transition hover:border-slate-300 hover:bg-slate-50"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-200">
-              <Package className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900">Quick order</div>
-              <div className="mt-0.5 text-sm text-slate-500">
-                One-off order — process it directly without a wave
-              </div>
-            </div>
-            <div className="flex items-center gap-1 text-xs font-medium text-slate-600">
-              Create order <ArrowRight className="h-3.5 w-3.5" />
-            </div>
-          </button>
+          </div>
         </div>
 
-        {/* ── Waves section ─────────────────────────────────────── */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">Waves</h2>
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{waves.length}</span>
-            </div>
-            <button type="button" onClick={() => void refetchWaves()} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-              <RefreshCw className={`h-3.5 w-3.5 ${wavesRefetching ? 'animate-spin' : ''}`} />
-            </button>
+        {/* ── Tabs ──────────────────────────────────────────────── */}
+        <div className="border-b border-slate-200 bg-white px-6">
+          <div className="flex gap-1">
+            {(['waves', 'orders'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-1.5 border-b-2 px-1 py-3 text-sm font-medium transition ${
+                  activeTab === tab
+                    ? 'border-cyan-600 text-cyan-700'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {tab === 'waves' ? 'Waves' : 'Standalone orders'}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
+                    activeTab === tab ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {tab === 'waves' ? waves.length : standaloneOrders.length}
+                </span>
+              </button>
+            ))}
           </div>
+        </div>
 
-          {wavesLoading ? (
-            <div className="flex h-24 items-center justify-center rounded-2xl border border-slate-200 bg-white">
-              <RefreshCw className="h-4 w-4 animate-spin text-slate-300" />
-            </div>
-          ) : waves.length === 0 ? (
-            <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-              No waves yet — create one above
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="min-w-full divide-y divide-slate-100 text-sm">
+        {/* ── Content Area ──────────────────────────────────────── */}
+        <div className="flex-1 overflow-auto p-6">
+          {activeTab === 'waves' && (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <button type="button" onClick={() => void refetchWaves()} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                  <RefreshCw className={`h-3.5 w-3.5 ${wavesRefetching ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {wavesLoading ? (
+                <div className="flex h-24 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+                  <RefreshCw className="h-4 w-4 animate-spin text-slate-300" />
+                </div>
+              ) : waves.length === 0 ? (
+                <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
+                  No waves yet — create one above
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-5 py-3">Wave</th>
@@ -175,140 +182,137 @@ export function OperationsPage() {
                     <th className="px-4 py-3">Progress</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {waves.map((wave) => {
-                    const action = getWavePrimaryAction(wave);
-                    return (
-                      <tr key={wave.id} className="group transition hover:bg-slate-50">
-                        <td className="px-5 py-3">
-                          <Link to={waveDetailPath(wave.id)} className="flex items-center gap-1 font-medium text-slate-900 hover:text-cyan-700">
-                            {wave.name}
-                            <ChevronRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" />
-                          </Link>
-                          <div className="flex items-center gap-2 mt-1">
-                            {wave.blockingOrderCount > 0 ? (
-                              <div className="flex items-center gap-1 text-xs text-amber-700">
-                                <AlertCircle className="h-3.5 w-3.5" />
-                                <span>{wave.blockingOrderCount} {wave.blockingOrderCount === 1 ? 'blocker' : 'blockers'}</span>
-                              </div>
-                            ) : wave.totalOrders > 0 ? (
-                              <div className="text-xs text-emerald-700">All ready</div>
-                            ) : (
-                              <div className="text-xs text-slate-400">No orders</div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getWaveStatusColor(wave.status)}`}>
-                            {getWaveStatusLabel(wave.status)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <WaveProgress readyOrders={wave.readyOrders} totalOrders={wave.totalOrders} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                            {action.target && (
-                              <button
-                                type="button"
-                                disabled={Boolean(action.reason) || (waveTransition.isPending && waveTransition.variables?.waveId === wave.id)}
-                                title={action.reason ?? undefined}
-                                onClick={() => waveTransition.mutate({ waveId: wave.id, status: action.target as WaveStatus })}
-                                className="rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100 disabled:opacity-50"
-                              >
-                                {waveTransition.isPending && waveTransition.variables?.waveId === wave.id ? '...' : action.label}
-                              </button>
-                            )}
-                            <Link to={waveDetailPath(wave.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                              <ChevronRight className="h-3.5 w-3.5" />
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {waves.map((wave) => {
+                      const action = getWavePrimaryAction(wave);
+                      return (
+                        <tr key={wave.id} className="group transition hover:bg-slate-50">
+                          <td className="px-5 py-3">
+                            <Link to={waveDetailPath(wave.id)} className="flex items-center gap-1 font-medium text-slate-900 hover:text-cyan-700">
+                              {wave.name}
+                              <ChevronRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" />
                             </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {wave.blockingOrderCount > 0 ? (
+                                <div className="flex items-center gap-1 text-xs text-amber-700">
+                                  <AlertCircle className="h-3.5 w-3.5" />
+                                  <span>{wave.blockingOrderCount} {wave.blockingOrderCount === 1 ? 'blocker' : 'blockers'}</span>
+                                </div>
+                              ) : wave.totalOrders > 0 ? (
+                                <div className="text-xs text-emerald-700">All ready</div>
+                              ) : (
+                                <div className="text-xs text-slate-400">No orders</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getWaveStatusColor(wave.status)}`}>
+                              {getWaveStatusLabel(wave.status)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <WaveProgress readyOrders={wave.readyOrders} totalOrders={wave.totalOrders} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                              {action.target && (
+                                <button
+                                  type="button"
+                                  disabled={Boolean(action.reason) || (waveTransition.isPending && waveTransition.variables?.waveId === wave.id)}
+                                  title={action.reason ?? undefined}
+                                  onClick={() => waveTransition.mutate({ waveId: wave.id, status: action.target as WaveStatus })}
+                                  className="rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100 disabled:opacity-50"
+                                >
+                                  {waveTransition.isPending && waveTransition.variables?.waveId === wave.id ? '...' : action.label}
+                                </button>
+                              )}
+                              <Link to={waveDetailPath(wave.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              )}
+            </section>
           )}
-        </section>
 
-        {/* ── Standalone orders section ──────────────────────────── */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">Standalone orders</h2>
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{standaloneOrders.length}</span>
-            </div>
-            <button type="button" onClick={() => void refetchOrders()} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
-              <RefreshCw className={`h-3.5 w-3.5 ${ordersRefetching ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+          {activeTab === 'orders' && (
+            <section>
+              <div className="mb-3 flex items-center justify-between">
+                <button type="button" onClick={() => void refetchOrders()} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                  <RefreshCw className={`h-3.5 w-3.5 ${ordersRefetching ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
 
-          {ordersLoading ? (
-            <div className="flex h-24 items-center justify-center rounded-2xl border border-slate-200 bg-white">
-              <RefreshCw className="h-4 w-4 animate-spin text-slate-300" />
-            </div>
-          ) : standaloneOrders.length === 0 ? (
-            <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
-              No standalone orders — create one above
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="min-w-full divide-y divide-slate-100 text-sm">
-                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-5 py-3">Order</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Lines</th>
-                    <th className="px-4 py-3">Progress</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {standaloneOrders.map((order) => {
-                    const target = getPrimaryTransitionTarget(order.status);
-                    const canTransition = Boolean(target) && !(target === 'ready' && order.lineCount === 0);
-                    return (
-                      <tr
-                        key={order.id}
-                        onClick={() => setSearchParams((p) => { p.set('order', order.id); return p; })}
-                        className={`cursor-pointer transition hover:bg-slate-50 ${selectedOrderId === order.id ? 'bg-cyan-50/60' : ''}`}
-                      >
-                        <td className="px-5 py-3 font-medium text-slate-900">{order.externalNumber}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getOrderStatusColor(order.status)}`}>
-                            {getOrderStatusLabel(order.status)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">{order.lineCount}</td>
-                        <td className="px-4 py-3 text-slate-500">{getProgressLabel(order)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                            {canTransition && target && (
-                              <button
-                                type="button"
-                                disabled={orderTransition.isPending && orderTransition.variables?.orderId === order.id}
-                                onClick={() => orderTransition.mutate({ orderId: order.id, status: target as OrderStatus })}
-                                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                              >
-                                {order.status === 'draft' && target === 'ready'
-                                  ? 'Commit and reserve'
-                                  : getOrderStatusLabel(target)}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+              {ordersLoading ? (
+                <div className="flex h-24 items-center justify-center rounded-2xl border border-slate-200 bg-white">
+                  <RefreshCw className="h-4 w-4 animate-spin text-slate-300" />
+                </div>
+              ) : standaloneOrders.length === 0 ? (
+                <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-slate-200 text-sm text-slate-400">
+                  No standalone orders — create one above
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3">Order</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Lines</th>
+                      <th className="px-4 py-3">Progress</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {standaloneOrders.map((order) => {
+                      const target = getPrimaryTransitionTarget(order.status);
+                      const canTransition = Boolean(target) && !(target === 'ready' && order.lineCount === 0);
+                      return (
+                        <tr
+                          key={order.id}
+                          onClick={() => setSearchParams((p) => { p.set('order', order.id); return p; })}
+                          className={`cursor-pointer transition hover:bg-slate-50 ${selectedOrderId === order.id ? 'bg-cyan-50/60' : ''}`}
+                        >
+                          <td className="px-5 py-3 font-medium text-slate-900">{order.externalNumber}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getOrderStatusColor(order.status)}`}>
+                              {getOrderStatusLabel(order.status)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{order.lineCount}</td>
+                          <td className="px-4 py-3 text-slate-500">{getProgressLabel(order)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                              {canTransition && target && (
+                                <button
+                                  type="button"
+                                  disabled={orderTransition.isPending && orderTransition.variables?.orderId === order.id}
+                                  onClick={() => orderTransition.mutate({ orderId: order.id, status: target as OrderStatus })}
+                                  className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                >
+                                  {order.status === 'draft' && target === 'ready'
+                                    ? 'Commit and reserve'
+                                    : getOrderStatusLabel(target)}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              )}
+            </section>
           )}
-        </section>
-
         </div>
       </div>
 
