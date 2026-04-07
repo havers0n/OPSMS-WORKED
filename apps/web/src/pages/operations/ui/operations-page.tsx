@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ChevronRight, Package, PackagePlus, RefreshCw, Waves as WavesIcon } from 'lucide-react';
+import { ArrowRight, AlertCircle, ChevronRight, Package, PackagePlus, RefreshCw, Waves as WavesIcon } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, WaveStatus, WaveSummary } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
-import { getOrderStatusColor, getOrderStatusLabel, getProgressLabel } from '@/entities/order/lib/order-actions';
+import { getOrderStatusColor, getOrderStatusLabel, getProgressLabel, getPrimaryTransitionTarget } from '@/entities/order/lib/order-actions';
 import { useCreateWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { wavesQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
@@ -186,8 +186,17 @@ export function OperationsPage() {
                             {wave.name}
                             <ChevronRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" />
                           </Link>
-                          <div className="text-xs text-slate-400">
-                            {wave.blockingOrderCount > 0 ? `${wave.blockingOrderCount} blocking` : wave.totalOrders > 0 ? 'All ready' : 'No orders'}
+                          <div className="flex items-center gap-2 mt-1">
+                            {wave.blockingOrderCount > 0 ? (
+                              <div className="flex items-center gap-1 text-xs text-amber-700">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <span>{wave.blockingOrderCount} {wave.blockingOrderCount === 1 ? 'blocker' : 'blockers'}</span>
+                              </div>
+                            ) : wave.totalOrders > 0 ? (
+                              <div className="text-xs text-emerald-700">All ready</div>
+                            ) : (
+                              <div className="text-xs text-slate-400">No orders</div>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">

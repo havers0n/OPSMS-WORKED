@@ -303,12 +303,12 @@ function WaveDrawer({ waveId, onClose }: { waveId: string; onClose: () => void }
       {/* Footer actions */}
       <div className="border-t border-slate-200 p-4">
         <div className="flex flex-wrap gap-2">
-          {secondaryAction && (
+          {secondaryAction?.target && (
             <button
               type="button"
               disabled={transition.isPending}
               onClick={() =>
-                transition.mutate({ waveId: wave.id, status: secondaryAction.target })
+                transition.mutate({ waveId: wave.id, status: secondaryAction.target as WaveStatus })
               }
               className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >

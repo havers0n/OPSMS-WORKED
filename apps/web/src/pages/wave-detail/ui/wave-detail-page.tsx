@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ChevronDown, ChevronRight, PackagePlus, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, PackagePlus, RefreshCw, X, AlertCircle } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, OrderSummary, WaveStatus } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
@@ -9,6 +9,7 @@ import { getOrderStatusColor, getOrderStatusLabel, getPrimaryTransitionTarget } 
 import { useAttachOrderToWave, useDetachOrderFromWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { waveKeys, waveQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
+import { deriveWaveBlockers, getBlockerReasonLabel } from '@/entities/wave/lib/wave-blockers';
 import { routes } from '@/shared/config/routes';
 import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
 
@@ -111,6 +112,63 @@ function AddOrderModal({ waveId, onClose }: { waveId: string; onClose: () => voi
             <button type="button" onClick={onClose} className="w-full rounded-xl border border-slate-200 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Wave Blocker Panel ────────────────────────────────────────────────────────
+
+function WaveBlockerPanel({
+  waveOrders,
+  onOpenOrder
+}: {
+  waveOrders: OrderSummary[];
+  onOpenOrder: (orderId: string) => void;
+}) {
+  const blockers = deriveWaveBlockers({ orders: waveOrders });
+
+  if (!blockers.blocked) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+          <AlertCircle className="h-4 w-4" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-amber-900">
+            Wave release blocked ({blockers.count} {blockers.count === 1 ? 'issue' : 'issues'})
+          </div>
+          <div className="mt-3 space-y-2">
+            {blockers.blockers.map((blocker) => (
+              <button
+                key={blocker.orderId}
+                onClick={() => onOpenOrder(blocker.orderId)}
+                type="button"
+                className="block w-full rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-left transition hover:border-amber-300 hover:bg-amber-50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-slate-900">{blocker.externalNumber}</div>
+                    <div className="mt-1 text-xs text-slate-600">{blocker.message}</div>
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">
+                      {getBlockerReasonLabel(blocker.reason)}
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-amber-700">
+            💡 Resolve these issues to proceed with wave release
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -280,6 +338,14 @@ export function WaveDetailPage() {
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {action.reason}
           </div>
+        )}
+
+        {/* ── Wave Blocker Panel ──────────────────────────────────── */}
+        {wave.orders.length > 0 && (
+          <WaveBlockerPanel
+            waveOrders={wave.orders}
+            onOpenOrder={openOrder}
+          />
         )}
 
         {/* ── Stale / invalid order param notice ──────────────── */}
