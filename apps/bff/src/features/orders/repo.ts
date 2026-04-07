@@ -53,6 +53,13 @@ type OrderLineInsertRow = {
   name: string;
   qty_required: number;
   qty_picked: number;
+  reserved_qty?: number;
+  status: string;
+};
+
+type OrderReservationRow = {
+  order_line_id: string;
+  quantity: number;
   status: string;
 };
 
@@ -194,6 +201,10 @@ export type OrdersRepo = {
   findOrderStatusSnapshot(orderId: string): Promise<OrderStatusSnapshot | null>;
   countOrderLines(orderId: string): Promise<number>;
   updateOrderStatus(orderId: string, patch: OrderPatch): Promise<void>;
+  commitOrderReservations(orderId: string): Promise<void>;
+  rollbackReadyOrderToDraft(orderId: string, reason?: string | null): Promise<void>;
+  cancelOrderWithUnreserve(orderId: string, reason?: string | null): Promise<void>;
+  closeOrderWithUnreserve(orderId: string): Promise<void>;
   runReleaseOrder(orderId: string): Promise<void>;
   findProductForOrderLine(productId: string): Promise<ProductForOrderLine | null>;
   createOrderLine(input: {
@@ -345,6 +356,44 @@ export function createOrdersRepo(supabase: SupabaseClient): OrdersRepo {
       }
     },
 
+    async commitOrderReservations(orderId) {
+      const { error } = await supabase.rpc('commit_order_reservations', { order_uuid: orderId });
+
+      if (error) {
+        throw error;
+      }
+    },
+
+    async rollbackReadyOrderToDraft(orderId, reason) {
+      const { error } = await supabase.rpc('rollback_ready_order_to_draft', {
+        order_uuid: orderId,
+        reason: reason ?? null
+      });
+
+      if (error) {
+        throw error;
+      }
+    },
+
+    async cancelOrderWithUnreserve(orderId, reason) {
+      const { error } = await supabase.rpc('cancel_order_with_unreserve', {
+        order_uuid: orderId,
+        reason: reason ?? null
+      });
+
+      if (error) {
+        throw error;
+      }
+    },
+
+    async closeOrderWithUnreserve(orderId) {
+      const { error } = await supabase.rpc('close_order_with_unreserve', { order_uuid: orderId });
+
+      if (error) {
+        throw error;
+      }
+    },
+
     async findProductForOrderLine(productId) {
       const { data, error } = await supabase
         .from('products')
@@ -426,7 +475,37 @@ export function createOrdersRepo(supabase: SupabaseClient): OrdersRepo {
         throw linesError;
       }
 
-      const lines = (lineRows ?? []).map((row) => mapOrderLineRowToDomain(row as OrderLineInsertRow));
+      const reservedByLine = new Map<string, number>();
+
+      if ((lineRows ?? []).length > 0) {
+        const { data: reservationRows, error: reservationsError } = await supabase
+          .from('order_reservations')
+          .select('order_line_id,quantity,status')
+          .eq('order_id', orderId);
+
+        if (reservationsError) {
+          throw reservationsError;
+        }
+
+        for (const reservation of (reservationRows ?? []) as OrderReservationRow[]) {
+          if (reservation.status !== 'active' && reservation.status !== 'released') {
+            continue;
+          }
+
+          reservedByLine.set(
+            reservation.order_line_id,
+            (reservedByLine.get(reservation.order_line_id) ?? 0) + Number(reservation.quantity)
+          );
+        }
+      }
+
+      const lines = (lineRows ?? []).map((row) => {
+        const line = row as OrderLineInsertRow;
+        return mapOrderLineRowToDomain({
+          ...line,
+          reserved_qty: reservedByLine.get(line.id) ?? 0
+        });
+      });
       return mapOrderRow(orderRow as OrderRow, lines);
     },
 

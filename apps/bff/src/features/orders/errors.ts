@@ -10,7 +10,29 @@ export type OrdersErrorShape = {
 type SupabaseLikeError = {
   code?: string;
   message?: string;
+  details?: string;
 };
+
+type InsufficientStockDetails = {
+  shortage?: {
+    sku?: string;
+    required?: number;
+    physical?: number;
+    reserved?: number;
+    atp?: number;
+  };
+};
+
+function parseInsufficientStockDetails(details: string | undefined): InsufficientStockDetails | undefined {
+  if (!details) return undefined;
+
+  try {
+    const parsed = JSON.parse(details) as InsufficientStockDetails;
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function orderNotFound(orderId: string): ApiError {
   return new ApiError(404, 'ORDER_NOT_FOUND', `Order ${orderId} not found.`);
@@ -25,11 +47,11 @@ export function waveNotEditableForOrderCreate(): ApiError {
 }
 
 export function orderNotEditableForAddLine(status: string): ApiError {
-  return new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot add lines to an order in status '${status}'.`);
+  return new ApiError(409, 'ORDER_NOT_EDITABLE_IN_READY', `Cannot add lines to an order in status '${status}'. Roll it back to draft first.`);
 }
 
 export function orderNotEditableForRemoveLine(status: string): ApiError {
-  return new ApiError(409, 'ORDER_NOT_EDITABLE', `Cannot remove lines from an order in status '${status}'.`);
+  return new ApiError(409, 'ORDER_NOT_EDITABLE_IN_READY', `Cannot remove lines from an order in status '${status}'. Roll it back to draft first.`);
 }
 
 export function productNotFound(): ApiError {
@@ -63,6 +85,15 @@ export function orderReleaseControlledByWave(): ApiError {
 export function mapReleaseOrderRpcError(error: SupabaseLikeError | null): Error | SupabaseLikeError | null {
   const message = error?.message ?? 'ORDER_RELEASE_FAILED';
 
+  if (message === 'INSUFFICIENT_STOCK') {
+    return new ApiError(
+      409,
+      'INSUFFICIENT_STOCK',
+      'Insufficient available-to-promise stock for one or more order lines.',
+      parseInsufficientStockDetails(error?.details)
+    );
+  }
+
   switch (message) {
     case 'ORDER_NOT_FOUND':
       return new ApiError(404, 'ORDER_NOT_FOUND', 'Order was not found.');
@@ -72,6 +103,18 @@ export function mapReleaseOrderRpcError(error: SupabaseLikeError | null): Error 
       return new ApiError(409, 'ORDER_HAS_NO_LINES', 'Cannot release an order with no lines.');
     case 'ORDER_ALREADY_RELEASED':
       return new ApiError(409, 'ORDER_ALREADY_RELEASED', 'Order has already been released.');
+    case 'ORDER_RESERVATION_REQUIRED':
+      return new ApiError(409, 'ROLLBACK_TO_DRAFT_REQUIRED', 'Commit the order through the reservation flow.');
+    case 'ROLLBACK_TO_DRAFT_REQUIRED':
+      return new ApiError(409, 'ROLLBACK_TO_DRAFT_REQUIRED', 'Roll the order back to draft before editing it.');
+    case 'RESERVATION_MISMATCH':
+      return new ApiError(409, 'RESERVATION_MISMATCH', 'Order reservations do not match the order lines.');
+    case 'INVALID_ORDER_STATUS':
+      return new ApiError(409, 'INVALID_ORDER_STATUS', 'The order is not in the required status for this transition.');
+    case 'ORDER_LINE_PRODUCT_REQUIRED':
+      return new ApiError(409, 'ORDER_LINE_PRODUCT_REQUIRED', 'Every committed order line must reference a catalog product.');
+    case 'ORDER_NOT_EDITABLE_IN_READY':
+      return new ApiError(409, 'ORDER_NOT_EDITABLE_IN_READY', 'Ready orders cannot be edited. Roll back to draft first.');
     default:
       return error;
   }

@@ -60,8 +60,8 @@ begin
     raise exception 'Expected pick_tasks.task_number to exist and be NOT NULL.';
   end if;
 
-  insert into public.orders (id, tenant_id, status)
-  values (order_uuid, default_tenant_uuid, 'released');
+  insert into public.orders (id, tenant_id, external_number, status)
+  values (order_uuid, default_tenant_uuid, 'PR10-ORDER', 'draft');
 
   insert into public.containers (tenant_id, external_code, container_type_id)
   values

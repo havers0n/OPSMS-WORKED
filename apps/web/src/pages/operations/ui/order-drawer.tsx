@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Order, OrderStatus, PickTaskSummary, Product } from '@wos/domain';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
+import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useAddOrderLine,
   useRemoveOrderLine,
@@ -30,6 +31,32 @@ function primaryAction(order: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveN
   if (target === 'released' && order.waveId)
     return { target, reason: `Release is controlled by wave ${order.waveName ?? order.waveId}.` };
   return { target, reason: null };
+}
+
+function getPrimaryActionLabel(status: OrderStatus, target: OrderStatus): string {
+  if (status === 'draft' && target === 'ready') return 'Commit and reserve';
+  return getOrderStatusLabel(target);
+}
+
+function getTransitionErrorMessage(error: unknown): string | null {
+  if (error instanceof BffRequestError && error.code === 'INSUFFICIENT_STOCK') {
+    const details = error.details as {
+      shortage?: {
+        sku?: string;
+        required?: number;
+        physical?: number;
+        reserved?: number;
+        atp?: number;
+      };
+    } | null;
+    const shortage = details?.shortage;
+    if (shortage) {
+      return `Insufficient stock for ${shortage.sku ?? 'this SKU'}: required ${shortage.required ?? '-'}, physical ${shortage.physical ?? '-'}, already reserved ${shortage.reserved ?? '-'}, ATP ${shortage.atp ?? '-'}.`;
+    }
+  }
+
+  if (error instanceof Error) return error.message;
+  return null;
 }
 
 function TaskCard({
@@ -194,6 +221,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
 
   const action = primaryAction(order);
   const editable = canEditLines(order.status);
+  const transitionError = getTransitionErrorMessage(transition.error);
 
   return (
     <div className="flex h-full flex-col">
@@ -229,6 +257,18 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
             Release is controlled by the wave.
           </div>
         ) : null}
+        {order.status === 'ready' ? (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            This order is committed and reserved. Roll it back to draft before editing lines.
+          </div>
+        ) : null}
+        {transitionError ? (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {transitionError}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex-1 space-y-4 overflow-auto p-4">
@@ -249,6 +289,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                   <tr>
                     <th className="px-3 py-2">Product</th>
                     <th className="px-3 py-2">Qty</th>
+                    <th className="px-3 py-2">Reserved</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2" />
                   </tr>
@@ -263,6 +304,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
                       <td className="px-3 py-2 text-slate-600">
                         {line.qtyPicked} / {line.qtyRequired}
                       </td>
+                      <td className="px-3 py-2 text-slate-600">{line.reservedQty}</td>
                       <td className="px-3 py-2 text-slate-600">{line.status}</td>
                       <td className="px-3 py-2 text-right">
                         {editable ? (
@@ -308,7 +350,17 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string; onClose: ()
               }
               className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-cyan-500 disabled:opacity-50"
             >
-              {transition.isPending ? 'Updating…' : getOrderStatusLabel(action.target)}
+              {transition.isPending ? 'Updating…' : getPrimaryActionLabel(order.status, action.target)}
+            </button>
+          ) : null}
+          {order.status === 'ready' ? (
+            <button
+              type="button"
+              disabled={transition.isPending}
+              onClick={() => transition.mutate({ orderId: order.id, status: 'draft' })}
+              className="rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+            >
+              Rollback to draft
             </button>
           ) : null}
           <button

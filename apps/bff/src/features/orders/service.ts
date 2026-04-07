@@ -48,6 +48,15 @@ export type OrdersService = {
 };
 
 export function createOrdersServiceFromRepo(repo: OrdersRepo): OrdersService {
+  async function runReservationRpc(operation: () => Promise<void>) {
+    try {
+      await operation();
+    } catch (error) {
+      const mapped = mapReleaseOrderRpcError(error as { code?: string; message?: string } | null);
+      throw mapped ?? error;
+    }
+  }
+
   return {
     async createOrder(command) {
       if (command.waveId) {
@@ -139,6 +148,8 @@ export function createOrdersServiceFromRepo(repo: OrdersRepo): OrdersService {
         if (!lineCount) {
           throw orderHasNoLinesForReady();
         }
+
+        await runReservationRpc(() => repo.commitOrderReservations(command.orderId));
       }
 
       if (command.status === 'released') {
@@ -161,13 +172,17 @@ export function createOrdersServiceFromRepo(repo: OrdersRepo): OrdersService {
         return releasedOrder;
       }
 
-      await repo.updateOrderStatus(command.orderId, {
-        status: command.status,
-        closedAt:
-          command.status === 'closed' || command.status === 'cancelled'
-            ? new Date().toISOString()
-            : undefined
-      });
+      if (command.status === 'draft' && order.status === 'ready') {
+        await runReservationRpc(() => repo.rollbackReadyOrderToDraft(command.orderId));
+      } else if (command.status === 'cancelled') {
+        await runReservationRpc(() => repo.cancelOrderWithUnreserve(command.orderId));
+      } else if (command.status === 'closed') {
+        await runReservationRpc(() => repo.closeOrderWithUnreserve(command.orderId));
+      } else if (command.status !== 'ready') {
+        await repo.updateOrderStatus(command.orderId, {
+          status: command.status
+        });
+      }
 
       const updatedOrder = await repo.findOrderResponse(command.orderId);
       if (!updatedOrder) {

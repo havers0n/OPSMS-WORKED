@@ -12,6 +12,8 @@ do $$
 declare
   default_tenant_uuid uuid;
   product_uuid uuid := gen_random_uuid();
+  pallet_type_uuid uuid;
+  container_uuid uuid := gen_random_uuid();
   empty_wave_uuid uuid;
   blocked_wave_uuid uuid;
   releasable_wave_uuid uuid;
@@ -25,8 +27,19 @@ begin
   from public.tenants
   where code = 'default';
 
+  select id
+  into pallet_type_uuid
+  from public.container_types
+  where code = 'pallet';
+
   insert into public.products (id, source, external_product_id, sku, name)
   values (product_uuid, 'test-suite', 'wave-product-001', 'WAVE-SKU-001', 'Wave Product');
+
+  insert into public.containers (id, tenant_id, external_code, container_type_id, status)
+  values (container_uuid, default_tenant_uuid, 'WAVE-STOCK-CONT', pallet_type_uuid, 'active');
+
+  insert into public.inventory_unit (tenant_id, container_id, product_id, quantity, uom, status)
+  values (default_tenant_uuid, container_uuid, product_uuid, 10, 'pcs', 'available');
 
   insert into public.waves (tenant_id, name, status)
   values (default_tenant_uuid, 'Empty Wave', 'draft')
@@ -67,9 +80,7 @@ begin
   insert into public.order_lines (order_id, tenant_id, product_id, sku, name, qty_required, status)
   values (blocked_ready_order_uuid, default_tenant_uuid, product_uuid, 'WAVE-SKU-001', 'Wave Product', 1, 'pending');
 
-  update public.orders
-  set status = 'ready'
-  where id = blocked_ready_order_uuid;
+  perform public.commit_order_reservations(blocked_ready_order_uuid);
 
   insert into public.orders (tenant_id, external_number, status, wave_id)
   values (default_tenant_uuid, 'ORD-W-BLOCK-2', 'draft', blocked_wave_uuid)
@@ -103,9 +114,7 @@ begin
   insert into public.order_lines (order_id, tenant_id, product_id, sku, name, qty_required, status)
   values (releasable_order_a_uuid, default_tenant_uuid, product_uuid, 'WAVE-SKU-001', 'Wave Product', 2, 'pending');
 
-  update public.orders
-  set status = 'ready'
-  where id = releasable_order_a_uuid;
+  perform public.commit_order_reservations(releasable_order_a_uuid);
 
   insert into public.orders (tenant_id, external_number, status, wave_id)
   values (default_tenant_uuid, 'ORD-W-REL-2', 'draft', releasable_wave_uuid)
@@ -114,9 +123,7 @@ begin
   insert into public.order_lines (order_id, tenant_id, product_id, sku, name, qty_required, status)
   values (releasable_order_b_uuid, default_tenant_uuid, product_uuid, 'WAVE-SKU-001', 'Wave Product', 1, 'pending');
 
-  update public.orders
-  set status = 'ready'
-  where id = releasable_order_b_uuid;
+  perform public.commit_order_reservations(releasable_order_b_uuid);
 
   update public.waves
   set status = 'ready'

@@ -741,6 +741,7 @@ export function mapOrderLineRowToDomain(row: {
   name: string;
   qty_required: number;
   qty_picked: number;
+  reserved_qty?: number;
   status: string;
 }): OrderLine {
   return orderLineSchema.parse({
@@ -752,6 +753,7 @@ export function mapOrderLineRowToDomain(row: {
     name: row.name,
     qtyRequired: row.qty_required,
     qtyPicked: row.qty_picked,
+    reservedQty: row.reserved_qty ?? 0,
     status: row.status
   });
 }

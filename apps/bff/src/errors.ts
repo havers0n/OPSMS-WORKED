@@ -6,7 +6,8 @@ export class ApiError extends Error {
   constructor(
     public readonly statusCode: number,
     public readonly code: string,
-    message: string
+    message: string,
+    public readonly details?: unknown
   ) {
     super(message);
   }
@@ -72,6 +73,7 @@ export function sendApiError(reply: FastifyReply, apiError: ApiError, requestId:
   const body = errorResponseSchema.parse({
     code: apiError.code,
     message: apiError.message,
+    details: apiError.details,
     requestId,
     errorId: randomUUID()
   });

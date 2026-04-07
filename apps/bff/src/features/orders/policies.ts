@@ -1,6 +1,6 @@
 import type { OrderStatus } from '@wos/domain';
 
-const editableOrderStatuses = new Set<OrderStatus>(['draft', 'ready']);
+const editableOrderStatuses = new Set<OrderStatus>(['draft']);
 
 export function getAllowedOrderTransitions(currentStatus: OrderStatus): OrderStatus[] {
   switch (currentStatus) {

@@ -98,8 +98,8 @@ begin
   insert into public.sites (id, tenant_id, code, name, timezone)
   values (site_uuid, default_tenant_uuid, 'PR10-SITE', 'PR-10 Site', 'UTC');
 
-  insert into public.floors (id, tenant_id, site_id, name, ordinal)
-  values (floor_uuid, default_tenant_uuid, site_uuid, 'PR-10 Floor', 1);
+  insert into public.floors (id, site_id, code, name, sort_order)
+  values (floor_uuid, site_uuid, 'PR10-FLOOR', 'PR-10 Floor', 1);
 
   insert into public.locations
     (tenant_id, floor_id, code, location_type, capacity_mode, status)
@@ -130,14 +130,21 @@ begin
   from public.containers where external_code = 'PR10-PICK-TOTE';
 
   -- ── Shared order + line ──────────────────────────────────────────────────────
-  insert into public.orders (id, tenant_id, status)
-  values (order_uuid, default_tenant_uuid, 'picking');
+  insert into public.orders (id, tenant_id, external_number, status)
+  values (order_uuid, default_tenant_uuid, 'PR10-EXECUTE', 'draft');
 
   insert into public.order_lines
     (id, order_id, tenant_id, sku, name, qty_required, product_id, status)
   values
     (order_line_uuid, order_uuid, default_tenant_uuid,
      'SKU-PR10', 'PR-10 Product', 3, product_uuid, 'released');
+
+  perform set_config('wos.allow_order_reservation_status_update', 'on', true);
+  perform set_config('wos.allow_committed_order_line_system_update', 'on', true);
+
+  update public.orders
+  set status = 'picking'
+  where id = order_uuid;
 
   -- ════════════════════════════════════════════════════════════════════════════
   -- Test 1: full-pick path — qty_actual == iu.quantity
@@ -222,10 +229,10 @@ begin
   -- Cleanup
   delete from public.pick_steps  where task_id = task_uuid;
   delete from public.pick_tasks  where id      = task_uuid;
-  delete from public.inventory_unit where id   = iu_uuid;
   delete from public.stock_movements
   where source_container_id = source_container_uuid
      or target_container_id = pick_container_uuid;
+  delete from public.inventory_unit where id   = iu_uuid;
   -- Restore order to 'picking' (rollup set it to 'picked')
   update public.orders set status = 'picking' where id = order_uuid;
 
@@ -295,12 +302,12 @@ begin
   -- Cleanup (no order rollup occurred, no order reset needed)
   delete from public.pick_steps  where task_id = task_uuid;
   delete from public.pick_tasks  where id      = task_uuid;
-  delete from public.inventory_unit where id   = iu_uuid;
-  delete from public.inventory_unit
-  where container_id = pick_container_uuid and product_id = product_uuid;
   delete from public.stock_movements
   where source_container_id = source_container_uuid
      or target_container_id = pick_container_uuid;
+  delete from public.inventory_unit where id   = iu_uuid;
+  delete from public.inventory_unit
+  where container_id = pick_container_uuid and product_id = product_uuid;
 
   -- ════════════════════════════════════════════════════════════════════════════
   -- Test 3: qty_actual == qty_required < iu.quantity
@@ -340,12 +347,12 @@ begin
   -- Cleanup
   delete from public.pick_steps  where task_id = task_uuid;
   delete from public.pick_tasks  where id      = task_uuid;
-  delete from public.inventory_unit where id   = iu_uuid;
-  delete from public.inventory_unit
-  where container_id = pick_container_uuid and product_id = product_uuid;
   delete from public.stock_movements
   where source_container_id = source_container_uuid
      or target_container_id = pick_container_uuid;
+  delete from public.inventory_unit where id   = iu_uuid;
+  delete from public.inventory_unit
+  where container_id = pick_container_uuid and product_id = product_uuid;
   update public.orders set status = 'picking' where id = order_uuid;
 
   -- ════════════════════════════════════════════════════════════════════════════
@@ -415,13 +422,13 @@ begin
     -- Cleanup
     delete from public.pick_steps  where task_id = task_uuid;
     delete from public.pick_tasks  where id      = task_uuid;
+    delete from public.stock_movements
+    where source_container_id = source_container_uuid
+       or target_container_id = pick_container_uuid;
     delete from public.inventory_unit
     where container_id = source_container_uuid and product_id = product_uuid;
     delete from public.inventory_unit
     where container_id = pick_container_uuid and product_id = product_uuid;
-    delete from public.stock_movements
-    where source_container_id = source_container_uuid
-       or target_container_id = pick_container_uuid;
     update public.orders set status = 'picking' where id = order_uuid;
   end;
 
@@ -465,12 +472,12 @@ begin
   -- Cleanup
   delete from public.pick_steps  where task_id = task_uuid;
   delete from public.pick_tasks  where id      = task_uuid;
-  delete from public.inventory_unit where id   = iu_uuid;
-  delete from public.inventory_unit
-  where container_id = pick_container_uuid and product_id = product_uuid;
   delete from public.stock_movements
   where source_container_id = source_container_uuid
      or target_container_id = pick_container_uuid;
+  delete from public.inventory_unit where id   = iu_uuid;
+  delete from public.inventory_unit
+  where container_id = pick_container_uuid and product_id = product_uuid;
   -- Order received 'partial' rollup from completed_with_exceptions; restore
   update public.orders set status = 'picking' where id = order_uuid;
 
@@ -511,12 +518,12 @@ begin
   -- Cleanup
   delete from public.pick_steps  where task_id = task_uuid;
   delete from public.pick_tasks  where id      = task_uuid;
-  delete from public.inventory_unit where id   = iu_uuid;
-  delete from public.inventory_unit
-  where container_id = pick_container_uuid and product_id = product_uuid;
   delete from public.stock_movements
   where source_container_id = source_container_uuid
      or target_container_id = pick_container_uuid;
+  delete from public.inventory_unit where id   = iu_uuid;
+  delete from public.inventory_unit
+  where container_id = pick_container_uuid and product_id = product_uuid;
 
   -- ════════════════════════════════════════════════════════════════════════════
   -- Test 7: needs_replenishment step raises PICK_STEP_NOT_EXECUTABLE

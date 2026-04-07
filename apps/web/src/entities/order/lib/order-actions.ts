@@ -17,7 +17,7 @@ export function getOrderActions(status: OrderStatus): OrderAction[] {
     case 'draft':
       return ['edit', 'mark_ready', 'cancel'];
     case 'ready':
-      return ['edit', 'mark_draft', 'release', 'cancel'];
+      return ['mark_draft', 'release', 'cancel'];
     case 'released':
       return ['open', 'cancel'];
     case 'picking':
@@ -35,7 +35,7 @@ export function getOrderActions(status: OrderStatus): OrderAction[] {
 }
 
 export function canEditLines(status: OrderStatus): boolean {
-  return status === 'draft' || status === 'ready';
+  return status === 'draft';
 }
 
 export function isActiveOrder(status: OrderStatus): boolean {

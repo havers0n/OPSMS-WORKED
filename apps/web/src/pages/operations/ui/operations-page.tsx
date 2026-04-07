@@ -308,7 +308,9 @@ export function OperationsPage() {
                                 onClick={() => orderTransition.mutate({ orderId: order.id, status: target as OrderStatus })}
                                 className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                               >
-                                {getOrderStatusLabel(target)}
+                                {order.status === 'draft' && target === 'ready'
+                                  ? 'Commit and reserve'
+                                  : getOrderStatusLabel(target)}
                               </button>
                             )}
                           </div>

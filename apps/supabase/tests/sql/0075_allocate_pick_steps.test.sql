@@ -101,8 +101,8 @@ begin
   insert into public.sites (id, tenant_id, code, name, timezone)
   values (site_uuid, default_tenant_uuid, 'PR09-SITE', 'PR-09 Site', 'UTC');
 
-  insert into public.floors (id, tenant_id, site_id, name, ordinal)
-  values (floor_uuid, default_tenant_uuid, site_uuid, 'PR-09 Floor', 1);
+  insert into public.floors (id, site_id, code, name, sort_order)
+  values (floor_uuid, site_uuid, 'PR09-FLOOR', 'PR-09 Floor', 1);
 
   -- location_type = 'floor': no geometry_slot_id required, no published layout
   -- needed.  source_cell_id will be NULL on allocated steps — valid.
@@ -160,8 +160,8 @@ begin
   -- product_b has no assignment at all.
 
   -- ── Order + lines ──────────────────────────────────────────────────────────
-  insert into public.orders (id, tenant_id, status)
-  values (order_uuid, default_tenant_uuid, 'released');
+  insert into public.orders (id, tenant_id, external_number, status)
+  values (order_uuid, default_tenant_uuid, 'PR09-ALLOC', 'draft');
 
   insert into public.order_lines
     (id, order_id, tenant_id, sku, name, qty_required, product_id, status)
@@ -172,6 +172,13 @@ begin
      'SKU-PR09-B', 'PR-09 Product B', 1, product_b_uuid, 'released'),
     (line_c_uuid, order_uuid, default_tenant_uuid,
      'SKU-PR09-C', 'PR-09 Product C', 2, product_c_uuid, 'released');
+
+  perform set_config('wos.allow_order_reservation_status_update', 'on', true);
+  perform set_config('wos.allow_committed_order_line_system_update', 'on', true);
+
+  update public.orders
+  set status = 'released'
+  where id = order_uuid;
 
   -- ── Pick task + steps ──────────────────────────────────────────────────────
   insert into public.pick_tasks (tenant_id, source_type, source_id, status)
@@ -353,8 +360,8 @@ begin
     step_big_uuid   uuid;
     result2         jsonb;
   begin
-    insert into public.orders (id, tenant_id, status)
-    values (order2_uuid, default_tenant_uuid, 'released');
+    insert into public.orders (id, tenant_id, external_number, status)
+    values (order2_uuid, default_tenant_uuid, 'PR09-ALLOC-BIG', 'draft');
 
     -- qty_required = 50 > iu_a.quantity (10), so no single unit satisfies it
     insert into public.order_lines
@@ -362,6 +369,13 @@ begin
     values
       (line_big_uuid, order2_uuid, default_tenant_uuid,
        'SKU-PR09-A', 'PR-09 Product A', 50, product_a_uuid, 'released');
+
+    perform set_config('wos.allow_order_reservation_status_update', 'on', true);
+    perform set_config('wos.allow_committed_order_line_system_update', 'on', true);
+
+    update public.orders
+    set status = 'released'
+    where id = order2_uuid;
 
     insert into public.pick_tasks (tenant_id, source_type, source_id, status)
     values (default_tenant_uuid, 'order', order2_uuid, 'ready')

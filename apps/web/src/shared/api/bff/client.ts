@@ -4,6 +4,7 @@ import { env } from '@/shared/config/env';
 type BffErrorBody = {
   code?: string;
   message?: string;
+  details?: unknown;
   requestId?: string;
   errorId?: string;
 };
@@ -14,7 +15,8 @@ export class BffRequestError extends Error {
     public readonly code: string | null,
     message: string,
     public readonly requestId: string | null,
-    public readonly errorId: string | null
+    public readonly errorId: string | null,
+    public readonly details: unknown = null
   ) {
     super(message);
   }
@@ -68,7 +70,7 @@ export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T
       errorBody?.message ??
       `BFF request failed with status ${response.status}${requestId ? ` [request ${requestId}]` : ''}${errorId ? ` [error ${errorId}]` : ''}`;
 
-    throw new BffRequestError(response.status, errorBody?.code ?? null, message, requestId, errorId);
+    throw new BffRequestError(response.status, errorBody?.code ?? null, message, requestId, errorId, errorBody?.details ?? null);
   }
 
   return (await response.json()) as T;

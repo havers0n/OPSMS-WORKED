@@ -76,37 +76,22 @@ begin
     raise exception 'Expected legacy order lines with null product_id to remain valid.';
   end if;
 
-  update public.orders
-  set status = 'ready'
-  where id = order_uuid;
+  begin
+    perform public.commit_order_reservations(order_uuid);
+    raise exception 'Expected legacy null product_id lines to block committed reservation.';
+  exception
+    when others then
+      if sqlerrm <> 'ORDER_LINE_PRODUCT_REQUIRED' then
+        raise;
+      end if;
+  end;
 
-  select public.release_order(order_uuid)
-  into task_uuid;
-
-  if task_uuid is null then
-    raise exception 'Expected release_order to return a pick task id.';
-  end if;
-
-  if not exists (
+  if exists (
     select 1
-    from public.orders
-    where id = order_uuid
-      and status = 'released'
-      and released_at is not null
+    from public.order_reservations
+    where order_id = order_uuid
   ) then
-    raise exception 'Expected release_order to mark the order released.';
-  end if;
-
-  if (select count(*) from public.order_lines where order_id = order_uuid and status = 'released') <> 2 then
-    raise exception 'Expected release_order to mark every order line released.';
-  end if;
-
-  if (select count(*) from public.pick_tasks where id = task_uuid and source_type = 'order' and source_id = order_uuid) <> 1 then
-    raise exception 'Expected release_order to create exactly one pick task for the order.';
-  end if;
-
-  if (select count(*) from public.pick_steps where task_id = task_uuid) <> 2 then
-    raise exception 'Expected release_order to create one pick step per order line.';
+    raise exception 'Expected failed reservation commit to leave no reservation rows.';
   end if;
 end
 $$;

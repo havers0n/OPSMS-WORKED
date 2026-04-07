@@ -132,6 +132,7 @@ function toOrderLineDto(row: {
   name: string;
   qty_required: number;
   qty_picked: number;
+  reserved_qty?: number;
   status: string;
 }) {
   return {
@@ -143,6 +144,7 @@ function toOrderLineDto(row: {
     name: row.name,
     qtyRequired: row.qty_required,
     qtyPicked: row.qty_picked,
+    reservedQty: row.reserved_qty ?? 0,
     status: row.status
   };
 }
@@ -178,6 +180,7 @@ function toOrderDto(
     name: string;
     qty_required: number;
     qty_picked: number;
+    reserved_qty?: number;
     status: string;
   }>
 ) {
@@ -314,6 +317,7 @@ describe('orders and waves', () => {
       name: productRow.name,
       qtyRequired: 2,
       qtyPicked: 0,
+      reservedQty: 0,
       status: 'pending'
     });
 
@@ -409,7 +413,7 @@ describe('orders and waves', () => {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
                 single: vi.fn(async () => ({
-                  data: { id: orderId, status: 'ready' },
+                  data: { id: orderId, status: 'draft' },
                   error: null
                 }))
               }))
@@ -496,12 +500,71 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'ORDER_NOT_EDITABLE',
-      message: "Cannot remove lines from an order in status 'released'."
+      code: 'ORDER_NOT_EDITABLE_IN_READY',
+      message: "Cannot remove lines from an order in status 'released'. Roll it back to draft first."
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
     expect(deleteOrderLine).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('blocks adding an order line when the order is ready', async () => {
+    const orderId = '44a1ce2d-5e5f-4d16-8c8b-4d10e50bd9ea';
+    const insertOrderLine = vi.fn();
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: { id: orderId, status: 'ready' },
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            insert: insertOrderLine
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn()
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/orders/${orderId}/lines`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: productRow.id,
+        qtyRequired: 1
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'ORDER_NOT_EDITABLE_IN_READY',
+      message: "Cannot add lines to an order in status 'ready'. Roll it back to draft first."
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+    expect(insertOrderLine).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -589,22 +652,7 @@ describe('orders and waves', () => {
         status: 'pending'
       }
     ];
-    const updateOrder = vi.fn((patch: Record<string, unknown>) => {
-      order = {
-        ...order,
-        status: patch.status as string
-      };
-      return {
-        eq: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(async () => ({
-              data: { id: order.id },
-              error: null
-            }))
-          }))
-        }))
-      };
-    });
+    const updateOrder = vi.fn();
 
     const supabase = {
       from: vi.fn((table: string) => {
@@ -651,7 +699,16 @@ describe('orders and waves', () => {
           }))
         };
       }),
-      rpc: vi.fn()
+      rpc: vi.fn(async (fn: string) => {
+        if (fn === 'commit_order_reservations') {
+          order = {
+            ...order,
+            status: 'ready'
+          };
+        }
+
+        return { data: null, error: null };
+      })
     };
 
     const app = createAppWithSupabase(supabase);
@@ -668,12 +725,226 @@ describe('orders and waves', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(toOrderDto(order, null, orderLineRows));
-    expect(updateOrder).toHaveBeenCalledWith({
-      status: 'ready'
-    });
-    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(updateOrder).not.toHaveBeenCalled();
+    expect(supabase.rpc).toHaveBeenCalledWith('commit_order_reservations', { order_uuid: orderId });
 
     await app.close();
+  });
+
+  it('returns structured shortage details when ready commit fails ATP checks', async () => {
+    const orderId = '4f89b380-0bf8-41fa-8b97-fcb86691e963';
+    const order = createOrderRow({
+      id: orderId,
+      externalNumber: 'ORD-SHORT-STRUCTURED',
+      status: 'draft',
+      waveId: null
+    });
+    const orderLineRows = [
+      {
+        id: '1d34a8a2-df1f-4df2-98c8-65e8cf3b2e47',
+        order_id: orderId,
+        tenant_id: tenantId,
+        product_id: productRow.id,
+        sku: productRow.sku,
+        name: productRow.name,
+        qty_required: 10,
+        qty_picked: 0,
+        status: 'pending'
+      }
+    ];
+    const shortage = {
+      sku: productRow.sku,
+      required: 10,
+      physical: 5,
+      reserved: 3,
+      atp: 2
+    };
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'orders') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                single: vi.fn(async () => ({
+                  data: buildOrderRow(order, null),
+                  error: null
+                }))
+              }))
+            }))
+          };
+        }
+
+        if (table === 'order_lines') {
+          return {
+            select: vi.fn((_columns: string, options?: { count?: string; head?: boolean }) => ({
+              eq: vi.fn(() => {
+                if (options?.head) {
+                  return Promise.resolve({
+                    data: null,
+                    count: orderLineRows.length,
+                    error: null
+                  });
+                }
+
+                return {
+                  order: vi.fn(async () => ({
+                    data: orderLineRows,
+                    error: null
+                  }))
+                };
+              })
+            }))
+          };
+        }
+
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: null, error: null }))
+          }))
+        };
+      }),
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: {
+          code: 'P0001',
+          message: 'INSUFFICIENT_STOCK',
+          details: JSON.stringify({ shortage })
+        }
+      }))
+    };
+
+    const app = createAppWithSupabase(supabase);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/orders/${orderId}/status`,
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        status: 'ready'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'INSUFFICIENT_STOCK',
+      message: 'Insufficient available-to-promise stock for one or more order lines.',
+      details: {
+        shortage
+      }
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('routes reservation-sensitive rollback, cancel, and close transitions through reservation RPCs', async () => {
+    const scenarios = [
+      {
+        orderId: '2d49026d-934e-4d79-9419-fce7b34f7e20',
+        initialStatus: 'ready',
+        targetStatus: 'draft',
+        rpc: 'rollback_ready_order_to_draft'
+      },
+      {
+        orderId: 'f450a8a9-51a8-4bc9-a95e-4e4519491ee8',
+        initialStatus: 'released',
+        targetStatus: 'cancelled',
+        rpc: 'cancel_order_with_unreserve'
+      },
+      {
+        orderId: 'c6dc5357-95a6-4278-a186-76a8e02cf813',
+        initialStatus: 'picked',
+        targetStatus: 'closed',
+        rpc: 'close_order_with_unreserve'
+      }
+    ] as const;
+
+    for (const scenario of scenarios) {
+      let order = createOrderRow({
+        id: scenario.orderId,
+        externalNumber: `ORD-${scenario.targetStatus}`,
+        status: scenario.initialStatus,
+        waveId: null
+      });
+      const updateOrder = vi.fn();
+      const rpc = vi.fn(async (fn: string) => {
+        if (fn === scenario.rpc) {
+          order = {
+            ...order,
+            status: scenario.targetStatus
+          };
+        }
+
+        return { data: null, error: null };
+      });
+
+      const supabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'orders') {
+            return {
+              select: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  single: vi.fn(async () => ({
+                    data: buildOrderRow(order, null),
+                    error: null
+                  }))
+                }))
+              })),
+              update: updateOrder
+            };
+          }
+
+          if (table === 'order_lines') {
+            return {
+              select: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  order: vi.fn(async () => ({
+                    data: [],
+                    error: null
+                  }))
+                }))
+              }))
+            };
+          }
+
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(async () => ({ data: null, error: null }))
+            }))
+          };
+        }),
+        rpc
+      };
+
+      const app = createAppWithSupabase(supabase);
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/orders/${scenario.orderId}/status`,
+        headers: {
+          authorization: 'Bearer token'
+        },
+        payload: {
+          status: scenario.targetStatus
+        }
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual(toOrderDto(order, null, []));
+      expect(updateOrder).not.toHaveBeenCalled();
+      if (scenario.rpc === 'close_order_with_unreserve') {
+        expect(rpc).toHaveBeenCalledWith(scenario.rpc, { order_uuid: scenario.orderId });
+      } else {
+        expect(rpc).toHaveBeenCalledWith(scenario.rpc, {
+          order_uuid: scenario.orderId,
+          reason: null
+        });
+      }
+
+      await app.close();
+    }
   });
 
   it('releases an order through release_order rpc and returns released status contract', async () => {

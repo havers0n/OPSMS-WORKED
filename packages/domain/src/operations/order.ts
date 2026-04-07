@@ -32,6 +32,7 @@ export const orderLineSchema = z.object({
   name: z.string().trim().min(1),
   qtyRequired: z.number().int().positive(),
   qtyPicked: z.number().int().min(0),
+  reservedQty: z.number().min(0).default(0),
   status: orderLineStatusSchema
 });
 export type OrderLine = z.infer<typeof orderLineSchema>;
