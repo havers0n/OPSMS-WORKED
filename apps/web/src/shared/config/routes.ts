@@ -4,11 +4,16 @@ export const routes = {
   warehouseView: '/warehouse/view',
   products: '/products',
   operations: '/operations',
+  orderDetail: '/operations/orders/:orderId',
   waveDetail: '/operations/waves/:id',
   pickTaskDetail: '/operations/pick-tasks/:id',
   orders: '/orders',
   waves: '/waves'
 } as const;
+
+export function orderDetailPath(orderId: string) {
+  return `/operations/orders/${orderId}`;
+}
 
 export function waveDetailPath(id: string) {
   return `/operations/waves/${id}`;

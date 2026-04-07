@@ -11,7 +11,7 @@ import { waveKeys, waveQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
 import { deriveWaveBlockers, getBlockerReasonLabel } from '@/entities/wave/lib/wave-blockers';
 import { routes } from '@/shared/config/routes';
-import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
+import { OrderPreview } from '@/features/order-detail/ui/order-preview';
 
 // ── Wave workflow is now centralized in entities/wave/lib/wave-actions.ts ──
 
@@ -414,26 +414,13 @@ export function WaveDetailPage() {
           )}
         </div>
 
-        {/* Right: Order Detail (if selected) */}
+        {/* Right: Order Preview (if selected) */}
         {selectedOrderId ? (
-          <div className="w-[420px] border-l border-slate-200 bg-white overflow-hidden flex flex-col">
-            <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Order Details</span>
-              <button
-                type="button"
-                onClick={closeOrder}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                aria-label="Close detail"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto">
-              <OrderDrawer orderId={selectedOrderId} onClose={closeOrder} />
-            </div>
+          <div className="w-[360px] border-l border-slate-200 bg-white overflow-hidden flex flex-col">
+            <OrderPreview orderId={selectedOrderId} onClose={closeOrder} />
           </div>
         ) : (
-          <div className="w-[420px] border-l border-slate-200 bg-slate-50 flex flex-col items-center justify-center">
+          <div className="w-[360px] border-l border-slate-200 bg-slate-50 flex flex-col items-center justify-center">
             <div className="text-center">
               <div className="text-xs text-slate-500">Select an order to view details</div>
             </div>

@@ -13,7 +13,7 @@ import {
   getProgressLabel,
   getPrimaryTransitionTarget
 } from '@/entities/order/lib/order-actions';
-import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
+import { OrderPreview } from '@/features/order-detail/ui/order-preview';
 
 // 9 статусов сгруппированы в 4 понятные вкладки
 type TabGroup = 'all' | 'active' | 'done' | 'issues';
@@ -269,10 +269,10 @@ export function OrdersPage() {
         </div>
       </div>
 
-      {/* Order detail panel */}
+      {/* Order preview panel */}
       {selectedOrderId ? (
-        <div className="m-4 ml-0 w-[420px] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <OrderDrawer orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
+        <div className="m-4 ml-0 w-[360px] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white flex flex-col">
+          <OrderPreview orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
         </div>
       ) : null}
 

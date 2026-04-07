@@ -10,7 +10,7 @@ import { useCreateWave, useTransitionWaveStatus } from '@/entities/wave/api/muta
 import { wavesQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
 import { waveDetailPath } from '@/shared/config/routes';
-import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
+import { OrderPreview } from '@/features/order-detail/ui/order-preview';
 
 // ── Wave workflow is now centralized in entities/wave/lib/wave-actions.ts ──
 
@@ -316,10 +316,10 @@ export function OperationsPage() {
         </div>
       </div>
 
-      {/* Order detail panel — in-flow sibling, not fixed overlay */}
+      {/* Order preview panel — in-flow sibling, not fixed overlay */}
       {selectedOrderId && (
-        <div className="m-4 ml-0 w-[420px] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <OrderDrawer orderId={selectedOrderId} onClose={() => setSearchParams((p) => { p.delete('order'); return p; })} />
+        <div className="m-4 ml-0 w-[360px] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white flex flex-col">
+          <OrderPreview orderId={selectedOrderId} onClose={() => setSearchParams((p) => { p.delete('order'); return p; })} />
         </div>
       )}
 
