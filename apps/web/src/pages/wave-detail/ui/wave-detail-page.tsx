@@ -8,36 +8,11 @@ import { ordersQueryOptions } from '@/entities/order/api/queries';
 import { getOrderStatusColor, getOrderStatusLabel, getPrimaryTransitionTarget } from '@/entities/order/lib/order-actions';
 import { useAttachOrderToWave, useDetachOrderFromWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { waveKeys, waveQueryOptions } from '@/entities/wave/api/queries';
+import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
 import { routes } from '@/shared/config/routes';
 import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
 
-// ── Wave status helpers ────────────────────────────────────────────────────────
-
-const waveStatusLabel: Record<WaveStatus, string> = {
-  draft: 'Draft', ready: 'Ready', released: 'Released',
-  in_progress: 'In progress', completed: 'Completed', partial: 'Partial', closed: 'Closed'
-};
-
-function getWaveStatusColor(status: WaveStatus) {
-  switch (status) {
-    case 'draft': return 'bg-slate-100 text-slate-700';
-    case 'ready': return 'bg-blue-50 text-blue-700 border border-blue-200';
-    case 'released': return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
-    case 'in_progress': return 'bg-amber-50 text-amber-700 border border-amber-200';
-    case 'completed': return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-    case 'partial': return 'bg-orange-50 text-orange-700 border border-orange-200';
-    case 'closed': return 'bg-slate-100 text-slate-500';
-  }
-}
-
-function getWaveNextAction(status: WaveStatus, totalOrders: number, blockingOrderCount: number) {
-  switch (status) {
-    case 'draft': return { target: 'ready' as WaveStatus, label: 'Mark ready', reason: totalOrders === 0 ? 'Add at least one order first.' : null };
-    case 'ready': return { target: 'released' as WaveStatus, label: 'Release wave', reason: blockingOrderCount > 0 ? 'Not all orders are ready.' : null };
-    case 'released': return { target: 'closed' as WaveStatus, label: 'Close wave', reason: null };
-    default: return { target: null, label: null, reason: null };
-  }
-}
+// ── Wave workflow is now centralized in entities/wave/lib/wave-actions.ts ──
 
 // ── Add Order Modal ────────────────────────────────────────────────────────────
 
@@ -248,7 +223,7 @@ export function WaveDetailPage() {
     );
   }
 
-  const action = getWaveNextAction(wave.status, wave.totalOrders, wave.blockingOrderCount);
+  const action = getWavePrimaryAction(wave);
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
@@ -269,7 +244,7 @@ export function WaveDetailPage() {
             <h1 className="text-2xl font-bold text-slate-900">{wave.name}</h1>
             <div className="mt-2 flex items-center gap-3">
               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getWaveStatusColor(wave.status)}`}>
-                {waveStatusLabel[wave.status]}
+                {getWaveStatusLabel(wave.status)}
               </span>
               <span className="text-sm text-slate-500">
                 {wave.totalOrders} orders · {wave.readyOrders} ready

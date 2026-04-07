@@ -1,4 +1,5 @@
 import type { Order, OrderStatus, OrderSummary } from '@wos/domain';
+import { BffRequestError } from '@/shared/api/bff/client';
 
 export type OrderAction =
   | 'edit'
@@ -92,4 +93,88 @@ export function getPrimaryTransitionTarget(status: OrderStatus): OrderStatus | n
 export function getProgressLabel(order: OrderSummary): string {
   if (order.unitCount === 0) return '-';
   return `${order.pickedUnitCount} / ${order.unitCount}`;
+}
+
+/**
+ * Workflow state for primary order action.
+ * Single source of truth for order transition UI across all entry points.
+ */
+export interface OrderActionState {
+  target: OrderStatus | null;
+  reason: string | null;
+}
+
+/**
+ * Determine primary workflow action for an order based on its current status and constraints.
+ * Accounts for line requirements and wave ownership.
+ */
+export function getPrimaryOrderAction(
+  order: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveName'>
+): OrderActionState {
+  const target = getPrimaryTransitionTarget(order.status);
+
+  if (!target) {
+    return { target: null, reason: null };
+  }
+
+  // Draft -> Ready: require at least one line
+  if (target === 'ready' && order.lines.length === 0) {
+    return {
+      target,
+      reason: 'Add at least one line before marking ready.'
+    };
+  }
+
+  // Ready -> Released: can't release if part of a wave
+  if (target === 'released' && order.waveId) {
+    return {
+      target,
+      reason: `Release is controlled by wave ${order.waveName ?? order.waveId}.`
+    };
+  }
+
+  return { target, reason: null };
+}
+
+/**
+ * User-facing label for primary action button.
+ * Override generic status label with domain-specific wording where needed.
+ */
+export function getPrimaryActionLabel(status: OrderStatus, target: OrderStatus): string {
+  // Custom label for draft -> ready transition
+  if (status === 'draft' && target === 'ready') {
+    return 'Commit and reserve';
+  }
+
+  // Default: use status label
+  return getOrderStatusLabel(target);
+}
+
+/**
+ * Parse BFF error responses and generate user-friendly error messages.
+ * Handles structured shortage/ATP payloads from reservation layer.
+ */
+export function getTransitionErrorMessage(error: unknown): string | null {
+  if (error instanceof BffRequestError && error.code === 'INSUFFICIENT_STOCK') {
+    const details = error.details as {
+      shortage?: {
+        sku?: string;
+        required?: number;
+        physical?: number;
+        reserved?: number;
+        atp?: number;
+      };
+    } | null;
+
+    const shortage = details?.shortage;
+    if (shortage) {
+      return `Insufficient stock for ${shortage.sku ?? 'this SKU'}: required ${shortage.required ?? '-'}, physical ${shortage.physical ?? '-'}, already reserved ${shortage.reserved ?? '-'}, ATP ${shortage.atp ?? '-'}.`;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return null;
 }

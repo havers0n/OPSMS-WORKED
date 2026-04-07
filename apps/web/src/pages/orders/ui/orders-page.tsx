@@ -10,8 +10,8 @@ import { ordersQueryOptions } from '@/entities/order/api/queries';
 import {
   getOrderStatusColor,
   getOrderStatusLabel,
-  getPrimaryTransitionTarget,
-  getProgressLabel
+  getProgressLabel,
+  getPrimaryTransitionTarget
 } from '@/entities/order/lib/order-actions';
 import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
 
@@ -29,7 +29,13 @@ const TAB_GROUPS: { id: TabGroup; label: string; statuses: OrderStatus[] }[] = [
   { id: 'issues', label: 'Issues', statuses: ['partial', 'cancelled'] }
 ];
 
-function primaryAction(order: Pick<OrderSummary, 'status' | 'lineCount' | 'waveId' | 'waveName'>) {
+/**
+ * Orders page uses OrderSummary with lineCount property.
+ * Adapts to shared order workflow rules.
+ */
+function getOrderListActionState(
+  order: Pick<OrderSummary, 'status' | 'lineCount' | 'waveId' | 'waveName'>
+) {
   const target = getPrimaryTransitionTarget(order.status);
   if (!target) return { target: null, reason: null as string | null };
   if (target === 'ready' && order.lineCount === 0)
@@ -194,7 +200,7 @@ export function OrdersPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {visibleOrders.map((order) => {
-                    const action = primaryAction(order);
+                    const action = getOrderListActionState(order);
                     const isSelected = selectedOrderId === order.id;
                     return (
                       <tr

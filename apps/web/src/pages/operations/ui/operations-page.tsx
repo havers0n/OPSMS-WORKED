@@ -5,39 +5,14 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, WaveStatus, WaveSummary } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
-import { getOrderStatusColor, getOrderStatusLabel, getPrimaryTransitionTarget, getProgressLabel } from '@/entities/order/lib/order-actions';
+import { getOrderStatusColor, getOrderStatusLabel, getProgressLabel } from '@/entities/order/lib/order-actions';
 import { useCreateWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { wavesQueryOptions } from '@/entities/wave/api/queries';
+import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
 import { waveDetailPath } from '@/shared/config/routes';
 import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
 
-// ── Wave status helpers ──────────────────────────────────────────────────────
-
-const waveStatusLabel: Record<WaveStatus, string> = {
-  draft: 'Draft', ready: 'Ready', released: 'Released',
-  in_progress: 'In progress', completed: 'Completed', partial: 'Partial', closed: 'Closed'
-};
-
-function getWaveStatusColor(status: WaveStatus) {
-  switch (status) {
-    case 'draft': return 'bg-slate-100 text-slate-700';
-    case 'ready': return 'bg-blue-50 text-blue-700 border border-blue-200';
-    case 'released': return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
-    case 'in_progress': return 'bg-amber-50 text-amber-700 border border-amber-200';
-    case 'completed': return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-    case 'partial': return 'bg-orange-50 text-orange-700 border border-orange-200';
-    case 'closed': return 'bg-slate-100 text-slate-500';
-  }
-}
-
-function getWaveActionState(wave: Pick<WaveSummary, 'status' | 'totalOrders' | 'blockingOrderCount'>) {
-  switch (wave.status) {
-    case 'draft': return { target: 'ready' as WaveStatus, label: 'Mark ready', reason: wave.totalOrders === 0 ? 'Add at least one order first.' : null };
-    case 'ready': return { target: 'released' as WaveStatus, label: 'Release', reason: wave.blockingOrderCount > 0 ? 'Not all orders are ready.' : null };
-    case 'released': return { target: 'closed' as WaveStatus, label: 'Close', reason: null };
-    default: return { target: null, label: null, reason: null };
-  }
-}
+// ── Wave workflow is now centralized in entities/wave/lib/wave-actions.ts ──
 
 function WaveProgress({ readyOrders, totalOrders }: { readyOrders: number; totalOrders: number }) {
   if (totalOrders === 0) return <span className="text-xs text-slate-400">Empty</span>;
@@ -203,7 +178,7 @@ export function OperationsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {waves.map((wave) => {
-                    const action = getWaveActionState(wave);
+                    const action = getWavePrimaryAction(wave);
                     return (
                       <tr key={wave.id} className="group transition hover:bg-slate-50">
                         <td className="px-5 py-3">
@@ -217,7 +192,7 @@ export function OperationsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getWaveStatusColor(wave.status)}`}>
-                            {waveStatusLabel[wave.status]}
+                            {getWaveStatusLabel(wave.status)}
                           </span>
                         </td>
                         <td className="px-4 py-3">
