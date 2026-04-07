@@ -9,7 +9,7 @@ import { getOrderStatusColor, getOrderStatusLabel, getPrimaryTransitionTarget, g
 import { useCreateWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { wavesQueryOptions } from '@/entities/wave/api/queries';
 import { waveDetailPath } from '@/shared/config/routes';
-import { OrderDrawer } from './order-drawer';
+import { OrderDrawer } from '@/features/order-detail/ui/order-drawer';
 
 // ── Wave status helpers ──────────────────────────────────────────────────────
 
