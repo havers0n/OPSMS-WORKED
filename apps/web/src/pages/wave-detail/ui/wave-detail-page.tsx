@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ChevronDown, ChevronRight, PackagePlus, RefreshCw, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, ChevronRight, PackagePlus, RefreshCw, X } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, OrderSummary, WaveStatus } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
@@ -174,9 +174,9 @@ function WaveBlockerPanel({
   );
 }
 
-// ── Wave Order Card (expandable) ───────────────────────────────────────────────
+// ── Wave Order Row (compact, for list view) ────────────────────────────────────
 
-function WaveOrderCard({ order, waveId, isExpanded, onToggle }: { order: OrderSummary; waveId: string; isExpanded: boolean; onToggle: () => void }) {
+function WaveOrderRow({ order, waveId, isSelected, onSelect }: { order: OrderSummary; waveId: string; isSelected: boolean; onSelect: () => void }) {
   const detach = useDetachOrderFromWave();
   const orderTransition = useTransitionOrderStatus();
   const target = getPrimaryTransitionTarget(order.status);
@@ -184,47 +184,47 @@ function WaveOrderCard({ order, waveId, isExpanded, onToggle }: { order: OrderSu
   const pct = order.unitCount > 0 ? Math.round((order.pickedUnitCount / order.unitCount) * 100) : 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      {/* Card header */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onToggle}
-        onKeyDown={(e) => e.key === 'Enter' || e.key === ' ' ? onToggle() : undefined}
-        className="flex w-full cursor-pointer items-center gap-4 p-4 text-left transition hover:bg-slate-50"
-      >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-900">{order.externalNumber}</span>
-            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getOrderStatusColor(order.status)}`}>
-              {getOrderStatusLabel(order.status)}
-            </span>
-          </div>
-          <div className="mt-1.5 flex items-center gap-3">
-            <span className="text-xs text-slate-500">{order.lineCount} lines · {order.unitCount} units</span>
-            {order.unitCount > 0 && (
-              <div className="flex items-center gap-1.5">
-                <div className="h-1 w-16 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-cyan-500'}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span className="text-xs text-slate-500">{pct}%</span>
+    <tr
+      className={`cursor-pointer transition hover:bg-slate-50 ${isSelected ? 'bg-cyan-50/60' : ''}`}
+      onClick={onSelect}
+    >
+      <td className="px-4 py-3 font-medium text-slate-900">
+        <span className="flex items-center gap-1">
+          {order.externalNumber}
+          {isSelected && <ChevronRight className="h-3.5 w-3.5 text-cyan-600" />}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${getOrderStatusColor(order.status)}`}>
+          {getOrderStatusLabel(order.status)}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-xs text-slate-600">{order.lineCount} lines</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          {order.unitCount > 0 ? (
+            <>
+              <div className="h-1 w-12 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={`h-full rounded-full ${pct === 100 ? 'bg-emerald-500' : 'bg-cyan-500'}`}
+                  style={{ width: `${pct}%` }}
+                />
               </div>
-            )}
-          </div>
+              <span className="w-7 text-right text-xs text-slate-500">{pct}%</span>
+            </>
+          ) : (
+            <span className="text-xs text-slate-400">—</span>
+          )}
         </div>
-        <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      </td>
+      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1">
           {canTransition && target && (
             <button
               type="button"
               disabled={orderTransition.isPending && orderTransition.variables?.orderId === order.id}
               onClick={() => orderTransition.mutate({ orderId: order.id, status: target as OrderStatus })}
-              className="rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100 disabled:opacity-50"
+              className="rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100 disabled:opacity-50"
             >
               {orderTransition.isPending && orderTransition.variables?.orderId === order.id ? '…' : getOrderStatusLabel(target)}
             </button>
@@ -233,22 +233,13 @@ function WaveOrderCard({ order, waveId, isExpanded, onToggle }: { order: OrderSu
             type="button"
             disabled={detach.isPending}
             onClick={() => detach.mutate({ waveId, orderId: order.id })}
-            className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+            className="rounded-lg px-2 py-1 text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
           >
             Remove
           </button>
         </div>
-      </div>
-
-      {/* Expanded: inline order detail */}
-      {isExpanded && (
-        <div className="border-t border-slate-100">
-          <div className="max-h-[480px] overflow-auto">
-            <OrderDrawer orderId={order.id} onClose={onToggle} />
-          </div>
-        </div>
-      )}
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -282,41 +273,39 @@ export function WaveDetailPage() {
   }
 
   const action = getWavePrimaryAction(wave);
+  const blockers = deriveWaveBlockers({ orders: wave.orders });
 
   return (
-    <div className="flex h-full w-full flex-col overflow-auto">
-      <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
-
-        {/* ── Back link ───────────────────────────────────────── */}
-        <Link
-          to={routes.operations}
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Operations
-        </Link>
-
-        {/* ── Wave header ─────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{wave.name}</h1>
-            <div className="mt-2 flex items-center gap-3">
-              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getWaveStatusColor(wave.status)}`}>
-                {getWaveStatusLabel(wave.status)}
-              </span>
-              <span className="text-sm text-slate-500">
-                {wave.totalOrders} orders · {wave.readyOrders} ready
-              </span>
-              {wave.blockingOrderCount > 0 && (
-                <span className="text-sm text-amber-600">{wave.blockingOrderCount} blocking</span>
-              )}
+    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-50">
+      {/* ── Compact Wave Summary Header ────────────────────────── */}
+      <div className="border-b border-slate-200 bg-white px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            <Link
+              to={routes.operations}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="Back to Operations"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-bold text-slate-900">{wave.name}</h1>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${getWaveStatusColor(wave.status)}`}>
+                  {getWaveStatusLabel(wave.status)}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {wave.totalOrders}O · {wave.readyOrders}R {wave.blockingOrderCount > 0 && `· ${wave.blockingOrderCount}⚠`}
+                </span>
+              </div>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => void refetch()}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="Refresh wave"
             >
               <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
             </button>
@@ -326,7 +315,7 @@ export function WaveDetailPage() {
                 disabled={Boolean(action.reason) || waveTransition.isPending}
                 title={action.reason ?? undefined}
                 onClick={() => waveTransition.mutate({ waveId: wave.id, status: action.target as WaveStatus })}
-                className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
+                className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
               >
                 {waveTransition.isPending ? '…' : action.label}
               </button>
@@ -335,22 +324,26 @@ export function WaveDetailPage() {
         </div>
 
         {action.reason && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             {action.reason}
           </div>
         )}
+      </div>
 
-        {/* ── Wave Blocker Panel ──────────────────────────────────── */}
-        {wave.orders.length > 0 && (
+      {/* ── Blocker Panel (if needed) ──────────────────────────── */}
+      {blockers.blocked && (
+        <div className="border-b border-slate-200 bg-white px-6 py-3">
           <WaveBlockerPanel
             waveOrders={wave.orders}
             onOpenOrder={openOrder}
           />
-        )}
+        </div>
+      )}
 
-        {/* ── Stale / invalid order param notice ──────────────── */}
-        {rawOrderParam && !selectedOrderId && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      {/* ── Stale order param notice ──────────────────────────── */}
+      {rawOrderParam && !selectedOrderId && (
+        <div className="border-b border-slate-200 bg-amber-50 px-6 py-2">
+          <div className="flex items-center justify-between gap-3 text-xs text-amber-800">
             <span>Selected order was not found in this wave.</span>
             <button
               type="button"
@@ -358,53 +351,94 @@ export function WaveDetailPage() {
               className="shrink-0 rounded p-0.5 hover:bg-amber-100"
               aria-label="Dismiss"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ── Orders section ──────────────────────────────────── */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
+      {/* ── Master-Detail Area ────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Orders List */}
+        <div className="flex flex-1 flex-col overflow-hidden bg-white">
+          <div className="border-b border-slate-200 px-6 py-3 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               Orders <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">{wave.orders.length}</span>
             </h2>
             <button
               type="button"
               onClick={() => setShowAddOrder(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+              className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
             >
               <PackagePlus className="h-3.5 w-3.5" />
-              Add order
+              Add
             </button>
           </div>
 
           {wave.orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 py-12 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
               <div className="text-sm text-slate-500">No orders in this wave yet.</div>
               <button
                 type="button"
                 onClick={() => setShowAddOrder(true)}
-                className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500"
+                className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500"
               >
                 Add first order
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {wave.orders.map((order) => (
-                <WaveOrderCard
-                  key={order.id}
-                  order={order}
-                  waveId={wave.id}
-                  isExpanded={selectedOrderId === order.id}
-                  onToggle={() => selectedOrderId === order.id ? closeOrder() : openOrder(order.id)}
-                />
-              ))}
+            <div className="flex-1 overflow-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-600">
+                  <tr>
+                    <th className="px-4 py-2">Number</th>
+                    <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">Lines</th>
+                    <th className="px-4 py-2">Progress</th>
+                    <th className="px-4 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {wave.orders.map((order) => (
+                    <WaveOrderRow
+                      key={order.id}
+                      order={order}
+                      waveId={wave.id}
+                      isSelected={selectedOrderId === order.id}
+                      onSelect={() => openOrder(order.id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </section>
+        </div>
 
+        {/* Right: Order Detail (if selected) */}
+        {selectedOrderId ? (
+          <div className="w-[420px] border-l border-slate-200 bg-white overflow-hidden flex flex-col">
+            <div className="border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Order Details</span>
+              <button
+                type="button"
+                onClick={closeOrder}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close detail"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <OrderDrawer orderId={selectedOrderId} onClose={closeOrder} />
+            </div>
+          </div>
+        ) : (
+          <div className="w-[420px] border-l border-slate-200 bg-slate-50 flex flex-col items-center justify-center">
+            <div className="text-center">
+              <div className="text-xs text-slate-500">Select an order to view details</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {showAddOrder && waveId && (
