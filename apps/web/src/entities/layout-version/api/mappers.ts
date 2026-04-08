@@ -104,6 +104,7 @@ export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): Layo
 
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
+    draftVersion: bundle.layoutVersion.draft_version ?? null,
     floorId: bundle.layoutVersion.floor_id,
     state: bundle.layoutVersion.state,
     versionNo: bundle.layoutVersion.version_no,

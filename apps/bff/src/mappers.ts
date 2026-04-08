@@ -56,6 +56,7 @@ import {
 type LayoutVersionRow = {
   id: string;
   floor_id: string;
+  draft_version?: number | null;
   version_no: number;
   state: string;
 };
@@ -583,6 +584,7 @@ export function mapLayoutDraftBundleToDomain(bundle: {
 
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
+    draftVersion: bundle.layoutVersion.draft_version ?? null,
     floorId: bundle.layoutVersion.floor_id,
     state: bundle.layoutVersion.state,
     versionNo: bundle.layoutVersion.version_no,
@@ -604,6 +606,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
 
   const bundle = json as {
     layoutVersionId: string;
+    draftVersion?: number | null;
     floorId: string;
     state: string;
     versionNo: number;
@@ -714,6 +717,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
 
   return layoutDraftSchema.parse({
     layoutVersionId: bundle.layoutVersionId,
+    draftVersion: bundle.draftVersion ?? null,
     floorId: bundle.floorId,
     state: bundle.state,
     versionNo: bundle.versionNo,

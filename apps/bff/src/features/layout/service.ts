@@ -3,7 +3,7 @@ import { createLayoutRepo } from './repo.js';
 
 export type LayoutService = {
   createDraft(floorId: string, actorId: string): Promise<string>;
-  saveDraft(layoutDraft: unknown, actorId: string): Promise<string>;
+  saveDraft(layoutDraft: unknown, actorId: string): Promise<{ layoutVersionId: string; draftVersion: number | null }>;
   validateVersion(layoutVersionId: string): Promise<unknown>;
   publishVersion(layoutVersionId: string, actorId: string): Promise<unknown>;
 };

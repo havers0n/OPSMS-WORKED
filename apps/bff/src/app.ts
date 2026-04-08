@@ -34,11 +34,11 @@ import {
   idResponseSchema,
   inventoryItemResponseSchema,
   layoutDraftResponseSchema,
-  layoutVersionIdResponseSchema,
   publishResponseSchema,
   publishedLayoutSummaryResponseSchema,
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
+  saveLayoutDraftResponseSchema,
   sitesResponseSchema,
   validationResponseSchema,
   pickTasksResponseSchema,
@@ -1007,9 +1007,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     const body = parseOrThrow(saveLayoutDraftBodySchema, request.body);
     const layoutService = getLayoutService(auth);
-    const layoutVersionId = await layoutService.saveDraft(body.layoutDraft, auth.user.id);
+    const result = await layoutService.saveDraft(body.layoutDraft, auth.user.id);
 
-    return parseOrThrow(layoutVersionIdResponseSchema, { layoutVersionId });
+    return parseOrThrow(saveLayoutDraftResponseSchema, result);
   });
 
   app.post('/api/layout-drafts/:layoutVersionId/validate', async (request, reply) => {

@@ -6,6 +6,7 @@ import { zoneSchema } from './zone';
 
 export const layoutDraftSchema = z.object({
   layoutVersionId: z.string(),
+  draftVersion: z.number().int().min(0).optional().nullable(),
   floorId: z.string(),
   state: layoutVersionStateSchema,
   versionNo: z.number().int().min(1).optional().nullable(),

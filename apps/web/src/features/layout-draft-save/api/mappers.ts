@@ -64,6 +64,7 @@ type SaveWallPayload = {
 
 export type SaveLayoutDraftPayload = {
   layoutVersionId: string;
+  draftVersion?: number | null;
   racks: SaveRackPayload[];
   zones: SaveZonePayload[];
   walls: SaveWallPayload[];
@@ -72,6 +73,7 @@ export type SaveLayoutDraftPayload = {
 export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraftPayload {
   return {
     layoutVersionId: draft.layoutVersionId,
+    draftVersion: draft.draftVersion ?? null,
     racks: draft.rackIds.map((id) => {
       const rack = draft.racks[id];
       return {

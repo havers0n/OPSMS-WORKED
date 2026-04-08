@@ -10,8 +10,8 @@ export function useSaveLayoutDraft(floorId: string | null) {
 
   return useMutation({
     mutationFn: (layoutDraft: LayoutDraft) => saveLayoutDraft(layoutDraft),
-    onSuccess: ({ layoutVersionId }) => {
-      useEditorStore.getState().markDraftSaved(layoutVersionId);
+    onSuccess: ({ layoutVersionId, draftVersion }) => {
+      useEditorStore.getState().markDraftSaved({ layoutVersionId, draftVersion });
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] === 'layout-validation' && query.queryKey[1] === layoutVersionId
       });
@@ -21,7 +21,8 @@ export function useSaveLayoutDraft(floorId: string | null) {
     onError: (error) => {
       // Draft expired (e.g. published from another tab or publish succeeded but
       // BFF response failed) — reload workspace so the store gets the current state.
-      if (error instanceof BffRequestError && error.code === 'DRAFT_NOT_ACTIVE') {
+      if (error instanceof BffRequestError && (error.code === 'DRAFT_NOT_ACTIVE' || error.code === 'DRAFT_CONFLICT')) {
+        void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(floorId) });
         void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.workspace(floorId) });
       }
     }

@@ -3,7 +3,7 @@ import { bffRequest } from '@/shared/api/bff/client';
 import { mapLayoutDraftToSavePayload } from './mappers';
 
 export async function saveLayoutDraft(layoutDraft: LayoutDraft) {
-  const result = await bffRequest<{ layoutVersionId: string }>('/layout-drafts/save', {
+  const result = await bffRequest<{ layoutVersionId: string; draftVersion: number | null }>('/layout-drafts/save', {
     method: 'POST',
     body: JSON.stringify({
       layoutDraft: mapLayoutDraftToSavePayload(layoutDraft)
@@ -12,7 +12,11 @@ export async function saveLayoutDraft(layoutDraft: LayoutDraft) {
 
   return {
     layoutVersionId: result.layoutVersionId,
-    savedDraft: layoutDraft
+    draftVersion: result.draftVersion,
+    savedDraft: {
+      ...layoutDraft,
+      draftVersion: result.draftVersion
+    }
   };
 }
 

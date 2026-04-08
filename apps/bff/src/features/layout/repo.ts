@@ -5,9 +5,15 @@ import { mapCellRowToDomain, mapLayoutBundleJsonToDomain, mapLayoutDraftBundleTo
 type LayoutVersionRow = {
   id: string;
   floor_id: string;
+  draft_version?: number | null;
   version_no: number;
   state: 'draft' | 'published' | 'archived';
   published_at?: string | null;
+};
+
+type SaveDraftResult = {
+  layoutVersionId: string;
+  draftVersion: number | null;
 };
 
 type CellRow = {
@@ -99,7 +105,7 @@ export type LayoutRepo = {
   findPublishedLayoutSummary(floorId: string): Promise<PublishedLayoutSummary | null>;
   listPublishedCells(floorId: string): Promise<Cell[]>;
   createDraft(floorId: string, actorId: string): Promise<string>;
-  saveDraft(layoutDraft: unknown, actorId: string): Promise<string>;
+  saveDraft(layoutDraft: unknown, actorId: string): Promise<SaveDraftResult>;
   validateVersion(layoutVersionId: string): Promise<unknown>;
   publishVersion(layoutVersionId: string, actorId: string): Promise<unknown>;
 };
@@ -120,7 +126,7 @@ async function findLatestLayoutVersionByState(
 ) {
   const { data, error } = await supabase
     .from('layout_versions')
-    .select('id,floor_id,version_no,state,published_at')
+    .select('id,floor_id,draft_version,version_no,state,published_at')
     .eq('floor_id', floorId);
 
   if (error) {
@@ -336,13 +342,19 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
         throw error;
       }
 
-      // save_layout_draft returns either a plain uuid (migration 0042) or a jsonb
-      // object { layoutVersionId, draftVersion } if the function was later updated.
-      // Normalise to the uuid string the BFF contract expects.
+      // save_layout_draft returns either a plain uuid (legacy) or a jsonb
+      // object { layoutVersionId, draftVersion }. Normalize both shapes.
       if (data !== null && typeof data === 'object' && 'layoutVersionId' in (data as object)) {
-        return (data as { layoutVersionId: string }).layoutVersionId;
+        const result = data as { layoutVersionId: string; draftVersion?: number | null };
+        return {
+          layoutVersionId: result.layoutVersionId,
+          draftVersion: result.draftVersion ?? null
+        };
       }
-      return data as string;
+      return {
+        layoutVersionId: data as string,
+        draftVersion: null
+      };
     },
 
     async validateVersion(layoutVersionId) {

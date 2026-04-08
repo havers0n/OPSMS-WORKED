@@ -830,6 +830,7 @@ function createValidSaveLayoutDraftPayload() {
   return {
     layoutDraft: {
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      draftVersion: 7,
       zones: [],
       racks: [
         {
@@ -884,6 +885,7 @@ function createActiveDraftSupabaseStub() {
                 {
                   id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
                   floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: 11,
                   version_no: 3,
                   state: 'draft'
                 }
@@ -1030,6 +1032,7 @@ function createFloorWorkspaceSupabaseStub() {
                 {
                   id: draftVersionId,
                   floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: 5,
                   version_no: 4,
                   state: 'draft',
                   published_at: null
@@ -1037,6 +1040,7 @@ function createFloorWorkspaceSupabaseStub() {
                 {
                   id: publishedVersionId,
                   floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: null,
                   version_no: 3,
                   state: 'published',
                   published_at: '2026-03-08T12:00:00.000Z'
@@ -2293,6 +2297,7 @@ describe('buildApp', () => {
       floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
       activeDraft: {
         layoutVersionId: '11111111-1111-4111-8111-111111111111',
+        draftVersion: 5,
         floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
         state: 'draft',
         rackIds: ['33333333-3333-4333-8333-333333333333'],
@@ -2304,6 +2309,7 @@ describe('buildApp', () => {
       },
       latestPublished: {
         layoutVersionId: '22222222-2222-4222-8222-222222222222',
+        draftVersion: null,
         floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
         state: 'published',
         rackIds: ['44444444-4444-4444-8444-444444444444'],
@@ -2336,6 +2342,7 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      draftVersion: 11,
       floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
       state: 'draft',
       rackIds: ['f38510b5-d5c5-4657-8d7e-a4154cb74951'],
@@ -2370,6 +2377,7 @@ describe('buildApp', () => {
       activeDraft: null,
       latestPublished: {
         layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+        draftVersion: null,
         floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
         state: 'published',
         rackIds: [],
@@ -2495,6 +2503,7 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      draftVersion: null,
       floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
       state: 'draft',
       rackIds: [],
@@ -3896,6 +3905,64 @@ describe('buildApp', () => {
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'save_layout_draft') {
         return {
+          data: {
+            layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+            draftVersion: 8
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts/save',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: createValidSaveLayoutDraftPayload()
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      draftVersion: 8
+    });
+    const savePayload = supabase.rpc.mock.calls[0]?.[1]?.layout_payload as {
+      racks: Array<{ faces: Array<Record<string, unknown>> }>;
+    };
+    expect(savePayload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
+    expect(savePayload.racks[0]?.faces[0]).toHaveProperty('faceLength', 4.5);
+    expect(supabase.rpc).toHaveBeenCalledWith('save_layout_draft', {
+      layout_payload: {
+        layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+        draftVersion: 7,
+        zones: [],
+        walls: [],
+        racks: [
+          expect.objectContaining({
+            id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'
+          })
+        ]
+      },
+      actor_uuid: authContext.user.id
+    });
+
+    await app.close();
+  });
+
+  it('normalizes legacy string save-layout rpc responses to the current save contract', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'save_layout_draft') {
+        return {
           data: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
           error: null
         };
@@ -3920,25 +3987,47 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d'
+      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      draftVersion: null
     });
-    const savePayload = supabase.rpc.mock.calls[0]?.[1]?.layout_payload as {
-      racks: Array<{ faces: Array<Record<string, unknown>> }>;
-    };
-    expect(savePayload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
-    expect(savePayload.racks[0]?.faces[0]).toHaveProperty('faceLength', 4.5);
-    expect(supabase.rpc).toHaveBeenCalledWith('save_layout_draft', {
-      layout_payload: {
-        layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
-        zones: [],
-        walls: [],
-        racks: [
-          expect.objectContaining({
-            id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'
-          })
-        ]
+
+    await app.close();
+  });
+
+  it('maps save-layout draft conflicts to the dedicated draft conflict contract', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'save_layout_draft') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'DRAFT_CONFLICT'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/layout-drafts/save',
+      headers: {
+        authorization: 'Bearer token'
       },
-      actor_uuid: authContext.user.id
+      payload: createValidSaveLayoutDraftPayload()
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'DRAFT_CONFLICT',
+      message: 'Layout draft was changed by another session. Please reload.'
     });
 
     await app.close();

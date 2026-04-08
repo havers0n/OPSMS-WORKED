@@ -112,7 +112,7 @@ type EditorStore = {
   setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
   initializeDraft: (draft: LayoutDraft) => void;
-  markDraftSaved: (layoutVersionId: string) => void;
+  markDraftSaved: (saveResult: { layoutVersionId: string; draftVersion: number | null }) => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: { x: number; y: number; width: number; height: number }) => void;
   createFreeWall: (x1: number, y1: number, x2: number, y2: number) => void;
@@ -363,14 +363,18 @@ export const useEditorStore = create<EditorStore>((set) => ({
         isDraftDirty: normalized.changed
       };
     }),
-  markDraftSaved: (layoutVersionId) =>
+  markDraftSaved: (saveResult) =>
     set((state) => {
-      if (!state.draft || state.draft.layoutVersionId !== layoutVersionId) {
+      if (!state.draft || state.draft.layoutVersionId !== saveResult.layoutVersionId) {
         return state;
       }
 
       return {
-        draftSourceVersionId: layoutVersionId,
+        draft: {
+          ...state.draft,
+          draftVersion: saveResult.draftVersion
+        },
+        draftSourceVersionId: saveResult.layoutVersionId,
         isDraftDirty: false
       };
     }),

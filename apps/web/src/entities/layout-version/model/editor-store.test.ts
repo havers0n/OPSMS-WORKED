@@ -31,6 +31,7 @@ function resetStore() {
 function createUuidLayoutDraftFixture() {
   return {
     layoutVersionId: crypto.randomUUID(),
+    draftVersion: 1,
     floorId: crypto.randomUUID(),
     state: 'draft' as const,
     rackIds: [],
@@ -61,6 +62,7 @@ describe('editor-store', () => {
     useEditorStore.getState().initializeDraft(draft);
 
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
+    expect(useEditorStore.getState().draft?.draftVersion).toBe(draft.draftVersion);
     expect(useEditorStore.getState().draft?.state).toBe('draft');
     expect(useInteractionStore.getState().selection.type).toBe('none');
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
@@ -83,9 +85,10 @@ describe('editor-store', () => {
     const rackId = draft.rackIds[0];
     useEditorStore.getState().initializeDraft(draft);
     useEditorStore.getState().updateRackPosition(rackId, 50, 60);
-    useEditorStore.getState().markDraftSaved(draft.layoutVersionId);
+    useEditorStore.getState().markDraftSaved({ layoutVersionId: draft.layoutVersionId, draftVersion: 2 });
 
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
+    expect(useEditorStore.getState().draft?.draftVersion).toBe(2);
 
     // A stale workspace refetch (with pre-save positions) must be blocked
     const staleDraft = createLayoutDraftFixture(); // same layoutVersionId, old positions
@@ -117,10 +120,11 @@ describe('editor-store', () => {
     useEditorStore.getState().initializeDraft(draft);
     useEditorStore.getState().updateRackPosition(draft.rackIds[0], 100, 200);
 
-    useEditorStore.getState().markDraftSaved(draft.layoutVersionId);
+    useEditorStore.getState().markDraftSaved({ layoutVersionId: draft.layoutVersionId, draftVersion: 2 });
 
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
+    expect(useEditorStore.getState().draft?.draftVersion).toBe(2);
   });
 
   it('creates, updates, and deletes a zone as first-class draft state', () => {

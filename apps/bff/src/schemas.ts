@@ -166,6 +166,7 @@ const saveWallPayloadSchema = z.object({
 export const saveLayoutDraftBodySchema = z.object({
   layoutDraft: z.object({
     layoutVersionId: z.string().uuid(),
+    draftVersion: z.number().int().min(0).nullable().optional(),
     racks: z.array(saveRackPayloadSchema),
     zones: z.array(saveZonePayloadSchema).default([]),
     walls: z.array(saveWallPayloadSchema).default([])
@@ -195,6 +196,11 @@ export const currentWorkspaceResponseSchema = z.object({
 
 export const layoutVersionIdResponseSchema = z.object({
   layoutVersionId: z.string().uuid()
+});
+
+export const saveLayoutDraftResponseSchema = z.object({
+  layoutVersionId: z.string().uuid(),
+  draftVersion: z.number().int().min(0).nullable()
 });
 
 export const sitesResponseSchema = z.array(siteSchema);

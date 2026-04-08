@@ -115,6 +115,7 @@ describe('mapLayoutDraftToSavePayload', () => {
         faceLength: 4.5
       })
     );
+    expect(payload.draftVersion).toBe(1);
     expect(payload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
     expect(payload.zones[0]).toEqual({
       id: '99999999-9999-9999-9999-999999999999',
