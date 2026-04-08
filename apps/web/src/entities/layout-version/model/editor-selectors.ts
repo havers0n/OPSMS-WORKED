@@ -66,9 +66,14 @@ export const useIsLayoutEditable = () => {
   return viewMode === 'layout' && draftState === 'draft';
 };
 export const useDraftDirtyState = () => useEditorStore((state) => state.isDraftDirty);
+export const useDraftPersistenceStatus = () => useEditorStore((state) => state.persistenceStatus);
+export const useLastDraftSaveErrorMessage = () => useEditorStore((state) => state.lastSaveErrorMessage);
 export const useResetDraft = () => useEditorStore((state) => state.resetDraft);
 export const useInitializeDraft = () => useEditorStore((state) => state.initializeDraft);
+export const useMarkDraftSaving = () => useEditorStore((state) => state.markDraftSaving);
 export const useMarkDraftSaved = () => useEditorStore((state) => state.markDraftSaved);
+export const useMarkDraftSaveConflict = () => useEditorStore((state) => state.markDraftSaveConflict);
+export const useMarkDraftSaveError = () => useEditorStore((state) => state.markDraftSaveError);
 export const useCreateRack = () => useEditorStore((state) => state.createRack);
 export const useCreateZone = () => useEditorStore((state) => state.createZone);
 export const useCreateFreeWall = () => useEditorStore((state) => state.createFreeWall);

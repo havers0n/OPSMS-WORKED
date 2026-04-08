@@ -21,7 +21,10 @@ function resetStore() {
     minRackDistance: 0,
     draft: null,
     draftSourceVersionId: null,
-    isDraftDirty: false
+    isDraftDirty: false,
+    persistenceStatus: 'idle',
+    lastSaveErrorMessage: null,
+    lastChangeClass: null
   });
 
   // Reset interaction-store
@@ -85,7 +88,11 @@ describe('editor-store', () => {
     const rackId = draft.rackIds[0];
     useEditorStore.getState().initializeDraft(draft);
     useEditorStore.getState().updateRackPosition(rackId, 50, 60);
-    useEditorStore.getState().markDraftSaved({ layoutVersionId: draft.layoutVersionId, draftVersion: 2 });
+    useEditorStore.getState().markDraftSaved({
+      layoutVersionId: draft.layoutVersionId,
+      draftVersion: 2,
+      changeClass: 'geometry_only'
+    });
 
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
     expect(useEditorStore.getState().draft?.draftVersion).toBe(2);
@@ -120,11 +127,62 @@ describe('editor-store', () => {
     useEditorStore.getState().initializeDraft(draft);
     useEditorStore.getState().updateRackPosition(draft.rackIds[0], 100, 200);
 
-    useEditorStore.getState().markDraftSaved({ layoutVersionId: draft.layoutVersionId, draftVersion: 2 });
+    useEditorStore.getState().markDraftSaved({
+      layoutVersionId: draft.layoutVersionId,
+      draftVersion: 2,
+      changeClass: 'geometry_only'
+    });
 
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
     expect(useEditorStore.getState().draft?.layoutVersionId).toBe(draft.layoutVersionId);
     expect(useEditorStore.getState().draft?.draftVersion).toBe(2);
+    expect(useEditorStore.getState().persistenceStatus).toBe('saved');
+    expect(useEditorStore.getState().lastChangeClass).toBe('geometry_only');
+  });
+
+  it('keeps dirty state when a save finishes after newer local edits', () => {
+    const draft = createLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 100, 200);
+    useEditorStore.getState().markDraftSaving({ layoutVersionId: draft.layoutVersionId });
+
+    useEditorStore.getState().markDraftSaved({
+      layoutVersionId: draft.layoutVersionId,
+      draftVersion: 2,
+      changeClass: 'geometry_only',
+      keepDirty: true
+    });
+
+    expect(useEditorStore.getState().isDraftDirty).toBe(true);
+    expect(useEditorStore.getState().persistenceStatus).toBe('dirty');
+    expect(useEditorStore.getState().draft?.draftVersion).toBe(2);
+  });
+
+  it('marks conflicts as a hard-stop persistence status', () => {
+    const draft = createLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().markDraftSaveConflict({
+      layoutVersionId: draft.layoutVersionId,
+      message: 'Layout draft was changed by another session. Please reload.'
+    });
+
+    expect(useEditorStore.getState().persistenceStatus).toBe('conflict');
+    expect(useEditorStore.getState().lastSaveErrorMessage).toContain('Please reload');
+  });
+
+  it('returns to dirty after the next edit following a save error', () => {
+    const draft = createLayoutDraftFixture();
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().markDraftSaveError({
+      layoutVersionId: draft.layoutVersionId,
+      message: 'Save failed'
+    });
+
+    expect(useEditorStore.getState().persistenceStatus).toBe('error');
+
+    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 150, 250);
+
+    expect(useEditorStore.getState().persistenceStatus).toBe('dirty');
   });
 
   it('creates, updates, and deletes a zone as first-class draft state', () => {

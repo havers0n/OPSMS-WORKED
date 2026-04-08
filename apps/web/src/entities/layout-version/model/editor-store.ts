@@ -1,4 +1,5 @@
 import type {
+  LayoutChangeClass,
   LayoutDraft,
   Rack,
   RackFace,
@@ -80,6 +81,9 @@ type EditorStore = {
   draft: LayoutDraft | null;
   draftSourceVersionId: string | null;
   isDraftDirty: boolean;
+  persistenceStatus: 'idle' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
+  lastSaveErrorMessage: string | null;
+  lastChangeClass: LayoutChangeClass | null;
   // — Mode (coordinates with mode-store) —
   setViewMode: (mode: AnyViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
@@ -112,7 +116,19 @@ type EditorStore = {
   setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
   initializeDraft: (draft: LayoutDraft) => void;
-  markDraftSaved: (saveResult: { layoutVersionId: string; draftVersion: number | null }) => void;
+  markDraftSaving: (saveResult: { layoutVersionId: string }) => void;
+  markDraftSaved: (saveResult: {
+    layoutVersionId: string;
+    draftVersion: number | null;
+    changeClass: LayoutChangeClass;
+    keepDirty?: boolean;
+  }) => void;
+  markDraftSaveConflict: (saveResult: { layoutVersionId: string; message: string }) => void;
+  markDraftSaveError: (saveResult: {
+    layoutVersionId: string;
+    message: string;
+    keepDirty?: boolean;
+  }) => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: { x: number; y: number; width: number; height: number }) => void;
   createFreeWall: (x1: number, y1: number, x2: number, y2: number) => void;
@@ -157,12 +173,28 @@ const initialEditorState = {
   minRackDistance: 0,
   draft: null,
   draftSourceVersionId: null,
-  isDraftDirty: false
+  isDraftDirty: false,
+  persistenceStatus: 'idle' as const,
+  lastSaveErrorMessage: null as string | null,
+  lastChangeClass: null as LayoutChangeClass | null
 };
 
 const WORKFLOW_RESET = {
   activeStorageWorkflow: null as ActiveStorageWorkflow
 };
+
+function markDraftChanged<T extends object>(state: Pick<EditorStore, 'persistenceStatus'>, patch: T): T & {
+  isDraftDirty: true;
+  persistenceStatus: 'dirty' | 'conflict';
+  lastSaveErrorMessage: string | null;
+} {
+  return {
+    ...patch,
+    isDraftDirty: true,
+    persistenceStatus: state.persistenceStatus === 'conflict' ? 'conflict' : 'dirty',
+    lastSaveErrorMessage: null
+  };
+}
 
 export const useEditorStore = create<EditorStore>((set) => ({
   ...initialEditorState,
@@ -274,7 +306,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
       draft: null,
       draftSourceVersionId: null,
       ...WORKFLOW_RESET,
-      isDraftDirty: false
+      isDraftDirty: false,
+      persistenceStatus: 'idle',
+      lastSaveErrorMessage: null,
+      lastChangeClass: null
     });
   },
   initializeDraft: (draft) =>
@@ -360,7 +395,21 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraftState,
         draftSourceVersionId: nextDraftState.layoutVersionId,
-        isDraftDirty: normalized.changed
+        isDraftDirty: normalized.changed,
+        persistenceStatus: normalized.changed ? 'dirty' : 'idle',
+        lastSaveErrorMessage: null,
+        lastChangeClass: null
+      };
+    }),
+  markDraftSaving: (saveResult) =>
+    set((state) => {
+      if (!state.draft || state.draft.layoutVersionId !== saveResult.layoutVersionId) {
+        return state;
+      }
+
+      return {
+        persistenceStatus: 'saving',
+        lastSaveErrorMessage: null
       };
     }),
   markDraftSaved: (saveResult) =>
@@ -375,7 +424,33 @@ export const useEditorStore = create<EditorStore>((set) => ({
           draftVersion: saveResult.draftVersion
         },
         draftSourceVersionId: saveResult.layoutVersionId,
-        isDraftDirty: false
+        isDraftDirty: saveResult.keepDirty ? true : false,
+        persistenceStatus: saveResult.keepDirty ? 'dirty' : 'saved',
+        lastSaveErrorMessage: null,
+        lastChangeClass: saveResult.changeClass
+      };
+    }),
+  markDraftSaveConflict: (saveResult) =>
+    set((state) => {
+      if (!state.draft || state.draft.layoutVersionId !== saveResult.layoutVersionId) {
+        return state;
+      }
+
+      return {
+        persistenceStatus: 'conflict',
+        lastSaveErrorMessage: saveResult.message
+      };
+    }),
+  markDraftSaveError: (saveResult) =>
+    set((state) => {
+      if (!state.draft || state.draft.layoutVersionId !== saveResult.layoutVersionId) {
+        return state;
+      }
+
+      return {
+        isDraftDirty: true,
+        persistenceStatus: saveResult.keepDirty ? 'dirty' : 'error',
+        lastSaveErrorMessage: saveResult.message
       };
     }),
   createRack: (x, y) => {
@@ -390,7 +465,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Zustand's set() is synchronous and this fires before subscribers.
       useInteractionStore.getState().setSelection({ type: 'rack', rackIds: [newRack.id], focus: { type: 'body' } });
       useInteractionStore.getState().setCreatingRackId(newRack.id);
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     });
     useModeStore.getState().setEditorMode('select');
   },
@@ -403,7 +478,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       nextDraft.zoneIds = [...nextDraft.zoneIds, newZone.id];
       nextDraft.zones[newZone.id] = newZone;
       useInteractionStore.getState().setSelection({ type: 'zone', zoneId: newZone.id });
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     });
     useModeStore.getState().setEditorMode('select');
   },
@@ -418,7 +493,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       nextDraft.wallIds = [...nextDraft.wallIds, newWall.id];
       nextDraft.walls[newWall.id] = newWall;
       useInteractionStore.getState().setSelection({ type: 'wall', wallId: newWall.id });
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     });
     useModeStore.getState().setEditorMode('select');
   },
@@ -434,7 +509,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       nextDraft.wallIds = [...nextDraft.wallIds, newWall.id];
       nextDraft.walls[newWall.id] = newWall;
       useInteractionStore.getState().setSelection({ type: 'wall', wallId: newWall.id });
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     });
     useModeStore.getState().setEditorMode('select');
   },
@@ -451,7 +526,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       ix.setSelectedRackIds(nextRackIds);
       if (ix.creatingRackId === rackId) ix.setCreatingRackId(null);
 
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     }),
   deleteZone: (zoneId) =>
     set((state) => {
@@ -466,7 +541,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         ix.clearSelection();
       }
 
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     }),
   deleteWall: (wallId) =>
     set((state) => {
@@ -481,7 +556,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         ix.clearSelection();
       }
 
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     }),
   duplicateRack: (rackId) =>
     set((state) => {
@@ -519,7 +594,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       nextDraft.rackIds = [...nextDraft.rackIds, newRackId];
       nextDraft.racks[newRackId] = duplicate;
       useInteractionStore.getState().setSelection({ type: 'rack', rackIds: [newRackId], focus: { type: 'body' } });
-      return { draft: nextDraft, isDraftDirty: true };
+      return markDraftChanged(state, { draft: nextDraft });
     }),
   updateRackPosition: (rackId, x, y) =>
     set((state) => {
@@ -537,16 +612,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
         return state;
       }
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({ ...rack, x, y })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateZoneRect: (zoneId, rect) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateZoneInDraft(state.draft, zoneId, (zone) => ({
           ...zone,
           x: clampZoneCoordinate(rect.x),
@@ -554,40 +628,37 @@ export const useEditorStore = create<EditorStore>((set) => ({
           width: clampZoneSize(rect.width),
           height: clampZoneSize(rect.height)
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateZoneDetails: (zoneId, patch) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateZoneInDraft(state.draft, zoneId, (zone) => ({
           ...zone,
           name: patch.name !== undefined ? patch.name : zone.name,
           category: patch.category !== undefined ? patch.category : zone.category,
           color: patch.color !== undefined ? patch.color : zone.color
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateWallGeometry: (wallId, geometry) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateWallInDraft(state.draft, wallId, (wall) => ({
           ...wall,
           ...normalizeWallGeometry(geometry, wall)
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateWallDetails: (wallId, patch) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateWallInDraft(state.draft, wallId, (wall) => ({
           ...wall,
           code:
@@ -609,14 +680,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               ? patch.blocksRackPlacement
               : wall.blocksRackPlacement
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   rotateRack: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
           const newDeg = (((rack.rotationDeg + 90) % 360) as 0 | 90 | 180 | 270);
           // axis auto-syncs with visual rotation:
@@ -625,35 +695,32 @@ export const useEditorStore = create<EditorStore>((set) => ({
           const newAxis: Rack['axis'] = (newDeg === 90 || newDeg === 270) ? 'NS' : 'WE';
           return { ...rack, rotationDeg: newDeg, axis: newAxis };
         }),
-        isDraftDirty: true
-      };
+      });
     }),
   updateRackGeneral: (rackId, patch) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => normalizeRack({ ...rack, ...patch })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateFaceConfig: (rackId, side, patch) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) => (face.side === side ? { ...face, ...patch } : face))
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateSectionLength: (rackId, side, sectionId, length) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) =>
@@ -665,14 +732,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateSectionSlots: (rackId, side, sectionId, slotCount) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) =>
@@ -688,14 +754,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   updateLevelCount: (rackId, side, sectionId, count) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) =>
@@ -720,14 +785,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   addSection: (rackId, side) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) =>
@@ -742,14 +806,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   deleteSection: (rackId, side, sectionId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) =>
@@ -758,14 +821,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   addLevel: (rackId, side, sectionId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           faces: rack.faces.map((face) =>
@@ -791,14 +853,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   applyFacePreset: (rackId, side, sectionCount, levelCount, slotCount) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
           const face = rack.faces.find((f) => f.side === side);
           // Use per-face length if set (asymmetric paired rack), else fall back to rack total
@@ -831,14 +892,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
             })
           };
         }),
-        isDraftDirty: true
-      };
+      });
     }),
   resetFaceB: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
           kind: 'single' as RackKind,
@@ -848,14 +908,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
               : face
           )
         })),
-        isDraftDirty: true
-      };
+      });
     }),
   setFaceLength: (rackId, side, length) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) =>
           normalizeRack({
             ...rack,
@@ -872,14 +931,13 @@ export const useEditorStore = create<EditorStore>((set) => ({
             })
           })
         ),
-        isDraftDirty: true
-      };
+      });
     }),
   setFaceBMode: (rackId, mode) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
-      return {
+      return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
           const faceA = rack.faces.find((face) => face.side === 'A');
           const faceB = rack.faces.find((face) => face.side === 'B');
@@ -937,8 +995,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
             faces: rack.faces.map((face) => (face.side === 'B' ? nextFaceB : face))
           };
         }),
-        isDraftDirty: true
-      };
+      });
     }),
   alignRacksHorizontal: (rackIds) =>
     set((state) => {
@@ -956,10 +1013,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
         nextDraft = updateRackInDraft(nextDraft, rackId, (rack) => ({ ...rack, ...pos }));
       }
 
-      return {
+      return markDraftChanged(state, {
         draft: nextDraft,
-        isDraftDirty: true
-      };
+      });
     }),
   alignRacksVertical: (rackIds) =>
     set((state) => {
@@ -977,10 +1033,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
         nextDraft = updateRackInDraft(nextDraft, rackId, (rack) => ({ ...rack, ...pos }));
       }
 
-      return {
+      return markDraftChanged(state, {
         draft: nextDraft,
-        isDraftDirty: true
-      };
+      });
     }),
   distributeRacksEqual: (rackIds, axis) =>
     set((state) => {
@@ -996,10 +1051,9 @@ export const useEditorStore = create<EditorStore>((set) => ({
         nextDraft = updateRackInDraft(nextDraft, rackId, (rack) => ({ ...rack, ...pos }));
       }
 
-      return {
+      return markDraftChanged(state, {
         draft: nextDraft,
-        isDraftDirty: true
-      };
+      });
     })
 }));
 

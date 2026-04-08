@@ -23,6 +23,7 @@ import {
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
+  useDraftPersistenceStatus,
   useDraftDirtyState,
   useLayoutDraftState,
   useResetDraft,
@@ -68,6 +69,7 @@ export function TopBar() {
   const layoutDraft = useLayoutDraftState();
   const hasDraftLayout = layoutDraft?.state === 'draft';
   const isDraftDirty = useDraftDirtyState();
+  const persistenceStatus = useDraftPersistenceStatus();
   const createDraft = useCreateLayoutDraft(activeFloorId);
   const saveDraft = useSaveLayoutDraft(activeFloorId);
   const validateLayout = useLayoutValidation(layoutDraft?.layoutVersionId ?? null);
@@ -118,10 +120,10 @@ export function TopBar() {
     const latestDraft = useEditorStore.getState().draft;
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
-      await saveDraft.mutateAsync(latestDraft);
-      setStatusMessage('Saved');
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : 'Save failed');
+      await saveDraft.flushSave(latestDraft);
+      setStatusMessage(null);
+    } catch {
+      setStatusMessage(null);
     }
   };
 
@@ -178,19 +180,29 @@ export function TopBar() {
 
   const activeSite = sites.find((s) => s.id === activeSiteId);
   const activeFloor = floors.find((f) => f.id === activeFloorId);
-  const workspaceStateLabel = isDraftDirty
-    ? 'Unsaved'
-    : !hasDraftLayout
-      ? 'Published'
-      : viewMode === 'layout'
-        ? 'Synced'
-        : 'Read-only';
+  const workspaceStateLabel = !hasDraftLayout
+    ? 'Published'
+    : viewMode !== 'layout'
+      ? 'Read-only'
+      : persistenceStatus === 'dirty'
+        ? 'Unsaved'
+        : persistenceStatus === 'saving'
+          ? 'Saving...'
+          : persistenceStatus === 'conflict'
+            ? 'Conflict'
+            : persistenceStatus === 'error'
+              ? 'Save failed'
+              : 'Saved';
   const isCurrentModeLocked = viewMode !== 'layout' || !hasDraftLayout;
-  const workspaceStateStyle = isDraftDirty
-    ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
-    : isCurrentModeLocked
-      ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
-      : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' };
+  const workspaceStateStyle = isCurrentModeLocked
+    ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
+    : persistenceStatus === 'dirty'
+      ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
+      : persistenceStatus === 'saving'
+        ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
+        : persistenceStatus === 'conflict' || persistenceStatus === 'error'
+          ? { background: 'rgba(220,38,38,0.12)', color: '#b91c1c' }
+          : { background: 'rgba(20,125,100,0.1)', color: 'var(--success)' };
   const workspaceTooltip = !hasDraftLayout
     ? 'Structure locked · switch to Layout and create a draft to edit'
     : viewMode !== 'layout'
@@ -392,7 +404,7 @@ export function TopBar() {
             {/* Save */}
             <button
               type="button"
-              disabled={!actions.canSaveDraft || isBusy}
+              disabled={!actions.canSaveDraft || isBusy || persistenceStatus === 'conflict'}
               onClick={handleSaveDraft}
               title="Save draft"
               className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
@@ -405,7 +417,7 @@ export function TopBar() {
             {/* Publish */}
             <button
               type="button"
-              disabled={!actions.canPublishDraft || isBusy}
+              disabled={!actions.canPublishDraft || isBusy || persistenceStatus === 'conflict'}
               onClick={handlePublish}
               className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
               style={{ background: 'var(--accent)' }}

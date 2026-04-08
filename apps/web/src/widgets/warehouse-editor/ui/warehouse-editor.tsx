@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
+import { useLayoutDraftAutosave } from '@/features/layout-draft-save/model/use-layout-draft-autosave';
 import {
   useClearSelection,
   useCreatingRackId,
@@ -22,6 +23,7 @@ import { ToolRail } from './tool-rail';
 export function WarehouseEditor() {
   const activeFloorId = useActiveFloorId();
   const { data: workspace } = useFloorWorkspace(activeFloorId);
+  useLayoutDraftAutosave(activeFloorId);
   const workspaceLayout = workspace?.activeDraft ?? workspace?.latestPublished ?? null;
   const currentDraft = useLayoutDraftState();
   const initializeDraft = useInitializeDraft();

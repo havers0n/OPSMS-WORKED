@@ -7,7 +7,7 @@ test.describe('live draft lifecycle', () => {
     await resetWarehouseData();
   });
 
-  test('selected floor with draft supports edit, save, validate, and publish', async ({ page }) => {
+  test('selected floor with draft supports autosave, validate, and publish', async ({ page }) => {
     const { floor } = await seedDraftScenario({ rackDisplayCode: '03' });
 
     await signInToWarehouse(page);
@@ -16,18 +16,15 @@ test.describe('live draft lifecycle', () => {
 
     const displayCodeInput = page.getByLabel('Display Code');
     await displayCodeInput.fill('07');
-    await expect(page.getByText('Unsaved draft')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Publish/i })).toBeDisabled();
-
-    await page.getByRole('button', { name: 'Save Draft' }).click();
-    await expect(page.getByText('Draft saved')).toBeVisible();
-    await expect(page.getByText('Draft synced')).toBeVisible();
+    await expect(page.getByText('Unsaved')).toBeVisible();
+    await expect(page.getByText('Saving...')).toBeVisible();
+    await expect(page.getByText('Saved')).toBeVisible();
 
     await page.getByRole('button', { name: /Validate/i }).click();
-    await expect(page.getByText('Layout is valid')).toBeVisible();
+    await expect(page.getByText('Valid')).toBeVisible();
 
     await page.getByRole('button', { name: /Publish/i }).click();
-    await expect(page.getByText(/Published with 8 generated cells/)).toBeVisible();
+    await expect(page.getByText(/Published/i)).toBeVisible();
   });
 
   test('dirty draft floor switch is guarded and only switches after confirmation', async ({ page }) => {
@@ -39,7 +36,7 @@ test.describe('live draft lifecycle', () => {
     await expect(page.getByText('Rack 03').first()).toBeVisible();
 
     await page.getByLabel('Display Code').fill('11');
-    await expect(page.getByText('Unsaved draft')).toBeVisible();
+    await expect(page.getByText('Unsaved')).toBeVisible();
 
     page.once('dialog', async (dialog) => {
       await dialog.dismiss();

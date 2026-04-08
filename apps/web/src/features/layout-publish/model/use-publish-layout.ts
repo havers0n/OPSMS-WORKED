@@ -3,7 +3,10 @@ import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
 import { useEditorStore } from '@/entities/layout-version/model/editor-store';
 import { BffRequestError } from '@/shared/api/bff/client';
-import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
+import {
+  cancelScheduledLayoutDraftSave,
+  useSaveLayoutDraft
+} from '@/features/layout-draft-save/model/use-save-layout-draft';
 import { createLayoutDraft } from '@/features/layout-draft-save/api/mutations';
 import { publishLayoutVersion } from '../api/mutations';
 
@@ -38,9 +41,16 @@ export function usePublishLayout(floorId: string | null) {
       }
 
       if (isDraftDirty) {
-        const saved = await saveDraft.mutateAsync(currentDraft);
-        layoutVersionId = saved.layoutVersionId;
-        draftVersion = saved.draftVersion;
+        cancelScheduledLayoutDraftSave();
+        const saved = await saveDraft.flushSave(currentDraft);
+        if (saved) {
+          layoutVersionId = saved.layoutVersionId;
+          draftVersion = saved.draftVersion;
+        } else {
+          const latestDraft = useEditorStore.getState().draft;
+          layoutVersionId = latestDraft?.layoutVersionId ?? layoutVersionId;
+          draftVersion = latestDraft?.draftVersion ?? draftVersion;
+        }
       }
 
       if (draftVersion === null) {
