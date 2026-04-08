@@ -4,6 +4,7 @@ export * from './catalog/product';
 export * from './layout/rack';
 export * from './layout/wall';
 export * from './layout/zone';
+export * from './layout/change-classification';
 export * from './layout/layout-version';
 export * from './layout/layout-draft';
 export * from './layout/cell';

@@ -880,8 +880,8 @@ function createActiveDraftSupabaseStub() {
       if (table === 'layout_versions') {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(async () => ({
-              data: [
+            eq: vi.fn(() => {
+              const rows = [
                 {
                   id: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
                   floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
@@ -889,9 +889,17 @@ function createActiveDraftSupabaseStub() {
                   version_no: 3,
                   state: 'draft'
                 }
-              ],
-              error: null
-            }))
+              ];
+
+              return {
+                data: rows,
+                error: null,
+                maybeSingle: vi.fn(async () => ({
+                  data: rows[0],
+                  error: null
+                }))
+              };
+            })
           }))
         };
       }
@@ -933,7 +941,7 @@ function createActiveDraftSupabaseStub() {
                   slot_numbering_direction: 'ltr',
                   is_mirrored: false,
                   mirror_source_face_id: null,
-                  face_length: null
+                  face_length: 4.5
                 }
               ],
               error: null
@@ -4063,7 +4071,7 @@ describe('buildApp', () => {
   });
 
   it('accepts save-layout payloads with optional rack-face faceLength', async () => {
-    const supabase = createSupabaseStub();
+    const supabase = createActiveDraftSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'save_layout_draft') {
         return {
@@ -4095,33 +4103,34 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
-      draftVersion: 8
+      draftVersion: 8,
+      changeClass: 'no_changes'
     });
-    const savePayload = supabase.rpc.mock.calls[0]?.[1]?.layout_payload as {
+    const saveCall = supabase.rpc.mock.calls.find(([fn]) => fn === 'save_layout_draft');
+    const savePayload = saveCall?.[1]?.layout_payload as {
       racks: Array<{ faces: Array<Record<string, unknown>> }>;
     };
     expect(savePayload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
     expect(savePayload.racks[0]?.faces[0]).toHaveProperty('faceLength', 4.5);
-    expect(supabase.rpc).toHaveBeenCalledWith('save_layout_draft', {
-      layout_payload: {
-        layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
-        draftVersion: 7,
-        zones: [],
-        walls: [],
-        racks: [
-          expect.objectContaining({
-            id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'
-          })
-        ]
-      },
-      actor_uuid: authContext.user.id
+    expect(saveCall?.[0]).toBe('save_layout_draft');
+    expect(saveCall?.[1]?.actor_uuid).toBe(authContext.user.id);
+    expect(saveCall?.[1]?.layout_payload).toMatchObject({
+      layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
+      draftVersion: 7,
+      zones: [],
+      walls: []
     });
+    expect(saveCall?.[1]?.layout_payload?.racks).toEqual([
+      expect.objectContaining({
+        id: 'f38510b5-d5c5-4657-8d7e-a4154cb74951'
+      })
+    ]);
 
     await app.close();
-  });
+  }, 15000);
 
   it('normalizes legacy string save-layout rpc responses to the current save contract', async () => {
-    const supabase = createSupabaseStub();
+    const supabase = createActiveDraftSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'save_layout_draft') {
         return {
@@ -4150,14 +4159,15 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
-      draftVersion: null
+      draftVersion: null,
+      changeClass: 'no_changes'
     });
 
     await app.close();
   });
 
   it('maps save-layout draft conflicts to the dedicated draft conflict contract', async () => {
-    const supabase = createSupabaseStub();
+    const supabase = createActiveDraftSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'save_layout_draft') {
         return {

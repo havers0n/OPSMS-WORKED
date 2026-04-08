@@ -102,6 +102,7 @@ const publishedCellSelectColumns =
 export type LayoutRepo = {
   findVersion(layoutVersionId: string): Promise<LayoutVersionRow | null>;
   findActiveDraft(floorId: string): Promise<LayoutDraft | null>;
+  findDraftByVersionId(layoutVersionId: string): Promise<LayoutDraft | null>;
   findLatestPublished(floorId: string): Promise<LayoutDraft | null>;
   findPublishedLayoutSummary(floorId: string): Promise<PublishedLayoutSummary | null>;
   listPublishedCells(floorId: string): Promise<Cell[]>;
@@ -279,6 +280,28 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
     async findActiveDraft(floorId) {
       const activeDraft = await findLatestLayoutVersionByState(supabase, floorId, 'draft');
       return omitVersionNo(await fetchLayoutVersionBundle(supabase, activeDraft));
+    },
+
+    async findDraftByVersionId(layoutVersionId) {
+      const layoutVersion = await (async () => {
+        const { data, error } = await supabase
+          .from('layout_versions')
+          .select('id,floor_id,draft_version,version_no,state,published_at')
+          .eq('id', layoutVersionId)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        return (data as LayoutVersionRow | null) ?? null;
+      })();
+
+      if (!layoutVersion || layoutVersion.state !== 'draft') {
+        return null;
+      }
+
+      return omitVersionNo(await fetchLayoutVersionBundle(supabase, layoutVersion));
     },
 
     async findLatestPublished(floorId) {

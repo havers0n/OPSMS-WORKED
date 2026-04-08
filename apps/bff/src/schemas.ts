@@ -3,6 +3,7 @@ import {
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
   cellSchema,
+  layoutChangeClassSchema,
   containerCurrentLocationSchema,
   containerOperationalRoleSchema,
   containerSchema,
@@ -173,6 +174,8 @@ export const saveLayoutDraftBodySchema = z.object({
   })
 });
 
+export type SaveLayoutDraftPayload = z.infer<typeof saveLayoutDraftBodySchema>['layoutDraft'];
+
 export const idResponseSchema = z.object({
   id: z.string().uuid()
 });
@@ -200,7 +203,8 @@ export const layoutVersionIdResponseSchema = z.object({
 
 export const saveLayoutDraftResponseSchema = z.object({
   layoutVersionId: z.string().uuid(),
-  draftVersion: z.number().int().min(0).nullable()
+  draftVersion: z.number().int().min(0).nullable(),
+  changeClass: layoutChangeClassSchema
 });
 
 export const publishLayoutDraftBodySchema = z.object({
