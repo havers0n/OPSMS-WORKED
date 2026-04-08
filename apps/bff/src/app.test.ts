@@ -3669,7 +3669,7 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('validates a layout draft and returns validation contract', async () => {
+  it('validates a saved layout draft and returns persisted validation contract', async () => {
     const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
     const supabase = createSupabaseStub();
     supabase.rpc = vi.fn(async (fn: string) => {
@@ -3870,7 +3870,7 @@ describe('buildApp', () => {
     await app.close();
   });
 
-  it('keeps publish-layout rpc P0001 fallback mapping as placement-conflict contract', async () => {
+  it('maps publish-time validation failure as final publish gate contract', async () => {
     const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
     const expectedDraftVersion = 7;
     const supabase = createSupabaseStub();

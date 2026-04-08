@@ -232,7 +232,7 @@ export function RackInspector({
   const resetFaceB = useResetFaceB();
   const updateFaceConfig = useUpdateFaceConfig();
 
-  const cachedValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
+  const persistedDraftValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
 
   const rack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
   const faceA = rack?.faces.find((f) => f.side === 'A') ?? null;
@@ -247,20 +247,21 @@ export function RackInspector({
     });
   }, [layoutDraft, rack]);
 
-  const previewValidationResult = useMemo(
+  const clientPrecheck = useMemo(
     () => (layoutDraft ? validateLayoutDraft(layoutDraft) : { isValid: false, issues: [] }),
     [layoutDraft]
   );
-  const validationResult = !isDraftDirty && cachedValidation.data ? cachedValidation.data : previewValidationResult;
+  const activeValidationSummary =
+    !isDraftDirty && persistedDraftValidation.data ? persistedDraftValidation.data : clientPrecheck;
   const rackIssues = useMemo(
     () =>
-      validationResult.issues.filter(
+      activeValidationSummary.issues.filter(
         (issue) =>
           !issue.entityId ||
           issue.entityId === rack?.id ||
           rack?.faces.some((f) => f.id === issue.entityId)
       ),
-    [validationResult.issues, rack]
+    [activeValidationSummary.issues, rack]
   );
 
   const previewAddresses = rackCells.slice(0, 6).map((cell) => cell.address.raw);

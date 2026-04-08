@@ -41,7 +41,7 @@ import {
   saveLayoutDraftBodySchema,
   saveLayoutDraftResponseSchema,
   sitesResponseSchema,
-  validationResponseSchema,
+  persistedDraftValidationResponseSchema,
   pickTasksResponseSchema,
   pickTaskDetailResponseSchema,
   operationsCellsRuntimeResponseSchema,
@@ -57,7 +57,7 @@ import {
   mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
-  mapValidationResult
+  mapPersistedDraftValidationResult
 } from './mappers.js';
 import { createAnonClient } from './supabase.js';
 import {
@@ -1021,7 +1021,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const layoutService = getLayoutService(auth);
     const result = await layoutService.validateVersion(layoutVersionId);
 
-    return parseOrThrow(validationResponseSchema, mapValidationResult(result));
+    return parseOrThrow(
+      persistedDraftValidationResponseSchema,
+      mapPersistedDraftValidationResult(result)
+    );
   });
 
   app.post('/api/layout-drafts/:layoutVersionId/publish', async (request, reply) => {

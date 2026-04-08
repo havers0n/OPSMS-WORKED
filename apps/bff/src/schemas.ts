@@ -252,7 +252,7 @@ export const pickPartialInventoryUnitResponseSchema = canonicalTransferInventory
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
 export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
-export const validationResponseSchema = layoutValidationResultSchema;
+export const persistedDraftValidationResponseSchema = layoutValidationResultSchema;
 export const publishResponseSchema = layoutPublishResultSchema;
 export const nonRackLocationsResponseSchema = nonRackLocationRefsSchema;
 

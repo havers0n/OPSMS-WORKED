@@ -1,4 +1,4 @@
-import type { LayoutValidationIssue, LayoutValidationResult } from './validation';
+import type { LayoutClientPrecheckResult, LayoutValidationIssue } from './validation';
 import type { LayoutDraft } from './layout-draft';
 import { generatePreviewCells } from './generate-cells';
 import type { Rack, RackFace, RackSection } from './rack';
@@ -16,7 +16,8 @@ function resolveSections(face: RackFace, rack: Rack): RackSection[] {
   return sourceFace?.sections ?? face.sections;
 }
 
-export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutValidationResult {
+// Local editor precheck only. Server validation remains authoritative for saved drafts and publish.
+export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutClientPrecheckResult {
   const issues: LayoutValidationIssue[] = [];
   const generatedCells = generatePreviewCells(layoutDraft);
   const addressSet = new Set<string>();

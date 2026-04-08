@@ -232,7 +232,7 @@ function RackContextPanel({
   const deleteRack = useDeleteRack();
 
   const rack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
-  const cachedValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
+  const persistedDraftValidation = useCachedLayoutValidation(layoutDraft?.layoutVersionId ?? null);
 
   useEffect(() => {
     setConfirmingDelete(false);
@@ -251,12 +251,12 @@ function RackContextPanel({
   const rackIssues = useMemo(() => {
     if (!layoutDraft || !rack) return [];
 
-    const previewValidation = validateLayoutDraft(layoutDraft);
-    const activeValidation =
-      !isDraftDirty && cachedValidation.data ? cachedValidation.data : previewValidation;
+    const clientPrecheck = validateLayoutDraft(layoutDraft);
+    const activeValidationSummary =
+      !isDraftDirty && persistedDraftValidation.data ? persistedDraftValidation.data : clientPrecheck;
 
-    return filterRackIssues(rack, activeValidation.issues);
-  }, [cachedValidation.data, isDraftDirty, layoutDraft, rack]);
+    return filterRackIssues(rack, activeValidationSummary.issues);
+  }, [persistedDraftValidation.data, isDraftDirty, layoutDraft, rack]);
 
   if (!rack) {
     return <PlaceholderContent description="Rack context is unavailable for the current selection." />;

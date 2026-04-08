@@ -74,6 +74,7 @@ export function TopBar() {
   const saveDraft = useSaveLayoutDraft(activeFloorId);
   const validateLayout = useLayoutValidation(layoutDraft?.layoutVersionId ?? null);
   const publishLayout = usePublishLayout(activeFloorId);
+  const persistedDraftValidation = validateLayout.cachedResult;
 
   const actions = getLayoutActionState({
     activeFloorId,
@@ -99,12 +100,12 @@ export function TopBar() {
     // the PublishedBanner below the TopBar — no need to repeat it here.
     if (!layoutDraft && latestPublished) return null;
     if (layoutDraft?.state === 'published') return null;
-    if (isDraftDirty && validateLayout.cachedResult) return 'Draft changed';
-    if (!validateLayout.cachedResult) return null;
-    return validateLayout.cachedResult.isValid
+    if (isDraftDirty && persistedDraftValidation) return 'Draft changed';
+    if (!persistedDraftValidation) return null;
+    return persistedDraftValidation.isValid
       ? 'Valid'
-      : `${validateLayout.cachedResult.issues.length} issue(s)`;
-  }, [isDraftDirty, latestPublished, layoutDraft, validateLayout.cachedResult]);
+      : `${persistedDraftValidation.issues.length} issue(s)`;
+  }, [isDraftDirty, latestPublished, layoutDraft, persistedDraftValidation]);
 
   const handleCreateDraft = async () => {
     if (!activeFloorId) return;
@@ -147,10 +148,18 @@ export function TopBar() {
     } catch (error) {
       if (error instanceof BffRequestError && error.code === 'LAYOUT_VALIDATION_FAILED') {
         try {
-          const validation = await validateLayout.mutateAsync(latestDraft.layoutVersionId);
+          const persistedDraftValidationAfterPublishGateFailure = await validateLayout.mutateAsync(
+            latestDraft.layoutVersionId
+          );
           const firstError =
-            validation.issues.find((issue) => issue.severity === 'error') ?? validation.issues[0];
-          setStatusMessage(firstError ? firstError.message : `${validation.issues.length} issue(s)`);
+            persistedDraftValidationAfterPublishGateFailure.issues.find(
+              (issue) => issue.severity === 'error'
+            ) ?? persistedDraftValidationAfterPublishGateFailure.issues[0];
+          setStatusMessage(
+            firstError
+              ? firstError.message
+              : `${persistedDraftValidationAfterPublishGateFailure.issues.length} issue(s)`
+          );
           return;
         } catch {
           // Fall through to the original publish error if validation lookup fails.

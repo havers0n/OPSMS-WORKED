@@ -16,6 +16,9 @@ export const layoutValidationResultSchema = z.object({
   issues: z.array(layoutValidationIssueSchema)
 });
 export type LayoutValidationResult = z.infer<typeof layoutValidationResultSchema>;
+export type LayoutClientPrecheckResult = LayoutValidationResult;
+export type LayoutPersistedDraftValidationResult = LayoutValidationResult;
+export type LayoutPublishReadinessResult = LayoutValidationResult;
 
 export const layoutPublishResultSchema = z.object({
   layoutVersionId: z.string(),

@@ -38,7 +38,7 @@ import {
   type InventoryUnit,
   type LayoutDraft,
   type LayoutLifecycleInfo,
-  type LayoutValidationResult,
+  type LayoutPersistedDraftValidationResult,
   type RackGeometry,
   type RackStructure,
   type LocationOccupancyRow,
@@ -755,7 +755,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
   });
 }
 
-export function mapValidationResult(input: unknown): LayoutValidationResult {
+export function mapPersistedDraftValidationResult(input: unknown): LayoutPersistedDraftValidationResult {
   return layoutValidationResultSchema.parse(input);
 }
 
