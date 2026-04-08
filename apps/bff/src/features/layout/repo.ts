@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Cell, LayoutDraft, PublishedLayoutSummary } from '@wos/domain';
 import { mapCellRowToDomain, mapLayoutBundleJsonToDomain, mapLayoutDraftBundleToDomain } from '../../mappers.js';
 
-type LayoutVersionRow = {
+export type LayoutVersionRow = {
   id: string;
   floor_id: string;
   draft_version?: number | null;
@@ -100,6 +100,7 @@ const publishedCellSelectColumns =
   'id,layout_version_id,rack_id,rack_face_id,rack_section_id,rack_level_id,slot_no,address,address_sort_key,cell_code,x,y,status';
 
 export type LayoutRepo = {
+  findVersion(layoutVersionId: string): Promise<LayoutVersionRow | null>;
   findActiveDraft(floorId: string): Promise<LayoutDraft | null>;
   findLatestPublished(floorId: string): Promise<LayoutDraft | null>;
   findPublishedLayoutSummary(floorId: string): Promise<PublishedLayoutSummary | null>;
@@ -261,6 +262,20 @@ async function fetchLayoutVersionBundleFromTables(
 
 export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
   return {
+    async findVersion(layoutVersionId) {
+      const { data, error } = await supabase
+        .from('layout_versions')
+        .select('id,floor_id,draft_version,version_no,state,published_at')
+        .eq('id', layoutVersionId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return (data as LayoutVersionRow | null) ?? null;
+    },
+
     async findActiveDraft(floorId) {
       const activeDraft = await findLatestLayoutVersionByState(supabase, floorId, 'draft');
       return omitVersionNo(await fetchLayoutVersionBundle(supabase, activeDraft));

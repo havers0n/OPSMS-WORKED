@@ -30,7 +30,6 @@ import {
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import type { ViewMode } from '@/entities/layout-version/model/editor-types';
-import type { LayoutDraft } from '@wos/domain';
 import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
@@ -45,27 +44,6 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'storage', label: 'Storage' },
   { id: 'layout', label: 'Layout' },
 ];
-
-const TRACE = import.meta.env.DEV;
-
-function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
-  if (!draft) return null;
-  const sample = draft.rackIds
-    .slice(0, 10)
-    .map((id) => {
-      const rack = draft.racks[id];
-      if (!rack) return null;
-      return { id: rack.id, x: rack.x, y: rack.y };
-    })
-    .filter(Boolean);
-
-  return {
-    layoutVersionId: draft.layoutVersionId,
-    state: draft.state,
-    rackCount: draft.rackIds.length,
-    sample
-  };
-}
 
 export function TopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -162,51 +140,10 @@ export function TopBar() {
     const latestDraft = useEditorStore.getState().draft;
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
-      if (TRACE) {
-        // Snapshot what the user currently sees: rack ids + x/y for the current local draft.
-        // If we later see old coordinates in initializeDraft()/workspace refetch,
-        // we will know that publish or subsequent rehydration uses stale data.
-        console.debug('[WOS TRACE]', {
-          t: Date.now(),
-          op: 'publish:before-save',
-          latestDraft: summarizeDraftForLogs(latestDraft),
-          isDraftDirty,
-          activeFloorId
-        });
-      }
-
-      // Always persist unsaved edits before publishing.
-      // publishLayoutVersion reads rack positions from DB; if the user moved
-      // racks after the last save the DB state lags behind Zustand, causing the
-      // new draft (created from published) to roll back to pre-move positions.
-      // Save/Publish clicked quickly (or component variables captured stale snapshot)
-      // can otherwise publish a rack tree that doesn't match what's currently shown.
-      await saveDraft.mutateAsync(latestDraft);
-
-      if (TRACE) {
-        console.debug('[WOS TRACE]', {
-          t: Date.now(),
-          op: 'publish:after-save-before-publish',
-          latestDraft: summarizeDraftForLogs(latestDraft),
-          publishLayoutVersionId: latestDraft.layoutVersionId
-        });
-      }
-
-      const result = await publishLayout.mutateAsync(latestDraft.layoutVersionId);
+      const result = await publishLayout.mutateAsync();
       setStatusMessage(`Published · ${result.generatedCells} cells · new draft ready`);
-
-      if (TRACE) {
-        console.debug('[WOS TRACE]', {
-          t: Date.now(),
-          op: 'publish:success',
-          publishLayoutVersionId: result.layoutVersionId,
-          publishedAt: result.publishedAt,
-          generatedCells: result.generatedCells,
-          validation: result.validation
-        });
-      }
     } catch (error) {
-      if (error instanceof BffRequestError && error.message.includes('failed validation')) {
+      if (error instanceof BffRequestError && error.code === 'LAYOUT_VALIDATION_FAILED') {
         try {
           const validation = await validateLayout.mutateAsync(latestDraft.layoutVersionId);
           const firstError =

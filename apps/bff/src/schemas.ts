@@ -203,6 +203,10 @@ export const saveLayoutDraftResponseSchema = z.object({
   draftVersion: z.number().int().min(0).nullable()
 });
 
+export const publishLayoutDraftBodySchema = z.object({
+  expectedDraftVersion: z.number().int().min(0)
+});
+
 export const sitesResponseSchema = z.array(siteSchema);
 export const floorsResponseSchema = z.array(floorSchema);
 export const containerTypesResponseSchema = z.array(containerTypeSchema);

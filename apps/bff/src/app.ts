@@ -35,6 +35,7 @@ import {
   inventoryItemResponseSchema,
   layoutDraftResponseSchema,
   publishResponseSchema,
+  publishLayoutDraftBodySchema,
   publishedLayoutSummaryResponseSchema,
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
@@ -1028,8 +1029,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     if (!auth) return;
 
     const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
+    const body = parseOrThrow(publishLayoutDraftBodySchema, request.body);
     const layoutService = getLayoutService(auth);
-    const result = await layoutService.publishVersion(layoutVersionId, auth.user.id);
+    const result = await layoutService.publishDraft(layoutVersionId, body.expectedDraftVersion, auth.user.id);
 
     return parseOrThrow(publishResponseSchema, result);
   });

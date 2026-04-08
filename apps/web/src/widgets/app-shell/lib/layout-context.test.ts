@@ -29,7 +29,7 @@ describe('layout-context helpers', () => {
     expect(confirmDiscard).toHaveBeenCalledTimes(1);
   });
 
-  it('disables publish while local draft is dirty', () => {
+  it('keeps publish enabled while local draft is dirty so publish owner can save first', () => {
     const state = getLayoutActionState({
       activeFloorId: 'floor-1',
       workspaceIsLoading: false,
@@ -44,7 +44,7 @@ describe('layout-context helpers', () => {
     });
 
     expect(state.canSaveDraft).toBe(true);
-    expect(state.canPublishDraft).toBe(false);
+    expect(state.canPublishDraft).toBe(true);
   });
 
   it('keeps all draft actions disabled when no live draft is loaded', () => {

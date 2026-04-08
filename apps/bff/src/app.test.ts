@@ -3784,7 +3784,32 @@ describe('buildApp', () => {
 
   it('publishes a layout draft and returns publish contract', async () => {
     const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
     const supabase = createSupabaseStub();
+    const originalFrom = supabase.from;
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: {
+                  id: layoutVersionId,
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: expectedDraftVersion,
+                  version_no: 4,
+                  state: 'draft',
+                  published_at: null
+                },
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return originalFrom(table);
+    });
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'publish_layout_version') {
         return {
@@ -3811,6 +3836,9 @@ describe('buildApp', () => {
     const response = await app.inject({
       method: 'POST',
       url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion
+      },
       headers: {
         authorization: 'Bearer token'
       }
@@ -3836,14 +3864,39 @@ describe('buildApp', () => {
 
   it('keeps publish-layout rpc P0001 fallback mapping as placement-conflict contract', async () => {
     const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
     const supabase = createSupabaseStub();
+    const originalFrom = supabase.from;
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: {
+                  id: layoutVersionId,
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: expectedDraftVersion,
+                  version_no: 4,
+                  state: 'draft',
+                  published_at: null
+                },
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return originalFrom(table);
+    });
     supabase.rpc = vi.fn(async (fn: string) => {
       if (fn === 'publish_layout_version') {
         return {
           data: null,
           error: {
             code: 'P0001',
-            message: 'LAYOUT_NOT_VALID'
+            message: `Layout version ${layoutVersionId} failed validation.`
           }
         };
       }
@@ -3858,6 +3911,9 @@ describe('buildApp', () => {
     const response = await app.inject({
       method: 'POST',
       url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion
+      },
       headers: {
         authorization: 'Bearer token'
       }
@@ -3865,11 +3921,117 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      code: 'PLACEMENT_CONFLICT',
-      message: 'LAYOUT_NOT_VALID'
+      code: 'LAYOUT_VALIDATION_FAILED',
+      message: 'Layout draft failed validation. Please review the reported issues.'
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('rejects stale publish attempts as draft conflict before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createSupabaseStub();
+    const originalFrom = supabase.from;
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: {
+                  id: layoutVersionId,
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: 8,
+                  version_no: 4,
+                  state: 'draft',
+                  published_at: null
+                },
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return originalFrom(table);
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'DRAFT_CONFLICT',
+      message: 'Layout draft was changed by another session. Please reload.'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects publish when the layout version is no longer the active draft', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createSupabaseStub();
+    const originalFrom = supabase.from;
+    supabase.from = vi.fn((table: string) => {
+      if (table === 'layout_versions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({
+                data: {
+                  id: layoutVersionId,
+                  floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                  draft_version: 7,
+                  version_no: 4,
+                  state: 'published',
+                  published_at: '2026-03-21T10:15:00.000Z'
+                },
+                error: null
+              }))
+            }))
+          }))
+        };
+      }
+
+      return originalFrom(table);
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'DRAFT_NOT_ACTIVE',
+      message: 'Layout draft is no longer active. Please reload.'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
 
     await app.close();
   });

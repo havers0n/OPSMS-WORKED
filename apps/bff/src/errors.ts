@@ -36,6 +36,9 @@ export function mapSupabaseError(error: unknown) {
     if (error.message === 'DRAFT_CONFLICT') {
       return new ApiError(409, 'DRAFT_CONFLICT', 'Layout draft was changed by another session. Please reload.');
     }
+    if (typeof error.message === 'string' && error.message.includes('failed validation')) {
+      return new ApiError(409, 'LAYOUT_VALIDATION_FAILED', 'Layout draft failed validation. Please review the reported issues.');
+    }
     switch (error.message) {
       case 'CONTAINER_NOT_FOUND':
         return new ApiError(404, 'NOT_FOUND', 'Container was not found.');

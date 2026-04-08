@@ -8,8 +8,14 @@ export type PublishLayoutResult = {
   validation: LayoutValidationResult;
 };
 
-export async function publishLayoutVersion(layoutVersionId: string): Promise<PublishLayoutResult> {
+export async function publishLayoutVersion(
+  layoutVersionId: string,
+  expectedDraftVersion: number
+): Promise<PublishLayoutResult> {
   return bffRequest<PublishLayoutResult>(`/layout-drafts/${layoutVersionId}/publish`, {
-    method: 'POST'
+    method: 'POST',
+    body: JSON.stringify({
+      expectedDraftVersion
+    })
   });
 }

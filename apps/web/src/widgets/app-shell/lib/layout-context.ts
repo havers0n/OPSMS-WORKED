@@ -38,7 +38,6 @@ export function getLayoutActionState(input: LayoutActionStateInput) {
       input.activeFloorId &&
         input.localDraft?.state === 'draft' &&
         hasLoadedDraft &&
-        !input.isDraftDirty &&
         isWorkspaceReady
     )
   };
