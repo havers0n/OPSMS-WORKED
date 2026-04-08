@@ -3,6 +3,7 @@ import {
   cellSchema,
   cellStorageSnapshotRowSchema,
   cellOccupancyRowSchema,
+  composeLayoutDraft,
   containerSchema,
   containerStorageSnapshotRowSchema,
   inventoryItemSchema,
@@ -12,8 +13,10 @@ import {
   parseCellAddress,
   containerTypeSchema,
   floorSchema,
-  layoutDraftSchema,
+  layoutLifecycleInfoSchema,
   layoutValidationResultSchema,
+  rackGeometrySchema,
+  rackStructureSchema,
   productSchema,
   siteSchema,
   orderSchema,
@@ -34,7 +37,10 @@ import {
   type InventoryItem,
   type InventoryUnit,
   type LayoutDraft,
+  type LayoutLifecycleInfo,
   type LayoutValidationResult,
+  type RackGeometry,
+  type RackStructure,
   type LocationOccupancyRow,
   type LocationStorageSnapshotRow,
   type Site,
@@ -517,22 +523,31 @@ function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevel
   };
 }
 
-function buildRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
-  return {
-    id: row.id,
-    displayCode: row.display_code,
-    kind: row.kind,
-    axis: row.axis,
+function buildRackGeometry(row: RackRow): RackGeometry {
+  return rackGeometrySchema.parse({
     x: row.x,
     y: row.y,
     totalLength: row.total_length,
     depth: row.depth,
-    rotationDeg: row.rotation_deg,
+    rotationDeg: row.rotation_deg
+  });
+}
+
+function buildRackStructure(
+  row: RackRow,
+  allFaces: RackFaceRow[],
+  allSections: RackSectionRow[],
+  allLevels: RackLevelRow[]
+): RackStructure {
+  return rackStructureSchema.parse({
+    displayCode: row.display_code,
+    kind: row.kind,
+    axis: row.axis,
     faces: allFaces
       .filter((face) => face.rack_id === row.id)
       .sort((a, b) => a.side.localeCompare(b.side))
       .map((face) => buildRackFace(face, allSections, allLevels))
-  };
+  });
 }
 
 function buildZone(row: LayoutZoneRow): Zone {
@@ -574,7 +589,11 @@ export function mapLayoutDraftBundleToDomain(bundle: {
 }): LayoutDraft {
   const racks = bundle.racks
     .sort((a, b) => a.display_code.localeCompare(b.display_code))
-    .map((row) => buildRack(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels));
+    .map((row) => ({
+      id: row.id,
+      geometry: buildRackGeometry(row),
+      structure: buildRackStructure(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels)
+    }));
   const zones = (bundle.zones ?? [])
     .sort((a, b) => a.code.localeCompare(b.code))
     .map(buildZone);
@@ -582,18 +601,19 @@ export function mapLayoutDraftBundleToDomain(bundle: {
     .sort((a, b) => a.code.localeCompare(b.code))
     .map(buildWall);
 
-  return layoutDraftSchema.parse({
+  const lifecycle: LayoutLifecycleInfo = layoutLifecycleInfoSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
     draftVersion: bundle.layoutVersion.draft_version ?? null,
     floorId: bundle.layoutVersion.floor_id,
     state: bundle.layoutVersion.state,
-    versionNo: bundle.layoutVersion.version_no,
-    rackIds: racks.map((rack) => rack.id),
-    racks: Object.fromEntries(racks.map((rack) => [rack.id, rack])),
-    zoneIds: zones.map((zone) => zone.id),
-    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone])),
-    wallIds: walls.map((wall) => wall.id),
-    walls: Object.fromEntries(walls.map((wall) => [wall.id, wall]))
+    versionNo: bundle.layoutVersion.version_no
+  });
+
+  return composeLayoutDraft({
+    lifecycle,
+    racks,
+    zones,
+    walls
   });
 }
 
@@ -660,35 +680,47 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
     }>;
   };
 
-  const racks = bundle.racks.map((r) => ({
-    id: r.id,
-    displayCode: r.displayCode,
-    kind: r.kind,
-    axis: r.axis,
-    x: r.x,
-    y: r.y,
-    totalLength: r.totalLength,
-    depth: r.depth,
-    rotationDeg: r.rotationDeg,
-    faces: r.faces.map((f) => ({
-      id: f.id,
-      side: f.side,
-      enabled: f.enabled,
-      slotNumberingDirection: f.slotNumberingDirection,
-      isMirrored: f.isMirrored,
-      mirrorSourceFaceId: f.mirrorSourceFaceId,
-      faceLength: f.faceLength ?? undefined,
-      sections: f.sections.map((s) => ({
-        id: s.id,
-        ordinal: s.ordinal,
-        length: s.length,
-        levels: s.levels.map((l) => ({
-          id: l.id,
-          ordinal: l.ordinal,
-          slotCount: l.slotCount
+  const lifecycle: LayoutLifecycleInfo = layoutLifecycleInfoSchema.parse({
+    layoutVersionId: bundle.layoutVersionId,
+    draftVersion: bundle.draftVersion ?? null,
+    floorId: bundle.floorId,
+    state: bundle.state,
+    versionNo: bundle.versionNo
+  });
+
+  const racks = bundle.racks.map((rack) => ({
+    id: rack.id,
+    geometry: rackGeometrySchema.parse({
+      x: rack.x,
+      y: rack.y,
+      totalLength: rack.totalLength,
+      depth: rack.depth,
+      rotationDeg: rack.rotationDeg
+    }),
+    structure: rackStructureSchema.parse({
+      displayCode: rack.displayCode,
+      kind: rack.kind,
+      axis: rack.axis,
+      faces: rack.faces.map((face) => ({
+        id: face.id,
+        side: face.side,
+        enabled: face.enabled,
+        slotNumberingDirection: face.slotNumberingDirection,
+        isMirrored: face.isMirrored,
+        mirrorSourceFaceId: face.mirrorSourceFaceId,
+        faceLength: face.faceLength ?? undefined,
+        sections: face.sections.map((section) => ({
+          id: section.id,
+          ordinal: section.ordinal,
+          length: section.length,
+          levels: section.levels.map((level) => ({
+            id: level.id,
+            ordinal: level.ordinal,
+            slotCount: level.slotCount
+          }))
         }))
       }))
-    }))
+    })
   }));
 
   const zones = (bundle.zones ?? []).map((zone) => ({
@@ -715,18 +747,11 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
     blocksRackPlacement: wall.blocksRackPlacement
   }));
 
-  return layoutDraftSchema.parse({
-    layoutVersionId: bundle.layoutVersionId,
-    draftVersion: bundle.draftVersion ?? null,
-    floorId: bundle.floorId,
-    state: bundle.state,
-    versionNo: bundle.versionNo,
-    rackIds: racks.map((r) => r.id),
-    racks: Object.fromEntries(racks.map((r) => [r.id, r])),
-    zoneIds: zones.map((zone) => zone.id),
-    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone])),
-    wallIds: walls.map((wall) => wall.id),
-    walls: Object.fromEntries(walls.map((wall) => [wall.id, wall]))
+  return composeLayoutDraft({
+    lifecycle,
+    racks,
+    zones,
+    walls
   });
 }
 

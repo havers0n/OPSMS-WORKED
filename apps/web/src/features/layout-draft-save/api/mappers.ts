@@ -1,5 +1,11 @@
-import type { LayoutDraft } from '@wos/domain';
-import type { WallType, ZoneCategory } from '@wos/domain';
+import {
+  splitLayoutDraft,
+  type LayoutDraft,
+  type RackGeometry,
+  type RackStructure,
+  type WallType,
+  type ZoneCategory
+} from '@wos/domain';
 
 type SaveRackLevelPayload = {
   id: string;
@@ -70,45 +76,47 @@ export type SaveLayoutDraftPayload = {
   walls: SaveWallPayload[];
 };
 
-export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraftPayload {
+function serializeRackSavePayload(id: string, geometry: RackGeometry, structure: RackStructure): SaveRackPayload {
   return {
-    layoutVersionId: draft.layoutVersionId,
-    draftVersion: draft.draftVersion ?? null,
-    racks: draft.rackIds.map((id) => {
-      const rack = draft.racks[id];
-      return {
-        id: rack.id,
-        displayCode: rack.displayCode,
-        kind: rack.kind,
-        axis: rack.axis,
-        x: rack.x,
-        y: rack.y,
-        totalLength: rack.totalLength,
-        depth: rack.depth,
-        rotationDeg: rack.rotationDeg,
-        faces: rack.faces.map((face) => ({
-          id: face.id,
-          side: face.side,
-          enabled: face.enabled,
-          slotNumberingDirection: face.slotNumberingDirection,
-          isMirrored: face.isMirrored,
-          mirrorSourceFaceId: face.mirrorSourceFaceId,
-          faceLength: face.faceLength,
-          sections: face.sections.map((section) => ({
-            id: section.id,
-            ordinal: section.ordinal,
-            length: section.length,
-            levels: section.levels.map((level) => ({
-              id: level.id,
-              ordinal: level.ordinal,
-              slotCount: level.slotCount
-            }))
-          }))
+    id,
+    displayCode: structure.displayCode,
+    kind: structure.kind,
+    axis: structure.axis,
+    x: geometry.x,
+    y: geometry.y,
+    totalLength: geometry.totalLength,
+    depth: geometry.depth,
+    rotationDeg: geometry.rotationDeg,
+    faces: structure.faces.map((face) => ({
+      id: face.id,
+      side: face.side,
+      enabled: face.enabled,
+      slotNumberingDirection: face.slotNumberingDirection,
+      isMirrored: face.isMirrored,
+      mirrorSourceFaceId: face.mirrorSourceFaceId,
+      faceLength: face.faceLength,
+      sections: face.sections.map((section) => ({
+        id: section.id,
+        ordinal: section.ordinal,
+        length: section.length,
+        levels: section.levels.map((level) => ({
+          id: level.id,
+          ordinal: level.ordinal,
+          slotCount: level.slotCount
         }))
-      };
-    }),
-    zones: draft.zoneIds.map((id) => {
-      const zone = draft.zones[id];
+      }))
+    }))
+  };
+}
+
+export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraftPayload {
+  const splitDraft = splitLayoutDraft(draft);
+
+  return {
+    layoutVersionId: splitDraft.lifecycle.layoutVersionId,
+    draftVersion: splitDraft.lifecycle.draftVersion ?? null,
+    racks: splitDraft.racks.map((rack) => serializeRackSavePayload(rack.id, rack.geometry, rack.structure)),
+    zones: splitDraft.zones.map((zone) => {
       return {
         id: zone.id,
         code: zone.code,
@@ -121,8 +129,7 @@ export function mapLayoutDraftToSavePayload(draft: LayoutDraft): SaveLayoutDraft
         height: zone.height
       };
     }),
-    walls: draft.wallIds.map((id) => {
-      const wall = draft.walls[id];
+    walls: splitDraft.walls.map((wall) => {
       return {
         id: wall.id,
         code: wall.code,

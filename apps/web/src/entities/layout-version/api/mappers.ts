@@ -1,4 +1,13 @@
-import { layoutDraftSchema, type LayoutDraft } from '@wos/domain';
+import {
+  composeLayoutDraft,
+  layoutLifecycleInfoSchema,
+  rackGeometrySchema,
+  rackStructureSchema,
+  type LayoutDraft,
+  type LayoutLifecycleInfo,
+  type RackGeometry,
+  type RackStructure
+} from '@wos/domain';
 import type {
   LayoutDraftRowBundle,
   LayoutWallRow,
@@ -45,22 +54,31 @@ function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevel
   };
 }
 
-function buildRack(row: RackRow, allFaces: RackFaceRow[], allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
-  return {
-    id: row.id,
-    displayCode: row.display_code,
-    kind: row.kind,
-    axis: row.axis,
+function buildRackGeometry(row: RackRow): RackGeometry {
+  return rackGeometrySchema.parse({
     x: row.x,
     y: row.y,
     totalLength: row.total_length,
     depth: row.depth,
-    rotationDeg: row.rotation_deg,
+    rotationDeg: row.rotation_deg
+  });
+}
+
+function buildRackStructure(
+  row: RackRow,
+  allFaces: RackFaceRow[],
+  allSections: RackSectionRow[],
+  allLevels: RackLevelRow[]
+): RackStructure {
+  return rackStructureSchema.parse({
+    displayCode: row.display_code,
+    kind: row.kind,
+    axis: row.axis,
     faces: allFaces
       .filter((face) => face.rack_id === row.id)
       .sort((a, b) => a.side.localeCompare(b.side))
       .map((face) => buildRackFace(face, allSections, allLevels))
-  };
+  });
 }
 
 function buildZone(row: LayoutZoneRow) {
@@ -94,7 +112,11 @@ function buildWall(row: LayoutWallRow) {
 export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): LayoutDraft {
   const racks = bundle.racks
     .sort((a, b) => a.display_code.localeCompare(b.display_code))
-    .map((row) => buildRack(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels));
+    .map((row) => ({
+      id: row.id,
+      geometry: buildRackGeometry(row),
+      structure: buildRackStructure(row, bundle.rackFaces, bundle.rackSections, bundle.rackLevels)
+    }));
   const zones = (bundle.zones ?? [])
     .sort((a, b) => a.code.localeCompare(b.code))
     .map(buildZone);
@@ -102,17 +124,18 @@ export function mapLayoutDraftBundleToDomain(bundle: LayoutDraftRowBundle): Layo
     .sort((a, b) => a.code.localeCompare(b.code))
     .map(buildWall);
 
-  return layoutDraftSchema.parse({
+  const lifecycle: LayoutLifecycleInfo = layoutLifecycleInfoSchema.parse({
     layoutVersionId: bundle.layoutVersion.id,
     draftVersion: bundle.layoutVersion.draft_version ?? null,
     floorId: bundle.layoutVersion.floor_id,
     state: bundle.layoutVersion.state,
-    versionNo: bundle.layoutVersion.version_no,
-    rackIds: racks.map((rack) => rack.id),
-    racks: Object.fromEntries(racks.map((rack) => [rack.id, rack])),
-    zoneIds: zones.map((zone) => zone.id),
-    zones: Object.fromEntries(zones.map((zone) => [zone.id, zone])),
-    wallIds: walls.map((wall) => wall.id),
-    walls: Object.fromEntries(walls.map((wall) => [wall.id, wall]))
+    versionNo: bundle.layoutVersion.version_no
+  });
+
+  return composeLayoutDraft({
+    lifecycle,
+    racks,
+    zones,
+    walls
   });
 }

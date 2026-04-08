@@ -38,16 +38,53 @@ export const rackFaceSchema = z.object({
 });
 export type RackFace = z.infer<typeof rackFaceSchema>;
 
-export const rackSchema = z.object({
-  id: z.string(),
-  displayCode: z.string(),
-  kind: rackKindSchema,
-  axis: rackAxisSchema,
+export const rackGeometrySchema = z.object({
   x: z.number(),
   y: z.number(),
   totalLength: z.number().positive(),
   depth: z.number().positive(),
-  rotationDeg: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
+  rotationDeg: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)])
+});
+export type RackGeometry = z.infer<typeof rackGeometrySchema>;
+
+export const rackStructureSchema = z.object({
+  displayCode: z.string(),
+  kind: rackKindSchema,
+  axis: rackAxisSchema,
   faces: z.array(rackFaceSchema)
 });
+export type RackStructure = z.infer<typeof rackStructureSchema>;
+
+export const rackSchema = z.object({
+  id: z.string(),
+  ...rackStructureSchema.shape,
+  ...rackGeometrySchema.shape
+});
 export type Rack = z.infer<typeof rackSchema>;
+
+export function splitRack(rack: Rack) {
+  return {
+    id: rack.id,
+    geometry: rackGeometrySchema.parse({
+      x: rack.x,
+      y: rack.y,
+      totalLength: rack.totalLength,
+      depth: rack.depth,
+      rotationDeg: rack.rotationDeg
+    }),
+    structure: rackStructureSchema.parse({
+      displayCode: rack.displayCode,
+      kind: rack.kind,
+      axis: rack.axis,
+      faces: rack.faces
+    })
+  };
+}
+
+export function composeRack(input: { id: string; geometry: RackGeometry; structure: RackStructure }): Rack {
+  return rackSchema.parse({
+    id: input.id,
+    ...input.structure,
+    ...input.geometry
+  });
+}
