@@ -11,7 +11,7 @@ import {
   Undo2
 } from 'lucide-react';
 import { useAuth } from '@/app/providers/auth-provider';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useActiveFloorId,
   useActiveSiteId,
@@ -100,12 +100,22 @@ export function TopBar() {
     // the PublishedBanner below the TopBar — no need to repeat it here.
     if (!layoutDraft && latestPublished) return null;
     if (layoutDraft?.state === 'published') return null;
-    if (isDraftDirty && persistedDraftValidation) return 'Draft changed';
+    if (isDraftDirty) return 'Draft changed';
     if (!persistedDraftValidation) return null;
     return persistedDraftValidation.isValid
       ? 'Valid'
       : `${persistedDraftValidation.issues.length} issue(s)`;
   }, [isDraftDirty, latestPublished, layoutDraft, persistedDraftValidation]);
+  // Clear any explicit action feedback the moment the draft becomes dirty so that
+  // ambient state labels (e.g. "Draft changed") are never hidden by a stale message.
+  useEffect(() => {
+    if (isDraftDirty) setStatusMessage(null);
+  }, [isDraftDirty]);
+
+  // Explicit action feedback (statusMessage) takes priority over computed ambient
+  // state (issueSummary) so that targeted messages like a specific validation error
+  // are not overridden by the generic issue count derived from the cached result.
+  const inlineStatusMessage = statusMessage ?? issueSummary;
 
   const handleCreateDraft = async () => {
     if (!activeFloorId) return;
@@ -353,13 +363,13 @@ export function TopBar() {
           style={{ borderColor: 'var(--border-muted)' }}
         >
           {/* Status message — visible in both modes */}
-          {(statusMessage || issueSummary) && (
+          {inlineStatusMessage && (
             <span
               className="mr-2 text-[11px]"
               style={{ color: 'var(--text-muted)' }}
               aria-live="polite"
             >
-            {statusMessage ?? issueSummary}
+            {inlineStatusMessage}
           </span>
         )}
 
