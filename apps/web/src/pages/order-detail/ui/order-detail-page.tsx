@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ChevronDown, ChevronRight, ChevronUp, RefreshCw, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { Order, OrderStatus, PickTaskSummary, Product } from '@wos/domain';
@@ -109,8 +109,9 @@ function TaskCard({
   );
 }
 
-/** Add product form — positioned below the lines table as a secondary editing area. */
+/** Add product form — collapsible, positioned below the lines table as a secondary editing area. */
 function AddProductSection({ order }: { order: Order }) {
+  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Product | null>(null);
   const [qty, setQty] = useState('1');
@@ -119,88 +120,102 @@ function AddProductSection({ order }: { order: Order }) {
   const addLine = useAddOrderLine(order.id);
 
   return (
-    <div className="border-t border-slate-200 pt-4">
-      <div className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-        Add product to order
-      </div>
+    <div className="border-t border-slate-200 pt-3">
+      {/* Toggle header */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between py-1 text-left"
+      >
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+          Add product to order
+        </span>
+        {open
+          ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+          : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+      </button>
 
-      <label className="relative block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search catalog…"
-          className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
-        />
-      </label>
+      {open && (
+        <div className="mt-3 flex flex-col gap-2">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search catalog…"
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-100"
+            />
+          </label>
 
-      {(search || products.length > 0) && (
-        <div className="mt-1.5 max-h-36 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          {isLoading ? (
-            <div className="p-3 text-sm text-slate-400">Loading…</div>
-          ) : products.length === 0 ? (
-            <div className="p-3 text-sm text-slate-400">No products found.</div>
-          ) : (
-            products.map((product) => (
-              <button
-                key={product.id}
-                type="button"
-                onClick={() => setSelected(product)}
-                className={`block w-full px-3 py-2 text-left text-sm transition ${
-                  selected?.id === product.id
-                    ? 'bg-cyan-50 text-cyan-900'
-                    : 'hover:bg-slate-50'
-                }`}
-              >
-                <div className="truncate font-medium text-slate-800">{product.name}</div>
-                <div className="text-xs text-slate-400">
-                  {product.sku ?? product.externalProductId}
-                </div>
-              </button>
-            ))
+          {(search || products.length > 0) && (
+            <div className="max-h-36 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+              {isLoading ? (
+                <div className="p-3 text-sm text-slate-400">Loading…</div>
+              ) : products.length === 0 ? (
+                <div className="p-3 text-sm text-slate-400">No products found.</div>
+              ) : (
+                products.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => setSelected(product)}
+                    className={`block w-full px-3 py-2 text-left text-sm transition ${
+                      selected?.id === product.id
+                        ? 'bg-cyan-50 text-cyan-900'
+                        : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="truncate font-medium text-slate-800">{product.name}</div>
+                    <div className="text-xs text-slate-400">
+                      {product.sku ?? product.externalProductId}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           )}
+
+          <div className="flex gap-2">
+            <div className="flex flex-1 items-center truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
+              {selected
+                ? `${selected.name} · ${selected.sku ?? selected.externalProductId}`
+                : 'Select a product above'}
+            </div>
+            <input
+              type="number"
+              min={1}
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className="h-9 w-20 rounded-lg border border-slate-200 bg-white px-2 text-sm tabular-nums outline-none focus:border-cyan-400"
+            />
+            <button
+              type="button"
+              disabled={addLine.isPending}
+              onClick={() => {
+                const parsed = Number(qty);
+                if (!selected) return setError('Select a product.');
+                if (!Number.isInteger(parsed) || parsed <= 0)
+                  return setError('Quantity must be a positive integer.');
+                setError(null);
+                addLine.mutate(
+                  { productId: selected.id, qtyRequired: parsed },
+                  {
+                    onSuccess: () => {
+                      setSelected(null);
+                      setQty('1');
+                      setSearch('');
+                    },
+                  }
+                );
+              }}
+              className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:opacity-50"
+            >
+              {addLine.isPending ? 'Adding…' : '+ Add line'}
+            </button>
+          </div>
+          {error ? <div className="text-xs text-red-500">{error}</div> : null}
         </div>
       )}
-
-      <div className="mt-2 flex gap-2">
-        <div className="flex flex-1 items-center truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
-          {selected
-            ? `${selected.name} · ${selected.sku ?? selected.externalProductId}`
-            : 'Select a product above'}
-        </div>
-        <input
-          type="number"
-          min={1}
-          value={qty}
-          onChange={(e) => setQty(e.target.value)}
-          className="h-9 w-20 rounded-lg border border-slate-200 bg-white px-2 text-sm tabular-nums outline-none focus:border-cyan-400"
-        />
-        <button
-          type="button"
-          disabled={addLine.isPending}
-          onClick={() => {
-            const parsed = Number(qty);
-            if (!selected) return setError('Select a product.');
-            if (!Number.isInteger(parsed) || parsed <= 0)
-              return setError('Quantity must be a positive integer.');
-            setError(null);
-            addLine.mutate(
-              { productId: selected.id, qtyRequired: parsed },
-              {
-                onSuccess: () => {
-                  setSelected(null);
-                  setQty('1');
-                  setSearch('');
-                },
-              }
-            );
-          }}
-          className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:opacity-50"
-        >
-          {addLine.isPending ? 'Adding…' : '+ Add line'}
-        </button>
-      </div>
-      {error ? <div className="mt-1.5 text-xs text-red-500">{error}</div> : null}
     </div>
   );
 }
@@ -468,7 +483,7 @@ export function OrderDetailPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {order.lines.map((line) => (
-                        <tr key={line.id} className="hover:bg-slate-50/60">
+                        <tr key={line.id} className="group hover:bg-slate-50/60">
                           <td className="px-4 py-3">
                             <div className="font-medium text-slate-800">{line.name}</div>
                             <div className="mt-0.5 text-xs text-slate-400">{line.sku}</div>
@@ -492,7 +507,7 @@ export function OrderDetailPage() {
                                 type="button"
                                 disabled={removeLine.isPending}
                                 onClick={() => removeLine.mutate(line.id)}
-                                className="text-xs text-slate-300 hover:text-red-500 disabled:opacity-50"
+                                className="text-xs text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500 focus:opacity-100 disabled:opacity-50"
                               >
                                 Remove
                               </button>
