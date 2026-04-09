@@ -2,7 +2,7 @@ import type { FloorWorkspace, LayoutDraft } from '@wos/domain';
 import {
   useLayoutDraftState,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 
 export function useWorkspaceLayout(workspace: FloorWorkspace | null | undefined): LayoutDraft | null {
   const localLayout = useLayoutDraftState();

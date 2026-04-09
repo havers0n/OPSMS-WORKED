@@ -4,7 +4,7 @@ import { MapPin, X } from 'lucide-react';
 import {
   useEditorSelection,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';

@@ -14,7 +14,7 @@ import {
   useDeleteRack,
   useSetSelectedRackId,
   useUpdateRackGeneral
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 

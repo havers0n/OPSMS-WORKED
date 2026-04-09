@@ -8,8 +8,8 @@ import {
   useLayoutDraftState,
   useSetEditorMode,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
-import type { EditorMode, ViewMode } from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
+import type { EditorMode, ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 
 type Tool = {
   id: string;

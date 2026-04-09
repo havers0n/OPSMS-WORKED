@@ -6,7 +6,7 @@ import type {
   EditorSelection,
   InteractionScope,
   RackSelectionFocus
-} from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 import {
   getCellCanvasRect,
   getRackCanvasRect,

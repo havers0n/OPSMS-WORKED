@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { useEditorStore } from './editor-store';
-import { useInteractionStore } from './interaction-store';
-import { useModeStore } from './mode-store';
-import { resolveInteractionScope, type EditorSelection } from './editor-types';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
+import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import { resolveInteractionScope, type EditorSelection } from '@/widgets/warehouse-editor/model/editor-types';
 
 function resetStore() {
   // Reset mode-store

@@ -9,7 +9,7 @@ import {
   useSelectedRackId,
   useSetEditorMode,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
 import { InspectorRouter } from './inspector-router';
 import { ToolRail } from './tool-rail';

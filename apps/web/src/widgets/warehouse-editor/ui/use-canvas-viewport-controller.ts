@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Rack } from '@wos/domain';
-import type { ViewMode } from '@/entities/layout-version/model/editor-types';
-import { useCameraStore } from '@/entities/layout-version/model/camera-store';
+import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
+import { useCameraStore } from '@/widgets/warehouse-editor/model/camera-store';
 import {
   type CanvasPoint,
   clampCanvasZoom,

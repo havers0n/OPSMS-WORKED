@@ -26,7 +26,7 @@ import {
   useUpdateFaceConfig,
   useUpdateRackGeneral,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 
 // ─── types ───────────────────────────────────────────────────────────────────

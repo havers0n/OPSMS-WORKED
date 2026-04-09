@@ -43,7 +43,7 @@ import {
   useUpdateZoneRect,
   useMinRackDistance,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { GRID_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_ZOOM_THRESHOLD } from '@/entities/layout-version/lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';

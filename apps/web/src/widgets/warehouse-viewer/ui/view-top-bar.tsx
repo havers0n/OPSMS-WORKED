@@ -14,8 +14,8 @@ import {
   useResetDraft,
   useSetViewMode,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
-import type { ViewMode } from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
+import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { useSites } from '@/entities/site/api/use-sites';
 import { routes } from '@/shared/config/routes';
 

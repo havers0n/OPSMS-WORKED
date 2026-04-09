@@ -3,9 +3,9 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
 import { createLayoutDraftFixture } from '../../../entities/layout-version/model/__fixtures__/layout-draft.fixture';
-import { useEditorStore } from '../../../entities/layout-version/model/editor-store';
-import { useInteractionStore } from '../../../entities/layout-version/model/interaction-store';
-import { useModeStore } from '../../../entities/layout-version/model/mode-store';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
+import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
 import { RackInspector } from './rack-inspector';
 
 vi.mock('@/features/layout-validate/model/use-layout-validation', () => ({

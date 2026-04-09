@@ -1,5 +1,5 @@
 import { MousePointer2 } from 'lucide-react';
-import { useViewMode } from '@/entities/layout-version/model/editor-selectors';
+import { useViewMode } from '@/widgets/warehouse-editor/model/editor-selectors';
 
 /**
  * View/Storage mode empty-state panel shown when no rack, cell, or container is selected.

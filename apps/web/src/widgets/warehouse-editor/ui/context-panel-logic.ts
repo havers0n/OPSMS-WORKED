@@ -12,7 +12,7 @@ import type {
   EditorSelection,
   InteractionScope,
   ViewMode
-} from '../../../entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 
 /**
  * Describes what the context panel should display.

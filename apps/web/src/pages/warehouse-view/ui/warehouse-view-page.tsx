@@ -14,7 +14,7 @@ import {
   useSetSelectedCellId,
   useSetViewMode,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';

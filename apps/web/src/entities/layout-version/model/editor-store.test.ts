@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mapLayoutDraftToSavePayload } from '../../../features/layout-draft-save/api/mappers';
 import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
-import { useEditorStore } from './editor-store';
-import { useInteractionStore } from './interaction-store';
-import { useModeStore } from './mode-store';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
+import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

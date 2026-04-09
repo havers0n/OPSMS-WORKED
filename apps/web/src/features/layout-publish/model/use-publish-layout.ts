@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
-import { useEditorStore } from '@/entities/layout-version/model/editor-store';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   cancelScheduledLayoutDraftSave,

@@ -76,6 +76,20 @@ export default tseslint.config(
             {
               group: ['@/shared/api/supabase/types'],
               message: 'Generated Supabase types must stay inside api boundaries.'
+            },
+            {
+              group: [
+                '@/entities/layout-version/model/editor-selectors',
+                '@/entities/layout-version/model/editor-store',
+                '@/entities/layout-version/model/editor-store-helpers',
+                '@/entities/layout-version/model/editor-types',
+                '@/entities/layout-version/model/camera-store',
+                '@/entities/layout-version/model/mode-store',
+                '@/entities/layout-version/model/interaction-store',
+                '@/entities/layout-version/model/use-semantic-zoom',
+                '@/entities/layout-version/model/storage-workflow-actions'
+              ],
+              message: 'Legacy layout-version runtime imports are forbidden. Use @/widgets/warehouse-editor/model/* canonical owners.'
             }
           ]
         }

@@ -8,7 +8,7 @@ import {
   useSelectedZoneId,
   useUpdateZoneDetails,
   useUpdateZoneRect
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 
 const ZONE_CATEGORY_OPTIONS: Array<{ value: ZoneCategory; label: string }> = [

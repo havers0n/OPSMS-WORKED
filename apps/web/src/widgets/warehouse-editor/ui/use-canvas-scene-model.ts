@@ -8,7 +8,7 @@ import {
   type InteractionScope,
   type RackSelectionFocus,
   type ViewMode
-} from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 import { useFloorSceneData } from './use-floor-scene-data';
 import { useCanvasCapabilities } from './use-canvas-capabilities';
 import { useCanvasHudState } from './use-canvas-hud-state';

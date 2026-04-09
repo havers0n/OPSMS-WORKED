@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import type { EditorMode, InteractionScope } from '@/entities/layout-version/model/editor-types';
+import type { EditorMode, InteractionScope } from '@/widgets/warehouse-editor/model/editor-types';
 
 type UseCanvasKeyboardShortcutsParams = {
   isLayoutEditable: boolean;

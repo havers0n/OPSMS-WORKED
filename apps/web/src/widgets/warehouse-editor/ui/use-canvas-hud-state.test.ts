@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { describe, expect, it } from 'vitest';
-import type { ActiveLayoutTask, EditorSelection } from '@/entities/layout-version/model/editor-types';
+import type { ActiveLayoutTask, EditorSelection } from '@/widgets/warehouse-editor/model/editor-types';
 import { createLayoutDraftFixture } from '@/entities/layout-version/model/__fixtures__/layout-draft.fixture';
 import type { CanvasCapabilities } from './use-canvas-capabilities';
 import { useCanvasHudState } from './use-canvas-hud-state';

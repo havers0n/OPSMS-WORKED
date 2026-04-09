@@ -6,7 +6,7 @@ import {
   useEditorSelection,
   useSetSelectedContainerId,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';

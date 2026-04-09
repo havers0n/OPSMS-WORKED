@@ -7,7 +7,7 @@ import {
   useUpdateLevelCount,
   useUpdateSectionLength,
   useUpdateSectionSlots
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 
 export function FaceTab({ title, rackId, face, readOnly = false }: { title: string; rackId: string; face: RackFace; readOnly?: boolean }) {
   const updateFaceConfig = useUpdateFaceConfig();

@@ -63,11 +63,11 @@ import {
   useStartPlacementMove,
   useToggleContextPanelMode,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import type {
   ContextPanelMode,
   RackSideFocus
-} from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';

@@ -3,7 +3,7 @@ import { resolveRightSideRoute } from './right-side-routing-logic';
 import type {
   ActiveLayoutTask,
   EditorSelection
-} from '../../../entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 
 const noSelection: EditorSelection = { type: 'none' };
 const rackSelection = (ids: string[]): EditorSelection => ({ type: 'rack', rackIds: ids });

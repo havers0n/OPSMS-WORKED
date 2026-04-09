@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveInspectorKind } from './inspector-router-logic';
-import type { EditorSelection } from '../../../entities/layout-version/model/editor-types';
+import type { EditorSelection } from '@/widgets/warehouse-editor/model/editor-types';
 
 const noSelection: EditorSelection = { type: 'none' };
 const rackSelection = (ids: string[]): EditorSelection => ({ type: 'rack', rackIds: ids });

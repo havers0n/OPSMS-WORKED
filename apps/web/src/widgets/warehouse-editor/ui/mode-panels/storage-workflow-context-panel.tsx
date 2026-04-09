@@ -8,8 +8,8 @@ import {
   useSetActiveStorageWorkflowError,
   useSetCreateAndPlacePlacementRetry,
   useSetSelectedCellId
-} from '@/entities/layout-version/model/editor-selectors';
-import type { ContextPanelMode } from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
+import type { ContextPanelMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';

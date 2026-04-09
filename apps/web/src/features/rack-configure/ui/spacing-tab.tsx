@@ -7,7 +7,7 @@ import {
   useMinRackDistance,
   useSelectedRackIds,
   useSetMinRackDistance
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 
 export function SpacingTab() {
   const selectedRackIds = useSelectedRackIds();

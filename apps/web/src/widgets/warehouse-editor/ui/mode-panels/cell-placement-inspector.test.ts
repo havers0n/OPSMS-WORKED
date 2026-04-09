@@ -32,7 +32,7 @@ let mockProductSearchResults: Array<{ id: string; name: string; sku: string | nu
 const mockCreatePolicyMutateAsync = vi.fn();
 const mockDeletePolicyMutateAsync = vi.fn();
 
-vi.mock('@/entities/layout-version/model/editor-selectors', () => ({
+vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
   useEditorSelection: () => mockSelection,
   useSetSelectedContainerId: () => vi.fn(),
   useViewMode: () => mockViewMode

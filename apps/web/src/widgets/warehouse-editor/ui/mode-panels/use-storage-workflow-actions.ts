@@ -5,7 +5,7 @@ import type {
   useSetActiveStorageWorkflowError,
   useSetCreateAndPlacePlacementRetry,
   useSetSelectedCellId
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useCreateContainer } from '@/features/container-create/model/use-create-container';
 import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
 import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { resetUiStore } from '@/app/store/ui-store';
-import { resetEditorStore } from '@/entities/layout-version/model/editor-store';
+import { resetEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { bffRequest } from '@/shared/api/bff/client';
 import { queryClient } from '@/shared/api/supabase/query-client';
 import { ensureDevSession, getCurrentSessionUser, signInWithPassword, signOutSession, signUpWithPassword, subscribeToAuthChanges } from '@/shared/api/supabase/auth';

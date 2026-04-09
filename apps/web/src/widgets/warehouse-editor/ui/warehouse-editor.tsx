@@ -8,7 +8,7 @@ import {
   useLayoutDraftState,
   useResetDraft,
   useSetEditorMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { ContextPanel } from './context-panel';
 import { EditorCanvas } from './editor-canvas';
 import { RightSidePanelSlot } from './right-side-panel-slot';

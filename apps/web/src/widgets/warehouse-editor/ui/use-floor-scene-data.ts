@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { FloorWorkspace } from '@wos/domain';
-import type { ViewMode } from '@/entities/layout-version/model/editor-types';
+import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { useFloorOperationsCells } from '@/entities/location/api/use-floor-operations-cells';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';

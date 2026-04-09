@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "lint": "eslint src --max-warnings 0 && tsc -p tsconfig.json --noEmit",
+    "runtime:migration:pr5:check": "bash -lc \"test -f src/widgets/warehouse-editor/model/editor-selectors.ts && ! rg -n '@/entities/layout-version/model/(editor-selectors|editor-store|editor-store-helpers|editor-types|camera-store|mode-store|interaction-store|use-semantic-zoom|storage-workflow-actions)' src && ! rg --files src/entities/layout-version/model | rg '/(editor-selectors|editor-store|editor-store-helpers|editor-types|camera-store|mode-store|interaction-store|use-semantic-zoom|storage-workflow-actions)\\\\.ts$'\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test"

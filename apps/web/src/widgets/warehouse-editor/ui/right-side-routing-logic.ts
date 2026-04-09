@@ -2,7 +2,7 @@ import type {
   ActiveLayoutTask,
   EditorSelection,
   ViewMode
-} from '../../../entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 
 export type RightSideRoute = 'task-surface' | 'inspector-surface' | 'closed';
 

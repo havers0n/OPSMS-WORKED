@@ -7,7 +7,7 @@ import {
   useSelectedWallId,
   useUpdateWallDetails,
   useUpdateWallGeometry
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 
 const WALL_TYPE_OPTIONS: Array<{ value: WallType; label: string }> = [

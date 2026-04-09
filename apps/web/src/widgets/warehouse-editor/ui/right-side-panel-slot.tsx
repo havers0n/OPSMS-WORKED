@@ -3,7 +3,7 @@ import {
   useActiveTask,
   useEditorSelection,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { InspectorSurface } from './inspector-surface';
 import { resolveRightSideRoute } from './right-side-routing-logic';
 import { TaskSurface } from './task-surface';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapLayoutDraftBundleToDomain } from '../../../entities/layout-version/api/mappers';
 import type { LayoutDraftRowBundle } from '../../../entities/layout-version/api/types';
-import { useEditorStore } from '../../../entities/layout-version/model/editor-store';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { mapLayoutDraftToSavePayload } from './mappers';
 
 describe('mapLayoutDraftToSavePayload', () => {

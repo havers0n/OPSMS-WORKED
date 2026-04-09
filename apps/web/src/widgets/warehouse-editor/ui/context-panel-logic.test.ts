@@ -5,7 +5,7 @@ import type {
   EditorSelection,
   InteractionScope,
   RackSideFocus
-} from '../../../entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

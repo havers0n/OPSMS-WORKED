@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type Konva from 'konva';
 import type { LayoutDraft } from '@wos/domain';
-import type { InteractionScope } from '@/entities/layout-version/model/editor-types';
+import type { InteractionScope } from '@/widgets/warehouse-editor/model/editor-types';
 import {
   type CanvasRect,
   getRackGeometry,

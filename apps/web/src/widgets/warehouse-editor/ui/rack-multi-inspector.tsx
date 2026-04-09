@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import { SpacingTab } from '@/features/rack-configure/ui/spacing-tab';
-import { useSelectedRackIds } from '@/entities/layout-version/model/editor-selectors';
+import { useSelectedRackIds } from '@/widgets/warehouse-editor/model/editor-selectors';
 
 /**
  * RackMultiInspector — shown when 2+ racks are selected in Layout mode.

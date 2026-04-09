@@ -29,8 +29,8 @@ import {
   useResetDraft,
   useSetViewMode,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
-import type { ViewMode } from '@/entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
+import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-layout-draft';
@@ -38,7 +38,7 @@ import { usePublishLayout } from '@/features/layout-publish/model/use-publish-la
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { getLayoutActionState, shouldProceedWithContextSwitch } from '../lib/layout-context';
-import { useEditorStore } from '@/entities/layout-version/model/editor-store';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'view', label: 'View' },

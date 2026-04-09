@@ -1,6 +1,6 @@
-import type { ActiveStorageWorkflow, EditorMode, ViewMode } from '@/entities/layout-version/model/editor-types';
+import type { ActiveStorageWorkflow, EditorMode, ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import type { CanvasInteractionLevel, CanvasLOD } from '@/entities/layout-version/lib/canvas-geometry';
-import { useSemanticZoom } from '@/entities/layout-version/model/use-semantic-zoom';
+import { useSemanticZoom } from '@/widgets/warehouse-editor/model/use-semantic-zoom';
 
 type CanvasCapabilitiesParams = {
   activeStorageWorkflow: ActiveStorageWorkflow;

@@ -5,7 +5,7 @@
 import type {
   EditorSelection,
   ViewMode
-} from '../../../entities/layout-version/model/editor-types';
+} from '@/widgets/warehouse-editor/model/editor-types';
 
 export type InspectorKind =
   | 'rack-structure'         // layout/view + single rack selected (existing)

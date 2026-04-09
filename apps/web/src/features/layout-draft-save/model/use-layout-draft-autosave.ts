@@ -9,7 +9,7 @@ import {
   useDraftDirtyState,
   useDraftPersistenceStatus,
   useLayoutDraftState
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 

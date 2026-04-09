@@ -14,7 +14,7 @@ import {
   useSetSelectedCellId,
   useSetSelectedContainerId,
   useViewMode
-} from '@/entities/layout-version/model/editor-selectors';
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerStorage } from '@/entities/container/api/use-container-storage';
 import { useProduct } from '@/entities/product/api/use-product';
