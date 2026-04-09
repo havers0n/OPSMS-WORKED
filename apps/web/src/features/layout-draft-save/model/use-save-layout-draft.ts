@@ -116,7 +116,11 @@ export function scheduleLayoutDraftAutosave(
       return;
     }
 
-    void runSaveLayoutDraft(queryClient, floorId, draft);
+    void runSaveLayoutDraft(queryClient, floorId, draft).catch(() => {
+      // Autosave updates store/query state via runSaveLayoutDraft side effects.
+      // Swallow the rejection here so conflict/save errors do not surface as
+      // unhandled promise rejections from the debounce callback.
+    });
   }, delayMs);
 }
 

@@ -18,6 +18,12 @@ vi.mock('../api/mutations', () => ({
   saveLayoutDraft: vi.fn()
 }));
 
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT?: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
 function resetStores() {
   useModeStore.setState({
     viewMode: 'layout',
@@ -197,6 +203,113 @@ describe('use-save-layout-draft coordinator', () => {
 
     expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
     expect(useEditorStore.getState().persistenceStatus).toBe('saved');
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it('autosave status flows through dirty to saving to saved', async () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const draft = createLayoutDraftFixture();
+    const pending = deferred<Awaited<ReturnType<typeof saveLayoutDraft>>>();
+
+    useEditorStore.getState().initializeDraft(draft);
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          React.createElement(AutosaveHarness, { floorId: draft.floorId })
+        )
+      );
+    });
+
+    vi.mocked(saveLayoutDraft).mockReturnValue(pending.promise);
+
+    act(() => {
+      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 190, 310);
+    });
+    expect(useEditorStore.getState().persistenceStatus).toBe('dirty');
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+    expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().persistenceStatus).toBe('saving');
+
+    pending.resolve({
+      layoutVersionId: draft.layoutVersionId,
+      draftVersion: 2,
+      changeClass: 'geometry_only',
+      savedDraft: {
+        ...useEditorStore.getState().draft!,
+        draftVersion: 2
+      }
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(useEditorStore.getState().persistenceStatus).toBe('saved');
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it('stops autosave after a draft conflict and does not keep retrying stale local edits', async () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const draft = createLayoutDraftFixture();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    useEditorStore.getState().initializeDraft(draft);
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          React.createElement(AutosaveHarness, { floorId: draft.floorId })
+        )
+      );
+    });
+
+    vi.mocked(saveLayoutDraft).mockRejectedValue(
+      new BffRequestError(409, 'DRAFT_CONFLICT', 'Layout draft was changed by another session. Please reload.', null, null)
+    );
+
+    act(() => {
+      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 200, 320);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+
+    expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().persistenceStatus).toBe('conflict');
+    expect(invalidateSpy).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 210, 330);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+      await Promise.resolve();
+    });
+
+    expect(useEditorStore.getState().persistenceStatus).toBe('conflict');
+    expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       renderer!.unmount();
