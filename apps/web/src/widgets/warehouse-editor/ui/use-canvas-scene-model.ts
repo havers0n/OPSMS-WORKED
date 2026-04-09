@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { FloorWorkspace, LayoutDraft, Rack } from '@wos/domain';
 import {
+  type ActiveLayoutTask,
   type ActiveStorageWorkflow,
   type EditorMode,
   type EditorSelection,
@@ -19,6 +20,7 @@ type CanvasOffset = {
 };
 
 type UseCanvasSceneModelParams = {
+  activeTask: ActiveLayoutTask;
   activeStorageWorkflow: ActiveStorageWorkflow;
   canvasOffset: CanvasOffset;
   editorMode: EditorMode;
@@ -56,6 +58,7 @@ type UseCanvasSceneModelParams = {
  * Public contract (params + return shape) is unchanged — editor-canvas.tsx does not change.
  */
 export function useCanvasSceneModel({
+  activeTask,
   activeStorageWorkflow,
   canvasOffset,
   editorMode,
@@ -108,6 +111,7 @@ export function useCanvasSceneModel({
   } = capabilities;
 
   const { hud, selection: resolvedSelection, workflow } = useCanvasHudState({
+    activeTask,
     activeStorageWorkflow,
     canvasOffset,
     capabilities,

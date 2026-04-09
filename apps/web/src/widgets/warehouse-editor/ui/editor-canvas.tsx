@@ -3,6 +3,7 @@ import type { FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import {
+  useActiveTask,
   useActiveStorageWorkflow,
   useCanvasZoom,
   useCancelPlacementInteraction,
@@ -76,6 +77,7 @@ export function EditorCanvas({
   const selection = useEditorSelection();
   const interactionScope = useInteractionScope();
   const highlightedCellIds = useHighlightedCellIds();
+  const activeTask = useActiveTask();
   const activeStorageWorkflow = useActiveStorageWorkflow();
   const hoveredRackId = useHoveredRackId();
   const clearSelection = useClearSelection();
@@ -139,6 +141,7 @@ export function EditorCanvas({
     zoom
   });
   const scene = useCanvasSceneModel({
+    activeTask,
     activeStorageWorkflow,
     canvasOffset,
     editorMode,
@@ -196,7 +199,7 @@ export function EditorCanvas({
     selectedStorageCellAnchorRect,
     selectedWallAnchorRect,
     selectedZoneAnchorRect,
-    shouldShowLayoutRackBar,
+    shouldShowLayoutRackGeometryBar,
     shouldShowLayoutRackSideHandles,
     shouldShowLayoutWallBar,
     shouldShowLayoutZoneBar,
@@ -347,7 +350,7 @@ export function EditorCanvas({
             isPlacing={isPlacing}
             isDrawingZone={isDrawingZone}
             isPlacementMoveMode={isPlacementMoveMode}
-            shouldShowLayoutRackBar={shouldShowLayoutRackBar}
+            shouldShowLayoutRackGeometryBar={shouldShowLayoutRackGeometryBar}
             shouldShowLayoutRackSideHandles={shouldShowLayoutRackSideHandles}
             shouldShowLayoutZoneBar={shouldShowLayoutZoneBar}
             shouldShowLayoutWallBar={shouldShowLayoutWallBar}

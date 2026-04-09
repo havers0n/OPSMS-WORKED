@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Cell, LayoutDraft } from '@wos/domain';
 import type {
+  ActiveLayoutTask,
   ActiveStorageWorkflow,
   EditorSelection,
   InteractionScope,
@@ -16,6 +17,7 @@ import {
 import type { CanvasCapabilities } from './use-canvas-capabilities';
 
 type UseCanvasHudStateParams = {
+  activeTask: ActiveLayoutTask;
   activeStorageWorkflow: ActiveStorageWorkflow;
   canvasOffset: { x: number; y: number };
   capabilities: CanvasCapabilities;
@@ -49,6 +51,7 @@ type UseCanvasHudStateParams = {
  * All mode flags consumed via `capabilities` to avoid spreading raw mode checks.
  */
 export function useCanvasHudState({
+  activeTask,
   activeStorageWorkflow,
   canvasOffset,
   capabilities,
@@ -131,9 +134,10 @@ export function useCanvasHudState({
     : null;
 
   // — HUD visibility decisions —
-  const shouldShowLayoutRackBar =
+  const shouldShowLayoutRackGeometryBar =
     interactionScope === 'object' &&
     isLayoutEditable &&
+    activeTask === null &&
     selectedRack !== null &&
     selectedRackAnchorRect !== null &&
     selectedRackIds.length === 1;
@@ -187,7 +191,7 @@ export function useCanvasHudState({
         selectedStorageCellAnchorRect,
         selectedWallAnchorRect,
         selectedZoneAnchorRect,
-        shouldShowLayoutRackBar,
+        shouldShowLayoutRackGeometryBar,
         shouldShowLayoutRackSideHandles,
         shouldShowLayoutWallBar,
         shouldShowLayoutZoneBar,
@@ -221,7 +225,7 @@ export function useCanvasHudState({
       selectedWallAnchorRect,
       selectedZone,
       selectedZoneAnchorRect,
-      shouldShowLayoutRackBar,
+      shouldShowLayoutRackGeometryBar,
       shouldShowLayoutRackSideHandles,
       shouldShowLayoutWallBar,
       shouldShowLayoutZoneBar,

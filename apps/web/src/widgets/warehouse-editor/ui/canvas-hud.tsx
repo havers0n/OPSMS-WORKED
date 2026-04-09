@@ -4,6 +4,7 @@ import type { RackSideFocus } from '@/entities/layout-version/model/editor-types
 import type { CanvasRect } from '../lib/canvas-geometry';
 import {
   ObjectLocalAffordanceBar,
+  ObjectLocalAffordanceDivider,
   ObjectLocalAffordanceButton
 } from './object-local-affordance-bar';
 
@@ -15,7 +16,7 @@ type CanvasHudProps = {
   isPlacing: boolean;
   isDrawingZone: boolean;
   isPlacementMoveMode: boolean;
-  shouldShowLayoutRackBar: boolean;
+  shouldShowLayoutRackGeometryBar: boolean;
   shouldShowLayoutRackSideHandles: boolean;
   shouldShowLayoutZoneBar: boolean;
   shouldShowLayoutWallBar: boolean;
@@ -37,30 +38,51 @@ type CanvasHudProps = {
 };
 
 type LayoutRackAffordanceBarProps = {
-  displayCode: string;
+  rack: Rack;
   anchorRect: CanvasRect;
   viewport: { width: number; height: number };
-  onOpenInspector: () => void;
 };
 
-function LayoutRackAffordanceBar({
-  displayCode,
-  anchorRect,
-  viewport,
-  onOpenInspector
-}: LayoutRackAffordanceBarProps) {
+function GeometryValue({
+  label,
+  value
+}: {
+  label: 'X' | 'Y' | 'L' | 'D' | 'R';
+  value: string;
+}) {
   return (
-    <ObjectLocalAffordanceBar
-      anchorRect={anchorRect}
-      viewport={viewport}
-      label={displayCode}
-    >
-      <ObjectLocalAffordanceButton
-        icon={SlidersHorizontal}
-        label="Inspect"
-        variant="accent"
-        onClick={onOpenInspector}
-      />
+    <div className="flex items-baseline gap-1 whitespace-nowrap">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </span>
+      <span className="font-mono text-[11px] font-semibold text-slate-900">{value}</span>
+    </div>
+  );
+}
+
+function LayoutRackAffordanceBar({ rack, anchorRect, viewport }: LayoutRackAffordanceBarProps) {
+  const values = [
+    { label: 'X' as const, value: rack.x.toFixed(2) },
+    { label: 'Y' as const, value: rack.y.toFixed(2) },
+    { label: 'L' as const, value: rack.totalLength.toFixed(1) },
+    { label: 'D' as const, value: rack.depth.toFixed(1) },
+    { label: 'R' as const, value: `${rack.rotationDeg}°` }
+  ];
+
+  return (
+    <ObjectLocalAffordanceBar anchorRect={anchorRect} viewport={viewport}>
+      <div
+        data-testid="rack-geometry-affordance-bar"
+        className="flex items-center gap-1"
+        aria-label="Selected rack geometry"
+      >
+        {values.map((item, index) => (
+          <div key={item.label} className="flex items-center gap-1">
+            {index > 0 ? <ObjectLocalAffordanceDivider /> : null}
+            <GeometryValue label={item.label} value={item.value} />
+          </div>
+        ))}
+      </div>
     </ObjectLocalAffordanceBar>
   );
 }
@@ -255,7 +277,7 @@ export function CanvasHud({
   isPlacing,
   isDrawingZone,
   isPlacementMoveMode,
-  shouldShowLayoutRackBar,
+  shouldShowLayoutRackGeometryBar,
   shouldShowLayoutRackSideHandles,
   shouldShowLayoutZoneBar,
   shouldShowLayoutWallBar,
@@ -330,12 +352,11 @@ export function CanvasHud({
         </div>
       )}
 
-      {shouldShowLayoutRackBar && selectedRack && selectedRackAnchorRect && (
+      {shouldShowLayoutRackGeometryBar && selectedRack && selectedRackAnchorRect && (
         <LayoutRackAffordanceBar
-          displayCode={selectedRack.displayCode}
+          rack={selectedRack}
           anchorRect={selectedRackAnchorRect}
           viewport={viewport}
-          onOpenInspector={onOpenInspector}
         />
       )}
 
