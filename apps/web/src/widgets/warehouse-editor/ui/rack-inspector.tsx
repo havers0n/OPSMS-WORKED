@@ -207,11 +207,10 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpda
  * RackInspector — structural inspector for a single selected rack.
  *
  * Rendered only by InspectorRouter when:
- *   - viewMode === 'layout' AND a rack is selected AND it is NOT being created.
+ *   - viewMode === 'layout' AND a rack is selected in the inspector surface.
  *   - viewMode === 'view' | 'storage' AND a rack is selected in read-only scope.
  *
- * Wizard routing (rack-creation-wizard) and empty-state routing (layout-empty)
- * are handled by InspectorRouter. This component never renders those states.
+ * Task routing is handled by TaskSurface. This component never renders task flow.
  */
 export function RackInspector({
   workspace,

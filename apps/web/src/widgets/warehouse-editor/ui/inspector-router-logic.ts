@@ -3,30 +3,25 @@
  * No React, no store, no @/ aliases — testable in isolation.
  */
 import type {
-  ActiveLayoutTask,
   EditorSelection,
   ViewMode
 } from '../../../entities/layout-version/model/editor-types';
 
 export type InspectorKind =
-  | 'rack-creation-wizard'   // layout + single rack being created
   | 'rack-structure'         // layout/view + single rack selected (existing)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'zone-detail'            // layout + single zone selected → editable inspector
   | 'zone-readonly'          // view/storage + zone selected → context-only, no actions
   | 'wall-detail'            // layout + single wall selected
-  | 'layout-empty'           // layout + nothing selected
   | 'placement-placeholder'  // view/storage mode + no selection
   | 'placement-cell'         // view/storage mode + cell selected
   | 'placement-container';   // view/storage mode + container selected
 
 /**
- * Maps (viewMode, selection, activeTask) → InspectorKind.
+ * Maps (viewMode, selection) → InspectorKind | null.
  * This is the single source of truth for inspector routing decisions.
  *
  * Layout routing contract:
- *   layout + none               → layout-empty
- *   layout + rack(1) + rack_creation task → rack-creation-wizard
  *   layout + rack(1)            → rack-structure
  *   layout + rack(≥2)           → rack-multi
  *   layout + zone               → zone-detail
@@ -53,21 +48,12 @@ export type InspectorKind =
  */
 export function resolveInspectorKind(
   viewMode: ViewMode,
-  selection: EditorSelection,
-  activeTask: ActiveLayoutTask
-): InspectorKind {
+  selection: EditorSelection
+): InspectorKind | null {
   if (viewMode === 'layout') {
     if (selection.type === 'rack') {
       if (selection.rackIds.length >= 2) return 'rack-multi';
-      const primaryId = selection.rackIds[0];
-      if (
-        primaryId &&
-        activeTask?.type === 'rack_creation' &&
-        primaryId === activeTask.rackId
-      ) {
-        return 'rack-creation-wizard';
-      }
-      return 'rack-structure';
+      return selection.rackIds[0] ? 'rack-structure' : null;
     }
     if (selection.type === 'zone') {
       return 'zone-detail';
@@ -75,7 +61,7 @@ export function resolveInspectorKind(
     if (selection.type === 'wall') {
       return 'wall-detail';
     }
-    return 'layout-empty';
+    return null;
   }
 
   if ((viewMode === 'view' || viewMode === 'storage') && selection.type === 'rack') {

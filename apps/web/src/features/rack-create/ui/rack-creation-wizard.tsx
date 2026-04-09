@@ -104,7 +104,7 @@ function TogglePair<T extends string>({
 // ─── main component ────────────────────────────────────────────────────────────
 
 /**
- * Shown inside the inspector when a rack creation task is active.
+ * Shown inside TaskSurface when a rack creation task is active.
  * Guides the user through geometry → sections → face B in a progressive sequence.
  * Completed step dots are clickable for free backward navigation.
  * The user can abandon the wizard at any time via "Cancel" (deletes the rack).

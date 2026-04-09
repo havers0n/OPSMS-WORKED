@@ -117,7 +117,6 @@ export function PublishedViewer() {
             <InspectorRouter
               workspace={workspace ?? null}
               onClose={handleCloseInspector}
-              onAddRack={handleAddRack}
             />
           </div>
         </div>

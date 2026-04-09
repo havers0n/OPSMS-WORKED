@@ -1,23 +1,17 @@
-import { useEffect, useState } from 'react';
-import { PanelRight } from 'lucide-react';
+import { useEffect } from 'react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useLayoutDraftAutosave } from '@/features/layout-draft-save/model/use-layout-draft-autosave';
 import {
-  useActiveTask,
   useClearSelection,
   useInitializeDraft,
   useLayoutDraftState,
   useResetDraft,
-  useSelectedRackId,
-  useSelectedWallId,
-  useSelectedZoneId,
-  useSetEditorMode,
-  useViewMode
+  useSetEditorMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { ContextPanel } from './context-panel';
 import { EditorCanvas } from './editor-canvas';
-import { InspectorRouter } from './inspector-router';
+import { RightSidePanelSlot } from './right-side-panel-slot';
 import { ToolRail } from './tool-rail';
 
 export function WarehouseEditor() {
@@ -29,27 +23,7 @@ export function WarehouseEditor() {
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
   const clearSelection = useClearSelection();
-  const viewMode = useViewMode();
-  const selectedRackId = useSelectedRackId();
-  const selectedWallId = useSelectedWallId();
-  const selectedZoneId = useSelectedZoneId();
-  const activeTask = useActiveTask();
   const setEditorMode = useSetEditorMode();
-
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-
-  useEffect(() => {
-    if (viewMode === 'view' || viewMode === 'storage') {
-      setInspectorOpen(true);
-    } else {
-      setInspectorOpen(
-        selectedRackId !== null ||
-        selectedZoneId !== null ||
-        selectedWallId !== null ||
-        activeTask !== null
-      );
-    }
-  }, [viewMode, selectedRackId, selectedZoneId, selectedWallId, activeTask]);
 
   useEffect(() => {
     if (!activeFloorId) {
@@ -110,7 +84,6 @@ export function WarehouseEditor() {
   };
 
   const handleCloseInspector = () => {
-    setInspectorOpen(false);
     clearSelection();
   };
 
@@ -126,48 +99,21 @@ export function WarehouseEditor() {
         <EditorCanvas
           workspace={workspace ?? null}
           onAddRack={handleAddRack}
-          onOpenInspector={() => setInspectorOpen(true)}
+          onOpenInspector={() => undefined}
         />
 
         <ContextPanel
           workspace={workspace ?? null}
           onAddRack={handleAddRack}
           onDrawZone={handleDrawZone}
-          onOpenInspector={() => setInspectorOpen(true)}
+          onOpenInspector={() => undefined}
         />
-
-        {(selectedRackId || selectedZoneId || selectedWallId) && !inspectorOpen && (
-          <button
-            type="button"
-            onClick={() => setInspectorOpen(true)}
-            title="Open inspector"
-            className="pointer-events-auto absolute bottom-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl shadow-md transition-colors hover:opacity-90"
-            style={{ background: 'var(--accent)', color: '#fff' }}
-          >
-            <PanelRight className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
-      <div
-        className="shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
-        style={{ width: inspectorOpen ? '320px' : '0px' }}
-      >
-        <div
-          className="h-full overflow-hidden border-l transition-transform duration-300 ease-in-out"
-          style={{
-            width: '320px',
-            borderColor: 'var(--border-muted)',
-            transform: inspectorOpen ? 'translateX(0)' : 'translateX(100%)'
-          }}
-        >
-          <InspectorRouter
-            workspace={workspace ?? null}
-            onClose={handleCloseInspector}
-            onAddRack={handleAddRack}
-          />
-        </div>
-      </div>
+      <RightSidePanelSlot
+        workspace={workspace ?? null}
+        onCloseInspector={handleCloseInspector}
+      />
     </div>
   );
 }

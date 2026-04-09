@@ -1,10 +1,10 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createLayoutDraftFixture } from '@/entities/layout-version/model/__fixtures__/layout-draft.fixture';
-import { useEditorStore } from '@/entities/layout-version/model/editor-store';
-import { useInteractionStore } from '@/entities/layout-version/model/interaction-store';
-import { useModeStore } from '@/entities/layout-version/model/mode-store';
+import { createLayoutDraftFixture } from '../../../entities/layout-version/model/__fixtures__/layout-draft.fixture';
+import { useEditorStore } from '../../../entities/layout-version/model/editor-store';
+import { useInteractionStore } from '../../../entities/layout-version/model/interaction-store';
+import { useModeStore } from '../../../entities/layout-version/model/mode-store';
 import { RackCreationWizard } from './rack-creation-wizard';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
