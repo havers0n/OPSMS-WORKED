@@ -4,7 +4,7 @@ import {
   type EditorSelection,
   type RackSideFocus
 } from './editor-types';
-import { makeRackSelection, getSelectedRackIds } from '../../../entities/layout-version/model/editor-store-helpers';
+import { makeRackSelection, getSelectedRackIds } from './editor-store-helpers';
 
 /**
  * Interaction Store — independent axis for all user interaction state.
