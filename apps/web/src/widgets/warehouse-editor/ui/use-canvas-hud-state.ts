@@ -13,7 +13,7 @@ import {
   getWallCanvasRect,
   getZoneCanvasRect,
   projectCanvasRectToViewport
-} from '../lib/canvas-geometry';
+} from '@/entities/layout-version/lib/canvas-geometry';
 import type { CanvasCapabilities } from './use-canvas-capabilities';
 
 type UseCanvasHudStateParams = {

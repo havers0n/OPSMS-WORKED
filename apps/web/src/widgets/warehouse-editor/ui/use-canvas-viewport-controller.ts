@@ -8,8 +8,8 @@ import {
   getZoomToCursorCamera,
   LOD_CELL_ENTRY,
   WORLD_SCALE
-} from '../lib/canvas-geometry';
-import { getRackBoundingBox } from '../lib/rack-spacing';
+} from '@/entities/layout-version/lib/canvas-geometry';
+import { getRackBoundingBox } from '@/entities/layout-version/lib/rack-spacing';
 
 type CanvasViewport = {
   width: number;

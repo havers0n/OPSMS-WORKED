@@ -7,7 +7,7 @@
  */
 import type { LocationType } from '@wos/domain';
 import { Group, Layer, Line, Rect, Text } from 'react-konva';
-import { WORLD_SCALE } from '../lib/canvas-geometry';
+import { WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 
 export type NonRackLocationMarker = {
   locationId: string;

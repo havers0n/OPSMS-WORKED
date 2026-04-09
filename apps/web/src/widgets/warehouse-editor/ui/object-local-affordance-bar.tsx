@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import type { CanvasRect } from '../lib/canvas-geometry';
+import type { CanvasRect } from '@/entities/layout-version/lib/canvas-geometry';
 
 type ViewportSize = {
   width: number;

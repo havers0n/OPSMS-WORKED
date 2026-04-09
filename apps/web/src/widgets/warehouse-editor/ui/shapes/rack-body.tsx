@@ -1,5 +1,5 @@
 import { Group, Line, Rect, Text } from 'react-konva';
-import type { CanvasRackGeometry } from '../../lib/canvas-geometry';
+import type { CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 
 const C = {
   fillDefault: '#ffffff',

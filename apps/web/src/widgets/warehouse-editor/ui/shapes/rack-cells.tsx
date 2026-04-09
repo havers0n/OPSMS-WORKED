@@ -1,7 +1,7 @@
 import { Group, Rect } from 'react-konva';
 import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
-import { getSectionWidths, type CanvasRackGeometry } from '../../lib/canvas-geometry';
+import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;

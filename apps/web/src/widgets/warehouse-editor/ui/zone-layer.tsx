@@ -2,7 +2,7 @@ import type { Zone } from '@wos/domain';
 import { getZonePlacementBehavior } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect, Text } from 'react-konva';
-import { type CanvasRect, GRID_SIZE, WORLD_SCALE } from '../lib/canvas-geometry';
+import { type CanvasRect, GRID_SIZE, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 
 type ZoneLayerProps = {
   canSelectZone: boolean;

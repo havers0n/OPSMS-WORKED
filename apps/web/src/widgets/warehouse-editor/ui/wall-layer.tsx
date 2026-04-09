@@ -1,7 +1,7 @@
 import type { Wall } from '@wos/domain';
 import type Konva from 'konva';
 import { Circle, Group, Layer, Line } from 'react-konva';
-import { WORLD_SCALE } from '../lib/canvas-geometry';
+import { WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 
 type DraftWallLine = {
   x1: number;

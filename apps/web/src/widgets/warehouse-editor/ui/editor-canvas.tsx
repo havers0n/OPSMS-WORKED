@@ -44,7 +44,7 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
-import { GRID_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_ZOOM_THRESHOLD } from '../lib/canvas-geometry';
+import { GRID_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_ZOOM_THRESHOLD } from '@/entities/layout-version/lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { RackLayer } from './rack-layer';

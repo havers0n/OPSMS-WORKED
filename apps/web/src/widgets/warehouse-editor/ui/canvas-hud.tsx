@@ -1,7 +1,7 @@
 import type { Cell, Rack, Wall, Zone } from '@wos/domain';
 import { Minus, Plus, SlidersHorizontal } from 'lucide-react';
 import type { RackSideFocus } from '@/entities/layout-version/model/editor-types';
-import type { CanvasRect } from '../lib/canvas-geometry';
+import type { CanvasRect } from '@/entities/layout-version/lib/canvas-geometry';
 import {
   ObjectLocalAffordanceBar,
   ObjectLocalAffordanceDivider,

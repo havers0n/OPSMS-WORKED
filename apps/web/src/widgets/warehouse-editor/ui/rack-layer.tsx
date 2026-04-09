@@ -1,8 +1,8 @@
 import type { Cell, OperationsCellRuntime, Rack } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
-import { getRackGeometry, WORLD_SCALE } from '../lib/canvas-geometry';
-import { getSnapPosition } from '../lib/rack-spacing';
+import { getRackGeometry, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
+import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';

@@ -18,7 +18,7 @@ import {
   MIN_CANVAS_ZOOM,
   projectCanvasRectToViewport,
   WORLD_SCALE
-} from './canvas-geometry';
+} from '@/entities/layout-version/lib/canvas-geometry';
 
 // Rack position in metres. WORLD_SCALE=40 → canvas x=120px, y=80px.
 const rack: Rack = {

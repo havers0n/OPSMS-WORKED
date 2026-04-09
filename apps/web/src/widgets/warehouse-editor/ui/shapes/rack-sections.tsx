@@ -1,6 +1,6 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { RackFace } from '@wos/domain';
-import { getSectionWidths, type CanvasRackGeometry } from '../../lib/canvas-geometry';
+import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 
 type Props = {
   geometry: CanvasRackGeometry;

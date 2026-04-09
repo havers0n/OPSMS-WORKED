@@ -8,7 +8,7 @@ import {
   getRackGeometry,
   GRID_SIZE,
   WORLD_SCALE
-} from '../lib/canvas-geometry';
+} from '@/entities/layout-version/lib/canvas-geometry';
 import { MIN_ZONE_SIZE } from './zone-layer';
 
 type MarqueeRect = {
