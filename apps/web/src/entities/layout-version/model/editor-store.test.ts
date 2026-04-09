@@ -17,6 +17,7 @@ function resetStore() {
 
   // Reset editor-store
   useEditorStore.setState({
+    objectWorkContext: 'geometry',
     activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,
@@ -52,6 +53,65 @@ afterEach(() => {
 });
 
 describe('editor-store', () => {
+  it('defaults objectWorkContext to geometry', () => {
+    expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
+  });
+
+  it('resets objectWorkContext to geometry when a different single rack is selected', () => {
+    const draft = createLayoutDraftFixture();
+    const otherRackId = 'rack-2';
+    draft.rackIds.push(otherRackId);
+    draft.racks[otherRackId] = {
+      ...draft.racks[draft.rackIds[0]],
+      id: otherRackId,
+      displayCode: '02'
+    };
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+    useEditorStore.getState().setObjectWorkContext('structure');
+
+    useEditorStore.getState().setSelectedRackId(otherRackId);
+
+    expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
+  });
+
+  it('does not reset objectWorkContext when the same single rack focus changes', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setSelectedRackId(rackId);
+    useEditorStore.getState().setObjectWorkContext('structure');
+
+    useEditorStore.getState().setSelectedRackSide(rackId, 'east');
+
+    expect(useEditorStore.getState().objectWorkContext).toBe('structure');
+  });
+
+  it('resets objectWorkContext when leaving single-rack inspection', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setSelectedRackId(rackId);
+    useEditorStore.getState().setObjectWorkContext('structure');
+
+    useEditorStore.getState().setSelectedZoneId('zone-1');
+
+    expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
+  });
+
+  it('resets objectWorkContext on view mode change and draft reset', () => {
+    useEditorStore.getState().setObjectWorkContext('structure');
+    useEditorStore.getState().setViewMode('storage');
+    expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
+
+    useEditorStore.getState().setObjectWorkContext('structure');
+    useEditorStore.getState().resetDraft();
+    expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
+  });
+
   it('normalizes legacy mode names onto the new mode model', () => {
     useEditorStore.getState().setViewMode('placement');
     expect(useModeStore.getState().viewMode).toBe('storage');

@@ -5,6 +5,7 @@ export type ViewMode = 'view' | 'storage' | 'layout';
 export type LegacyViewMode = 'placement' | 'operations';
 export type AnyViewMode = ViewMode | LegacyViewMode;
 export type RackSideFocus = 'north' | 'east' | 'south' | 'west';
+export type ObjectWorkContext = 'geometry' | 'structure';
 
 export type RackSelectionFocus =
   | { type: 'body' }

@@ -4,6 +4,7 @@ import { useModeStore } from './mode-store';
 import { useInteractionStore } from './interaction-store';
 import {
   type ActiveLayoutTask,
+  type ObjectWorkContext,
   resolveInteractionScope,
   type ActiveStorageWorkflow,
   type EditorSelection,
@@ -22,6 +23,10 @@ export const useViewMode = () => useModeStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
 export const useEditorMode = () => useModeStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
+export const useObjectWorkContext = (): ObjectWorkContext =>
+  useEditorStore((state) => state.objectWorkContext);
+export const useSetObjectWorkContext = () =>
+  useEditorStore((state) => state.setObjectWorkContext);
 // — Selection state — reads from interaction-store
 export const useSelectedRackIds = () =>
   useInteractionStore((state) =>

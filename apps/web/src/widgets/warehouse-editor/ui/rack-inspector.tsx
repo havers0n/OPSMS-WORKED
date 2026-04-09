@@ -1,5 +1,5 @@
 import { generatePreviewCells, validateLayoutDraft } from '@wos/domain';
-import type { FloorWorkspace, LayoutValidationIssue, RackFace } from '@wos/domain';
+import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
 import {
   AlertTriangle,
   ChevronDown,
@@ -18,16 +18,20 @@ import {
   useApplyFacePreset,
   useDraftDirtyState,
   useIsLayoutEditable,
+  useObjectWorkContext,
   useResetFaceB,
+  useSetObjectWorkContext,
   useSelectedRackId,
   useSetFaceBMode,
-  useUpdateFaceConfig
+  useUpdateFaceConfig,
+  useUpdateRackGeneral,
+  useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-type AccordionSection = 'geometry' | 'faceA' | 'faceB' | 'address';
+type AccordionSection = 'faceA' | 'faceB' | 'address';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -201,6 +205,83 @@ function NumberingPanel({ rackId, side, slotNumberingDirection, disabled, onUpda
   );
 }
 
+function WorkContextSwitch({
+  value,
+  onChange
+}: {
+  value: 'geometry' | 'structure';
+  onChange: (next: 'geometry' | 'structure') => void;
+}) {
+  return (
+    <div
+      data-testid="rack-work-context-switch"
+      className="mt-4 flex rounded-xl border border-[var(--border-muted)] bg-white p-1 shadow-sm"
+    >
+      {([
+        { value: 'geometry', label: 'Geometry' },
+        { value: 'structure', label: 'Structure' }
+      ] as const).map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+            value === option.value
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StructureIdentityPanel({
+  rack,
+  readOnly
+}: {
+  rack: Rack;
+  readOnly: boolean;
+}) {
+  const updateRackGeneral = useUpdateRackGeneral();
+
+  return (
+    <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        Rack Identity
+      </div>
+      <div className="grid gap-3">
+        <label className="grid gap-1 text-sm text-slate-700">
+          Display Code
+          <input
+            disabled={readOnly}
+            className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+            value={rack.displayCode}
+            onChange={(event) => updateRackGeneral(rack.id, { displayCode: event.target.value })}
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-slate-700">
+          Kind
+          <select
+            disabled={readOnly}
+            className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+            value={rack.kind}
+            onChange={(event) =>
+              updateRackGeneral(rack.id, { kind: event.target.value as typeof rack.kind })
+            }
+          >
+            <option value="single">single</option>
+            <option value="paired">paired</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 /**
@@ -219,12 +300,15 @@ export function RackInspector({
   workspace: FloorWorkspace | null;
   onClose: () => void;
 }) {
-  const [openSections, setOpenSections] = useState<Set<AccordionSection>>(new Set(['geometry', 'faceA']));
+  const [openSections, setOpenSections] = useState<Set<AccordionSection>>(new Set(['faceA']));
 
   const layoutDraft = useWorkspaceLayout(workspace);
+  const viewMode = useViewMode();
   const isLayoutEditable = useIsLayoutEditable();
   const isDraftDirty = useDraftDirtyState();
   const selectedRackId = useSelectedRackId();
+  const objectWorkContext = useObjectWorkContext();
+  const setObjectWorkContext = useSetObjectWorkContext();
 
   const setFaceBMode = useSetFaceBMode();
   const applyFacePreset = useApplyFacePreset();
@@ -264,6 +348,7 @@ export function RackInspector({
   );
 
   const previewAddresses = rackCells.slice(0, 6).map((cell) => cell.address.raw);
+  const showWorkContextSwitch = viewMode === 'layout';
 
   // InspectorRouter guarantees this component is only rendered when a rack is
   // selected and is not in creation mode. This guard is a defensive fallback.
@@ -292,6 +377,170 @@ export function RackInspector({
     setOpenSections((prev) => new Set([...prev, 'faceB']));
   };
 
+  const structureContent = (
+    <>
+      <div className="px-5 py-5">
+        <StructureIdentityPanel rack={rack} readOnly={!isLayoutEditable} />
+      </div>
+
+      <div className="border-b border-[var(--border-muted)]">
+        <AccordionHeader
+          title="Face A"
+          subtitle={faceA ? faceSummaryText(faceA) : undefined}
+          isOpen={isOpen('faceA')}
+          onToggle={() => toggleSection('faceA')}
+          badge={
+            rackIssues.some((i) => i.entityId === faceA?.id) ? (
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+            ) : undefined
+          }
+        />
+        {isOpen('faceA') && faceA && (
+          <div className="flex flex-col gap-4 px-5 pb-5">
+            <NumberingPanel
+              rackId={rack.id}
+              side="A"
+              slotNumberingDirection={faceA.slotNumberingDirection}
+              disabled={!isLayoutEditable}
+              onUpdate={updateFaceConfig}
+            />
+            <SectionPresetForm
+              rackId={rack.id}
+              side="A"
+              totalLength={faceA.faceLength ?? rack.totalLength}
+              initialSectionCount={faceA.sections.length || 3}
+              initialLevelCount={faceA.sections[0]?.levels.length || 4}
+              initialSlotCount={faceA.sections[0]?.levels[0]?.slotCount || 3}
+              readOnly={!isLayoutEditable}
+              onApply={applyFacePreset}
+            />
+            {faceA.sections.length > 0 && <FrontElevationPreview face={faceA} side="A" />}
+            <FaceTab title="Face A" rackId={rack.id} face={faceA} readOnly={!isLayoutEditable} />
+          </div>
+        )}
+      </div>
+
+      <div className="border-b border-[var(--border-muted)]">
+        <AccordionHeader
+          title="Face B"
+          subtitle={
+            !faceBConfigured
+              ? 'Not configured - single-face rack'
+              : isMirrored
+                ? 'Mirrored from Face A'
+                : faceSummaryText(faceB)
+          }
+          isOpen={isOpen('faceB')}
+          onToggle={() => toggleSection('faceB')}
+          badge={
+            isMirrored ? (
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                Mirror
+              </span>
+            ) : !faceBConfigured ? (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                Single
+              </span>
+            ) : undefined
+          }
+        />
+        {isOpen('faceB') && (
+          <div className="px-5 pb-5">
+            {faceBConfigured && (
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-xs text-slate-500">
+                  {isMirrored
+                    ? 'Face B mirrors Face A automatically.'
+                    : 'Face B is independently configured.'}
+                </div>
+                <button
+                  type="button"
+                  disabled={!isLayoutEditable}
+                  onClick={() => resetFaceB(rack.id)}
+                  className="text-xs font-medium text-red-500 underline-offset-2 hover:text-red-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+                  title="Reset Face B to unconfigured (converts rack back to single)"
+                >
+                  Remove Face B
+                </button>
+              </div>
+            )}
+
+            {!faceBConfigured ? (
+              <FaceBEmptyState selectedMode={null} onSelectMode={isLayoutEditable ? handleFaceBMode : () => {}} />
+            ) : isMirrored ? (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                  Face B is a mirror of Face A. It will use reversed numbering direction automatically.
+                </div>
+                {faceA && faceA.sections.length > 0 && (
+                  <FrontElevationPreview face={faceA} side="B" />
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <NumberingPanel
+                  rackId={rack.id}
+                  side="B"
+                  slotNumberingDirection={faceB.slotNumberingDirection}
+                  disabled={!isLayoutEditable}
+                  onUpdate={updateFaceConfig}
+                />
+                <SectionPresetForm
+                  rackId={rack.id}
+                  side="B"
+                  totalLength={faceB.faceLength ?? rack.totalLength}
+                  initialSectionCount={faceB.sections.length || 3}
+                  initialLevelCount={faceB.sections[0]?.levels.length || 4}
+                  initialSlotCount={faceB.sections[0]?.levels[0]?.slotCount || 3}
+                  readOnly={!isLayoutEditable}
+                  onApply={applyFacePreset}
+                />
+                {faceB.sections.length > 0 && (
+                  <FrontElevationPreview face={faceB} side="B" />
+                )}
+                <FaceTab title="Face B" rackId={rack.id} face={faceB} readOnly={!isLayoutEditable} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <AccordionHeader
+          title="Address Preview"
+          subtitle={previewAddresses.length > 0 ? previewAddresses[0] + ' ...' : 'No addresses generated'}
+          isOpen={isOpen('address')}
+          onToggle={() => toggleSection('address')}
+        />
+        {isOpen('address') && (
+          <div className="px-5 pb-5">
+            {previewAddresses.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[var(--border-muted)] px-4 py-4 text-center text-sm text-slate-400">
+                Configure sections to see generated addresses.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {previewAddresses.map((addr) => (
+                  <div
+                    key={addr}
+                    className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 font-mono text-xs text-slate-700"
+                  >
+                    {addr}
+                  </div>
+                ))}
+                {rackCells.length > previewAddresses.length && (
+                  <div className="text-center text-xs text-slate-400">
+                    +{rackCells.length - previewAddresses.length} more addresses
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   // ─── render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -319,6 +568,9 @@ export function RackInspector({
             <div className="mt-0.5 text-xs text-slate-500">
               {rack.kind === 'paired' ? 'Paired' : 'Single'} | {rack.totalLength.toFixed(1)} m x {rack.depth.toFixed(1)} m | {rack.rotationDeg} deg
             </div>
+            {showWorkContextSwitch && (
+              <WorkContextSwitch value={objectWorkContext} onChange={setObjectWorkContext} />
+            )}
           </div>
         </div>
       </div>
@@ -328,193 +580,22 @@ export function RackInspector({
 
       {/* ── Scrollable accordion body ── */}
       <div className="flex-1 overflow-y-auto">
-
-        {/* ── Geometry accordion ── */}
-        <div className="border-b border-[var(--border-muted)]">
-          <AccordionHeader
-            title="Geometry"
-            subtitle={`${rack.totalLength.toFixed(1)} m x ${rack.depth.toFixed(1)} m | ${rack.kind}`}
-            isOpen={isOpen('geometry')}
-            onToggle={() => toggleSection('geometry')}
-          />
-          {isOpen('geometry') && (
-            <div className="px-5 pb-5">
+        {showWorkContextSwitch ? (
+          objectWorkContext === 'geometry' ? (
+            <div className="px-5 py-5">
               <GeneralTab rack={rack} readOnly={!isLayoutEditable} />
             </div>
-          )}
-        </div>
-
-        {/* ── Face A accordion ── */}
-        <div className="border-b border-[var(--border-muted)]">
-          <AccordionHeader
-            title="Face A"
-            subtitle={faceA ? faceSummaryText(faceA) : undefined}
-            isOpen={isOpen('faceA')}
-            onToggle={() => toggleSection('faceA')}
-            badge={
-              rackIssues.some((i) => i.entityId === faceA?.id) ? (
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-              ) : undefined
-            }
-          />
-          {isOpen('faceA') && faceA && (
-            <div className="flex flex-col gap-4 px-5 pb-5">
-              {/* Numbering direction */}
-              <NumberingPanel
-                rackId={rack.id}
-                side="A"
-                slotNumberingDirection={faceA.slotNumberingDirection}
-                disabled={!isLayoutEditable}
-                onUpdate={updateFaceConfig}
-              />
-
-              {/* Preset generator */}
-              <SectionPresetForm
-                rackId={rack.id}
-                side="A"
-                totalLength={faceA.faceLength ?? rack.totalLength}
-                initialSectionCount={faceA.sections.length || 3}
-                initialLevelCount={faceA.sections[0]?.levels.length || 4}
-                initialSlotCount={faceA.sections[0]?.levels[0]?.slotCount || 3}
-                readOnly={!isLayoutEditable}
-                onApply={applyFacePreset}
-              />
-
-              {/* Front elevation preview */}
-              {faceA.sections.length > 0 && (
-                <FrontElevationPreview face={faceA} side="A" />
-              )}
-
-              {/* Section table (always visible as override tool) */}
-              <FaceTab title="Face A" rackId={rack.id} face={faceA} readOnly={!isLayoutEditable} />
+          ) : (
+            structureContent
+          )
+        ) : (
+          <>
+            <div className="px-5 py-5">
+              <GeneralTab rack={rack} readOnly={!isLayoutEditable} />
             </div>
-          )}
-        </div>
-
-        {/* ── Face B accordion ── */}
-        <div className="border-b border-[var(--border-muted)]">
-          <AccordionHeader
-            title="Face B"
-            subtitle={
-              !faceBConfigured
-                ? 'Not configured - single-face rack'
-                : isMirrored
-                  ? 'Mirrored from Face A'
-                  : faceSummaryText(faceB)
-            }
-            isOpen={isOpen('faceB')}
-            onToggle={() => toggleSection('faceB')}
-            badge={
-              isMirrored ? (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                  Mirror
-                </span>
-              ) : !faceBConfigured ? (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-                  Single
-                </span>
-              ) : undefined
-            }
-          />
-          {isOpen('faceB') && (
-            <div className="px-5 pb-5">
-              {/* Header row when Face B is already configured — allow resetting */}
-              {faceBConfigured && (
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="text-xs text-slate-500">
-                    {isMirrored
-                      ? 'Face B mirrors Face A automatically.'
-                      : 'Face B is independently configured.'}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={!isLayoutEditable}
-                    onClick={() => resetFaceB(rack.id)}
-                    className="text-xs font-medium text-red-500 underline-offset-2 hover:text-red-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
-                    title="Reset Face B to unconfigured (converts rack back to single)"
-                  >
-                    Remove Face B
-                  </button>
-                </div>
-              )}
-
-              {!faceBConfigured ? (
-                <FaceBEmptyState selectedMode={null} onSelectMode={isLayoutEditable ? handleFaceBMode : () => {}} />
-              ) : isMirrored ? (
-                /* Mirror mode: show read-only preview of mirrored layout */
-                <div className="flex flex-col gap-4">
-                  <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                    Face B is a mirror of Face A. It will use reversed numbering direction automatically.
-                  </div>
-                  {faceA && faceA.sections.length > 0 && (
-                    <FrontElevationPreview face={faceA} side="B" />
-                  )}
-                </div>
-              ) : (
-                /* Independent Face B configuration */
-                <div className="flex flex-col gap-4">
-                  <NumberingPanel
-                    rackId={rack.id}
-                    side="B"
-                    slotNumberingDirection={faceB.slotNumberingDirection}
-                    disabled={!isLayoutEditable}
-                    onUpdate={updateFaceConfig}
-                  />
-                  <SectionPresetForm
-                    rackId={rack.id}
-                    side="B"
-                    totalLength={faceB.faceLength ?? rack.totalLength}
-                    initialSectionCount={faceB.sections.length || 3}
-                    initialLevelCount={faceB.sections[0]?.levels.length || 4}
-                    initialSlotCount={faceB.sections[0]?.levels[0]?.slotCount || 3}
-                    readOnly={!isLayoutEditable}
-                    onApply={applyFacePreset}
-                  />
-                  {faceB.sections.length > 0 && (
-                    <FrontElevationPreview face={faceB} side="B" />
-                  )}
-                  <FaceTab title="Face B" rackId={rack.id} face={faceB} readOnly={!isLayoutEditable} />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Address Preview accordion ── */}
-        <div>
-          <AccordionHeader
-            title="Address Preview"
-            subtitle={previewAddresses.length > 0 ? previewAddresses[0] + ' ...' : 'No addresses generated'}
-            isOpen={isOpen('address')}
-            onToggle={() => toggleSection('address')}
-          />
-          {isOpen('address') && (
-            <div className="px-5 pb-5">
-              {previewAddresses.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[var(--border-muted)] px-4 py-4 text-center text-sm text-slate-400">
-                  Configure sections to see generated addresses.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  {previewAddresses.map((addr) => (
-                    <div
-                      key={addr}
-                      className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 font-mono text-xs text-slate-700"
-                    >
-                      {addr}
-                    </div>
-                  ))}
-                  {rackCells.length > previewAddresses.length && (
-                    <div className="text-center text-xs text-slate-400">
-                      +{rackCells.length - previewAddresses.length} more addresses
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
+            {structureContent}
+          </>
+        )}
       </div>
     </aside>
   );

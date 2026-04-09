@@ -18,6 +18,7 @@ import {
   type EditorSelection,
   type RackSelectionFocus,
   type RackSideFocus,
+  type ObjectWorkContext,
   type ViewMode
 } from './editor-types';
 import { useModeStore } from './mode-store';
@@ -77,6 +78,7 @@ function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
 }
 
 type EditorStore = {
+  objectWorkContext: ObjectWorkContext;
   activeTask: ActiveLayoutTask;
   activeStorageWorkflow: ActiveStorageWorkflow;
   minRackDistance: number;
@@ -89,6 +91,7 @@ type EditorStore = {
   // — Mode (coordinates with mode-store) —
   setViewMode: (mode: AnyViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
+  setObjectWorkContext: (context: ObjectWorkContext) => void;
   // — Selection coordinators (also reset activeStorageWorkflow) —
   setSelection: (selection: EditorSelection) => void;
   clearSelection: () => void;
@@ -172,6 +175,7 @@ type EditorStore = {
 };
 
 const initialEditorState = {
+  objectWorkContext: 'geometry' as ObjectWorkContext,
   activeTask: null as ActiveLayoutTask,
   activeStorageWorkflow: null as ActiveStorageWorkflow,
   minRackDistance: 0,
@@ -187,6 +191,23 @@ const WORKFLOW_RESET = {
   activeTask: null as ActiveLayoutTask,
   activeStorageWorkflow: null as ActiveStorageWorkflow
 };
+
+function getSingleSelectedRackId(selection: EditorSelection): string | null {
+  return selection.type === 'rack' && selection.rackIds.length === 1 ? selection.rackIds[0] ?? null : null;
+}
+
+function shouldResetObjectWorkContext(prevSelection: EditorSelection, nextSelection: EditorSelection) {
+  return getSingleSelectedRackId(prevSelection) !== getSingleSelectedRackId(nextSelection);
+}
+
+function objectWorkContextResetPatch(
+  prevSelection: EditorSelection,
+  nextSelection: EditorSelection
+) {
+  return shouldResetObjectWorkContext(prevSelection, nextSelection)
+    ? { objectWorkContext: 'geometry' as const }
+    : {};
+}
 
 function markDraftChanged<T extends object>(state: Pick<EditorStore, 'persistenceStatus'>, patch: T): T & {
   isDraftDirty: true;
@@ -209,51 +230,112 @@ export const useEditorStore = create<EditorStore>((set) => ({
     useModeStore.getState().setEditorMode('select');
     // clearForModeSwitch: clears selection and highlightedCellIds
     useInteractionStore.getState().clearForModeSwitch();
-    set(WORKFLOW_RESET);
+    set({ ...WORKFLOW_RESET, objectWorkContext: 'geometry' });
   },
   setEditorMode: (editorMode) => {
     useModeStore.getState().setEditorMode(editorMode);
   },
+  setObjectWorkContext: (objectWorkContext) => set({ objectWorkContext }),
   // — Selection coordinators: delegate to interaction-store + reset active workflow —
   setSelection: (selection) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelection(selection);
-    set(WORKFLOW_RESET);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, selection)
+    });
   },
   clearSelection: () => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().clearSelection();
-    set(WORKFLOW_RESET);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, { type: 'none' })
+    });
   },
   setSelectedRackIds: (rackIds) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedRackIds(rackIds);
-    set(WORKFLOW_RESET);
+    const nextSelection = makeRackSelection(rackIds);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   setSelectedRackId: (rackId) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedRackId(rackId);
-    set(WORKFLOW_RESET);
+    const nextSelection: EditorSelection = rackId
+      ? { type: 'rack', rackIds: [rackId], focus: { type: 'body' } }
+      : { type: 'none' };
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   setSelectedRackSide: (rackId, side) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedRackSide(rackId, side);
-    set(WORKFLOW_RESET);
+    const nextSelection: EditorSelection = {
+      type: 'rack',
+      rackIds: [rackId],
+      focus: { type: 'side', side }
+    };
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   toggleRackSelection: (rackId) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().toggleRackSelection(rackId);
-    set(WORKFLOW_RESET);
+    const current = getSelectedRackIds(prevSelection);
+    const next = current.includes(rackId)
+      ? current.filter((id) => id !== rackId)
+      : [...current, rackId];
+    const nextSelection = makeRackSelection(next);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   setSelectedZoneId: (zoneId) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedZoneId(zoneId);
-    set(WORKFLOW_RESET);
+    const nextSelection = zoneId ? ({ type: 'zone', zoneId } as const) : ({ type: 'none' } as const);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   setSelectedWallId: (wallId) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedWallId(wallId);
-    set(WORKFLOW_RESET);
+    const nextSelection = wallId ? ({ type: 'wall', wallId } as const) : ({ type: 'none' } as const);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   setSelectedCellId: (cellId) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedCellId(cellId);
-    set(WORKFLOW_RESET);
+    const nextSelection = cellId ? ({ type: 'cell', cellId } as const) : ({ type: 'none' } as const);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   setSelectedContainerId: (containerId, sourceCellId) => {
+    const prevSelection = useInteractionStore.getState().selection;
     useInteractionStore.getState().setSelectedContainerId(containerId, sourceCellId);
-    set(WORKFLOW_RESET);
+    const nextSelection = containerId
+      ? ({ type: 'container', containerId, sourceCellId } as const)
+      : ({ type: 'none' } as const);
+    set({
+      ...WORKFLOW_RESET,
+      ...objectWorkContextResetPatch(prevSelection, nextSelection)
+    });
   },
   startPlaceContainerWorkflow: (cellId) =>
     set((state) => {
@@ -311,6 +393,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
     set({
       draft: null,
       draftSourceVersionId: null,
+      objectWorkContext: 'geometry',
       ...WORKFLOW_RESET,
       isDraftDirty: false,
       persistenceStatus: 'idle',
@@ -401,6 +484,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       return {
         draft: nextDraftState,
         draftSourceVersionId: nextDraftState.layoutVersionId,
+        ...objectWorkContextResetPatch(currentSelection, nextSelection),
         isDraftDirty: normalized.changed,
         persistenceStatus: normalized.changed ? 'dirty' : 'idle',
         lastSaveErrorMessage: null,
