@@ -2,7 +2,11 @@
  * Pure routing logic for the inspector router.
  * No React, no store, no @/ aliases — testable in isolation.
  */
-import type { EditorSelection, ViewMode } from '../../../entities/layout-version/model/editor-types';
+import type {
+  ActiveLayoutTask,
+  EditorSelection,
+  ViewMode
+} from '../../../entities/layout-version/model/editor-types';
 
 export type InspectorKind =
   | 'rack-creation-wizard'   // layout + single rack being created
@@ -17,12 +21,12 @@ export type InspectorKind =
   | 'placement-container';   // view/storage mode + container selected
 
 /**
- * Maps (viewMode, selection, creatingRackId) → InspectorKind.
+ * Maps (viewMode, selection, activeTask) → InspectorKind.
  * This is the single source of truth for inspector routing decisions.
  *
  * Layout routing contract:
  *   layout + none               → layout-empty
- *   layout + rack(1) + creating → rack-creation-wizard
+ *   layout + rack(1) + rack_creation task → rack-creation-wizard
  *   layout + rack(1)            → rack-structure
  *   layout + rack(≥2)           → rack-multi
  *   layout + zone               → zone-detail
@@ -50,13 +54,19 @@ export type InspectorKind =
 export function resolveInspectorKind(
   viewMode: ViewMode,
   selection: EditorSelection,
-  creatingRackId: string | null
+  activeTask: ActiveLayoutTask
 ): InspectorKind {
   if (viewMode === 'layout') {
     if (selection.type === 'rack') {
       if (selection.rackIds.length >= 2) return 'rack-multi';
       const primaryId = selection.rackIds[0];
-      if (primaryId && primaryId === creatingRackId) return 'rack-creation-wizard';
+      if (
+        primaryId &&
+        activeTask?.type === 'rack_creation' &&
+        primaryId === activeTask.rackId
+      ) {
+        return 'rack-creation-wizard';
+      }
       return 'rack-structure';
     }
     if (selection.type === 'zone') {

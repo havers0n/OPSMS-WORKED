@@ -56,7 +56,7 @@ export function PublishedViewer() {
     }
   }, [activeFloorId, resetDraft]);
 
-  // Mirror WarehouseEditor inspector open logic (no creatingRackId in read-only mode).
+  // Mirror WarehouseEditor inspector open logic (no active layout task in read-only mode).
   useEffect(() => {
     if (viewMode !== 'layout') {
       setInspectorOpen(true);

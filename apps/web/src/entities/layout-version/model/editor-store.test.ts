@@ -17,6 +17,7 @@ function resetStore() {
 
   // Reset editor-store
   useEditorStore.setState({
+    activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,
     draft: null,
@@ -28,7 +29,7 @@ function resetStore() {
   });
 
   // Reset interaction-store
-  useInteractionStore.setState({ selection: { type: 'none' }, hoveredRackId: null, creatingRackId: null, highlightedCellIds: [], contextPanelMode: 'compact' });
+  useInteractionStore.setState({ selection: { type: 'none' }, hoveredRackId: null, highlightedCellIds: [], contextPanelMode: 'compact' });
 }
 
 function createUuidLayoutDraftFixture() {
@@ -473,18 +474,43 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
   });
 
+  it('createRack starts an explicit rack_creation task for the new rack', () => {
+    useEditorStore.getState().initializeDraft(createUuidLayoutDraftFixture());
+
+    useEditorStore.getState().createRack(120, 80);
+
+    const rackId = useEditorStore.getState().draft?.rackIds[0] ?? null;
+    expect(rackId).toBeTruthy();
+    expect(useEditorStore.getState().activeTask).toEqual({
+      type: 'rack_creation',
+      rackId
+    });
+  });
+
+  it('deleteRack clears activeTask when deleting the active task rack', () => {
+    useEditorStore.getState().initializeDraft(createUuidLayoutDraftFixture());
+    useEditorStore.getState().createRack(120, 80);
+
+    const rackId = useEditorStore.getState().draft?.rackIds[0] ?? null;
+    expect(rackId).toBeTruthy();
+
+    useEditorStore.getState().deleteRack(rackId!);
+
+    expect(useEditorStore.getState().activeTask).toBeNull();
+  });
+
   describe('setViewMode — cross-store coordination invariants', () => {
-    it('resets editorMode to select, clears selection/highlights/creatingRackId, and cancels workflow', () => {
+    it('resets editorMode to select, clears selection/highlights, clears activeTask, and cancels workflow', () => {
       // Arrange: layout mode with an active draw tool, rack selected, stale workflow
       useModeStore.setState({ viewMode: 'layout', editorMode: 'draw-wall' });
       useInteractionStore.setState({
         ...useInteractionStore.getState(),
         selection: { type: 'rack', rackIds: ['r1'], focus: { type: 'body' } },
-        highlightedCellIds: ['cell-1', 'cell-2'],
-        creatingRackId: 'r1'
+        highlightedCellIds: ['cell-1', 'cell-2']
       });
       useEditorStore.setState({
         ...useEditorStore.getState(),
+        activeTask: { type: 'rack_creation', rackId: 'r1' },
         activeStorageWorkflow: { kind: 'place-container', cellId: 'cell-1', status: 'editing', errorMessage: null }
       });
 
@@ -495,7 +521,7 @@ describe('editor-store', () => {
       expect(useModeStore.getState().editorMode).toBe('select');
       expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
       expect(useInteractionStore.getState().highlightedCellIds).toEqual([]);
-      expect(useInteractionStore.getState().creatingRackId).toBeNull();
+      expect(useEditorStore.getState().activeTask).toBeNull();
       expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
     });
 

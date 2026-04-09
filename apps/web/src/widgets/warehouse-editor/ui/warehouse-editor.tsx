@@ -4,8 +4,8 @@ import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useLayoutDraftAutosave } from '@/features/layout-draft-save/model/use-layout-draft-autosave';
 import {
+  useActiveTask,
   useClearSelection,
-  useCreatingRackId,
   useInitializeDraft,
   useLayoutDraftState,
   useResetDraft,
@@ -33,7 +33,7 @@ export function WarehouseEditor() {
   const selectedRackId = useSelectedRackId();
   const selectedWallId = useSelectedWallId();
   const selectedZoneId = useSelectedZoneId();
-  const creatingRackId = useCreatingRackId();
+  const activeTask = useActiveTask();
   const setEditorMode = useSetEditorMode();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -46,10 +46,10 @@ export function WarehouseEditor() {
         selectedRackId !== null ||
         selectedZoneId !== null ||
         selectedWallId !== null ||
-        creatingRackId !== null
+        activeTask !== null
       );
     }
-  }, [viewMode, selectedRackId, selectedZoneId, selectedWallId, creatingRackId]);
+  }, [viewMode, selectedRackId, selectedZoneId, selectedWallId, activeTask]);
 
   useEffect(() => {
     if (!activeFloorId) {

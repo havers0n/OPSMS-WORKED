@@ -2,7 +2,7 @@ import type { FloorWorkspace } from '@wos/domain';
 import { getZonePlacementBehavior } from '@wos/domain';
 import { MapPin, X } from 'lucide-react';
 import {
-  useCreatingRackId,
+  useActiveTask,
   useEditorSelection,
   useViewMode
 } from '@/entities/layout-version/model/editor-selectors';
@@ -184,10 +184,10 @@ type InspectorRouterProps = {
 export function InspectorRouter({ workspace, onClose, onAddRack }: InspectorRouterProps) {
   const viewMode = useViewMode();
   const selection = useEditorSelection();
-  const creatingRackId = useCreatingRackId();
+  const activeTask = useActiveTask();
   const layoutDraft = useWorkspaceLayout(workspace);
 
-  const kind = resolveInspectorKind(viewMode, selection, creatingRackId);
+  const kind = resolveInspectorKind(viewMode, selection, activeTask);
 
   switch (kind) {
     case 'rack-creation-wizard': {

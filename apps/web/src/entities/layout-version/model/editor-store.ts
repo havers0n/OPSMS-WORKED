@@ -10,6 +10,7 @@ import type {
 } from '@wos/domain';
 import { create } from 'zustand';
 import {
+  type ActiveLayoutTask,
   type ActiveStorageWorkflow,
   normalizeViewMode,
   type AnyViewMode,
@@ -76,6 +77,7 @@ function summarizeDraftForLogs(draft: LayoutDraft | null | undefined) {
 }
 
 type EditorStore = {
+  activeTask: ActiveLayoutTask;
   activeStorageWorkflow: ActiveStorageWorkflow;
   minRackDistance: number;
   draft: LayoutDraft | null;
@@ -112,6 +114,7 @@ type EditorStore = {
   setActiveStorageWorkflowError: (errorMessage: string | null) => void;
   setCreateAndPlacePlacementRetry: (createdContainer: { id: string; code: string }, errorMessage: string) => void;
   markActiveStorageWorkflowSubmitting: () => void;
+  clearActiveTask: () => void;
   // — Layout config —
   setMinRackDistance: (distance: number) => void;
   resetDraft: () => void;
@@ -169,6 +172,7 @@ type EditorStore = {
 };
 
 const initialEditorState = {
+  activeTask: null as ActiveLayoutTask,
   activeStorageWorkflow: null as ActiveStorageWorkflow,
   minRackDistance: 0,
   draft: null,
@@ -180,6 +184,7 @@ const initialEditorState = {
 };
 
 const WORKFLOW_RESET = {
+  activeTask: null as ActiveLayoutTask,
   activeStorageWorkflow: null as ActiveStorageWorkflow
 };
 
@@ -202,7 +207,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
     // Coordinate: update mode-store, clear interaction, clear workflow
     useModeStore.getState().setViewMode(nextViewMode);
     useModeStore.getState().setEditorMode('select');
-    // clearForModeSwitch: clears selection, creatingRackId, highlightedCellIds
+    // clearForModeSwitch: clears selection and highlightedCellIds
     useInteractionStore.getState().clearForModeSwitch();
     set(WORKFLOW_RESET);
   },
@@ -294,6 +299,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
       };
     }),
   ...createStorageWorkflowActions(set),
+  clearActiveTask: () => set({ activeTask: null }),
   setMinRackDistance: (minRackDistance) => set({ minRackDistance }),
   resetDraft: () => {
     if (TRACE) {
@@ -464,8 +470,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
       // Update interaction state as a side effect inside set() — safe because
       // Zustand's set() is synchronous and this fires before subscribers.
       useInteractionStore.getState().setSelection({ type: 'rack', rackIds: [newRack.id], focus: { type: 'body' } });
-      useInteractionStore.getState().setCreatingRackId(newRack.id);
-      return markDraftChanged(state, { draft: nextDraft });
+      return markDraftChanged(state, {
+        draft: nextDraft,
+        activeTask: { type: 'rack_creation', rackId: newRack.id }
+      });
     });
     useModeStore.getState().setEditorMode('select');
   },
@@ -524,9 +532,14 @@ export const useEditorStore = create<EditorStore>((set) => ({
       const ix = useInteractionStore.getState();
       const nextRackIds = getSelectedRackIds(ix.selection).filter(id => id !== rackId);
       ix.setSelectedRackIds(nextRackIds);
-      if (ix.creatingRackId === rackId) ix.setCreatingRackId(null);
 
-      return markDraftChanged(state, { draft: nextDraft });
+      return markDraftChanged(state, {
+        draft: nextDraft,
+        activeTask:
+          state.activeTask?.type === 'rack_creation' && state.activeTask.rackId === rackId
+            ? null
+            : state.activeTask
+      });
     }),
   deleteZone: (zoneId) =>
     set((state) => {

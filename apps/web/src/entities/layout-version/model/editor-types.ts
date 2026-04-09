@@ -77,6 +77,13 @@ export type ActiveStorageWorkflow =
     }
   | null;
 
+export type ActiveLayoutTask =
+  | null
+  | {
+      type: 'rack_creation';
+      rackId: string;
+    };
+
 export type InteractionScope = 'idle' | 'object' | 'workflow';
 export type ContextPanelMode = 'compact' | 'expanded';
 export type CellPlacementTaskRequest = 'place-existing' | 'create-and-place';

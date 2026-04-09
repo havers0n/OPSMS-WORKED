@@ -12,11 +12,11 @@ import { makeRackSelection, getSelectedRackIds } from './editor-store-helpers';
  * Owns:
  *   - selection (which entity the user has selected)
  *   - hoveredRackId (transient hover highlight)
- *   - creatingRackId (UI flag: rack is in creation wizard)
  *   - highlightedCellIds (search/filter highlight overlay)
  *   - contextPanelMode (compact vs expanded panel)
  *
  * Does NOT own:
+ *   - activeTask (layout task semantics — stays in editor-store)
  *   - activeStorageWorkflow (domain/business semantics — stays in editor-store)
  *   - camera zoom / pan (camera-store)
  *   - viewMode / editorMode (mode-store)
@@ -34,7 +34,6 @@ import { makeRackSelection, getSelectedRackIds } from './editor-store-helpers';
 type InteractionStore = {
   selection: EditorSelection;
   hoveredRackId: string | null;
-  creatingRackId: string | null;
   highlightedCellIds: string[];
   contextPanelMode: ContextPanelMode;
 
@@ -53,9 +52,6 @@ type InteractionStore = {
   // — Hover (pure, no side effects) —
   setHoveredRackId: (rackId: string | null) => void;
 
-  // — Creation wizard (pure, no side effects) —
-  setCreatingRackId: (rackId: string | null) => void;
-
   // — Highlights (pure, no side effects) —
   setHighlightedCellIds: (cellIds: string[]) => void;
   clearHighlightedCellIds: () => void;
@@ -65,7 +61,7 @@ type InteractionStore = {
   toggleContextPanelMode: () => void;
 
   // — Resets (called by editor-store coordinators, not directly by components) —
-  /** Clears selection, creatingRackId, and highlights. Used on mode transitions. */
+  /** Clears selection and highlights. Used on mode transitions. */
   clearForModeSwitch: () => void;
   /** Resets all interaction state to initial values. Used on full draft reset. */
   resetAll: () => void;
@@ -74,7 +70,6 @@ type InteractionStore = {
 const initialInteractionState = {
   selection: { type: 'none' } as EditorSelection,
   hoveredRackId: null as string | null,
-  creatingRackId: null as string | null,
   highlightedCellIds: [] as string[],
   contextPanelMode: 'compact' as ContextPanelMode
 };
@@ -118,7 +113,6 @@ export const useInteractionStore = create<InteractionStore>((set, get) => ({
     }),
 
   setHoveredRackId: (hoveredRackId) => set({ hoveredRackId }),
-  setCreatingRackId: (creatingRackId) => set({ creatingRackId }),
 
   setHighlightedCellIds: (cellIds) => set({ highlightedCellIds: [...new Set(cellIds)] }),
   clearHighlightedCellIds: () => set({ highlightedCellIds: [] }),
@@ -132,7 +126,6 @@ export const useInteractionStore = create<InteractionStore>((set, get) => ({
   clearForModeSwitch: () =>
     set({
       selection: { type: 'none' },
-      creatingRackId: null,
       highlightedCellIds: []
     }),
 

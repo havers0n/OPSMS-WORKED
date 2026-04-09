@@ -3,6 +3,7 @@ import { useCameraStore } from './camera-store';
 import { useModeStore } from './mode-store';
 import { useInteractionStore } from './interaction-store';
 import {
+  type ActiveLayoutTask,
   resolveInteractionScope,
   type ActiveStorageWorkflow,
   type EditorSelection,
@@ -53,8 +54,6 @@ export const useMinRackDistance = () => useEditorStore((state) => state.minRackD
 export const useSetMinRackDistance = () => useEditorStore((state) => state.setMinRackDistance);
 // — Pure interaction state — reads/writes directly from interaction-store
 export const useHoveredRackId = () => useInteractionStore((state) => state.hoveredRackId);
-export const useCreatingRackId = () => useInteractionStore((state) => state.creatingRackId);
-export const useSetCreatingRackId = () => useInteractionStore((state) => state.setCreatingRackId);
 export const useHighlightedCellIds = () => useInteractionStore((state) => state.highlightedCellIds);
 export const useSetHighlightedCellIds = () => useInteractionStore((state) => state.setHighlightedCellIds);
 export const useClearHighlightedCellIds = () => useInteractionStore((state) => state.clearHighlightedCellIds);
@@ -145,6 +144,13 @@ export const useSetCreateAndPlacePlacementRetry = () =>
   useEditorStore((state) => state.setCreateAndPlacePlacementRetry);
 export const useMarkActiveStorageWorkflowSubmitting = () =>
   useEditorStore((state) => state.markActiveStorageWorkflowSubmitting);
+export const useActiveTask = (): ActiveLayoutTask =>
+  useEditorStore((state) => state.activeTask);
+export const useActiveRackCreationRackId = () =>
+  useEditorStore((state) =>
+    state.activeTask?.type === 'rack_creation' ? state.activeTask.rackId : null
+  );
+export const useClearActiveTask = () => useEditorStore((state) => state.clearActiveTask);
 export const useContextPanelMode = () =>
   useInteractionStore((state) => state.contextPanelMode);
 export const useSetContextPanelMode = () =>

@@ -13,6 +13,7 @@ function resetStore() {
 
   // Reset editor-store
   useEditorStore.setState({
+    activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,
     draft: null,
@@ -21,7 +22,7 @@ function resetStore() {
   });
 
   // Reset interaction-store
-  useInteractionStore.setState({ selection: { type: 'none' }, hoveredRackId: null, creatingRackId: null, highlightedCellIds: [], contextPanelMode: 'compact' });
+  useInteractionStore.setState({ selection: { type: 'none' }, hoveredRackId: null, highlightedCellIds: [], contextPanelMode: 'compact' });
 }
 
 afterEach(() => {

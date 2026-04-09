@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 // Import from the pure logic module — avoids pulling in React components and @/ path aliases.
 import { resolveInspectorKind } from './inspector-router-logic';
-import type { EditorSelection } from '../../../entities/layout-version/model/editor-types';
+import type {
+  ActiveLayoutTask,
+  EditorSelection
+} from '../../../entities/layout-version/model/editor-types';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -11,24 +14,29 @@ const zoneSelection = (zoneId: string): EditorSelection => ({ type: 'zone', zone
 const wallSelection = (wallId: string): EditorSelection => ({ type: 'wall', wallId });
 const cellSelection = (cellId: string): EditorSelection => ({ type: 'cell', cellId });
 const containerSelection = (containerId: string): EditorSelection => ({ type: 'container', containerId });
+const rackCreationTask = (rackId: string): ActiveLayoutTask => ({ type: 'rack_creation', rackId });
 
 // ─── layout mode — single-rack ────────────────────────────────────────────────
 
 describe('resolveInspectorKind — layout mode, single-rack', () => {
-  it('returns rack-creation-wizard when the selected rack is the creating rack', () => {
+  it('returns rack-creation-wizard when the selected rack matches the active rack_creation task', () => {
     const id = 'rack-1';
-    expect(resolveInspectorKind('layout', rackSelection([id]), id)).toBe('rack-creation-wizard');
+    expect(resolveInspectorKind('layout', rackSelection([id]), rackCreationTask(id))).toBe('rack-creation-wizard');
   });
 
-  it('returns rack-structure when rack is selected but not being created', () => {
+  it('returns rack-structure when rack is selected but no task is active', () => {
     const id = 'rack-1';
     expect(resolveInspectorKind('layout', rackSelection([id]), null)).toBe('rack-structure');
-    expect(resolveInspectorKind('layout', rackSelection([id]), 'rack-other')).toBe('rack-structure');
+  });
+
+  it('returns rack-structure when the active task does not match the selected rack', () => {
+    const id = 'rack-1';
+    expect(resolveInspectorKind('layout', rackSelection([id]), rackCreationTask('rack-other'))).toBe('rack-structure');
   });
 
   it('returns layout-empty when nothing is selected', () => {
     expect(resolveInspectorKind('layout', noSelection, null)).toBe('layout-empty');
-    expect(resolveInspectorKind('layout', noSelection, 'rack-1')).toBe('layout-empty');
+    expect(resolveInspectorKind('layout', noSelection, rackCreationTask('rack-1'))).toBe('layout-empty');
   });
 
   it('returns layout-empty for non-rack selection types in layout mode', () => {
@@ -58,13 +66,13 @@ describe('resolveInspectorKind — layout mode, multi-rack', () => {
     expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2', 'r3']), null)).toBe('rack-multi');
   });
 
-  it('returns rack-multi even when creatingRackId matches one of the selected racks', () => {
-    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r1')).toBe('rack-multi');
-    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r2')).toBe('rack-multi');
+  it('returns rack-multi even when the active task matches one of the selected racks', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), rackCreationTask('r1'))).toBe('rack-multi');
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), rackCreationTask('r2'))).toBe('rack-multi');
   });
 
-  it('returns rack-multi regardless of creatingRackId value', () => {
-    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r3')).toBe('rack-multi');
+  it('returns rack-multi regardless of activeTask value', () => {
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), rackCreationTask('r3'))).toBe('rack-multi');
     expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), null)).toBe('rack-multi');
   });
 });
@@ -80,8 +88,8 @@ describe('resolveInspectorKind — storage mode, placeholder', () => {
     expect(resolveInspectorKind('storage', rackSelection(['r1']), null)).toBe('rack-structure');
   });
 
-  it('storage rack routing is unaffected by creatingRackId', () => {
-    expect(resolveInspectorKind('storage', rackSelection(['r1']), 'r1')).toBe('rack-structure');
+  it('storage rack routing is unaffected by activeTask', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']), rackCreationTask('r1'))).toBe('rack-structure');
   });
 });
 
@@ -93,9 +101,9 @@ describe('resolveInspectorKind — storage mode, cell selection', () => {
     expect(resolveInspectorKind('storage', cellSel, null)).toBe('placement-cell');
   });
 
-  it('returns placement-cell regardless of creatingRackId', () => {
+  it('returns placement-cell regardless of activeTask', () => {
     const cellSel = cellSelection('rack-1:sec-abc:2');
-    expect(resolveInspectorKind('storage', cellSel, 'rack-1')).toBe('placement-cell');
+    expect(resolveInspectorKind('storage', cellSel, rackCreationTask('rack-1'))).toBe('placement-cell');
     expect(resolveInspectorKind('storage', cellSel, null)).toBe('placement-cell');
   });
 
@@ -122,9 +130,9 @@ describe('resolveInspectorKind — storage mode, container selection', () => {
     expect(resolveInspectorKind('storage', sel, null)).toBe('placement-container');
   });
 
-  it('returns placement-container regardless of creatingRackId', () => {
+  it('returns placement-container regardless of activeTask', () => {
     const sel = containerSelection('3dbf2a90-b1cb-42f0-afec-57f436a22f5d');
-    expect(resolveInspectorKind('storage', sel, 'rack-x')).toBe('placement-container');
+    expect(resolveInspectorKind('storage', sel, rackCreationTask('rack-x'))).toBe('placement-container');
   });
 
   it('container selection in layout mode returns layout-empty (layout ignores containers)', () => {
@@ -164,15 +172,20 @@ describe('resolveInspectorKind — view mode, read-only object routing', () => {
 describe('resolveInspectorKind — invariants', () => {
   it('never returns rack-creation-wizard for an empty rackIds array', () => {
     const emptyRackSel: EditorSelection = { type: 'rack', rackIds: [] };
-    // rackIds[0] is undefined, so primaryId is falsy — should not match creatingRackId
-    expect(resolveInspectorKind('layout', emptyRackSel, 'rack-1')).toBe('rack-structure');
+    // rackIds[0] is undefined, so primaryId is falsy — should not match activeTask
+    expect(resolveInspectorKind('layout', emptyRackSel, rackCreationTask('rack-1'))).toBe('rack-structure');
   });
 
-  it('never returns rack-creation-wizard when creatingRackId is null', () => {
+  it('selection without task does not route to rack-creation-wizard', () => {
     expect(resolveInspectorKind('layout', rackSelection(['r1']), null)).toBe('rack-structure');
   });
 
+  it('task without matching selection does not route to rack-creation-wizard', () => {
+    expect(resolveInspectorKind('layout', noSelection, rackCreationTask('r1'))).toBe('layout-empty');
+    expect(resolveInspectorKind('layout', rackSelection(['r2']), rackCreationTask('r1'))).toBe('rack-structure');
+  });
+
   it('rack-multi takes precedence over rack-creation-wizard for multi-rack selection', () => {
-    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), 'r1')).toBe('rack-multi');
+    expect(resolveInspectorKind('layout', rackSelection(['r1', 'r2']), rackCreationTask('r1'))).toBe('rack-multi');
   });
 });

@@ -7,8 +7,8 @@ import { FaceBEmptyState } from '@/features/face-b-configure-mode/ui/face-b-empt
 import { RotateCcw } from 'lucide-react';
 import {
   useApplyFacePreset,
+  useClearActiveTask,
   useRotateRack,
-  useSetCreatingRackId,
   useSetFaceBMode,
   useSetFaceLength,
   useDeleteRack,
@@ -104,7 +104,7 @@ function TogglePair<T extends string>({
 // ─── main component ────────────────────────────────────────────────────────────
 
 /**
- * Shown inside the inspector when a rack was just placed (creatingRackId is set).
+ * Shown inside the inspector when a rack creation task is active.
  * Guides the user through geometry → sections → face B in a progressive sequence.
  * Completed step dots are clickable for free backward navigation.
  * The user can abandon the wizard at any time via "Cancel" (deletes the rack).
@@ -118,7 +118,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
   const setFaceBMode = useSetFaceBMode();
   const setFaceLength = useSetFaceLength();
   const rotateRack = useRotateRack();
-  const setCreatingRackId = useSetCreatingRackId();
+  const clearActiveTask = useClearActiveTask();
   const deleteRack = useDeleteRack();
   const setSelectedRackId = useSetSelectedRackId();
 
@@ -142,13 +142,13 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
   };
 
   const handleCancel = () => {
+    clearActiveTask();
     deleteRack(rack.id);
-    setCreatingRackId(null);
     setSelectedRackId(null);
   };
 
   const handleFinish = () => {
-    setCreatingRackId(null);
+    clearActiveTask();
     // Inspector stays open on the now-configured rack in normal edit mode
   };
 

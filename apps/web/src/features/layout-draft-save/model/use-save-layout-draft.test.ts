@@ -32,11 +32,11 @@ function resetStores() {
   useInteractionStore.setState({
     selection: { type: 'none' },
     hoveredRackId: null,
-    creatingRackId: null,
     highlightedCellIds: [],
     contextPanelMode: 'compact'
   });
   useEditorStore.setState({
+    activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,
     draft: null,
