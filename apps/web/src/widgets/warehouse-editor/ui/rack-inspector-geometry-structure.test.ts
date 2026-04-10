@@ -2,7 +2,7 @@ import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
-import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
+import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
@@ -29,6 +29,7 @@ function resetStores() {
 
   useEditorStore.setState({
     objectWorkContext: 'geometry',
+    selectedRackActiveLevel: 0,
     activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,
@@ -198,5 +199,20 @@ describe('RackInspector geometry vs structure', () => {
     expect(hasText(renderer, 'Position X')).toBe(true);
     expect(hasText(renderer, 'Display Code')).toBe(true);
     expect(hasText(renderer, 'Face A')).toBe(true);
+  });
+
+  it('does not render level pager in rack inspector after pager ownership move', () => {
+    const draft = createLayoutDraftFixture();
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+    });
+
+    const renderer = renderInspector({
+      ...createWorkspace(),
+      activeDraft: draft
+    });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-level-pager' })).toHaveLength(0);
   });
 });

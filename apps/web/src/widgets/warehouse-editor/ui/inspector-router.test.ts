@@ -33,8 +33,8 @@ describe('resolveInspectorKind — layout mode', () => {
 });
 
 describe('resolveInspectorKind — storage mode', () => {
-  it('routes rack selection to rack-structure', () => {
-    expect(resolveInspectorKind('storage', rackSelection(['r1']))).toBe('rack-structure');
+  it('routes rack selection to rack-storage', () => {
+    expect(resolveInspectorKind('storage', rackSelection(['r1']))).toBe('rack-storage');
   });
 
   it('routes cell and container selection to placement inspectors', () => {

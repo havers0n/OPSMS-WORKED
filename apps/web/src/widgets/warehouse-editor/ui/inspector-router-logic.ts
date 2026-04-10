@@ -9,6 +9,7 @@ import type {
 
 export type InspectorKind =
   | 'rack-structure'         // layout/view + single rack selected (existing)
+  | 'rack-storage'           // storage + single rack selected (storage-owned overview)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'zone-detail'            // layout + single zone selected → editable inspector
   | 'zone-readonly'          // view/storage + zone selected → context-only, no actions
@@ -35,7 +36,7 @@ export type InspectorKind =
  *   view + none                 → placement-placeholder
  *
  * Storage routing contract:
- *   storage + rack              → rack-structure
+ *   storage + rack              → rack-storage
  *   storage + zone              → zone-readonly  (zone is not a placement target)
  *   storage + cell              → placement-cell
  *   storage + container         → placement-container
@@ -64,8 +65,11 @@ export function resolveInspectorKind(
     return null;
   }
 
-  if ((viewMode === 'view' || viewMode === 'storage') && selection.type === 'rack') {
+  if (viewMode === 'view' && selection.type === 'rack') {
     return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
+  }
+  if (viewMode === 'storage' && selection.type === 'rack') {
+    return selection.rackIds[0] ? 'rack-storage' : 'placement-placeholder';
   }
 
   // viewMode === 'view' | 'storage'

@@ -22,10 +22,8 @@ import {
   Box,
   CheckCircle2,
   Copy,
-  Eye,
   Info,
   Layers,
-  Lock,
   MapPin,
   Maximize2,
   Minimize2,
@@ -33,7 +31,6 @@ import {
   MoveRight,
   Package,
   PackagePlus,
-  PlusCircle,
   RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
@@ -58,6 +55,7 @@ import {
   useSelectedRackId,
   useSelectedWallId,
   useSelectedZoneId,
+
   useSetEditorMode,
   useSetSelectedRackId,
   useStartPlacementMove,
@@ -74,6 +72,7 @@ import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { resolveContextPanelIntent, type ContextPanelIntent } from './context-panel-logic';
 import { StorageCellContextPanel } from './mode-panels/storage-cell-context-panel';
 import { StorageWorkflowContextPanel } from './mode-panels/storage-workflow-context-panel';
+
 
 // Re-export for use by other modules
 export { resolveContextPanelIntent, type ContextPanelIntent } from './context-panel-logic';
@@ -118,21 +117,6 @@ const INTENT_CONFIG: Record<
     icon: Package,
     label: 'Container context',
     description: 'Container actions and details will appear here.'
-  },
-  'idle-view': {
-    icon: Eye,
-    label: 'View idle',
-    description: 'Select a rack, cell, or container to inspect read-only detail.'
-  },
-  'idle-storage': {
-    icon: Package,
-    label: 'Storage idle',
-    description: 'Select a cell to inspect current stock and launch storage actions.'
-  },
-  'idle-layout': {
-    icon: MousePointer2,
-    label: 'Layout idle',
-    description: 'Select a rack to inspect structure, or place a new rack.'
   },
   workflow: {
     icon: ArrowRightLeft,
@@ -210,6 +194,35 @@ function getRackValidationSummary(issues: LayoutValidationIssue[]) {
   };
 }
 
+// ─── ViewRackLevelPanel ───────────────────────────────────────────────────────
+// Shown when a rack is selected in view mode.
+// Storage mode owns rack-level navigation in StorageRackInspector.
+
+function ViewRackLevelPanel({
+  workspace
+}: {
+  workspace: FloorWorkspace | null;
+}) {
+  const layoutDraft = useWorkspaceLayout(workspace);
+  const selectedRackId = useSelectedRackId();
+  const rack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
+
+  if (!rack) {
+    return <PlaceholderContent description="No rack selected." />;
+  }
+
+  return (
+    <div className="px-3 py-3">
+      <div className="mb-2 truncate px-0.5 text-sm font-semibold text-slate-900" title={rack.displayCode}>
+        Rack {rack.displayCode}
+      </div>
+      <p className="text-[11px] text-slate-500">
+        Rack-level storage overview is available in Storage mode.
+      </p>
+    </div>
+  );
+}
+
 const RACK_SIDE_LABELS: Record<RackSideFocus, string> = {
   north: 'North side',
   east: 'East side',
@@ -217,7 +230,7 @@ const RACK_SIDE_LABELS: Record<RackSideFocus, string> = {
   west: 'West side'
 };
 
-function RackContextPanel({
+export function RackContextPanel({
   workspace
 }: {
   workspace: FloorWorkspace | null;
@@ -268,95 +281,66 @@ function RackContextPanel({
 
   return (
     <div className="px-3 py-3">
-      <div className="rounded-xl border border-[var(--border-muted)] bg-white p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-slate-900" title={rack.displayCode}>
-              Rack {rack.displayCode}
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
-              {formatRackKind(rack.kind)}
-            </div>
-          </div>
-
-          <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold"
-            style={status.style}
-          >
-            <StatusIcon className="h-3 w-3" />
-            {status.label}
-          </span>
-        </div>
-
-        <div className="mt-3 text-[11px] text-slate-600">
-          {rack.totalLength.toFixed(1)} m x {rack.depth.toFixed(1)} m | {rack.rotationDeg} deg
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {[
-            { label: 'Sections', value: String(sectionCount) },
-            { label: 'Cells', value: String(cellCount) }
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-secondary)] px-2.5 py-2"
-            >
-              <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                {label}
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-slate-800">{value}</div>
-            </div>
-          ))}
-        </div>
+      {/* Identity + stats row */}
+      <div className="mb-2.5 flex items-center gap-1.5 px-0.5">
+        <span className="truncate text-sm font-semibold text-slate-900" title={rack.displayCode}>
+          Rack {rack.displayCode}
+        </span>
+        <StatusIcon className="h-3.5 w-3.5 shrink-0" style={{ color: status.style.color }} />
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-slate-500">
+          <span>{sectionCount} sec</span>
+          <span className="text-slate-300">·</span>
+          <span>{cellCount} cells</span>
+        </span>
       </div>
 
+      {/* Actions */}
       {isLayoutEditable && (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <ContextActionButton
-            label="Rotate"
-            icon={RotateCcw}
-            onClick={() => rotateRack(rack.id)}
-          />
-          <ContextActionButton
-            label="Duplicate"
-            icon={Copy}
-            onClick={() => duplicateRack(rack.id)}
-          />
-          {!confirmingDelete ? (
+        !confirmingDelete ? (
+          <div className="grid grid-cols-3 gap-1.5">
+            <ContextActionButton
+              label="Rotate"
+              icon={RotateCcw}
+              onClick={() => rotateRack(rack.id)}
+            />
+            <ContextActionButton
+              label="Duplicate"
+              icon={Copy}
+              onClick={() => duplicateRack(rack.id)}
+            />
             <ContextActionButton
               label="Delete"
               icon={Trash2}
               variant="danger"
-              className="col-span-2"
               onClick={() => setConfirmingDelete(true)}
             />
-          ) : (
-            <div className="col-span-2 grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-red-200 bg-red-50 p-2">
-              <div className="self-center px-1 text-[11px] font-medium text-red-600">
-                Delete this rack?
-              </div>
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    deleteRack(rack.id);
-                    setConfirmingDelete(false);
-                  }}
-                  className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-red-700"
-                >
-                  Delete
-                </button>
-              </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-red-200 bg-red-50 p-2">
+            <div className="self-center px-1 text-[11px] font-medium text-red-600">
+              Delete this rack?
             </div>
-          )}
-        </div>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteRack(rack.id);
+                  setConfirmingDelete(false);
+                }}
+                className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        )
       )}
     </div>
   );
@@ -724,91 +708,6 @@ function StorageContainerContextPanel({
   );
 }
 
-function IdleContextPanel({
-  viewMode,
-  workspace,
-  onAddRack,
-  onDrawZone
-}: {
-  viewMode: 'view' | 'storage' | 'layout';
-  workspace: FloorWorkspace | null;
-  onAddRack: () => void;
-  onDrawZone: () => void;
-}) {
-  const isLayoutEditable = useIsLayoutEditable();
-  const isPublishedOnly = Boolean(workspace?.latestPublished && !workspace?.activeDraft);
-
-  const idleConfig = {
-    view: {
-      icon: Eye,
-      title: 'Browse warehouse',
-      summary: 'Read-only mode',
-      detail: 'Zoom to rack or cell level, then select a rack, cell, or container to inspect.',
-      footer: 'Selection details appear in the right inspector.'
-    },
-    storage: {
-      icon: Package,
-      title: 'Storage mode',
-      summary: 'No cell selected',
-      detail: 'Select a cell at L3 to review occupancy and launch Place or Move actions.',
-      footer: 'Current action context appears here after selection.'
-    },
-    layout: {
-      icon: isPublishedOnly ? Lock : MousePointer2,
-      title: isPublishedOnly ? 'Published layout' : 'Layout mode',
-      summary: isPublishedOnly ? 'Read-only structure' : 'No rack selected',
-      detail: isPublishedOnly
-        ? 'Create a draft to edit rack geometry. Published structure remains inspectable.'
-        : 'Select a rack, zone, or wall to inspect geometry, or draw a new object.',
-      footer: 'Rack, rack-side, zone, and wall context appear here after selection.'
-    }
-  }[viewMode];
-
-  const Icon = idleConfig.icon;
-
-  return (
-    <div className="px-3 py-3">
-      <div className="rounded-xl border border-[var(--border-muted)] bg-white p-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-secondary)]">
-            <Icon className="h-4 w-4 text-slate-500" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-900">
-              {idleConfig.title}
-            </div>
-            <div className="text-[11px] text-slate-500">
-              {idleConfig.summary}
-            </div>
-          </div>
-        </div>
-
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          {idleConfig.detail}
-        </p>
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-          {idleConfig.footer}
-        </p>
-      </div>
-
-      {viewMode === 'layout' && isLayoutEditable && (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <ContextActionButton
-            label="Add rack"
-            icon={PlusCircle}
-            onClick={onAddRack}
-          />
-          <ContextActionButton
-            label="Draw zone"
-            icon={MapPin}
-            onClick={onDrawZone}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ContextActionButton({
   icon: Icon,
   label,
@@ -870,13 +769,9 @@ function PlaceholderContent({ description }: { description: string }) {
  */
 export function ContextPanel({
   workspace,
-  onAddRack,
-  onDrawZone,
   onOpenInspector
 }: {
   workspace: FloorWorkspace | null;
-  onAddRack: () => void;
-  onDrawZone: () => void;
   onOpenInspector: () => void;
 }) {
   const scope = useInteractionScope();
@@ -891,12 +786,13 @@ export function ContextPanel({
   if (intent === 'hidden') return null;
 
   const config = INTENT_CONFIG[intent];
-  const Icon = config.icon;
-  const isExpanded = contextPanelMode === 'expanded';
+  // Expand/collapse only used by storage panels that receive panelMode prop
+  const showExpandToggle = intent === 'cell-context' || intent === 'workflow';
+  const isExpanded = showExpandToggle && contextPanelMode === 'expanded';
   const shellClassName = `pointer-events-auto absolute right-4 top-4 z-20 flex max-h-[calc(100%-32px)] flex-col overflow-hidden rounded-2xl transition-all duration-200 ${
     isExpanded
       ? 'w-[min(420px,calc(100%-32px))]'
-      : 'w-[min(264px,calc(100%-32px))]'
+      : 'w-[min(280px,calc(100%-32px))]'
   }`;
   const ModeIcon = isExpanded ? Minimize2 : Maximize2;
   const modeToggleTitle = isExpanded
@@ -914,41 +810,24 @@ export function ContextPanel({
         boxShadow: 'var(--shadow-panel)'
       }}
     >
-      {/* Header */}
-      <div
-        className="flex items-center gap-2 border-b px-3 py-2.5"
-        style={{ borderColor: 'var(--border-muted)' }}
-      >
-        <Icon
-          className="h-3.5 w-3.5 shrink-0"
-          style={{ color: 'var(--accent)' }}
-        />
-        <span
-          className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: 'var(--text-primary)' }}
+      {/* Header — only for storage contexts that use expand/collapse */}
+      {showExpandToggle && (
+        <div
+          className="flex items-center justify-end border-b px-2 py-1.5"
+          style={{ borderColor: 'var(--border-muted)' }}
         >
-          {config.label}
-        </span>
-        <button
-          type="button"
-          onClick={toggleContextPanelMode}
-          title={modeToggleTitle}
-          aria-label={modeToggleTitle}
-          className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          <ModeIcon className="h-3.5 w-3.5" />
-        </button>
-        <span
-          className="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-          style={{
-            background: 'var(--accent-soft)',
-            color: 'var(--accent)'
-          }}
-        >
-          {viewMode}
-        </span>
-      </div>
+          <button
+            type="button"
+            onClick={toggleContextPanelMode}
+            title={modeToggleTitle}
+            aria-label={modeToggleTitle}
+            className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-slate-100"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <ModeIcon className="h-3 w-3" />
+          </button>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {intent === 'rack-context' && viewMode === 'layout' && (
@@ -984,32 +863,13 @@ export function ContextPanel({
             panelMode={contextPanelMode}
           />
         )}
-        {intent === 'idle-view' && (
-          <IdleContextPanel
-            viewMode="view"
-            workspace={workspace}
-            onAddRack={onAddRack}
-            onDrawZone={onDrawZone}
-          />
+        {intent === 'rack-context' && viewMode === 'view' && (
+          <ViewRackLevelPanel workspace={workspace} />
         )}
-        {intent === 'idle-storage' && (
-          <IdleContextPanel
-            viewMode="storage"
-            workspace={workspace}
-            onAddRack={onAddRack}
-            onDrawZone={onDrawZone}
-          />
+        {intent === 'rack-context' && viewMode === 'storage' && (
+          <PlaceholderContent description="Rack-level storage ownership is in the inspector." />
         )}
-        {intent === 'idle-layout' && (
-          <IdleContextPanel
-            viewMode="layout"
-            workspace={workspace}
-            onAddRack={onAddRack}
-            onDrawZone={onDrawZone}
-          />
-        )}
-        {((intent === 'rack-context' && viewMode !== 'layout') ||
-          (intent === 'rack-side-context' && viewMode !== 'layout') ||
+        {((intent === 'rack-side-context' && viewMode !== 'layout') ||
           (intent === 'zone-context' && viewMode !== 'layout') ||
           (intent === 'wall-context' && viewMode !== 'layout') ||
           (intent === 'cell-context' && viewMode !== 'storage') ||
@@ -1021,9 +881,6 @@ export function ContextPanel({
             intent !== 'wall-context' &&
             intent !== 'cell-context' &&
             intent !== 'container-context' &&
-            intent !== 'idle-view' &&
-            intent !== 'idle-storage' &&
-            intent !== 'idle-layout' &&
             intent !== 'workflow')) && (
           <PlaceholderContent description={config.description} />
         )}

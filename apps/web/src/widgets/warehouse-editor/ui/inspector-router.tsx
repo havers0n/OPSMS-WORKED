@@ -8,6 +8,7 @@ import {
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
+import { StorageRackInspector } from './storage-rack-inspector';
 import { WallInspector } from './wall-inspector';
 import { ZoneInspector } from './zone-inspector';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
@@ -167,7 +168,7 @@ type InspectorRouterProps = {
  *   layout  + rack(1, existing) → RackInspector (structural)
  *   layout  + rack(≥2)         → RackMultiInspector (spacing/alignment)
  *   view    + rack             → RackInspector (read-only)
- *   storage + rack             → RackInspector (read-only)
+ *   storage + rack             → StorageRackInspector (storage-owned overview)
  *   view    + cell             → CellPlacementInspector (read-only)
  *   view    + container        → ContainerPlacementInspector (read-only)
  *   storage + cell             → CellPlacementInspector
@@ -182,6 +183,9 @@ export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
   switch (kind) {
     case 'rack-structure':
       return <RackInspector workspace={workspace} onClose={onClose} />;
+
+    case 'rack-storage':
+      return <StorageRackInspector workspace={workspace} onClose={onClose} />;
 
     case 'rack-multi':
       return <RackMultiInspector onClose={onClose} />;

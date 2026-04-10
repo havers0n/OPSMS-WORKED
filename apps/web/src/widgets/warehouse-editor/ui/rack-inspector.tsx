@@ -289,7 +289,7 @@ function StructureIdentityPanel({
  *
  * Rendered only by InspectorRouter when:
  *   - viewMode === 'layout' AND a rack is selected in the inspector surface.
- *   - viewMode === 'view' | 'storage' AND a rack is selected in read-only scope.
+ *   - viewMode === 'view' AND a rack is selected in read-only scope.
  *
  * Task routing is handled by TaskSurface. This component never renders task flow.
  */
