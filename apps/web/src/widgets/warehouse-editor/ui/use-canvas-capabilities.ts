@@ -61,7 +61,7 @@ export function useCanvasCapabilities({
   const canSelectRack =
     !isLayoutDrawToolActive &&
     !isPlacementMoveMode &&
-    (isLayoutMode || ((isViewMode || isStorageMode) && interactionLevel === 'L1'));
+    (isLayoutMode || isStorageMode || (isViewMode && interactionLevel === 'L1'));
   const canSelectZone = isLayoutMode && !isLayoutDrawToolActive && !isPlacementMoveMode;
   const canSelectWall = isLayoutMode && !isLayoutDrawToolActive && !isPlacementMoveMode;
   const canSelectCells =

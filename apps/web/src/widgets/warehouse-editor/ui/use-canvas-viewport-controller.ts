@@ -28,6 +28,10 @@ type UseCanvasViewportControllerParams = {
   zoom: number;
 };
 
+export function getModeEntryMinZoom(viewMode: ViewMode): number {
+  return viewMode === 'view' ? LOD_CELL_ENTRY : 0;
+}
+
 export function useCanvasViewportController({
   autoFitRacks,
   setCanvasZoom,
@@ -71,8 +75,8 @@ export function useCanvasViewportController({
     return () => ro.disconnect();
   }, []);
 
-  // Auto-zoom to cell-visible level when entering View/Storage.
-  // Ensures cells are always visible on mode entry without requiring manual zoom.
+  // Auto-fit when entering View/Storage.
+  // View mode keeps the cell-visible floor; Storage mode stays rack-friendly.
   useEffect(() => {
     const prevMode = prevViewModeRef.current;
     prevViewModeRef.current = viewMode;
@@ -82,12 +86,12 @@ export function useCanvasViewportController({
     if (viewport.width === 0) return;
 
     // Selection is already cleared by setViewMode() in the store.
-    // This effect only handles the auto-zoom to cell-visible level.
+    // This effect only handles mode-entry auto-fit.
     const racks = autoFitRacks;
+    const minEntryZoom = getModeEntryMinZoom(viewMode);
 
     if (racks.length === 0) {
-      // No racks yet — just ensure cells would be visible if any appear.
-      setCanvasZoom(clampCanvasZoom(Math.max(zoom, LOD_CELL_ENTRY)));
+      setCanvasZoom(clampCanvasZoom(Math.max(zoom, minEntryZoom)));
       return;
     }
 
@@ -102,11 +106,10 @@ export function useCanvasViewportController({
     const bboxWPx = (maxXm - minXm) * WORLD_SCALE;
     const bboxHPx = (maxYm - minYm) * WORLD_SCALE;
 
-    const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : LOD_CELL_ENTRY;
-    const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : LOD_CELL_ENTRY;
+    const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : minEntryZoom;
+    const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : minEntryZoom;
 
-    // Never go below LOD_CELL_ENTRY — cells must be visible in this mode.
-    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), LOD_CELL_ENTRY));
+    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), minEntryZoom));
 
     const newOffsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
     const newOffsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;

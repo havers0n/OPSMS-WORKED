@@ -140,11 +140,17 @@ export function RackLayer({
     rackId: string,
     event: Konva.KonvaEventObject<MouseEvent | TouchEvent>
   ) => {
+    // Defensive guard: explicit cell clicks must not be downgraded into rack clicks.
+    // RackCells already cancel bubble, but this keeps rack-first/cell-second semantics stable.
+    if ((event as unknown as { cancelBubble?: boolean }).cancelBubble) return;
     event.cancelBubble = true;
     if (!canSelectRack) return;
 
     if (!isLayoutMode) {
       clearHighlightedCellIds();
+      if (isStorageMode) {
+        setSelectedCellId(null);
+      }
       setSelectedRackIds([rackId]);
       return;
     }

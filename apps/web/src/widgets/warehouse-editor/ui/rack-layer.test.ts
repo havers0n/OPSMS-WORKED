@@ -18,8 +18,11 @@ vi.mock('react-konva', () => ({
 }));
 
 vi.mock('./shapes/rack-cells', () => ({
-  RackCells: ({ rackId, activeLevelIndex }: { rackId: string; activeLevelIndex: number }) =>
-    createElement('RackCells', { rackId, activeLevelIndex })
+  RackCells: (props: Record<string, unknown>) => createElement('RackCells', props)
+}));
+
+vi.mock('./shapes/rack-sections', () => ({
+  RackSections: (props: Record<string, unknown>) => createElement('RackSections', props)
 }));
 
 function createFace(id: string): RackFace {
@@ -61,6 +64,15 @@ function renderRackLayer(params: {
   primarySelectedRackId: string | null;
   selectedRackActiveLevel?: number;
   lod?: 0 | 1 | 2;
+  isLayoutMode?: boolean;
+  isStorageMode?: boolean;
+  canSelectCells?: boolean;
+  canSelectRack?: boolean;
+  isWorkflowScope?: boolean;
+  setSelectedCellId?: (cellId: string | null) => void;
+  setSelectedRackIds?: (rackIds: string[]) => void;
+  clearHighlightedCellIds?: () => void;
+  setPlacementMoveTargetCellId?: (cellId: string | null) => void;
 }) {
   const racks = [createRack('rack-1', 0), createRack('rack-2', 10)];
   const rackLookup = Object.fromEntries(racks.map((rack) => [rack.id, rack])) as Record<string, Rack>;
@@ -69,20 +81,20 @@ function renderRackLayer(params: {
     renderer = TestRenderer.create(
       createElement(RackLayer, {
       activeCellRackId: null,
-      canSelectCells: false,
-      canSelectRack: true,
+      canSelectCells: params.canSelectCells ?? false,
+      canSelectRack: params.canSelectRack ?? true,
       canvasSelectedCellId: null,
       cellRuntimeById: new Map(),
-      clearHighlightedCellIds: () => undefined,
+      clearHighlightedCellIds: params.clearHighlightedCellIds ?? (() => undefined),
       highlightedCellIds: new Set<string>(),
       hoveredRackId: null,
       isLayoutEditable: true,
-      isLayoutMode: true,
+      isLayoutMode: params.isLayoutMode ?? true,
       isPlacing: false,
       isRackPassiveScopeActive: false,
-      isStorageMode: false,
+      isStorageMode: params.isStorageMode ?? false,
       isViewMode: false,
-      isWorkflowScope: false,
+      isWorkflowScope: params.isWorkflowScope ?? false,
       lod: params.lod ?? 2,
       minRackDistance: 0,
       moveSourceCellId: null,
@@ -96,10 +108,10 @@ function renderRackLayer(params: {
       selectedRackIds: params.selectedRackIds,
       setHighlightedCellIds: () => undefined,
       setHoveredRackId: () => undefined,
-      setPlacementMoveTargetCellId: () => undefined,
-      setSelectedCellId: () => undefined,
+      setPlacementMoveTargetCellId: params.setPlacementMoveTargetCellId ?? (() => undefined),
+      setSelectedCellId: params.setSelectedCellId ?? (() => undefined),
       setSelectedRackId: () => undefined,
-      setSelectedRackIds: () => undefined,
+      setSelectedRackIds: params.setSelectedRackIds ?? (() => undefined),
       setSnapGuides: () => undefined,
       toggleRackSelection: () => undefined,
       updateRackPosition: () => undefined
@@ -163,5 +175,131 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[0]?.props.activeLevelIndex).toBe(99);
     expect(rackCells[1]?.props.rackId).toBe('rack-2');
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
+  });
+});
+
+describe('RackLayer storage interaction depth', () => {
+  it('cell click wins over rack click in storage mode', () => {
+    const setSelectedCellId = vi.fn();
+    const setSelectedRackIds = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      isLayoutMode: false,
+      isStorageMode: true,
+      canSelectCells: true,
+      setSelectedCellId,
+      setSelectedRackIds,
+      clearHighlightedCellIds
+    });
+
+    const rackCells = renderer.root.findAllByType('RackCells');
+    act(() => {
+      rackCells[0].props.onCellClick('cell-1', { x: 10, y: 20 });
+    });
+
+    expect(setSelectedCellId).toHaveBeenCalledWith('cell-1');
+    expect(setSelectedRackIds).not.toHaveBeenCalled();
+    expect(clearHighlightedCellIds).not.toHaveBeenCalled();
+  });
+
+  it('rack body click in storage mode selects rack and clears selected cell context', () => {
+    const setSelectedCellId = vi.fn();
+    const setSelectedRackIds = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      isLayoutMode: false,
+      isStorageMode: true,
+      canSelectRack: true,
+      setSelectedCellId,
+      setSelectedRackIds,
+      clearHighlightedCellIds
+    });
+
+    const rackGroups = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+    );
+
+    expect(rackGroups.length).toBeGreaterThan(0);
+
+    act(() => {
+      rackGroups[0].props.onClick({ evt: {}, cancelBubble: false });
+    });
+
+    expect(clearHighlightedCellIds).toHaveBeenCalledTimes(1);
+    expect(setSelectedCellId).toHaveBeenCalledWith(null);
+    expect(setSelectedRackIds).toHaveBeenCalledWith(['rack-1']);
+  });
+
+  it('storage workflow cell click keeps move-target behavior', () => {
+    const setPlacementMoveTargetCellId = vi.fn();
+    const setSelectedCellId = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      isLayoutMode: false,
+      isStorageMode: true,
+      isWorkflowScope: true,
+      canSelectCells: true,
+      setPlacementMoveTargetCellId,
+      setSelectedCellId
+    });
+
+    const rackCells = renderer.root.findAllByType('RackCells');
+    act(() => {
+      rackCells[0].props.onCellClick('cell-9', { x: 0, y: 0 });
+    });
+
+    expect(setPlacementMoveTargetCellId).toHaveBeenCalledWith('cell-9');
+    expect(setSelectedCellId).not.toHaveBeenCalled();
+  });
+
+  it('keeps section rendering non-interactive (no section selection semantics)', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      lod: 1,
+      isLayoutMode: false,
+      isStorageMode: true
+    });
+
+    const sectionNodes = renderer.root.findAllByType('RackSections');
+    expect(sectionNodes.length).toBeGreaterThan(0);
+    expect(sectionNodes[0].props.onClick).toBeUndefined();
+    expect(sectionNodes[0].props.onTap).toBeUndefined();
+  });
+
+  it('rack press ignores already-cancelled events (defensive non-bubbling guard)', () => {
+    const setSelectedRackIds = vi.fn();
+    const setSelectedCellId = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      isLayoutMode: false,
+      isStorageMode: true,
+      setSelectedRackIds,
+      setSelectedCellId,
+      clearHighlightedCellIds
+    });
+
+    const rackGroups = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+    );
+
+    act(() => {
+      rackGroups[0].props.onClick({ evt: {}, cancelBubble: true });
+    });
+
+    expect(setSelectedRackIds).not.toHaveBeenCalled();
+    expect(setSelectedCellId).not.toHaveBeenCalled();
+    expect(clearHighlightedCellIds).not.toHaveBeenCalled();
   });
 });
