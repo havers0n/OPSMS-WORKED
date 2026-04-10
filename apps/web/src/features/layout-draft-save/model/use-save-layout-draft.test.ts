@@ -58,6 +58,27 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function capturePersistenceSurface() {
+  const state = useEditorStore.getState();
+  return {
+    isDraftDirty: state.isDraftDirty,
+    persistenceStatus: state.persistenceStatus,
+    draftSourceVersionId: state.draftSourceVersionId,
+    draftLayoutVersionId: state.draft?.layoutVersionId ?? null
+  };
+}
+
+function expectSurfaceConsistentForActiveDraft(expectedLayoutVersionId: string) {
+  const surface = capturePersistenceSurface();
+  expect(surface.draftLayoutVersionId).toBe(expectedLayoutVersionId);
+  expect(surface.draftSourceVersionId).toBe(expectedLayoutVersionId);
+  if (surface.isDraftDirty) {
+    expect(['dirty', 'conflict', 'error']).toContain(surface.persistenceStatus);
+  } else {
+    expect(['saved', 'idle']).toContain(surface.persistenceStatus);
+  }
+}
+
 function AutosaveHarness({ floorId }: { floorId: string | null }) {
   useLayoutDraftAutosave(floorId);
   return null;
@@ -263,6 +284,59 @@ describe('use-save-layout-draft coordinator', () => {
     });
   });
 
+  it('manual save while autosave is scheduled does not create duplicate save requests', async () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const draft = createLayoutDraftFixture();
+
+    useEditorStore.getState().initializeDraft(draft);
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          React.createElement(AutosaveHarness, { floorId: draft.floorId })
+        )
+      );
+    });
+
+    vi.mocked(saveLayoutDraft).mockImplementation(async (currentDraft) => ({
+      layoutVersionId: currentDraft.layoutVersionId,
+      draftVersion: 2,
+      changeClass: 'geometry_only',
+      savedDraft: {
+        ...currentDraft,
+        draftVersion: 2
+      }
+    }));
+
+    act(() => {
+      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 175, 295);
+    });
+
+    const manualSavePromise = flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
+    await expect(manualSavePromise).resolves.toMatchObject({ draftVersion: 2 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+      await Promise.resolve();
+    });
+
+    expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
+    expect(capturePersistenceSurface()).toEqual({
+      isDraftDirty: false,
+      persistenceStatus: 'saved',
+      draftSourceVersionId: draft.layoutVersionId,
+      draftLayoutVersionId: draft.layoutVersionId
+    });
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
   it('stops autosave after a draft conflict and does not keep retrying stale local edits', async () => {
     vi.useFakeTimers();
     const queryClient = new QueryClient();
@@ -314,5 +388,54 @@ describe('use-save-layout-draft coordinator', () => {
     await act(async () => {
       renderer!.unmount();
     });
+  });
+
+  it('conflict then manual retry keeps persistence surface consistent (retry may succeed or remain blocked)', async () => {
+    const queryClient = new QueryClient();
+    const draft = createLayoutDraftFixture();
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 205, 325);
+
+    vi.mocked(saveLayoutDraft)
+      .mockRejectedValueOnce(
+        new BffRequestError(409, 'DRAFT_CONFLICT', 'Layout draft was changed by another session. Please reload.', null, null)
+      )
+      .mockResolvedValueOnce({
+        layoutVersionId: draft.layoutVersionId,
+        draftVersion: 2,
+        changeClass: 'geometry_only',
+        savedDraft: {
+          ...useEditorStore.getState().draft!,
+          draftVersion: 2
+        }
+      });
+
+    await expect(
+      flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!)
+    ).rejects.toMatchObject({ code: 'DRAFT_CONFLICT' });
+
+    expect(capturePersistenceSurface()).toEqual({
+      isDraftDirty: true,
+      persistenceStatus: 'conflict',
+      draftSourceVersionId: draft.layoutVersionId,
+      draftLayoutVersionId: draft.layoutVersionId
+    });
+
+    let retryOutcome: 'succeeded' | 'blocked' = 'blocked';
+    try {
+      await flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
+      retryOutcome = 'succeeded';
+    } catch {
+      retryOutcome = 'blocked';
+    }
+
+    if (retryOutcome === 'succeeded') {
+      expectSurfaceConsistentForActiveDraft(draft.layoutVersionId);
+      expect(['conflict', 'error']).not.toContain(capturePersistenceSurface().persistenceStatus);
+    } else {
+      expect(capturePersistenceSurface().persistenceStatus).toBe('conflict');
+      expectSurfaceConsistentForActiveDraft(draft.layoutVersionId);
+    }
   });
 });
