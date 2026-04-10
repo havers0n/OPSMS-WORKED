@@ -10,6 +10,7 @@ export const MINOR_GRID_ZOOM_THRESHOLD = 1.2; // zoom level at which 1 m minor g
 export const ROTATE_HANDLE_SIZE = 28;
 export const MIN_CANVAS_ZOOM = 0.5;
 export const MAX_CANVAS_ZOOM = 3.0;
+export const RACK_VIEWPORT_OVERSCAN_METERS = 2;
 
 // ─── Level-of-Detail thresholds ─────────────────────────────────────────────
 // LOD 0  zoom < ~0.9  → plain block + code label only
@@ -96,6 +97,11 @@ export type CanvasRect = {
   height: number;
 };
 
+type CanvasViewport = {
+  width: number;
+  height: number;
+};
+
 export type CanvasPoint = {
   x: number;
   y: number;
@@ -116,18 +122,38 @@ export function clampCanvasZoom(value: number) {
   return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value));
 }
 
+function getCanvasPointFromViewportPoint(
+  viewportPoint: CanvasPoint,
+  camera: Pick<CanvasCamera, 'zoom' | 'offsetX' | 'offsetY'>
+): CanvasPoint {
+  return {
+    x: (viewportPoint.x - camera.offsetX) / camera.zoom,
+    y: (viewportPoint.y - camera.offsetY) / camera.zoom
+  };
+}
+
+function getWorldPointFromViewportPoint(
+  viewportPoint: CanvasPoint,
+  camera: Pick<CanvasCamera, 'zoom' | 'offsetX' | 'offsetY'>
+): CanvasPoint {
+  const canvasPoint = getCanvasPointFromViewportPoint(viewportPoint, camera);
+  return {
+    x: canvasPoint.x / WORLD_SCALE,
+    y: canvasPoint.y / WORLD_SCALE
+  };
+}
+
 export function getZoomToCursorCamera(
   camera: CanvasCamera,
   cursor: CanvasPoint,
   nextZoom: number
 ): CanvasCamera {
-  const worldX = (cursor.x - camera.offsetX) / camera.zoom;
-  const worldY = (cursor.y - camera.offsetY) / camera.zoom;
+  const canvasPoint = getCanvasPointFromViewportPoint(cursor, camera);
 
   return {
     zoom: nextZoom,
-    offsetX: cursor.x - worldX * nextZoom,
-    offsetY: cursor.y - worldY * nextZoom
+    offsetX: cursor.x - canvasPoint.x * nextZoom,
+    offsetY: cursor.y - canvasPoint.y * nextZoom
   };
 }
 
@@ -234,6 +260,87 @@ export function getRackCanvasRect(rack: Rack): CanvasRect {
       x: geometry.x + geometry.centerX,
       y: geometry.y + geometry.centerY
     }
+  );
+}
+
+function getRackWorldRect(rack: Rack): CanvasRect {
+  const isPaired = rack.kind === 'paired';
+  const faceA = rack.faces.find((f) => f.side === 'A');
+  const faceB = rack.faces.find((f) => f.side === 'B');
+  const faceALength = faceA?.faceLength ?? rack.totalLength;
+  const faceBLength = isPaired ? (faceB?.faceLength ?? rack.totalLength) : faceALength;
+  const width = Math.max(faceALength, faceBLength);
+  const height = rack.depth;
+
+  return getRotatedBounds(
+    {
+      x: rack.x,
+      y: rack.y,
+      width,
+      height
+    },
+    rack.rotationDeg,
+    {
+      x: rack.x + width / 2,
+      y: rack.y + height / 2
+    }
+  );
+}
+
+function getVisibleWorldRect(
+  viewport: CanvasViewport,
+  canvasOffset: { x: number; y: number },
+  zoom: number
+): CanvasRect {
+  const camera = {
+    zoom,
+    offsetX: canvasOffset.x,
+    offsetY: canvasOffset.y
+  };
+  const corners = [
+    getWorldPointFromViewportPoint({ x: 0, y: 0 }, camera),
+    getWorldPointFromViewportPoint({ x: viewport.width, y: 0 }, camera),
+    getWorldPointFromViewportPoint({ x: 0, y: viewport.height }, camera),
+    getWorldPointFromViewportPoint({ x: viewport.width, y: viewport.height }, camera)
+  ];
+  const minX = Math.min(...corners.map((point) => point.x));
+  const maxX = Math.max(...corners.map((point) => point.x));
+  const minY = Math.min(...corners.map((point) => point.y));
+  const maxY = Math.max(...corners.map((point) => point.y));
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
+}
+
+export function isRackInViewport(
+  rack: Rack,
+  viewport: CanvasViewport,
+  canvasOffset: { x: number; y: number },
+  zoom: number,
+  overscanMeters: number = RACK_VIEWPORT_OVERSCAN_METERS
+): boolean {
+  if (zoom <= 0 || viewport.width <= 0 || viewport.height <= 0) {
+    return false;
+  }
+
+  const rackRect = getRackWorldRect(rack);
+  const viewportRect = getVisibleWorldRect(viewport, canvasOffset, zoom);
+  const expandedViewport = {
+    x: viewportRect.x - overscanMeters,
+    y: viewportRect.y - overscanMeters,
+    width: viewportRect.width + overscanMeters * 2,
+    height: viewportRect.height + overscanMeters * 2
+  };
+
+  return (
+    rackRect.x <= expandedViewport.x + expandedViewport.width &&
+    rackRect.x + rackRect.width >= expandedViewport.x &&
+    rackRect.y <= expandedViewport.y + expandedViewport.height &&
+    rackRect.y + rackRect.height >= expandedViewport.y
   );
 }
 
