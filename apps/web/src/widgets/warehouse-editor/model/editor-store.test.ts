@@ -53,6 +53,16 @@ afterEach(() => {
 });
 
 describe('editor-store', () => {
+  function capturePersistenceInvariantFields() {
+    const state = useEditorStore.getState();
+    return {
+      isDraftDirty: state.isDraftDirty,
+      persistenceStatus: state.persistenceStatus,
+      draftSourceVersionId: state.draftSourceVersionId,
+      draftLayoutVersionId: state.draft?.layoutVersionId ?? null
+    };
+  }
+
   it('defaults objectWorkContext to geometry', () => {
     expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
   });
@@ -626,6 +636,117 @@ describe('editor-store', () => {
       useEditorStore.getState().startPlacementMove('container-1', 'cell-1');
 
       expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+    });
+  });
+
+  describe('runtime smoke invariants after relocation', () => {
+    it('layout->storage transition keeps established cross-store reset contract', () => {
+      useModeStore.setState({ viewMode: 'layout', editorMode: 'draw-zone' });
+      useInteractionStore.setState({
+        ...useInteractionStore.getState(),
+        selection: { type: 'rack', rackIds: ['rack-1'], focus: { type: 'body' } },
+        highlightedCellIds: ['cell-1', 'cell-2']
+      });
+      useEditorStore.setState({
+        ...useEditorStore.getState(),
+        activeTask: { type: 'rack_creation', rackId: 'rack-1' },
+        activeStorageWorkflow: {
+          kind: 'place-container',
+          cellId: 'cell-1',
+          status: 'editing',
+          errorMessage: null
+        }
+      });
+
+      useEditorStore.getState().setViewMode('storage');
+
+      expect(useModeStore.getState().viewMode).toBe('storage');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+      expect(useInteractionStore.getState().highlightedCellIds).toEqual([]);
+      expect(useEditorStore.getState().activeTask).toBeNull();
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+    });
+
+    it('storage->layout transition clears storage workflow and incompatible storage selection', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useEditorStore.getState().startPlaceContainerWorkflow('cell-1');
+
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'cell', cellId: 'cell-1' });
+      expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+        kind: 'place-container',
+        cellId: 'cell-1',
+        status: 'editing',
+        errorMessage: null
+      });
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+    });
+
+    it('cancelPlacementInteraction returns workflow state to idle-like null', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useEditorStore.getState().startCreateAndPlaceWorkflow('cell-1');
+
+      expect(useEditorStore.getState().activeStorageWorkflow).toEqual({
+        kind: 'create-and-place',
+        cellId: 'cell-1',
+        status: 'editing',
+        errorMessage: null,
+        createdContainer: null
+      });
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'cell', cellId: 'cell-1' });
+
+      useEditorStore.getState().cancelPlacementInteraction();
+
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'cell', cellId: 'cell-1' });
+    });
+
+    it('runtime transition preserves dirty persistence invariant fields (before/after lock)', () => {
+      const draft = createLayoutDraftFixture();
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 120, 240);
+
+      const before = capturePersistenceInvariantFields();
+      expect(before).toEqual({
+        isDraftDirty: true,
+        persistenceStatus: 'dirty',
+        draftSourceVersionId: draft.layoutVersionId,
+        draftLayoutVersionId: draft.layoutVersionId
+      });
+
+      useEditorStore.getState().setViewMode('storage');
+
+      const after = capturePersistenceInvariantFields();
+      expect(after).toEqual(before);
+    });
+
+    it('runtime transition preserves saved persistence invariant fields (before/after lock)', () => {
+      const draft = createLayoutDraftFixture();
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().markDraftSaved({
+        layoutVersionId: draft.layoutVersionId,
+        draftVersion: 2,
+        changeClass: 'geometry_only'
+      });
+
+      const before = capturePersistenceInvariantFields();
+      expect(before).toEqual({
+        isDraftDirty: false,
+        persistenceStatus: 'saved',
+        draftSourceVersionId: draft.layoutVersionId,
+        draftLayoutVersionId: draft.layoutVersionId
+      });
+
+      useEditorStore.getState().setViewMode('view');
+
+      const after = capturePersistenceInvariantFields();
+      expect(after).toEqual(before);
     });
   });
 
