@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLayoutDraftFixture } from '@/entities/layout-version/model/__fixtures__/layout-draft.fixture';
+import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';

@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { describe, expect, it } from 'vitest';
 import type { Rack } from '@wos/domain';
-import { createLayoutDraftFixture } from '@/entities/layout-version/model/__fixtures__/layout-draft.fixture';
+import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
 import { CanvasHud } from './canvas-hud';
 
 (
