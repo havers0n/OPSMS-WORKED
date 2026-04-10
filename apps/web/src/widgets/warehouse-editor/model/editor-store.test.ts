@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mapLayoutDraftToSavePayload } from '../../../features/layout-draft-save/api/mappers';
+import { mapLayoutDraftToSavePayload } from '@/features/layout-draft-save/api/mappers';
 import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
