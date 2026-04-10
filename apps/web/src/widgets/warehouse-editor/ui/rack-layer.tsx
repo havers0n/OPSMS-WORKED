@@ -34,8 +34,10 @@ type RackLayerProps = {
   moveSourceRackId: string | null;
   occupiedCellIds: Set<string>;
   publishedCellsByStructure: Map<string, Cell>;
+  primarySelectedRackId: string | null;
   rackLookup: Record<string, Rack>;
   racks: Rack[];
+  selectedRackActiveLevel: number;
   selectedRackIds: string[];
   setHighlightedCellIds: (cellIds: string[]) => void;
   setHoveredRackId: (rackId: string | null) => void;
@@ -70,8 +72,10 @@ export function RackLayer({
   moveSourceRackId,
   occupiedCellIds,
   publishedCellsByStructure,
+  primarySelectedRackId,
   rackLookup,
   racks,
+  selectedRackActiveLevel,
   selectedRackIds,
   setHighlightedCellIds,
   setHoveredRackId,
@@ -242,6 +246,7 @@ export function RackLayer({
                 faceA={faceA}
                 faceB={geometry.isPaired ? faceB : null}
                 isSelected={isSelected}
+                activeLevelIndex={rack.id === primarySelectedRackId ? selectedRackActiveLevel : 0}
                 publishedCellsByStructure={publishedCellsByStructure}
                 occupiedCellIds={occupiedCellIds}
                 cellRuntimeById={cellRuntimeById}
