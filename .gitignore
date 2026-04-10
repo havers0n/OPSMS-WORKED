@@ -17,6 +17,10 @@ packages/*/.turbo/
 apps/web/test-results/
 apps/web/storybook-static/
 
+# AI agent artifacts
+.qwen/
+docs/commit-history/
+
 # Test session artifacts
 .playwright-mcp/
 [0-9][0-9]-*.png
