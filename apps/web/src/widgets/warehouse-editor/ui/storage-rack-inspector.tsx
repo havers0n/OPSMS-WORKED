@@ -10,9 +10,10 @@ import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
-import { CellPlacementOperationalBody } from './mode-panels/cell-placement-inspector';
+import { CellPlacementOperationalBody } from './storage-location-detail-body';
 import { getRackFaceALevelCount } from '../lib/rack-level-count';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
+import { resolveStorageFocusContext } from '../model/storage-focus';
 import { RackLevelPager } from './rack-level-pager';
 
 export function StorageRackInspector({
@@ -28,18 +29,44 @@ export function StorageRackInspector({
   const selection = useEditorSelection();
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const { data: locationOccupancy = [] } = useFloorLocationOccupancy(workspace?.floorId ?? null);
+  const publishedCellsById = useMemo(
+    () => new Map(publishedCells.map((cell) => [cell.id, cell] as const)),
+    [publishedCells]
+  );
+  const focusContext = resolveStorageFocusContext({
+    viewMode: 'storage',
+    selection,
+    selectedRackActiveLevel: activeLevel,
+    publishedCellsById
+  });
 
-  const selectedCell = selection.type === 'cell'
-    ? (publishedCells.find((cell) => cell.id === selection.cellId) ?? null)
-    : null;
-  const resolvedRackId =
-    selection.type === 'rack'
-      ? (selection.rackIds[0] ?? null)
-      : selection.type === 'cell'
-        ? (selectedCell?.rackId ?? null)
-        : null;
+  const selectedCell =
+    focusContext.leaf === 'cell' && focusContext.resolvedCellId
+      ? (publishedCellsById.get(focusContext.resolvedCellId) ?? null)
+      : null;
+  const resolvedRackId = focusContext.rackId;
   const rack = layoutDraft && resolvedRackId ? layoutDraft.racks[resolvedRackId] : null;
-  const levelCount = getRackFaceALevelCount(rack ?? null);
+  const structureLevelCount = getRackFaceALevelCount(rack ?? null);
+  const publishedAddressLevelCount =
+    resolvedRackId === null
+      ? 0
+      : new Set(
+          publishedCells
+            .filter((cell) => cell.rackId === resolvedRackId)
+            .map((cell) => cell.address.parts.level)
+            .filter((level): level is number => Number.isFinite(level))
+        ).size;
+  const publishedRackLevelIdCount =
+    resolvedRackId === null
+      ? 0
+      : new Set(
+          publishedCells
+            .filter((cell) => cell.rackId === resolvedRackId)
+            .map((cell) => cell.rackLevelId)
+            .filter((levelId): levelId is string => typeof levelId === 'string' && levelId.length > 0)
+        ).size;
+  const publishedLevelCount = Math.max(publishedAddressLevelCount, publishedRackLevelIdCount);
+  const levelCount = Math.max(structureLevelCount, publishedLevelCount);
   const selectedCellId = selection.type === 'cell' ? selection.cellId : null;
   const { data: selectedCellLocationRef, error: selectedCellLocationError } = useLocationByCell(selectedCellId);
   const selectedCellLocationId = selectedCellLocationRef?.locationId ?? null;
