@@ -168,12 +168,11 @@ type InspectorRouterProps = {
  *   layout  + rack(1, existing) → RackInspector (structural)
  *   layout  + rack(≥2)         → RackMultiInspector (spacing/alignment)
  *   view    + rack             → RackInspector (read-only)
- *   storage + rack             → StorageRackInspector (storage-owned overview)
+ *   storage + none/rack/cell   → StorageRackInspector (persistent storage shell)
  *   view    + cell             → CellPlacementInspector (read-only)
  *   view    + container        → ContainerPlacementInspector (read-only)
- *   storage + cell             → CellPlacementInspector
  *   storage + container        → ContainerPlacementInspector
- *   view/storage + none        → PlacementModePanel
+ *   view + none                → PlacementModePanel
  */
 export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
   const viewMode = useViewMode();
@@ -184,7 +183,7 @@ export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
     case 'rack-structure':
       return <RackInspector workspace={workspace} onClose={onClose} />;
 
-    case 'rack-storage':
+    case 'storage-shell':
       return <StorageRackInspector workspace={workspace} onClose={onClose} />;
 
     case 'rack-multi':

@@ -56,18 +56,18 @@ describe('resolveContextPanelVisibility', () => {
 // ─── resolveContextPanelIntent ──────────────────────────────────────────────
 
 describe('resolveContextPanelIntent — idle cases', () => {
-  it('returns a mode-specific idle branch when scope is idle', () => {
+  it('returns hidden for all idle scope cases (no idle panel shown)', () => {
     expect(resolveContextPanelIntent({
       scope: 'idle', editorMode: 'select', viewMode: 'layout', selection: noSelection
-    })).toBe('idle-layout');
+    })).toBe('hidden');
 
     expect(resolveContextPanelIntent({
       scope: 'idle', editorMode: 'select', viewMode: 'storage', selection: noSelection
-    })).toBe('idle-storage');
+    })).toBe('hidden');
 
     expect(resolveContextPanelIntent({
       scope: 'idle', editorMode: 'select', viewMode: 'view', selection: noSelection
-    })).toBe('idle-view');
+    })).toBe('hidden');
   });
 });
 

@@ -18,9 +18,6 @@ import type {
  * Describes what the context panel should display.
  *
  * - 'hidden'         — panel is not shown
- * - 'idle-view'      — no selection in view mode
- * - 'idle-storage'   — no selection in storage mode
- * - 'idle-layout'    — no selection in layout mode
  * - 'rack-context'   — single rack selected (body-level context)
  * - 'rack-side-context' — one side of a single rack is focused
  * - 'multi-rack'     — multiple racks selected
@@ -32,9 +29,6 @@ import type {
  */
 export type ContextPanelIntent =
   | 'hidden'
-  | 'idle-view'
-  | 'idle-storage'
-  | 'idle-layout'
   | 'rack-context'
   | 'rack-side-context'
   | 'multi-rack'
@@ -93,9 +87,7 @@ export function resolveContextPanelIntent(params: {
   }
 
   if (scope === 'idle') {
-    if (viewMode === 'view') return 'idle-view';
-    if (viewMode === 'storage') return 'idle-storage';
-    return 'idle-layout';
+    return 'hidden';
   }
 
   // Object scope — route based on selection type

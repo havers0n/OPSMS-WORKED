@@ -78,11 +78,6 @@ export function WarehouseEditor() {
     setEditorMode('place');
   };
 
-  const handleDrawZone = () => {
-    clearSelection();
-    setEditorMode('draw-zone');
-  };
-
   const handleCloseInspector = () => {
     clearSelection();
   };
@@ -104,8 +99,6 @@ export function WarehouseEditor() {
 
         <ContextPanel
           workspace={workspace ?? null}
-          onAddRack={handleAddRack}
-          onDrawZone={handleDrawZone}
           onOpenInspector={() => undefined}
         />
       </div>

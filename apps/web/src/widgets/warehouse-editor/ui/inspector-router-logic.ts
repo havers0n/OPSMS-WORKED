@@ -9,7 +9,7 @@ import type {
 
 export type InspectorKind =
   | 'rack-structure'         // layout/view + single rack selected (existing)
-  | 'rack-storage'           // storage + single rack selected (storage-owned overview)
+  | 'storage-shell'          // storage + none/rack/cell (persistent storage hierarchy shell)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'zone-detail'            // layout + single zone selected → editable inspector
   | 'zone-readonly'          // view/storage + zone selected → context-only, no actions
@@ -36,11 +36,10 @@ export type InspectorKind =
  *   view + none                 → placement-placeholder
  *
  * Storage routing contract:
- *   storage + rack              → rack-storage
+ *   storage + none/rack/cell    → storage-shell
  *   storage + zone              → zone-readonly  (zone is not a placement target)
- *   storage + cell              → placement-cell
  *   storage + container         → placement-container
- *   storage + anything else     → placement-placeholder
+ *   storage + anything else     → storage-shell
  *
  * Note: canSelectZone in use-canvas-scene-model.ts currently prevents zone
  * selection outside layout mode, so zone-readonly is unreachable in practice.
@@ -68,8 +67,10 @@ export function resolveInspectorKind(
   if (viewMode === 'view' && selection.type === 'rack') {
     return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
   }
-  if (viewMode === 'storage' && selection.type === 'rack') {
-    return selection.rackIds[0] ? 'rack-storage' : 'placement-placeholder';
+  if (viewMode === 'storage') {
+    if (selection.type === 'zone') return 'zone-readonly';
+    if (selection.type === 'container') return 'placement-container';
+    return 'storage-shell';
   }
 
   // viewMode === 'view' | 'storage'
