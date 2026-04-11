@@ -1,33 +1,56 @@
-import React from 'react';
-import { useNavigationRackId, useNavigationActiveLevel, useSelectionLocationId } from '../model/v2/v2-selectors';
+import React, { useState } from 'react';
+import {
+  useNavigationRackId,
+  useNavigationActiveLevel,
+  useSelectionLocationId,
+  useSetLevel,
+  useSelectLocation,
+} from '../model/v2/v2-selectors';
 import { mockLocationsByLevel } from './storage-navigator.fixtures';
 
 /**
- * StorageNavigator — Isolated shell component for storage mode.
- *
- * This component provides navigation UI for warehouse locations:
- * - Search input (shell, no filtering logic yet)
- * - Occupancy filter buttons (shell, no filter state yet)
- * - Level tabs (shell, no switching logic yet)
- * - Location list (static, from fixture data)
+ * StorageNavigator — Interactive V2 navigator for storage mode.
  *
  * V2 Integration:
  * - Reads navigation-store: rackId, activeLevel (display context)
+ * - Writes navigation-store: setLevel (level tab clicks)
  * - Reads selection-store: locationId (highlight selected item)
- * - No mutations or side effects
+ * - Writes selection-store: selectLocation (location item clicks)
  *
- * Integration Status:
- * - Component is isolated, not yet integrated into warehouse-editor
- * - Deferred to PR4/integration PR
+ * Local UI state:
+ * - searchQuery: substring filter on location ID
+ * - occupancyFilter: 'all' | 'empty-only'
+ *
+ * Non-goals (deferred to PR5+):
+ * - No inspector wiring
+ * - No canvas highlight integration
+ * - No legacy store bridge
+ * - No task mode
  */
 export function StorageNavigator() {
-  // V2 store selectors (graceful nulls)
+  // V2 store — read
   const rackId = useNavigationRackId() ?? 'Unknown Rack';
   const activeLevel = useNavigationActiveLevel() ?? 1;
   const selectedLocationId = useSelectionLocationId() ?? null;
 
-  // Get locations for active level from fixture
+  // V2 store — write
+  const setLevel = useSetLevel();
+  const selectLocation = useSelectLocation();
+
+  // Local UI state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [occupancyFilter, setOccupancyFilter] = useState<'all' | 'empty-only'>('all');
+
+  // Filtering chain
   const locationsForLevel = mockLocationsByLevel[activeLevel] ?? [];
+  const visibleLocations = locationsForLevel
+    .filter(loc => occupancyFilter === 'all' || loc.status === 'empty')
+    .filter(loc =>
+      searchQuery.trim() === '' ||
+      loc.id.toLowerCase().includes(searchQuery.trim().toLowerCase())
+    );
+
+  const filtersActive = occupancyFilter !== 'all' || searchQuery.trim() !== '';
 
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-200 w-80 overflow-hidden">
@@ -51,8 +74,7 @@ export function StorageNavigator() {
                     ? 'bg-blue-100 border-blue-400 text-blue-900'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
                 }`}
-                disabled
-                title="Level switching deferred to PR3+"
+                onClick={() => setLevel(level)}
               >
                 {level}
               </button>
@@ -69,8 +91,8 @@ export function StorageNavigator() {
             type="text"
             placeholder="Find location..."
             className="flex-1 bg-transparent text-sm outline-none placeholder-gray-400"
-            disabled
-            title="Search filtering deferred to PR3+"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
           />
           <span className="text-gray-400">🔍</span>
         </div>
@@ -78,16 +100,22 @@ export function StorageNavigator() {
         {/* Occupancy Filter Buttons */}
         <div className="flex gap-2">
           <button
-            className="flex-1 px-2 py-1.5 text-xs font-medium border rounded transition-colors bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
-            disabled
-            title="Filter logic deferred to PR3+"
+            className={`flex-1 px-2 py-1.5 text-xs font-medium border rounded transition-colors ${
+              occupancyFilter === 'empty-only'
+                ? 'bg-blue-100 border-blue-400 text-blue-900'
+                : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+            }`}
+            onClick={() => setOccupancyFilter('empty-only')}
           >
             🟢 Empty Only
           </button>
           <button
-            className="flex-1 px-2 py-1.5 text-xs font-medium border rounded transition-colors bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
-            disabled
-            title="Filter logic deferred to PR3+"
+            className={`flex-1 px-2 py-1.5 text-xs font-medium border rounded transition-colors ${
+              occupancyFilter === 'all'
+                ? 'bg-blue-100 border-blue-400 text-blue-900'
+                : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+            }`}
+            onClick={() => setOccupancyFilter('all')}
           >
             All
           </button>
@@ -96,18 +124,26 @@ export function StorageNavigator() {
 
       {/* Location List (Scrollable) */}
       <div className="flex-1 overflow-y-auto">
-        {locationsForLevel.length > 0 ? (
+        {locationsForLevel.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-gray-500">
+            No locations for level {activeLevel}
+          </div>
+        ) : visibleLocations.length === 0 && filtersActive ? (
+          <div className="px-4 py-8 text-center text-sm text-gray-500">
+            No locations match current filters
+          </div>
+        ) : (
           <div>
             {/* Level Header */}
             <div className="sticky top-0 px-4 py-2 bg-gray-100 border-b border-gray-200">
               <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-                Level {activeLevel} ({locationsForLevel.length} locations)
+                Level {activeLevel} ({visibleLocations.length} locations)
               </h3>
             </div>
 
             {/* Location Items */}
             <div className="divide-y divide-gray-200">
-              {locationsForLevel.map((location) => (
+              {visibleLocations.map((location) => (
                 <div
                   key={location.id}
                   className={`px-4 py-2 text-sm flex items-center gap-2 cursor-pointer transition-colors ${
@@ -120,6 +156,7 @@ export function StorageNavigator() {
                       ? `Selected: ${location.id}`
                       : `Location ${location.id} - ${location.status}`
                   }
+                  onClick={() => selectLocation(location.id)}
                 >
                   {/* Status Icon */}
                   <span className="text-base flex-shrink-0">
@@ -148,18 +185,14 @@ export function StorageNavigator() {
               ))}
             </div>
           </div>
-        ) : (
-          <div className="px-4 py-8 text-center text-sm text-gray-500">
-            No locations for level {activeLevel}
-          </div>
         )}
       </div>
 
       {/* Footer: Implementation Status */}
       <div className="px-4 py-2 border-t border-gray-200 flex-shrink-0 text-xs text-gray-500 bg-gray-50">
         <p>
-          <span className="font-medium">PR2 Status:</span> Shell only. Real data, mutations, and
-          inspector wiring deferred to PR3+.
+          <span className="font-medium">PR4 Status:</span> Interactive — level tabs, search,
+          occupancy filter, and location selection active. Inspector wiring deferred to PR5+.
         </p>
       </div>
     </div>
