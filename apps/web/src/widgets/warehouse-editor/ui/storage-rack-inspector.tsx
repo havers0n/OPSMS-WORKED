@@ -2,10 +2,11 @@ import type { FloorWorkspace } from '@wos/domain';
 import { AlertCircle, Box, Loader2, MapPin, X } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import {
-  useEditorSelection,
-  useSelectedRackActiveLevel,
-  useSetSelectedRackActiveLevel
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+  resolveStorageFocusContext,
+  useStorageSelectedRackActiveLevel,
+  useStorageSelection,
+  useStorageSetSelectedRackActiveLevel
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
@@ -13,7 +14,6 @@ import { useLocationStorage } from '@/entities/location/api/use-location-storage
 import { CellPlacementOperationalBody } from './storage-location-detail-body';
 import { getRackFaceALevelCount } from '../lib/rack-level-count';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
-import { resolveStorageFocusContext } from '../model/storage-focus';
 import { RackLevelPager } from './rack-level-pager';
 
 export function StorageRackInspector({
@@ -24,9 +24,9 @@ export function StorageRackInspector({
   onClose: () => void;
 }) {
   const layoutDraft = useWorkspaceLayout(workspace);
-  const activeLevel = useSelectedRackActiveLevel();
-  const setActiveLevel = useSetSelectedRackActiveLevel();
-  const selection = useEditorSelection();
+  const activeLevel = useStorageSelectedRackActiveLevel();
+  const setActiveLevel = useStorageSetSelectedRackActiveLevel();
+  const selection = useStorageSelection();
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const { data: locationOccupancy = [] } = useFloorLocationOccupancy(workspace?.floorId ?? null);
   const publishedCellsById = useMemo(

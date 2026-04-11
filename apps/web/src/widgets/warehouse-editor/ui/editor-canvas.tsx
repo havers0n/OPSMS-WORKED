@@ -4,9 +4,7 @@ import { Layer, Line, Rect, Stage } from 'react-konva';
 import type Konva from 'konva';
 import {
   useActiveTask,
-  useActiveStorageWorkflow,
   useCanvasZoom,
-  useCancelPlacementInteraction,
   useCreateFreeWall,
   useCreateRack,
   useDeleteWall,
@@ -19,12 +17,9 @@ import {
   useClearHighlightedCellIds,
   useHoveredRackId,
   useIsLayoutEditable,
-  useSelectedCellId,
-  useSelectedRackActiveLevel,
   useSelectedRackFocus,
   useSelectedZoneId,
   useSelectedWallId,
-  useSetPlacementMoveTargetCellId,
   useSelectedRackId,
   useSetSelectedRackId,
   useSetSelectedWallId,
@@ -35,7 +30,6 @@ import {
   useSetHoveredRackId,
   useHighlightedCellIds,
   useSetHighlightedCellIds,
-  useSetSelectedCellId,
   useSetSelectedRackSide,
   useSetSelectedRackIds,
   useToggleRackSelection,
@@ -45,6 +39,15 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import {
+  resolveStorageFocusContext,
+  useStorageActiveWorkflow,
+  useStorageCancelPlacementInteraction,
+  useStorageSelectedCellId,
+  useStorageSelectedRackActiveLevel,
+  useStorageSetPlacementMoveTargetCellId,
+  useStorageSetSelectedCellId
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import {
   GRID_SIZE,
   isRackInViewport,
@@ -61,7 +64,6 @@ import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
-import { resolveStorageFocusContext } from '../model/storage-focus';
 
 export function EditorCanvas({
   workspace,
@@ -80,13 +82,13 @@ export function EditorCanvas({
   const selectedRackIds = useSelectedRackIds();
   const selectedRackId = useSelectedRackId();
   const selectedRackFocus = useSelectedRackFocus();
-  const selectedRackActiveLevel = useSelectedRackActiveLevel();
-  const selectedCellId = useSelectedCellId();
+  const selectedRackActiveLevel = useStorageSelectedRackActiveLevel();
+  const selectedCellId = useStorageSelectedCellId();
   const selection = useEditorSelection();
   const interactionScope = useInteractionScope();
   const highlightedCellIds = useHighlightedCellIds();
   const activeTask = useActiveTask();
-  const activeStorageWorkflow = useActiveStorageWorkflow();
+  const activeStorageWorkflow = useStorageActiveWorkflow();
   const hoveredRackId = useHoveredRackId();
   const clearSelection = useClearSelection();
   const deleteWall = useDeleteWall();
@@ -99,9 +101,9 @@ export function EditorCanvas({
   const selectedWallId = useSelectedWallId();
   const setSelectedZoneId = useSetSelectedZoneId();
   const setSelectedWallId = useSetSelectedWallId();
-  const setSelectedCellId = useSetSelectedCellId();
-  const setPlacementMoveTargetCellId = useSetPlacementMoveTargetCellId();
-  const cancelPlacementInteraction = useCancelPlacementInteraction();
+  const setSelectedCellId = useStorageSetSelectedCellId();
+  const setPlacementMoveTargetCellId = useStorageSetPlacementMoveTargetCellId();
+  const cancelPlacementInteraction = useStorageCancelPlacementInteraction();
   const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const clearHighlightedCellIds = useClearHighlightedCellIds();

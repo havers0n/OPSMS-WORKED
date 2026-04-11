@@ -2,13 +2,13 @@ import type { FloorWorkspace } from '@wos/domain';
 import { MapPin, MoveRight, Package, PackagePlus, RotateCcw, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  useActiveStorageWorkflow,
-  useCancelPlacementInteraction,
-  useMarkActiveStorageWorkflowSubmitting,
-  useSetActiveStorageWorkflowError,
-  useSetCreateAndPlacePlacementRetry,
-  useSetSelectedCellId
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+  useStorageActiveWorkflow,
+  useStorageCancelPlacementInteraction,
+  useStorageMarkWorkflowSubmitting,
+  useStorageSetCreateAndPlacePlacementRetry,
+  useStorageSetSelectedCellId,
+  useStorageSetWorkflowError
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import type { ContextPanelMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
@@ -26,12 +26,12 @@ export function StorageWorkflowContextPanel({
   workspace: FloorWorkspace | null;
   panelMode: ContextPanelMode;
 }) {
-  const activeStorageWorkflow = useActiveStorageWorkflow();
-  const cancelPlacementInteraction = useCancelPlacementInteraction();
-  const markActiveStorageWorkflowSubmitting = useMarkActiveStorageWorkflowSubmitting();
-  const setActiveStorageWorkflowError = useSetActiveStorageWorkflowError();
-  const setCreateAndPlacePlacementRetry = useSetCreateAndPlacePlacementRetry();
-  const setSelectedCellId = useSetSelectedCellId();
+  const activeStorageWorkflow = useStorageActiveWorkflow();
+  const cancelPlacementInteraction = useStorageCancelPlacementInteraction();
+  const markActiveStorageWorkflowSubmitting = useStorageMarkWorkflowSubmitting();
+  const setActiveStorageWorkflowError = useStorageSetWorkflowError();
+  const setCreateAndPlacePlacementRetry = useStorageSetCreateAndPlacePlacementRetry();
+  const setSelectedCellId = useStorageSetSelectedCellId();
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const [placeContainerIdInput, setPlaceContainerIdInput] = useState('');
   const [containerTypeIdInput, setContainerTypeIdInput] = useState('');

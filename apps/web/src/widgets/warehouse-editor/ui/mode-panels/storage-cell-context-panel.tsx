@@ -2,12 +2,12 @@ import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
 import { MoveRight, Package, PackagePlus, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import {
-  useSelectedCellId,
-  useSetSelectedContainerId,
-  useStartCreateAndPlaceWorkflow,
-  useStartPlaceContainerWorkflow,
-  useStartPlacementMove
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+  useStorageSelectedCellId,
+  useStorageSetSelectedContainerId,
+  useStorageStartCreateAndPlaceWorkflow,
+  useStorageStartPlaceContainerWorkflow,
+  useStorageStartPlacementMove
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import type { ContextPanelMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
@@ -34,11 +34,11 @@ export function StorageCellContextPanel({
   workspace: FloorWorkspace | null;
   panelMode: ContextPanelMode;
 }) {
-  const selectedCellId = useSelectedCellId();
-  const startPlaceContainerWorkflow = useStartPlaceContainerWorkflow();
-  const startCreateAndPlaceWorkflow = useStartCreateAndPlaceWorkflow();
-  const setSelectedContainerId = useSetSelectedContainerId();
-  const startPlacementMove = useStartPlacementMove();
+  const selectedCellId = useStorageSelectedCellId();
+  const startPlaceContainerWorkflow = useStorageStartPlaceContainerWorkflow();
+  const startCreateAndPlaceWorkflow = useStorageStartCreateAndPlaceWorkflow();
+  const setSelectedContainerId = useStorageSetSelectedContainerId();
+  const startPlacementMove = useStorageStartPlacementMove();
   const createProductLocationRole = useCreateProductLocationRole();
 
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);

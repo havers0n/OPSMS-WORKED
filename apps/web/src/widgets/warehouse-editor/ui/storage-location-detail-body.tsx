@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import type { LocationStorageSnapshotRow } from '@wos/domain';
 import { ChevronRight, Layers, Loader2, Package, ShieldCheck, X } from 'lucide-react';
 import {
-  useSetSelectedContainerId,
-  useStartCreateAndPlaceWorkflow,
-  useStartPlaceContainerWorkflow
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+  useStorageSetSelectedContainerId,
+  useStorageStartCreateAndPlaceWorkflow,
+  useStorageStartPlaceContainerWorkflow
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import { getProductImageUrl, getProductLabel, getProductMeta } from '@/entities/product/lib/display';
 import {
   getContainerDisplayLabel,
@@ -599,8 +599,8 @@ function PlacementActionsSection({
   selectedCellId: string;
   isDisabled: boolean;
 }) {
-  const startPlaceContainerWorkflow = useStartPlaceContainerWorkflow();
-  const startCreateAndPlaceWorkflow = useStartCreateAndPlaceWorkflow();
+  const startPlaceContainerWorkflow = useStorageStartPlaceContainerWorkflow();
+  const startCreateAndPlaceWorkflow = useStorageStartCreateAndPlaceWorkflow();
 
   return (
     <div
@@ -658,7 +658,7 @@ export function CellPlacementOperationalBody({
   rows: LocationStorageSnapshotRow[];
   isReadOnlyView: boolean;
 }) {
-  const setSelectedContainerId = useSetSelectedContainerId();
+  const setSelectedContainerId = useStorageSetSelectedContainerId();
   const [panelMode, setPanelMode] = useState<PlacementPanelMode>('details');
   const [taskType, setTaskType] = useState<PlacementTaskType>(null);
 

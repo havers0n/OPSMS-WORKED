@@ -29,18 +29,20 @@ const startPlacementMoveSpy = vi.fn();
 const setSelectedContainerIdSpy = vi.fn();
 const handleAssignPolicyRoleSpy = vi.fn();
 
-vi.mock('@/widgets/warehouse-editor/model/editor-selectors', async () => {
-  const actual = await vi.importActual<typeof import('@/widgets/warehouse-editor/model/editor-selectors')>(
-    '@/widgets/warehouse-editor/model/editor-selectors'
+vi.mock('@/widgets/warehouse-editor/model/storage-ui-facade', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/widgets/warehouse-editor/model/storage-ui-facade')
+  >(
+    '@/widgets/warehouse-editor/model/storage-ui-facade'
   );
 
   return {
     ...actual,
-    useSelectedCellId: () => mockSelectedCellId,
-    useStartPlaceContainerWorkflow: () => startPlaceContainerWorkflowSpy,
-    useStartCreateAndPlaceWorkflow: () => startCreateAndPlaceWorkflowSpy,
-    useStartPlacementMove: () => startPlacementMoveSpy,
-    useSetSelectedContainerId: () => setSelectedContainerIdSpy
+    useStorageSelectedCellId: () => mockSelectedCellId,
+    useStorageStartPlaceContainerWorkflow: () => startPlaceContainerWorkflowSpy,
+    useStorageStartCreateAndPlaceWorkflow: () => startCreateAndPlaceWorkflowSpy,
+    useStorageStartPlacementMove: () => startPlacementMoveSpy,
+    useStorageSetSelectedContainerId: () => setSelectedContainerIdSpy
   };
 });
 

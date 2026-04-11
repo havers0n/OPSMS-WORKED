@@ -38,19 +38,21 @@ const handleConfirmPlaceSpy = vi.fn();
 const handleCreateAndPlaceSpy = vi.fn();
 const handleRetryCreatedContainerPlacementSpy = vi.fn();
 
-vi.mock('@/widgets/warehouse-editor/model/editor-selectors', async () => {
-  const actual = await vi.importActual<typeof import('@/widgets/warehouse-editor/model/editor-selectors')>(
-    '@/widgets/warehouse-editor/model/editor-selectors'
+vi.mock('@/widgets/warehouse-editor/model/storage-ui-facade', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/widgets/warehouse-editor/model/storage-ui-facade')
+  >(
+    '@/widgets/warehouse-editor/model/storage-ui-facade'
   );
 
   return {
     ...actual,
-    useActiveStorageWorkflow: () => mockActiveStorageWorkflow,
-    useCancelPlacementInteraction: () => cancelPlacementInteractionSpy,
-    useMarkActiveStorageWorkflowSubmitting: () => markActiveStorageWorkflowSubmittingSpy,
-    useSetActiveStorageWorkflowError: () => setActiveStorageWorkflowErrorSpy,
-    useSetCreateAndPlacePlacementRetry: () => setCreateAndPlacePlacementRetrySpy,
-    useSetSelectedCellId: () => setSelectedCellIdSpy
+    useStorageActiveWorkflow: () => mockActiveStorageWorkflow,
+    useStorageCancelPlacementInteraction: () => cancelPlacementInteractionSpy,
+    useStorageMarkWorkflowSubmitting: () => markActiveStorageWorkflowSubmittingSpy,
+    useStorageSetWorkflowError: () => setActiveStorageWorkflowErrorSpy,
+    useStorageSetCreateAndPlacePlacementRetry: () => setCreateAndPlacePlacementRetrySpy,
+    useStorageSetSelectedCellId: () => setSelectedCellIdSpy
   };
 });
 

@@ -1,11 +1,11 @@
 import type {
-  useActiveStorageWorkflow,
-  useCancelPlacementInteraction,
-  useMarkActiveStorageWorkflowSubmitting,
-  useSetActiveStorageWorkflowError,
-  useSetCreateAndPlacePlacementRetry,
-  useSetSelectedCellId
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+  useStorageActiveWorkflow,
+  useStorageCancelPlacementInteraction,
+  useStorageMarkWorkflowSubmitting,
+  useStorageSetCreateAndPlacePlacementRetry,
+  useStorageSetSelectedCellId,
+  useStorageSetWorkflowError
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import { useCreateContainer } from '@/features/container-create/model/use-create-container';
 import { useMoveContainer } from '@/features/placement-actions/model/use-move-container';
 import { usePlaceContainer } from '@/features/placement-actions/model/use-place-container';
@@ -25,16 +25,16 @@ export function useStorageWorkflowActions({
   setSelectedCellId
 }: {
   floorId: string | null;
-  activeStorageWorkflow: ReturnType<typeof useActiveStorageWorkflow>;
+  activeStorageWorkflow: ReturnType<typeof useStorageActiveWorkflow>;
   workflowLocationId: string | null;
   placeContainerIdInput: string;
   containerTypeIdInput: string;
   targetValidationMessage: string | null;
-  cancelPlacementInteraction: ReturnType<typeof useCancelPlacementInteraction>;
-  markActiveStorageWorkflowSubmitting: ReturnType<typeof useMarkActiveStorageWorkflowSubmitting>;
-  setActiveStorageWorkflowError: ReturnType<typeof useSetActiveStorageWorkflowError>;
-  setCreateAndPlacePlacementRetry: ReturnType<typeof useSetCreateAndPlacePlacementRetry>;
-  setSelectedCellId: ReturnType<typeof useSetSelectedCellId>;
+  cancelPlacementInteraction: ReturnType<typeof useStorageCancelPlacementInteraction>;
+  markActiveStorageWorkflowSubmitting: ReturnType<typeof useStorageMarkWorkflowSubmitting>;
+  setActiveStorageWorkflowError: ReturnType<typeof useStorageSetWorkflowError>;
+  setCreateAndPlacePlacementRetry: ReturnType<typeof useStorageSetCreateAndPlacePlacementRetry>;
+  setSelectedCellId: ReturnType<typeof useStorageSetSelectedCellId>;
 }) {
   const placeContainer = usePlaceContainer({
     floorId,

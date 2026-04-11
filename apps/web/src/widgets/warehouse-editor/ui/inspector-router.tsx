@@ -4,12 +4,15 @@ import { MapPin, X } from 'lucide-react';
 import { useMemo } from 'react';
 import {
   useEditorSelection,
-  useSelectedRackActiveLevel,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import {
+  resolveStorageFocusContext,
+  useStorageSelectedRackActiveLevel,
+  useStorageSelection
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
-import { resolveStorageFocusContext } from '../model/storage-focus';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
 import { StorageRackInspector } from './storage-rack-inspector';
@@ -230,8 +233,8 @@ function StorageContainerRouteGate({
   workspace,
   onClose
 }: InspectorRouterProps) {
-  const selection = useEditorSelection();
-  const selectedRackActiveLevel = useSelectedRackActiveLevel();
+  const selection = useStorageSelection();
+  const selectedRackActiveLevel = useStorageSelectedRackActiveLevel();
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
   const publishedCellsById = useMemo(
     () => new Map(publishedCells.map((cell) => [cell.id, cell] as const)),

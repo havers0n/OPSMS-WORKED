@@ -58,10 +58,13 @@ import {
 
   useSetEditorMode,
   useSetSelectedRackId,
-  useStartPlacementMove,
   useToggleContextPanelMode,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import {
+  useStorageSelection,
+  useStorageStartPlacementMove
+} from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import type {
   ContextPanelMode,
   RackSideFocus
@@ -664,8 +667,8 @@ function StorageContainerContextPanel({
 }: {
   workspace: FloorWorkspace | null;
 }) {
-  const selection = useEditorSelection();
-  const startPlacementMove = useStartPlacementMove();
+  const selection = useStorageSelection();
+  const startPlacementMove = useStorageStartPlacementMove();
   const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
 
   if (selection.type !== 'container') {

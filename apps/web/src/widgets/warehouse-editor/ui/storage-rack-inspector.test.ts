@@ -22,19 +22,21 @@ vi.mock('../lib/use-workspace-layout', () => ({
   useWorkspaceLayout: () => mockLayoutDraft
 }));
 
-vi.mock('@/widgets/warehouse-editor/model/editor-selectors', async () => {
-  const actual = await vi.importActual<typeof import('@/widgets/warehouse-editor/model/editor-selectors')>(
-    '@/widgets/warehouse-editor/model/editor-selectors'
+vi.mock('@/widgets/warehouse-editor/model/storage-ui-facade', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/widgets/warehouse-editor/model/storage-ui-facade')
+  >(
+    '@/widgets/warehouse-editor/model/storage-ui-facade'
   );
 
   return {
     ...actual,
-    useSelectedRackActiveLevel: () => mockSelectedRackActiveLevel,
-    useSetSelectedRackActiveLevel: () => setSelectedRackActiveLevelSpy,
-    useSetSelectedContainerId: () => setSelectedContainerIdSpy,
-    useStartPlaceContainerWorkflow: () => startPlaceContainerWorkflowSpy,
-    useStartCreateAndPlaceWorkflow: () => startCreateAndPlaceWorkflowSpy,
-    useEditorSelection: () => mockSelection
+    useStorageSelectedRackActiveLevel: () => mockSelectedRackActiveLevel,
+    useStorageSetSelectedRackActiveLevel: () => setSelectedRackActiveLevelSpy,
+    useStorageSetSelectedContainerId: () => setSelectedContainerIdSpy,
+    useStorageStartPlaceContainerWorkflow: () => startPlaceContainerWorkflowSpy,
+    useStorageStartCreateAndPlaceWorkflow: () => startCreateAndPlaceWorkflowSpy,
+    useStorageSelection: () => mockSelection
   };
 });
 
