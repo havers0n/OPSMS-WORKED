@@ -14,6 +14,10 @@ import { useLocationStorage } from '@/entities/location/api/use-location-storage
 import { CellPlacementOperationalBody } from './storage-location-detail-body';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackLevelPager } from './rack-level-pager';
+import {
+  collectRackSemanticLevels,
+  resolveSemanticLevelForIndex
+} from '@/widgets/warehouse-editor/model/storage-level-mapping';
 
 export function StorageRackInspector({
   workspace,
@@ -45,17 +49,11 @@ export function StorageRackInspector({
       : null;
   const resolvedRackId = focusContext.rackId;
   const rack = layoutDraft && resolvedRackId ? layoutDraft.racks[resolvedRackId] : null;
-  // Get max level count from all faces (A and B) to support asymmetric racks
-  const levelCount =
-    !rack || rack.faces.length === 0
-      ? 0
-      : Math.max(
-          ...rack.faces
-            .filter((f) => f.enabled)
-            .map((f) =>
-              f.sections.length === 0 ? 0 : Math.max(...f.sections.map((s) => s.levels.length))
-            )
-        );
+  const semanticLevels = useMemo(
+    () => (rack ? collectRackSemanticLevels(rack) : []),
+    [rack]
+  );
+  const levelCount = semanticLevels.length;
   const selectedCellId = focusContext.resolvedCellId;
   const hasResolvedCellContext = focusContext.leaf === 'cell' && focusContext.resolvedCellId !== null;
   const { data: selectedCellLocationRef, error: selectedCellLocationError } = useLocationByCell(selectedCellId);
@@ -107,18 +105,14 @@ export function StorageRackInspector({
       };
     }
 
-    // Get all unique level ordinals from all enabled faces, sorted ascending.
-    // UI shows "L1" for activeLevel=0, which should map to ordinal 1 (lowest ordinal, first level).
-    const allOrdinals = Array.from(
-      new Set(
-        rack.faces
-          .filter((f) => f.enabled)
-          .flatMap((face) =>
-            face.sections.flatMap((section) => section.levels.map((l) => l.ordinal))
-          )
-      )
-    ).sort((a, b) => a - b); // ascending: [1, 2, 3, ...]
-    const levelNo = allOrdinals[activeLevel] ?? (activeLevel + 1);
+    const levelNo = resolveSemanticLevelForIndex(semanticLevels, activeLevel);
+    if (levelNo === null) {
+      return {
+        totalLocations: 0,
+        occupiedLocations: 0,
+        emptyLocations: 0
+      };
+    }
     const levelCells = publishedCells.filter(
       (cell) => cell.rackId === rack.id && cell.address.parts.level === levelNo
     );
@@ -136,7 +130,7 @@ export function StorageRackInspector({
       occupiedLocations,
       emptyLocations: Math.max(0, totalLocations - occupiedLocations)
     };
-  }, [rack, activeLevel, publishedCells, locationOccupancy]);
+  }, [rack, activeLevel, publishedCells, locationOccupancy, semanticLevels]);
 
   if (!rack) {
     return (

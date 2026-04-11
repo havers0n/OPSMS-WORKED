@@ -2,6 +2,10 @@ import { Group, Rect } from 'react-konva';
 import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  collectFaceSemanticLevels,
+  resolveSemanticLevelForIndex
+} from '@/widgets/warehouse-editor/model/storage-level-mapping';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
@@ -53,6 +57,7 @@ type FaceProps = {
   highlightedCellIds: Set<string>;
   isInteractive: boolean;
   activeLevelIndex: number;
+  semanticLevels: number[];
   isWorkflowScope: boolean;
   isRackPassive: boolean;
   selectedCellId: string | null;
@@ -77,6 +82,7 @@ function FaceCells({
   highlightedCellIds,
   isInteractive,
   activeLevelIndex,
+  semanticLevels,
   isWorkflowScope,
   isRackPassive,
   selectedCellId,
@@ -99,8 +105,11 @@ function FaceCells({
         const secW = sectionOffsets[si + 1] - secX;
         if (secW < MIN_CELL_W * 2) return null;
 
-        const levels = [...sec.levels].sort((left, right) => right.ordinal - left.ordinal);
-        const level = levels[activeLevelIndex] ?? null;
+        const semanticLevel = resolveSemanticLevelForIndex(semanticLevels, activeLevelIndex);
+        const level =
+          semanticLevel === null
+            ? null
+            : sec.levels.find((sectionLevel) => sectionLevel.ordinal === semanticLevel) ?? null;
         if (!level) return null;
         const slotCount = level.slotCount;
         if (!slotCount) return null;
@@ -222,6 +231,7 @@ type Props = {
   faceB: RackFace | null;
   isSelected: boolean;
   activeLevelIndex: number;
+  semanticLevels?: number[];
   publishedCellsByStructure: Map<string, Cell>;
   occupiedCellIds?: Set<string>;
   cellRuntimeById?: Map<string, OperationsCellRuntime>;
@@ -243,6 +253,7 @@ export function RackCells({
   faceB,
   isSelected,
   activeLevelIndex,
+  semanticLevels,
   publishedCellsByStructure,
   occupiedCellIds = new Set<string>(),
   cellRuntimeById = new Map<string, OperationsCellRuntime>(),
@@ -256,6 +267,8 @@ export function RackCells({
 }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const faceABandH = isPaired ? spineY : height;
+  const normalizedSemanticLevels =
+    semanticLevels ?? collectFaceSemanticLevels([faceA, ...(faceB ? [faceB] : [])]);
 
   return (
     <Group listening={isInteractive}>
@@ -276,6 +289,7 @@ export function RackCells({
         highlightedCellIds={highlightedCellIds}
         isInteractive={isInteractive}
         activeLevelIndex={activeLevelIndex}
+        semanticLevels={normalizedSemanticLevels}
         isWorkflowScope={isWorkflowScope}
         isRackPassive={isPassive}
         selectedCellId={selectedCellId}
@@ -300,6 +314,7 @@ export function RackCells({
           highlightedCellIds={highlightedCellIds}
           isInteractive={isInteractive}
           activeLevelIndex={activeLevelIndex}
+          semanticLevels={normalizedSemanticLevels}
           isWorkflowScope={isWorkflowScope}
           isRackPassive={isPassive}
           selectedCellId={selectedCellId}

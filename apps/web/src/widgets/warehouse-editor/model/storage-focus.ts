@@ -1,5 +1,6 @@
 import type { Cell } from '@wos/domain';
 import type { EditorSelection, ViewMode } from './editor-types';
+import { resolveSemanticLevelForIndex } from './storage-level-mapping';
 
 export type StorageFocusLeaf = 'none' | 'rack' | 'cell';
 
@@ -19,6 +20,20 @@ type ResolveStorageFocusContextArgs = {
   selectedRackActiveLevel: number;
   publishedCellsById: Map<string, Cell>;
 };
+
+function collectRackSemanticLevelsFromPublishedCells(
+  publishedCellsById: Map<string, Cell>,
+  rackId: string
+) {
+  return Array.from(
+    new Set(
+      Array.from(publishedCellsById.values())
+        .filter((cell) => cell.rackId === rackId)
+        .map((cell) => cell.address?.parts?.level)
+        .filter((level): level is number => Number.isFinite(level))
+    )
+  ).sort((left, right) => left - right);
+}
 
 function createNoneContext(activeLevel: number): StorageFocusContext {
   return {
@@ -58,13 +73,19 @@ export function resolveStorageFocusContext({
   if (selection.type === 'cell') {
     const cell = publishedCellsById.get(selection.cellId) ?? null;
     const rackId = cell?.rackId ?? null;
-    // Preserve existing inspector semantics: active level is 0-based UI index,
-    // while cell address level is 1-based (`activeLevel + 1` comparison).
     const cellLevel = cell?.address?.parts?.level;
+    const semanticLevels = rackId
+      ? collectRackSemanticLevelsFromPublishedCells(publishedCellsById, rackId)
+      : [];
+    const activeSemanticLevel = resolveSemanticLevelForIndex(
+      semanticLevels,
+      selectedRackActiveLevel
+    );
     const isOffLevel =
       rackId !== null &&
       typeof cellLevel === 'number' &&
-      cellLevel !== selectedRackActiveLevel + 1;
+      activeSemanticLevel !== null &&
+      cellLevel !== activeSemanticLevel;
 
     return {
       leaf: 'cell',
@@ -82,10 +103,18 @@ export function resolveStorageFocusContext({
     const sourceCell = sourceCellId ? (publishedCellsById.get(sourceCellId) ?? null) : null;
     const rackId = sourceCell?.rackId ?? null;
     const cellLevel = sourceCell?.address?.parts?.level;
+    const semanticLevels = rackId
+      ? collectRackSemanticLevelsFromPublishedCells(publishedCellsById, rackId)
+      : [];
+    const activeSemanticLevel = resolveSemanticLevelForIndex(
+      semanticLevels,
+      selectedRackActiveLevel
+    );
     const isOffLevel =
       rackId !== null &&
       typeof cellLevel === 'number' &&
-      cellLevel !== selectedRackActiveLevel + 1;
+      activeSemanticLevel !== null &&
+      cellLevel !== activeSemanticLevel;
 
     return {
       leaf: sourceCell ? 'cell' : 'none',

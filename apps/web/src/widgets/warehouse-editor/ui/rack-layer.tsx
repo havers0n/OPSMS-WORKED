@@ -3,6 +3,7 @@ import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
 import { getRackGeometry, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
+import { collectRackSemanticLevels } from '@/widgets/warehouse-editor/model/storage-level-mapping';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { RackSections } from './shapes/rack-sections';
@@ -176,6 +177,7 @@ export function RackLayer({
           moveSourceRackId !== rack.id;
         const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
         const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
+        const semanticLevels = collectRackSemanticLevels(rack);
 
         return (
           <Group
@@ -253,6 +255,7 @@ export function RackLayer({
                 faceB={geometry.isPaired ? faceB : null}
                 isSelected={isSelected}
                 activeLevelIndex={rack.id === primarySelectedRackId ? selectedRackActiveLevel : 0}
+                semanticLevels={semanticLevels}
                 publishedCellsByStructure={publishedCellsByStructure}
                 occupiedCellIds={occupiedCellIds}
                 cellRuntimeById={cellRuntimeById}
