@@ -8,6 +8,12 @@ interface WorkspaceCanvasAndPanelProps {
   onAddRack: () => void;
   onOpenInspector: () => undefined;
   onCloseInspector: () => void;
+  /**
+   * When true, suppresses the legacy RightSidePanelSlot so the V2 path can
+   * mount its own right surface (StorageInspectorV2) alongside this component.
+   * Defaults to false — has no effect on the layout-mode or legacy storage path.
+   */
+  hideRightPanel?: boolean;
 }
 
 /**
@@ -23,7 +29,8 @@ export function WorkspaceCanvasAndPanel({
   workspace,
   onAddRack,
   onOpenInspector,
-  onCloseInspector
+  onCloseInspector,
+  hideRightPanel,
 }: WorkspaceCanvasAndPanelProps) {
   return (
     <>
@@ -40,10 +47,12 @@ export function WorkspaceCanvasAndPanel({
         />
       </div>
 
-      <RightSidePanelSlot
-        workspace={workspace}
-        onCloseInspector={onCloseInspector}
-      />
+      {!hideRightPanel && (
+        <RightSidePanelSlot
+          workspace={workspace}
+          onCloseInspector={onCloseInspector}
+        />
+      )}
     </>
   );
 }

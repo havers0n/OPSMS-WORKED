@@ -1,4 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
+import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 
@@ -20,10 +21,13 @@ interface StorageWorkspaceV2Props {
  * All state and handlers are received from parent (WarehouseEditor).
  * This is pure composition with no local logic.
  *
- * **Relationship to PR1 & PR2:**
+ * **Relationship to PR1–PR6:**
  * - PR1: V2 state primitives (navigation, selection, task stores)
  * - PR2: StorageNavigator shell component
  * - PR3: This workspace container (gated V2 host)
+ * - PR4: StorageNavigator made interactive (selection wired to selection-store)
+ * - PR5: StorageInspectorV2 mounted here; legacy RightSidePanelSlot suppressed in V2 path
+ * - PR6: workspace threaded to navigator + inspector for real data cutover
  *
  * **Enabled by:** ENABLE_STORAGE_WORKSPACE_V2 const in warehouse-editor.tsx
  */
@@ -39,14 +43,17 @@ export function StorageWorkspaceV2({
       aria-label="Storage workspace"
       className="flex h-full w-full overflow-hidden"
     >
-      <StorageNavigator />
+      <StorageNavigator workspace={workspace} />
 
       <WorkspaceCanvasAndPanel
         workspace={workspace}
         onAddRack={onAddRack}
         onOpenInspector={onOpenInspector}
         onCloseInspector={onCloseInspector}
+        hideRightPanel
       />
+
+      <StorageInspectorV2 workspace={workspace} />
     </div>
   );
 }

@@ -14,7 +14,7 @@ import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 
-const ENABLE_STORAGE_WORKSPACE_V2 = false;
+const ENABLE_STORAGE_WORKSPACE_V2 = true;
 
 export function WarehouseEditor() {
   const activeFloorId = useActiveFloorId();
