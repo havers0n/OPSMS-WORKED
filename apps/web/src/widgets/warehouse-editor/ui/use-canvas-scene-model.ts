@@ -176,6 +176,7 @@ export function useCanvasSceneModel({
         floorOperationsCellsById,
         highlightedCellIdSet,
         occupiedCellIds,
+        publishedCellsById,
         publishedCellsByStructure
       },
       selection: resolvedSelection,
@@ -200,6 +201,7 @@ export function useCanvasSceneModel({
       isViewMode,
       lod,
       occupiedCellIds,
+      publishedCellsById,
       placementLayout,
       publishedCellsByStructure,
       racks,

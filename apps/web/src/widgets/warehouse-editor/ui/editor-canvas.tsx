@@ -61,6 +61,7 @@ import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
+import { resolveStorageActiveRackId } from './storage-active-rack-context';
 
 export function EditorCanvas({
   workspace,
@@ -191,6 +192,7 @@ export function EditorCanvas({
     floorOperationsCellsById,
     highlightedCellIdSet,
     occupiedCellIds,
+    publishedCellsById,
     publishedCellsByStructure
   } = scene.lookups;
   const {
@@ -203,6 +205,12 @@ export function EditorCanvas({
     selectedZone
   } = scene.selection;
   const { moveSourceCellId } = scene.workflow;
+  const primarySelectedRackId = resolveStorageActiveRackId({
+    viewMode,
+    selection,
+    selectedRackId,
+    publishedCellsById
+  });
   const {
     hintText,
     selectedRackAnchorRect,
@@ -504,7 +512,7 @@ export function EditorCanvas({
                 moveSourceRackId={moveSourceRackId}
                 occupiedCellIds={occupiedCellIds}
                 publishedCellsByStructure={publishedCellsByStructure}
-                primarySelectedRackId={selectedRackId}
+                primarySelectedRackId={primarySelectedRackId}
                 rackLookup={layoutDraft.racks}
                 racks={visibleRacks}
                 selectedRackActiveLevel={selectedRackActiveLevel}
