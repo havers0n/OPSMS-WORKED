@@ -123,14 +123,6 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
   });
 
-  it('normalizes legacy mode names onto the new mode model', () => {
-    useEditorStore.getState().setViewMode('placement');
-    expect(useModeStore.getState().viewMode).toBe('storage');
-
-    useEditorStore.getState().setViewMode('operations');
-    expect(useModeStore.getState().viewMode).toBe('view');
-  });
-
   it('initializes live draft into local state', () => {
     const draft = createLayoutDraftFixture();
 

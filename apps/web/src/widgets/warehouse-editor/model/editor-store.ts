@@ -12,9 +12,9 @@ import { create } from 'zustand';
 import {
   type ActiveLayoutTask,
   type ActiveStorageWorkflow,
-  type AnyViewMode,
   type EditorMode,
   type EditorSelection,
+  type ViewMode,
   type RackSideFocus,
   type ObjectWorkContext
 } from './editor-types';
@@ -87,7 +87,7 @@ type EditorStore = {
   lastSaveErrorMessage: string | null;
   lastChangeClass: LayoutChangeClass | null;
   // — Mode (coordinates with mode-store) —
-  setViewMode: (mode: AnyViewMode) => void;
+  setViewMode: (mode: ViewMode) => void;
   setEditorMode: (mode: EditorMode) => void;
   setObjectWorkContext: (context: ObjectWorkContext) => void;
   setSelectedRackActiveLevel: (level: number) => void;

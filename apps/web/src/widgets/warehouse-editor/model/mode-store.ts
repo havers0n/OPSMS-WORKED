@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import type { AnyViewMode, EditorMode, ViewMode } from './editor-types';
-import { normalizeViewMode } from './editor-types';
+import type { EditorMode, ViewMode } from './editor-types';
 
 /**
  * Mode Store — independent single source of truth for viewMode and editorMode.
@@ -14,7 +13,6 @@ import { normalizeViewMode } from './editor-types';
  * - Hold current viewMode ('layout', 'view', 'storage')
  * - Hold current editorMode ('select', 'place', 'draw-zone', 'draw-wall')
  * - Provide synchronous setters for mode transitions
- * - Apply normalization (e.g., 'placement' → 'storage')
  *
  * Does NOT:
  * - Clear selection or workflow (editor-store handles this)
@@ -25,7 +23,7 @@ import { normalizeViewMode } from './editor-types';
 type ModeStore = {
   viewMode: ViewMode;
   editorMode: EditorMode;
-  setViewMode: (nextViewMode: AnyViewMode) => void;
+  setViewMode: (nextViewMode: ViewMode) => void;
   setEditorMode: (nextEditorMode: EditorMode) => void;
 };
 
@@ -34,7 +32,7 @@ export const useModeStore = create<ModeStore>((set) => ({
   editorMode: 'select',
   setViewMode: (nextViewMode) =>
     set({
-      viewMode: normalizeViewMode(nextViewMode)
+      viewMode: nextViewMode
     }),
   setEditorMode: (nextEditorMode) =>
     set({

@@ -2,20 +2,12 @@ export type EditorMode = 'select' | 'place' | 'draw-zone' | 'draw-wall';
 
 /** Top-level editing perspective — controls which tools, overlays and inspector sections are active */
 export type ViewMode = 'view' | 'storage' | 'layout';
-export type LegacyViewMode = 'placement' | 'operations';
-export type AnyViewMode = ViewMode | LegacyViewMode;
 export type RackSideFocus = 'north' | 'east' | 'south' | 'west';
 export type ObjectWorkContext = 'geometry' | 'structure';
 
 export type RackSelectionFocus =
   | { type: 'body' }
   | { type: 'side'; side: RackSideFocus };
-
-export function normalizeViewMode(mode: AnyViewMode): ViewMode {
-  if (mode === 'placement') return 'storage';
-  if (mode === 'operations') return 'view';
-  return mode;
-}
 
 /**
  * Typed selection state for the editor.
