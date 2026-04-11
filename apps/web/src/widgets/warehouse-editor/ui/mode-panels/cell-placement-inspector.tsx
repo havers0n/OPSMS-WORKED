@@ -5,6 +5,8 @@ import { BffRequestError } from '@/shared/api/bff/client';
 import {
   useEditorSelection,
   useSetSelectedContainerId,
+  useStartCreateAndPlaceWorkflow,
+  useStartPlaceContainerWorkflow,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
@@ -110,6 +112,7 @@ function ContainerCard({ group, onContainerClick, sourceCellId }: ContainerCardP
       className="w-full rounded-lg text-left transition-shadow hover:ring-1 hover:ring-[var(--accent)]"
       style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
       onClick={() => onContainerClick(group.containerId, sourceCellId)}
+      data-testid="storage-shell-container-entry"
     >
       <div className="flex items-start justify-between gap-2 px-3 py-2.5">
         <div className="min-w-0">
@@ -595,12 +598,171 @@ function CurrentInventorySection({ rows, hasContainers }: CurrentInventorySectio
   );
 }
 
-export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
-  const selection = useEditorSelection();
+function PlacementActionsSection({
+  selectedCellId,
+  isDisabled
+}: {
+  selectedCellId: string;
+  isDisabled: boolean;
+}) {
+  const startPlaceContainerWorkflow = useStartPlaceContainerWorkflow();
+  const startCreateAndPlaceWorkflow = useStartCreateAndPlaceWorkflow();
+
+  return (
+    <div
+      className="rounded-lg"
+      style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+      data-testid="cell-placement-actions"
+    >
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
+        <Package className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+          Placement actions
+        </span>
+      </div>
+      <div className="border-t border-[var(--border-muted)] px-3 py-3">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+            onClick={() => startPlaceContainerWorkflow(selectedCellId)}
+            disabled={isDisabled}
+          >
+            Place existing
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+            onClick={() => startCreateAndPlaceWorkflow(selectedCellId)}
+            disabled={isDisabled}
+          >
+            Create + place
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type OperationalCell = {
+  id: string;
+  address: {
+    raw: string;
+  };
+};
+
+export function CellPlacementOperationalBody({
+  selectedCell,
+  locationId,
+  rows,
+  isReadOnlyView
+}: {
+  selectedCell: OperationalCell;
+  locationId: string;
+  rows: LocationStorageSnapshotRow[];
+  isReadOnlyView: boolean;
+}) {
   const setSelectedContainerId = useSetSelectedContainerId();
-  const viewMode = useViewMode();
   const [panelMode, setPanelMode] = useState<PlacementPanelMode>('details');
   const [taskType, setTaskType] = useState<PlacementTaskType>(null);
+
+  const containers = groupByContainer(rows);
+  const isOccupied = containers.length > 0;
+
+  const enterTaskMode = (nextTaskType: Exclude<PlacementTaskType, null>) => {
+    setPanelMode('task');
+    setTaskType(nextTaskType);
+  };
+
+  const returnToDetails = () => {
+    setPanelMode('details');
+    setTaskType(null);
+  };
+
+  useEffect(() => {
+    setPanelMode('details');
+    setTaskType(null);
+  }, [selectedCell.id]);
+
+  useEffect(() => {
+    if (!isReadOnlyView) return;
+    setPanelMode('details');
+    setTaskType(null);
+  }, [isReadOnlyView]);
+
+  const taskTitle = taskType === 'edit-policy' ? 'Edit location policy' : '';
+  const showDetailsMode = isReadOnlyView || panelMode === 'details';
+  const showTaskMode = !isReadOnlyView && panelMode === 'task' && taskType !== null;
+
+  return (
+    <>
+      {showTaskMode && (
+        <section
+          className="flex min-h-full flex-col rounded-xl border shadow-sm"
+          style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+          data-testid="cell-placement-task-shell"
+        >
+          <div
+            className="flex items-center justify-between gap-3 border-b px-4 py-3"
+            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-subtle)' }}
+            data-testid="cell-placement-task-header"
+          >
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Policy editor
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{taskTitle}</p>
+            </div>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--text-muted)]"
+              style={{ borderColor: 'var(--border-muted)' }}
+              onClick={returnToDetails}
+            >
+              Back
+            </button>
+          </div>
+
+          <div className="flex-1 px-4 py-4" data-testid="cell-placement-task-body">
+            {taskType === 'edit-policy' && (
+              <div data-testid="cell-placement-task-edit-policy">
+                <LocationPolicySection locationId={locationId} mode="editor" />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {showDetailsMode && (
+        <>
+          <CurrentContainersSection
+            containers={containers}
+            selectedCellId={selectedCell.id}
+            onContainerClick={setSelectedContainerId}
+          />
+          <CurrentInventorySection rows={rows} hasContainers={isOccupied} />
+          {!isReadOnlyView && (
+            <PlacementActionsSection
+              selectedCellId={selectedCell.id}
+              isDisabled={locationId.length === 0}
+            />
+          )}
+          <LocationPolicySection
+            locationId={locationId}
+            mode="summary"
+            onEdit={isReadOnlyView ? undefined : () => enterTaskMode('edit-policy')}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
+  const selection = useEditorSelection();
+  const viewMode = useViewMode();
 
   const cellId = selection.type === 'cell' ? selection.cellId : null;
   const isReadOnlyView = viewMode === 'view';
@@ -643,47 +805,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
   const bffError = error instanceof BffRequestError ? error : null;
   const locationBffError = locationQueryError instanceof BffRequestError ? locationQueryError : null;
-  const containers = groupByContainer(data);
-  const isOccupied = containers.length > 0;
-
-  const enterTaskMode = (nextTaskType: Exclude<PlacementTaskType, null>) => {
-    setPanelMode('task');
-    setTaskType(nextTaskType);
-  };
-
-  const returnToDetails = () => {
-    setPanelMode('details');
-    setTaskType(null);
-  };
-
-  useEffect(() => {
-    setPanelMode('details');
-    setTaskType(null);
-  }, [cellId]);
-
-  useEffect(() => {
-    if (!isReadOnlyView) return;
-    setPanelMode('details');
-    setTaskType(null);
-  }, [isReadOnlyView]);
-
-  const currentStateSections =
-    selectedCell && locationId && !isPending && !isError ? (
-      <>
-        <CurrentContainersSection
-          containers={containers}
-          selectedCellId={selectedCell.id}
-          onContainerClick={setSelectedContainerId}
-        />
-        <CurrentInventorySection rows={data} hasContainers={isOccupied} />
-      </>
-    ) : null;
-
-  const taskTitle =
-    taskType === 'edit-policy' ? 'Edit location policy' : '';
-
-  const showDetailsMode = isReadOnlyView || panelMode === 'details';
-  const showTaskMode = !isReadOnlyView && panelMode === 'task' && taskType !== null;
 
   return (
     <aside className="flex h-full w-full flex-col" style={{ background: 'var(--surface-primary)' }}>
@@ -701,53 +822,16 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
 
       <div
         className={`flex flex-1 flex-col overflow-y-auto px-4 py-4 ${
-          showTaskMode ? 'bg-[var(--surface-subtle)]' : 'gap-3'
+          !isReadOnlyView ? 'gap-3' : 'gap-3'
         }`}
-        data-testid={showTaskMode ? 'cell-placement-task-view' : 'cell-placement-details-view'}
+        data-testid="cell-placement-details-view"
       >
-        {showTaskMode && selectedCell && (
-          <section
-            className="flex min-h-full flex-col rounded-xl border shadow-sm"
-            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
-            data-testid="cell-placement-task-shell"
-          >
-            <div
-              className="flex items-center justify-between gap-3 border-b px-4 py-3"
-              style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-subtle)' }}
-              data-testid="cell-placement-task-header"
-            >
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  Policy editor
-                </p>
-                <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{taskTitle}</p>
-              </div>
-              <button
-                type="button"
-                className="rounded-md border px-3 py-1.5 text-xs font-medium text-[var(--text-muted)]"
-                style={{ borderColor: 'var(--border-muted)' }}
-                onClick={returnToDetails}
-              >
-                Back
-              </button>
-            </div>
-
-            <div className="flex-1 px-4 py-4" data-testid="cell-placement-task-body">
-              {taskType === 'edit-policy' && locationId && (
-                <div data-testid="cell-placement-task-edit-policy">
-                  <LocationPolicySection locationId={locationId} mode="editor" />
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {showDetailsMode && currentStateSections}
-        {showDetailsMode && selectedCell && locationId && (
-          <LocationPolicySection
+        {selectedCell && locationId && !isPending && !isError && (
+          <CellPlacementOperationalBody
+            selectedCell={selectedCell}
             locationId={locationId}
-            mode="summary"
-            onEdit={isReadOnlyView ? undefined : () => enterTaskMode('edit-policy')}
+            rows={data}
+            isReadOnlyView={isReadOnlyView}
           />
         )}
 

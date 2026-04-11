@@ -33,19 +33,16 @@ describe('resolveInspectorKind — layout mode', () => {
 });
 
 describe('resolveInspectorKind — storage mode', () => {
-  it('routes rack selection to rack-storage', () => {
-    expect(resolveInspectorKind('storage', rackSelection(['r1']))).toBe('rack-storage');
+  it('routes none/rack/cell selection to storage-shell', () => {
+    expect(resolveInspectorKind('storage', noSelection)).toBe('storage-shell');
+    expect(resolveInspectorKind('storage', rackSelection(['r1']))).toBe('storage-shell');
+    expect(resolveInspectorKind('storage', cellSelection('cell-1'))).toBe('storage-shell');
   });
 
-  it('routes cell and container selection to placement inspectors', () => {
-    expect(resolveInspectorKind('storage', cellSelection('cell-1'))).toBe('placement-cell');
+  it('keeps container selection routed to placement-container', () => {
     expect(resolveInspectorKind('storage', containerSelection('container-1'))).toBe(
       'placement-container'
     );
-  });
-
-  it('shows placeholder when nothing is selected', () => {
-    expect(resolveInspectorKind('storage', noSelection)).toBe('placement-placeholder');
   });
 });
 

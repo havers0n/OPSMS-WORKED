@@ -29,12 +29,17 @@ let mockStorageData: LocationStorageSnapshotRow[] = [];
 let mockContainerTypes: ContainerType[] = [];
 let mockPolicyAssignments: LocationProductAssignment[] = [];
 let mockProductSearchResults: Array<{ id: string; name: string; sku: string | null }> = [];
+const mockSetSelectedContainerId = vi.fn();
+const mockStartPlaceContainerWorkflow = vi.fn();
+const mockStartCreateAndPlaceWorkflow = vi.fn();
 const mockCreatePolicyMutateAsync = vi.fn();
 const mockDeletePolicyMutateAsync = vi.fn();
 
 vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
   useEditorSelection: () => mockSelection,
-  useSetSelectedContainerId: () => vi.fn(),
+  useSetSelectedContainerId: () => mockSetSelectedContainerId,
+  useStartPlaceContainerWorkflow: () => mockStartPlaceContainerWorkflow,
+  useStartCreateAndPlaceWorkflow: () => mockStartCreateAndPlaceWorkflow,
   useViewMode: () => mockViewMode
 }));
 
@@ -234,6 +239,9 @@ beforeEach(() => {
   mockContainerTypes = [];
   mockPolicyAssignments = [];
   mockProductSearchResults = [];
+  mockSetSelectedContainerId.mockReset();
+  mockStartPlaceContainerWorkflow.mockReset();
+  mockStartCreateAndPlaceWorkflow.mockReset();
   vi.spyOn(console, 'debug').mockImplementation(() => {});
   mockCreatePolicyMutateAsync.mockReset();
   mockDeletePolicyMutateAsync.mockReset();
@@ -253,7 +261,7 @@ describe('CellPlacementInspector render hierarchy', () => {
 
     expectTextOrder(markup, 'Current containers', 'Location Policy');
     expectTextOrder(markup, 'Current inventory', 'Location Policy');
-    expect(markup).not.toContain('Placement actions');
+    expect(markup).toContain('Placement actions');
   });
 });
 
@@ -322,9 +330,9 @@ describe('CellPlacementInspector placement mode transitions', () => {
     expect(view.findByTestId('cell-placement-task-view')).toBeNull();
     expect(view.text()).toContain('Current containers');
     expect(view.text()).toContain('Current inventory');
-    expect(view.text()).not.toContain('Placement actions');
-    expect(view.text()).not.toContain('Place existing container');
-    expect(view.text()).not.toContain('+ Create container');
+    expect(view.text()).toContain('Placement actions');
+    expect(view.text()).toContain('Place existing');
+    expect(view.text()).toContain('Create + place');
     expect(view.text()).toContain('Location Policy');
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
@@ -458,7 +466,7 @@ describe('CellPlacementInspector placement mode transitions', () => {
     });
 
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
-    expect(view.findByTestId('cell-placement-details-view')).toBeNull();
+    expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-edit-policy')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
     expect(view.findByTestId('cell-placement-policy-summary')).toBeNull();
@@ -503,8 +511,8 @@ describe('CellPlacementInspector view mode read-only gating', () => {
     expect(view.text()).toContain('Current inventory');
     expect(view.text()).toContain('Location Policy');
     expect(view.text()).not.toContain('Placement actions');
-    expect(view.text()).not.toContain('Place existing container');
-    expect(view.text()).not.toContain('+ Create container');
+    expect(view.text()).not.toContain('Place existing');
+    expect(view.text()).not.toContain('Create + place');
     expect(view.text()).not.toContain('Edit policy');
     expect(view.findByTestId('cell-placement-task-view')).toBeNull();
 
