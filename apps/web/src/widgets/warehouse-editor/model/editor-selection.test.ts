@@ -13,6 +13,7 @@ function resetStore() {
 
   // Reset editor-store
   useEditorStore.setState({
+    selectedRackActiveLevel: 0,
     activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,
@@ -30,6 +31,15 @@ afterEach(() => {
 });
 
 describe('EditorSelection — canonical store field', () => {
+  it('defaults selectedRackActiveLevel to 0', () => {
+    expect(useEditorStore.getState().selectedRackActiveLevel).toBe(0);
+  });
+
+  it('guards selectedRackActiveLevel from negative values', () => {
+    useEditorStore.getState().setSelectedRackActiveLevel(-5);
+    expect(useEditorStore.getState().selectedRackActiveLevel).toBe(0);
+  });
+
   it('defaults to { type: none }', () => {
     const { selection } = useInteractionStore.getState();
     expect(selection).toEqual({ type: 'none' });
@@ -89,8 +99,37 @@ describe('EditorSelection — canonical store field', () => {
 
   it('clearSelection() resets to { type: none }', () => {
     useEditorStore.getState().setSelectedRackId('r1');
+    useEditorStore.getState().setSelectedRackActiveLevel(3);
     useEditorStore.getState().clearSelection();
     expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+    expect(useEditorStore.getState().selectedRackActiveLevel).toBe(0);
+  });
+
+  it('resets selectedRackActiveLevel when primary selected rack changes', () => {
+    useEditorStore.getState().setSelectedRackId('r1');
+    useEditorStore.getState().setSelectedRackActiveLevel(2);
+
+    useEditorStore.getState().setSelectedRackId('r2');
+
+    expect(useEditorStore.getState().selectedRackActiveLevel).toBe(0);
+  });
+
+  it('does not reset selectedRackActiveLevel when primary selected rack does not change', () => {
+    useEditorStore.getState().setSelectedRackId('r1');
+    useEditorStore.getState().setSelectedRackActiveLevel(2);
+
+    useEditorStore.getState().setSelectedRackSide('r1', 'east');
+
+    expect(useEditorStore.getState().selectedRackActiveLevel).toBe(2);
+  });
+
+  it('preserves selectedRackActiveLevel on rack->cell drill-down', () => {
+    useEditorStore.getState().setSelectedRackId('r1');
+    useEditorStore.getState().setSelectedRackActiveLevel(2);
+
+    useEditorStore.getState().setSelectedCellId('cell-1');
+
+    expect(useEditorStore.getState().selectedRackActiveLevel).toBe(2);
   });
 
   it('preserves Context Panel mode across selection and workflow changes', () => {

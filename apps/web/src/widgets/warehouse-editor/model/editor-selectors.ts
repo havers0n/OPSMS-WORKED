@@ -27,6 +27,10 @@ export const useObjectWorkContext = (): ObjectWorkContext =>
   useEditorStore((state) => state.objectWorkContext);
 export const useSetObjectWorkContext = () =>
   useEditorStore((state) => state.setObjectWorkContext);
+export const useSelectedRackActiveLevel = () =>
+  useEditorStore((state) => state.selectedRackActiveLevel);
+export const useSetSelectedRackActiveLevel = () =>
+  useEditorStore((state) => state.setSelectedRackActiveLevel);
 // — Selection state — reads from interaction-store
 export const useSelectedRackIds = () =>
   useInteractionStore((state) =>

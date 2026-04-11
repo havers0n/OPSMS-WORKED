@@ -18,6 +18,7 @@ function resetStore() {
   // Reset editor-store
   useEditorStore.setState({
     objectWorkContext: 'geometry',
+    selectedRackActiveLevel: 0,
     activeTask: null,
     activeStorageWorkflow: null,
     minRackDistance: 0,

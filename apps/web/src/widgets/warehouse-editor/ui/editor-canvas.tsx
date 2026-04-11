@@ -20,6 +20,7 @@ import {
   useHoveredRackId,
   useIsLayoutEditable,
   useSelectedCellId,
+  useSelectedRackActiveLevel,
   useSelectedRackFocus,
   useSelectedZoneId,
   useSelectedWallId,
@@ -44,7 +45,12 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
-import { GRID_SIZE, MAJOR_GRID_SIZE, MINOR_GRID_ZOOM_THRESHOLD } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  GRID_SIZE,
+  isRackInViewport,
+  MAJOR_GRID_SIZE,
+  MINOR_GRID_ZOOM_THRESHOLD
+} from '@/entities/layout-version/lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { RackLayer } from './rack-layer';
@@ -73,6 +79,7 @@ export function EditorCanvas({
   const selectedRackIds = useSelectedRackIds();
   const selectedRackId = useSelectedRackId();
   const selectedRackFocus = useSelectedRackFocus();
+  const selectedRackActiveLevel = useSelectedRackActiveLevel();
   const selectedCellId = useSelectedCellId();
   const selection = useEditorSelection();
   const interactionScope = useInteractionScope();
@@ -140,6 +147,10 @@ export function EditorCanvas({
     viewMode,
     zoom
   });
+  const visibleRacks = useMemo(
+    () => racks.filter((rack) => isRackInViewport(rack, viewport, canvasOffset, zoom)),
+    [racks, viewport, canvasOffset, zoom]
+  );
   const scene = useCanvasSceneModel({
     activeTask,
     activeStorageWorkflow,
@@ -493,8 +504,10 @@ export function EditorCanvas({
                 moveSourceRackId={moveSourceRackId}
                 occupiedCellIds={occupiedCellIds}
                 publishedCellsByStructure={publishedCellsByStructure}
+                primarySelectedRackId={selectedRackId}
                 rackLookup={layoutDraft.racks}
-                racks={racks}
+                racks={visibleRacks}
+                selectedRackActiveLevel={selectedRackActiveLevel}
                 selectedRackIds={selectedRackIds}
                 setHighlightedCellIds={setHighlightedCellIds}
                 setHoveredRackId={setHoveredRackId}
