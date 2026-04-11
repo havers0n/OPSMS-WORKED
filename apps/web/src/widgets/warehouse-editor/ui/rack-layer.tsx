@@ -49,6 +49,14 @@ type RackLayerProps = {
   setSnapGuides: (guides: SnapGuide[]) => void;
   toggleRackSelection: (rackId: string) => void;
   updateRackPosition: (rackId: string, x: number, y: number) => void;
+  /**
+   * V2 Storage focus callbacks — when provided, these replace legacy
+   * setSelectedCellId / setSelectedRackIds in storage mode so that the
+   * V2 StorageFocusStore becomes the sole writer.
+   * Not passed in the legacy/layout path — undefined means use legacy behaviour.
+   */
+  onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
+  onV2StorageRackSelect?: (params: { rackId: string }) => void;
 };
 
 export function RackLayer({
@@ -86,7 +94,9 @@ export function RackLayer({
   setSelectedRackIds,
   setSnapGuides,
   toggleRackSelection,
-  updateRackPosition
+  updateRackPosition,
+  onV2StorageCellSelect,
+  onV2StorageRackSelect,
 }: RackLayerProps) {
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     if (!isLayoutEditable) return;
@@ -118,25 +128,10 @@ export function RackLayer({
     }
   };
 
-  const handleCellClick = (cellId: string, anchor: { x: number; y: number }) => {
-    void anchor;
-
-    if (isStorageMode) {
-      if (isWorkflowScope) {
-        setPlacementMoveTargetCellId(cellId);
-        return;
-      }
-
-      setSelectedCellId(cellId);
-      return;
-    }
-
-    if (isViewMode) {
-      setSelectedCellId(cellId);
-      setHighlightedCellIds([cellId]);
-    }
-  };
-
+  /**
+   * Rack press handler — defined outside the map (rackId is passed as param).
+   * In storage mode: uses V2 callback when provided, else falls back to legacy.
+   */
   const handleRackPress = (
     rackId: string,
     event: Konva.KonvaEventObject<MouseEvent | TouchEvent>
@@ -150,9 +145,17 @@ export function RackLayer({
     if (!isLayoutMode) {
       clearHighlightedCellIds();
       if (isStorageMode) {
-        setSelectedCellId(null);
+        if (onV2StorageRackSelect) {
+          // V2: single writer — focus store handles clearing the selected cell
+          onV2StorageRackSelect({ rackId });
+        } else {
+          // Legacy: dual-write to editor store
+          setSelectedCellId(null);
+          setSelectedRackIds([rackId]);
+        }
+      } else {
+        setSelectedRackIds([rackId]);
       }
-      setSelectedRackIds([rackId]);
       return;
     }
 
@@ -163,6 +166,10 @@ export function RackLayer({
       setSelectedRackId(rackId);
     }
   };
+
+  // NOTE: handleCellClick is defined per-rack inside racks.map() so that it
+  // has access to rack.id for the V2 onV2StorageCellSelect({ cellId, rackId }) call.
+  // This is necessary because RackCells.onCellClick only receives cellId.
 
   return (
     <Layer>
@@ -178,6 +185,29 @@ export function RackLayer({
         const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
         const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
         const semanticLevels = collectRackSemanticLevels(rack);
+
+        // Per-rack cell click handler: closure captures rack.id for V2 focus store call.
+        const handleCellClick = (cellId: string, anchor: { x: number; y: number }) => {
+          void anchor;
+          if (isStorageMode) {
+            if (isWorkflowScope) {
+              setPlacementMoveTargetCellId(cellId);
+              return;
+            }
+            if (onV2StorageCellSelect) {
+              // V2: single writer — caller (EditorCanvas) resolves level from publishedCellsById
+              onV2StorageCellSelect({ cellId, rackId: rack.id });
+            } else {
+              // Legacy: write to editor store
+              setSelectedCellId(cellId);
+            }
+            return;
+          }
+          if (isViewMode) {
+            setSelectedCellId(cellId);
+            setHighlightedCellIds([cellId]);
+          }
+        };
 
         return (
           <Group

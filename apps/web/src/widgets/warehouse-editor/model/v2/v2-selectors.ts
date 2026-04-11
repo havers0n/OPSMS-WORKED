@@ -7,6 +7,10 @@ import {
   type SelectionStore,
 } from './selection-store'
 import {
+  useStorageFocusStore,
+  type StorageFocusStore,
+} from './storage-focus-store'
+import {
   useTaskStore,
   type TaskStore,
   type StorageTask,
@@ -75,11 +79,43 @@ export const useStopStorageTask = () =>
   useTaskStore((state: TaskStore) => state.stopTask)
 
 // ============================================================================
+// Storage Focus Selectors — PR7 unified runtime focus source
+// ============================================================================
+
+export const useStorageFocusSelectedCellId = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.selectedCellId)
+
+export const useStorageFocusSelectedRackId = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.selectedRackId)
+
+export const useStorageFocusActiveLevel = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.activeLevel)
+
+export const useStorageFocusSelectCell = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.selectCell)
+
+export const useStorageFocusSelectRack = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.selectRack)
+
+export const useStorageFocusSetActiveLevel = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.setActiveLevel)
+
+export const useStorageFocusClearCell = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.clearCell)
+
+export const useStorageFocusClearAllFocus = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.clearAllFocus)
+
+export const useStorageFocusHandleEmptyCanvasClick = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.handleEmptyCanvasClick)
+
+// ============================================================================
 // Re-exports for convenience (types needed by consumer code)
 // ============================================================================
 
 export type { NavigationStore } from './navigation-store'
 export type { SelectionStore } from './selection-store'
+export type { StorageFocusStore } from './storage-focus-store'
 export type {
   TaskStore,
   StorageTask,

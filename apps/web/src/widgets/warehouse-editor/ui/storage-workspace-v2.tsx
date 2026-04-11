@@ -21,13 +21,14 @@ interface StorageWorkspaceV2Props {
  * All state and handlers are received from parent (WarehouseEditor).
  * This is pure composition with no local logic.
  *
- * **Relationship to PR1–PR6:**
+ * **Relationship to PR1–PR7:**
  * - PR1: V2 state primitives (navigation, selection, task stores)
  * - PR2: StorageNavigator shell component
  * - PR3: This workspace container (gated V2 host)
  * - PR4: StorageNavigator made interactive (selection wired to selection-store)
  * - PR5: StorageInspectorV2 mounted here; legacy RightSidePanelSlot suppressed in V2 path
  * - PR6: workspace threaded to navigator + inspector for real data cutover
+ * - PR7: isStorageV2 + hideContextPanel passed; StorageFocusStore is now sole V2 focus writer
  *
  * **Enabled by:** ENABLE_STORAGE_WORKSPACE_V2 const in warehouse-editor.tsx
  */
@@ -51,6 +52,8 @@ export function StorageWorkspaceV2({
         onOpenInspector={onOpenInspector}
         onCloseInspector={onCloseInspector}
         hideRightPanel
+        hideContextPanel
+        isStorageV2
       />
 
       <StorageInspectorV2 workspace={workspace} />

@@ -3,45 +3,38 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import {
-  useNavigationRackId,
-  useNavigationActiveLevel,
-  useSelectionLocationId,
-  useSetLevel,
-  useSelectLocation,
-  useSetRack,
+  useStorageFocusSelectedCellId,
+  useStorageFocusSelectedRackId,
+  useStorageFocusActiveLevel,
+  useStorageFocusSelectCell,
+  useStorageFocusSelectRack,
+  useStorageFocusSetActiveLevel,
 } from '../model/v2/v2-selectors';
 
 /**
- * StorageNavigator — V2 navigator for storage mode, driven by real read data.
+ * StorageNavigator — V2 navigator for storage mode.
  *
- * V2 Integration:
- * - Reads navigation-store: rackId, activeLevel (display context)
- * - Writes navigation-store: setLevel (level tab clicks)
- *   ⚠️ TEMPORARY FALLBACK: also initialises rackId on mount via existing setRack()
- *     when rackId is null, using the first key of workspace.latestPublished.racks.
- *     This is NOT the intended rack-resolution model (should derive from selected cell
- *     or an explicit rack-picker). Deferred to a future PR.
- * - Reads selection-store: locationId (highlight selected item)
- *   ⚠️ TEMPORARY DEBT: locationId field holds a cellId (UUID) in V2 navigator context.
- *     The field's real semantics are resolved per-use in StorageInspectorV2.
- *     Must be cleaned up in a future PR.
- * - Writes selection-store: selectLocation(cellId) on location item clicks
+ * PR7: Reads and writes exclusively via StorageFocusStore.
+ * The old navigation-store + selection-store are no longer used here.
  *
- * Real data sources (PR6):
+ * Focus store as secondary writer:
+ * - Level tab click     → setActiveLevel(level)
+ * - Location item click → selectCell({ cellId, rackId, level })
+ *
+ * Focus store reads:
+ * - selectedCellId   — for highlighting the selected item in the list
+ * - selectedRackId   — for filtering cells and displaying the rack header
+ * - activeLevel      — for level tab highlight and list filtering
+ *
+ * ⚠️ TEMPORARY FALLBACK (same as PR6): when selectedRackId is null and racks
+ * are loaded, the navigator auto-initialises the focus store with the first rack
+ * via selectRack(). This is NOT the intended rack-resolution model (should derive
+ * from an explicit rack-picker or initial URL/session state). Deferred.
+ *
+ * Real data sources (PR6, unchanged):
  * - usePublishedCells(floorId) → cell list with rackId, level, cellCode
  * - useFloorLocationOccupancy(floorId) → occupancy map (cellId → containerId)
  * - workspace.latestPublished.racks → rack displayCode
- *
- * Local UI state:
- * - searchQuery: substring filter on cell code
- * - occupancyFilter: 'all' | 'empty-only'
- *
- * Non-goals:
- * - No inspector wiring beyond selectLocation
- * - No canvas highlight integration
- * - No legacy store bridge
- * - No task mode
- * - No rack-picker UI (deferred)
  */
 
 interface StorageNavigatorProps {
@@ -52,26 +45,17 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const floorId = workspace?.floorId ?? null;
   const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
 
-  // V2 store — read
-  const rackId = useNavigationRackId();
-  const activeLevel = useNavigationActiveLevel() ?? 1;
-  const selectedCellId = useSelectionLocationId(); // ⚠️ holds cellId in V2 context
+  // ── Focus store — read ──────────────────────────────────────────────────────
+  const selectedCellId = useStorageFocusSelectedCellId();
+  const rackId = useStorageFocusSelectedRackId();
+  const activeLevel = useStorageFocusActiveLevel() ?? 1;
 
-  // V2 store — write
-  const setLevel = useSetLevel();
-  const setRack = useSetRack();
-  const selectLocation = useSelectLocation();
+  // ── Focus store — write ─────────────────────────────────────────────────────
+  const selectCell = useStorageFocusSelectCell();
+  const selectRack = useStorageFocusSelectRack();
+  const setActiveLevel = useStorageFocusSetActiveLevel();
 
-  // ⚠️ TEMPORARY FALLBACK: initialize rackId to first rack in workspace when unset.
-  // Intended model: derive from selected cell or explicit rack-picker. Deferred.
-  useEffect(() => {
-    const rackKeys = racks ? Object.keys(racks) : [];
-    if (!rackId && rackKeys.length > 0) {
-      setRack(rackKeys[0]);
-    }
-  }, [rackId, racks, setRack]);
-
-  // Real data
+  // ── Real data ───────────────────────────────────────────────────────────────
   const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(floorId);
   const { data: occupancyRows = [], isLoading: occupancyLoading } = useFloorLocationOccupancy(floorId);
 
@@ -85,6 +69,17 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     }
     return map;
   }, [occupancyRows]);
+
+  // ⚠️ TEMPORARY FALLBACK: initialise rackId from first rack when none is selected.
+  // Intended model: derive from an explicit rack-picker or session state. Deferred.
+  useEffect(() => {
+    if (!rackId && racks) {
+      const rackKeys = Object.keys(racks);
+      if (rackKeys.length > 0) {
+        selectRack({ rackId: rackKeys[0] });
+      }
+    }
+  }, [rackId, racks, selectRack]);
 
   // Derive available levels from cells for the current rack
   const availableLevels = useMemo(() => {
@@ -129,7 +124,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const filtersActive = occupancyFilter !== 'all' || searchQuery.trim() !== '';
 
-  // Rack display
+  // Rack display — rackId is the focus store's selectedRackId (always coherent)
   const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '—';
 
   const isLoading = cellsLoading || occupancyLoading;
@@ -160,7 +155,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                     ? 'bg-blue-100 border-blue-400 text-blue-900'
                     : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
                 }`}
-                onClick={() => setLevel(level)}
+                onClick={() => setActiveLevel(level)}
               >
                 {level}
               </button>
@@ -254,7 +249,13 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                         ? `Selected: ${cell.address.raw}`
                         : `Location ${cell.address.raw} — ${isOccupied ? 'occupied' : 'empty'}`
                     }
-                    onClick={() => selectLocation(cell.id)}
+                    onClick={() => {
+                      selectCell({
+                        cellId: cell.id,
+                        rackId: cell.rackId,
+                        level: cell.address.parts.level,
+                      });
+                    }}
                   >
                     {/* Status Icon */}
                     <span className="text-base flex-shrink-0">
@@ -288,8 +289,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       {/* Footer: Implementation Status */}
       <div className="px-4 py-2 border-t border-gray-200 flex-shrink-0 text-xs text-gray-500 bg-gray-50">
         <p>
-          <span className="font-medium">PR6:</span> Real data — published cells + floor occupancy.
-          {' '}⚠️ Rack init is a temporary fallback; rack-picker deferred.
+          <span className="font-medium">PR7:</span> Focus via StorageFocusStore — canvas + navigator are coherent.
+          {' '}⚠️ Rack-picker deferred.
         </p>
       </div>
     </div>

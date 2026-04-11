@@ -14,6 +14,17 @@ interface WorkspaceCanvasAndPanelProps {
    * Defaults to false — has no effect on the layout-mode or legacy storage path.
    */
   hideRightPanel?: boolean;
+  /**
+   * When true, suppresses the ContextPanel (floating cell/rack toolbar) so the
+   * V2 path can provide its own context affordances.
+   * Defaults to false.
+   */
+  hideContextPanel?: boolean;
+  /**
+   * Forwarded to EditorCanvas to activate V2 StorageFocusStore canvas interactions.
+   * When true, canvas writes go exclusively to the focus store.
+   */
+  isStorageV2?: boolean;
 }
 
 /**
@@ -31,6 +42,8 @@ export function WorkspaceCanvasAndPanel({
   onOpenInspector,
   onCloseInspector,
   hideRightPanel,
+  hideContextPanel,
+  isStorageV2,
 }: WorkspaceCanvasAndPanelProps) {
   return (
     <>
@@ -39,12 +52,15 @@ export function WorkspaceCanvasAndPanel({
           workspace={workspace}
           onAddRack={onAddRack}
           onOpenInspector={onOpenInspector}
+          isStorageV2={isStorageV2}
         />
 
-        <ContextPanel
-          workspace={workspace}
-          onOpenInspector={onOpenInspector}
-        />
+        {!hideContextPanel && (
+          <ContextPanel
+            workspace={workspace}
+            onOpenInspector={onOpenInspector}
+          />
+        )}
       </div>
 
       {!hideRightPanel && (

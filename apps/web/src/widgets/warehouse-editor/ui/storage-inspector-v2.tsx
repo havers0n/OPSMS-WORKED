@@ -3,20 +3,19 @@ import React from 'react';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import {
-  useSelectionLocationId,
-  useNavigationRackId,
-  useNavigationActiveLevel,
+  useStorageFocusSelectedCellId,
+  useStorageFocusSelectedRackId,
+  useStorageFocusActiveLevel,
 } from '../model/v2/v2-selectors';
 
 /**
  * StorageInspectorV2 — Read-only right surface for the V2 storage path.
  *
- * V2 Integration:
- * - Reads selection-store: locationId field
- *   ⚠️ TEMPORARY DEBT (PR6): this field holds a cellId (UUID), not a real locationId.
- *     Real locationId is resolved here via useLocationByCell(cellId).
- *     Must be corrected in a future PR when selection-store semantics are clarified.
- * - Reads navigation-store: rackId, activeLevel (breadcrumb context only)
+ * V2 Integration (PR7):
+ * - Reads StorageFocusStore: selectedCellId (was: selection-store.locationId)
+ *   The PR6 semantic ambiguity (locationId holding a cellId) is resolved — the
+ *   focus store field is correctly named selectedCellId.
+ * - Reads StorageFocusStore: selectedRackId, activeLevel (breadcrumb context)
  * - Derives real locationId via useLocationByCell(cellId) — 1 GET per unique cellId, cached
  * - Fetches container + inventory via useLocationStorage(locationId)
  *
@@ -97,8 +96,8 @@ function InspectorFooter() {
   return (
     <div className="px-4 py-2 border-t border-gray-200 flex-shrink-0 text-xs text-gray-500 bg-gray-50">
       <p>
-        <span className="font-medium">PR6:</span> Real data — location storage snapshot.
-        {' '}Actions deferred to PR7+.
+        <span className="font-medium">PR7:</span> Focus via StorageFocusStore — breadcrumb is coherent with canvas.
+        {' '}Actions deferred to PR8+.
       </p>
     </div>
   );
@@ -160,13 +159,10 @@ function LoadingState() {
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
 
-  // ⚠️ TEMPORARY DEBT: selection-store.locationId holds a cellId in V2 navigator context.
-  // This is not the intended semantics — cleaned up in a future PR.
-  const cellId = useSelectionLocationId();
-
-  // Breadcrumb context (rack displayCode is a TEMPORARY FALLBACK from navigation-store rackId)
-  const rackId = useNavigationRackId();
-  const activeLevel = useNavigationActiveLevel() ?? 1;
+  // PR7: reads from StorageFocusStore — the single V2 runtime focus source.
+  const cellId = useStorageFocusSelectedCellId();
+  const rackId = useStorageFocusSelectedRackId();
+  const activeLevel = useStorageFocusActiveLevel() ?? 1;
   const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '—';
 
   // Step 1: resolve cellId → locationId

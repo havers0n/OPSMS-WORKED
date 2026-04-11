@@ -41,6 +41,13 @@ type UseCanvasStageInteractionsParams = {
   setSelectedRackIds: (rackIds: string[]) => void;
   stageRef: MutableRefObject<Konva.Stage | null>;
   viewport: { width: number; height: number };
+  /**
+   * V2 Storage override for empty-canvas click.
+   * When provided, replaces clearSelection() so that only the V2 StorageFocusStore
+   * is written (no dual-write to the legacy editor selection state).
+   * Not passed in the legacy / layout path.
+   */
+  onStorageEmptyClick?: () => void;
 };
 
 export function useCanvasStageInteractions({
@@ -58,7 +65,8 @@ export function useCanvasStageInteractions({
   layoutDraft,
   setSelectedRackIds,
   stageRef,
-  viewport
+  viewport,
+  onStorageEmptyClick,
 }: UseCanvasStageInteractionsParams) {
   // marquee drives the Konva Rect visual; marqueeRef is readable in event handlers
   // without stale closure issues.
@@ -94,6 +102,8 @@ export function useCanvasStageInteractions({
   clearSelectionRef.current = clearSelection;
   const cancelPlacementInteractionRef = useRef(cancelPlacementInteraction);
   cancelPlacementInteractionRef.current = cancelPlacementInteraction;
+  const onStorageEmptyClickRef = useRef(onStorageEmptyClick);
+  onStorageEmptyClickRef.current = onStorageEmptyClick;
 
   const cancelDrawZone = useCallback(() => {
     draftZoneStartRef.current = null;
@@ -137,7 +147,13 @@ export function useCanvasStageInteractions({
           return;
         }
 
-        clearSelectionRef.current();
+        // V2 storage path: single writer to focus store, no legacy selection write.
+        // Legacy path: clear editor store selection as before.
+        if (onStorageEmptyClickRef.current) {
+          onStorageEmptyClickRef.current();
+        } else {
+          clearSelectionRef.current();
+        }
         clearHighlightedCellIds();
       }
     };

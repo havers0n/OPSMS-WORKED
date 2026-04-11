@@ -40,7 +40,6 @@ import {
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import {
-  resolveStorageFocusContext,
   useStorageActiveWorkflow,
   useStorageCancelPlacementInteraction,
   useStorageSelectedCellId,
@@ -48,6 +47,15 @@ import {
   useStorageSetPlacementMoveTargetCellId,
   useStorageSetSelectedCellId
 } from '@/widgets/warehouse-editor/model/storage-ui-facade';
+import {
+  useStorageFocusActiveLevel,
+  useStorageFocusSelectedCellId,
+  useStorageFocusSelectedRackId,
+  useStorageFocusSelectCell,
+  useStorageFocusSelectRack,
+  useStorageFocusHandleEmptyCanvasClick,
+} from '@/widgets/warehouse-editor/model/v2/v2-selectors';
+import { resolveIndexForSemanticLevel } from '@/widgets/warehouse-editor/model/storage-level-mapping';
 import {
   GRID_SIZE,
   isRackInViewport,
@@ -68,11 +76,18 @@ import { ZoneLayer } from './zone-layer';
 export function EditorCanvas({
   workspace,
   onAddRack: _onAddRack,
-  onOpenInspector
+  onOpenInspector,
+  isStorageV2 = false,
 }: {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
   onOpenInspector: () => void;
+  /**
+   * When true, canvas interaction writes go to the V2 StorageFocusStore
+   * instead of the legacy editor selection state (no dual-write).
+   * Passed by StorageWorkspaceV2 → WorkspaceCanvasAndPanel → here.
+   */
+  isStorageV2?: boolean;
 }) {
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
@@ -85,6 +100,9 @@ export function EditorCanvas({
   const selectedRackActiveLevel = useStorageSelectedRackActiveLevel();
   const selectedCellId = useStorageSelectedCellId();
   const selection = useEditorSelection();
+  const storageFocusSelectedCellId = useStorageFocusSelectedCellId();
+  const storageFocusSelectedRackId = useStorageFocusSelectedRackId();
+  const storageFocusActiveLevel = useStorageFocusActiveLevel();
   const interactionScope = useInteractionScope();
   const highlightedCellIds = useHighlightedCellIds();
   const activeTask = useActiveTask();
@@ -116,6 +134,13 @@ export function EditorCanvas({
   const createRack = useCreateRack();
   const createFreeWall = useCreateFreeWall();
   const minRackDistance = useMinRackDistance();
+  const isStorageV2Active = isStorageV2 && viewMode === 'storage';
+
+  // V2 focus store actions — always called unconditionally (hook rules).
+  // Only wired into the canvas when isStorageV2 && isStorageMode (see isStorageV2Active).
+  const storageFocusSelectCell = useStorageFocusSelectCell();
+  const storageFocusSelectRack = useStorageFocusSelectRack();
+  const storageFocusHandleEmptyCanvasClick = useStorageFocusHandleEmptyCanvasClick();
 
   const isViewMode = viewMode === 'view';
   // In View and Storage mode the published rack tree must be
@@ -154,6 +179,22 @@ export function EditorCanvas({
     () => racks.filter((rack) => isRackInViewport(rack, viewport, canvasOffset, zoom)),
     [racks, viewport, canvasOffset, zoom]
   );
+  const effectiveSelectedCellId = isStorageV2Active ? storageFocusSelectedCellId : selectedCellId;
+  const effectiveSelectedRackId = isStorageV2Active ? storageFocusSelectedRackId : selectedRackId;
+  const effectiveSelectedRackIds = isStorageV2Active
+    ? (storageFocusSelectedRackId ? [storageFocusSelectedRackId] : [])
+    : selectedRackIds;
+  const effectiveSelectedRackFocus = isStorageV2Active
+    ? { type: 'body' as const }
+    : selectedRackFocus;
+  const effectiveSelection = isStorageV2Active
+    ? (storageFocusSelectedCellId
+      ? ({ type: 'cell', cellId: storageFocusSelectedCellId } as const)
+      : storageFocusSelectedRackId
+        ? ({ type: 'rack', rackIds: [storageFocusSelectedRackId], focus: { type: 'body' as const } } as const)
+        : ({ type: 'none' } as const))
+    : selection;
+
   const scene = useCanvasSceneModel({
     activeTask,
     activeStorageWorkflow,
@@ -165,13 +206,13 @@ export function EditorCanvas({
     layoutDraft,
     placementLayout,
     racks,
-    selectedCellId,
-    selectedRackFocus,
-    selectedRackId,
-    selectedRackIds,
+    selectedCellId: effectiveSelectedCellId,
+    selectedRackFocus: effectiveSelectedRackFocus,
+    selectedRackId: effectiveSelectedRackId,
+    selectedRackIds: effectiveSelectedRackIds,
     selectedWallId,
     selectedZoneId,
-    selection,
+    selection: effectiveSelection,
     viewMode,
     workspace,
     zoom
@@ -207,6 +248,27 @@ export function EditorCanvas({
     selectedZone
   } = scene.selection;
   const { moveSourceCellId } = scene.workflow;
+  // V2 is active only when the V2 workspace gate is on and we're in storage mode.
+  // When active, canvas interactions write exclusively to StorageFocusStore.
+  const isStorageV2Active = isStorageV2 && isStorageMode;
+
+  // V2 cell-select callback: resolves level from publishedCellsById before calling selectCell.
+  // Passed to RackLayer as onV2StorageCellSelect — only when V2 is active.
+  const onV2StorageCellSelect = isStorageV2Active
+    ? ({ cellId, rackId }: { cellId: string; rackId: string }) => {
+        const cell = publishedCellsById.get(cellId);
+        const level = cell?.address.parts.level ?? null;
+        storageFocusSelectCell({ cellId, rackId, level });
+      }
+    : undefined;
+
+  // V2 rack-select callback — only when V2 is active.
+  const onV2StorageRackSelect = isStorageV2Active
+    ? ({ rackId }: { rackId: string }) => {
+        storageFocusSelectRack({ rackId });
+      }
+    : undefined;
+
   const storageFocusContext = resolveStorageFocusContext({
     viewMode,
     selection,
@@ -276,7 +338,9 @@ export function EditorCanvas({
     layoutDraft,
     setSelectedRackIds,
     stageRef,
-    viewport
+    viewport,
+    // V2: replace clearSelection with focus-store handler in storage V2 path
+    onStorageEmptyClick: isStorageV2Active ? storageFocusHandleEmptyCanvasClick : undefined,
   });
 
   useCanvasKeyboardShortcuts({
@@ -529,6 +593,8 @@ export function EditorCanvas({
                 setSnapGuides={setSnapGuides}
                 toggleRackSelection={toggleRackSelection}
                 updateRackPosition={updateRackPosition}
+                onV2StorageCellSelect={onV2StorageCellSelect}
+                onV2StorageRackSelect={onV2StorageRackSelect}
               />
 
               {/* ── Marquee selection overlay (topmost, non-interactive) ── */}
