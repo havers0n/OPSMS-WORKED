@@ -1,5 +1,6 @@
 import type { FloorWorkspace, LocationStorageSnapshotRow, Rack } from '@wos/domain';
 import React from 'react';
+import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import {
@@ -158,6 +159,8 @@ function LoadingState() {
 
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
+  const floorId = workspace?.floorId ?? null;
+  const { data: publishedCells = [] } = usePublishedCells(floorId);
 
   // PR7: reads from StorageFocusStore — the single V2 runtime focus source.
   const cellId = useStorageFocusSelectedCellId();
@@ -180,8 +183,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     return <LoadingState />;
   }
 
-  // Derive breadcrumb location code: prefer real locationCode from snapshot, fall back to cellId
-  const locationCode = storageRows[0]?.locationCode ?? cellId;
+  const selectedCellAddress = publishedCells.find((cell) => cell.id === cellId)?.address.raw ?? null;
+  // Derive breadcrumb location code: prefer real locationCode, then semantic cell code, then raw id.
+  const locationCode = storageRows[0]?.locationCode ?? selectedCellAddress ?? cellId;
   const isOccupied = storageRows.length > 0;
   const containers = groupByContainer(storageRows);
 

@@ -12,19 +12,17 @@ import {
   useClearSelection,
   useDeleteZone,
   useEditorMode,
-  useEditorSelection,
+  useActiveStorageWorkflow,
+  useCancelPlacementInteraction,
   useInteractionScope,
   useClearHighlightedCellIds,
   useHoveredRackId,
   useIsLayoutEditable,
-  useSelectedRackFocus,
   useSelectedZoneId,
   useSelectedWallId,
-  useSelectedRackId,
   useSetSelectedRackId,
   useSetSelectedWallId,
   useSetSelectedZoneId,
-  useSelectedRackIds,
   useSetCanvasZoom,
   useSetEditorMode,
   useSetHoveredRackId,
@@ -32,6 +30,8 @@ import {
   useSetHighlightedCellIds,
   useSetSelectedRackSide,
   useSetSelectedRackIds,
+  useSetPlacementMoveTargetCellId,
+  useSetSelectedCellId,
   useToggleRackSelection,
   useUpdateRackPosition,
   useUpdateWallGeometry,
@@ -39,14 +39,9 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
-import {
-  useStorageActiveWorkflow,
-  useStorageCancelPlacementInteraction,
-  useStorageSelectedCellId,
-  useStorageSelectedRackActiveLevel,
-  useStorageSetPlacementMoveTargetCellId,
-  useStorageSetSelectedCellId
-} from '@/widgets/warehouse-editor/model/storage-ui-facade';
+import type { EditorSelection, RackSelectionFocus } from '@/widgets/warehouse-editor/model/editor-types';
+import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import {
   useStorageFocusActiveLevel,
   useStorageFocusSelectedCellId,
@@ -73,6 +68,10 @@ import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
 
+const EMPTY_RACK_IDS: string[] = [];
+const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
+const NONE_SELECTION: EditorSelection = { type: 'none' };
+
 export function EditorCanvas({
   workspace,
   onAddRack: _onAddRack,
@@ -91,22 +90,51 @@ export function EditorCanvas({
 }) {
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
+  const isStorageV2Active = isStorageV2 && viewMode === 'storage';
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
   const isLayoutEditable = useIsLayoutEditable();
-  const selectedRackIds = useSelectedRackIds();
-  const selectedRackId = useSelectedRackId();
-  const selectedRackFocus = useSelectedRackFocus();
-  const selectedRackActiveLevel = useStorageSelectedRackActiveLevel();
-  const selectedCellId = useStorageSelectedCellId();
-  const selection = useEditorSelection();
+  const selectedRackIds = useInteractionStore((state) =>
+    isStorageV2Active
+      ? EMPTY_RACK_IDS
+      : state.selection.type === 'rack'
+        ? state.selection.rackIds
+        : EMPTY_RACK_IDS
+  );
+  const selectedRackId = useInteractionStore((state) =>
+    isStorageV2Active
+      ? null
+      : state.selection.type === 'rack'
+        ? (state.selection.rackIds[0] ?? null)
+        : null
+  );
+  const selectedRackFocus = useInteractionStore((state) =>
+    isStorageV2Active
+      ? BODY_RACK_FOCUS
+      : state.selection.type === 'rack'
+        ? (state.selection.focus ?? BODY_RACK_FOCUS)
+        : BODY_RACK_FOCUS
+  );
+  const selectedRackActiveLevel = useEditorStore((state) =>
+    isStorageV2Active ? 0 : state.selectedRackActiveLevel
+  );
+  const selectedCellId = useInteractionStore((state) =>
+    isStorageV2Active
+      ? null
+      : state.selection.type === 'cell'
+        ? state.selection.cellId
+        : null
+  );
+  const selection = useInteractionStore((state) =>
+    isStorageV2Active ? NONE_SELECTION : state.selection
+  );
   const storageFocusSelectedCellId = useStorageFocusSelectedCellId();
   const storageFocusSelectedRackId = useStorageFocusSelectedRackId();
   const storageFocusActiveLevel = useStorageFocusActiveLevel();
   const interactionScope = useInteractionScope();
   const highlightedCellIds = useHighlightedCellIds();
   const activeTask = useActiveTask();
-  const activeStorageWorkflow = useStorageActiveWorkflow();
+  const activeStorageWorkflow = useActiveStorageWorkflow();
   const hoveredRackId = useHoveredRackId();
   const clearSelection = useClearSelection();
   const deleteWall = useDeleteWall();
@@ -119,9 +147,9 @@ export function EditorCanvas({
   const selectedWallId = useSelectedWallId();
   const setSelectedZoneId = useSetSelectedZoneId();
   const setSelectedWallId = useSetSelectedWallId();
-  const setSelectedCellId = useStorageSetSelectedCellId();
-  const setPlacementMoveTargetCellId = useStorageSetPlacementMoveTargetCellId();
-  const cancelPlacementInteraction = useStorageCancelPlacementInteraction();
+  const setSelectedCellId = useSetSelectedCellId();
+  const setPlacementMoveTargetCellId = useSetPlacementMoveTargetCellId();
+  const cancelPlacementInteraction = useCancelPlacementInteraction();
   const toggleRackSelection = useToggleRackSelection();
   const setHoveredRackId = useSetHoveredRackId();
   const clearHighlightedCellIds = useClearHighlightedCellIds();
@@ -134,7 +162,6 @@ export function EditorCanvas({
   const createRack = useCreateRack();
   const createFreeWall = useCreateFreeWall();
   const minRackDistance = useMinRackDistance();
-  const isStorageV2Active = isStorageV2 && viewMode === 'storage';
 
   // V2 focus store actions — always called unconditionally (hook rules).
   // Only wired into the canvas when isStorageV2 && isStorageMode (see isStorageV2Active).
@@ -248,10 +275,6 @@ export function EditorCanvas({
     selectedZone
   } = scene.selection;
   const { moveSourceCellId } = scene.workflow;
-  // V2 is active only when the V2 workspace gate is on and we're in storage mode.
-  // When active, canvas interactions write exclusively to StorageFocusStore.
-  const isStorageV2Active = isStorageV2 && isStorageMode;
-
   // V2 cell-select callback: resolves level from publishedCellsById before calling selectCell.
   // Passed to RackLayer as onV2StorageCellSelect — only when V2 is active.
   const onV2StorageCellSelect = isStorageV2Active
@@ -269,13 +292,51 @@ export function EditorCanvas({
       }
     : undefined;
 
-  const storageFocusContext = resolveStorageFocusContext({
-    viewMode,
-    selection,
+  const primarySelectedRackId = isStorageV2Active
+    ? storageFocusSelectedRackId
+    : viewMode === 'storage'
+      ? (selection.type === 'rack'
+        ? (selection.rackIds[0] ?? null)
+        : selection.type === 'cell'
+          ? (publishedCellsById.get(selection.cellId)?.rackId ?? null)
+          : selection.type === 'container'
+            ? (selection.sourceCellId
+              ? (publishedCellsById.get(selection.sourceCellId)?.rackId ?? null)
+              : null)
+            : null)
+      : selectedRackId;
+  const selectedRackActiveLevelIndex = useMemo(() => {
+    if (!isStorageV2Active) return selectedRackActiveLevel;
+    if (!primarySelectedRackId) return 0;
+    if (storageFocusActiveLevel === null) return 0;
+
+    const layout = placementLayout ?? layoutDraft;
+    const rack = layout?.racks[primarySelectedRackId] ?? null;
+    if (!rack) return 0;
+
+    const semanticLevels = Array.from(
+      new Set(
+        rack.faces
+          .filter((face) => face.enabled)
+          .flatMap((face) =>
+            face.sections.flatMap((section) =>
+              section.levels
+                .map((level) => level.ordinal)
+                .filter((ordinal): ordinal is number => Number.isFinite(ordinal))
+            )
+          )
+      )
+    ).sort((a, b) => a - b);
+    const idx = resolveIndexForSemanticLevel(semanticLevels, storageFocusActiveLevel);
+    return idx ?? 0;
+  }, [
+    isStorageV2Active,
     selectedRackActiveLevel,
-    publishedCellsById
-  });
-  const primarySelectedRackId = viewMode === 'storage' ? storageFocusContext.rackId : selectedRackId;
+    primarySelectedRackId,
+    storageFocusActiveLevel,
+    placementLayout,
+    layoutDraft
+  ]);
   const {
     hintText,
     selectedRackAnchorRect,
@@ -307,8 +368,8 @@ export function EditorCanvas({
   clearSelectionRef.current = clearSelection;
   const cancelPlacementInteractionRef = useRef(cancelPlacementInteraction);
   cancelPlacementInteractionRef.current = cancelPlacementInteraction;
-  const selectedRackIdsRef = useRef(selectedRackIds);
-  selectedRackIdsRef.current = selectedRackIds;
+  const selectedRackIdsRef = useRef(effectiveSelectedRackIds);
+  selectedRackIdsRef.current = effectiveSelectedRackIds;
   const deleteZoneRef = useRef(deleteZone);
   deleteZoneRef.current = deleteZone;
   const deleteWallRef = useRef(deleteWall);
@@ -582,8 +643,8 @@ export function EditorCanvas({
                 primarySelectedRackId={primarySelectedRackId}
                 rackLookup={layoutDraft.racks}
                 racks={visibleRacks}
-                selectedRackActiveLevel={selectedRackActiveLevel}
-                selectedRackIds={selectedRackIds}
+                selectedRackActiveLevel={selectedRackActiveLevelIndex}
+                selectedRackIds={effectiveSelectedRackIds}
                 setHighlightedCellIds={setHighlightedCellIds}
                 setHoveredRackId={setHoveredRackId}
                 setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}

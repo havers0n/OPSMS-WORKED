@@ -9,6 +9,7 @@ import { EditorCanvas } from './editor-canvas';
 let mockViewMode: ViewMode = 'storage';
 let mockSelection: EditorSelection = { type: 'none' };
 let mockSelectedRackId: string | null = null;
+let mockSelectedRackActiveLevel = 2;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
 let rackLayerLastProps: Record<string, unknown> | null = null;
@@ -29,7 +30,9 @@ vi.mock('@/entities/layout-version/lib/canvas-geometry', () => ({
 
 vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
   useActiveTask: () => null,
+  useActiveStorageWorkflow: () => null,
   useCanvasZoom: () => 1,
+  useCancelPlacementInteraction: () => () => undefined,
   useCreateFreeWall: () => () => undefined,
   useCreateRack: () => () => undefined,
   useDeleteWall: () => () => undefined,
@@ -37,19 +40,17 @@ vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
   useClearSelection: () => () => undefined,
   useDeleteZone: () => () => undefined,
   useEditorMode: () => 'select' as const,
-  useEditorSelection: () => mockSelection,
   useInteractionScope: () => 'object' as const,
   useClearHighlightedCellIds: () => () => undefined,
   useHoveredRackId: () => null,
   useIsLayoutEditable: () => false,
-  useSelectedRackFocus: () => ({ type: 'body' as const }),
   useSelectedZoneId: () => null,
   useSelectedWallId: () => null,
-  useSelectedRackId: () => mockSelectedRackId,
+  useSetPlacementMoveTargetCellId: () => () => undefined,
+  useSetSelectedCellId: () => () => undefined,
   useSetSelectedRackId: () => () => undefined,
   useSetSelectedWallId: () => () => undefined,
   useSetSelectedZoneId: () => () => undefined,
-  useSelectedRackIds: () => (mockSelection.type === 'rack' ? mockSelection.rackIds : []),
   useSetCanvasZoom: () => () => undefined,
   useSetEditorMode: () => () => undefined,
   useSetHoveredRackId: () => () => undefined,
@@ -65,90 +66,24 @@ vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
   useViewMode: () => mockViewMode
 }));
 
-vi.mock('@/widgets/warehouse-editor/model/storage-ui-facade', () => {
-  const resolveStorageFocusContext = ({
-    viewMode,
-    selection,
-    selectedRackActiveLevel,
-    publishedCellsById
-  }: {
-    viewMode: ViewMode;
-    selection: EditorSelection;
-    selectedRackActiveLevel: number;
-    publishedCellsById: Map<string, Cell>;
-  }) => {
-    if (viewMode !== 'storage') {
-      return {
-        leaf: 'none',
-        rackId: null,
-        resolvedCellId: null,
-        resolvedContainerId: null,
-        activeLevel: selectedRackActiveLevel,
-        hasResolvedRackContext: false,
-        isOffLevel: false
-      } as const;
-    }
+vi.mock('@/widgets/warehouse-editor/model/editor-store', () => ({
+  useEditorStore: (selector: (state: { selectedRackActiveLevel: number }) => unknown) =>
+    selector({ selectedRackActiveLevel: mockSelectedRackActiveLevel })
+}));
 
-    if (selection.type === 'rack') {
-      return {
-        leaf: 'rack',
-        rackId: selection.rackIds[0] ?? null,
-        resolvedCellId: null,
-        resolvedContainerId: null,
-        activeLevel: selectedRackActiveLevel,
-        hasResolvedRackContext: (selection.rackIds[0] ?? null) !== null,
-        isOffLevel: false
-      } as const;
-    }
+vi.mock('@/widgets/warehouse-editor/model/interaction-store', () => ({
+  useInteractionStore: (selector: (state: { selection: EditorSelection }) => unknown) =>
+    selector({ selection: mockSelection })
+}));
 
-    if (selection.type === 'cell') {
-      const cell = publishedCellsById.get(selection.cellId) ?? null;
-      return {
-        leaf: 'cell',
-        rackId: cell?.rackId ?? null,
-        resolvedCellId: selection.cellId,
-        resolvedContainerId: null,
-        activeLevel: selectedRackActiveLevel,
-        hasResolvedRackContext: (cell?.rackId ?? null) !== null,
-        isOffLevel: false
-      } as const;
-    }
-
-    if (selection.type === 'container') {
-      const sourceCellId = selection.sourceCellId ?? null;
-      const sourceCell = sourceCellId ? (publishedCellsById.get(sourceCellId) ?? null) : null;
-      return {
-        leaf: sourceCell ? 'cell' : 'none',
-        rackId: sourceCell?.rackId ?? null,
-        resolvedCellId: sourceCell?.id ?? null,
-        resolvedContainerId: selection.containerId,
-        activeLevel: selectedRackActiveLevel,
-        hasResolvedRackContext: (sourceCell?.rackId ?? null) !== null,
-        isOffLevel: false
-      } as const;
-    }
-
-    return {
-      leaf: 'none',
-      rackId: null,
-      resolvedCellId: null,
-      resolvedContainerId: null,
-      activeLevel: selectedRackActiveLevel,
-      hasResolvedRackContext: false,
-      isOffLevel: false
-    } as const;
-  };
-
-  return {
-    resolveStorageFocusContext,
-    useStorageActiveWorkflow: () => null,
-    useStorageCancelPlacementInteraction: () => () => undefined,
-    useStorageSelectedCellId: () => (mockSelection.type === 'cell' ? mockSelection.cellId : null),
-    useStorageSelectedRackActiveLevel: () => 2,
-    useStorageSetPlacementMoveTargetCellId: () => () => undefined,
-    useStorageSetSelectedCellId: () => () => undefined
-  };
-});
+vi.mock('@/widgets/warehouse-editor/model/v2/v2-selectors', () => ({
+  useStorageFocusActiveLevel: () => null,
+  useStorageFocusSelectedCellId: () => (mockSelection.type === 'cell' ? mockSelection.cellId : null),
+  useStorageFocusSelectedRackId: () => mockSelectedRackId,
+  useStorageFocusSelectCell: () => () => undefined,
+  useStorageFocusSelectRack: () => () => undefined,
+  useStorageFocusHandleEmptyCanvasClick: () => () => undefined
+}));
 
 vi.mock('../lib/use-workspace-layout', () => ({
   useWorkspaceLayout: () => mockLayoutDraft
@@ -290,6 +225,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
     mockSelectedRackId = null;
+    mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'cell', cellId: 'cell-1' };
     mockPublishedCellsById = new Map([
       ['cell-1', {
@@ -325,6 +261,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
     mockSelectedRackId = 'legacy-rack-id';
+    mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'rack', rackIds: [rackId] };
     mockPublishedCellsById = new Map();
 
@@ -343,6 +280,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockLayoutDraft = draft;
     mockViewMode = 'view';
     mockSelectedRackId = 'legacy-rack-id';
+    mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'rack', rackIds: [rackId] };
     mockPublishedCellsById = new Map([
       ['cell-1', {
@@ -369,7 +307,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
       latestPublished: draft
     });
 
-    expect(rackLayerLastProps?.primarySelectedRackId).toBe('legacy-rack-id');
+    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
   it('preserves current contract: storage unresolved selected cell does not produce primarySelectedRackId', () => {
@@ -377,6 +315,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
     mockSelectedRackId = 'rack-stale';
+    mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'cell', cellId: 'missing-cell' };
     mockPublishedCellsById = new Map();
 
@@ -395,6 +334,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
     mockSelectedRackId = 'rack-stale';
+    mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
     mockPublishedCellsById = new Map([
       ['cell-1', {
@@ -429,6 +369,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
     mockSelectedRackId = 'rack-stale';
+    mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
     mockPublishedCellsById = new Map();
 

@@ -1,5 +1,5 @@
 import type { FloorWorkspace, Rack } from '@wos/domain';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import {
@@ -7,7 +7,6 @@ import {
   useStorageFocusSelectedRackId,
   useStorageFocusActiveLevel,
   useStorageFocusSelectCell,
-  useStorageFocusSelectRack,
   useStorageFocusSetActiveLevel,
 } from '../model/v2/v2-selectors';
 
@@ -25,11 +24,6 @@ import {
  * - selectedCellId   — for highlighting the selected item in the list
  * - selectedRackId   — for filtering cells and displaying the rack header
  * - activeLevel      — for level tab highlight and list filtering
- *
- * ⚠️ TEMPORARY FALLBACK (same as PR6): when selectedRackId is null and racks
- * are loaded, the navigator auto-initialises the focus store with the first rack
- * via selectRack(). This is NOT the intended rack-resolution model (should derive
- * from an explicit rack-picker or initial URL/session state). Deferred.
  *
  * Real data sources (PR6, unchanged):
  * - usePublishedCells(floorId) → cell list with rackId, level, cellCode
@@ -52,7 +46,6 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   // ── Focus store — write ─────────────────────────────────────────────────────
   const selectCell = useStorageFocusSelectCell();
-  const selectRack = useStorageFocusSelectRack();
   const setActiveLevel = useStorageFocusSetActiveLevel();
 
   // ── Real data ───────────────────────────────────────────────────────────────
@@ -69,17 +62,6 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     }
     return map;
   }, [occupancyRows]);
-
-  // ⚠️ TEMPORARY FALLBACK: initialise rackId from first rack when none is selected.
-  // Intended model: derive from an explicit rack-picker or session state. Deferred.
-  useEffect(() => {
-    if (!rackId && racks) {
-      const rackKeys = Object.keys(racks);
-      if (rackKeys.length > 0) {
-        selectRack({ rackId: rackKeys[0] });
-      }
-    }
-  }, [rackId, racks, selectRack]);
 
   // Derive available levels from cells for the current rack
   const availableLevels = useMemo(() => {
