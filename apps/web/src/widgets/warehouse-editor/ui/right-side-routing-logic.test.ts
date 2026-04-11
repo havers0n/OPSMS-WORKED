@@ -35,7 +35,7 @@ describe('resolveRightSideRoute', () => {
     );
   });
 
-  it('closes the layout slot when there is no task and no inspectable selection', () => {
+  it('preserves current contract: layout mode closes slot when there is no task and no inspectable selection', () => {
     expect(resolveRightSideRoute('layout', noSelection, null)).toBe('closed');
     expect(resolveRightSideRoute('layout', rackSelection([]), null)).toBe('closed');
     expect(resolveRightSideRoute('layout', cellSelection('cell-1'), null)).toBe('closed');
@@ -44,7 +44,7 @@ describe('resolveRightSideRoute', () => {
     );
   });
 
-  it('keeps non-layout routes inspector-based', () => {
+  it('characterizes current transitional behavior: non-layout idle routes remain inspector-based', () => {
     expect(resolveRightSideRoute('view', noSelection, null)).toBe('inspector-surface');
     expect(resolveRightSideRoute('storage', noSelection, null)).toBe('inspector-surface');
     expect(resolveRightSideRoute('view', rackSelection(['rack-1']), rackCreationTask('rack-1'))).toBe(

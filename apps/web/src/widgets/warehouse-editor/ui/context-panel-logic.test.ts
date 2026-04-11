@@ -41,6 +41,10 @@ describe('resolveContextPanelVisibility', () => {
     expect(resolveContextPanelVisibility({ scope: 'object', editorMode: 'select', viewMode: 'storage' })).toBe(true);
   });
 
+  it('preserves current contract: storage object scope remains visible in select mode', () => {
+    expect(resolveContextPanelVisibility({ scope: 'object', editorMode: 'select', viewMode: 'storage' })).toBe(true);
+  });
+
   it('returns true for workflow scope', () => {
     expect(resolveContextPanelVisibility({ scope: 'workflow', editorMode: 'select', viewMode: 'storage' })).toBe(true);
     expect(resolveContextPanelVisibility({ scope: 'workflow', editorMode: 'select', viewMode: 'view' })).toBe(true);
@@ -92,6 +96,12 @@ describe('resolveContextPanelIntent — rack context', () => {
   it('returns rack-context in view mode for single rack', () => {
     expect(resolveContextPanelIntent({
       scope: 'object', editorMode: 'select', viewMode: 'view', selection: rackSelection(['r1'])
+    })).toBe('rack-context');
+  });
+
+  it('characterizes current transitional behavior: storage single rack selection resolves to rack-context (may intentionally change later)', () => {
+    expect(resolveContextPanelIntent({
+      scope: 'object', editorMode: 'select', viewMode: 'storage', selection: rackSelection(['r1'])
     })).toBe('rack-context');
   });
 

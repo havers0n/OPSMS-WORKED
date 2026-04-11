@@ -57,8 +57,28 @@ beforeEach(() => {
   mockViewMode = 'storage';
 });
 
+function setFaceALevelCount(draft: LayoutDraft, levelCount: number) {
+  const rackId = draft.rackIds[0];
+  const faceA = draft.racks[rackId]?.faces.find((face) => face.side === 'A');
+  if (faceA && faceA.sections[0]) {
+    faceA.sections[0].levels = Array.from({ length: levelCount }, (_, index) => ({
+      id: `level-a-${index + 1}`,
+      ordinal: index + 1,
+      slotCount: 3
+    }));
+  }
+}
+
 describe('ContextPanel rack-level ownership', () => {
-  it('suppresses legacy storage rack-level panel content in storage mode', () => {
+  it('preserves current contract: storage mode keeps rack-level pager ownership in inspector, not context panel', () => {
+    const renderer = renderContextPanel();
+
+    expect(hasText(renderer, 'Rack-level storage ownership is in the inspector.')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-context-level-pager' })).toHaveLength(0);
+  });
+
+  it('preserves current contract: storage mode still does not render context rack-level pager even when rack has multiple levels', () => {
+    setFaceALevelCount(mockLayoutDraft as LayoutDraft, 4);
     const renderer = renderContextPanel();
 
     expect(hasText(renderer, 'Rack-level storage ownership is in the inspector.')).toBe(true);

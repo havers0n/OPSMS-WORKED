@@ -610,6 +610,55 @@ describe('editor-store', () => {
       expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
     });
 
+    it('preserves current contract: storage rack selection resets selectedRackActiveLevel to 0 on storage->layout switch', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useEditorStore.getState().setSelectedRackId('rack-1');
+      useEditorStore.getState().setSelectedRackActiveLevel(4);
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+      expect(useEditorStore.getState().selectedRackActiveLevel).toBe(0);
+    });
+
+    it('preserves current contract: storage cell selection keeps observed selectedRackActiveLevel on storage->layout switch', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useEditorStore.getState().setSelectedRackActiveLevel(3);
+      useEditorStore.getState().startPlaceContainerWorkflow('cell-abc');
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+      expect(useEditorStore.getState().selectedRackActiveLevel).toBe(3);
+    });
+
+    it('preserves current contract: storage container selection keeps observed selectedRackActiveLevel and clears workflow on storage->layout switch', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useEditorStore.getState().setSelectedRackActiveLevel(5);
+      useEditorStore.getState().setSelectedContainerId('container-1', 'cell-1');
+      useEditorStore.getState().startPlacementMove('container-1', 'cell-1');
+      expect(useInteractionStore.getState().selection).toEqual({
+        type: 'container',
+        containerId: 'container-1',
+        sourceCellId: 'cell-1'
+      });
+      expect(useEditorStore.getState().activeStorageWorkflow).not.toBeNull();
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useModeStore.getState().viewMode).toBe('layout');
+      expect(useModeStore.getState().editorMode).toBe('select');
+      expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+      expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
+      expect(useEditorStore.getState().selectedRackActiveLevel).toBe(5);
+    });
+
     it('setViewMode to the current mode still resets editorMode and selection', () => {
       // Repeated call (e.g. UI re-applies same mode) must still enforce clean state
       useModeStore.setState({ viewMode: 'layout', editorMode: 'place' });

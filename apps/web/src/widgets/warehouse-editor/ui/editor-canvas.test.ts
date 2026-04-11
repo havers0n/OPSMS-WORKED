@@ -1,6 +1,6 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, FloorWorkspace, LayoutDraft } from '@wos/domain';
 import type { EditorSelection, ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
@@ -201,6 +201,10 @@ function renderCanvas(workspace: FloorWorkspace) {
 }
 
 describe('EditorCanvas storage active-rack wiring', () => {
+  beforeEach(() => {
+    rackLayerLastProps = null;
+  });
+
   it('passes selected cell parent rack id to RackLayer in storage mode', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
@@ -234,5 +238,92 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
+  });
+
+  it('passes selected rack id from shared resolver for storage rack selection', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = 'legacy-rack-id';
+    mockSelection = { type: 'rack', rackIds: [rackId] };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
+  });
+
+  it('keeps selectedRackId semantics in non-storage mode', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockSelectedRackId = 'legacy-rack-id';
+    mockSelection = { type: 'rack', rackIds: [rackId] };
+    mockPublishedCellsById = new Map([
+      ['cell-1', {
+        id: 'cell-1',
+        layoutVersionId: 'lv-1',
+        rackId,
+        rackFaceId: 'face-a',
+        rackSectionId: 'section-a',
+        rackLevelId: 'level-1',
+        slotNo: 1,
+        address: {
+          raw: '01-A.01.01.01',
+          parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+          sortKey: '0001-A-01-01-01'
+        },
+        cellCode: 'CELL-1',
+        status: 'active'
+      } satisfies Cell]
+    ]);
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.primarySelectedRackId).toBe('legacy-rack-id');
+  });
+
+  it('preserves current contract: storage unresolved selected cell does not produce primarySelectedRackId', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = 'rack-stale';
+    mockSelection = { type: 'cell', cellId: 'missing-cell' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
+  });
+
+  it('characterizes current transitional behavior: storage container selection does not produce primarySelectedRackId continuity', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = 'rack-stale';
+    mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
   });
 });
