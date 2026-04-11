@@ -12,7 +12,6 @@ import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-loc
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { CellPlacementOperationalBody } from './storage-location-detail-body';
-import { getRackFaceALevelCount } from '../lib/rack-level-count';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackLevelPager } from './rack-level-pager';
 
@@ -46,27 +45,17 @@ export function StorageRackInspector({
       : null;
   const resolvedRackId = focusContext.rackId;
   const rack = layoutDraft && resolvedRackId ? layoutDraft.racks[resolvedRackId] : null;
-  const structureLevelCount = getRackFaceALevelCount(rack ?? null);
-  const publishedAddressLevelCount =
-    resolvedRackId === null
+  // Get max level count from all faces (A and B) to support asymmetric racks
+  const levelCount =
+    !rack || rack.faces.length === 0
       ? 0
-      : new Set(
-          publishedCells
-            .filter((cell) => cell.rackId === resolvedRackId)
-            .map((cell) => cell.address.parts.level)
-            .filter((level): level is number => Number.isFinite(level))
-        ).size;
-  const publishedRackLevelIdCount =
-    resolvedRackId === null
-      ? 0
-      : new Set(
-          publishedCells
-            .filter((cell) => cell.rackId === resolvedRackId)
-            .map((cell) => cell.rackLevelId)
-            .filter((levelId): levelId is string => typeof levelId === 'string' && levelId.length > 0)
-        ).size;
-  const publishedLevelCount = Math.max(publishedAddressLevelCount, publishedRackLevelIdCount);
-  const levelCount = Math.max(structureLevelCount, publishedLevelCount);
+      : Math.max(
+          ...rack.faces
+            .filter((f) => f.enabled)
+            .map((f) =>
+              f.sections.length === 0 ? 0 : Math.max(...f.sections.map((s) => s.levels.length))
+            )
+        );
   const selectedCellId = focusContext.resolvedCellId;
   const hasResolvedCellContext = focusContext.leaf === 'cell' && focusContext.resolvedCellId !== null;
   const { data: selectedCellLocationRef, error: selectedCellLocationError } = useLocationByCell(selectedCellId);
@@ -118,7 +107,18 @@ export function StorageRackInspector({
       };
     }
 
-    const levelNo = activeLevel + 1;
+    // Get all unique level ordinals from all enabled faces, sorted ascending.
+    // UI shows "L1" for activeLevel=0, which should map to ordinal 1 (lowest ordinal, first level).
+    const allOrdinals = Array.from(
+      new Set(
+        rack.faces
+          .filter((f) => f.enabled)
+          .flatMap((face) =>
+            face.sections.flatMap((section) => section.levels.map((l) => l.ordinal))
+          )
+      )
+    ).sort((a, b) => a - b); // ascending: [1, 2, 3, ...]
+    const levelNo = allOrdinals[activeLevel] ?? (activeLevel + 1);
     const levelCells = publishedCells.filter(
       (cell) => cell.rackId === rack.id && cell.address.parts.level === levelNo
     );
