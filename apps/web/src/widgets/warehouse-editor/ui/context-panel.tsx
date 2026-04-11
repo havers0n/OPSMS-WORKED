@@ -27,12 +27,9 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
-  MousePointer2,
   MoveRight,
   Package,
-  PackagePlus,
   RotateCcw,
-  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   XCircle
@@ -66,7 +63,6 @@ import {
   useStorageStartPlacementMove
 } from '@/widgets/warehouse-editor/model/storage-ui-facade';
 import type {
-  ContextPanelMode,
   RackSideFocus
 } from '@/widgets/warehouse-editor/model/editor-types';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
@@ -75,10 +71,6 @@ import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { resolveContextPanelIntent, type ContextPanelIntent } from './context-panel-logic';
 import { StorageCellContextPanel } from './mode-panels/storage-cell-context-panel';
 import { StorageWorkflowContextPanel } from './mode-panels/storage-workflow-context-panel';
-
-
-// Re-export for use by other modules
-export { resolveContextPanelIntent, type ContextPanelIntent } from './context-panel-logic';
 
 // ─── intent display config ──────────────────────────────────────────────────
 
@@ -127,10 +119,6 @@ const INTENT_CONFIG: Record<
     description: 'Workflow state and progress will appear here.'
   }
 };
-
-function formatRackKind(kind: Rack['kind']) {
-  return kind === 'paired' ? 'Paired rack' : 'Single rack';
-}
 
 function countRackSections(rack: Rack) {
   return rack.faces.reduce((total, face) => total + face.sections.length, 0);

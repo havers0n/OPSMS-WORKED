@@ -24,8 +24,6 @@ import { ContainerPlacementInspector } from './mode-panels/container-placement-i
 
 // Pure routing logic lives in inspector-router-logic.ts (no React, testable in isolation).
 import { resolveInspectorKind } from './inspector-router-logic';
-export type { InspectorKind } from './inspector-router-logic';
-export { resolveInspectorKind };
 
 // ─── zone readonly panel ──────────────────────────────────────────────────────
 

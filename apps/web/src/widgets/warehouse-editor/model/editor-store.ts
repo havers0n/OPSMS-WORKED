@@ -12,14 +12,11 @@ import { create } from 'zustand';
 import {
   type ActiveLayoutTask,
   type ActiveStorageWorkflow,
-  normalizeViewMode,
   type AnyViewMode,
   type EditorMode,
   type EditorSelection,
-  type RackSelectionFocus,
   type RackSideFocus,
-  type ObjectWorkContext,
-  type ViewMode
+  type ObjectWorkContext
 } from './editor-types';
 import { useModeStore } from './mode-store';
 import { useInteractionStore } from './interaction-store';
