@@ -111,10 +111,15 @@ describe('resolveStorageFocusContext', () => {
   });
 
   it('returns isOffLevel=false when cell level is missing', () => {
-    const cellWithMissingLevel = makeCell('cell-1', 'rack-1', 2) as Cell & {
-      address: { parts: { level?: number } };
-    };
-    delete cellWithMissingLevel.address.parts.level;
+    const baseCell = makeCell('cell-1', 'rack-1', 2);
+    const { level: _droppedLevel, ...partsWithoutLevel } = baseCell.address.parts;
+    const cellWithMissingLevel = {
+      ...baseCell,
+      address: {
+        ...baseCell.address,
+        parts: partsWithoutLevel
+      }
+    } as unknown as Cell;
 
     expect(
       resolve({

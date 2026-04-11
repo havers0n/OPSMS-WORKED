@@ -195,7 +195,7 @@ describe('RackLayer storage interaction depth', () => {
       clearHighlightedCellIds
     });
 
-    const rackCells = renderer.root.findAllByType('RackCells');
+    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
     act(() => {
       rackCells[0].props.onCellClick('cell-1', { x: 10, y: 20 });
     });
@@ -251,7 +251,7 @@ describe('RackLayer storage interaction depth', () => {
       setSelectedCellId
     });
 
-    const rackCells = renderer.root.findAllByType('RackCells');
+    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
     act(() => {
       rackCells[0].props.onCellClick('cell-9', { x: 0, y: 0 });
     });
@@ -269,7 +269,7 @@ describe('RackLayer storage interaction depth', () => {
       isStorageMode: true
     });
 
-    const sectionNodes = renderer.root.findAllByType('RackSections');
+    const sectionNodes = renderer.root.findAll((node) => String(node.type) === 'RackSections');
     expect(sectionNodes.length).toBeGreaterThan(0);
     expect(sectionNodes[0].props.onClick).toBeUndefined();
     expect(sectionNodes[0].props.onTap).toBeUndefined();
