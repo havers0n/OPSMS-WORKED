@@ -183,4 +183,54 @@ describe('RightSidePanelSlot', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
   });
+
+  it('keeps storage workflow ownership out of task surface (storage mode remains inspector-based)', () => {
+    act(() => {
+      useModeStore.setState({
+        viewMode: 'storage',
+        editorMode: 'select'
+      });
+      useInteractionStore.getState().setSelection({ type: 'cell', cellId: 'cell-1' });
+      useEditorStore.setState({
+        ...useEditorStore.getState(),
+        activeStorageWorkflow: {
+          kind: 'place-container',
+          status: 'editing',
+          cellId: 'cell-1',
+          errorMessage: null
+        }
+      });
+    });
+
+    const renderer = renderSlot();
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
+  });
+
+  it('keeps storage move workflow out of task surface as well', () => {
+    act(() => {
+      useModeStore.setState({
+        viewMode: 'storage',
+        editorMode: 'select'
+      });
+      useInteractionStore.getState().setSelection({ type: 'cell', cellId: 'cell-2' });
+      useEditorStore.setState({
+        ...useEditorStore.getState(),
+        activeStorageWorkflow: {
+          kind: 'move-container',
+          status: 'targeting',
+          containerId: 'container-1',
+          sourceCellId: 'cell-1',
+          targetCellId: 'cell-2',
+          errorMessage: null
+        }
+      });
+    });
+
+    const renderer = renderSlot();
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
+  });
 });

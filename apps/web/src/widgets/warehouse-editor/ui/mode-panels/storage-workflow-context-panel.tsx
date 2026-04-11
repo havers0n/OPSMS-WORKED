@@ -108,7 +108,10 @@ export function StorageWorkflowContextPanel({
 
   if (activeStorageWorkflow.kind === 'move-container') {
     return (
-      <div className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}>
+      <div
+        className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}
+        data-testid="storage-workflow-context-owner"
+      >
         <div
           className={`rounded-xl border border-[var(--border-muted)] bg-white ${
             isExpanded ? 'p-4' : 'p-3'
@@ -162,6 +165,7 @@ export function StorageWorkflowContextPanel({
             label={isSubmitting ? 'Moving...' : 'Confirm move'}
             icon={MoveRight}
             disabled={isSubmitting || Boolean(targetValidationMessage)}
+            testId="storage-workflow-submit-action"
             onClick={() => void handleConfirmMove()}
           />
           <ContextActionButton
@@ -169,6 +173,7 @@ export function StorageWorkflowContextPanel({
             icon={XCircle}
             variant="danger"
             disabled={isSubmitting}
+            testId="storage-workflow-cancel-action"
             onClick={cancelPlacementInteraction}
           />
         </div>
@@ -189,7 +194,10 @@ export function StorageWorkflowContextPanel({
     activeStorageWorkflow.status === 'placement-retry';
 
   return (
-    <div className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}>
+    <div
+      className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}
+      data-testid="storage-workflow-context-owner"
+    >
       <div
         className={`rounded-xl border border-[var(--border-muted)] bg-white ${
           isExpanded ? 'p-4' : 'p-3'
@@ -283,6 +291,7 @@ export function StorageWorkflowContextPanel({
             label={isSubmitting ? 'Placing...' : 'Confirm place'}
             icon={PackagePlus}
             disabled={isSubmitting || placeContainerIdInput.trim().length === 0 || locationId === null}
+            testId="storage-workflow-submit-action"
             onClick={() => void handleConfirmPlace()}
           />
         ) : isPlacementRetry ? (
@@ -290,6 +299,7 @@ export function StorageWorkflowContextPanel({
             label={isSubmitting ? 'Retrying...' : 'Retry placement'}
             icon={PackagePlus}
             disabled={isSubmitting || locationId === null || createdContainer === null}
+            testId="storage-workflow-submit-action"
             onClick={() => void handleRetryCreatedContainerPlacement()}
           />
         ) : (
@@ -304,6 +314,7 @@ export function StorageWorkflowContextPanel({
                 storableTypeCount: storableTypes.length
               }).length > 0
             }
+            testId="storage-workflow-submit-action"
             onClick={() => void handleCreateAndPlace()}
           />
         )}
@@ -312,6 +323,7 @@ export function StorageWorkflowContextPanel({
           icon={XCircle}
           variant="danger"
           disabled={isSubmitting}
+          testId="storage-workflow-cancel-action"
           onClick={cancelPlacementInteraction}
         />
       </div>
@@ -325,7 +337,8 @@ function ContextActionButton({
   onClick,
   variant = 'default',
   className = '',
-  disabled = false
+  disabled = false,
+  testId
 }: {
   icon: typeof RotateCcw;
   label: string;
@@ -333,6 +346,7 @@ function ContextActionButton({
   variant?: 'default' | 'danger';
   className?: string;
   disabled?: boolean;
+  testId?: string;
 }) {
   const buttonClassName =
     variant === 'danger'
@@ -342,6 +356,7 @@ function ContextActionButton({
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${buttonClassName} ${className}`.trim()}

@@ -1,5 +1,5 @@
 import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
-import { AlertTriangle, CheckCircle2, Loader2, MoveRight, Package, PackagePlus, RotateCcw, ShieldCheck } from 'lucide-react';
+import { MoveRight, Package, PackagePlus, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import {
   useSelectedCellId,
@@ -20,67 +20,11 @@ function getUniqueContainerIds(rows: LocationStorageSnapshotRow[]) {
   return [...new Set(rows.map((row) => row.containerId))];
 }
 
-function countInventoryRows(rows: LocationStorageSnapshotRow[]) {
-  return rows.filter((row) => row.itemRef !== null).length;
-}
-
 function formatLocationTypeLabel(locationType: string) {
   return locationType
     .split('_')
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(' ');
-}
-
-function getCellOccupancySummary({
-  containerCount,
-  isLoading,
-  isError
-}: {
-  containerCount: number;
-  isLoading: boolean;
-  isError: boolean;
-}) {
-  if (isError) {
-    return {
-      icon: AlertTriangle,
-      label: 'Unavailable',
-      style: {
-        background: '#fef2f2',
-        color: '#b91c1c'
-      }
-    };
-  }
-
-  if (isLoading) {
-    return {
-      icon: Loader2,
-      label: 'Loading',
-      style: {
-        background: '#eff6ff',
-        color: '#1d4ed8'
-      }
-    };
-  }
-
-  if (containerCount === 0) {
-    return {
-      icon: CheckCircle2,
-      label: 'Empty',
-      style: {
-        background: '#ecfdf5',
-        color: '#047857'
-      }
-    };
-  }
-
-  return {
-    icon: Package,
-    label: `${containerCount} container${containerCount === 1 ? '' : 's'}`,
-    style: {
-      background: '#fff7ed',
-      color: '#c2410c'
-    }
-  };
 }
 
 export function StorageCellContextPanel({
@@ -122,10 +66,6 @@ export function StorageCellContextPanel({
     () => getUniqueContainerIds(locationRows),
     [locationRows]
   );
-  const inventoryCount = useMemo(
-    () => countInventoryRows(locationRows),
-    [locationRows]
-  );
   const {
     policyBridgeCandidate,
     policyBridgeError,
@@ -145,23 +85,8 @@ export function StorageCellContextPanel({
 
   const isLoading = isLocationPending || (locationId !== null && isStoragePending);
   const isError = isLocationError || isStorageError;
-  const status = getCellOccupancySummary({
-    containerCount: containerIds.length,
-    isLoading,
-    isError
-  });
-  const StatusIcon = status.icon;
   const canMoveSingleContainer = containerIds.length === 1 && !isLoading && !isError;
   const moveSourceContainerId = canMoveSingleContainer ? containerIds[0] : null;
-  const moveHint = isError
-    ? 'Resolve storage loading before starting a move.'
-    : isLoading
-      ? 'Checking current containers before move.'
-      : containerIds.length === 0
-        ? 'Place a container before move is available.'
-        : containerIds.length > 1
-          ? 'Open a specific container in the inspector to move one item.'
-          : 'Move this container to another destination cell.';
   const isExpanded = panelMode === 'expanded';
   const shouldShowPolicyBridge =
     !isLoading &&
@@ -172,55 +97,27 @@ export function StorageCellContextPanel({
     policyBridgeCandidate !== null;
 
   return (
-    <div className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}>
+    <div
+      className={isExpanded ? 'px-4 py-4' : 'px-3 py-3'}
+      data-testid="storage-cell-context-launcher"
+    >
       <div
         className={`rounded-xl border border-[var(--border-muted)] bg-white ${
           isExpanded ? 'p-4' : 'p-3'
         }`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate font-mono text-sm font-semibold text-slate-900" title={selectedCell.address.raw}>
-              {selectedCell.address.raw}
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
-              {locationRef
-                ? `${locationRef.locationCode} | ${formatLocationTypeLabel(locationRef.locationType)}`
-                : isLocationError
-                  ? 'Location unavailable'
-                  : 'Resolving location...'}
-            </div>
+        <div className="min-w-0">
+          <div className="truncate font-mono text-sm font-semibold text-slate-900" title={selectedCell.address.raw}>
+            {selectedCell.address.raw}
           </div>
-
-          <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold"
-            style={status.style}
-          >
-            <StatusIcon className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`.trim()} />
-            {status.label}
-          </span>
+          <div className="mt-1 text-[11px] text-slate-500">
+            {locationRef
+              ? `${locationRef.locationCode} | ${formatLocationTypeLabel(locationRef.locationType)}`
+              : isLocationError
+                ? 'Location unavailable'
+                : 'Resolving location...'}
+          </div>
         </div>
-
-        <div className={`mt-3 grid grid-cols-2 ${isExpanded ? 'gap-3' : 'gap-2'}`}>
-          {[
-            { label: 'Containers', value: String(containerIds.length) },
-            { label: 'Inventory rows', value: String(inventoryCount) }
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-secondary)] px-2.5 py-2"
-            >
-              <div className="text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                {label}
-              </div>
-              <div className="mt-0.5 text-sm font-semibold text-slate-800">{value}</div>
-            </div>
-          ))}
-        </div>
-
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          {moveHint} Full containers, inventory, and policy detail stay in the inspector.
-        </p>
       </div>
 
       {shouldShowPolicyBridge && (
@@ -231,14 +128,13 @@ export function StorageCellContextPanel({
           <div className="flex items-start gap-2">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
             <div className="min-w-0">
-              <div className="text-xs font-semibold text-amber-900">Stock has no location role</div>
+              <div className="text-xs font-semibold text-amber-900">Policy quick action</div>
               <p className="mt-1 truncate text-[11px] text-amber-800" title={policyBridgeCandidate.product.name}>
                 {policyBridgeCandidate.product.name}
                 {policyBridgeCandidate.product.sku ? ` | ${policyBridgeCandidate.product.sku}` : ''}
               </p>
               <p className="mt-1 text-[11px] text-amber-700">
-                Present in {policyBridgeCandidate.containerCount} container
-                {policyBridgeCandidate.containerCount === 1 ? '' : 's'}. Assign a role directly.
+                Assign an operational role for this SKU.
               </p>
             </div>
           </div>
@@ -283,18 +179,21 @@ export function StorageCellContextPanel({
           label="Place"
           icon={PackagePlus}
           disabled={isLocationError || locationId === null}
+          testId="storage-cell-context-launch-place"
           onClick={() => startPlaceContainerWorkflow(selectedCell.id)}
         />
         <ContextActionButton
           label="Create + place"
           icon={Package}
           disabled={isLocationError || locationId === null}
+          testId="storage-cell-context-launch-create-place"
           onClick={() => startCreateAndPlaceWorkflow(selectedCell.id)}
         />
         <ContextActionButton
           label="Move"
           icon={MoveRight}
           disabled={!moveSourceContainerId}
+          testId="storage-cell-context-launch-move"
           onClick={() => {
             if (!moveSourceContainerId) return;
             setSelectedContainerId(moveSourceContainerId, selectedCell.id);
@@ -312,7 +211,8 @@ function ContextActionButton({
   onClick,
   variant = 'default',
   className = '',
-  disabled = false
+  disabled = false,
+  testId
 }: {
   icon: typeof RotateCcw;
   label: string;
@@ -320,6 +220,7 @@ function ContextActionButton({
   variant?: 'default' | 'danger';
   className?: string;
   disabled?: boolean;
+  testId?: string;
 }) {
   const buttonClassName =
     variant === 'danger'
@@ -329,6 +230,7 @@ function ContextActionButton({
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${buttonClassName} ${className}`.trim()}

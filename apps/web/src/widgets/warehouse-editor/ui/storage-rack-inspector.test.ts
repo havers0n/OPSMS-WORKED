@@ -309,6 +309,9 @@ describe('StorageRackInspector', () => {
     expect(hasText(renderer, 'Current inventory')).toBe(true);
     expect(hasText(renderer, 'Location Policy')).toBe(true);
     expect(hasText(renderer, 'Placement actions')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-workflow-context-owner' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-workflow-submit-action' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-workflow-cancel-action' })).toHaveLength(0);
   });
 
   it('keeps rack shell continuity for resolved container selection through source cell context', () => {
