@@ -44,6 +44,34 @@ function createFace(id: string): RackFace {
   };
 }
 
+function createFaceWithLevels(
+  id: string,
+  side: 'A' | 'B',
+  enabled: boolean,
+  ordinals: number[]
+): RackFace {
+  return {
+    id,
+    side,
+    enabled,
+    slotNumberingDirection: 'ltr',
+    isMirrored: false,
+    mirrorSourceFaceId: null,
+    sections: [
+      {
+        id: `${id}-section`,
+        ordinal: 1,
+        length: 5,
+        levels: ordinals.map((ordinal, index) => ({
+          id: `${id}-level-${index + 1}`,
+          ordinal,
+          slotCount: 2
+        }))
+      }
+    ]
+  };
+}
+
 function createRack(id: string, x: number): Rack {
   return {
     id,
@@ -73,8 +101,9 @@ function renderRackLayer(params: {
   setSelectedRackIds?: (rackIds: string[]) => void;
   clearHighlightedCellIds?: () => void;
   setPlacementMoveTargetCellId?: (cellId: string | null) => void;
+  racks?: Rack[];
 }) {
-  const racks = [createRack('rack-1', 0), createRack('rack-2', 10)];
+  const racks = params.racks ?? [createRack('rack-1', 0), createRack('rack-2', 10)];
   const rackLookup = Object.fromEntries(racks.map((rack) => [rack.id, rack])) as Record<string, Rack>;
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -175,6 +204,28 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[0]?.props.activeLevelIndex).toBe(99);
     expect(rackCells[1]?.props.rackId).toBe('rack-2');
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
+  });
+
+  it('passes rack-wide semantic level union (enabled faces only) to RackCells', () => {
+    const rackA: Rack = {
+      ...createRack('rack-1', 0),
+      faces: [
+        createFaceWithLevels('rack-1-face-a', 'A', true, [1]),
+        createFaceWithLevels('rack-1-face-b', 'B', true, [3]),
+        createFaceWithLevels('rack-1-face-b-disabled', 'B', false, [9])
+      ]
+    };
+    const rackB = createRack('rack-2', 10);
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      selectedRackActiveLevel: 0,
+      racks: [rackA, rackB]
+    });
+    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    expect(rackCells).toHaveLength(2);
+    expect(rackCells[0]?.props.rackId).toBe('rack-1');
+    expect(rackCells[0]?.props.semanticLevels).toEqual([1, 3]);
   });
 });
 

@@ -22,6 +22,10 @@ function makeCell(id: string, rackId: string, level = 1): Cell {
   };
 }
 
+function makeRackCells(rackId: string, levels: number[]) {
+  return levels.map((level, idx) => makeCell(`cell-${rackId}-${level}-${idx}`, rackId, level));
+}
+
 function resolve(params: {
   viewMode: ViewMode;
   selection: EditorSelection;
@@ -74,19 +78,21 @@ describe('resolveStorageFocusContext', () => {
   });
 
   it('preserves current contract: resolves storage cell selection and computes off-level from existing semantics', () => {
+    const rackCells = makeRackCells('rack-1', [1, 3, 5]);
+    const selectedCell = rackCells.find((cell) => cell.address.parts.level === 3) as Cell;
     expect(
       resolve({
         viewMode: 'storage',
-        selection: { type: 'cell', cellId: 'cell-1' },
-        selectedRackActiveLevel: 1,
-        publishedCellsById: new Map([['cell-1', makeCell('cell-1', 'rack-1', 3)]])
+        selection: { type: 'cell', cellId: selectedCell.id },
+        selectedRackActiveLevel: 0,
+        publishedCellsById: new Map(rackCells.map((cell) => [cell.id, cell] as const))
       })
     ).toEqual({
       leaf: 'cell',
       rackId: 'rack-1',
-      resolvedCellId: 'cell-1',
+      resolvedCellId: selectedCell.id,
       resolvedContainerId: null,
-      activeLevel: 1,
+      activeLevel: 0,
       hasResolvedRackContext: true,
       isOffLevel: true
     });
@@ -140,22 +146,51 @@ describe('resolveStorageFocusContext', () => {
   });
 
   it('resolves storage container selection when sourceCellId restores parent rack context', () => {
+    const rackCells = makeRackCells('rack-1', [1, 3, 5]);
+    const selectedCell = rackCells.find((cell) => cell.address.parts.level === 3) as Cell;
     expect(
       resolve({
         viewMode: 'storage',
-        selection: { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' },
-        selectedRackActiveLevel: 1,
-        publishedCellsById: new Map([['cell-1', makeCell('cell-1', 'rack-1', 3)]])
+        selection: { type: 'container', containerId: 'container-1', sourceCellId: selectedCell.id },
+        selectedRackActiveLevel: 0,
+        publishedCellsById: new Map(rackCells.map((cell) => [cell.id, cell] as const))
       })
     ).toEqual({
       leaf: 'cell',
       rackId: 'rack-1',
-      resolvedCellId: 'cell-1',
+      resolvedCellId: selectedCell.id,
       resolvedContainerId: 'container-1',
-      activeLevel: 1,
+      activeLevel: 0,
       hasResolvedRackContext: true,
       isOffLevel: true
     });
+  });
+
+  it('supports sparse rack levels for off-level comparison', () => {
+    const rackCells = makeRackCells('rack-1', [1, 3, 5]);
+    const selectedCell = rackCells.find((cell) => cell.address.parts.level === 3) as Cell;
+    const context = resolve({
+      viewMode: 'storage',
+      selection: { type: 'cell', cellId: selectedCell.id },
+      selectedRackActiveLevel: 2,
+      publishedCellsById: new Map(rackCells.map((cell) => [cell.id, cell] as const))
+    });
+
+    expect(context.isOffLevel).toBe(true);
+    expect(context.activeLevel).toBe(2);
+  });
+
+  it('returns isOffLevel=false when active semantic level cannot be resolved from available published cells', () => {
+    const partialRackCells = makeRackCells('rack-1', [3]);
+    const selectedCell = partialRackCells[0] as Cell;
+    const context = resolve({
+      viewMode: 'storage',
+      selection: { type: 'cell', cellId: selectedCell.id },
+      selectedRackActiveLevel: 2,
+      publishedCellsById: new Map(partialRackCells.map((cell) => [cell.id, cell] as const))
+    });
+
+    expect(context.isOffLevel).toBe(false);
   });
 
   it('keeps explicit unresolved fallback context for storage container when sourceCellId is missing', () => {

@@ -140,22 +140,22 @@ function getCellBounds(activeLevelIndex: number, levelIds: string[]) {
 describe('RackCells', () => {
   const threeLevelIds = ['level-high', 'level-mid', 'level-low'];
 
-  it('renders only level-0 identities when activeLevelIndex=0', () => {
+  it('renders semantic L1 identities when activeLevelIndex=0', () => {
     const clicked = clickCellIdsWithCollector(0, threeLevelIds);
-    expect(clicked).toEqual(['cell-level-high-1', 'cell-level-high-2']);
+    expect(clicked).toEqual(['cell-level-low-1', 'cell-level-low-2']);
     expect(clicked).not.toContain('cell-level-mid-1');
     expect(clicked).not.toContain('cell-level-mid-2');
-    expect(clicked).not.toContain('cell-level-low-1');
-    expect(clicked).not.toContain('cell-level-low-2');
-  });
-
-  it('renders only level-1 identities when activeLevelIndex=1', () => {
-    const clicked = clickCellIdsWithCollector(1, threeLevelIds);
-    expect(clicked).toEqual(['cell-level-mid-1', 'cell-level-mid-2']);
     expect(clicked).not.toContain('cell-level-high-1');
     expect(clicked).not.toContain('cell-level-high-2');
+  });
+
+  it('renders semantic L2 identities when activeLevelIndex=1', () => {
+    const clicked = clickCellIdsWithCollector(1, threeLevelIds);
+    expect(clicked).toEqual(['cell-level-mid-1', 'cell-level-mid-2']);
     expect(clicked).not.toContain('cell-level-low-1');
     expect(clicked).not.toContain('cell-level-low-2');
+    expect(clicked).not.toContain('cell-level-high-1');
+    expect(clicked).not.toContain('cell-level-high-2');
   });
 
   it('uses equal displayed-band bounds for activeLevelIndex 0 and 1 on same multi-level rack', () => {
@@ -179,5 +179,75 @@ describe('RackCells', () => {
   it('renders no cells for out-of-range activeLevelIndex without fallback', () => {
     const bounds = getCellBounds(99, threeLevelIds);
     expect(bounds).toBeNull();
+  });
+
+  it('handles empty semanticLevels input gracefully by rendering no cells', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, {
+          geometry,
+          rackId: 'rack-1',
+          faceA: createFace(threeLevelIds),
+          faceB: null,
+          isSelected: true,
+          activeLevelIndex: 0,
+          semanticLevels: [],
+          publishedCellsByStructure: createCellsMap(threeLevelIds),
+          isInteractive: false,
+          onCellClick: () => undefined
+        })
+      );
+    });
+
+    const clickableRects = renderer.root
+      .findAll((node) => String(node.type) === 'Rect')
+      .filter((node) => typeof node.props.onClick === 'function');
+    expect(clickableRects).toHaveLength(0);
+  });
+
+  it('supports sparse semantic levels via explicit semanticLevels mapping', () => {
+    const clicked: string[] = [];
+    const sparseFace: RackFace = {
+      ...createFace(['level-1', 'level-3', 'level-5']),
+      sections: [
+        {
+          ...createFace(['level-1', 'level-3', 'level-5']).sections[0],
+          levels: [
+            { id: 'level-1', ordinal: 1, slotCount: 2 },
+            { id: 'level-3', ordinal: 3, slotCount: 2 },
+            { id: 'level-5', ordinal: 5, slotCount: 2 }
+          ]
+        }
+      ]
+    };
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, {
+          geometry,
+          rackId: 'rack-1',
+          faceA: sparseFace,
+          faceB: null,
+          isSelected: true,
+          activeLevelIndex: 1,
+          semanticLevels: [1, 3, 5],
+          publishedCellsByStructure: createCellsMap(['level-1', 'level-3', 'level-5']),
+          isInteractive: true,
+          onCellClick: (cellId: string) => clicked.push(cellId)
+        })
+      );
+    });
+
+    for (const rectNode of renderer.root.findAll((node) => String(node.type) === 'Rect')) {
+      if (typeof rectNode.props.onClick === 'function') {
+        act(() => {
+          rectNode.props.onClick({ cancelBubble: false, evt: { clientX: 0, clientY: 0 } });
+        });
+      }
+    }
+
+    expect(clicked).toEqual(['cell-level-3-1', 'cell-level-3-2']);
   });
 });

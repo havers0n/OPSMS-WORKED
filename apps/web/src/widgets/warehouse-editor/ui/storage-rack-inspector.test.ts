@@ -114,6 +114,29 @@ function setFaceALevelCount(draft: LayoutDraft, levelCount: number) {
   }
 }
 
+function setFaceBLevels(draft: LayoutDraft, ordinals: number[]) {
+  const rackId = draft.rackIds[0];
+  const faceB = draft.racks[rackId]?.faces.find((face) => face.side === 'B');
+  if (faceB) {
+    faceB.enabled = true;
+    if (!faceB.sections[0]) {
+      faceB.sections = [
+        {
+          id: 'section-b-1',
+          ordinal: 1,
+          length: 5,
+          levels: []
+        }
+      ];
+    }
+    faceB.sections[0].levels = ordinals.map((ordinal, index) => ({
+      id: `level-b-${index + 1}`,
+      ordinal,
+      slotCount: 3
+    }));
+  }
+}
+
 function renderInspector() {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -241,7 +264,7 @@ describe('StorageRackInspector', () => {
     expect(setSelectedRackActiveLevelSpy).toHaveBeenNthCalledWith(2, 0);
   });
 
-  it('keeps pager visible when published cell levels exceed rack structure levels', () => {
+  it('hides pager when rack semantic level set has a single level even if published addresses are higher', () => {
     setFaceALevelCount(mockLayoutDraft as LayoutDraft, 1);
     mockPublishedCells = [
       {
@@ -265,10 +288,10 @@ describe('StorageRackInspector', () => {
     ];
 
     const renderer = renderInspector();
-    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(0);
   });
 
-  it('keeps pager visible when rack levels differ by rackLevelId even if address level is flat', () => {
+  it('hides pager when address levels are flat and rack semantic level set resolves to one level', () => {
     setFaceALevelCount(mockLayoutDraft as LayoutDraft, 1);
     mockPublishedCells = [
       {
@@ -293,6 +316,13 @@ describe('StorageRackInspector', () => {
       }
     ];
 
+    const renderer = renderInspector();
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(0);
+  });
+
+  it('shows pager from rack-wide semantic union for asymmetric A/B levels', () => {
+    setFaceALevelCount(mockLayoutDraft as LayoutDraft, 1);
+    setFaceBLevels(mockLayoutDraft as LayoutDraft, [3]);
     const renderer = renderInspector();
     expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(1);
   });
