@@ -61,7 +61,7 @@ import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
-import { resolveStorageActiveRackId } from './storage-active-rack-context';
+import { resolveStorageFocusContext } from '../model/storage-focus';
 
 export function EditorCanvas({
   workspace,
@@ -205,12 +205,13 @@ export function EditorCanvas({
     selectedZone
   } = scene.selection;
   const { moveSourceCellId } = scene.workflow;
-  const primarySelectedRackId = resolveStorageActiveRackId({
+  const storageFocusContext = resolveStorageFocusContext({
     viewMode,
     selection,
-    selectedRackId,
+    selectedRackActiveLevel,
     publishedCellsById
   });
+  const primarySelectedRackId = viewMode === 'storage' ? storageFocusContext.rackId : selectedRackId;
   const {
     hintText,
     selectedRackAnchorRect,

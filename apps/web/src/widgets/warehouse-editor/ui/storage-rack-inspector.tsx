@@ -67,7 +67,8 @@ export function StorageRackInspector({
         ).size;
   const publishedLevelCount = Math.max(publishedAddressLevelCount, publishedRackLevelIdCount);
   const levelCount = Math.max(structureLevelCount, publishedLevelCount);
-  const selectedCellId = selection.type === 'cell' ? selection.cellId : null;
+  const selectedCellId = focusContext.resolvedCellId;
+  const hasResolvedCellContext = focusContext.leaf === 'cell' && focusContext.resolvedCellId !== null;
   const { data: selectedCellLocationRef, error: selectedCellLocationError } = useLocationByCell(selectedCellId);
   const selectedCellLocationId = selectedCellLocationRef?.locationId ?? null;
   const {
@@ -219,7 +220,7 @@ export function StorageRackInspector({
           </div>
         </div>
 
-        {selection.type !== 'cell' && (
+        {!hasResolvedCellContext && (
           <div className="rounded-xl border border-[var(--border-muted)] p-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               Selected location
@@ -230,7 +231,7 @@ export function StorageRackInspector({
           </div>
         )}
 
-        {selection.type === 'cell' && selectedCell && (
+        {hasResolvedCellContext && selectedCell && (
           <div
             className="rounded-xl border border-[var(--border-muted)] p-3"
             data-testid="storage-shell-location-detail"
@@ -276,7 +277,7 @@ export function StorageRackInspector({
           </div>
         )}
 
-        {selection.type === 'cell' && !selectedCell && (
+        {hasResolvedCellContext && !selectedCell && (
           <div className="rounded-xl border border-[var(--border-muted)] p-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
               Location detail

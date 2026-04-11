@@ -310,7 +310,42 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
   });
 
-  it('characterizes current transitional behavior: storage container selection does not produce primarySelectedRackId continuity', () => {
+  it('sets primarySelectedRackId for resolved storage container selection', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = 'rack-stale';
+    mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
+    mockPublishedCellsById = new Map([
+      ['cell-1', {
+        id: 'cell-1',
+        layoutVersionId: 'lv-1',
+        rackId,
+        rackFaceId: 'face-a',
+        rackSectionId: 'section-a',
+        rackLevelId: 'level-1',
+        slotNo: 1,
+        address: {
+          raw: '01-A.01.01.01',
+          parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+          sortKey: '0001-A-01-01-01'
+        },
+        cellCode: 'CELL-1',
+        status: 'active'
+      } satisfies Cell]
+    ]);
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
+  });
+
+  it('keeps explicit unresolved container fallback: no primarySelectedRackId without source-cell context', () => {
     const draft = createLayoutDraftFixture();
     mockLayoutDraft = draft;
     mockViewMode = 'storage';

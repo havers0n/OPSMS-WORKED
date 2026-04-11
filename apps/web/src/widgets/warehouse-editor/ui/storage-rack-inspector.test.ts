@@ -100,6 +100,18 @@ function createDraftWithLevelCount(levelCount: number): LayoutDraft {
   return draft;
 }
 
+function setFaceALevelCount(draft: LayoutDraft, levelCount: number) {
+  const rackId = draft.rackIds[0];
+  const faceA = draft.racks[rackId]?.faces.find((face) => face.side === 'A');
+  if (faceA && faceA.sections[0]) {
+    faceA.sections[0].levels = Array.from({ length: levelCount }, (_, index) => ({
+      id: `level-a-${index + 1}`,
+      ordinal: index + 1,
+      slotCount: 3
+    }));
+  }
+}
+
 function renderInspector() {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -227,12 +239,69 @@ describe('StorageRackInspector', () => {
     expect(setSelectedRackActiveLevelSpy).toHaveBeenNthCalledWith(2, 0);
   });
 
+  it('keeps pager visible when published cell levels exceed rack structure levels', () => {
+    setFaceALevelCount(mockLayoutDraft as LayoutDraft, 1);
+    mockPublishedCells = [
+      {
+        ...mockPublishedCells[0],
+        id: 'cell-l1',
+        address: {
+          ...mockPublishedCells[0].address,
+          raw: '01-A.01.01.01',
+          parts: { ...mockPublishedCells[0].address.parts, level: 1 }
+        }
+      },
+      {
+        ...mockPublishedCells[0],
+        id: 'cell-l2',
+        address: {
+          ...mockPublishedCells[0].address,
+          raw: '01-A.01.02.01',
+          parts: { ...mockPublishedCells[0].address.parts, level: 2 }
+        }
+      }
+    ];
+
+    const renderer = renderInspector();
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(1);
+  });
+
+  it('keeps pager visible when rack levels differ by rackLevelId even if address level is flat', () => {
+    setFaceALevelCount(mockLayoutDraft as LayoutDraft, 1);
+    mockPublishedCells = [
+      {
+        ...mockPublishedCells[0],
+        id: 'cell-rack-level-1',
+        rackLevelId: 'level-1',
+        address: {
+          ...mockPublishedCells[0].address,
+          raw: '01-A.01.01.01',
+          parts: { ...mockPublishedCells[0].address.parts, level: 1 }
+        }
+      },
+      {
+        ...mockPublishedCells[0],
+        id: 'cell-rack-level-2',
+        rackLevelId: 'level-2',
+        address: {
+          ...mockPublishedCells[0].address,
+          raw: '01-A.01.01.02',
+          parts: { ...mockPublishedCells[0].address.parts, level: 1, slot: 2 }
+        }
+      }
+    ];
+
+    const renderer = renderInspector();
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(1);
+  });
+
   it('keeps rack shell visible and switches lower region to location detail for cell selection', () => {
     mockSelection = { type: 'cell', cellId: 'cell-1' };
     const renderer = renderInspector();
 
     expect(hasText(renderer, 'Storage rack')).toBe(true);
     expect(hasText(renderer, 'Storage summary')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'storage-shell-location-detail' })).toHaveLength(1);
     expect(hasText(renderer, '01-A.01.02.01')).toBe(true);
     expect(hasText(renderer, 'Select a storage location to view its details.')).toBe(false);
@@ -240,6 +309,28 @@ describe('StorageRackInspector', () => {
     expect(hasText(renderer, 'Current inventory')).toBe(true);
     expect(hasText(renderer, 'Location Policy')).toBe(true);
     expect(hasText(renderer, 'Placement actions')).toBe(true);
+  });
+
+  it('keeps rack shell continuity for resolved container selection through source cell context', () => {
+    mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
+    const renderer = renderInspector();
+
+    expect(hasText(renderer, 'Storage rack')).toBe(true);
+    expect(hasText(renderer, 'Storage summary')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-shell-location-detail' })).toHaveLength(1);
+    expect(hasText(renderer, '01-A.01.02.01')).toBe(true);
+    expect(hasText(renderer, 'Select a storage location to view its details.')).toBe(false);
+  });
+
+  it('keeps existing empty-guidance behavior when selected cell cannot resolve parent rack', () => {
+    mockSelection = { type: 'cell', cellId: 'missing-cell' };
+    const renderer = renderInspector();
+
+    expect(hasText(renderer, 'Storage rack')).toBe(true);
+    expect(hasText(renderer, 'Select a rack or storage location to inspect storage by level.')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-rack-inspector-level-pager' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-shell-location-detail' })).toHaveLength(0);
   });
 
   it('de-duplicates container entries by containerId using first-seen row only', () => {

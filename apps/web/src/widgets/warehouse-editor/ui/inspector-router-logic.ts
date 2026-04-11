@@ -9,7 +9,7 @@ import type {
 
 export type InspectorKind =
   | 'rack-structure'         // layout/view + single rack selected (existing)
-  | 'storage-shell'          // storage + none/rack/cell (persistent storage hierarchy shell)
+  | 'storage-shell'          // storage + none/rack/cell/resolved-container (persistent storage hierarchy shell)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'zone-detail'            // layout + single zone selected → editable inspector
   | 'zone-readonly'          // view/storage + zone selected → context-only, no actions
@@ -17,6 +17,10 @@ export type InspectorKind =
   | 'placement-placeholder'  // view/storage mode + no selection
   | 'placement-cell'         // view/storage mode + cell selected
   | 'placement-container';   // view/storage mode + container selected
+
+type ResolveInspectorKindContext = {
+  hasResolvedStorageContainerRackContext: boolean;
+};
 
 /**
  * Maps (viewMode, selection) → InspectorKind | null.
@@ -38,7 +42,8 @@ export type InspectorKind =
  * Storage routing contract:
  *   storage + none/rack/cell    → storage-shell
  *   storage + zone              → zone-readonly  (zone is not a placement target)
- *   storage + container         → placement-container
+ *   storage + container (resolved source context)   → storage-shell
+ *   storage + container (unresolved/no-source)      → placement-container
  *   storage + anything else     → storage-shell
  *
  * Note: canSelectZone in use-canvas-scene-model.ts currently prevents zone
@@ -48,7 +53,8 @@ export type InspectorKind =
  */
 export function resolveInspectorKind(
   viewMode: ViewMode,
-  selection: EditorSelection
+  selection: EditorSelection,
+  context: ResolveInspectorKindContext = { hasResolvedStorageContainerRackContext: false }
 ): InspectorKind | null {
   if (viewMode === 'layout') {
     if (selection.type === 'rack') {
@@ -69,7 +75,9 @@ export function resolveInspectorKind(
   }
   if (viewMode === 'storage') {
     if (selection.type === 'zone') return 'zone-readonly';
-    if (selection.type === 'container') return 'placement-container';
+    if (selection.type === 'container') {
+      return context.hasResolvedStorageContainerRackContext ? 'storage-shell' : 'placement-container';
+    }
     return 'storage-shell';
   }
 

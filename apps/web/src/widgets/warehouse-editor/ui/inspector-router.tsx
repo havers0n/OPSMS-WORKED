@@ -1,11 +1,15 @@
 import type { FloorWorkspace } from '@wos/domain';
 import { getZonePlacementBehavior } from '@wos/domain';
 import { MapPin, X } from 'lucide-react';
+import { useMemo } from 'react';
 import {
   useEditorSelection,
+  useSelectedRackActiveLevel,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
+import { resolveStorageFocusContext } from '../model/storage-focus';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
 import { StorageRackInspector } from './storage-rack-inspector';
@@ -171,12 +175,22 @@ type InspectorRouterProps = {
  *   storage + none/rack/cell   → StorageRackInspector (persistent storage shell)
  *   view    + cell             → CellPlacementInspector (read-only)
  *   view    + container        → ContainerPlacementInspector (read-only)
- *   storage + container        → ContainerPlacementInspector
+ *   storage + resolved container → StorageRackInspector
+ *   storage + unresolved/no-source container → ContainerPlacementInspector
  *   view + none                → PlacementModePanel
  */
 export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
   const viewMode = useViewMode();
   const selection = useEditorSelection();
+  if (viewMode === 'storage' && selection.type === 'container') {
+    return (
+      <StorageContainerRouteGate
+        workspace={workspace}
+        onClose={onClose}
+      />
+    );
+  }
+
   const kind = resolveInspectorKind(viewMode, selection);
 
   switch (kind) {
@@ -210,4 +224,32 @@ export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
     case null:
       return null;
   }
+}
+
+function StorageContainerRouteGate({
+  workspace,
+  onClose
+}: InspectorRouterProps) {
+  const selection = useEditorSelection();
+  const selectedRackActiveLevel = useSelectedRackActiveLevel();
+  const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
+  const publishedCellsById = useMemo(
+    () => new Map(publishedCells.map((cell) => [cell.id, cell] as const)),
+    [publishedCells]
+  );
+  const storageFocusContext = resolveStorageFocusContext({
+    viewMode: 'storage',
+    selection,
+    selectedRackActiveLevel,
+    publishedCellsById
+  });
+  const kind = resolveInspectorKind('storage', selection, {
+    hasResolvedStorageContainerRackContext: storageFocusContext.hasResolvedRackContext
+  });
+
+  if (kind === 'storage-shell') {
+    return <StorageRackInspector workspace={workspace} onClose={onClose} />;
+  }
+
+  return <ContainerPlacementInspector workspace={workspace} />;
 }

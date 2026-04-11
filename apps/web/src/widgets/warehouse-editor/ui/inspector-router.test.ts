@@ -43,10 +43,25 @@ describe('resolveInspectorKind — storage mode', () => {
     expect(resolveInspectorKind('storage', cellSelection('cell-1'))).toBe('storage-shell');
   });
 
-  it('preserves current contract: storage container selection with source cell routes to placement-container', () => {
-    expect(resolveInspectorKind('storage', containerSelection('container-1', 'cell-1'))).toBe(
-      'placement-container'
-    );
+  it('routes resolved storage container selection to storage-shell', () => {
+    expect(
+      resolveInspectorKind('storage', containerSelection('container-1', 'cell-1'), {
+        hasResolvedStorageContainerRackContext: true
+      })
+    ).toBe('storage-shell');
+  });
+
+  it('keeps explicit unresolved/no-source container fallback on placement-container', () => {
+    expect(
+      resolveInspectorKind('storage', containerSelection('container-1', 'cell-1'), {
+        hasResolvedStorageContainerRackContext: false
+      })
+    ).toBe('placement-container');
+    expect(
+      resolveInspectorKind('storage', containerSelection('container-1'), {
+        hasResolvedStorageContainerRackContext: false
+      })
+    ).toBe('placement-container');
   });
 
   it('characterizes current transitional behavior: storage zone selection routes to zone-readonly', () => {

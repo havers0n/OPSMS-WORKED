@@ -134,18 +134,55 @@ describe('resolveStorageFocusContext', () => {
     });
   });
 
-  it('characterizes current transitional behavior: storage container selection remains none-context and does not infer rack context from sourceCellId', () => {
+  it('resolves storage container selection when sourceCellId restores parent rack context', () => {
     expect(
       resolve({
         viewMode: 'storage',
         selection: { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' },
+        selectedRackActiveLevel: 1,
+        publishedCellsById: new Map([['cell-1', makeCell('cell-1', 'rack-1', 3)]])
+      })
+    ).toEqual({
+      leaf: 'cell',
+      rackId: 'rack-1',
+      resolvedCellId: 'cell-1',
+      resolvedContainerId: 'container-1',
+      activeLevel: 1,
+      hasResolvedRackContext: true,
+      isOffLevel: true
+    });
+  });
+
+  it('keeps explicit unresolved fallback context for storage container when sourceCellId is missing', () => {
+    expect(
+      resolve({
+        viewMode: 'storage',
+        selection: { type: 'container', containerId: 'container-1' },
         selectedRackActiveLevel: 1
       })
     ).toEqual({
       leaf: 'none',
       rackId: null,
       resolvedCellId: null,
-      resolvedContainerId: null,
+      resolvedContainerId: 'container-1',
+      activeLevel: 1,
+      hasResolvedRackContext: false,
+      isOffLevel: false
+    });
+  });
+
+  it('keeps explicit unresolved fallback context for storage container when sourceCellId cannot be resolved', () => {
+    expect(
+      resolve({
+        viewMode: 'storage',
+        selection: { type: 'container', containerId: 'container-1', sourceCellId: 'missing-cell' },
+        selectedRackActiveLevel: 1
+      })
+    ).toEqual({
+      leaf: 'none',
+      rackId: null,
+      resolvedCellId: null,
+      resolvedContainerId: 'container-1',
       activeLevel: 1,
       hasResolvedRackContext: false,
       isOffLevel: false
