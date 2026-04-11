@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import type { User } from '@supabase/supabase-js';
 import { resetUiStore } from '@/app/store/ui-store';
 import { resetEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import { resetNavigationStore } from '@/widgets/warehouse-editor/model/v2/navigation-store';
+import { resetSelectionStore } from '@/widgets/warehouse-editor/model/v2/selection-store';
+import { resetTaskStore } from '@/widgets/warehouse-editor/model/v2/task-store';
 import { bffRequest } from '@/shared/api/bff/client';
 import { queryClient } from '@/shared/api/supabase/query-client';
 import { ensureDevSession, getCurrentSessionUser, signInWithPassword, signOutSession, signUpWithPassword, subscribeToAuthChanges } from '@/shared/api/supabase/auth';
@@ -72,6 +75,9 @@ function resetLocalWorkspaceState() {
   queryClient.clear();
   resetUiStore();
   resetEditorStore();
+  resetNavigationStore();
+  resetSelectionStore();
+  resetTaskStore();
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
