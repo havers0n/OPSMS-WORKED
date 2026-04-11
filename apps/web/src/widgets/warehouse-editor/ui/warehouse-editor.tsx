@@ -9,14 +9,17 @@ import {
   useResetDraft,
   useSetEditorMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
-import { ContextPanel } from './context-panel';
-import { EditorCanvas } from './editor-canvas';
-import { RightSidePanelSlot } from './right-side-panel-slot';
+import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
+import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
+
+const ENABLE_STORAGE_WORKSPACE_V2 = false;
 
 export function WarehouseEditor() {
   const activeFloorId = useActiveFloorId();
   const { data: workspace } = useFloorWorkspace(activeFloorId);
+  const viewMode = useModeStore((s) => s.viewMode);
   useLayoutDraftAutosave(activeFloorId);
   const workspaceLayout = workspace?.activeDraft ?? workspace?.latestPublished ?? null;
   const currentDraft = useLayoutDraftState();
@@ -73,6 +76,8 @@ export function WarehouseEditor() {
     );
   }
 
+  const handleOpenInspector = () => undefined;
+
   const handleAddRack = () => {
     clearSelection();
     setEditorMode('place');
@@ -82,6 +87,18 @@ export function WarehouseEditor() {
     clearSelection();
   };
 
+  // V2 gate: route to StorageWorkspaceV2 if enabled and in storage mode
+  if (viewMode === 'storage' && ENABLE_STORAGE_WORKSPACE_V2) {
+    return (
+      <StorageWorkspaceV2
+        workspace={workspace ?? null}
+        onAddRack={handleAddRack}
+        onOpenInspector={handleOpenInspector}
+        onCloseInspector={handleCloseInspector}
+      />
+    );
+  }
+
   return (
     <div
       role="region"
@@ -90,21 +107,10 @@ export function WarehouseEditor() {
     >
       <ToolRail />
 
-      <div className="relative min-w-0 flex-1 overflow-hidden">
-        <EditorCanvas
-          workspace={workspace ?? null}
-          onAddRack={handleAddRack}
-          onOpenInspector={() => undefined}
-        />
-
-        <ContextPanel
-          workspace={workspace ?? null}
-          onOpenInspector={() => undefined}
-        />
-      </div>
-
-      <RightSidePanelSlot
+      <WorkspaceCanvasAndPanel
         workspace={workspace ?? null}
+        onAddRack={handleAddRack}
+        onOpenInspector={handleOpenInspector}
         onCloseInspector={handleCloseInspector}
       />
     </div>
