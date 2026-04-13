@@ -46,8 +46,13 @@ import {
   pickTaskDetailSchema,
   waveSchema,
   waveSummarySchema,
-  waveStatusSchema
+  waveStatusSchema,
+  rackInspectorPayloadSchema
 } from '@wos/domain';
+
+// ── Rack Inspector ──────────────────────────────────────────────────────────
+
+export { rackInspectorPayloadSchema };
 
 export const createSiteBodySchema = z.object({
   code: z.string().trim().min(1),

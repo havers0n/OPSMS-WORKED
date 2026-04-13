@@ -30,6 +30,7 @@ export * from './storage/inventory-item-ref';
 export * from './storage/stock-movement';
 export * from './storage/container-storage-snapshot';
 export * from './storage/cell-storage-snapshot';
+export * from './storage/rack-inspector';
 export * from './warehouse/site';
 export * from './warehouse/floor';
 export * from './warehouse/floor-workspace';

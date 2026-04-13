@@ -49,7 +49,8 @@ import {
   executePickStepBodySchema,
   executePickStepResponseSchema,
   nonRackLocationsResponseSchema,
-  patchLocationGeometryBodySchema
+  patchLocationGeometryBodySchema,
+  rackInspectorPayloadSchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
@@ -115,6 +116,7 @@ import {
   type ProductRow
 } from './inventory-product-resolution.js';
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
+import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
 import {
   createPickingService,
   type PickingService
@@ -1114,6 +1116,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     } catch (error) {
       throw mapPickingError(error) ?? error;
     }
+  });
+
+  // ── Rack Inspector ──────────────────────────────────────────────────────────
+
+  app.get('/api/racks/:rackId/inspector', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const rackId = parseOrThrow(idResponseSchema, { id: (request.params as { rackId: string }).rackId }).id;
+    const supabase = getUserSupabase(auth);
+    const rackInspectorRepo = createRackInspectorRepo(supabase);
+    const payload = await rackInspectorRepo.getRackInspector(rackId);
+
+    if (!payload) {
+      throw new ApiError(404, 'RACK_NOT_FOUND', `Rack ${rackId} not found.`);
+    }
+
+    return parseOrThrow(rackInspectorPayloadSchema, payload);
   });
 
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });

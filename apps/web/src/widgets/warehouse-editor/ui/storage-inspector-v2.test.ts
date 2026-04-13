@@ -39,6 +39,28 @@ vi.mock('@/entities/location/api/use-location-storage', () => ({
   })
 }));
 
+type MockRackInspectorPayload = {
+  rackId: string;
+  displayCode: string;
+  kind: string;
+  axis: string;
+  totalLevels: number;
+  totalCells: number;
+  levels: Array<{ levelOrdinal: number; totalCells: number; occupiedCells: number; emptyCells: number }>;
+  occupancySummary: { totalCells: number; occupiedCells: number; emptyCells: number; occupancyRate: number };
+};
+
+let mockRackInspectorData: MockRackInspectorPayload | null = null;
+let mockRackInspectorLoading = false;
+
+vi.mock('@/entities/rack/api/use-rack-inspector', () => ({
+  useRackInspector: () => ({
+    data: mockRackInspectorData,
+    isLoading: mockRackInspectorLoading,
+    isError: false,
+  })
+}));
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function createWorkspace(): FloorWorkspace {
@@ -177,5 +199,92 @@ describe('StorageInspectorV2 breadcrumb fallbacks', () => {
     expect(text).toContain('R-01');
     expect(text).toContain('Level 3');
     expect(text).toContain('LOC-SEM-01');
+  });
+});
+
+describe('StorageInspectorV2 rack-summary integration (PR1)', () => {
+  beforeEach(() => {
+    resetStorageFocusStore();
+    mockPublishedCells = [];
+    mockLocationRef = null;
+    mockStorageRows = [];
+    mockRackInspectorData = {
+      rackId: 'rack-1',
+      displayCode: 'R-01',
+      kind: 'single',
+      axis: 'NS',
+      totalLevels: 2,
+      totalCells: 4,
+      levels: [
+        { levelOrdinal: 1, totalCells: 2, occupiedCells: 1, emptyCells: 1 },
+        { levelOrdinal: 2, totalCells: 2, occupiedCells: 0, emptyCells: 2 },
+      ],
+      occupancySummary: { totalCells: 4, occupiedCells: 1, emptyCells: 3, occupancyRate: 0.25 },
+    };
+    mockRackInspectorLoading = false;
+  });
+
+  afterEach(() => {
+    resetStorageFocusStore();
+    mockRackInspectorData = null;
+    mockRackInspectorLoading = false;
+  });
+
+  it('shows EmptyState when neither cellId nor rackId is set', () => {
+    const renderer = renderInspector(createWorkspace());
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('No location selected');
+  });
+
+  it('shows RackSummary when rackId is set but cellId is null', () => {
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+    });
+    const renderer = renderInspector(createWorkspace());
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('R-01');
+    expect(text).not.toContain('No location selected');
+  });
+
+  it('shows cell path (not RackSummary) when cellId is set', () => {
+    act(() => {
+      useStorageFocusStore.getState().selectCell({
+        cellId: 'cell-1',
+        rackId: 'rack-1',
+        level: 1,
+      });
+    });
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
+    ];
+    mockLocationRef = { locationId: 'loc-1' };
+    const renderer = renderInspector(createWorkspace());
+    const text = flattenText(renderer.toJSON());
+    // Should show cell breadcrumb (includes rack code from breadcrumb context)
+    expect(text).toContain('01-A.01.01');
+    // Should NOT show the rack-summary occupancy/levels sections
+    expect(text).not.toContain('1 / 4 cells occupied');
+  });
+
+  it('RackSummary shows occupancy rate', () => {
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+    });
+    const renderer = renderInspector(createWorkspace());
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('25%');
+    expect(text).toContain('1 / 4 cells occupied');
+  });
+
+  it('RackSummary shows levels breakdown', () => {
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+    });
+    const renderer = renderInspector(createWorkspace());
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('L1:');
+    expect(text).toContain('1/2');
+    expect(text).toContain('L2:');
+    expect(text).toContain('0/2');
   });
 });
