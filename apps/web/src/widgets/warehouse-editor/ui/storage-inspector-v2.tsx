@@ -1,9 +1,17 @@
-import type { FloorWorkspace, LocationStorageSnapshotRow, Rack, RackInspectorPayload } from '@wos/domain';
+import type { ContainerType, FloorWorkspace, LocationStorageSnapshotRow, Product, Rack, RackInspectorPayload } from '@wos/domain';
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
+import { useContainerTypes } from '@/entities/container/api/use-container-types';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
+import { locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
+import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
+import { createContainer } from '@/features/container-create/api/mutations';
+import { addInventoryItem } from '@/features/inventory-add/api/mutations';
+import { placeContainer } from '@/features/placement-actions/api/mutations';
+import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -11,22 +19,23 @@ import {
 } from '../model/v2/v2-selectors';
 
 /**
- * StorageInspectorV2 — Read-only right surface for the V2 storage path.
+ * StorageInspectorV2 — Right surface for the V2 storage path.
  *
- * Panel modes (PR2):
- * - empty          — no rack, no cell selected
- * - rack-overview  — rack selected, no cell drilled in
- * - cell-overview  — cell selected; shows containers + inventory preview
- * - container-detail — local drill-down into one container; back → cell-overview
+ * Panel modes (PR3):
+ * - empty                             — no rack, no cell selected
+ * - rack-overview                     — rack selected, no cell drilled in
+ * - cell-overview                     — cell selected; shows containers + inventory preview + actions
+ * - container-detail                  — local drill-down into one container; back → cell-overview
+ * - task-create-container             — create empty container at selected cell (PR3)
+ * - task-create-container-with-product — create container + initial product (PR3)
  *
  * State ownership:
  * - selectedRackId, selectedCellId, activeLevel → StorageFocusStore (global, spatial)
  * - selectedContainerId → local useState (panel-only, never escapes)
+ * - taskKind → local useState (panel-only, never escapes, resets on cellId change)
  *
  * Cell data path is fetched once at the top level and shared between
- * cell-overview and container-detail — no duplicate query orchestration.
- *
- * Read-only invariants (no mutations, no task triggers, no new global stores).
+ * cell-overview, container-detail, and task panels — no duplicate query orchestration.
  *
  * Fields NOT available in current BFF responses — explicitly omitted:
  * - capacityMode, policy, retentionDays
@@ -44,7 +53,11 @@ type PanelMode =
   | { kind: 'empty' }
   | { kind: 'rack-overview'; rackId: string }
   | { kind: 'cell-overview'; cellId: string }
-  | { kind: 'container-detail'; cellId: string; containerId: string };
+  | { kind: 'container-detail'; cellId: string; containerId: string }
+  | { kind: 'task-create-container'; cellId: string }
+  | { kind: 'task-create-container-with-product'; cellId: string };
+
+type TaskKind = 'create-container' | 'create-container-with-product';
 
 /**
  * Derives the current panel mode from spatial focus state and local container selection.
@@ -62,6 +75,19 @@ export function resolvePanelMode(
   if (cellId) return { kind: 'cell-overview', cellId };
   if (rackId) return { kind: 'rack-overview', rackId };
   return { kind: 'empty' };
+}
+
+/**
+ * Applies a task override on top of the base panel mode.
+ * Task modes only activate when the base mode is cell-overview.
+ * Pure function — exported for isolated testing.
+ */
+export function resolveActiveMode(base: PanelMode, taskKind: TaskKind | null): PanelMode {
+  if (base.kind === 'cell-overview' && taskKind === 'create-container')
+    return { kind: 'task-create-container', cellId: base.cellId };
+  if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product')
+    return { kind: 'task-create-container-with-product', cellId: base.cellId };
+  return base;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -113,9 +139,440 @@ function InspectorFooter() {
   return (
     <div className="px-4 py-2 border-t border-gray-200 flex-shrink-0 text-xs text-gray-500 bg-gray-50">
       <p>
-        <span className="font-medium">PR2:</span> Explicit panel modes — rack-overview, cell-overview, container-detail.
-        {' '}Actions deferred to PR3+.
+        <span className="font-medium">PR3:</span> Create container · Create container with product.
       </p>
+    </div>
+  );
+}
+
+// ── Task panel shared types & helpers ─────────────────────────────────────────
+
+interface TaskPanelProps {
+  locationId: string | null;
+  floorId: string | null;
+  rackDisplayCode: string;
+  locationCode: string;
+  activeLevel: number;
+  onCancel: () => void;
+  onSuccess: () => void;
+}
+
+type TaskError = { stage: 'create' | 'place' | 'inventory'; message: string };
+
+function TaskPanelBreadcrumb({
+  rackDisplayCode,
+  activeLevel,
+  locationCode,
+}: {
+  rackDisplayCode: string;
+  activeLevel: number;
+  locationCode: string;
+}) {
+  return (
+    <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
+      <span>{rackDisplayCode}</span>
+      <span className="text-gray-300">/</span>
+      <span>Level {activeLevel}</span>
+      <span className="text-gray-300">/</span>
+      <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
+    </div>
+  );
+}
+
+function ContainerTypeSelect({
+  containerTypes,
+  value,
+  onChange,
+  disabled,
+}: {
+  containerTypes: ContainerType[];
+  value: string;
+  onChange: (id: string) => void;
+  disabled: boolean;
+}) {
+  const storableTypes = containerTypes.filter((t) => t.supportsStorage);
+  return (
+    <div className="space-y-1">
+      <label className="block text-xs font-medium text-gray-700">
+        Container type <span className="text-red-500">*</span>
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled || storableTypes.length === 0}
+        className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+        aria-label="Container type"
+      >
+        <option value="">Select type…</option>
+        {storableTypes.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.description} ({t.code})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ── CreateContainerTaskPanel ──────────────────────────────────────────────────
+
+function CreateContainerTaskPanel({
+  locationId,
+  floorId,
+  rackDisplayCode,
+  locationCode,
+  activeLevel,
+  onCancel,
+  onSuccess,
+}: TaskPanelProps) {
+  const queryClient = useQueryClient();
+  const { data: containerTypes = [] } = useContainerTypes();
+  const [containerTypeId, setContainerTypeId] = useState('');
+  const [externalCode, setExternalCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<TaskError | null>(null);
+
+  const canSubmit = Boolean(containerTypeId) && Boolean(locationId) && !isSubmitting;
+
+  async function handleSubmit() {
+    if (!canSubmit || !locationId) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      let containerId: string;
+      try {
+        const result = await createContainer({
+          containerTypeId,
+          externalCode: externalCode.trim() || undefined,
+        });
+        containerId = result.containerId;
+      } catch {
+        setError({ stage: 'create', message: 'Failed to create container.' });
+        return;
+      }
+      try {
+        await placeContainer({ containerId, locationId });
+      } catch {
+        setError({ stage: 'place', message: 'Failed to place container at this location.' });
+        return;
+      }
+      await invalidatePlacementQueries(queryClient, { floorId, containerId });
+      await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      onSuccess();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      role="complementary"
+      aria-label="Create container"
+    >
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
+          aria-label="Cancel create container"
+        >
+          ← Cancel
+        </button>
+        <TaskPanelBreadcrumb
+          rackDisplayCode={rackDisplayCode}
+          activeLevel={activeLevel}
+          locationCode={locationCode}
+        />
+        <p className="text-sm font-semibold text-gray-900 mt-1">Create container</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <ContainerTypeSelect
+          containerTypes={containerTypes}
+          value={containerTypeId}
+          onChange={setContainerTypeId}
+          disabled={isSubmitting}
+        />
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-700">
+            External code <span className="text-gray-400">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={externalCode}
+            onChange={(e) => setExternalCode(e.target.value)}
+            disabled={isSubmitting}
+            placeholder="e.g. PLT-0042"
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            aria-label="External code"
+          />
+        </div>
+
+        {!locationId && (
+          <p className="text-xs text-gray-400">Resolving location…</p>
+        )}
+
+        {error && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {error.message}
+          </p>
+        )}
+      </div>
+
+      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Confirm create container"
+        >
+          {isSubmitting ? 'Creating…' : 'Create container'}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── CreateContainerWithProductTaskPanel ───────────────────────────────────────
+
+function CreateContainerWithProductTaskPanel({
+  locationId,
+  floorId,
+  rackDisplayCode,
+  locationCode,
+  activeLevel,
+  onCancel,
+  onSuccess,
+}: TaskPanelProps) {
+  const queryClient = useQueryClient();
+  const { data: containerTypes = [] } = useContainerTypes();
+  const [containerTypeId, setContainerTypeId] = useState('');
+  const [externalCode, setExternalCode] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState('');
+  const [uom, setUom] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<TaskError | null>(null);
+
+  const { data: searchResults = [] } = useProductsSearch(productSearch.trim() || null);
+  const showResults = productSearch.trim().length > 0 && !selectedProduct;
+
+  const canSubmit =
+    Boolean(containerTypeId) &&
+    Boolean(locationId) &&
+    selectedProduct !== null &&
+    quantity.trim() !== '' &&
+    Number(quantity) > 0 &&
+    uom.trim() !== '' &&
+    !isSubmitting;
+
+  function selectProduct(product: Product) {
+    setSelectedProduct(product);
+    setProductSearch(product.name ?? product.sku ?? '');
+  }
+
+  async function handleSubmit() {
+    if (!canSubmit || !locationId || !selectedProduct) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      let containerId: string;
+      try {
+        const result = await createContainer({
+          containerTypeId,
+          externalCode: externalCode.trim() || undefined,
+        });
+        containerId = result.containerId;
+      } catch {
+        setError({ stage: 'create', message: 'Failed to create container.' });
+        return;
+      }
+      try {
+        await placeContainer({ containerId, locationId });
+      } catch {
+        setError({ stage: 'place', message: 'Failed to place container at this location.' });
+        return;
+      }
+      try {
+        await addInventoryItem({
+          containerId,
+          productId: selectedProduct.id,
+          quantity: Number(quantity),
+          uom: uom.trim(),
+        });
+      } catch {
+        // Container was created and placed — surface the partial state honestly.
+        await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+        setError({
+          stage: 'inventory',
+          message:
+            'Container was created and placed, but inventory could not be added. The container is now empty at this location.',
+        });
+        return;
+      }
+      await invalidatePlacementQueries(queryClient, { floorId, containerId });
+      await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      onSuccess();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      role="complementary"
+      aria-label="Create container with product"
+    >
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
+          aria-label="Cancel create container with product"
+        >
+          ← Cancel
+        </button>
+        <TaskPanelBreadcrumb
+          rackDisplayCode={rackDisplayCode}
+          activeLevel={activeLevel}
+          locationCode={locationCode}
+        />
+        <p className="text-sm font-semibold text-gray-900 mt-1">Create container with product</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <ContainerTypeSelect
+          containerTypes={containerTypes}
+          value={containerTypeId}
+          onChange={setContainerTypeId}
+          disabled={isSubmitting}
+        />
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-700">
+            External code <span className="text-gray-400">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={externalCode}
+            onChange={(e) => setExternalCode(e.target.value)}
+            disabled={isSubmitting}
+            placeholder="e.g. PLT-0042"
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            aria-label="External code"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-700">
+            Product <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={productSearch}
+            onChange={(e) => {
+              setProductSearch(e.target.value);
+              setSelectedProduct(null);
+            }}
+            disabled={isSubmitting}
+            placeholder="Search by name or SKU…"
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            aria-label="Product search"
+          />
+          {showResults && searchResults.length > 0 && (
+            <ul className="border border-gray-200 rounded bg-white shadow-sm max-h-36 overflow-y-auto" role="listbox" aria-label="Product search results">
+              {searchResults.slice(0, 10).map((p) => (
+                <li
+                  key={p.id}
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => selectProduct(p)}
+                  className="px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 flex items-baseline gap-2"
+                >
+                  <span className="font-mono text-gray-500">{p.sku}</span>
+                  <span className="text-gray-700 truncate">{p.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {selectedProduct && (
+            <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">
+              <span className="font-mono">{selectedProduct.sku}</span>
+              {selectedProduct.name && <span className="ml-1.5">{selectedProduct.name}</span>}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <div className="flex-1 space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Quantity <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0.001"
+              step="any"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="0"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              aria-label="Quantity"
+            />
+          </div>
+          <div className="w-24 space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              UOM <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={uom}
+              onChange={(e) => setUom(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="EA"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              aria-label="Unit of measure"
+            />
+          </div>
+        </div>
+
+        {!locationId && (
+          <p className="text-xs text-gray-400">Resolving location…</p>
+        )}
+
+        {error && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {error.message}
+          </p>
+        )}
+      </div>
+
+      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Confirm create container with product"
+        >
+          {isSubmitting ? 'Creating…' : 'Create container'}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
@@ -276,19 +733,22 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   // Local container drill-down — panel-only state, never escapes this component.
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
+  // Local task flow — panel-only state, never escapes this component.
+  const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
 
-  // Reset local container selection whenever the cell focus changes or clears.
+  // Reset both local states whenever the cell focus changes or clears.
   useEffect(() => {
     setSelectedContainerId(null);
+    setTaskKind(null);
   }, [cellId]);
 
-  // Cell data path — fetched once at top level, shared across cell-overview and container-detail.
+  // Cell data path — fetched once at top level, shared across cell-overview, container-detail, and task panels.
   // These hooks are no-ops (disabled) when cellId / locationId is null.
   const { data: locationRef, isLoading: locationRefLoading } = useLocationByCell(cellId);
   const locationId = locationRef?.locationId ?? null;
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
 
-  const mode = resolvePanelMode(rackId, cellId, selectedContainerId);
+  const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind);
 
   // ── empty ──────────────────────────────────────────────────────────────────
   if (mode.kind === 'empty') {
@@ -310,6 +770,36 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const locationCode = storageRows[0]?.locationCode ?? selectedCellAddress ?? cellId;
   const isOccupied = storageRows.length > 0;
   const containers = groupByContainer(storageRows);
+
+  // ── task-create-container ──────────────────────────────────────────────────
+  if (mode.kind === 'task-create-container') {
+    return (
+      <CreateContainerTaskPanel
+        locationId={locationId}
+        floorId={floorId}
+        rackDisplayCode={rackDisplayCode}
+        locationCode={locationCode}
+        activeLevel={activeLevel}
+        onCancel={() => setTaskKind(null)}
+        onSuccess={() => setTaskKind(null)}
+      />
+    );
+  }
+
+  // ── task-create-container-with-product ─────────────────────────────────────
+  if (mode.kind === 'task-create-container-with-product') {
+    return (
+      <CreateContainerWithProductTaskPanel
+        locationId={locationId}
+        floorId={floorId}
+        rackDisplayCode={rackDisplayCode}
+        locationCode={locationCode}
+        activeLevel={activeLevel}
+        onCancel={() => setTaskKind(null)}
+        onSuccess={() => setTaskKind(null)}
+      />
+    );
+  }
 
   // ── container-detail ───────────────────────────────────────────────────────
   if (mode.kind === 'container-detail') {
@@ -512,6 +1002,25 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
         {/* Location Info section intentionally omitted:
             capacityMode, policy, retentionDays not available in current BFF responses. */}
+
+        {/* Actions */}
+        <SectionHeader title="Actions" />
+        <div className="px-4 py-3 space-y-2">
+          <button
+            onClick={() => setTaskKind('create-container')}
+            className="w-full text-left px-3 py-2 text-sm rounded border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+            aria-label="Create container at this location"
+          >
+            Create container
+          </button>
+          <button
+            onClick={() => setTaskKind('create-container-with-product')}
+            className="w-full text-left px-3 py-2 text-sm rounded border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+            aria-label="Create container with product at this location"
+          >
+            Create container with product
+          </button>
+        </div>
       </div>
 
       <InspectorFooter />
