@@ -1,5 +1,5 @@
 import type { FloorWorkspace, LocationStorageSnapshotRow, Rack, RackInspectorPayload } from '@wos/domain';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
@@ -13,34 +13,23 @@ import {
 /**
  * StorageInspectorV2 — Read-only right surface for the V2 storage path.
  *
- * V2 Integration (PR7):
- * - Reads StorageFocusStore: selectedCellId (was: selection-store.locationId)
- *   The PR6 semantic ambiguity (locationId holding a cellId) is resolved — the
- *   focus store field is correctly named selectedCellId.
- * - Reads StorageFocusStore: selectedRackId, activeLevel (breadcrumb context)
- * - Derives real locationId via useLocationByCell(cellId) — 1 GET per unique cellId, cached
- * - Fetches container + inventory via useLocationStorage(locationId)
+ * Panel modes (PR2):
+ * - empty          — no rack, no cell selected
+ * - rack-overview  — rack selected, no cell drilled in
+ * - cell-overview  — cell selected; shows containers + inventory preview
+ * - container-detail — local drill-down into one container; back → cell-overview
  *
- * Real data sources (PR6):
- * - useLocationByCell → LocationReference (resolves cellId to locationId)
- * - useLocationStorage → LocationStorageSnapshotRow[] (container + inventory)
+ * State ownership:
+ * - selectedRackId, selectedCellId, activeLevel → StorageFocusStore (global, spatial)
+ * - selectedContainerId → local useState (panel-only, never escapes)
  *
- * Read-only invariants:
- * - No action buttons
- * - No mutations, no task triggers
- * - No local state that duplicates selection-store
- * - No legacy store reads or bridges
+ * Cell data path is fetched once at the top level and shared between
+ * cell-overview and container-detail — no duplicate query orchestration.
  *
- * Fields NOT available in current BFF responses — explicitly omitted (not shown as "unknown"):
- * - capacityMode
- * - policy
- * - retentionDays
- * (Location Info section removed until backend provides these)
+ * Read-only invariants (no mutations, no task triggers, no new global stores).
  *
- * Non-goals (deferred to PR7+):
- * - No action buttons (Place, Move, Edit Inventory)
- * - No task mode wiring
- * - No canvas highlight integration
+ * Fields NOT available in current BFF responses — explicitly omitted:
+ * - capacityMode, policy, retentionDays
  */
 
 interface StorageInspectorV2Props {
@@ -48,6 +37,32 @@ interface StorageInspectorV2Props {
 }
 
 const INVENTORY_PREVIEW_LIMIT = 3;
+
+// ── Panel mode model ───────────────────────────────────────────────────────────
+
+type PanelMode =
+  | { kind: 'empty' }
+  | { kind: 'rack-overview'; rackId: string }
+  | { kind: 'cell-overview'; cellId: string }
+  | { kind: 'container-detail'; cellId: string; containerId: string };
+
+/**
+ * Derives the current panel mode from spatial focus state and local container selection.
+ * Pure function — exported for isolated testing.
+ *
+ * Priority: container-detail > cell-overview > rack-overview > empty
+ * containerId only activates when cellId is also set (it is local to the cell panel).
+ */
+export function resolvePanelMode(
+  rackId: string | null,
+  cellId: string | null,
+  containerId: string | null
+): PanelMode {
+  if (cellId && containerId) return { kind: 'container-detail', cellId, containerId };
+  if (cellId) return { kind: 'cell-overview', cellId };
+  if (rackId) return { kind: 'rack-overview', rackId };
+  return { kind: 'empty' };
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -98,8 +113,8 @@ function InspectorFooter() {
   return (
     <div className="px-4 py-2 border-t border-gray-200 flex-shrink-0 text-xs text-gray-500 bg-gray-50">
       <p>
-        <span className="font-medium">PR7:</span> Focus via StorageFocusStore — breadcrumb is coherent with canvas.
-        {' '}Actions deferred to PR8+.
+        <span className="font-medium">PR2:</span> Explicit panel modes — rack-overview, cell-overview, container-detail.
+        {' '}Actions deferred to PR3+.
       </p>
     </div>
   );
@@ -156,7 +171,7 @@ function LoadingState() {
   );
 }
 
-// ── Rack summary (rack selected, no cell drilled in) ──────────────────────────
+// ── Rack overview (rack selected, no cell drilled in) ─────────────────────────
 
 function OccupancyBar({ rate }: { rate: number }) {
   const pct = Math.round(rate * 100);
@@ -173,11 +188,7 @@ function OccupancyBar({ rate }: { rate: number }) {
   );
 }
 
-interface RackSummaryProps {
-  rackId: string;
-}
-
-function RackSummary({ rackId }: RackSummaryProps) {
+function RackOverviewPanel({ rackId }: { rackId: string }) {
   const { data, isLoading, isError } = useRackInspector(rackId);
 
   if (isLoading) {
@@ -202,10 +213,6 @@ function RackSummary({ rackId }: RackSummaryProps) {
     );
   }
 
-  return <RackSummaryContent data={data} />;
-}
-
-function RackSummaryContent({ data }: { data: RackInspectorPayload }) {
   return (
     <div
       className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
@@ -261,44 +268,141 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const floorId = workspace?.floorId ?? null;
   const { data: publishedCells = [] } = usePublishedCells(floorId);
 
-  // PR7: reads from StorageFocusStore — the single V2 runtime focus source.
+  // Spatial focus — from StorageFocusStore, the single V2 runtime focus source.
   const cellId = useStorageFocusSelectedCellId();
   const rackId = useStorageFocusSelectedRackId();
   const activeLevel = useStorageFocusActiveLevel() ?? 1;
   const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '—';
 
-  // Step 1: resolve cellId → locationId
+  // Local container drill-down — panel-only state, never escapes this component.
+  const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
+
+  // Reset local container selection whenever the cell focus changes or clears.
+  useEffect(() => {
+    setSelectedContainerId(null);
+  }, [cellId]);
+
+  // Cell data path — fetched once at top level, shared across cell-overview and container-detail.
+  // These hooks are no-ops (disabled) when cellId / locationId is null.
   const { data: locationRef, isLoading: locationRefLoading } = useLocationByCell(cellId);
   const locationId = locationRef?.locationId ?? null;
-
-  // Step 2: fetch storage snapshot by locationId
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
 
-  if (!cellId && !rackId) {
+  const mode = resolvePanelMode(rackId, cellId, selectedContainerId);
+
+  // ── empty ──────────────────────────────────────────────────────────────────
+  if (mode.kind === 'empty') {
     return <EmptyState />;
   }
 
-  if (!cellId && rackId) {
-    return <RackSummary rackId={rackId} />;
+  // ── rack-overview ──────────────────────────────────────────────────────────
+  if (mode.kind === 'rack-overview') {
+    return <RackOverviewPanel rackId={mode.rackId} />;
   }
 
+  // ── cell-overview / container-detail — shared cell data path ──────────────
   if (locationRefLoading || (locationId && storageLoading)) {
     return <LoadingState />;
   }
 
   const selectedCellAddress = publishedCells.find((cell) => cell.id === cellId)?.address.raw ?? null;
-  // Derive breadcrumb location code: prefer real locationCode, then semantic cell code, then raw id.
+  // Breadcrumb: prefer real locationCode, then semantic cell address, then raw id.
   const locationCode = storageRows[0]?.locationCode ?? selectedCellAddress ?? cellId;
   const isOccupied = storageRows.length > 0;
   const containers = groupByContainer(storageRows);
 
+  // ── container-detail ───────────────────────────────────────────────────────
+  if (mode.kind === 'container-detail') {
+    const containerRows = storageRows.filter((r) => r.containerId === mode.containerId);
+    const first = containerRows[0];
+    const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
+    const items = containerRows.filter((r) => r.itemRef !== null || r.quantity !== null);
+
+    return (
+      <div
+        className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+        role="complementary"
+        aria-label={`Container detail: ${displayCode}`}
+      >
+        {/* Header with back */}
+        <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+          <button
+            onClick={() => setSelectedContainerId(null)}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2"
+            aria-label="Back to cell overview"
+          >
+            ← Back
+          </button>
+          <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
+            <span>{rackDisplayCode}</span>
+            <span className="text-gray-300">/</span>
+            <span>Level {activeLevel}</span>
+            <span className="text-gray-300">/</span>
+            <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <SectionHeader title="Container" />
+          <div className="px-4 py-3 border-b border-gray-200 space-y-1">
+            <div className="font-mono text-sm font-semibold text-gray-900">{displayCode}</div>
+            {first && (
+              <>
+                <div className="text-xs text-gray-500 capitalize">
+                  Type: {first.containerType}
+                </div>
+                <div className="text-xs text-gray-500 capitalize">
+                  Status: {first.containerStatus}
+                </div>
+              </>
+            )}
+          </div>
+
+          <SectionHeader title="Inventory" />
+          <div className="px-4 py-3">
+            {items.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">Empty container</p>
+            ) : (
+              <div className="space-y-1.5">
+                {items.map((row, idx) => {
+                  const label = row.product?.name ?? row.product?.sku ?? row.itemRef ?? '—';
+                  const qty = row.quantity ?? 0;
+                  const uom = row.uom ?? '';
+                  return (
+                    <div
+                      key={`${row.containerId}-${row.itemRef ?? idx}`}
+                      className="flex items-baseline justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        {row.product?.sku && (
+                          <span className="font-mono text-gray-500">{row.product.sku}</span>
+                        )}
+                        <span className="text-gray-600 ml-1.5 truncate">{label}</span>
+                      </div>
+                      <span className="font-medium text-gray-700 flex-shrink-0 tabular-nums">
+                        {qty} {uom}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <InspectorFooter />
+      </div>
+    );
+  }
+
+  // ── cell-overview ──────────────────────────────────────────────────────────
   return (
     <div
       className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
       role="complementary"
       aria-label={`Location inspector: ${locationCode}`}
     >
-      {/* ── Breadcrumb ──────────────────────────────────────────────────── */}
+      {/* Breadcrumb */}
       <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
           <span>{rackDisplayCode}</span>
@@ -309,9 +413,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         </div>
       </div>
 
-      {/* ── Scrollable body ─────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-
         {/* Status Summary */}
         <SectionHeader title="Status" />
         <div className="px-4 py-3 border-b border-gray-200 space-y-2">
@@ -324,7 +426,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           )}
         </div>
 
-        {/* Current Contents */}
+        {/* Current Contents — containers are clickable to drill into container-detail */}
         <SectionHeader title="Current Contents" />
         <div className="px-4 py-3 border-b border-gray-200">
           {!isOccupied ? (
@@ -335,9 +437,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
                 const first = rows[0];
                 const displayCode = first.externalCode ?? first.systemCode;
                 return (
-                  <div
+                  <button
                     key={containerId}
-                    className="bg-gray-50 border border-gray-200 rounded px-3 py-2 space-y-1"
+                    onClick={() => setSelectedContainerId(containerId)}
+                    className="w-full text-left bg-gray-50 border border-gray-200 rounded px-3 py-2 space-y-1 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+                    aria-label={`View container ${displayCode}`}
                   >
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Container
@@ -348,7 +452,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
                     <div className="text-xs text-gray-500 capitalize">
                       Status: {first.containerStatus}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -362,7 +466,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
             <p className="text-sm text-gray-400 italic">0 items</p>
           ) : (
             (() => {
-              // Flatten inventory items across all containers
               const allItems = storageRows.filter(
                 (row) => row.itemRef !== null || row.quantity !== null
               );
@@ -408,9 +511,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         </div>
 
         {/* Location Info section intentionally omitted:
-            capacityMode, policy, retentionDays are not available in current BFF responses.
-            Will be added once the backend exposes location metadata. */}
-
+            capacityMode, policy, retentionDays not available in current BFF responses. */}
       </div>
 
       <InspectorFooter />
