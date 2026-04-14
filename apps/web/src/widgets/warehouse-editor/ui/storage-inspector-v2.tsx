@@ -18,7 +18,8 @@ import { createContainer } from '@/features/container-create/api/mutations';
 import { addInventoryItem } from '@/features/inventory-add/api/mutations';
 import { moveContainer as moveContainerApi, placeContainer } from '@/features/placement-actions/api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
-import { containerKeys } from '@/entities/container/api/queries';
+import { containerKeys, containerStorageQueryOptions } from '@/entities/container/api/queries';
+import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -62,12 +63,18 @@ type PanelMode =
   | { kind: 'rack-overview'; rackId: string }
   | { kind: 'cell-overview'; cellId: string }
   | { kind: 'container-detail'; cellId: string; containerId: string }
+  | { kind: 'task-add-product-to-container'; cellId: string; containerId: string }
   | { kind: 'task-edit-policy'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
   | { kind: 'task-create-container-with-product'; cellId: string }
   | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
 
-type TaskKind = 'create-container' | 'create-container-with-product' | 'move-container' | 'edit-policy';
+type TaskKind =
+  | 'create-container'
+  | 'create-container-with-product'
+  | 'move-container'
+  | 'edit-policy'
+  | 'add-product-to-container';
 type PolicyRoleChoice = 'primary_pick' | 'reserve' | 'none';
 type PolicyRole = 'primary_pick' | 'reserve';
 type ActiveContainerProduct = {
@@ -135,6 +142,8 @@ export function resolveActiveMode(
     return { kind: 'task-move-container', sourceContainerId: moveTaskState.sourceContainerId, sourceCellId: moveTaskState.sourceCellId };
   if (base.kind === 'container-detail' && taskKind === 'edit-policy')
     return { kind: 'task-edit-policy', cellId: base.cellId, containerId: base.containerId };
+  if (base.kind === 'container-detail' && taskKind === 'add-product-to-container')
+    return { kind: 'task-add-product-to-container', cellId: base.cellId, containerId: base.containerId };
   if (base.kind === 'cell-overview' && taskKind === 'create-container')
     return { kind: 'task-create-container', cellId: base.cellId };
   if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product')
@@ -1045,6 +1054,246 @@ function MoveContainerTaskPanel({
   );
 }
 
+function hasInventoryRows(rows: LocationStorageSnapshotRow[]): boolean {
+  return rows.some((row) => row.itemRef !== null || row.quantity !== null);
+}
+
+interface AddProductToContainerTaskPanelProps {
+  containerId: string;
+  floorId: string | null;
+  locationId: string | null;
+  sourceCellId: string | null;
+  rackDisplayCode: string;
+  activeLevel: number;
+  locationCode: string;
+  containerDisplayCode: string;
+  isContainerEmpty: boolean;
+  onCancel: () => void;
+  onSuccess: () => void;
+}
+
+function AddProductToContainerTaskPanel({
+  containerId,
+  floorId,
+  locationId,
+  sourceCellId,
+  rackDisplayCode,
+  activeLevel,
+  locationCode,
+  containerDisplayCode,
+  isContainerEmpty,
+  onCancel,
+  onSuccess
+}: AddProductToContainerTaskPanelProps) {
+  const queryClient = useQueryClient();
+  const addInventory = useAddInventoryToContainer({
+    floorId,
+    sourceCellId,
+    containerId
+  });
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState('');
+  const [uom, setUom] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const isSubmitting = addInventory.isPending;
+
+  const { data: searchResults = [] } = useProductsSearch(productSearch.trim() || null);
+  const showResults = productSearch.trim().length > 0 && !selectedProduct;
+  const quantityNumber = Number(quantity);
+  const canSubmit =
+    isContainerEmpty &&
+    selectedProduct !== null &&
+    Number.isFinite(quantityNumber) &&
+    quantityNumber > 0 &&
+    uom.trim().length > 0 &&
+    !isSubmitting;
+
+  const selectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setProductSearch(product.name ?? product.sku ?? '');
+  };
+
+  const handleSubmit = async () => {
+    if (!locationId || !selectedProduct) return;
+    setError(null);
+
+    if (!isContainerEmpty) {
+      setError('This container is no longer empty. Return to details to continue.');
+      return;
+    }
+
+    try {
+      const latestRows = await queryClient.fetchQuery(containerStorageQueryOptions(containerId));
+      if (hasInventoryRows(latestRows)) {
+        setError('This container is no longer empty. Return to details to continue.');
+        return;
+      }
+
+      await addInventory.mutateAsync({
+        containerId,
+        productId: selectedProduct.id,
+        quantity: quantityNumber,
+        uom: uom.trim()
+      });
+
+      await Promise.all([
+        queryClient.refetchQueries({
+          queryKey: locationKeys.storage(locationId),
+          exact: true
+        }),
+        queryClient.refetchQueries({
+          queryKey: containerKeys.storage(containerId),
+          exact: true
+        })
+      ]);
+
+      onSuccess();
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : 'Could not add product.');
+    }
+  };
+
+  return (
+    <div
+      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      role="complementary"
+      aria-label="Add product to container"
+      data-testid="task-add-product-to-container-panel"
+    >
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
+          aria-label="Cancel add product to container"
+        >
+          ← Cancel
+        </button>
+        <TaskPanelBreadcrumb
+          rackDisplayCode={rackDisplayCode}
+          activeLevel={activeLevel}
+          locationCode={locationCode}
+        />
+        <p className="text-sm font-semibold text-gray-900 mt-1">
+          Add product to {containerDisplayCode}
+        </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {!isContainerEmpty && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            This container is no longer empty. Return to container details.
+          </p>
+        )}
+
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-700">
+            Product <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={productSearch}
+            onChange={(e) => {
+              setProductSearch(e.target.value);
+              setSelectedProduct(null);
+            }}
+            disabled={isSubmitting}
+            placeholder="Search by name or SKU…"
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            aria-label="Add product search"
+          />
+          {showResults && searchResults.length > 0 && (
+            <ul
+              className="border border-gray-200 rounded bg-white shadow-sm max-h-36 overflow-y-auto"
+              role="listbox"
+              aria-label="Add product search results"
+            >
+              {searchResults.slice(0, 10).map((product) => (
+                <li
+                  key={product.id}
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => selectProduct(product)}
+                  className="px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 flex items-baseline gap-2"
+                >
+                  <span className="font-mono text-gray-500">{product.sku}</span>
+                  <span className="text-gray-700 truncate">{product.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {selectedProduct && (
+            <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">
+              <span className="font-mono">{selectedProduct.sku}</span>
+              {selectedProduct.name && <span className="ml-1.5">{selectedProduct.name}</span>}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <div className="flex-1 space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              Quantity <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0.001"
+              step="any"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="0"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              aria-label="Add product quantity"
+            />
+          </div>
+          <div className="w-24 space-y-1">
+            <label className="block text-xs font-medium text-gray-700">
+              UOM <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={uom}
+              onChange={(e) => setUom(e.target.value)}
+              disabled={isSubmitting}
+              placeholder="EA"
+              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              aria-label="Add product uom"
+            />
+          </div>
+        </div>
+
+        {!locationId && <p className="text-xs text-gray-400">Resolving location…</p>}
+
+        {error && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+        <button
+          onClick={() => void handleSubmit()}
+          disabled={!canSubmit}
+          className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Confirm add product to container"
+        >
+          {isSubmitting ? 'Adding…' : 'Add product'}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 interface EditPolicyTaskPanelProps {
   rackDisplayCode: string;
   activeLevel: number;
@@ -1444,12 +1693,36 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
+  if (mode.kind === 'task-add-product-to-container') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const first = containerRows[0];
+    const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
+    const isContainerEmpty = !hasInventoryRows(containerRows);
+
+    return (
+      <AddProductToContainerTaskPanel
+        containerId={mode.containerId}
+        floorId={floorId}
+        locationId={locationId}
+        sourceCellId={mode.cellId}
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        containerDisplayCode={displayCode}
+        isContainerEmpty={isContainerEmpty}
+        onCancel={() => setTaskKind(null)}
+        onSuccess={() => setTaskKind(null)}
+      />
+    );
+  }
+
   // ── container-detail ───────────────────────────────────────────────────────
   if (mode.kind === 'container-detail') {
     const containerRows = storageRows.filter((r) => r.containerId === mode.containerId);
     const first = containerRows[0];
     const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
     const items = containerRows.filter((r) => r.itemRef !== null || r.quantity !== null);
+    const isEmptyContainer = items.length === 0;
     const activeProducts = getActiveProducts(containerRows);
     const editableProduct = activeProducts.length === 1 ? activeProducts[0] : null;
     const guardReason = getPolicyEditGuardReason(activeProducts);
@@ -1548,6 +1821,15 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
           {/* Actions */}
           <div className="px-4 py-3 border-b border-gray-200">
+            {isEmptyContainer && (
+              <button
+                onClick={() => setTaskKind('add-product-to-container')}
+                className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 mb-2"
+                data-testid="add-product-action"
+              >
+                Add product
+              </button>
+            )}
             <button
               onClick={() => {
                 if (!cellId || !locationId) return;

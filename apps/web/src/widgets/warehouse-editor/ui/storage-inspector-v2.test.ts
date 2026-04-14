@@ -31,6 +31,19 @@ type MockStorageRow = {
 let mockPublishedCells: MockCell[] = [];
 let mockLocationRef: { locationId: string } | null = null;
 let mockStorageRows: MockStorageRow[] = [];
+let mockProductsSearchResults: Array<{
+  id: string;
+  sku: string | null;
+  name: string;
+  source: string;
+  externalProductId: string;
+  permalink: string | null;
+  imageUrls: unknown[];
+  imageFiles: unknown[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}> = [];
 let mockPolicyAssignments: Array<{
   id: string;
   productId: string;
@@ -99,7 +112,7 @@ vi.mock('@/entities/container/api/use-container-types', () => ({
 }));
 
 vi.mock('@/entities/product/api/use-products-search', () => ({
-  useProductsSearch: () => ({ data: [], isLoading: false }),
+  useProductsSearch: () => ({ data: mockProductsSearchResults, isLoading: false }),
 }));
 
 const mockCreatePolicyRoleMutateAsync = vi.fn();
@@ -136,8 +149,12 @@ const mockCreateContainer = vi.fn();
 const mockPlaceContainer = vi.fn();
 const mockMoveContainer = vi.fn();
 const mockAddInventoryItem = vi.fn();
+const mockAddInventoryToContainerMutateAsync = vi.fn();
+let mockAddInventoryToContainerIsPending = false;
 const mockInvalidatePlacement = vi.fn();
 const mockInvalidateQueries = vi.fn();
+const mockRefetchQueries = vi.fn();
+const mockFetchQuery = vi.fn();
 
 vi.mock('@/features/container-create/api/mutations', () => ({
   createContainer: (...args: unknown[]) => mockCreateContainer(...args),
@@ -152,6 +169,13 @@ vi.mock('@/features/inventory-add/api/mutations', () => ({
   addInventoryItem: (...args: unknown[]) => mockAddInventoryItem(...args),
 }));
 
+vi.mock('@/features/container-inventory/model/use-add-inventory-to-container', () => ({
+  useAddInventoryToContainer: () => ({
+    mutateAsync: (...args: unknown[]) => mockAddInventoryToContainerMutateAsync(...args),
+    isPending: mockAddInventoryToContainerIsPending
+  })
+}));
+
 vi.mock('@/features/placement-actions/model/invalidation', () => ({
   invalidatePlacementQueries: (...args: unknown[]) => mockInvalidatePlacement(...args),
 }));
@@ -160,7 +184,11 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
-    useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+    useQueryClient: () => ({
+      invalidateQueries: mockInvalidateQueries,
+      refetchQueries: mockRefetchQueries,
+      fetchQuery: mockFetchQuery
+    }),
   };
 });
 
@@ -318,6 +346,15 @@ describe('resolveActiveMode', () => {
     });
   });
 
+  it('overrides container-detail to task-add-product-to-container for add-product task', () => {
+    const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
+    expect(resolveActiveMode(base, 'add-product-to-container')).toEqual({
+      kind: 'task-add-product-to-container',
+      cellId: 'c1',
+      containerId: 'ct1'
+    });
+  });
+
   // ── move-container task ───────────────────────────────────────────────────
 
   const minimalMoveState: MoveTaskState = {
@@ -377,6 +414,7 @@ describe('StorageInspectorV2 breadcrumb fallbacks', () => {
   beforeEach(() => {
     resetStorageFocusStore();
     mockPolicyAssignments = [];
+    mockProductsSearchResults = [];
     mockCreatePolicyRoleMutateAsync.mockReset();
     mockDeletePolicyRoleMutateAsync.mockReset();
     mockPublishedCells = [
@@ -483,6 +521,25 @@ describe('StorageInspectorV2 panel modes', () => {
     mockLocationRef = null;
     mockStorageRows = [];
     mockPolicyAssignments = [];
+    mockProductsSearchResults = [];
+    mockAddInventoryToContainerMutateAsync.mockReset();
+    mockAddInventoryToContainerIsPending = false;
+    mockRefetchQueries.mockReset();
+    mockFetchQuery.mockReset();
+    mockRefetchQueries.mockResolvedValue(undefined);
+    mockFetchQuery.mockImplementation(async (options: { queryKey?: unknown[] }) => {
+      const key = options.queryKey ?? [];
+      const maybeContainerId = typeof key[key.length - 1] === 'string' ? (key[key.length - 1] as string) : null;
+      if (!maybeContainerId) return [];
+      return mockStorageRows
+        .filter((row) => row.containerId === maybeContainerId)
+        .map((row) => ({
+          containerId: row.containerId,
+          itemRef: row.itemRef ?? null,
+          quantity: row.quantity ?? null,
+          uom: row.uom ?? null
+        }));
+    });
     mockContainerTypes = [];
     mockRackInspectorData = {
       rackId: 'rack-1',
@@ -797,6 +854,7 @@ describe('StorageInspectorV2 task flows', () => {
   beforeEach(() => {
     resetStorageFocusStore();
     mockPolicyAssignments = [];
+    mockProductsSearchResults = [];
     mockCreatePolicyRoleMutateAsync.mockReset();
     mockDeletePolicyRoleMutateAsync.mockReset();
     mockContainerTypes = [
@@ -805,10 +863,28 @@ describe('StorageInspectorV2 task flows', () => {
     mockCreateContainer.mockReset();
     mockPlaceContainer.mockReset();
     mockAddInventoryItem.mockReset();
+    mockAddInventoryToContainerMutateAsync.mockReset();
+    mockAddInventoryToContainerIsPending = false;
     mockInvalidatePlacement.mockReset();
     mockInvalidateQueries.mockReset();
+    mockRefetchQueries.mockReset();
+    mockFetchQuery.mockReset();
     mockInvalidatePlacement.mockResolvedValue(undefined);
     mockInvalidateQueries.mockResolvedValue(undefined);
+    mockRefetchQueries.mockResolvedValue(undefined);
+    mockFetchQuery.mockImplementation(async (options: { queryKey?: unknown[] }) => {
+      const key = options.queryKey ?? [];
+      const maybeContainerId = typeof key[key.length - 1] === 'string' ? (key[key.length - 1] as string) : null;
+      if (!maybeContainerId) return [];
+      return mockStorageRows
+        .filter((row) => row.containerId === maybeContainerId)
+        .map((row) => ({
+          containerId: row.containerId,
+          itemRef: row.itemRef ?? null,
+          quantity: row.quantity ?? null,
+          uom: row.uom ?? null
+        }));
+    });
     setupCellOverview();
   });
 
@@ -1110,6 +1186,386 @@ describe('StorageInspectorV2 task flows', () => {
     });
     expect(flattenText(renderer.toJSON())).toContain('Current Contents');
   });
+
+  it('shows "Add product" action in container-detail when container is empty', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+
+    expect(renderer.root.findByProps({ 'data-testid': 'add-product-action' })).toBeTruthy();
+  });
+
+  it('does not render "Add product" action for non-empty container', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: 'product:11111111-1111-1111-1111-111111111111',
+        quantity: 2,
+        uom: 'EA',
+        product: {
+          id: '11111111-1111-1111-1111-111111111111',
+          sku: 'SKU-1',
+          name: 'Product One',
+          isActive: true
+        }
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+
+    const addProductButtons = renderer.root.findAllByProps({ 'data-testid': 'add-product-action' });
+    expect(addProductButtons).toHaveLength(0);
+  });
+
+  it('opens add-product task from empty container-detail and cancel returns to same container-detail', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+
+    expect(renderer.root.findByProps({ 'data-testid': 'task-add-product-to-container-panel' })).toBeTruthy();
+
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Cancel add product to container' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('C-001');
+    expect(text).toContain('Empty container');
+    expect(mockAddInventoryToContainerMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps submit disabled until explicit product selection, quantity > 0, and non-empty UOM', () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+
+    const submitButton = renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' });
+    expect(submitButton.props.disabled).toBe(true);
+
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product search' }).props.onChange({ target: { value: 'Prod' } });
+    });
+    act(() => {
+      renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
+    });
+    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(true);
+
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '0' } });
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: 'EA' } });
+    });
+    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(true);
+
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '3' } });
+    });
+    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(false);
+
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: '   ' } });
+    });
+    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(true);
+  });
+
+  it('successful add-product flow keeps same container-detail context and shows refreshed inventory', async () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+    mockAddInventoryToContainerMutateAsync.mockImplementation(async () => {
+      mockStorageRows = [
+        {
+          locationCode: 'LOC-01',
+          locationType: 'rack_slot',
+          containerId: 'c-1',
+          containerStatus: 'stored',
+          systemCode: 'C-001',
+          externalCode: null,
+          containerType: 'pallet',
+          itemRef: 'product:11111111-1111-1111-1111-111111111111',
+          quantity: 3,
+          uom: 'EA',
+          product: {
+            id: '11111111-1111-1111-1111-111111111111',
+            sku: 'SKU-1',
+            name: 'Product One',
+            isActive: true
+          }
+        }
+      ];
+      return {};
+    });
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product search' }).props.onChange({ target: { value: 'Prod' } });
+    });
+    act(() => {
+      renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '3' } });
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: 'EA' } });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.onClick();
+    });
+
+    expect(mockAddInventoryToContainerMutateAsync).toHaveBeenCalledWith({
+      containerId: 'c-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      quantity: 3,
+      uom: 'EA'
+    });
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      queryKey: ['location', 'storage', 'loc-1'],
+      exact: true
+    });
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      queryKey: ['container', 'storage', 'c-1'],
+      exact: true
+    });
+    expect(useStorageFocusStore.getState().selectedCellId).toBe('cell-1');
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('C-001');
+    expect(text).not.toContain('Empty container');
+    expect(text).toContain('3 EA');
+  });
+
+  it('aborts empty-only flow honestly when container is no longer empty at submit check', async () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+    mockFetchQuery.mockResolvedValue([
+      {
+        containerId: 'c-1',
+        itemRef: 'product:11111111-1111-1111-1111-111111111111',
+        quantity: 1,
+        uom: 'EA'
+      }
+    ]);
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product search' }).props.onChange({ target: { value: 'Prod' } });
+    });
+    act(() => {
+      renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '2' } });
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: 'EA' } });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.onClick();
+    });
+
+    expect(mockAddInventoryToContainerMutateAsync).not.toHaveBeenCalled();
+    expect(flattenText(renderer.toJSON())).toContain('This container is no longer empty. Return to details to continue.');
+  });
+
+  it('resets add-product task state when selected cell changes', () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } },
+      { id: 'cell-2', rackId: 'rack-1', address: { raw: '01-A.01.02', parts: { level: 1 } } }
+    ];
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+    expect(renderer.root.findByProps({ 'data-testid': 'task-add-product-to-container-panel' })).toBeTruthy();
+
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Current Contents');
+    expect(text).not.toContain('Add product to C-001');
+  });
 });
 
 // ── PR5 policy flow integration tests ────────────────────────────────────────
@@ -1135,6 +1591,7 @@ describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
   beforeEach(() => {
     resetStorageFocusStore();
     mockPolicyAssignments = [];
+    mockProductsSearchResults = [];
     mockCreatePolicyRoleMutateAsync.mockReset();
     mockDeletePolicyRoleMutateAsync.mockReset();
     setContainerContext([
@@ -1519,13 +1976,18 @@ describe('StorageInspectorV2 move container flow', () => {
   beforeEach(() => {
     resetStorageFocusStore();
     mockPolicyAssignments = [];
+    mockProductsSearchResults = [];
     mockCreatePolicyRoleMutateAsync.mockReset();
     mockDeletePolicyRoleMutateAsync.mockReset();
     mockMoveContainer.mockReset();
     mockInvalidatePlacement.mockReset();
     mockInvalidateQueries.mockReset();
+    mockRefetchQueries.mockReset();
+    mockFetchQuery.mockReset();
     mockInvalidatePlacement.mockResolvedValue(undefined);
     mockInvalidateQueries.mockResolvedValue(undefined);
+    mockRefetchQueries.mockResolvedValue(undefined);
+    mockFetchQuery.mockResolvedValue([]);
     setupContainerDetail();
   });
 
