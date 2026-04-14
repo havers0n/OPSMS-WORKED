@@ -2,7 +2,7 @@ import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
-import { StorageInspectorV2, resolvePanelMode, resolveActiveMode } from './storage-inspector-v2';
+import { StorageInspectorV2, resolvePanelMode, resolveActiveMode, type MoveTaskState } from './storage-inspector-v2';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 
 type MockCell = {
@@ -98,6 +98,7 @@ vi.mock('@/entities/location/api/queries', () => ({
 
 const mockCreateContainer = vi.fn();
 const mockPlaceContainer = vi.fn();
+const mockMoveContainer = vi.fn();
 const mockAddInventoryItem = vi.fn();
 const mockInvalidatePlacement = vi.fn();
 const mockInvalidateQueries = vi.fn();
@@ -108,6 +109,7 @@ vi.mock('@/features/container-create/api/mutations', () => ({
 
 vi.mock('@/features/placement-actions/api/mutations', () => ({
   placeContainer: (...args: unknown[]) => mockPlaceContainer(...args),
+  moveContainer: (...args: unknown[]) => mockMoveContainer(...args),
 }));
 
 vi.mock('@/features/inventory-add/api/mutations', () => ({
@@ -266,9 +268,61 @@ describe('resolveActiveMode', () => {
     expect(resolveActiveMode(base, 'create-container')).toEqual(base);
   });
 
-  it('does NOT override container-detail regardless of taskKind', () => {
+  it('does NOT override container-detail regardless of create taskKind', () => {
     const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
     expect(resolveActiveMode(base, 'create-container')).toEqual(base);
+  });
+
+  // ── move-container task ───────────────────────────────────────────────────
+
+  const minimalMoveState: MoveTaskState = {
+    sourceContainerId: 'c-1',
+    sourceCellId: 'cell-1',
+    sourceLocationId: 'loc-1',
+    sourceRackId: 'rack-1',
+    sourceLevel: 1,
+    sourceLocationCode: 'LOC-01',
+    sourceContainerDisplayCode: 'C-001',
+    targetCellId: null,
+    stage: 'selecting-target',
+    errorMessage: null,
+  };
+
+  it('returns task-move-container when taskKind is move-container and moveTaskState is set', () => {
+    const base = { kind: 'cell-overview' as const, cellId: 'cell-1' };
+    expect(resolveActiveMode(base, 'move-container', minimalMoveState)).toEqual({
+      kind: 'task-move-container',
+      sourceContainerId: 'c-1',
+      sourceCellId: 'cell-1',
+    });
+  });
+
+  it('move task overrides container-detail base — takes absolute priority', () => {
+    const base = { kind: 'container-detail' as const, cellId: 'cell-1', containerId: 'c-1' };
+    expect(resolveActiveMode(base, 'move-container', minimalMoveState)).toEqual({
+      kind: 'task-move-container',
+      sourceContainerId: 'c-1',
+      sourceCellId: 'cell-1',
+    });
+  });
+
+  it('move task overrides rack-overview base', () => {
+    const base = { kind: 'rack-overview' as const, rackId: 'rack-1' };
+    expect(resolveActiveMode(base, 'move-container', minimalMoveState)).toEqual({
+      kind: 'task-move-container',
+      sourceContainerId: 'c-1',
+      sourceCellId: 'cell-1',
+    });
+  });
+
+  it('guard: move-container with null moveTaskState falls through to base mode', () => {
+    const base = { kind: 'cell-overview' as const, cellId: 'cell-1' };
+    expect(resolveActiveMode(base, 'move-container', null)).toEqual(base);
+  });
+
+  it('existing create tasks still work with default null third arg (backward-compat)', () => {
+    const base = { kind: 'cell-overview' as const, cellId: 'c1' };
+    expect(resolveActiveMode(base, 'create-container')).toEqual({ kind: 'task-create-container', cellId: 'c1' });
   });
 });
 
@@ -938,6 +992,36 @@ describe('StorageInspectorV2 task flows', () => {
     expect(mockAddInventoryItem).not.toHaveBeenCalled();
   });
 
+  it('move flow does not require a new global store (all state is local)', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+      }
+    ];
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'move-container-action' }).props.onClick();
+    });
+    const text = flattenText(renderer.toJSON());
+    // Move panel renders purely from local state — no global store needed
+    expect(text).toContain('Move container');
+    expect(text).toContain('From');
+  });
+
   it('existing container-detail behavior is unaffected by PR3 changes', () => {
     mockStorageRows = [
       {
@@ -969,6 +1053,260 @@ describe('StorageInspectorV2 task flows', () => {
     // Back works
     act(() => {
       root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
+    });
+    expect(flattenText(renderer.toJSON())).toContain('Current Contents');
+  });
+});
+
+// ── Move container flow integration tests ─────────────────────────────────────
+
+describe('StorageInspectorV2 move container flow', () => {
+  const CONTAINER_ROW: MockStorageRow = {
+    locationCode: 'LOC-SRC',
+    locationType: 'rack_slot',
+    containerId: 'c-1',
+    containerStatus: 'stored',
+    systemCode: 'C-001',
+    externalCode: null,
+    containerType: 'pallet',
+    itemRef: null,
+    quantity: null,
+  };
+
+  function setupContainerDetail() {
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
+    });
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } },
+      { id: 'cell-2', rackId: 'rack-1', address: { raw: '01-A.01.02', parts: { level: 1 } } },
+    ];
+    mockLocationRef = { locationId: 'loc-source' };
+    mockStorageRows = [CONTAINER_ROW];
+  }
+
+  function openMoveTask(root: TestRenderer.ReactTestRenderer['root']) {
+    act(() => {
+      root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'data-testid': 'move-container-action' }).props.onClick();
+    });
+  }
+
+  beforeEach(() => {
+    resetStorageFocusStore();
+    mockMoveContainer.mockReset();
+    mockInvalidatePlacement.mockReset();
+    mockInvalidateQueries.mockReset();
+    mockInvalidatePlacement.mockResolvedValue(undefined);
+    mockInvalidateQueries.mockResolvedValue(undefined);
+    setupContainerDetail();
+  });
+
+  afterEach(() => {
+    resetStorageFocusStore();
+  });
+
+  it('"Move container" action is visible in container-detail', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Move container');
+    expect(renderer.root.findByProps({ 'data-testid': 'move-container-action' })).toBeTruthy();
+  });
+
+  it('clicking "Move container" transitions to task-move-container panel', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Move container');
+    expect(text).toContain('From');
+    expect(renderer.root.findByProps({ 'aria-label': 'Cancel move container' })).toBeTruthy();
+  });
+
+  it('source context (container code, location code) is visible in move panel', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('C-001');
+    expect(text).toContain('LOC-SRC');
+  });
+
+  it('placeholder shown and Confirm disabled when no target cell selected', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    expect(renderer.root.findByProps({ 'data-testid': 'move-target-placeholder' })).toBeTruthy();
+    expect(renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.disabled).toBe(true);
+  });
+
+  it('clicking a different cell during move task updates local targetCellId without clearing task', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+    // Move task panel still rendered (not cleared by cell navigation)
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Move container');
+    // Source context preserved
+    expect(text).toContain('LOC-SRC');
+    // Target placeholder replaced
+    let hasPlaceholder = false;
+    try { renderer.root.findByProps({ 'data-testid': 'move-target-placeholder' }); hasPlaceholder = true; } catch { /* gone */ }
+    expect(hasPlaceholder).toBe(false);
+  });
+
+  it('clicking source cell again during move task does not update targetCellId', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    // Re-select source cell — same-cell guard
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
+    });
+    // Placeholder still shown (source cell ≠ valid target)
+    expect(renderer.root.findByProps({ 'data-testid': 'move-target-placeholder' })).toBeTruthy();
+  });
+
+  it('cancel clears move task and fires no mutation', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Cancel move container' }).props.onClick();
+    });
+    expect(mockMoveContainer).not.toHaveBeenCalled();
+    // Move task panel gone
+    const text = flattenText(renderer.toJSON());
+    expect(text).not.toContain('Click a cell on the canvas');
+  });
+
+  it('confirm executes moveContainer mutation with correct containerId and targetLocationId', async () => {
+    mockMoveContainer.mockResolvedValue({
+      containerId: 'c-1',
+      sourceLocationId: 'loc-source',
+      targetLocationId: 'loc-target',
+      movementId: 'm-1',
+      occurredAt: '',
+    });
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    // Update mockLocationRef to target before navigating so panel resolves target location
+    mockLocationRef = { locationId: 'loc-target' };
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
+    });
+    expect(mockMoveContainer).toHaveBeenCalledWith({
+      containerId: 'c-1',
+      targetLocationId: 'loc-target',
+    });
+    expect(mockInvalidatePlacement).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sourceCellId: 'cell-1', containerId: 'c-1' })
+    );
+  });
+
+  it('success stage shows policy reconciliation notice', async () => {
+    mockMoveContainer.mockResolvedValue({
+      containerId: 'c-1',
+      sourceLocationId: 'loc-source',
+      targetLocationId: 'loc-target',
+      movementId: 'm-1',
+      occurredAt: '',
+    });
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    mockLocationRef = { locationId: 'loc-target' };
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
+    });
+    expect(renderer.root.findByProps({ 'data-testid': 'policy-reconciliation-notice' })).toBeTruthy();
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('policy');
+    expect(text).toContain('Container moved successfully');
+  });
+
+  it('"Done" after success clears move task — panel exits move mode', async () => {
+    mockMoveContainer.mockResolvedValue({
+      containerId: 'c-1',
+      sourceLocationId: 'loc-source',
+      targetLocationId: 'loc-target',
+      movementId: 'm-1',
+      occurredAt: '',
+    });
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    mockLocationRef = { locationId: 'loc-target' };
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'move-done-button' }).props.onClick();
+    });
+    // Move task cleared — no longer in move mode
+    const text = flattenText(renderer.toJSON());
+    expect(text).not.toContain('Click a cell on the canvas');
+    expect(text).not.toContain('Confirm move');
+  });
+
+  it('existing create-container flow still works after PR4 (no regression)', () => {
+    mockStorageRows = []; // empty cell — no containers
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
+    });
+    mockContainerTypes = [
+      { id: 'type-1', code: 'PLT', description: 'Pallet', supportsStorage: true, supportsPicking: false },
+    ];
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+    });
+    expect(renderer.root.findByProps({ 'aria-label': 'Cancel create container' })).toBeTruthy();
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
     });
     expect(flattenText(renderer.toJSON())).toContain('Current Contents');
   });

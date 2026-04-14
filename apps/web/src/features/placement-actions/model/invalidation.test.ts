@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { invalidatePlacementQueries } from './invalidation';
 
 describe('invalidatePlacementQueries', () => {
-  it('invalidates location storage, floor occupancy, container storage, and floor workspace keys', async () => {
+  it('invalidates location storage, floor occupancy, container storage, container current-location, and floor workspace keys', async () => {
     const invalidateQueries = vi.fn(async () => undefined);
 
     await invalidatePlacementQueries(
@@ -15,12 +15,15 @@ describe('invalidatePlacementQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'storage']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['container', 'storage', 'container-uuid']
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['container', 'current-location', 'container-uuid']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'occupancy-by-floor', 'floor-uuid']

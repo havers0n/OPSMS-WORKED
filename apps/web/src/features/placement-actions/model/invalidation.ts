@@ -28,6 +28,11 @@ export async function invalidatePlacementQueries(
         queryKey: containerKeys.storage(args.containerId)
       })
     );
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.currentLocation(args.containerId)
+      })
+    );
   }
 
   if (args.floorId) {

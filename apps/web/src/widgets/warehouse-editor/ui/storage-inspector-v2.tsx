@@ -1,5 +1,5 @@
 import type { ContainerType, FloorWorkspace, LocationStorageSnapshotRow, Product, Rack, RackInspectorPayload } from '@wos/domain';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
@@ -10,12 +10,14 @@ import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
 import { createContainer } from '@/features/container-create/api/mutations';
 import { addInventoryItem } from '@/features/inventory-add/api/mutations';
-import { placeContainer } from '@/features/placement-actions/api/mutations';
+import { moveContainer as moveContainerApi, placeContainer } from '@/features/placement-actions/api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
+import { containerKeys } from '@/entities/container/api/queries';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
   useStorageFocusActiveLevel,
+  useStorageFocusSelectCell,
 } from '../model/v2/v2-selectors';
 
 /**
@@ -55,9 +57,31 @@ type PanelMode =
   | { kind: 'cell-overview'; cellId: string }
   | { kind: 'container-detail'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
-  | { kind: 'task-create-container-with-product'; cellId: string };
+  | { kind: 'task-create-container-with-product'; cellId: string }
+  | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
 
-type TaskKind = 'create-container' | 'create-container-with-product';
+type TaskKind = 'create-container' | 'create-container-with-product' | 'move-container';
+
+/**
+ * Local task state for the move-container flow.
+ * sourceContainerDisplayCode and sourceLocationCode are captured at task start
+ * so they survive the user browsing away to select a target cell.
+ * targetLocationId is resolved inside MoveContainerTaskPanel (not stored here).
+ */
+export type MoveTaskState = {
+  sourceContainerId: string;
+  sourceCellId: string;
+  sourceLocationId: string;
+  sourceRackId: string | null;
+  sourceLevel: number | null;
+  sourceLocationCode: string;
+  sourceContainerDisplayCode: string;
+  /** Local move target — updated via effect when user clicks cells during task. */
+  targetCellId: string | null;
+  /** Single source of truth for task progression (not duplicated in panel). */
+  stage: 'selecting-target' | 'moving' | 'success' | 'error';
+  errorMessage: string | null;
+};
 
 /**
  * Derives the current panel mode from spatial focus state and local container selection.
@@ -79,10 +103,17 @@ export function resolvePanelMode(
 
 /**
  * Applies a task override on top of the base panel mode.
- * Task modes only activate when the base mode is cell-overview.
+ * Move task overrides all base modes (incl. container-detail).
+ * Create tasks only activate when the base mode is cell-overview.
  * Pure function — exported for isolated testing.
  */
-export function resolveActiveMode(base: PanelMode, taskKind: TaskKind | null): PanelMode {
+export function resolveActiveMode(
+  base: PanelMode,
+  taskKind: TaskKind | null,
+  moveTaskState: MoveTaskState | null = null
+): PanelMode {
+  if (taskKind === 'move-container' && moveTaskState !== null)
+    return { kind: 'task-move-container', sourceContainerId: moveTaskState.sourceContainerId, sourceCellId: moveTaskState.sourceCellId };
   if (base.kind === 'cell-overview' && taskKind === 'create-container')
     return { kind: 'task-create-container', cellId: base.cellId };
   if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product')
@@ -139,7 +170,8 @@ function InspectorFooter() {
   return (
     <div className="px-4 py-2 border-t border-gray-200 flex-shrink-0 text-xs text-gray-500 bg-gray-50">
       <p>
-        <span className="font-medium">PR3:</span> Create container · Create container with product.
+        <span className="font-medium">PR3:</span> Create container · Create container with product.{' '}
+        <span className="font-medium">PR4:</span> Move container.
       </p>
     </div>
   );
@@ -718,6 +750,209 @@ function RackOverviewPanel({ rackId }: { rackId: string }) {
   );
 }
 
+// ── MoveContainerTaskPanel ────────────────────────────────────────────────────
+
+interface MoveContainerTaskPanelProps {
+  moveTaskState: MoveTaskState;
+  floorId: string | null;
+  rackDisplayCode: string;
+  onStageChange: (stage: MoveTaskState['stage'], error?: string | null) => void;
+  onCancel: () => void;
+  onDone: () => void;
+}
+
+function MoveContainerTaskPanel({
+  moveTaskState,
+  floorId,
+  rackDisplayCode,
+  onStageChange,
+  onCancel,
+  onDone,
+}: MoveContainerTaskPanelProps) {
+  const queryClient = useQueryClient();
+
+  // Resolve target location from the local targetCellId.
+  const { data: targetLocationRef, isLoading: targetLocationLoading } = useLocationByCell(
+    moveTaskState.targetCellId
+  );
+  const resolvedTargetLocationId = targetLocationRef?.locationId ?? null;
+
+  const isTargetSameAsSource = moveTaskState.targetCellId === moveTaskState.sourceCellId;
+  const canConfirm =
+    moveTaskState.targetCellId !== null &&
+    !isTargetSameAsSource &&
+    resolvedTargetLocationId !== null &&
+    moveTaskState.stage === 'selecting-target';
+
+  const handleConfirm = async () => {
+    if (!resolvedTargetLocationId) return;
+    onStageChange('moving');
+    try {
+      await moveContainerApi({
+        containerId: moveTaskState.sourceContainerId,
+        targetLocationId: resolvedTargetLocationId,
+      });
+      await invalidatePlacementQueries(queryClient, {
+        floorId,
+        sourceCellId: moveTaskState.sourceCellId,
+        containerId: moveTaskState.sourceContainerId,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: containerKeys.currentLocation(moveTaskState.sourceContainerId),
+      });
+      onStageChange('success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Move failed. Please try again.';
+      onStageChange('error', message);
+    }
+  };
+
+  const isMoving = moveTaskState.stage === 'moving';
+
+  return (
+    <div
+      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      role="complementary"
+      aria-label="Move container"
+    >
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        {moveTaskState.stage !== 'success' && (
+          <button
+            onClick={onCancel}
+            disabled={isMoving}
+            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
+            aria-label="Cancel move container"
+          >
+            ← Cancel
+          </button>
+        )}
+        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
+          <span>{rackDisplayCode}</span>
+          <span className="text-gray-300">/</span>
+          <span className="font-mono text-gray-900 font-medium">{moveTaskState.sourceLocationCode}</span>
+        </div>
+        <p className="text-sm font-semibold text-gray-900 mt-1">Move container</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* Container being moved */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Container</p>
+          <p className="font-mono text-sm font-semibold text-gray-900">
+            {moveTaskState.sourceContainerDisplayCode}
+          </p>
+        </div>
+
+        {/* Source */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">From</p>
+          <p className="font-mono text-sm text-gray-700">{moveTaskState.sourceLocationCode}</p>
+        </div>
+
+        {/* Target */}
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">To</p>
+          {moveTaskState.targetCellId === null ? (
+            <p className="text-sm text-gray-400 italic" data-testid="move-target-placeholder">
+              Click a cell on the canvas to select a target location
+            </p>
+          ) : isTargetSameAsSource ? (
+            <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              Same as source — choose a different cell
+            </p>
+          ) : targetLocationLoading ? (
+            <p className="text-sm text-gray-400">Resolving location…</p>
+          ) : (
+            <p className="font-mono text-sm text-gray-700" data-testid="move-target-selected">
+              {resolvedTargetLocationId ? moveTaskState.targetCellId : '—'}
+            </p>
+          )}
+        </div>
+
+        {/* Moving spinner */}
+        {moveTaskState.stage === 'moving' && (
+          <p className="text-sm text-gray-500">Moving container…</p>
+        )}
+
+        {/* Success — policy reconciliation notice */}
+        {moveTaskState.stage === 'success' && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-green-700" data-testid="move-success-message">
+              Container moved successfully.
+            </p>
+            <div
+              className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-xs text-amber-800 space-y-1"
+              data-testid="policy-reconciliation-notice"
+            >
+              <p className="font-medium">Policy review required</p>
+              <p>
+                Location-level storage policy is not transferred automatically. Review source and
+                target location policies if needed.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {moveTaskState.stage === 'error' && moveTaskState.errorMessage && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {moveTaskState.errorMessage}
+          </p>
+        )}
+      </div>
+
+      {/* Footer actions */}
+      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+        {moveTaskState.stage === 'success' ? (
+          <button
+            onClick={onDone}
+            className="flex-1 px-3 py-2 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700"
+            data-testid="move-done-button"
+          >
+            Done
+          </button>
+        ) : moveTaskState.stage === 'error' ? (
+          <>
+            <button
+              onClick={handleConfirm}
+              disabled={!canConfirm}
+              className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Retry
+            </button>
+            <button
+              onClick={onCancel}
+              className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={handleConfirm}
+              disabled={!canConfirm}
+              className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Confirm move container"
+              data-testid="move-confirm-button"
+            >
+              {isMoving ? 'Moving…' : 'Confirm move'}
+            </button>
+            <button
+              onClick={onCancel}
+              disabled={isMoving}
+              className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
@@ -735,12 +970,32 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
   // Local task flow — panel-only state, never escapes this component.
   const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
+  // Local move task state — single source of truth for move flow (stage + frozen source + local target).
+  const [moveTaskState, setMoveTaskState] = useState<MoveTaskState | null>(null);
 
-  // Reset both local states whenever the cell focus changes or clears.
+  // Refs hold current values so the effect on [cellId] can read them without stale closures.
+  const taskKindRef = useRef<TaskKind | null>(null);
+  taskKindRef.current = taskKind;
+  const moveTaskRef = useRef<MoveTaskState | null>(null);
+  moveTaskRef.current = moveTaskState;
+
+  // Spatial focus action — used by cancel handler to restore source cell.
+  const selectCell = useStorageFocusSelectCell();
+
+  // Combined effect: during move task, capture proposed target into local state.
+  // During normal browsing, clear panel-local state on cell change.
   useEffect(() => {
+    if (taskKindRef.current === 'move-container') {
+      const current = moveTaskRef.current;
+      if (cellId && current && cellId !== current.sourceCellId) {
+        setMoveTaskState((prev) => (prev ? { ...prev, targetCellId: cellId } : null));
+      }
+      return;
+    }
     setSelectedContainerId(null);
     setTaskKind(null);
-  }, [cellId]);
+    setMoveTaskState(null);
+  }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cell data path — fetched once at top level, shared across cell-overview, container-detail, and task panels.
   // These hooks are no-ops (disabled) when cellId / locationId is null.
@@ -748,7 +1003,28 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const locationId = locationRef?.locationId ?? null;
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
 
-  const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind);
+  const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
+
+  // ── Move task handlers (defined before mode branches so they're available everywhere) ──
+  const handleMoveStageChange = (stage: MoveTaskState['stage'], error?: string | null) => {
+    setMoveTaskState((prev) => (prev ? { ...prev, stage, errorMessage: error ?? null } : null));
+  };
+
+  const handleMoveCancel = () => {
+    const source = moveTaskState!;
+    setTaskKind(null);
+    setMoveTaskState(null);
+    setSelectedContainerId(null);
+    selectCell({ cellId: source.sourceCellId, rackId: source.sourceRackId ?? undefined, level: source.sourceLevel ?? undefined });
+  };
+
+  const handleMoveDone = () => {
+    const movedContainerId = moveTaskState!.sourceContainerId;
+    // cellId is already at target; not changing it → cleanup effect does not fire → selectedContainerId survives.
+    setTaskKind(null);
+    setMoveTaskState(null);
+    setSelectedContainerId(movedContainerId);
+  };
 
   // ── empty ──────────────────────────────────────────────────────────────────
   if (mode.kind === 'empty') {
@@ -758,6 +1034,20 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   // ── rack-overview ──────────────────────────────────────────────────────────
   if (mode.kind === 'rack-overview') {
     return <RackOverviewPanel rackId={mode.rackId} />;
+  }
+
+  // ── task-move-container — checked before loading state so panel persists while target cell loads ──
+  if (mode.kind === 'task-move-container') {
+    return (
+      <MoveContainerTaskPanel
+        moveTaskState={moveTaskState!}
+        floorId={floorId}
+        rackDisplayCode={rackDisplayCode}
+        onStageChange={handleMoveStageChange}
+        onCancel={handleMoveCancel}
+        onDone={handleMoveDone}
+      />
+    );
   }
 
   // ── cell-overview / container-detail — shared cell data path ──────────────
@@ -846,6 +1136,32 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
                 </div>
               </>
             )}
+          </div>
+
+          {/* Actions */}
+          <div className="px-4 py-3 border-b border-gray-200">
+            <button
+              onClick={() => {
+                if (!cellId || !locationId) return;
+                setMoveTaskState({
+                  sourceContainerId: mode.containerId,
+                  sourceCellId: cellId,
+                  sourceLocationId: locationId,
+                  sourceRackId: rackId,
+                  sourceLevel: activeLevel,
+                  sourceLocationCode: locationCode,
+                  sourceContainerDisplayCode: displayCode,
+                  targetCellId: null,
+                  stage: 'selecting-target',
+                  errorMessage: null,
+                });
+                setTaskKind('move-container');
+              }}
+              className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2"
+              data-testid="move-container-action"
+            >
+              Move container
+            </button>
           </div>
 
           <SectionHeader title="Inventory" />
