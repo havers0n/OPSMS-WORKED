@@ -8,6 +8,12 @@ import { locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
+import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
+import {
+  useCreateProductLocationRole,
+  useDeleteProductLocationRole
+} from '@/entities/product-location-role/api/mutations';
+import type { LocationProductAssignment } from '@/entities/product-location-role/api/queries';
 import { createContainer } from '@/features/container-create/api/mutations';
 import { addInventoryItem } from '@/features/inventory-add/api/mutations';
 import { moveContainer as moveContainerApi, placeContainer } from '@/features/placement-actions/api/mutations';
@@ -56,11 +62,24 @@ type PanelMode =
   | { kind: 'rack-overview'; rackId: string }
   | { kind: 'cell-overview'; cellId: string }
   | { kind: 'container-detail'; cellId: string; containerId: string }
+  | { kind: 'task-edit-policy'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
   | { kind: 'task-create-container-with-product'; cellId: string }
   | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
 
-type TaskKind = 'create-container' | 'create-container-with-product' | 'move-container';
+type TaskKind = 'create-container' | 'create-container-with-product' | 'move-container' | 'edit-policy';
+type PolicyRoleChoice = 'primary_pick' | 'reserve' | 'none';
+type PolicyRole = 'primary_pick' | 'reserve';
+type ActiveContainerProduct = {
+  id: string;
+  name: string;
+  sku: string | null;
+};
+
+type ContainerPolicySummaryState =
+  | { kind: 'no-policy' }
+  | { kind: 'single-role'; role: PolicyRole }
+  | { kind: 'legacy-conflict'; roles: PolicyRole[] };
 
 /**
  * Local task state for the move-container flow.
@@ -114,6 +133,8 @@ export function resolveActiveMode(
 ): PanelMode {
   if (taskKind === 'move-container' && moveTaskState !== null)
     return { kind: 'task-move-container', sourceContainerId: moveTaskState.sourceContainerId, sourceCellId: moveTaskState.sourceCellId };
+  if (base.kind === 'container-detail' && taskKind === 'edit-policy')
+    return { kind: 'task-edit-policy', cellId: base.cellId, containerId: base.containerId };
   if (base.kind === 'cell-overview' && taskKind === 'create-container')
     return { kind: 'task-create-container', cellId: base.cellId };
   if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product')
@@ -137,6 +158,77 @@ function groupByContainer(
     }
   }
   return Array.from(map.entries()).map(([containerId, rows]) => ({ containerId, rows }));
+}
+
+const uuidLikePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuidLike(value: string): boolean {
+  return uuidLikePattern.test(value);
+}
+
+function isActiveProductRow(row: LocationStorageSnapshotRow): boolean {
+  if (row.product == null) return false;
+  if (!row.product.isActive) return false;
+  if (typeof row.product.id !== 'string' || !isUuidLike(row.product.id)) return false;
+  if (row.quantity === null || row.quantity <= 0) return false;
+  if (row.uom === null || row.uom.trim().length === 0) return false;
+  if (row.itemRef === null || row.itemRef.trim().length === 0) return false;
+  return true;
+}
+
+function getActiveProducts(rows: LocationStorageSnapshotRow[]): ActiveContainerProduct[] {
+  const products = new Map<string, ActiveContainerProduct>();
+  for (const row of rows) {
+    if (!isActiveProductRow(row) || row.product === null) continue;
+    if (!products.has(row.product.id)) {
+      products.set(row.product.id, {
+        id: row.product.id,
+        name: row.product.name,
+        sku: row.product.sku
+      });
+    }
+  }
+  return Array.from(products.values());
+}
+
+function roleLabel(role: PolicyRole): string {
+  return role === 'primary_pick' ? 'Primary pick' : 'Reserve';
+}
+
+function resolvePolicySummaryState(
+  assignments: LocationProductAssignment[],
+  productId: string
+): ContainerPolicySummaryState {
+  const published = assignments.filter(
+    (assignment) => assignment.state === 'published' && assignment.productId === productId
+  );
+  const hasPrimaryPick = published.some((assignment) => assignment.role === 'primary_pick');
+  const hasReserve = published.some((assignment) => assignment.role === 'reserve');
+
+  if (hasPrimaryPick && hasReserve) {
+    return { kind: 'legacy-conflict', roles: ['primary_pick', 'reserve'] };
+  }
+  if (hasPrimaryPick) {
+    return { kind: 'single-role', role: 'primary_pick' };
+  }
+  if (hasReserve) {
+    return { kind: 'single-role', role: 'reserve' };
+  }
+  return { kind: 'no-policy' };
+}
+
+function policySummaryText(state: ContainerPolicySummaryState): string {
+  if (state.kind === 'no-policy') return 'No policy';
+  if (state.kind === 'single-role') return roleLabel(state.role);
+  return `Legacy conflict: ${state.roles.map(roleLabel).join(' + ')}`;
+}
+
+function getPolicyEditGuardReason(activeProducts: ActiveContainerProduct[]): string | null {
+  if (activeProducts.length === 1) return null;
+  if (activeProducts.length === 0) {
+    return 'Policy editing is unavailable because this container does not resolve to one active SKU.';
+  }
+  return 'Policy editing is unavailable because this container resolves to multiple active SKUs.';
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -953,6 +1045,140 @@ function MoveContainerTaskPanel({
   );
 }
 
+interface EditPolicyTaskPanelProps {
+  rackDisplayCode: string;
+  activeLevel: number;
+  locationCode: string;
+  product: ActiveContainerProduct;
+  summaryState: ContainerPolicySummaryState;
+  isSaving: boolean;
+  errorMessage: string | null;
+  onCancel: () => void;
+  onSave: (choice: PolicyRoleChoice) => Promise<void>;
+}
+
+function EditPolicyTaskPanel({
+  rackDisplayCode,
+  activeLevel,
+  locationCode,
+  product,
+  summaryState,
+  isSaving,
+  errorMessage,
+  onCancel,
+  onSave
+}: EditPolicyTaskPanelProps) {
+  const initialChoice: PolicyRoleChoice =
+    summaryState.kind === 'single-role'
+      ? summaryState.role
+      : 'none';
+  const [selectedRole, setSelectedRole] = useState<PolicyRoleChoice>(initialChoice);
+
+  useEffect(() => {
+    setSelectedRole(initialChoice);
+  }, [initialChoice]);
+
+  return (
+    <div
+      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      role="complementary"
+      aria-label="Edit policy for location"
+      data-testid="task-edit-policy-panel"
+    >
+      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={onCancel}
+          disabled={isSaving}
+          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
+          aria-label="Cancel edit policy"
+        >
+          ← Cancel
+        </button>
+        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
+          <span>{rackDisplayCode}</span>
+          <span className="text-gray-300">/</span>
+          <span>Level {activeLevel}</span>
+          <span className="text-gray-300">/</span>
+          <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
+        </div>
+        <p className="text-sm font-semibold text-gray-900 mt-1">Edit picking policy for this location</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs space-y-1">
+          <p className="font-medium text-gray-700">Policy for SKU at this location</p>
+          <p className="font-mono text-gray-900">{product.sku ?? product.name}</p>
+          <p className="text-gray-600">{product.name}</p>
+          <p className="text-gray-600">
+            Current role: <span className="font-medium">{policySummaryText(summaryState)}</span>
+          </p>
+          {summaryState.kind === 'legacy-conflict' && (
+            <p className="text-amber-700">Legacy conflict detected. Choose one role to normalize.</p>
+          )}
+        </div>
+
+        <fieldset className="space-y-2" data-testid="policy-role-selector">
+          <legend className="text-xs font-medium text-gray-700">Role for this SKU at this location</legend>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="radio"
+              name="policy-role"
+              checked={selectedRole === 'primary_pick'}
+              onChange={() => setSelectedRole('primary_pick')}
+              disabled={isSaving}
+            />
+            Primary pick
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="radio"
+              name="policy-role"
+              checked={selectedRole === 'reserve'}
+              onChange={() => setSelectedRole('reserve')}
+              disabled={isSaving}
+            />
+            Reserve
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="radio"
+              name="policy-role"
+              checked={selectedRole === 'none'}
+              onChange={() => setSelectedRole('none')}
+              disabled={isSaving}
+            />
+            None (remove policy)
+          </label>
+        </fieldset>
+
+        {errorMessage && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {errorMessage}
+          </p>
+        )}
+      </div>
+
+      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+        <button
+          onClick={() => void onSave(selectedRole)}
+          disabled={isSaving}
+          className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Save policy for location"
+        >
+          {isSaving ? 'Saving…' : 'Save policy'}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isSaving}
+          className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
@@ -972,6 +1198,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
   // Local move task state — single source of truth for move flow (stage + frozen source + local target).
   const [moveTaskState, setMoveTaskState] = useState<MoveTaskState | null>(null);
+  const [policyTaskError, setPolicyTaskError] = useState<string | null>(null);
+  const [isPolicyTaskSaving, setIsPolicyTaskSaving] = useState(false);
 
   // Refs hold current values so the effect on [cellId] can read them without stale closures.
   const taskKindRef = useRef<TaskKind | null>(null);
@@ -995,6 +1223,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setSelectedContainerId(null);
     setTaskKind(null);
     setMoveTaskState(null);
+    setPolicyTaskError(null);
+    setIsPolicyTaskSaving(false);
   }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cell data path — fetched once at top level, shared across cell-overview, container-detail, and task panels.
@@ -1002,6 +1232,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const { data: locationRef, isLoading: locationRefLoading } = useLocationByCell(cellId);
   const locationId = locationRef?.locationId ?? null;
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
+  const { data: policyAssignments = [] } = useLocationProductAssignments(locationId);
+  const createProductLocationRole = useCreateProductLocationRole();
+  const deleteProductLocationRole = useDeleteProductLocationRole(locationId);
 
   const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
 
@@ -1015,7 +1248,13 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setTaskKind(null);
     setMoveTaskState(null);
     setSelectedContainerId(null);
-    selectCell({ cellId: source.sourceCellId, rackId: source.sourceRackId ?? undefined, level: source.sourceLevel ?? undefined });
+    const restoreRackId = source.sourceRackId ?? rackId;
+    if (!restoreRackId) return;
+    selectCell({
+      cellId: source.sourceCellId,
+      rackId: restoreRackId,
+      level: source.sourceLevel ?? activeLevel ?? null
+    });
   };
 
   const handleMoveDone = () => {
@@ -1061,6 +1300,50 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const isOccupied = storageRows.length > 0;
   const containers = groupByContainer(storageRows);
 
+  const normalizePolicyForProductAtLocation = async (
+    productId: string,
+    choice: PolicyRoleChoice
+  ) => {
+    if (!locationId) return;
+    const publishedRows = policyAssignments.filter(
+      (assignment) =>
+        assignment.state === 'published' &&
+        assignment.productId === productId &&
+        assignment.locationId === locationId
+    );
+    const toDelete: string[] = [];
+
+    if (choice === 'none') {
+      for (const assignment of publishedRows) {
+        toDelete.push(assignment.id);
+      }
+    } else {
+      const selectedRows = publishedRows.filter((assignment) => assignment.role === choice);
+      if (selectedRows.length === 0) {
+        await createProductLocationRole.mutateAsync({
+          locationId,
+          productId,
+          role: choice
+        });
+      }
+      if (selectedRows.length > 1) {
+        for (const duplicate of selectedRows.slice(1)) {
+          toDelete.push(duplicate.id);
+        }
+      }
+      for (const assignment of publishedRows) {
+        if (assignment.role !== choice) {
+          toDelete.push(assignment.id);
+        }
+      }
+    }
+
+    const uniqueDeletes = Array.from(new Set(toDelete));
+    for (const roleId of uniqueDeletes) {
+      await deleteProductLocationRole.mutateAsync(roleId);
+    }
+  };
+
   // ── task-create-container ──────────────────────────────────────────────────
   if (mode.kind === 'task-create-container') {
     return (
@@ -1091,12 +1374,87 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
+  if (mode.kind === 'task-edit-policy') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const activeProducts = getActiveProducts(containerRows);
+    const editableProduct = activeProducts.length === 1 ? activeProducts[0] : null;
+    const summaryState =
+      editableProduct === null
+        ? null
+        : resolvePolicySummaryState(policyAssignments, editableProduct.id);
+
+    if (editableProduct === null || summaryState === null) {
+      return (
+        <div
+          className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+          role="complementary"
+          aria-label="Edit policy unavailable"
+        >
+          <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+            <button
+              onClick={() => setTaskKind(null)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2"
+              aria-label="Back to container detail"
+            >
+              ← Back
+            </button>
+            <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
+              <span>{rackDisplayCode}</span>
+              <span className="text-gray-300">/</span>
+              <span>Level {activeLevel}</span>
+              <span className="text-gray-300">/</span>
+              <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
+            </div>
+          </div>
+          <div className="flex-1 px-4 py-4">
+            <p className="text-sm text-gray-600">{getPolicyEditGuardReason(activeProducts)}</p>
+          </div>
+          <InspectorFooter />
+        </div>
+      );
+    }
+
+    const handleSave = async (choice: PolicyRoleChoice) => {
+      setPolicyTaskError(null);
+      setIsPolicyTaskSaving(true);
+      try {
+        await normalizePolicyForProductAtLocation(editableProduct.id, choice);
+        setTaskKind(null);
+      } catch (error) {
+        setPolicyTaskError(
+          error instanceof Error ? error.message : 'Failed to save policy for this location.'
+        );
+      } finally {
+        setIsPolicyTaskSaving(false);
+      }
+    };
+
+    return (
+      <EditPolicyTaskPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        product={editableProduct}
+        summaryState={summaryState}
+        isSaving={isPolicyTaskSaving}
+        errorMessage={policyTaskError}
+        onCancel={() => setTaskKind(null)}
+        onSave={handleSave}
+      />
+    );
+  }
+
   // ── container-detail ───────────────────────────────────────────────────────
   if (mode.kind === 'container-detail') {
     const containerRows = storageRows.filter((r) => r.containerId === mode.containerId);
     const first = containerRows[0];
     const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
     const items = containerRows.filter((r) => r.itemRef !== null || r.quantity !== null);
+    const activeProducts = getActiveProducts(containerRows);
+    const editableProduct = activeProducts.length === 1 ? activeProducts[0] : null;
+    const guardReason = getPolicyEditGuardReason(activeProducts);
+    const policyState =
+      editableProduct === null ? null : resolvePolicySummaryState(policyAssignments, editableProduct.id);
 
     return (
       <div
@@ -1135,6 +1493,56 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
                   Status: {first.containerStatus}
                 </div>
               </>
+            )}
+          </div>
+
+          <SectionHeader title="Picking Policy" />
+          <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="location-policy-summary">
+            <p className="text-xs text-gray-500">Policy for SKU at this location</p>
+            {editableProduct ? (
+              <>
+                <p className="text-xs text-gray-700">
+                  SKU:{' '}
+                  <span className="font-mono text-gray-900">
+                    {editableProduct.sku ?? editableProduct.name}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-700">
+                  Location:{' '}
+                  <span className="font-mono text-gray-900">
+                    {locationCode}
+                  </span>
+                </p>
+                {policyState && (
+                  <p className="text-xs text-gray-700">
+                    Current role:{' '}
+                    <span className="font-medium text-gray-900">{policySummaryText(policyState)}</span>
+                  </p>
+                )}
+                {policyState?.kind === 'legacy-conflict' && (
+                  <p className="text-xs text-amber-700" data-testid="policy-legacy-conflict">
+                    Legacy conflict detected for this SKU at this location.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-amber-700">{guardReason}</p>
+            )}
+            {editableProduct ? (
+              <button
+                onClick={() => {
+                  setPolicyTaskError(null);
+                  setTaskKind('edit-policy');
+                }}
+                className="w-full text-left text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2"
+                data-testid="edit-policy-action"
+              >
+                Edit policy
+              </button>
+            ) : (
+              <p className="text-xs text-gray-500">
+                Edit policy is available only when this container resolves to exactly one active SKU.
+              </p>
             )}
           </div>
 
@@ -1318,6 +1726,16 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
         {/* Location Info section intentionally omitted:
             capacityMode, policy, retentionDays not available in current BFF responses. */}
+
+        <SectionHeader title="Policy" />
+        <div className="px-4 py-3 border-b border-gray-200" data-testid="cell-policy-hint">
+          <p className="text-xs text-gray-600">
+            Picking policy is defined for SKU at this location.
+          </p>
+          <p className="text-xs text-gray-500 mt-1">
+            To edit policy, open a container detail that resolves to exactly one active SKU.
+          </p>
+        </div>
 
         {/* Actions */}
         <SectionHeader title="Actions" />
