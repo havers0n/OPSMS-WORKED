@@ -174,8 +174,7 @@ export function SectionPresetForm({
             <div className="flex-1 text-xs text-red-700">
               <div className="font-semibold">Replace existing structure?</div>
               <div className="mt-0.5 text-red-600">
-                This will replace {existingSectionCount} existing section
-                {existingSectionCount === 1 ? '' : 's'} on Face {side} with the preset above.
+                {`This will replace ${existingSectionCount} existing section${existingSectionCount === 1 ? '' : 's'} on Face ${side} with the preset above.`}
               </div>
             </div>
           </div>
