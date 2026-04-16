@@ -22,7 +22,8 @@ function buildRackLevel(row: RackLevelRow) {
   return {
     id: row.id,
     ordinal: row.ordinal,
-    slotCount: row.slot_count
+    slotCount: row.slot_count,
+    structuralDefaultRole: row.structural_default_role ?? 'none'
   };
 }
 
@@ -39,12 +40,13 @@ function buildRackSection(row: RackSectionRow, allLevels: RackLevelRow[]) {
 }
 
 function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
+  const relationshipMode = row.face_mode ?? (row.is_mirrored ? 'mirrored' : 'independent');
   return {
     id: row.id,
     side: row.side,
     enabled: row.enabled,
     slotNumberingDirection: row.slot_numbering_direction,
-    relationshipMode: row.is_mirrored ? 'mirrored' : 'independent',
+    relationshipMode,
     isMirrored: row.is_mirrored,
     mirrorSourceFaceId: row.mirror_source_face_id,
     faceLength: row.face_length ?? undefined,

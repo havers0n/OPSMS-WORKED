@@ -1,5 +1,22 @@
 import { z } from 'zod';
 import { rackAxisSchema, rackKindSchema } from '../enums/layout';
+import { rackFaceRelationshipModeSchema } from '../layout/rack';
+
+const structuralDefaultRoleSchema = z.enum(['primary_pick', 'reserve', 'none']);
+
+export const rackInspectorFaceSchema = z.object({
+  faceId: z.string().uuid(),
+  side: z.enum(['A', 'B']),
+  relationshipMode: rackFaceRelationshipModeSchema
+});
+export type RackInspectorFace = z.infer<typeof rackInspectorFaceSchema>;
+
+export const rackInspectorLevelDefaultSchema = z.object({
+  rackLevelId: z.string().uuid(),
+  levelOrdinal: z.number().int().positive(),
+  structuralDefaultRole: structuralDefaultRoleSchema
+});
+export type RackInspectorLevelDefault = z.infer<typeof rackInspectorLevelDefaultSchema>;
 
 export const rackInspectorLevelSchema = z.object({
   /** Display ordinal (1 = floor level). Not a globally unique ID — per-section ordinals
@@ -24,6 +41,10 @@ export const rackInspectorPayloadSchema = z.object({
 
   /** Per-level breakdown, ordered by levelOrdinal ascending. */
   levels: z.array(rackInspectorLevelSchema),
+  /** Canonical face relationship mode (additive contract for layout/storage consumers). */
+  faces: z.array(rackInspectorFaceSchema),
+  /** Per-level structural defaults keyed by concrete rack level id. */
+  levelDefaults: z.array(rackInspectorLevelDefaultSchema),
 
   occupancySummary: z.object({
     totalCells: z.number().int().nonnegative(),

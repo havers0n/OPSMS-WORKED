@@ -3,7 +3,7 @@ export const env = {
   logLevel: process.env.BFF_LOG_LEVEL ?? 'info',
   port: Number(process.env.BFF_PORT ?? '8787'),
   host: process.env.BFF_HOST ?? '127.0.0.1',
-  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:55821',
+  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:54421',
   supabaseAnonKey:
     process.env.SUPABASE_ANON_KEY ??
     process.env.VITE_SUPABASE_ANON_KEY ??

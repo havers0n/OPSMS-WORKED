@@ -116,6 +116,7 @@ export function buildNormalizedDraftFromSavePayload(
           side: face.side,
           enabled: face.enabled,
           slotNumberingDirection: face.slotNumberingDirection,
+          relationshipMode: face.relationshipMode ?? (face.isMirrored ? 'mirrored' : 'independent'),
           isMirrored: face.isMirrored,
           mirrorSourceFaceId: face.mirrorSourceFaceId,
           ...(face.faceLength !== undefined ? { faceLength: face.faceLength } : {}),
@@ -126,7 +127,8 @@ export function buildNormalizedDraftFromSavePayload(
             levels: section.levels.map((level) => ({
               id: level.id,
               ordinal: level.ordinal,
-              slotCount: level.slotCount
+              slotCount: level.slotCount,
+              structuralDefaultRole: level.structuralDefaultRole ?? 'none'
             }))
           }))
         }))

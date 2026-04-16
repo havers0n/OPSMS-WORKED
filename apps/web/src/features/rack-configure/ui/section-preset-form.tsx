@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Zap } from 'lucide-react';
 
 interface SectionPresetFormProps {
   rackId: string;
@@ -11,6 +11,8 @@ interface SectionPresetFormProps {
   initialLevelCount: number;
   /** Current slot count (from first level of first section), used as initial value */
   initialSlotCount: number;
+  /** Number of sections currently present on the face. When > 0, Generate requires confirmation. */
+  existingSectionCount: number;
   readOnly?: boolean;
   onApply: (rackId: string, side: 'A' | 'B', sectionCount: number, levelCount: number, slotCount: number) => void;
 }
@@ -69,8 +71,9 @@ function Stepper({
 
 /**
  * Generates equal-width sections for a face from three scalar parameters.
- * This replaces the tedious row-by-row section table for initial setup.
- * The raw section table is still available as an "override" mode.
+ * When the target face already has sections, Generate arms an inline
+ * confirmation before calling onApply — so the section list cannot be
+ * silently overwritten.
  */
 export function SectionPresetForm({
   rackId,
@@ -79,15 +82,53 @@ export function SectionPresetForm({
   initialSectionCount,
   initialLevelCount,
   initialSlotCount,
+  existingSectionCount,
   readOnly = false,
   onApply
 }: SectionPresetFormProps) {
   const [sectionCount, setSectionCount] = useState(Math.max(1, initialSectionCount));
   const [levelCount, setLevelCount] = useState(Math.max(1, initialLevelCount));
   const [slotCount, setSlotCount] = useState(Math.max(1, initialSlotCount));
+  const [pendingConfirm, setPendingConfirm] = useState(false);
+
+  // If the face's real section count changes (e.g. another edit or a confirmed
+  // apply landed), drop any armed confirmation so the form re-reflects truth.
+  useEffect(() => {
+    setPendingConfirm(false);
+  }, [existingSectionCount]);
 
   const sectionLength = totalLength > 0 ? totalLength / sectionCount : 0;
   const totalCells = sectionCount * levelCount * slotCount;
+
+  const updateSectionCount = (v: number) => {
+    setSectionCount(v);
+    setPendingConfirm(false);
+  };
+  const updateLevelCount = (v: number) => {
+    setLevelCount(v);
+    setPendingConfirm(false);
+  };
+  const updateSlotCount = (v: number) => {
+    setSlotCount(v);
+    setPendingConfirm(false);
+  };
+
+  const handleGenerate = () => {
+    if (existingSectionCount > 0) {
+      setPendingConfirm(true);
+    } else {
+      onApply(rackId, side, sectionCount, levelCount, slotCount);
+    }
+  };
+
+  const handleConfirmReplace = () => {
+    onApply(rackId, side, sectionCount, levelCount, slotCount);
+    setPendingConfirm(false);
+  };
+
+  const handleCancelReplace = () => {
+    setPendingConfirm(false);
+  };
 
   return (
     <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
@@ -96,9 +137,9 @@ export function SectionPresetForm({
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
-        <Stepper label="Sections" value={sectionCount} min={1} max={20} readOnly={readOnly} onChange={setSectionCount} />
-        <Stepper label="Levels" value={levelCount} min={1} max={20} readOnly={readOnly} onChange={setLevelCount} />
-        <Stepper label="Slots / level" value={slotCount} min={1} max={30} readOnly={readOnly} onChange={setSlotCount} />
+        <Stepper label="Sections" value={sectionCount} min={1} max={20} readOnly={readOnly} onChange={updateSectionCount} />
+        <Stepper label="Levels" value={levelCount} min={1} max={20} readOnly={readOnly} onChange={updateLevelCount} />
+        <Stepper label="Slots / level" value={slotCount} min={1} max={30} readOnly={readOnly} onChange={updateSlotCount} />
       </div>
 
       <div className="mt-3 flex items-center justify-between">
@@ -109,16 +150,55 @@ export function SectionPresetForm({
           cells total
         </div>
 
-        <button
-          type="button"
-          disabled={readOnly}
-          onClick={() => onApply(rackId, side, sectionCount, levelCount, slotCount)}
-          className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:active:scale-100"
-        >
-          <Zap className="h-3.5 w-3.5" />
-          Generate
-        </button>
+        {!pendingConfirm && (
+          <button
+            type="button"
+            disabled={readOnly}
+            data-testid="section-preset-generate"
+            onClick={handleGenerate}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:active:scale-100"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Generate
+          </button>
+        )}
       </div>
+
+      {pendingConfirm && (
+        <div
+          data-testid="section-preset-confirm"
+          className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+            <div className="flex-1 text-xs text-red-700">
+              <div className="font-semibold">Replace existing structure?</div>
+              <div className="mt-0.5 text-red-600">
+                This will replace {existingSectionCount} existing section
+                {existingSectionCount === 1 ? '' : 's'} on Face {side} with the preset above.
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              data-testid="section-preset-cancel"
+              onClick={handleCancelReplace}
+              className="rounded-lg border border-[var(--border-muted)] bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="section-preset-replace"
+              onClick={handleConfirmReplace}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+            >
+              Replace
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

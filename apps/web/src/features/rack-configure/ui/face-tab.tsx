@@ -3,14 +3,12 @@ import { Trash2 } from 'lucide-react';
 import {
   useAddSection,
   useDeleteSection,
-  useUpdateFaceConfig,
   useUpdateLevelCount,
   useUpdateSectionLength,
   useUpdateSectionSlots
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 
 export function FaceTab({ title, rackId, face, readOnly = false }: { title: string; rackId: string; face: RackFace; readOnly?: boolean }) {
-  const updateFaceConfig = useUpdateFaceConfig();
   const updateSectionLength = useUpdateSectionLength();
   const updateSectionSlots = useUpdateSectionSlots();
   const updateLevelCount = useUpdateLevelCount();
@@ -22,20 +20,8 @@ export function FaceTab({ title, rackId, face, readOnly = false }: { title: stri
 
   return (
     <section className="grid gap-4">
-      <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
-        <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</h2>
-        <label className="grid gap-1 text-sm text-slate-700">
-          Slot Numbering
-          <select
-            disabled={readOnly}
-            className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 shadow-sm"
-            value={face.slotNumberingDirection}
-            onChange={(event) => updateFaceConfig(rackId, face.side, { slotNumberingDirection: event.target.value as RackFace['slotNumberingDirection'] })}
-          >
-            <option value="ltr">{"① → N"} (left to right)</option>
-            <option value="rtl">{"N → ①"} (right to left)</option>
-          </select>
-        </label>
+      <div className="flex items-center justify-between">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{title}</h2>
       </div>
 
       <div className="flex items-center justify-between">

@@ -216,10 +216,10 @@ export function EditorCanvas({
     : selectedRackFocus;
   const effectiveSelection = isStorageV2Active
     ? (storageFocusSelectedCellId
-      ? ({ type: 'cell', cellId: storageFocusSelectedCellId } as const)
+      ? ({ type: 'cell', cellId: storageFocusSelectedCellId } as EditorSelection)
       : storageFocusSelectedRackId
-        ? ({ type: 'rack', rackIds: [storageFocusSelectedRackId], focus: { type: 'body' as const } } as const)
-        : ({ type: 'none' } as const))
+        ? ({ type: 'rack', rackIds: [storageFocusSelectedRackId], focus: { type: 'body' } } as EditorSelection)
+        : NONE_SELECTION)
     : selection;
 
   const scene = useCanvasSceneModel({

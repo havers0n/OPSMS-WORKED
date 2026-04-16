@@ -36,6 +36,7 @@ function createBaseDraft(): LayoutDraft {
               side: 'A',
               enabled: true,
               slotNumberingDirection: 'ltr',
+              relationshipMode: 'independent',
               isMirrored: false,
               mirrorSourceFaceId: null,
               faceLength: 5,
@@ -48,7 +49,8 @@ function createBaseDraft(): LayoutDraft {
                     {
                       id: '66666666-6666-6666-6666-666666666666',
                       ordinal: 1,
-                      slotCount: 3
+                      slotCount: 3,
+                      structuralDefaultRole: 'none'
                     }
                   ]
                 }

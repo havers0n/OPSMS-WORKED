@@ -51,6 +51,7 @@ type RackFaceRow = {
   side: 'A' | 'B';
   enabled: boolean;
   slot_numbering_direction: 'ltr' | 'rtl';
+  face_mode: 'mirrored' | 'independent' | null;
   is_mirrored: boolean;
   mirror_source_face_id: string | null;
   face_length: number | null;
@@ -68,6 +69,7 @@ type RackLevelRow = {
   rack_section_id: string;
   ordinal: number;
   slot_count: number;
+  structural_default_role: 'primary_pick' | 'reserve' | 'none' | null;
 };
 
 type LayoutZoneRow = {
@@ -191,7 +193,7 @@ async function fetchLayoutVersionBundleFromTables(
     ? { data: [] as RackFaceRow[], error: null }
     : await supabase
       .from('rack_faces')
-      .select('id,rack_id,side,enabled,slot_numbering_direction,is_mirrored,mirror_source_face_id,face_length')
+      .select('id,rack_id,side,enabled,slot_numbering_direction,face_mode,is_mirrored,mirror_source_face_id,face_length')
       .in('rack_id', rackIds);
 
   if (facesError) {
@@ -219,7 +221,7 @@ async function fetchLayoutVersionBundleFromTables(
     ? { data: [] as RackLevelRow[], error: null }
     : await supabase
       .from('rack_levels')
-      .select('id,rack_section_id,ordinal,slot_count')
+      .select('id,rack_section_id,ordinal,slot_count,structural_default_role')
       .in('rack_section_id', sectionIds);
 
   if (levelsError) {

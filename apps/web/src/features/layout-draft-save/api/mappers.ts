@@ -11,6 +11,7 @@ type SaveRackLevelPayload = {
   id: string;
   ordinal: number;
   slotCount: number;
+  structuralDefaultRole: 'primary_pick' | 'reserve' | 'none';
 };
 
 type SaveRackSectionPayload = {
@@ -25,6 +26,7 @@ type SaveRackFacePayload = {
   side: string;
   enabled: boolean;
   slotNumberingDirection: string;
+  relationshipMode: 'mirrored' | 'independent';
   isMirrored: boolean;
   mirrorSourceFaceId: string | null;
   faceLength?: number;
@@ -92,6 +94,7 @@ function serializeRackSavePayload(id: string, geometry: RackGeometry, structure:
       side: face.side,
       enabled: face.enabled,
       slotNumberingDirection: face.slotNumberingDirection,
+      relationshipMode: face.relationshipMode ?? (face.isMirrored ? 'mirrored' : 'independent'),
       isMirrored: face.isMirrored,
       mirrorSourceFaceId: face.mirrorSourceFaceId,
       faceLength: face.faceLength,
@@ -102,7 +105,8 @@ function serializeRackSavePayload(id: string, geometry: RackGeometry, structure:
         levels: section.levels.map((level) => ({
           id: level.id,
           ordinal: level.ordinal,
-          slotCount: level.slotCount
+          slotCount: level.slotCount,
+          structuralDefaultRole: level.structuralDefaultRole ?? 'none'
         }))
       }))
     }))

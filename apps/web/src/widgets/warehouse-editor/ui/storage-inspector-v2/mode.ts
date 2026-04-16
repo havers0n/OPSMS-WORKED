@@ -1,0 +1,91 @@
+export type PanelMode =
+  | { kind: 'empty' }
+  | { kind: 'rack-overview'; rackId: string }
+  | { kind: 'cell-overview'; cellId: string }
+  | { kind: 'container-detail'; cellId: string; containerId: string }
+  | { kind: 'task-add-product-to-container'; cellId: string; containerId: string }
+  | { kind: 'task-edit-policy'; cellId: string; containerId: string }
+  | { kind: 'task-create-container'; cellId: string }
+  | { kind: 'task-create-container-with-product'; cellId: string }
+  | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
+
+export type TaskKind =
+  | 'create-container'
+  | 'create-container-with-product'
+  | 'move-container'
+  | 'edit-policy'
+  | 'add-product-to-container';
+
+/**
+ * Local task state for the move-container flow.
+ * sourceContainerDisplayCode and sourceLocationCode are captured at task start
+ * so they survive the user browsing away to select a target cell.
+ * targetLocationId is resolved inside the root from targetCellId.
+ */
+export type MoveTaskState = {
+  sourceContainerId: string;
+  sourceCellId: string;
+  sourceLocationId: string;
+  sourceRackId: string | null;
+  sourceLevel: number | null;
+  sourceLocationCode: string;
+  sourceContainerDisplayCode: string;
+  targetCellId: string | null;
+  stage: 'selecting-target' | 'moving' | 'success' | 'error';
+  errorMessage: string | null;
+};
+
+/**
+ * Priority: container-detail > cell-overview > rack-overview > empty
+ * containerId only activates when cellId is also set.
+ */
+export function resolvePanelMode(
+  rackId: string | null,
+  cellId: string | null,
+  containerId: string | null
+): PanelMode {
+  if (cellId && containerId) return { kind: 'container-detail', cellId, containerId };
+  if (cellId) return { kind: 'cell-overview', cellId };
+  if (rackId) return { kind: 'rack-overview', rackId };
+  return { kind: 'empty' };
+}
+
+/**
+ * Move task overrides all base modes.
+ * Create tasks activate only from cell-overview.
+ */
+export function resolveActiveMode(
+  base: PanelMode,
+  taskKind: TaskKind | null,
+  moveTaskState: MoveTaskState | null = null
+): PanelMode {
+  if (taskKind === 'move-container' && moveTaskState !== null) {
+    return {
+      kind: 'task-move-container',
+      sourceContainerId: moveTaskState.sourceContainerId,
+      sourceCellId: moveTaskState.sourceCellId
+    };
+  }
+
+  if (base.kind === 'container-detail' && taskKind === 'edit-policy') {
+    return { kind: 'task-edit-policy', cellId: base.cellId, containerId: base.containerId };
+  }
+
+  if (base.kind === 'container-detail' && taskKind === 'add-product-to-container') {
+    return {
+      kind: 'task-add-product-to-container',
+      cellId: base.cellId,
+      containerId: base.containerId
+    };
+  }
+
+  if (base.kind === 'cell-overview' && taskKind === 'create-container') {
+    return { kind: 'task-create-container', cellId: base.cellId };
+  }
+
+  if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product') {
+    return { kind: 'task-create-container-with-product', cellId: base.cellId };
+  }
+
+  return base;
+}

@@ -86,6 +86,7 @@ type RackFaceRow = {
   side: 'A' | 'B';
   enabled: boolean;
   slot_numbering_direction: 'ltr' | 'rtl';
+  face_mode?: 'mirrored' | 'independent' | null;
   is_mirrored: boolean;
   mirror_source_face_id: string | null;
   face_length: number | null;
@@ -103,6 +104,7 @@ type RackLevelRow = {
   rack_section_id: string;
   ordinal: number;
   slot_count: number;
+  structural_default_role?: 'primary_pick' | 'reserve' | 'none' | null;
 };
 
 type LayoutZoneRow = {
@@ -491,7 +493,8 @@ function buildRackLevel(row: RackLevelRow) {
   return {
     id: row.id,
     ordinal: row.ordinal,
-    slotCount: row.slot_count
+    slotCount: row.slot_count,
+    structuralDefaultRole: row.structural_default_role ?? 'none'
   };
 }
 
@@ -508,11 +511,13 @@ function buildRackSection(row: RackSectionRow, allLevels: RackLevelRow[]) {
 }
 
 function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
+  const relationshipMode = row.face_mode ?? (row.is_mirrored ? 'mirrored' : 'independent');
   return {
     id: row.id,
     side: row.side,
     enabled: row.enabled,
     slotNumberingDirection: row.slot_numbering_direction,
+    relationshipMode,
     isMirrored: row.is_mirrored,
     mirrorSourceFaceId: row.mirror_source_face_id,
     faceLength: row.face_length ?? undefined,
@@ -645,6 +650,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
         side: string;
         enabled: boolean;
         slotNumberingDirection: string;
+        relationshipMode?: 'mirrored' | 'independent';
         faceLength: number | null;
         isMirrored: boolean;
         mirrorSourceFaceId: string | null;
@@ -652,7 +658,12 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
           id: string;
           ordinal: number;
           length: number;
-          levels: Array<{ id: string; ordinal: number; slotCount: number }>;
+          levels: Array<{
+            id: string;
+            ordinal: number;
+            slotCount: number;
+            structuralDefaultRole?: 'primary_pick' | 'reserve' | 'none';
+          }>;
         }>;
       }>;
     }>;
@@ -706,6 +717,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
         side: face.side,
         enabled: face.enabled,
         slotNumberingDirection: face.slotNumberingDirection,
+        relationshipMode: face.relationshipMode ?? (face.isMirrored ? 'mirrored' : 'independent'),
         isMirrored: face.isMirrored,
         mirrorSourceFaceId: face.mirrorSourceFaceId,
         faceLength: face.faceLength ?? undefined,
@@ -716,7 +728,8 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
           levels: section.levels.map((level) => ({
             id: level.id,
             ordinal: level.ordinal,
-            slotCount: level.slotCount
+            slotCount: level.slotCount,
+            structuralDefaultRole: level.structuralDefaultRole ?? 'none'
           }))
         }))
       }))

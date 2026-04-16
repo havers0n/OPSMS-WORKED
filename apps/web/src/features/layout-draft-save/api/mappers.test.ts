@@ -46,6 +46,7 @@ describe('mapLayoutDraftToSavePayload', () => {
           side: 'A',
           enabled: true,
           face_length: 4.5,
+          face_mode: 'independent',
           slot_numbering_direction: 'ltr',
           is_mirrored: false,
           mirror_source_face_id: null,
@@ -69,6 +70,7 @@ describe('mapLayoutDraftToSavePayload', () => {
           rack_section_id: '55555555-5555-5555-5555-555555555555',
           ordinal: 1,
           slot_count: 2,
+          structural_default_role: 'none',
           updated_at: '2026-03-13T00:00:00.000Z'
         }
       ],

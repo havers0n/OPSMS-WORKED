@@ -47,7 +47,8 @@ import {
   waveSchema,
   waveSummarySchema,
   waveStatusSchema,
-  rackInspectorPayloadSchema
+  rackInspectorPayloadSchema,
+  locationEffectiveRoleSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -105,7 +106,8 @@ export const createLayoutDraftBodySchema = z.object({
 const saveRackLevelPayloadSchema = z.object({
   id: z.string().uuid(),
   ordinal: z.number().int().min(1),
-  slotCount: z.number().int().min(1)
+  slotCount: z.number().int().min(1),
+  structuralDefaultRole: z.enum(['primary_pick', 'reserve', 'none']).optional().default('none')
 });
 
 const saveRackSectionPayloadSchema = z.object({
@@ -120,6 +122,7 @@ const saveRackFacePayloadSchema = z.object({
   side: rackFaceSideSchema,
   enabled: z.boolean(),
   slotNumberingDirection: slotNumberingDirectionSchema,
+  relationshipMode: z.enum(['mirrored', 'independent']).optional(),
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().uuid().nullable(),
   faceLength: z.number().positive().optional(),
@@ -260,6 +263,10 @@ export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema
 export const persistedDraftValidationResponseSchema = layoutValidationResultSchema;
 export const publishResponseSchema = layoutPublishResultSchema;
 export const nonRackLocationsResponseSchema = nonRackLocationRefsSchema;
+export const effectiveLocationRoleQuerySchema = z.object({
+  productId: z.string().uuid()
+});
+export const effectiveLocationRoleResponseSchema = locationEffectiveRoleSchema;
 
 export const patchLocationGeometryBodySchema = z.object({
   floorX: z.number().nullable(),

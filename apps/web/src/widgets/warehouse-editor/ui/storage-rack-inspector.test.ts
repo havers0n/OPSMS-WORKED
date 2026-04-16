@@ -441,6 +441,6 @@ describe('StorageRackInspector', () => {
 
     expect(hasText(renderer, 'Geometry')).toBe(false);
     expect(hasText(renderer, 'Structure')).toBe(false);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-work-context-switch' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
   });
 });

@@ -94,8 +94,8 @@ afterEach(() => {
   resetStores();
 });
 
-describe('RightSidePanelSlot work-context switch visibility', () => {
-  it('does not show the work-context switch for multi-rack selection', () => {
+describe('RightSidePanelSlot inspector task-nav visibility', () => {
+  it('does not show the task nav for multi-rack selection', () => {
     const workspace = createWorkspace();
     act(() => {
       useEditorStore.getState().initializeDraft(workspace.activeDraft!);
@@ -104,26 +104,26 @@ describe('RightSidePanelSlot work-context switch visibility', () => {
 
     const renderer = renderSlot(workspace);
 
-    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-work-context-switch' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
   });
 
-  it('does not show the work-context switch for zone or wall inspectors', () => {
+  it('does not show the task nav for zone or wall inspectors', () => {
     const workspace = createWorkspace();
     act(() => {
       useEditorStore.getState().initializeDraft(workspace.activeDraft!);
       useEditorStore.getState().setSelectedZoneId('zone-1');
     });
     const zoneRenderer = renderSlot(workspace);
-    expect(zoneRenderer.root.findAllByProps({ 'data-testid': 'rack-work-context-switch' })).toHaveLength(0);
+    expect(zoneRenderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
 
     act(() => {
       useEditorStore.getState().setSelectedWallId('wall-1');
     });
     const wallRenderer = renderSlot(workspace);
-    expect(wallRenderer.root.findAllByProps({ 'data-testid': 'rack-work-context-switch' })).toHaveLength(0);
+    expect(wallRenderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
   });
 
-  it('does not show the work-context switch while the task surface is active', () => {
+  it('does not show the task nav while the task surface is active', () => {
     const workspace = createWorkspace();
     const rackId = workspace.activeDraft!.rackIds[0];
     act(() => {
@@ -137,6 +137,6 @@ describe('RightSidePanelSlot work-context switch visibility', () => {
 
     const renderer = renderSlot(workspace);
 
-    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-work-context-switch' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
   });
 });

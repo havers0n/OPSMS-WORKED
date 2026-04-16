@@ -348,6 +348,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
               rackId={rack.id}
               side="A"
               totalLength={faceALength}
+              existingSectionCount={faceA.sections.length}
               initialSectionCount={faceA.sections.length || 3}
               initialLevelCount={faceA.sections[0]?.levels.length || 4}
               initialSlotCount={faceA.sections[0]?.levels[0]?.slotCount || 3}
@@ -408,6 +409,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
                   rackId={rack.id}
                   side="B"
                   totalLength={faceBLength}
+                  existingSectionCount={faceB.sections.length}
                   initialSectionCount={faceB.sections.length}
                   initialLevelCount={faceB.sections[0]?.levels.length || 4}
                   initialSlotCount={faceB.sections[0]?.levels[0]?.slotCount || 3}

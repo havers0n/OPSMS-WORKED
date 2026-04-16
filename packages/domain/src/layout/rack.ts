@@ -9,7 +9,8 @@ import {
 export const rackLevelSchema = z.object({
   id: z.string(),
   ordinal: z.number().int().min(1),
-  slotCount: z.number().int().min(1)
+  slotCount: z.number().int().min(1),
+  structuralDefaultRole: z.enum(['primary_pick', 'reserve', 'none']).optional()
 });
 export type RackLevel = z.infer<typeof rackLevelSchema>;
 

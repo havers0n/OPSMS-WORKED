@@ -1365,6 +1365,7 @@ export type Database = {
           created_at: string
           enabled: boolean
           face_length: number | null
+          face_mode: string
           id: string
           is_mirrored: boolean
           mirror_source_face_id: string | null
@@ -1377,6 +1378,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           face_length?: number | null
+          face_mode?: string
           id?: string
           is_mirrored?: boolean
           mirror_source_face_id?: string | null
@@ -1389,6 +1391,7 @@ export type Database = {
           created_at?: string
           enabled?: boolean
           face_length?: number | null
+          face_mode?: string
           id?: string
           is_mirrored?: boolean
           mirror_source_face_id?: string | null
@@ -1421,6 +1424,7 @@ export type Database = {
           ordinal: number
           rack_section_id: string
           slot_count: number
+          structural_default_role: string
           updated_at: string
         }
         Insert: {
@@ -1429,6 +1433,7 @@ export type Database = {
           ordinal: number
           rack_section_id: string
           slot_count: number
+          structural_default_role?: string
           updated_at?: string
         }
         Update: {
@@ -1437,6 +1442,7 @@ export type Database = {
           ordinal?: number
           rack_section_id?: string
           slot_count?: number
+          structural_default_role?: string
           updated_at?: string
         }
         Relationships: [

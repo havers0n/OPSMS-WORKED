@@ -32,6 +32,7 @@ describe('layout boundary mapping', () => {
           side: 'A',
           enabled: true,
           slot_numbering_direction: 'ltr',
+          face_mode: 'independent',
           is_mirrored: false,
           mirror_source_face_id: null,
           face_length: 4.5
@@ -50,7 +51,8 @@ describe('layout boundary mapping', () => {
           id: '66666666-6666-6666-6666-666666666666',
           rack_section_id: '55555555-5555-5555-5555-555555555555',
           ordinal: 1,
-          slot_count: 3
+          slot_count: 3,
+          structural_default_role: 'none'
         }
       ],
       zones: [],
@@ -101,6 +103,7 @@ describe('layout boundary mapping', () => {
               side: 'A',
               enabled: true,
               slotNumberingDirection: 'rtl',
+              relationshipMode: 'independent',
               faceLength: 5.5,
               isMirrored: false,
               mirrorSourceFaceId: null,
@@ -113,7 +116,8 @@ describe('layout boundary mapping', () => {
                     {
                       id: '66666666-6666-6666-6666-666666666666',
                       ordinal: 1,
-                      slotCount: 2
+                      slotCount: 2,
+                      structuralDefaultRole: 'none'
                     }
                   ]
                 }

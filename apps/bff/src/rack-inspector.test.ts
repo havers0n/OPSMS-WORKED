@@ -32,9 +32,11 @@ const cellRows = [
   { id: ids.cell2b, rack_level_id: ids.level2 },
 ];
 const rackLevelRows = [
-  { id: ids.level1, ordinal: 1 },
-  { id: ids.level2, ordinal: 2 },
+  { id: ids.level1, ordinal: 1, structural_default_role: 'none' as const },
+  { id: ids.level2, ordinal: 2, structural_default_role: 'reserve' as const },
 ];
+const rackFaceRows = [{ id: 'b2000000-0000-4000-8000-000000000002', side: 'A' as const, face_mode: 'independent' as const, is_mirrored: false }];
+const rackSectionRows = [{ id: 'b3000000-0000-4000-8000-000000000003' }];
 const occupancyRows = [
   { cell_id: ids.cell1a },
   { cell_id: ids.cell2a },
@@ -72,6 +74,20 @@ function makeSupabaseStub(overrides: {
             eq: vi.fn(() => ({
               eq: vi.fn(async () => ({ data: cellData, error: null })),
             })),
+          })),
+        };
+      }
+      if (table === 'rack_faces') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(async () => ({ data: rackFaceRows, error: null })),
+          })),
+        };
+      }
+      if (table === 'rack_sections') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({ data: rackSectionRows, error: null })),
           })),
         };
       }

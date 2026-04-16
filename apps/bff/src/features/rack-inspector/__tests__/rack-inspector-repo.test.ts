@@ -32,8 +32,17 @@ const cellRows = [
 ];
 
 const rackLevelRows = [
-  { id: ids.level1, ordinal: 1 },
-  { id: ids.level2, ordinal: 2 },
+  { id: ids.level1, ordinal: 1, structural_default_role: 'none' as const },
+  { id: ids.level2, ordinal: 2, structural_default_role: 'reserve' as const },
+];
+
+const rackFaceRows = [
+  { id: ids.faceA, side: 'A' as const, face_mode: 'independent' as const, is_mirrored: false }
+];
+
+const rackSectionRows = [
+  { id: ids.section1 },
+  { id: ids.section2 }
 ];
 
 // Only cell1a is occupied
@@ -50,6 +59,10 @@ function makeSupabaseStub(overrides: {
   cellError?: unknown;
   levelData?: typeof rackLevelRows;
   levelError?: unknown;
+  faceData?: typeof rackFaceRows;
+  faceError?: unknown;
+  sectionData?: typeof rackSectionRows;
+  sectionError?: unknown;
   occupancyData?: typeof occupancyRows;
   occupancyError?: unknown;
 } = {}) {
@@ -60,6 +73,10 @@ function makeSupabaseStub(overrides: {
     cellError = null,
     levelData = rackLevelRows,
     levelError = null,
+    faceData = rackFaceRows,
+    faceError = null,
+    sectionData = rackSectionRows,
+    sectionError = null,
     occupancyData = occupancyRows,
     occupancyError = null,
   } = overrides;
@@ -86,12 +103,27 @@ function makeSupabaseStub(overrides: {
         };
       }
 
-      if (table === 'rack_levels') {
+      if (table === 'rack_faces') {
         return {
           select: vi.fn(() => ({
-            in: vi.fn(async () => ({ data: levelData, error: levelError })),
+            eq: vi.fn(async () => ({ data: faceData, error: faceError })),
           })),
         };
+      }
+
+      if (table === 'rack_sections') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({ data: sectionData, error: sectionError })),
+          })),
+        };
+      }
+
+      if (table === 'rack_levels') {
+        const select = vi.fn(() => ({
+          in: vi.fn(async () => ({ data: levelData, error: levelError })),
+        }));
+        return { select };
       }
 
       if (table === 'location_occupancy_v') {
@@ -126,6 +158,7 @@ describe('createRackInspectorRepo', () => {
       expect(result?.displayCode).toBe('R1');
       expect(result?.kind).toBe('single');
       expect(result?.axis).toBe('NS');
+      expect(result?.faces[0]?.relationshipMode).toBe('independent');
     });
 
     it('kind is never "double" — regression guard on stale type', async () => {

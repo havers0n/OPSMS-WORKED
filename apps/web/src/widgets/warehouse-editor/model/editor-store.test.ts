@@ -123,6 +123,17 @@ describe('editor-store', () => {
     expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
   });
 
+  it('accepts the widened ObjectWorkContext union (addressing, face-mode)', () => {
+    useEditorStore.getState().setObjectWorkContext('addressing');
+    expect(useEditorStore.getState().objectWorkContext).toBe('addressing');
+
+    useEditorStore.getState().setObjectWorkContext('face-mode');
+    expect(useEditorStore.getState().objectWorkContext).toBe('face-mode');
+
+    useEditorStore.getState().setObjectWorkContext('geometry');
+    expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
+  });
+
   it('initializes live draft into local state', () => {
     const draft = createLayoutDraftFixture();
 
