@@ -939,6 +939,7 @@ function createActiveDraftSupabaseStub() {
                   side: 'A',
                   enabled: true,
                   slot_numbering_direction: 'ltr',
+                  face_mode: 'independent',
                   is_mirrored: false,
                   mirror_source_face_id: null,
                   face_length: 4.5
@@ -977,7 +978,8 @@ function createActiveDraftSupabaseStub() {
                   id: '342d905f-2a71-4812-828f-4b0d1acc4a53',
                   rack_section_id: 'd208453f-555a-40d0-b4bf-f1e6a93a7752',
                   ordinal: 1,
-                  slot_count: 2
+                  slot_count: 2,
+                  structural_default_role: 'none'
                 }
               ],
               error: null
@@ -1115,6 +1117,7 @@ function createFloorWorkspaceSupabaseStub() {
                         side: 'A',
                         enabled: true,
                         slot_numbering_direction: 'ltr',
+                        face_mode: 'independent',
                         is_mirrored: false,
                         mirror_source_face_id: null,
                         face_length: null
@@ -1127,6 +1130,7 @@ function createFloorWorkspaceSupabaseStub() {
                         side: 'A',
                         enabled: true,
                         slot_numbering_direction: 'ltr',
+                        face_mode: 'independent',
                         is_mirrored: false,
                         mirror_source_face_id: null,
                         face_length: null
@@ -1179,7 +1183,8 @@ function createFloorWorkspaceSupabaseStub() {
                         id: '99999999-9999-4999-8999-999999999999',
                         rack_section_id: draftSectionId,
                         ordinal: 1,
-                        slot_count: 2
+                        slot_count: 2,
+                        structural_default_role: 'none'
                       }
                     ]
                   : [
@@ -1187,7 +1192,8 @@ function createFloorWorkspaceSupabaseStub() {
                         id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
                         rack_section_id: publishedSectionId,
                         ordinal: 1,
-                        slot_count: 3
+                        slot_count: 3,
+                        structural_default_role: 'none'
                       }
                     ],
                 error: null
@@ -4104,7 +4110,7 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
       draftVersion: 8,
-      changeClass: 'no_changes'
+      changeClass: 'structure_changed'
     });
     const saveCall = supabase.rpc.mock.calls.find(([fn]) => fn === 'save_layout_draft');
     const savePayload = saveCall?.[1]?.layout_payload as {
@@ -4160,7 +4166,7 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
       draftVersion: null,
-      changeClass: 'no_changes'
+      changeClass: 'structure_changed'
     });
 
     await app.close();
@@ -4462,6 +4468,114 @@ describe('GET /api/pick-tasks/:taskId', () => {
 
     expect(response.statusCode).toBe(401);
 
+    await app.close();
+  });
+});
+
+describe('GET /api/locations/:locationId/effective-role', () => {
+  const locationId = 'f932d7de-7350-42b9-9dd6-df11e34b3ea1';
+  const productId = '16fbb907-fd55-4f57-bca9-61bd6a35d92f';
+
+  it('rejects missing productId query with 400', async () => {
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getProductLocationRolesService: vi.fn(() => ({
+        listByLocationId: vi.fn(async () => []),
+        resolveEffectiveRole: vi.fn(),
+        create: vi.fn(),
+        delete: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/locations/${locationId}/effective-role`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+    await app.close();
+  }, 15000);
+
+  it('returns canonical effective-role payload for a product+location pair', async () => {
+    const resolveEffectiveRole = vi.fn(async () => ({
+      locationId,
+      productId,
+      structuralDefaultRole: 'reserve',
+      effectiveRole: 'primary_pick',
+      effectiveRoleSource: 'explicit_override',
+      conflictingPublishedRoles: []
+    }));
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getProductLocationRolesService: vi.fn(() => ({
+        listByLocationId: vi.fn(async () => []),
+        resolveEffectiveRole,
+        create: vi.fn(),
+        delete: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/locations/${locationId}/effective-role?productId=${productId}`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      locationId,
+      productId,
+      structuralDefaultRole: 'reserve',
+      effectiveRole: 'primary_pick',
+      effectiveRoleSource: 'explicit_override',
+      conflictingPublishedRoles: []
+    });
+    expect(resolveEffectiveRole).toHaveBeenCalledWith(
+      authContext.currentTenant.tenantId,
+      locationId,
+      productId
+    );
+    await app.close();
+  });
+
+  it('returns conflict contract with nullable effectiveRole', async () => {
+    const resolveEffectiveRole = vi.fn(async () => ({
+      locationId,
+      productId,
+      structuralDefaultRole: 'none',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    }));
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getProductLocationRolesService: vi.fn(() => ({
+        listByLocationId: vi.fn(async () => []),
+        resolveEffectiveRole,
+        create: vi.fn(),
+        delete: vi.fn()
+      }) as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/locations/${locationId}/effective-role?productId=${productId}`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      locationId,
+      productId,
+      structuralDefaultRole: 'none',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    });
     await app.close();
   });
 });
