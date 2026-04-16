@@ -21,11 +21,19 @@ export const rackSectionSchema = z.object({
 });
 export type RackSection = z.infer<typeof rackSectionSchema>;
 
+export const rackFaceRelationshipModeSchema = z.enum(['mirrored', 'independent']);
+export type RackFaceRelationshipMode = z.infer<typeof rackFaceRelationshipModeSchema>;
+
 export const rackFaceSchema = z.object({
   id: z.string(),
   side: rackFaceSideSchema,
   enabled: z.boolean(),
   slotNumberingDirection: slotNumberingDirectionSchema,
+  /**
+   * Temporary compatibility bridge for legacy drafts that still persist only
+   * mirror fields. Canonical runtime writes must materialize this field.
+   */
+  relationshipMode: rackFaceRelationshipModeSchema.optional(),
   isMirrored: z.boolean(),
   mirrorSourceFaceId: z.string().nullable(),
   /**
@@ -37,6 +45,24 @@ export const rackFaceSchema = z.object({
   sections: z.array(rackSectionSchema)
 });
 export type RackFace = z.infer<typeof rackFaceSchema>;
+
+export function resolveRackFaceRelationshipMode(face: RackFace): RackFaceRelationshipMode {
+  return face.relationshipMode ?? (face.isMirrored ? 'mirrored' : 'independent');
+}
+
+export function isRackFaceMirrored(face: RackFace): boolean {
+  return resolveRackFaceRelationshipMode(face) === 'mirrored';
+}
+
+export function synchronizeRackFaceRelationship(face: RackFace): RackFace {
+  const relationshipMode = resolveRackFaceRelationshipMode(face);
+  return {
+    ...face,
+    relationshipMode,
+    isMirrored: relationshipMode === 'mirrored',
+    mirrorSourceFaceId: relationshipMode === 'mirrored' ? face.mirrorSourceFaceId : null
+  };
+}
 
 export const rackGeometrySchema = z.object({
   x: z.number(),

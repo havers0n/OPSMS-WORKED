@@ -1,9 +1,11 @@
-import type {
-  LayoutDraft,
-  Rack,
-  RackFace,
-  Wall,
-  Zone
+import {
+  synchronizeRackFaceRelationship,
+  resolveRackFaceRelationshipMode,
+  type LayoutDraft,
+  type Rack,
+  type RackFace,
+  type Wall,
+  type Zone
 } from '@wos/domain';
 import type {
   EditorSelection,
@@ -139,6 +141,7 @@ export function normalizeRack(rack: Rack): Rack {
       if (rack.kind === 'single' && face.side === 'B') {
         return {
           ...face,
+          relationshipMode: 'independent',
           enabled: false,
           isMirrored: false,
           mirrorSourceFaceId: null,
@@ -147,22 +150,29 @@ export function normalizeRack(rack: Rack): Rack {
         };
       }
 
-      if (face.side === 'B' && face.isMirrored) {
+      if (face.side === 'B' && resolveRackFaceRelationshipMode(face) === 'mirrored') {
         return {
-          ...face,
+          ...synchronizeRackFaceRelationship({
+            ...face,
+            relationshipMode: 'mirrored'
+          }),
           enabled: true,
           faceLength: undefined,
           sections: []
         };
       }
 
-      if (face.sections.length === 0) {
-        return face;
+      const faceWithCanonicalMode = synchronizeRackFaceRelationship(face);
+
+      if (faceWithCanonicalMode.sections.length === 0) {
+        return faceWithCanonicalMode;
       }
 
-      const expectedLength = face.faceLength ?? rack.totalLength;
-      const nextSections = scaleSectionsToLength(face.sections, expectedLength);
-      return nextSections === face.sections ? face : { ...face, sections: nextSections };
+      const expectedLength = faceWithCanonicalMode.faceLength ?? rack.totalLength;
+      const nextSections = scaleSectionsToLength(faceWithCanonicalMode.sections, expectedLength);
+      return nextSections === faceWithCanonicalMode.sections
+        ? faceWithCanonicalMode
+        : { ...faceWithCanonicalMode, sections: nextSections };
     })
   };
 }
@@ -256,6 +266,7 @@ export function buildNewRack(racks: Record<string, Rack>, x: number, y: number):
         side: 'A',
         enabled: true,
         slotNumberingDirection: 'ltr',
+        relationshipMode: 'independent',
         isMirrored: false,
         mirrorSourceFaceId: null,
         sections: [buildEmptySection('A', 1, 3, totalLength)]
@@ -265,6 +276,7 @@ export function buildNewRack(racks: Record<string, Rack>, x: number, y: number):
         side: 'B',
         enabled: false,
         slotNumberingDirection: 'ltr',
+        relationshipMode: 'independent',
         isMirrored: false,
         mirrorSourceFaceId: null,
         sections: []

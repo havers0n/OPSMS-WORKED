@@ -1,4 +1,4 @@
-import type { LayoutValidationResult, Rack, RackFace } from '@wos/domain';
+import { resolveRackFaceRelationshipMode, type LayoutValidationResult, type Rack, type RackFace } from '@wos/domain';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 function faceSummary(face: RackFace) {
@@ -36,7 +36,9 @@ function FaceBlock({ face, label }: { face: RackFace; label: string }) {
       </div>
       <div className="mt-2 flex gap-3 text-xs text-slate-500">
         <span>Numbering: <span className="font-medium text-slate-700">{face.slotNumberingDirection === 'rtl' ? 'N→①' : '①→N'}</span></span>
-        {face.isMirrored && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 text-[10px] font-medium">Mirrored</span>}
+        {resolveRackFaceRelationshipMode(face) === 'mirrored' && (
+          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 text-[10px] font-medium">Mirrored</span>
+        )}
       </div>
     </div>
   );

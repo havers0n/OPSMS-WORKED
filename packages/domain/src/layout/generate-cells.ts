@@ -3,6 +3,7 @@ import { buildPreviewCellKey } from './cell';
 import { buildCellAddress } from './cell';
 import type { LayoutDraft } from './layout-draft';
 import type { Rack, RackFace, RackLevel, RackSection } from './rack';
+import { isRackFaceMirrored } from './rack';
 
 function orderSlots(level: RackLevel, face: RackFace): number[] {
   const slots = Array.from({ length: level.slotCount }, (_, index) => index + 1);
@@ -26,7 +27,7 @@ function resolveSections(
 ): Array<{ section: RackSection; addressOrdinal: number }> {
   let sections: RackSection[];
 
-  if (face.isMirrored && face.mirrorSourceFaceId) {
+  if (isRackFaceMirrored(face) && face.mirrorSourceFaceId) {
     const sourceFace = sourceRack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId);
     sections = sourceFace ? sourceFace.sections : face.sections;
   } else {

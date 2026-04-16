@@ -968,6 +968,90 @@ describe('editor-store', () => {
     }
   });
 
+  it('setFaceBRelationship(..., mirrored) writes canonical and legacy mirror fields', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
+
+    const faceA = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'A');
+    const faceB = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'B');
+
+    expect(faceB?.relationshipMode).toBe('mirrored');
+    expect(faceB?.isMirrored).toBe(true);
+    expect(faceB?.mirrorSourceFaceId).toBe(faceA?.id);
+    expect(faceB?.enabled).toBe(true);
+    expect(faceB?.sections).toEqual([]);
+  });
+
+  it('setFaceBRelationship(..., independent, copy) clones Face A sections with new IDs', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().setFaceBRelationship(rackId, 'independent', { initFrom: 'copy' });
+
+    const faceA = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'A');
+    const faceB = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'B');
+
+    expect(faceB?.relationshipMode).toBe('independent');
+    expect(faceB?.isMirrored).toBe(false);
+    expect(faceB?.mirrorSourceFaceId).toBeNull();
+    expect(faceB?.sections).toHaveLength(faceA?.sections.length ?? 0);
+    expect(faceB?.sections[0]?.id).not.toBe(faceA?.sections[0]?.id);
+    expect(faceB?.sections[0]?.levels[0]?.id).not.toBe(faceA?.sections[0]?.levels[0]?.id);
+  });
+
+  it('setFaceBRelationship(..., independent, scratch) initializes an independent starter section', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().setFaceBRelationship(rackId, 'independent', { initFrom: 'scratch' });
+
+    const faceB = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'B');
+
+    expect(faceB?.relationshipMode).toBe('independent');
+    expect(faceB?.isMirrored).toBe(false);
+    expect(faceB?.mirrorSourceFaceId).toBeNull();
+    expect(faceB?.sections).toHaveLength(1);
+  });
+
+  it('setFaceBMode compatibility shim delegates to canonical relationship writes', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().setFaceBMode(rackId, 'mirror');
+    let faceB = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'B');
+    expect(faceB?.relationshipMode).toBe('mirrored');
+
+    useEditorStore.getState().setFaceBMode(rackId, 'scratch');
+    faceB = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'B');
+    expect(faceB?.relationshipMode).toBe('independent');
+    expect(faceB?.sections.length).toBeGreaterThan(0);
+  });
+
+  it('stabilizes legacy-only face relationship fields on next write', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    for (const face of rack.faces) {
+      delete (face as { relationshipMode?: unknown }).relationshipMode;
+    }
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
+
+    const faceA = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'A');
+    const faceB = useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'B');
+    expect(faceA?.relationshipMode).toBe('independent');
+    expect(faceB?.relationshipMode).toBe('mirrored');
+    expect(faceB?.isMirrored).toBe(true);
+    expect(faceB?.mirrorSourceFaceId).toBe(faceA?.id);
+  });
+
   it('normalizes stale invalid drafts on initialize and marks them dirty', () => {
     const draft = createLayoutDraftFixture();
     draft.racks[draft.rackIds[0]].faces[0].sections[0].length = 2.5;

@@ -1,4 +1,4 @@
-import { generatePreviewCells, validateLayoutDraft } from '@wos/domain';
+import { generatePreviewCells, resolveRackFaceRelationshipMode, validateLayoutDraft } from '@wos/domain';
 import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
 import {
   AlertTriangle,
@@ -21,8 +21,8 @@ import {
   useObjectWorkContext,
   useResetFaceB,
   useSetObjectWorkContext,
+  useSetFaceBRelationship,
   useSelectedRackId,
-  useSetFaceBMode,
   useUpdateFaceConfig,
   useUpdateRackGeneral,
   useViewMode
@@ -122,7 +122,7 @@ function ValidationStrip({ issues }: { issues: LayoutValidationIssue[] }) {
 }
 
 function faceSummaryText(face: RackFace): string {
-  if (face.isMirrored) return 'Mirrored from Face A';
+  if (resolveRackFaceRelationshipMode(face) === 'mirrored') return 'Mirrored from Face A';
   if (face.sections.length === 0) return 'Not configured';
   const cells = face.sections.reduce((sum, s) => sum + s.levels.reduce((l, lv) => l + lv.slotCount, 0), 0);
   return `${face.sections.length} sec | ${face.sections[0]?.levels.length ?? 0} lvl | ${cells} cells`;
@@ -310,7 +310,7 @@ export function RackInspector({
   const objectWorkContext = useObjectWorkContext();
   const setObjectWorkContext = useSetObjectWorkContext();
 
-  const setFaceBMode = useSetFaceBMode();
+  const setFaceBRelationship = useSetFaceBRelationship();
   const applyFacePreset = useApplyFacePreset();
   const resetFaceB = useResetFaceB();
   const updateFaceConfig = useUpdateFaceConfig();
@@ -369,11 +369,16 @@ export function RackInspector({
 
   // ─── derived face state (from store, not local state) ───────────────────────
 
-  const faceBConfigured = !!faceB && (faceB.isMirrored || faceB.sections.length > 0);
-  const isMirrored = !!faceB && faceB.isMirrored;
+  const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : 'independent';
+  const faceBConfigured = !!faceB && (faceBRelationshipMode === 'mirrored' || faceB.sections.length > 0);
+  const isMirrored = !!faceB && faceBRelationshipMode === 'mirrored';
 
   const handleFaceBMode = (mode: 'mirror' | 'copy' | 'scratch') => {
-    setFaceBMode(rack.id, mode);
+    if (mode === 'mirror') {
+      setFaceBRelationship(rack.id, 'mirrored');
+    } else {
+      setFaceBRelationship(rack.id, 'independent', { initFrom: mode });
+    }
     setOpenSections((prev) => new Set([...prev, 'faceB']));
   };
 

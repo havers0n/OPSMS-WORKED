@@ -88,4 +88,17 @@ describe('validateLayoutDraft', () => {
     expect(result.issues.some((issue) => issue.code === 'wall.axis_alignment_required')).toBe(true);
     expect(result.issues.some((issue) => issue.code === 'wall.zero_length_forbidden')).toBe(true);
   });
+
+  it('falls back to legacy mirror flags when relationshipMode is absent', () => {
+    const draft = createValidLayoutDraftFixture();
+    const faceB = draft.racks[draft.rackIds[0]].faces.find((face) => face.side === 'B');
+    if (!faceB) {
+      throw new Error('Expected Face B fixture');
+    }
+
+    delete faceB.relationshipMode;
+
+    const result = validateLayoutDraft(draft);
+    expect(result.isValid).toBe(true);
+  });
 });

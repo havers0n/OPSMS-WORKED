@@ -44,6 +44,7 @@ function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevel
     side: row.side,
     enabled: row.enabled,
     slotNumberingDirection: row.slot_numbering_direction,
+    relationshipMode: row.is_mirrored ? 'mirrored' : 'independent',
     isMirrored: row.is_mirrored,
     mirrorSourceFaceId: row.mirror_source_face_id,
     faceLength: row.face_length ?? undefined,

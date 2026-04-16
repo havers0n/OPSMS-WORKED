@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Rack, RackFace } from '@wos/domain';
+import { resolveRackFaceRelationshipMode, type Rack, type RackFace } from '@wos/domain';
 import { ArrowLeft, ArrowRight, Check, X } from 'lucide-react';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
@@ -9,7 +9,7 @@ import {
   useApplyFacePreset,
   useClearActiveTask,
   useRotateRack,
-  useSetFaceBMode,
+  useSetFaceBRelationship,
   useSetFaceLength,
   useDeleteRack,
   useSetSelectedRackId,
@@ -115,7 +115,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
 
   const updateRackGeneral = useUpdateRackGeneral();
   const applyFacePreset = useApplyFacePreset();
-  const setFaceBMode = useSetFaceBMode();
+  const setFaceBRelationship = useSetFaceBRelationship();
   const setFaceLength = useSetFaceLength();
   const rotateRack = useRotateRack();
   const clearActiveTask = useClearActiveTask();
@@ -124,6 +124,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
 
   const faceA = rack.faces.find((f) => f.side === 'A') as RackFace;
   const faceB = rack.faces.find((f) => f.side === 'B') as RackFace;
+  const faceBRelationshipMode = resolveRackFaceRelationshipMode(faceB);
 
   // Effective lengths — per-face override takes priority over rack.totalLength
   const faceALength = faceA.faceLength ?? rack.totalLength;
@@ -390,14 +391,18 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
             </div>
 
             <FaceBEmptyState
-              selectedMode={faceB.isMirrored ? 'mirror' : faceB.sections.length > 0 ? 'copy' : null}
-              onSelectMode={(mode) => setFaceBMode(rack.id, mode)}
+              selectedMode={faceBRelationshipMode === 'mirrored' ? 'mirror' : faceB.sections.length > 0 ? 'copy' : null}
+              onSelectMode={(mode) =>
+                mode === 'mirror'
+                  ? setFaceBRelationship(rack.id, 'mirrored')
+                  : setFaceBRelationship(rack.id, 'independent', { initFrom: mode })
+              }
             />
 
-            {faceB.isMirrored && faceA.sections.length > 0 && (
+            {faceBRelationshipMode === 'mirrored' && faceA.sections.length > 0 && (
               <FrontElevationPreview face={faceA} side="B" />
             )}
-            {!faceB.isMirrored && faceB.sections.length > 0 && (
+            {faceBRelationshipMode !== 'mirrored' && faceB.sections.length > 0 && (
               <>
                 <SectionPresetForm
                   rackId={rack.id}
@@ -424,7 +429,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
               <button
                 type="button"
                 onClick={() => completeStep('faceB', 'done')}
-                disabled={!faceB.isMirrored && faceB.sections.length === 0}
+                disabled={faceBRelationshipMode !== 'mirrored' && faceB.sections.length === 0}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Finish setup

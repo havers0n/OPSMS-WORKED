@@ -34,6 +34,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
             enabled: true,
 
             slotNumberingDirection: 'ltr',
+            relationshipMode: 'independent',
             isMirrored: false,
             mirrorSourceFaceId: null,
             sections: [
@@ -51,6 +52,7 @@ export function createLayoutDraftFixture(): LayoutDraft {
             enabled: false,
 
             slotNumberingDirection: 'ltr',
+            relationshipMode: 'independent',
             isMirrored: false,
             mirrorSourceFaceId: null,
             sections: []

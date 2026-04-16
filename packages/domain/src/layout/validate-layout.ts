@@ -2,13 +2,14 @@ import type { LayoutClientPrecheckResult, LayoutValidationIssue } from './valida
 import type { LayoutDraft } from './layout-draft';
 import { generatePreviewCells } from './generate-cells';
 import type { Rack, RackFace, RackSection } from './rack';
+import { isRackFaceMirrored } from './rack';
 
 function compareLength(totalLength: number, sectionLengthSum: number) {
   return Math.abs(totalLength - sectionLengthSum) < 0.001;
 }
 
 function resolveSections(face: RackFace, rack: Rack): RackSection[] {
-  if (!face.isMirrored || !face.mirrorSourceFaceId) {
+  if (!isRackFaceMirrored(face) || !face.mirrorSourceFaceId) {
     return face.sections;
   }
 
@@ -46,7 +47,7 @@ export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutClientPrech
       });
     }
 
-    if (rack.kind === 'single' && faceB && faceB.enabled && (faceB.isMirrored || faceB.sections.length > 0)) {
+    if (rack.kind === 'single' && faceB && faceB.enabled && (isRackFaceMirrored(faceB) || faceB.sections.length > 0)) {
       issues.push({
         code: 'rack.single_face_b_forbidden',
         severity: 'error',

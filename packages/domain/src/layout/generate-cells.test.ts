@@ -21,4 +21,18 @@ describe('generatePreviewCells', () => {
     expect(firstCell?.previewCellKey).toMatch(/^cell_[0-9a-f]{8}$/);
     expect(firstCell).not.toHaveProperty('cellCode');
   });
+
+  it('falls back to legacy mirror fields when relationshipMode is absent', () => {
+    const draft = createValidLayoutDraftFixture();
+    const faceB = draft.racks[draft.rackIds[0]].faces.find((face) => face.side === 'B');
+    if (!faceB) {
+      throw new Error('Expected Face B fixture');
+    }
+
+    delete faceB.relationshipMode;
+
+    const cells = generatePreviewCells(draft);
+    const faceBCells = cells.filter((cell) => cell.address.raw.startsWith('03-B.'));
+    expect(faceBCells).toHaveLength(4);
+  });
 });

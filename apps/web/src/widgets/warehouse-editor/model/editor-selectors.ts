@@ -112,6 +112,7 @@ export const useUpdateLevelCount = () => useEditorStore((state) => state.updateL
 export const useAddSection = () => useEditorStore((state) => state.addSection);
 export const useDeleteSection = () => useEditorStore((state) => state.deleteSection);
 export const useAddLevel = () => useEditorStore((state) => state.addLevel);
+export const useSetFaceBRelationship = () => useEditorStore((state) => state.setFaceBRelationship);
 export const useSetFaceBMode = () => useEditorStore((state) => state.setFaceBMode);
 export const useResetFaceB = () => useEditorStore((state) => state.resetFaceB);
 export const useApplyFacePreset = () => useEditorStore((state) => state.applyFacePreset);

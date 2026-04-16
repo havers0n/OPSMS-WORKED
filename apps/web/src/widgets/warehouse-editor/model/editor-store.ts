@@ -3,11 +3,13 @@ import type {
   LayoutDraft,
   Rack,
   RackFace,
+  RackFaceRelationshipMode,
   RackKind,
   SlotNumberingDirection,
   Wall,
   Zone
 } from '@wos/domain';
+import { resolveRackFaceRelationshipMode, synchronizeRackFaceRelationship } from '@wos/domain';
 import { create } from 'zustand';
 import {
   type ActiveLayoutTask,
@@ -162,6 +164,12 @@ type EditorStore = {
   addSection: (rackId: string, side: 'A' | 'B') => void;
   deleteSection: (rackId: string, side: 'A' | 'B', sectionId: string) => void;
   addLevel: (rackId: string, side: 'A' | 'B', sectionId: string) => void;
+  setFaceBRelationship: (
+    rackId: string,
+    mode: RackFaceRelationshipMode,
+    options?: { initFrom?: 'copy' | 'scratch' }
+  ) => void;
+  /** Compatibility shim. Use setFaceBRelationship for new code. */
   setFaceBMode: (rackId: string, mode: 'mirror' | 'copy' | 'scratch') => void;
   resetFaceB: (rackId: string) => void;
   /** Replace all sections in a face with N equal-length sections generated from preset values. */
@@ -253,7 +261,7 @@ function markDraftChanged<T extends object>(state: Pick<EditorStore, 'persistenc
   };
 }
 
-export const useEditorStore = create<EditorStore>((set) => ({
+export const useEditorStore = create<EditorStore>((set, get) => ({
   ...initialEditorState,
   setViewMode: (nextViewMode) => {
     const prevSelection = useInteractionStore.getState().selection;
@@ -752,9 +760,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
         x: source.x + 80,
         y: source.y + 80,
         faces: source.faces.map((face) => ({
-          ...face,
-          id: newEntityId(),
-          mirrorSourceFaceId: null,
+          ...synchronizeRackFaceRelationship({
+            ...face,
+            id: newEntityId(),
+            relationshipMode: 'independent',
+            mirrorSourceFaceId: null
+          }),
           sections: face.sections.map((section) => ({
             ...section,
             id: newEntityId(),
@@ -1084,7 +1095,15 @@ export const useEditorStore = create<EditorStore>((set) => ({
           kind: 'single' as RackKind,
           faces: rack.faces.map((face) =>
             face.side === 'B'
-              ? { ...face, enabled: false, isMirrored: false, mirrorSourceFaceId: null, sections: [] }
+              ? {
+                  ...synchronizeRackFaceRelationship({
+                    ...face,
+                    relationshipMode: 'independent',
+                    mirrorSourceFaceId: null
+                  }),
+                  enabled: false,
+                  sections: []
+                }
               : face
           )
         })),
@@ -1103,7 +1122,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
                 return { ...face, faceLength: length };
               }
 
-              if (side === 'A' && face.side === 'B' && face.isMirrored) {
+              if (side === 'A' && face.side === 'B' && resolveRackFaceRelationshipMode(face) === 'mirrored') {
                 return { ...face, faceLength: undefined };
               }
 
@@ -1113,7 +1132,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
         ),
       });
     }),
-  setFaceBMode: (rackId, mode) =>
+  setFaceBRelationship: (rackId, mode, options) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
@@ -1135,37 +1154,32 @@ export const useEditorStore = create<EditorStore>((set) => ({
             }))
           }));
 
-          let nextFaceB: RackFace = faceB;
-
-          if (mode === 'mirror') {
+          let nextFaceB: RackFace;
+          if (mode === 'mirrored') {
             nextFaceB = {
-              ...faceB,
+              ...synchronizeRackFaceRelationship({
+                ...faceB,
+                relationshipMode: 'mirrored',
+                mirrorSourceFaceId: faceA.id
+              }),
               enabled: true,
-              isMirrored: true,
-              mirrorSourceFaceId: faceA.id,
               faceLength: undefined,
               slotNumberingDirection: 'rtl' as SlotNumberingDirection,
               sections: []
             };
-          }
-
-          if (mode === 'copy') {
+          } else {
+            const initFrom = options?.initFrom ?? 'copy';
             nextFaceB = {
-              ...faceB,
+              ...synchronizeRackFaceRelationship({
+                ...faceB,
+                relationshipMode: 'independent',
+                mirrorSourceFaceId: null
+              }),
               enabled: true,
-              isMirrored: false,
-              mirrorSourceFaceId: null,
-              sections: sectionsCopy
-            };
-          }
-
-          if (mode === 'scratch') {
-            nextFaceB = {
-              ...faceB,
-              enabled: true,
-              isMirrored: false,
-              mirrorSourceFaceId: null,
-              sections: [buildEmptySection('B', 1, 3, faceB.faceLength ?? rack.totalLength)]
+              sections:
+                initFrom === 'scratch'
+                  ? [buildEmptySection('B', 1, 3, faceB.faceLength ?? rack.totalLength)]
+                  : sectionsCopy
             };
           }
 
@@ -1174,9 +1188,22 @@ export const useEditorStore = create<EditorStore>((set) => ({
             kind: 'paired' as RackKind,
             faces: rack.faces.map((face) => (face.side === 'B' ? nextFaceB : face))
           };
-        }),
+        })
       });
     }),
+  setFaceBMode: (rackId, mode) => {
+    if (mode === 'mirror') {
+      get().setFaceBRelationship(rackId, 'mirrored');
+      return;
+    }
+
+    if (mode === 'copy') {
+      get().setFaceBRelationship(rackId, 'independent', { initFrom: 'copy' });
+      return;
+    }
+
+    get().setFaceBRelationship(rackId, 'independent', { initFrom: 'scratch' });
+  },
   alignRacksHorizontal: (rackIds) =>
     set((state) => {
       if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
