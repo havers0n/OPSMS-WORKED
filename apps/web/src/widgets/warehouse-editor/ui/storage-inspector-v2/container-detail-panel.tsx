@@ -1,4 +1,5 @@
 import type { LocationStorageSnapshotRow, Product } from '@wos/domain';
+import { LocationAddress } from '@/entities/location/ui/location-address';
 import { InspectorFooter, SectionHeader } from './shared';
 
 type ContainerDetailPanelProps = {
@@ -56,13 +57,11 @@ export function ContainerDetailPanel({
         <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2" aria-label="Back to cell overview">
           ← Back
         </button>
-        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
-          <span>{rackDisplayCode}</span>
-          <span className="text-gray-300">/</span>
-          <span>Level {activeLevel}</span>
-          <span className="text-gray-300">/</span>
-          <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
-        </div>
+        <LocationAddress
+          rackDisplayCode={rackDisplayCode}
+          activeLevel={activeLevel}
+          locationCode={locationCode}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto">

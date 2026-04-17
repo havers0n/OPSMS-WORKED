@@ -1,5 +1,7 @@
 import type { LocationStorageSnapshotRow } from '@wos/domain';
-import { InspectorFooter, SectionHeader, StatusBadge } from './shared';
+import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
+import { LocationAddress } from '@/entities/location/ui/location-address';
+import { InspectorFooter, SectionHeader } from './shared';
 
 type GroupedContainer = {
   containerId: string;
@@ -36,19 +38,17 @@ export function CellOverviewPanel({
   return (
     <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label={`Location inspector: ${locationCode}`}>
       <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
-        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
-          <span>{rackDisplayCode}</span>
-          <span className="text-gray-300">/</span>
-          <span>Level {activeLevel}</span>
-          <span className="text-gray-300">/</span>
-          <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
-        </div>
+        <LocationAddress
+          rackDisplayCode={rackDisplayCode}
+          activeLevel={activeLevel}
+          locationCode={locationCode}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <SectionHeader title="Status" />
         <div className="px-4 py-3 border-b border-gray-200 space-y-2">
-          <StatusBadge occupied={isOccupied} />
+          <CellStatusChip occupied={isOccupied} />
           {locationType && (
             <div className="text-xs text-gray-600">
               <span className="text-gray-400">Type:</span> {locationType.replace('_', ' ')}
