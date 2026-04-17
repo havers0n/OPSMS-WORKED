@@ -2,6 +2,7 @@ import { resolveRackFaceRelationshipMode } from '@wos/domain';
 import type { Rack, RackFace } from '@wos/domain';
 import { useUpdateFaceConfig } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { NumberingPanel } from './numbering-panel';
+import { AddressAnatomy } from './address-anatomy';
 
 const MAX_PREVIEW_ADDRESSES = 6;
 
@@ -29,6 +30,8 @@ export function AddressingTask({
 
   return (
     <div className="flex flex-col gap-4 px-5 py-5">
+      <AddressAnatomy faceA={faceA} faceB={faceB} />
+
       <div className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 text-sm text-slate-600 shadow-sm">
         Numbering controls live here. Addresses shown below are a <strong>preview</strong> derived
         from the current draft — they are not a committed address record.
