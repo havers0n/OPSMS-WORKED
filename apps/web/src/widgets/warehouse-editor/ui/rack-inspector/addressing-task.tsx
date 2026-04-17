@@ -3,6 +3,7 @@ import type { Rack, RackFace } from '@wos/domain';
 import { useUpdateFaceConfig } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { NumberingPanel } from './numbering-panel';
 import { AddressAnatomy } from './address-anatomy';
+import { SlotDirectionVisual } from './slot-direction-visual';
 
 const MAX_PREVIEW_ADDRESSES = 6;
 
@@ -38,23 +39,29 @@ export function AddressingTask({
       </div>
 
       {faceA && (
-        <NumberingPanel
-          rackId={rack.id}
-          side="A"
-          slotNumberingDirection={faceA.slotNumberingDirection}
-          disabled={readOnly}
-          onUpdate={updateFaceConfig}
-        />
+        <>
+          <NumberingPanel
+            rackId={rack.id}
+            side="A"
+            slotNumberingDirection={faceA.slotNumberingDirection}
+            disabled={readOnly}
+            onUpdate={updateFaceConfig}
+          />
+          <SlotDirectionVisual face={faceA} />
+        </>
       )}
 
       {faceB && !isMirrored && faceBConfigured && (
-        <NumberingPanel
-          rackId={rack.id}
-          side="B"
-          slotNumberingDirection={faceB.slotNumberingDirection}
-          disabled={readOnly}
-          onUpdate={updateFaceConfig}
-        />
+        <>
+          <NumberingPanel
+            rackId={rack.id}
+            side="B"
+            slotNumberingDirection={faceB.slotNumberingDirection}
+            disabled={readOnly}
+            onUpdate={updateFaceConfig}
+          />
+          <SlotDirectionVisual face={faceB} />
+        </>
       )}
 
       {isMirrored && (
