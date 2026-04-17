@@ -1,7 +1,7 @@
 import { generatePreviewCells, resolveRackFaceRelationshipMode, validateLayoutDraft } from '@wos/domain';
 import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
 import { AlertTriangle, ChevronLeft, ChevronRight, X, XCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import {
   useDraftDirtyState,
@@ -9,6 +9,7 @@ import {
   useObjectWorkContext,
   useSelectedRackId,
   useSetObjectWorkContext,
+  useUpdateRackGeneral,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
@@ -153,6 +154,75 @@ function validationSummary(issues: LayoutValidationIssue[]) {
   const errors = issues.filter((i) => i.severity === 'error');
   const warnings = issues.filter((i) => i.severity === 'warning');
   return { errors, warnings, hasIssues: issues.length > 0 };
+}
+
+function RackHeaderDisplayCode({ rack, editable }: { rack: Rack; editable: boolean }) {
+  const updateRackGeneral = useUpdateRackGeneral();
+  const [isEditingDisplayCode, setIsEditingDisplayCode] = useState(false);
+  const [displayCodeDraft, setDisplayCodeDraft] = useState(rack.displayCode);
+  const displayCodeInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setDisplayCodeDraft(rack.displayCode);
+    setIsEditingDisplayCode(false);
+  }, [rack.id, rack.displayCode]);
+
+  useEffect(() => {
+    if (!isEditingDisplayCode) return;
+    displayCodeInputRef.current?.focus();
+    displayCodeInputRef.current?.select();
+  }, [isEditingDisplayCode]);
+
+  const commitDisplayCodeEdit = () => {
+    if (displayCodeDraft !== rack.displayCode) {
+      updateRackGeneral(rack.id, { displayCode: displayCodeDraft });
+    }
+    setIsEditingDisplayCode(false);
+  };
+
+  const cancelDisplayCodeEdit = () => {
+    setDisplayCodeDraft(rack.displayCode);
+    setIsEditingDisplayCode(false);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 text-xl font-semibold text-slate-900">
+      <span>Rack</span>
+      {editable ? (
+        isEditingDisplayCode ? (
+          <input
+            ref={displayCodeInputRef}
+            data-testid="rack-inspector-header-display-code-input"
+            value={displayCodeDraft}
+            onChange={(event) => setDisplayCodeDraft(event.target.value)}
+            onBlur={commitDisplayCodeEdit}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                commitDisplayCodeEdit();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelDisplayCodeEdit();
+              }
+            }}
+            className="h-8 w-16 rounded-md border border-[var(--border-muted)] bg-white px-2 py-1 text-base font-semibold text-slate-900 shadow-sm outline-none focus:border-slate-400"
+          />
+        ) : (
+          <button
+            type="button"
+            data-testid="rack-inspector-header-display-code-button"
+            onClick={() => setIsEditingDisplayCode(true)}
+            className="rounded-md border border-transparent px-2 py-1 text-base font-semibold text-slate-900 transition-colors hover:border-[var(--border-muted)] hover:bg-white"
+          >
+            {rack.displayCode}
+          </button>
+        )
+      ) : (
+        <span data-testid="rack-inspector-header-display-code-readonly">{rack.displayCode}</span>
+      )}
+    </div>
+  );
 }
 
 function ValidationStrip({ issues }: { issues: LayoutValidationIssue[] }) {
@@ -331,7 +401,7 @@ export function RackInspector({
 
         <div className="px-5 pt-2 pb-3">
           <div className="min-w-0">
-            <div className="text-xl font-semibold text-slate-900">Rack {rack.displayCode}</div>
+            <RackHeaderDisplayCode rack={rack} editable={isLayoutEditable} />
             {showTaskNav && (
               <InspectorTaskNav value={objectWorkContext} onChange={setObjectWorkContext} />
             )}

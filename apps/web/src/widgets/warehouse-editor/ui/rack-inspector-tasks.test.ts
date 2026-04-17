@@ -109,6 +109,18 @@ function clickTab(
   });
 }
 
+function clickTopologyOption(
+  renderer: TestRenderer.ReactTestRenderer,
+  topology: 'single' | 'mirrored' | 'independent'
+) {
+  const control = renderer.root.findByProps({
+    'data-testid': `structure-topology-option-${topology}`
+  });
+  act(() => {
+    control.props.onClick();
+  });
+}
+
 function findOrdinalRow(scope: TestRenderer.ReactTestInstance, ordinal: number) {
   const label = String(ordinal).padStart(2, '0');
   const ordinalNode = scope.findAll(
@@ -181,7 +193,7 @@ describe('RackInspector tasks', () => {
     expect(summaryText(renderer)).toContain('0');
     expect(summaryText(renderer)).toContain('errors');
     expect(summaryText(renderer)).toContain('warnings');
-    expect(hasText(renderer, 'Display Code')).toBe(false);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(1);
     expect(hasText(renderer, 'Generate structure')).toBe(false);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
     expect(hasText(renderer, 'Face B Relationship')).toBe(false);
@@ -216,23 +228,16 @@ describe('RackInspector tasks', () => {
       'structure-section-policies'
     ]);
 
-    const topologyOrder = renderer.root
-      .findAll(
-        (node) =>
-          node.props['data-testid'] === 'structure-topology-identity' ||
-          node.props['data-testid'] === 'structure-topology-face-b-control'
-      )
-      .map((node) => node.props['data-testid']);
-    expect(topologyOrder).toEqual([
-      'structure-topology-identity',
-      'structure-topology-face-b-control'
-    ]);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-topology-face-configuration' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-topology-option-single' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-topology-option-mirrored' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-topology-option-independent' })).toHaveLength(1);
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-policies-face-defaults' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-policies-rack-apply' })).toHaveLength(1);
-    expect(hasText(renderer, 'Display Code')).toBe(true);
-    expect(hasText(renderer, 'Kind')).toBe(true);
+    expect(hasText(renderer, 'Display Code')).toBe(false);
+    expect(hasText(renderer, 'Kind')).toBe(false);
     expect(hasText(renderer, 'Face A')).toBe(true);
     const faceStructureOrder = renderer.root
       .findAll(
@@ -266,6 +271,8 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
     // face-mode moved out
     expect(hasText(renderer, 'Face B Relationship')).toBe(false);
+    expect(hasText(renderer, 'Mirror A')).toBe(false);
+    expect(hasText(renderer, 'Remove Face B')).toBe(false);
     // geometry not in structure
     expect(hasText(renderer, 'Position X')).toBe(false);
     expect(hasText(renderer, 'Rotate 90°')).toBe(false);
@@ -334,7 +341,7 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Preview Addresses')).toBe(true);
     // structure content should not be in addressing
     expect(hasText(renderer, 'Generate structure')).toBe(false);
-    expect(hasText(renderer, 'Display Code')).toBe(false);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(1);
     // geometry not in addressing
     expect(hasText(renderer, 'Position X')).toBe(false);
   });
@@ -350,7 +357,7 @@ describe('RackInspector tasks', () => {
     const renderer = renderInspector(createWorkspace(draft));
 
     expect(useEditorStore.getState().objectWorkContext).toBe('face-mode');
-    expect(hasText(renderer, 'Display Code')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(1);
     expect(hasText(renderer, 'Generate structure')).toBe(true);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
     expect(hasText(renderer, 'Face B Relationship')).toBe(false);
@@ -373,12 +380,20 @@ describe('RackInspector tasks', () => {
       rotateButton.props.onClick();
     });
 
-    clickTab(renderer, 'structure');
-    const displayCodeInput = renderer.root.findAll(
-      (node) => node.type === 'input' && node.props.value === '01'
-    )[0];
+    const displayCodeButton = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-button'
+    });
+    act(() => {
+      displayCodeButton.props.onClick();
+    });
+    const displayCodeInput = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-input'
+    });
     act(() => {
       displayCodeInput.props.onChange({ target: { value: '77' } });
+    });
+    act(() => {
+      displayCodeInput.props.onKeyDown({ key: 'Enter', preventDefault: () => undefined });
     });
 
     expect(useEditorStore.getState().draft?.racks[rackId].rotationDeg).toBe(90);
@@ -425,8 +440,147 @@ describe('RackInspector tasks', () => {
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
     expect(hasText(renderer, 'Position X')).toBe(true);
-    expect(hasText(renderer, 'Display Code')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-readonly' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(0);
     expect(hasText(renderer, 'Face A')).toBe(true);
+  });
+
+  it('uses canonical topology control only and preserves locked transition semantics', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.faces[0].sections = [
+      {
+        id: 'section-a-1',
+        ordinal: 1,
+        length: 2.5,
+        levels: [{ id: 'level-a-1', ordinal: 1, slotCount: 5 }]
+      },
+      {
+        id: 'section-a-2',
+        ordinal: 2,
+        length: 2.5,
+        levels: [{ id: 'level-a-2', ordinal: 2, slotCount: 7 }]
+      }
+    ];
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    expect(hasText(renderer, 'Kind')).toBe(false);
+    expect(hasText(renderer, 'Mirror A')).toBe(false);
+    expect(hasText(renderer, 'Remove Face B')).toBe(false);
+
+    clickTopologyOption(renderer, 'independent');
+    let updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    let updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
+    expect(updatedRack?.kind).toBe('paired');
+    expect(updatedFaceB?.enabled).toBe(true);
+    expect(updatedFaceB?.relationshipMode).toBe('independent');
+    expect(updatedFaceB?.sections).toHaveLength(1);
+    expect(updatedFaceB?.sections[0]?.levels).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
+
+    const independentSnapshot = structuredClone(updatedRack);
+    clickTopologyOption(renderer, 'independent');
+    updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    expect(updatedRack).toEqual(independentSnapshot);
+
+    clickTopologyOption(renderer, 'mirrored');
+    updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
+    expect(updatedRack?.kind).toBe('paired');
+    expect(updatedFaceB?.relationshipMode).toBe('mirrored');
+    expect(updatedFaceB?.sections).toEqual([]);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
+
+    clickTopologyOption(renderer, 'independent');
+    updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    const updatedFaceA = updatedRack?.faces.find((face) => face.side === 'A');
+    updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
+    expect(updatedFaceB?.relationshipMode).toBe('independent');
+    expect(updatedFaceB?.sections).toHaveLength(updatedFaceA?.sections.length ?? 0);
+    expect(updatedFaceB?.sections[0]?.levels.length).toBe(updatedFaceA?.sections[0]?.levels.length);
+    expect(updatedFaceB?.sections[0]?.id).not.toBe(updatedFaceA?.sections[0]?.id);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
+
+    clickTopologyOption(renderer, 'single');
+    updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
+    expect(updatedRack?.kind).toBe('single');
+    expect(updatedFaceB?.enabled).toBe(false);
+    expect(updatedFaceB?.sections).toEqual([]);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
+  });
+
+  it('supports header display code enter/blur commit and escape cancel', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    expect(hasText(renderer, 'Display Code')).toBe(false);
+
+    const displayCodeButton = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-button'
+    });
+    act(() => {
+      displayCodeButton.props.onClick();
+    });
+    let displayCodeInput = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-input'
+    });
+
+    act(() => {
+      displayCodeInput.props.onChange({ target: { value: '11' } });
+    });
+    act(() => {
+      displayCodeInput.props.onKeyDown({ key: 'Enter', preventDefault: () => undefined });
+    });
+    expect(useEditorStore.getState().draft?.racks[rackId].displayCode).toBe('11');
+
+    const displayCodeButtonAfterEnter = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-button'
+    });
+    act(() => {
+      displayCodeButtonAfterEnter.props.onClick();
+    });
+    displayCodeInput = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-input'
+    });
+    act(() => {
+      displayCodeInput.props.onChange({ target: { value: '22' } });
+    });
+    act(() => {
+      displayCodeInput.props.onBlur();
+    });
+    expect(useEditorStore.getState().draft?.racks[rackId].displayCode).toBe('22');
+
+    const displayCodeButtonAfterBlur = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-button'
+    });
+    act(() => {
+      displayCodeButtonAfterBlur.props.onClick();
+    });
+    displayCodeInput = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-header-display-code-input'
+    });
+    act(() => {
+      displayCodeInput.props.onChange({ target: { value: '99' } });
+    });
+    act(() => {
+      displayCodeInput.props.onKeyDown({ key: 'Escape', preventDefault: () => undefined });
+    });
+    expect(useEditorStore.getState().draft?.racks[rackId].displayCode).toBe('22');
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-input' })).toHaveLength(0);
   });
 
   it('does not render level pager in rack inspector', () => {

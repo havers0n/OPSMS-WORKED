@@ -1,28 +1,50 @@
 import type { Rack, RackFace } from '@wos/domain';
 import { resolveRackFaceRelationshipMode } from '@wos/domain';
 
+export type TopologyChoice = 'single' | 'mirrored' | 'independent';
+
 export function FaceModeIsometric({
   rack,
-  faceB
+  faceB,
+  readOnly,
+  onSelectTopology
 }: {
   rack: Rack;
   faceB: RackFace | null;
+  readOnly: boolean;
+  onSelectTopology: (topology: TopologyChoice) => void;
 }) {
   const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
   const isMirrored = !!faceB && faceBRelationshipMode === 'mirrored';
   const faceBConfigured = !!faceB && (isMirrored || faceB.sections.length > 0);
 
-  const STATE = !faceBConfigured ? 'single' : isMirrored ? 'mirrored' : 'independent';
+  const currentTopology: TopologyChoice = !faceBConfigured
+    ? 'single'
+    : isMirrored
+      ? 'mirrored'
+      : 'independent';
+
+  const handleSelect = (topology: TopologyChoice) => {
+    if (readOnly) return;
+    onSelectTopology(topology);
+  };
 
   return (
-    <div className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 shadow-sm">
+    <div
+      data-testid="structure-topology-face-configuration"
+      className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 shadow-sm"
+    >
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
         Face Configuration
       </div>
 
       <svg viewBox="0 0 280 160" className="w-full bg-slate-50 rounded-lg" style={{ maxHeight: '150px' }}>
         {/* Single Face */}
-        <g>
+        <g
+          data-testid="structure-topology-option-single"
+          onClick={() => handleSelect('single')}
+          className={readOnly ? undefined : 'cursor-pointer'}
+        >
           <text x="35" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
             Single
           </text>
@@ -31,9 +53,9 @@ export function FaceModeIsometric({
             y="30"
             width="50"
             height="90"
-            fill={STATE === 'single' ? '#e0e7ff' : '#f1f5f9'}
-            stroke={STATE === 'single' ? '#6366f1' : '#cbd5e1'}
-            strokeWidth={STATE === 'single' ? 2 : 1}
+            fill={currentTopology === 'single' ? '#e0e7ff' : '#f1f5f9'}
+            stroke={currentTopology === 'single' ? '#6366f1' : '#cbd5e1'}
+            strokeWidth={currentTopology === 'single' ? 2 : 1}
             rx="2"
           />
           <text x="35" y="77" className="text-[10px] font-semibold fill-slate-600" textAnchor="middle">
@@ -45,7 +67,11 @@ export function FaceModeIsometric({
         </g>
 
         {/* Mirrored */}
-        <g>
+        <g
+          data-testid="structure-topology-option-mirrored"
+          onClick={() => handleSelect('mirrored')}
+          className={readOnly ? undefined : 'cursor-pointer'}
+        >
           <text x="140" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
             Mirrored
           </text>
@@ -54,9 +80,9 @@ export function FaceModeIsometric({
             y="30"
             width="25"
             height="90"
-            fill={STATE === 'mirrored' ? '#dbeafe' : '#f1f5f9'}
-            stroke={STATE === 'mirrored' ? '#3b82f6' : '#cbd5e1'}
-            strokeWidth={STATE === 'mirrored' ? 2 : 1}
+            fill={currentTopology === 'mirrored' ? '#dbeafe' : '#f1f5f9'}
+            stroke={currentTopology === 'mirrored' ? '#3b82f6' : '#cbd5e1'}
+            strokeWidth={currentTopology === 'mirrored' ? 2 : 1}
             rx="2"
           />
           <text x="127" y="77" className="text-[9px] font-semibold fill-slate-600" textAnchor="middle">
@@ -67,9 +93,9 @@ export function FaceModeIsometric({
             y="30"
             width="25"
             height="90"
-            fill={STATE === 'mirrored' ? '#dbeafe' : '#f1f5f9'}
-            stroke={STATE === 'mirrored' ? '#3b82f6' : '#cbd5e1'}
-            strokeWidth={STATE === 'mirrored' ? 2 : 1}
+            fill={currentTopology === 'mirrored' ? '#dbeafe' : '#f1f5f9'}
+            stroke={currentTopology === 'mirrored' ? '#3b82f6' : '#cbd5e1'}
+            strokeWidth={currentTopology === 'mirrored' ? 2 : 1}
             rx="2"
             opacity="0.6"
           />
@@ -83,7 +109,11 @@ export function FaceModeIsometric({
         </g>
 
         {/* Independent */}
-        <g>
+        <g
+          data-testid="structure-topology-option-independent"
+          onClick={() => handleSelect('independent')}
+          className={readOnly ? undefined : 'cursor-pointer'}
+        >
           <text x="245" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
             Independent
           </text>
@@ -92,9 +122,9 @@ export function FaceModeIsometric({
             y="30"
             width="25"
             height="90"
-            fill={STATE === 'independent' ? '#fef3c7' : '#f1f5f9'}
-            stroke={STATE === 'independent' ? '#f59e0b' : '#cbd5e1'}
-            strokeWidth={STATE === 'independent' ? 2 : 1}
+            fill={currentTopology === 'independent' ? '#fef3c7' : '#f1f5f9'}
+            stroke={currentTopology === 'independent' ? '#f59e0b' : '#cbd5e1'}
+            strokeWidth={currentTopology === 'independent' ? 2 : 1}
             rx="2"
           />
           <text x="232" y="77" className="text-[9px] font-semibold fill-slate-600" textAnchor="middle">
@@ -105,9 +135,9 @@ export function FaceModeIsometric({
             y="30"
             width="25"
             height="90"
-            fill={STATE === 'independent' ? '#fef3c7' : '#f1f5f9'}
-            stroke={STATE === 'independent' ? '#f59e0b' : '#cbd5e1'}
-            strokeWidth={STATE === 'independent' ? 2 : 1}
+            fill={currentTopology === 'independent' ? '#fef3c7' : '#f1f5f9'}
+            stroke={currentTopology === 'independent' ? '#f59e0b' : '#cbd5e1'}
+            strokeWidth={currentTopology === 'independent' ? 2 : 1}
             rx="2"
           />
           <text x="257" y="77" className="text-[9px] font-semibold fill-slate-600" textAnchor="middle">

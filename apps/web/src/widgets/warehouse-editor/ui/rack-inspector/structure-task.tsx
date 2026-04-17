@@ -9,10 +9,9 @@ import {
   useResetFaceB,
   useSetFaceBRelationship
 } from '@/widgets/warehouse-editor/model/editor-selectors';
-import { StructureIdentityPanel } from './structure-identity-panel';
 import { LevelDefaultsPanel } from './level-defaults-panel';
 import { RackLevelDefaultsPanel } from './rack-level-defaults-panel';
-import { FaceModeIsometric } from './face-mode-isometric';
+import { FaceModeIsometric, type TopologyChoice } from './face-mode-isometric';
 import { PolicyLegendVisual } from './policy-legend-visual';
 
 function cn(...classes: (string | false | undefined | null)[]) {
@@ -35,88 +34,6 @@ function StructureSection({
       </div>
       {children}
     </section>
-  );
-}
-
-function FaceBControl({
-  rack,
-  faceB,
-  readOnly
-}: {
-  rack: Rack;
-  faceB: RackFace | null;
-  readOnly: boolean;
-}) {
-  const setFaceBRelationship = useSetFaceBRelationship();
-  const resetFaceB = useResetFaceB();
-
-  const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
-  const isMirrored = !!faceB && faceBRelationshipMode === 'mirrored';
-  const faceBConfigured = !!faceB && (isMirrored || faceB.sections.length > 0);
-
-  return (
-    <div
-      data-testid="structure-topology-face-b-control"
-      className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4"
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Face B
-        </div>
-        {faceBConfigured && !readOnly && (
-          <button
-            type="button"
-            onClick={() => resetFaceB(rack.id)}
-            className="text-[11px] text-red-400 hover:text-red-600"
-          >
-            Remove
-          </button>
-        )}
-      </div>
-      <div className="flex gap-1 rounded-xl border border-[var(--border-muted)] bg-white p-1">
-        {!faceBConfigured && (
-          <button
-            type="button"
-            disabled
-            className="flex-1 rounded-lg px-3 py-2 text-xs font-medium bg-slate-900 text-white shadow-sm"
-          >
-            Off
-          </button>
-        )}
-        <button
-          type="button"
-          disabled={readOnly}
-          onClick={() => setFaceBRelationship(rack.id, 'mirrored')}
-          className={cn(
-            'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed',
-            faceBConfigured && isMirrored
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-700 disabled:text-slate-400'
-          )}
-        >
-          Mirror A
-        </button>
-        <button
-          type="button"
-          disabled={readOnly}
-          onClick={() => {
-            if (!faceBConfigured) {
-              setFaceBRelationship(rack.id, 'independent', { initFrom: 'scratch' });
-            } else if (isMirrored) {
-              setFaceBRelationship(rack.id, 'independent', { initFrom: 'copy' });
-            }
-          }}
-          className={cn(
-            'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed',
-            faceBConfigured && !isMirrored
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-700 disabled:text-slate-400'
-          )}
-        >
-          Independent
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -193,6 +110,8 @@ export function StructureTask({
   readOnly: boolean;
 }) {
   const [activeFaceSide, setActiveFaceSide] = useState<'A' | 'B'>('A');
+  const resetFaceB = useResetFaceB();
+  const setFaceBRelationship = useSetFaceBRelationship();
 
   const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
   const isMirrored = !!faceB && faceBRelationshipMode === 'mirrored';
@@ -203,14 +122,36 @@ export function StructureTask({
   const activeFaceData = effectiveActiveFace === 'A' ? faceA : faceB;
   const policyFace = showFaceTabs ? activeFaceData : faceA;
 
+  const handleTopologySelect = (topology: TopologyChoice) => {
+    if (topology === 'single') {
+      resetFaceB(rack.id);
+      return;
+    }
+
+    if (topology === 'mirrored') {
+      setFaceBRelationship(rack.id, 'mirrored');
+      return;
+    }
+
+    if (!faceBConfigured) {
+      setFaceBRelationship(rack.id, 'independent', { initFrom: 'scratch' });
+      return;
+    }
+
+    if (isMirrored) {
+      setFaceBRelationship(rack.id, 'independent', { initFrom: 'copy' });
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
       <StructureSection title="Topology" testId="structure-section-topology">
-        <div data-testid="structure-topology-identity">
-          <StructureIdentityPanel rack={rack} readOnly={readOnly} />
-        </div>
-        <FaceModeIsometric rack={rack} faceB={faceB} />
-        <FaceBControl rack={rack} faceB={faceB} readOnly={readOnly} />
+        <FaceModeIsometric
+          rack={rack}
+          faceB={faceB}
+          readOnly={readOnly}
+          onSelectTopology={handleTopologySelect}
+        />
       </StructureSection>
 
       <StructureSection title="Face Structure" testId="structure-section-face-structure">
