@@ -4,7 +4,8 @@ import { useUpdateRackLevelStructuralDefaultRole } from '@/widgets/warehouse-edi
 type StructuralRole = 'primary_pick' | 'reserve' | 'none';
 type RackLevelRowState =
   | { kind: 'uniform'; role: StructuralRole }
-  | { kind: 'mixed'; roles: StructuralRole[] };
+  | { kind: 'mixed'; roles: StructuralRole[] }
+  | { kind: 'empty' };
 
 function RoleButton({
   label,
@@ -34,10 +35,19 @@ function RoleButton({
 }
 
 function resolveLevelRoleState(faces: RackFace[], ordinal: number): RackLevelRowState {
-  const roles = faces.map((face) => {
-    const sampleLevel = face.sections.flatMap((section) => section.levels).find((level) => level.ordinal === ordinal);
-    return sampleLevel?.structuralDefaultRole ?? 'none';
-  });
+  const roles = faces
+    .map((face) => {
+      const sampleLevel = face.sections
+        .flatMap((section) => section.levels)
+        .find((level) => level.ordinal === ordinal);
+      if (!sampleLevel) return null;
+      return sampleLevel.structuralDefaultRole ?? 'none';
+    })
+    .filter((role): role is StructuralRole => role !== null);
+
+  if (roles.length === 0) {
+    return { kind: 'empty' };
+  }
 
   const unique = Array.from(new Set(roles));
   if (unique.length === 1) {
@@ -81,7 +91,7 @@ export function RackLevelDefaultsPanel({
           Apply role to all faces at this level
         </h3>
         <p className="mt-1 text-xs text-slate-500">
-          Applies the selected role to all editable faces at this level.
+          Applies the selected role to all editable faces that include this level.
         </p>
         <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
           Reapplying here replaces differing face-level defaults at this level.
@@ -103,6 +113,7 @@ export function RackLevelDefaultsPanel({
         <div className="divide-y divide-[var(--border-muted)]">
           {ordinals.map((ordinal) => {
             const state = resolveLevelRoleState(editableFaces, ordinal);
+            if (state.kind === 'empty') return null;
             const currentRole = state.kind === 'uniform' ? state.role : null;
 
             return (

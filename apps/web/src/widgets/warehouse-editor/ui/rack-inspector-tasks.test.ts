@@ -109,6 +109,37 @@ function clickTab(
   });
 }
 
+function findOrdinalRow(scope: TestRenderer.ReactTestInstance, ordinal: number) {
+  const label = String(ordinal).padStart(2, '0');
+  const ordinalNode = scope.findAll(
+    (node) =>
+      node.type === 'span' &&
+      typeof node.props.className === 'string' &&
+      node.props.className.includes('font-mono') &&
+      nodeText(node).trim() === label
+  )[0];
+
+  if (!ordinalNode?.parent) {
+    throw new Error(`Could not find row for ordinal ${label}`);
+  }
+
+  return ordinalNode.parent;
+}
+
+function findRoleButton(row: TestRenderer.ReactTestInstance, label: 'Pick' | 'Res' | 'None') {
+  const button = row.findAll(
+    (node) => node.type === 'button' && node.children.some((child) => child === label)
+  )[0];
+  if (!button) {
+    throw new Error(`Could not find "${label}" role button`);
+  }
+  return button;
+}
+
+function isRoleButtonActive(button: TestRenderer.ReactTestInstance) {
+  return typeof button.props.className === 'string' && button.props.className.includes('ring-1 ring-black/5');
+}
+
 afterEach(() => {
   resetStores();
   vi.clearAllMocks();
@@ -422,7 +453,7 @@ describe('RackInspector tasks', () => {
     clickTab(renderer, 'structure');
 
     expect(hasText(renderer, 'Apply role to all faces at this level')).toBe(true);
-    expect(hasText(renderer, 'Applies the selected role to all editable faces at this level.')).toBe(true);
+    expect(hasText(renderer, 'Applies the selected role to all editable faces that include this level.')).toBe(true);
     expect(hasText(renderer, 'Reapplying here replaces differing face-level defaults at this level.')).toBe(true);
     expect(hasText(renderer, 'Default-role state')).toBe(true);
     expect(hasText(renderer, 'Aligned')).toBe(true);
@@ -483,6 +514,213 @@ describe('RackInspector tasks', () => {
     expect(summaryText(renderer)).toContain('Paired / Independent');
     expect(summaryText(renderer)).toContain('Default roles');
     expect(summaryText(renderer)).toContain('Aligned');
+  });
+
+  it('single-face bulk apply sets aligned row with highlighted selected role', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    const rackApply = renderer.root.findByProps({ 'data-testid': 'structure-policies-rack-apply' });
+    const row01 = findOrdinalRow(rackApply, 1);
+    const resButton = findRoleButton(row01, 'Res');
+    act(() => {
+      resButton.props.onClick();
+    });
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    const faceA = updatedRack?.faces.find((face) => face.side === 'A');
+    const level1 = faceA?.sections.flatMap((section) => section.levels).find((level) => level.ordinal === 1);
+    expect(level1?.structuralDefaultRole).toBe('reserve');
+
+    const updatedRow01 = findOrdinalRow(rackApply, 1);
+    expect(nodeText(updatedRow01)).toContain('Aligned');
+    expect(nodeText(updatedRow01)).not.toContain('Mixed');
+    expect(isRoleButtonActive(findRoleButton(updatedRow01, 'Res'))).toBe(true);
+  });
+
+  it('mirrored bulk apply uses Face A scope and keeps aligned highlighted state', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].isMirrored = true;
+    rack.faces[1].relationshipMode = 'mirrored';
+    rack.faces[1].mirrorSourceFaceId = rack.faces[0].id;
+    rack.faces[1].sections = [];
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    const rackApply = renderer.root.findByProps({ 'data-testid': 'structure-policies-rack-apply' });
+    const row01 = findOrdinalRow(rackApply, 1);
+    const resButton = findRoleButton(row01, 'Res');
+    act(() => {
+      resButton.props.onClick();
+    });
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    const faceA = updatedRack?.faces.find((face) => face.side === 'A');
+    const faceB = updatedRack?.faces.find((face) => face.side === 'B');
+    const level1 = faceA?.sections.flatMap((section) => section.levels).find((level) => level.ordinal === 1);
+    expect(level1?.structuralDefaultRole).toBe('reserve');
+    expect(faceB?.sections).toEqual([]);
+
+    const updatedRow01 = findOrdinalRow(rackApply, 1);
+    expect(nodeText(updatedRow01)).toContain('Aligned');
+    expect(isRoleButtonActive(findRoleButton(updatedRow01, 'Res'))).toBe(true);
+  });
+
+  it('independent shared ordinal divergence becomes aligned and highlighted after bulk apply', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'independent';
+    rack.faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3, structuralDefaultRole: 'reserve' }]
+      }
+    ];
+    rack.faces[0].sections[0].levels[0].structuralDefaultRole = 'primary_pick';
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    const rackApply = renderer.root.findByProps({ 'data-testid': 'structure-policies-rack-apply' });
+    const row01 = findOrdinalRow(rackApply, 1);
+    expect(nodeText(row01)).toContain('Mixed');
+    expect(isRoleButtonActive(findRoleButton(row01, 'Pick'))).toBe(false);
+    expect(isRoleButtonActive(findRoleButton(row01, 'Res'))).toBe(false);
+    expect(isRoleButtonActive(findRoleButton(row01, 'None'))).toBe(false);
+
+    act(() => {
+      findRoleButton(row01, 'None').props.onClick();
+    });
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    const faceA = updatedRack?.faces.find((face) => face.side === 'A');
+    const faceB = updatedRack?.faces.find((face) => face.side === 'B');
+    const faceALevel1 = faceA?.sections.flatMap((section) => section.levels).find((level) => level.ordinal === 1);
+    const faceBLevel1 = faceB?.sections.flatMap((section) => section.levels).find((level) => level.ordinal === 1);
+    expect(faceALevel1?.structuralDefaultRole).toBe('none');
+    expect(faceBLevel1?.structuralDefaultRole).toBe('none');
+
+    const updatedRow01 = findOrdinalRow(rackApply, 1);
+    expect(nodeText(updatedRow01)).toContain('Aligned');
+    expect(nodeText(updatedRow01)).not.toContain('Mixed');
+    expect(isRoleButtonActive(findRoleButton(updatedRow01, 'None'))).toBe(true);
+  });
+
+  it('independent asymmetric ordinal excludes missing face from aggregate and stays alignable', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'independent';
+    rack.faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 2, slotCount: 3, structuralDefaultRole: 'reserve' }]
+      }
+    ];
+    rack.faces[0].sections[0].levels[0].structuralDefaultRole = 'reserve';
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    const rackApply = renderer.root.findByProps({ 'data-testid': 'structure-policies-rack-apply' });
+    const row01 = findOrdinalRow(rackApply, 1);
+    expect(nodeText(row01)).toContain('Aligned');
+    expect(nodeText(row01)).not.toContain('Mixed');
+    expect(isRoleButtonActive(findRoleButton(row01, 'Res'))).toBe(true);
+
+    act(() => {
+      findRoleButton(row01, 'Pick').props.onClick();
+    });
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    const faceA = updatedRack?.faces.find((face) => face.side === 'A');
+    const faceB = updatedRack?.faces.find((face) => face.side === 'B');
+    const faceALevel1 = faceA?.sections.flatMap((section) => section.levels).find((level) => level.ordinal === 1);
+    const faceBLevel1 = faceB?.sections.flatMap((section) => section.levels).find((level) => level.ordinal === 1);
+    expect(faceALevel1?.structuralDefaultRole).toBe('primary_pick');
+    expect(faceBLevel1).toBeUndefined();
+
+    const updatedRow01 = findOrdinalRow(rackApply, 1);
+    expect(nodeText(updatedRow01)).toContain('Aligned');
+    expect(isRoleButtonActive(findRoleButton(updatedRow01, 'Pick'))).toBe(true);
+  });
+
+  it('local face-level defaults still reflect active face truth while bulk row stays aggregate-based', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'independent';
+    rack.faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3, structuralDefaultRole: 'reserve' }]
+      }
+    ];
+    rack.faces[0].sections[0].levels[0].structuralDefaultRole = 'primary_pick';
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    const faceBButton = renderer.root.findByProps({ 'data-testid': 'structure-face-switch-B' });
+    act(() => {
+      faceBButton.props.onClick();
+    });
+
+    const bulkPanel = renderer.root.findByProps({ 'data-testid': 'structure-policies-rack-apply' });
+    const bulkRow01 = findOrdinalRow(bulkPanel, 1);
+    expect(nodeText(bulkRow01)).toContain('Mixed');
+    expect(isRoleButtonActive(findRoleButton(bulkRow01, 'Pick'))).toBe(false);
+    expect(isRoleButtonActive(findRoleButton(bulkRow01, 'Res'))).toBe(false);
+
+    const localPanel = renderer.root.findByProps({ 'data-testid': 'structure-policies-face-defaults' });
+    const localRow01 = findOrdinalRow(localPanel, 1);
+    expect(isRoleButtonActive(findRoleButton(localRow01, 'Res'))).toBe(true);
+    expect(isRoleButtonActive(findRoleButton(localRow01, 'Pick'))).toBe(false);
   });
 
   it('shows read-only inherited Level Defaults for mirrored Face B', () => {
