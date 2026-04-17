@@ -33,7 +33,7 @@ export function LevelDefaultsPanel({
   face,
   readOnly = false,
   heading = 'Face-level defaults',
-  description = 'Sets the default role for this face at this level.'
+  description = 'Applies only to this face at this level.'
 }: {
   rackId: string;
   face: RackFace;

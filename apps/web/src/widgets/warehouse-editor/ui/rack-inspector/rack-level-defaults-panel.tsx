@@ -81,14 +81,14 @@ export function RackLevelDefaultsPanel({
           Apply role to all faces at this level
         </h3>
         <p className="mt-1 text-xs text-slate-500">
-          This action applies the selected role to all editable faces at this level.
+          Applies the selected role to all editable faces at this level.
         </p>
-        <p className="mt-1 text-xs text-slate-500">
-          Reapplying at rack level overwrites face-level differences for this level.
+        <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
+          Reapplying here replaces differing face-level defaults at this level.
         </p>
         {isMirrored && (
           <p className="mt-1 text-xs text-blue-700">
-            Face B is mirrored; edits apply through Face A.
+            Face B is mirrored, so editable defaults are applied through Face A.
           </p>
         )}
       </div>
@@ -97,7 +97,7 @@ export function RackLevelDefaultsPanel({
         <div className="grid grid-cols-[52px_1fr_88px] items-center gap-2 border-b border-[var(--border-muted)] bg-[var(--surface-secondary)] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
           <span>#</span>
           <span>Structural Default Role</span>
-          <span className="text-right">State</span>
+          <span className="text-right">Default-role state</span>
         </div>
 
         <div className="divide-y divide-[var(--border-muted)]">
@@ -134,7 +134,7 @@ export function RackLevelDefaultsPanel({
                   {state.kind === 'mixed' ? (
                     <span className="rounded-md bg-amber-100 px-2 py-1 text-amber-700">Mixed</span>
                   ) : (
-                    <span className="text-slate-400">Uniform</span>
+                    <span className="text-slate-400">Aligned</span>
                   )}
                 </div>
               </div>

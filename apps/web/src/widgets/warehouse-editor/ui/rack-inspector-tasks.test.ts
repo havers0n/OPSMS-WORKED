@@ -205,6 +205,7 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Face A')).toBe(true);
     expect(hasText(renderer, 'Preset Generator')).toBe(true);
     expect(hasText(renderer, 'Face-level defaults')).toBe(true);
+    expect(hasText(renderer, 'Editing Face A defaults. Applies only to this face at this level.')).toBe(true);
     // addressing moved out
     expect(hasText(renderer, 'Numbering direction')).toBe(false);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
@@ -256,6 +257,7 @@ describe('RackInspector tasks', () => {
 
     expect(hasText(renderer, 'Face B')).toBe(true);
     expect(hasText(renderer, 'Face-level defaults')).toBe(true);
+    expect(hasText(renderer, 'Editing Face B defaults. Applies only to this face at this level.')).toBe(true);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
   });
 
@@ -394,8 +396,10 @@ describe('RackInspector tasks', () => {
     clickTab(renderer, 'structure');
 
     expect(hasText(renderer, 'Apply role to all faces at this level')).toBe(true);
-    expect(hasText(renderer, 'This action applies the selected role to all editable faces at this level.')).toBe(true);
-    expect(hasText(renderer, 'Reapplying at rack level overwrites face-level differences for this level.')).toBe(true);
+    expect(hasText(renderer, 'Applies the selected role to all editable faces at this level.')).toBe(true);
+    expect(hasText(renderer, 'Reapplying here replaces differing face-level defaults at this level.')).toBe(true);
+    expect(hasText(renderer, 'Default-role state')).toBe(true);
+    expect(hasText(renderer, 'Aligned')).toBe(true);
     expect(hasText(renderer, 'Pick')).toBe(true);
     expect(hasText(renderer, 'Res')).toBe(true);
     expect(hasText(renderer, 'None')).toBe(true);
@@ -480,15 +484,22 @@ describe('RackInspector tasks', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-policies-mirrored-face-b' })).toHaveLength(1);
     const policiesSection = renderer.root.findByProps({ 'data-testid': 'structure-section-policies' });
-    expect(nodeText(policiesSection)).toContain('Face B mirrors Face A');
-    expect(nodeText(policiesSection)).toContain('Face B is mirrored; edits apply through Face A.');
     expect(nodeText(policiesSection)).toContain(
-      'Face B is mirrored, so default roles are inherited from Face A.'
+      'Face B mirrors Face A. Face B defaults are inherited and read-only in mirrored mode.'
+    );
+    expect(nodeText(policiesSection)).toContain(
+      'Inherited from Face A. Edit Face A to change mirrored defaults.'
+    );
+    expect(nodeText(policiesSection)).toContain(
+      'Face B is mirrored, so editable defaults are applied through Face A.'
     );
 
-    expect(hasText(renderer, 'Face B mirrors Face A')).toBe(true);
-    expect(hasText(renderer, 'Face B is mirrored; edits apply through Face A.')).toBe(true);
-    expect(hasText(renderer, 'Face B is mirrored, so default roles are inherited from Face A.')).toBe(true);
+    expect(hasText(renderer, 'Face B inherited defaults')).toBe(true);
+    expect(
+      hasText(renderer, 'Face B mirrors Face A. Face B defaults are inherited and read-only in mirrored mode.')
+    ).toBe(true);
+    expect(hasText(renderer, 'Inherited from Face A. Edit Face A to change mirrored defaults.')).toBe(true);
+    expect(hasText(renderer, 'Face B is mirrored, so editable defaults are applied through Face A.')).toBe(true);
   });
 
   it('keeps task body stable when summary is collapsed and expanded', () => {

@@ -222,28 +222,15 @@ export function StructureTask({
       <StructureSection title="Policies" testId="structure-section-policies">
         <div data-testid="structure-policies-face-defaults">
           {policyFace && (
-            <LevelDefaultsPanel rackId={rack.id} face={policyFace} readOnly={readOnly} />
+            <LevelDefaultsPanel
+              rackId={rack.id}
+              face={policyFace}
+              readOnly={readOnly}
+              description={`Editing Face ${policyFace.side} defaults. Applies only to this face at this level.`}
+            />
           )}
         </div>
 
-        {isMirrored && faceA && (
-          <div data-testid="structure-policies-mirrored-face-b" className="flex flex-col gap-3">
-            <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              Face B mirrors Face A. Switch to Independent above to edit separately.
-            </div>
-            <div className="opacity-60 grayscale-[0.5]">
-              <LevelDefaultsPanel
-                rackId={rack.id}
-                face={faceA}
-                readOnly={true}
-                heading="Face B level defaults"
-                description="Face B is mirrored, so default roles are inherited from Face A."
-              />
-            </div>
-          </div>
-        )}
-
-        <PolicyLegendVisual />
         <div data-testid="structure-policies-rack-apply" className="mt-4">
           <RackLevelDefaultsPanel
             rackId={rack.id}
@@ -252,6 +239,25 @@ export function StructureTask({
             readOnly={readOnly}
           />
         </div>
+
+        {isMirrored && faceA && (
+          <div data-testid="structure-policies-mirrored-face-b" className="flex flex-col gap-3">
+            <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              Face B mirrors Face A. Face B defaults are inherited and read-only in mirrored mode.
+            </div>
+            <div className="opacity-60 grayscale-[0.5]">
+              <LevelDefaultsPanel
+                rackId={rack.id}
+                face={faceA}
+                readOnly={true}
+                heading="Face B inherited defaults"
+                description="Inherited from Face A. Edit Face A to change mirrored defaults."
+              />
+            </div>
+          </div>
+        )}
+
+        <PolicyLegendVisual />
       </StructureSection>
     </div>
   );
