@@ -1,5 +1,5 @@
-import { generatePreviewCells, validateLayoutDraft } from '@wos/domain';
-import type { FloorWorkspace, LayoutValidationIssue } from '@wos/domain';
+import { generatePreviewCells, resolveRackFaceRelationshipMode, validateLayoutDraft } from '@wos/domain';
+import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
 import { AlertTriangle, X, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
@@ -19,6 +19,107 @@ import { StructureTask } from './rack-inspector/structure-task';
 
 function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(' ');
+}
+
+function InspectorSummaryBar({
+  rack,
+  faceA,
+  faceB,
+  rackCells
+}: {
+  rack: Rack;
+  faceA: RackFace | null;
+  faceB: RackFace | null;
+  rackCells: Array<{ address: { raw: string } }>;
+}) {
+  const faceBMode = faceB
+    ? resolveRackFaceRelationshipMode(faceB) === 'mirrored'
+      ? 'Mirror'
+      : 'Indep.'
+    : 'Off';
+
+  const totalLevels = Math.max(
+    0,
+    ...[faceA, faceB]
+      .filter((f): f is RackFace => !!f)
+      .flatMap((f) => f.sections)
+      .map((s) => s.levels.length)
+  );
+
+  const slotDir = faceA?.slotNumberingDirection ?? 'ltr';
+
+  return (
+    <div className="flex w-40 shrink-0 flex-col gap-5 overflow-y-auto border-r border-[var(--border-muted)] bg-[var(--surface-secondary)] px-3 py-4">
+      <div>
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Summary
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-[11px] text-slate-600">
+            <span className="font-semibold text-slate-800">{rackCells.length}</span> slots
+          </div>
+          <div className="text-[11px] text-slate-600">
+            <span className="font-semibold text-slate-800">{totalLevels}</span> levels
+          </div>
+          <div className="text-[11px] text-slate-600">
+            Face B:{' '}
+            <span className="font-semibold text-slate-800">{faceBMode}</span>
+          </div>
+          <div className="text-[11px] text-slate-600">
+            {rack.kind === 'paired' ? 'Paired' : 'Single'}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Policies
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {[
+            { color: 'bg-blue-500', label: 'Pick' },
+            { color: 'bg-amber-500', label: 'Reserve' },
+            { color: 'bg-slate-300', label: 'None' }
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+              <div className="text-[11px] text-slate-600">{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Face Config
+        </div>
+        <div className="flex flex-col gap-1">
+          {(
+            [
+              { dir: 'ltr', arrow: '→', slots: '01 02 03', label: 'LTR' },
+              { dir: 'rtl', arrow: '←', slots: '03 02 01', label: 'RTL' }
+            ] as const
+          ).map(({ dir, arrow, slots, label }) => (
+            <div
+              key={dir}
+              className={cn(
+                'flex items-center gap-1 rounded-md px-2 py-1 text-[11px]',
+                slotDir === dir
+                  ? 'bg-white shadow-sm ring-1 ring-black/5 text-slate-700'
+                  : 'text-slate-400'
+              )}
+            >
+              <span>{arrow}</span>
+              <span className="font-mono">{slots}</span>
+              {slotDir === dir && (
+                <span className="ml-auto text-[9px] font-semibold text-slate-500">{label}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function validationSummary(issues: LayoutValidationIssue[]) {
@@ -217,7 +318,15 @@ export function RackInspector({
 
       <ValidationStrip issues={rackIssues} />
 
-      <div className="flex-1 overflow-y-auto">{renderTaskBody()}</div>
+      <div className="flex flex-1 overflow-hidden">
+        <InspectorSummaryBar
+          rack={rack}
+          faceA={faceA}
+          faceB={faceB}
+          rackCells={rackCells}
+        />
+        <div className="flex-1 overflow-y-auto">{renderTaskBody()}</div>
+      </div>
     </aside>
   );
 }
