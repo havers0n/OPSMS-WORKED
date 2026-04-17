@@ -199,8 +199,8 @@ export function StructureTask({
               rackId={rack.id}
               face={faceA}
               readOnly={true}
-              heading="Face B Overrides (Advanced)"
-              description="Face B is mirrored, so overrides are inherited from Face A."
+              heading="Face B level defaults"
+              description="Face B is mirrored, so default roles are inherited from Face A."
             />
           </div>
         </div>

@@ -281,7 +281,7 @@ describe('RackInspector tasks', () => {
 
     clickTab(renderer, 'structure');
 
-    expect(hasText(renderer, 'Apply to Whole Rack Level')).toBe(true);
+    expect(hasText(renderer, 'Apply role to all faces at this level')).toBe(true);
     expect(hasText(renderer, 'This action applies the selected role to all editable faces at this level.')).toBe(true);
     expect(hasText(renderer, 'Reapplying at rack level overwrites face-level differences for this level.')).toBe(true);
     expect(hasText(renderer, 'Pick')).toBe(true);
@@ -337,6 +337,6 @@ describe('RackInspector tasks', () => {
 
     expect(hasText(renderer, 'Face B mirrors Face A')).toBe(true);
     expect(hasText(renderer, 'Face B is mirrored; edits apply through Face A.')).toBe(true);
-    expect(hasText(renderer, 'Face B overrides are inherited from Face A while mirrored.')).toBe(true);
+    expect(hasText(renderer, 'Face B is mirrored, so default roles are inherited from Face A.')).toBe(true);
   });
 });

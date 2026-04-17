@@ -32,8 +32,8 @@ export function LevelDefaultsPanel({
   rackId,
   face,
   readOnly = false,
-  heading = 'Face Overrides (Advanced)',
-  description = 'Overrides whole-rack apply for this face and level.'
+  heading = 'Face-level defaults',
+  description = 'Sets the default role for this face at this level.'
 }: {
   rackId: string;
   face: RackFace;

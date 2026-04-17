@@ -78,7 +78,7 @@ export function RackLevelDefaultsPanel({
     >
       <div>
         <h3 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-          Apply to Whole Rack Level
+          Apply role to all faces at this level
         </h3>
         <p className="mt-1 text-xs text-slate-500">
           This action applies the selected role to all editable faces at this level.
