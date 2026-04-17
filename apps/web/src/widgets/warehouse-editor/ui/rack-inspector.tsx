@@ -1,7 +1,7 @@
 import { generatePreviewCells, resolveRackFaceRelationshipMode, validateLayoutDraft } from '@wos/domain';
 import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
-import { AlertTriangle, X, XCircle } from 'lucide-react';
-import { useMemo } from 'react';
+import { AlertTriangle, ChevronLeft, ChevronRight, X, XCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import {
   useDraftDirtyState,
@@ -32,6 +32,8 @@ function InspectorSummaryBar({
   faceB: RackFace | null;
   rackCells: Array<{ address: { raw: string } }>;
 }) {
+  const [isOpen, setIsOpen] = useState(true);
+
   const faceBMode = faceB
     ? resolveRackFaceRelationshipMode(faceB) === 'mirrored'
       ? 'Mirror'
@@ -48,12 +50,38 @@ function InspectorSummaryBar({
 
   const slotDir = faceA?.slotNumberingDirection ?? 'ltr';
 
+  if (!isOpen) {
+    return (
+      <div className="flex w-7 shrink-0 flex-col border-r border-[var(--border-muted)] bg-[var(--surface-secondary)]">
+        <button
+          type="button"
+          title="Expand summary"
+          onClick={() => setIsOpen(true)}
+          className="flex flex-1 items-center justify-center text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex w-40 shrink-0 flex-col gap-5 overflow-y-auto border-r border-[var(--border-muted)] bg-[var(--surface-secondary)] px-3 py-4">
-      <div>
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+    <div className="flex w-40 shrink-0 flex-col border-r border-[var(--border-muted)] bg-[var(--surface-secondary)]">
+      <div className="flex items-center justify-between px-3 pt-3 pb-1">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Summary
         </div>
+        <button
+          type="button"
+          title="Collapse summary"
+          onClick={() => setIsOpen(false)}
+          className="flex h-5 w-5 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-5 overflow-y-auto px-3 pb-4 pt-2">
         <div className="flex flex-col gap-1">
           <div className="text-[11px] text-slate-600">
             <span className="font-semibold text-slate-800">{rackCells.length}</span> slots
@@ -77,53 +105,53 @@ function InspectorSummaryBar({
             {rack.kind === 'paired' ? 'Paired' : 'Single'}
           </div>
         </div>
-      </div>
 
-      <div>
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          Policies
+        <div>
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Policies
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {[
+              { color: 'bg-blue-500', label: 'Pick' },
+              { color: 'bg-amber-500', label: 'Reserve' },
+              { color: 'bg-slate-300', label: 'None' }
+            ].map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <div className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+                <div className="text-[11px] text-slate-600">{label}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-1.5">
-          {[
-            { color: 'bg-blue-500', label: 'Pick' },
-            { color: 'bg-amber-500', label: 'Reserve' },
-            { color: 'bg-slate-300', label: 'None' }
-          ].map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <div className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
-              <div className="text-[11px] text-slate-600">{label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      <div>
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          Face Config
-        </div>
-        <div className="flex flex-col gap-1">
-          {(
-            [
-              { dir: 'ltr', arrow: '→', slots: '01 02 03', label: 'LTR' },
-              { dir: 'rtl', arrow: '←', slots: '03 02 01', label: 'RTL' }
-            ] as const
-          ).map(({ dir, arrow, slots, label }) => (
-            <div
-              key={dir}
-              className={cn(
-                'flex items-center gap-1 rounded-md px-2 py-1 text-[11px]',
-                slotDir === dir
-                  ? 'bg-white shadow-sm ring-1 ring-black/5 text-slate-700'
-                  : 'text-slate-400'
-              )}
-            >
-              <span>{arrow}</span>
-              <span className="font-mono">{slots}</span>
-              {slotDir === dir && (
-                <span className="ml-auto text-[9px] font-semibold text-slate-500">{label}</span>
-              )}
-            </div>
-          ))}
+        <div>
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Face Config
+          </div>
+          <div className="flex flex-col gap-1">
+            {(
+              [
+                { dir: 'ltr', arrow: '→', slots: '01 02 03', label: 'LTR' },
+                { dir: 'rtl', arrow: '←', slots: '03 02 01', label: 'RTL' }
+              ] as const
+            ).map(({ dir, arrow, slots, label }) => (
+              <div
+                key={dir}
+                className={cn(
+                  'flex items-center gap-1 rounded-md px-2 py-1 text-[11px]',
+                  slotDir === dir
+                    ? 'bg-white shadow-sm ring-1 ring-black/5 text-slate-700'
+                    : 'text-slate-400'
+                )}
+              >
+                <span>{arrow}</span>
+                <span className="font-mono">{slots}</span>
+                {slotDir === dir && (
+                  <span className="ml-auto text-[9px] font-semibold text-slate-500">{label}</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
