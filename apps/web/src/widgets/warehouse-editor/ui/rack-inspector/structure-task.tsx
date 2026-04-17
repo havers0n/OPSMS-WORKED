@@ -12,6 +12,8 @@ import {
 import { StructureIdentityPanel } from './structure-identity-panel';
 import { LevelDefaultsPanel } from './level-defaults-panel';
 import { RackLevelDefaultsPanel } from './rack-level-defaults-panel';
+import { FaceModeIsometric } from './face-mode-isometric';
+import { PolicyLegendVisual } from './policy-legend-visual';
 
 function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(' ');
@@ -156,6 +158,7 @@ export function StructureTask({
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
       <StructureIdentityPanel rack={rack} readOnly={readOnly} />
+      <FaceModeIsometric rack={rack} faceB={faceB} />
       <FaceBControl rack={rack} faceB={faceB} readOnly={readOnly} />
 
       {showFaceTabs && (
@@ -207,12 +210,15 @@ export function StructureTask({
         <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
           Policies
         </div>
-        <RackLevelDefaultsPanel
-          rackId={rack.id}
-          faceA={faceA}
-          faceB={faceB}
-          readOnly={readOnly}
-        />
+        <PolicyLegendVisual />
+        <div className="mt-4">
+          <RackLevelDefaultsPanel
+            rackId={rack.id}
+            faceA={faceA}
+            faceB={faceB}
+            readOnly={readOnly}
+          />
+        </div>
       </div>
     </div>
   );
