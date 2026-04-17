@@ -8,11 +8,7 @@ import { locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
-import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
-import {
-  useCreateProductLocationRole,
-  useDeleteProductLocationRole
-} from '@/entities/product-location-role/api/mutations';
+import { useLocationEffectiveRole } from '@/entities/product-location-role/api/use-location-effective-role';
 import { createContainer } from '@/features/container-create/api/mutations';
 import { addInventoryItem } from '@/features/inventory-add/api/mutations';
 import { moveContainer as moveContainerApi, placeContainer } from '@/features/placement-actions/api/mutations';
@@ -27,13 +23,12 @@ import {
 } from '../model/v2/v2-selectors';
 import {
   INVENTORY_PREVIEW_LIMIT,
+  effectiveRoleSourceLabel,
   getActiveProducts,
-  getPolicyEditGuardReason,
   groupByContainer,
   hasInventoryRows,
-  policySummaryText,
-  resolvePolicySummaryState,
-  type PolicyRoleChoice
+  resolveStructuralDefaultFromPublishedLayout,
+  semanticRoleLabel
 } from './storage-inspector-v2/helpers';
 import {
   resolveActiveMode,
@@ -51,7 +46,6 @@ import {
 import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-container-panel';
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
-import { EditPolicyTaskPanel } from './storage-inspector-v2/task-edit-policy-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
 
 export { resolvePanelMode, resolveActiveMode } from './storage-inspector-v2/mode';
@@ -172,8 +166,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
   const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
   const [moveTaskState, setMoveTaskState] = useState<MoveTaskState | null>(null);
-  const [policyTaskError, setPolicyTaskError] = useState<string | null>(null);
-  const [isPolicyTaskSaving, setIsPolicyTaskSaving] = useState(false);
 
   const [createContainerTypeId, setCreateContainerTypeId] = useState('');
   const [createExternalCode, setCreateExternalCode] = useState('');
@@ -210,11 +202,19 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const locationId = locationRef?.locationId ?? null;
 
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
-  const { data: policyAssignments = [] } = useLocationProductAssignments(locationId);
-  const createProductLocationRole = useCreateProductLocationRole();
-  const deleteProductLocationRole = useDeleteProductLocationRole(locationId);
 
   const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
+  const effectiveRoleContainerRows =
+    mode.kind === 'container-detail'
+      ? storageRows.filter((row) => row.containerId === mode.containerId)
+      : [];
+  const effectiveRoleActiveProducts = getActiveProducts(effectiveRoleContainerRows);
+  const effectiveRoleProductId =
+    effectiveRoleActiveProducts.length === 1 ? effectiveRoleActiveProducts[0].id : null;
+  const { data: effectiveRoleContext, isLoading: effectiveRoleLoading } = useLocationEffectiveRole(
+    locationId,
+    effectiveRoleProductId
+  );
 
   const addProductContainerId = mode.kind === 'task-add-product-to-container' ? mode.containerId : null;
   const addProductSourceCellId = mode.kind === 'task-add-product-to-container' ? mode.cellId : null;
@@ -265,8 +265,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setSelectedContainerId(null);
     setTaskKind(null);
     setMoveTaskState(null);
-    setPolicyTaskError(null);
-    setIsPolicyTaskSaving(false);
     resetCreateTaskState();
     resetCreateWithProductTaskState();
     resetAddProductTaskState();
@@ -462,49 +460,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setSelectedContainerId(movedContainerId);
   };
 
-  const normalizePolicyForProductAtLocation = async (productId: string, choice: PolicyRoleChoice) => {
-    if (!locationId) return;
-
-    const publishedRows = policyAssignments.filter(
-      (assignment) =>
-        assignment.state === 'published' &&
-        assignment.productId === productId &&
-        assignment.locationId === locationId
-    );
-
-    const toDelete: string[] = [];
-
-    if (choice === 'none') {
-      for (const assignment of publishedRows) {
-        toDelete.push(assignment.id);
-      }
-    } else {
-      const selectedRows = publishedRows.filter((assignment) => assignment.role === choice);
-      if (selectedRows.length === 0) {
-        await createProductLocationRole.mutateAsync({
-          locationId,
-          productId,
-          role: choice
-        });
-      }
-      if (selectedRows.length > 1) {
-        for (const duplicate of selectedRows.slice(1)) {
-          toDelete.push(duplicate.id);
-        }
-      }
-      for (const assignment of publishedRows) {
-        if (assignment.role !== choice) {
-          toDelete.push(assignment.id);
-        }
-      }
-    }
-
-    const uniqueDeletes = Array.from(new Set(toDelete));
-    for (const roleId of uniqueDeletes) {
-      await deleteProductLocationRole.mutateAsync(roleId);
-    }
-  };
-
   if (mode.kind === 'empty') {
     return <EmptyState />;
   }
@@ -589,67 +544,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onUomChange={setCreateWithProductUom}
         onConfirm={() => void handleCreateWithProductConfirm()}
         onCancel={closeCreateWithProductTask}
-      />
-    );
-  }
-
-  if (mode.kind === 'task-edit-policy') {
-    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
-    const activeProducts = getActiveProducts(containerRows);
-    const editableProduct = activeProducts.length === 1 ? activeProducts[0] : null;
-    const summaryState = editableProduct === null ? null : resolvePolicySummaryState(policyAssignments, editableProduct.id);
-
-    if (editableProduct === null || summaryState === null) {
-      return (
-        <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label="Edit policy unavailable">
-          <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
-            <button
-              onClick={() => setTaskKind(null)}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2"
-              aria-label="Back to container detail"
-            >
-              ← Back
-            </button>
-            <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
-              <span>{rackDisplayCode}</span>
-              <span className="text-gray-300">/</span>
-              <span>Level {activeLevel}</span>
-              <span className="text-gray-300">/</span>
-              <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
-            </div>
-          </div>
-          <div className="flex-1 px-4 py-4">
-            <p className="text-sm text-gray-600">{getPolicyEditGuardReason(activeProducts)}</p>
-          </div>
-          <InspectorFooter />
-        </div>
-      );
-    }
-
-    const handleSave = async (choice: PolicyRoleChoice) => {
-      setPolicyTaskError(null);
-      setIsPolicyTaskSaving(true);
-      try {
-        await normalizePolicyForProductAtLocation(editableProduct.id, choice);
-        setTaskKind(null);
-      } catch (error) {
-        setPolicyTaskError(error instanceof Error ? error.message : 'Failed to save policy for this location.');
-      } finally {
-        setIsPolicyTaskSaving(false);
-      }
-    };
-
-    return (
-      <EditPolicyTaskPanel
-        rackDisplayCode={rackDisplayCode}
-        activeLevel={activeLevel}
-        locationCode={locationCode}
-        product={editableProduct}
-        summaryState={summaryState}
-        isSaving={isPolicyTaskSaving}
-        errorMessage={policyTaskError}
-        onCancel={() => setTaskKind(null)}
-        onSave={handleSave}
       />
     );
   }
@@ -742,9 +636,41 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     const items = containerRows.filter((row) => row.itemRef !== null || row.quantity !== null);
     const isEmptyContainer = items.length === 0;
     const activeProducts = getActiveProducts(containerRows);
-    const editableProduct = activeProducts.length === 1 ? activeProducts[0] : null;
-    const guardReason = getPolicyEditGuardReason(activeProducts);
-    const policyState = editableProduct === null ? null : resolvePolicySummaryState(policyAssignments, editableProduct.id);
+    const selectedProduct = activeProducts.length === 1 ? activeProducts[0] : null;
+    const structuralDefaultFromLayout = resolveStructuralDefaultFromPublishedLayout(
+      cellId,
+      publishedCells,
+      racks
+    );
+    const structuralDefaultRole = effectiveRoleContext?.structuralDefaultRole ?? structuralDefaultFromLayout;
+    const structuralDefaultText =
+      structuralDefaultRole === null ? 'Unknown' : semanticRoleLabel(structuralDefaultRole);
+    const hasProductContext = selectedProduct !== null;
+    const isEffectiveRoleLoading = hasProductContext && effectiveRoleLoading;
+    const isConflict = effectiveRoleContext?.effectiveRoleSource === 'conflict';
+
+    const effectiveRoleText = hasProductContext
+      ? isEffectiveRoleLoading
+        ? 'Loading...'
+        : isConflict
+          ? 'Conflict'
+          : effectiveRoleContext
+            ? semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none')
+            : 'Unknown'
+      : 'Not computed';
+
+    const sourceText = hasProductContext
+      ? isEffectiveRoleLoading
+        ? 'Loading...'
+        : effectiveRoleContext
+          ? effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource)
+          : 'Unknown'
+      : 'Not computed';
+
+    const showNoneExplanation =
+      effectiveRoleContext?.structuralDefaultRole === 'none' &&
+      effectiveRoleContext.effectiveRoleSource === 'none' &&
+      effectiveRoleContext.effectiveRole === 'none';
 
     return (
       <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label={`Container detail: ${displayCode}`}>
@@ -773,45 +699,38 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
             )}
           </div>
 
-          <SectionHeader title="Picking Policy" />
-          <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="location-policy-summary">
-            <p className="text-xs text-gray-500">Policy for SKU at this location</p>
-            {editableProduct ? (
-              <>
-                <p className="text-xs text-gray-700">
-                  SKU: <span className="font-mono text-gray-900">{editableProduct.sku ?? editableProduct.name}</span>
-                </p>
-                <p className="text-xs text-gray-700">
-                  Location: <span className="font-mono text-gray-900">{locationCode}</span>
-                </p>
-                {policyState && (
-                  <p className="text-xs text-gray-700">
-                    Current role: <span className="font-medium text-gray-900">{policySummaryText(policyState)}</span>
-                  </p>
-                )}
-                {policyState?.kind === 'legacy-conflict' && (
-                  <p className="text-xs text-amber-700" data-testid="policy-legacy-conflict">
-                    Legacy conflict detected for this SKU at this location.
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-amber-700">{guardReason}</p>
+          <SectionHeader title="Location Role" />
+          <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="location-role-context">
+            {selectedProduct && (
+              <p className="text-xs text-gray-700">
+                SKU: <span className="font-mono text-gray-900">{selectedProduct.sku ?? selectedProduct.name}</span>
+              </p>
             )}
-            {editableProduct ? (
-              <button
-                onClick={() => {
-                  setPolicyTaskError(null);
-                  setTaskKind('edit-policy');
-                }}
-                className="w-full text-left text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2"
-                data-testid="edit-policy-action"
-              >
-                Edit policy
-              </button>
-            ) : (
-              <p className="text-xs text-gray-500">
-                Edit policy is available only when this container resolves to exactly one active SKU.
+            <p className="text-xs text-gray-700">
+              Structural default: <span className="font-medium text-gray-900">{structuralDefaultText}</span>
+            </p>
+            <p className="text-xs text-gray-700">
+              Effective role: <span className="font-medium text-gray-900">{effectiveRoleText}</span>
+            </p>
+            <p className="text-xs text-gray-700">
+              Source: <span className="font-medium text-gray-900">{sourceText}</span>
+            </p>
+
+            {!hasProductContext && (
+              <p className="text-xs text-gray-500" data-testid="location-role-product-context-required">
+                Product context required to resolve explicit override.
+              </p>
+            )}
+
+            {isConflict && (
+              <p className="text-xs text-amber-700" data-testid="location-role-conflict-note">
+                Multiple published explicit roles exist for this product/location.
+              </p>
+            )}
+
+            {showNoneExplanation && (
+              <p className="text-xs text-gray-500" data-testid="location-role-none-note">
+                No structural default or explicit override applies here.
               </p>
             )}
           </div>
@@ -972,8 +891,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
         <SectionHeader title="Policy" />
         <div className="px-4 py-3 border-b border-gray-200" data-testid="cell-policy-hint">
-          <p className="text-xs text-gray-600">Picking policy is defined for SKU at this location.</p>
-          <p className="text-xs text-gray-500 mt-1">To edit policy, open a container detail that resolves to exactly one active SKU.</p>
+          <p className="text-xs text-gray-600">Location role context is shown for container detail.</p>
+          <p className="text-xs text-gray-500 mt-1">Select a container with one active SKU to resolve effective role.</p>
         </div>
 
         <SectionHeader title="Actions" />

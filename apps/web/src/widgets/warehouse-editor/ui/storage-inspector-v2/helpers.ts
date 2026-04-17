@@ -1,10 +1,12 @@
-import type { LocationStorageSnapshotRow } from '@wos/domain';
+import type { Cell, LocationStorageSnapshotRow, Rack } from '@wos/domain';
 import type { LocationProductAssignment } from '@/entities/product-location-role/api/queries';
 
 export const INVENTORY_PREVIEW_LIMIT = 3;
 
 export type PolicyRoleChoice = 'primary_pick' | 'reserve' | 'none';
 export type PolicyRole = 'primary_pick' | 'reserve';
+export type SemanticRole = 'primary_pick' | 'reserve' | 'none';
+export type EffectiveRoleSource = 'explicit_override' | 'structural_default' | 'none' | 'conflict';
 
 export type ActiveContainerProduct = {
   id: string;
@@ -111,4 +113,42 @@ export function hasInventoryRows(
   rows: Array<{ itemRef: string | null; quantity: number | null }>
 ): boolean {
   return rows.some((row) => row.itemRef !== null || row.quantity !== null);
+}
+
+export function semanticRoleLabel(role: SemanticRole): string {
+  if (role === 'primary_pick') return 'Primary Pick';
+  if (role === 'reserve') return 'Reserve';
+  return 'None';
+}
+
+export function effectiveRoleSourceLabel(source: EffectiveRoleSource): string {
+  if (source === 'explicit_override') return 'Explicit override';
+  if (source === 'structural_default') return 'Structural default';
+  if (source === 'conflict') return 'Conflict';
+  return 'None';
+}
+
+export function resolveStructuralDefaultFromPublishedLayout(
+  cellId: string | null,
+  publishedCells: Cell[],
+  racks: Record<string, Rack> | undefined
+): SemanticRole | null {
+  if (!cellId || !racks) return null;
+
+  const cell = publishedCells.find((candidate) => candidate.id === cellId);
+  if (!cell) return null;
+
+  const rack = racks[cell.rackId];
+  if (!rack) return null;
+
+  const face = rack.faces.find((candidate) => candidate.id === cell.rackFaceId);
+  if (!face) return null;
+
+  const section = face.sections.find((candidate) => candidate.id === cell.rackSectionId);
+  if (!section) return null;
+
+  const level = section.levels.find((candidate) => candidate.id === cell.rackLevelId);
+  if (!level) return null;
+
+  return level.structuralDefaultRole ?? 'none';
 }

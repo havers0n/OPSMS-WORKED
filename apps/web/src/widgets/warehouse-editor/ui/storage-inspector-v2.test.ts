@@ -8,6 +8,9 @@ import { resetStorageFocusStore, useStorageFocusStore } from '@/widgets/warehous
 type MockCell = {
   id: string;
   rackId: string;
+  rackFaceId?: string;
+  rackSectionId?: string;
+  rackLevelId?: string;
   address: {
     raw: string;
     parts: { level: number };
@@ -44,21 +47,16 @@ let mockProductsSearchResults: Array<{
   createdAt: string;
   updatedAt: string;
 }> = [];
-let mockPolicyAssignments: Array<{
-  id: string;
-  productId: string;
+let mockEffectiveRoleResponse: {
   locationId: string;
-  role: 'primary_pick' | 'reserve';
-  state: 'draft' | 'published' | 'inactive';
-  layoutVersionId: string | null;
-  createdAt: string;
-  product: {
-    id: string;
-    name: string;
-    sku: string | null;
-    imageUrl: string | null;
-  };
-}> = [];
+  productId: string;
+  structuralDefaultRole: 'primary_pick' | 'reserve' | 'none';
+  effectiveRole: 'primary_pick' | 'reserve' | 'none' | null;
+  effectiveRoleSource: 'explicit_override' | 'structural_default' | 'none' | 'conflict';
+  conflictingPublishedRoles: Array<'primary_pick' | 'reserve'>;
+} | null = null;
+let mockEffectiveRoleLoading = false;
+const mockUseLocationEffectiveRole = vi.fn();
 
 vi.mock('@/entities/cell/api/use-published-cells', () => ({
   usePublishedCells: () => ({
@@ -115,25 +113,14 @@ vi.mock('@/entities/product/api/use-products-search', () => ({
   useProductsSearch: () => ({ data: mockProductsSearchResults, isLoading: false }),
 }));
 
-const mockCreatePolicyRoleMutateAsync = vi.fn();
-const mockDeletePolicyRoleMutateAsync = vi.fn();
-
-vi.mock('@/entities/product-location-role/api/use-location-product-assignments', () => ({
-  useLocationProductAssignments: () => ({
-    data: mockPolicyAssignments,
-    isLoading: false
-  }),
-}));
-
-vi.mock('@/entities/product-location-role/api/mutations', () => ({
-  useCreateProductLocationRole: () => ({
-    isPending: false,
-    mutateAsync: (...args: unknown[]) => mockCreatePolicyRoleMutateAsync(...args)
-  }),
-  useDeleteProductLocationRole: () => ({
-    isPending: false,
-    mutateAsync: (...args: unknown[]) => mockDeletePolicyRoleMutateAsync(...args)
-  }),
+vi.mock('@/entities/product-location-role/api/use-location-effective-role', () => ({
+  useLocationEffectiveRole: (...args: unknown[]) => {
+    mockUseLocationEffectiveRole(...args);
+    return {
+      data: mockEffectiveRoleResponse,
+      isLoading: mockEffectiveRoleLoading
+    };
+  }
 }));
 
 // locationKeys stub — only the 'storage' key factory is needed in tests.
@@ -220,7 +207,27 @@ function createWorkspace(): FloorWorkspace {
           totalLength: 5,
           depth: 1,
           rotationDeg: 0,
-          faces: []
+          faces: [
+            {
+              id: 'face-1',
+              side: 'A',
+              enabled: true,
+              slotNumberingDirection: 'ltr',
+              relationshipMode: 'independent',
+              isMirrored: false,
+              mirrorSourceFaceId: null,
+              sections: [
+                {
+                  id: 'section-1',
+                  ordinal: 1,
+                  length: 5,
+                  levels: [
+                    { id: 'level-1', ordinal: 1, slotCount: 4, structuralDefaultRole: 'reserve' }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       }
     }
@@ -413,14 +420,17 @@ describe('resolveActiveMode', () => {
 describe('StorageInspectorV2 breadcrumb fallbacks', () => {
   beforeEach(() => {
     resetStorageFocusStore();
-    mockPolicyAssignments = [];
     mockProductsSearchResults = [];
-    mockCreatePolicyRoleMutateAsync.mockReset();
-    mockDeletePolicyRoleMutateAsync.mockReset();
+    mockEffectiveRoleResponse = null;
+    mockEffectiveRoleLoading = false;
+    mockUseLocationEffectiveRole.mockReset();
     mockPublishedCells = [
       {
         id: 'cell-1',
         rackId: 'rack-1',
+        rackFaceId: 'face-1',
+        rackSectionId: 'section-1',
+        rackLevelId: 'level-1',
         address: { raw: '01-A.01.01', parts: { level: 1 } }
       }
     ];
@@ -520,8 +530,10 @@ describe('StorageInspectorV2 panel modes', () => {
     mockPublishedCells = [];
     mockLocationRef = null;
     mockStorageRows = [];
-    mockPolicyAssignments = [];
     mockProductsSearchResults = [];
+    mockEffectiveRoleResponse = null;
+    mockEffectiveRoleLoading = false;
+    mockUseLocationEffectiveRole.mockReset();
     mockAddInventoryToContainerMutateAsync.mockReset();
     mockAddInventoryToContainerIsPending = false;
     mockRefetchQueries.mockReset();
@@ -560,8 +572,6 @@ describe('StorageInspectorV2 panel modes', () => {
     mockAddInventoryItem.mockReset();
     mockInvalidatePlacement.mockReset();
     mockInvalidateQueries.mockReset();
-    mockCreatePolicyRoleMutateAsync.mockReset();
-    mockDeletePolicyRoleMutateAsync.mockReset();
     mockInvalidatePlacement.mockResolvedValue(undefined);
     mockInvalidateQueries.mockResolvedValue(undefined);
   });
@@ -748,8 +758,22 @@ describe('StorageInspectorV2 panel modes', () => {
       });
     });
     mockPublishedCells = [
-      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } },
-      { id: 'cell-2', rackId: 'rack-1', address: { raw: '01-A.01.02', parts: { level: 1 } } },
+      {
+        id: 'cell-1',
+        rackId: 'rack-1',
+        rackFaceId: 'face-1',
+        rackSectionId: 'section-1',
+        rackLevelId: 'level-1',
+        address: { raw: '01-A.01.01', parts: { level: 1 } }
+      },
+      {
+        id: 'cell-2',
+        rackId: 'rack-1',
+        rackFaceId: 'face-1',
+        rackSectionId: 'section-1',
+        rackLevelId: 'level-1',
+        address: { raw: '01-A.01.02', parts: { level: 1 } }
+      },
     ];
     mockLocationRef = { locationId: 'loc-1' };
     mockStorageRows = [
@@ -853,10 +877,10 @@ describe('StorageInspectorV2 panel modes', () => {
 describe('StorageInspectorV2 task flows', () => {
   beforeEach(() => {
     resetStorageFocusStore();
-    mockPolicyAssignments = [];
     mockProductsSearchResults = [];
-    mockCreatePolicyRoleMutateAsync.mockReset();
-    mockDeletePolicyRoleMutateAsync.mockReset();
+    mockEffectiveRoleResponse = null;
+    mockEffectiveRoleLoading = false;
+    mockUseLocationEffectiveRole.mockReset();
     mockContainerTypes = [
       { id: 'type-1', code: 'PLT', description: 'Pallet', supportsStorage: true, supportsPicking: false },
     ];
@@ -1568,15 +1592,22 @@ describe('StorageInspectorV2 task flows', () => {
   });
 });
 
-// ── PR5 policy flow integration tests ────────────────────────────────────────
+// ── PR6 semantic read-only integration tests ─────────────────────────────────
 
-describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
+describe('StorageInspectorV2 location role context (PR6)', () => {
   function setContainerContext(rows: MockStorageRow[]) {
     act(() => {
       useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
     });
     mockPublishedCells = [
-      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
+      {
+        id: 'cell-1',
+        rackId: 'rack-1',
+        rackFaceId: 'face-1',
+        rackSectionId: 'section-1',
+        rackLevelId: 'level-1',
+        address: { raw: '01-A.01.01', parts: { level: 1 } }
+      }
     ];
     mockLocationRef = { locationId: 'loc-1' };
     mockStorageRows = rows;
@@ -1590,10 +1621,17 @@ describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
 
   beforeEach(() => {
     resetStorageFocusStore();
-    mockPolicyAssignments = [];
     mockProductsSearchResults = [];
-    mockCreatePolicyRoleMutateAsync.mockReset();
-    mockDeletePolicyRoleMutateAsync.mockReset();
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: 'reserve',
+      effectiveRoleSource: 'structural_default',
+      conflictingPublishedRoles: []
+    };
+    mockEffectiveRoleLoading = false;
+    mockUseLocationEffectiveRole.mockReset();
     setContainerContext([
       {
         locationCode: 'LOC-01',
@@ -1620,251 +1658,73 @@ describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
     resetStorageFocusStore();
   });
 
-  it('renders policy summary in supported container-detail context', () => {
+  it('renders structural-default-only state', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Policy for SKU at this location');
-    expect(text).toContain('Current role:');
-    expect(text).toContain('No policy');
-    expect(text).toContain('Edit policy');
+    expect(text).toContain('Location Role');
+    expect(text).toContain('Structural default: Reserve');
+    expect(text).toContain('Effective role: Reserve');
+    expect(text).toContain('Source: Structural default');
   });
 
-  it('opens edit policy task flow from container-detail', () => {
-    const renderer = renderInspector(createWorkspace());
-    openContainerDetail(renderer.root);
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'edit-policy-action' }).props.onClick();
-    });
-    expect(renderer.root.findByProps({ 'data-testid': 'task-edit-policy-panel' })).toBeTruthy();
-    expect(flattenText(renderer.toJSON())).toContain('Edit picking policy for this location');
-  });
-
-  it('cancel in edit policy returns to summary without mutation', () => {
-    const renderer = renderInspector(createWorkspace());
-    openContainerDetail(renderer.root);
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'edit-policy-action' }).props.onClick();
-    });
-    act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Cancel edit policy' }).props.onClick();
-    });
-    expect(mockCreatePolicyRoleMutateAsync).not.toHaveBeenCalled();
-    expect(mockDeletePolicyRoleMutateAsync).not.toHaveBeenCalled();
-    expect(renderer.root.findByProps({ 'data-testid': 'location-policy-summary' })).toBeTruthy();
-  });
-
-  it('set primary_pick saves successfully', async () => {
-    mockCreatePolicyRoleMutateAsync.mockImplementation(async (payload: { role: string }) => {
-      expect(payload.role).toBe('primary_pick');
-      mockPolicyAssignments = [
-        {
-          id: 'role-primary',
-          productId: '11111111-1111-1111-1111-111111111111',
-          locationId: 'loc-1',
-          role: 'primary_pick',
-          state: 'published',
-          layoutVersionId: null,
-          createdAt: '2026-01-01T00:00:00.000Z',
-          product: {
-            id: '11111111-1111-1111-1111-111111111111',
-            name: 'Product One',
-            sku: 'SKU-1',
-            imageUrl: null
-          }
-        }
-      ];
-      return mockPolicyAssignments[0];
-    });
-
-    const renderer = renderInspector(createWorkspace());
-    openContainerDetail(renderer.root);
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'edit-policy-action' }).props.onClick();
-    });
-    const primaryRadio = renderer.root.findAllByType('input')[0];
-    act(() => {
-      primaryRadio.props.onChange();
-    });
-    await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Save policy for location' }).props.onClick();
-    });
-    act(() => {
-      renderer.update(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
-    });
-
-    expect(mockCreatePolicyRoleMutateAsync).toHaveBeenCalledWith({
+  it('renders explicit-override-wins state', () => {
+    mockEffectiveRoleResponse = {
       locationId: 'loc-1',
       productId: '11111111-1111-1111-1111-111111111111',
-      role: 'primary_pick'
-    });
-    expect(flattenText(renderer.toJSON())).toContain('Primary pick');
-  });
-
-  it('set reserve normalizes by removing other role', async () => {
-    mockPolicyAssignments = [
-      {
-        id: 'role-primary',
-        productId: '11111111-1111-1111-1111-111111111111',
-        locationId: 'loc-1',
-        role: 'primary_pick',
-        state: 'published',
-        layoutVersionId: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        product: {
-          id: '11111111-1111-1111-1111-111111111111',
-          name: 'Product One',
-          sku: 'SKU-1',
-          imageUrl: null
-        }
-      }
-    ];
-    mockCreatePolicyRoleMutateAsync.mockImplementation(async () => {
-      mockPolicyAssignments.push({
-        id: 'role-reserve',
-        productId: '11111111-1111-1111-1111-111111111111',
-        locationId: 'loc-1',
-        role: 'reserve',
-        state: 'published',
-        layoutVersionId: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        product: {
-          id: '11111111-1111-1111-1111-111111111111',
-          name: 'Product One',
-          sku: 'SKU-1',
-          imageUrl: null
-        }
-      });
-      return mockPolicyAssignments[1];
-    });
-    mockDeletePolicyRoleMutateAsync.mockImplementation(async (roleId: string) => {
-      mockPolicyAssignments = mockPolicyAssignments.filter((row) => row.id !== roleId);
-    });
+      structuralDefaultRole: 'reserve',
+      effectiveRole: 'primary_pick',
+      effectiveRoleSource: 'explicit_override',
+      conflictingPublishedRoles: []
+    };
 
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'edit-policy-action' }).props.onClick();
-    });
-    const reserveRadio = renderer.root.findAllByType('input')[1];
-    act(() => {
-      reserveRadio.props.onChange();
-    });
-    await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Save policy for location' }).props.onClick();
-    });
-    act(() => {
-      renderer.update(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
-    });
-
-    expect(mockCreatePolicyRoleMutateAsync).toHaveBeenCalledWith({
-      locationId: 'loc-1',
-      productId: '11111111-1111-1111-1111-111111111111',
-      role: 'reserve'
-    });
-    expect(mockDeletePolicyRoleMutateAsync).toHaveBeenCalledWith('role-primary');
-    expect(flattenText(renderer.toJSON())).toContain('Reserve');
-  });
-
-  it('remove policy (none) deletes all roles and shows No policy', async () => {
-    mockPolicyAssignments = [
-      {
-        id: 'role-reserve',
-        productId: '11111111-1111-1111-1111-111111111111',
-        locationId: 'loc-1',
-        role: 'reserve',
-        state: 'published',
-        layoutVersionId: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        product: {
-          id: '11111111-1111-1111-1111-111111111111',
-          name: 'Product One',
-          sku: 'SKU-1',
-          imageUrl: null
-        }
-      }
-    ];
-    mockDeletePolicyRoleMutateAsync.mockImplementation(async (roleId: string) => {
-      mockPolicyAssignments = mockPolicyAssignments.filter((row) => row.id !== roleId);
-    });
-
-    const renderer = renderInspector(createWorkspace());
-    openContainerDetail(renderer.root);
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'edit-policy-action' }).props.onClick();
-    });
-    const noneRadio = renderer.root.findAllByType('input')[2];
-    act(() => {
-      noneRadio.props.onChange();
-    });
-    await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Save policy for location' }).props.onClick();
-    });
-    act(() => {
-      renderer.update(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
-    });
-
-    expect(mockDeletePolicyRoleMutateAsync).toHaveBeenCalledWith('role-reserve');
-    expect(flattenText(renderer.toJSON())).toContain('No policy');
-  });
-
-  it('shows explicit legacy conflict and normalizes after save', async () => {
-    mockPolicyAssignments = [
-      {
-        id: 'role-primary',
-        productId: '11111111-1111-1111-1111-111111111111',
-        locationId: 'loc-1',
-        role: 'primary_pick',
-        state: 'published',
-        layoutVersionId: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        product: { id: '11111111-1111-1111-1111-111111111111', name: 'Product One', sku: 'SKU-1', imageUrl: null }
-      },
-      {
-        id: 'role-reserve',
-        productId: '11111111-1111-1111-1111-111111111111',
-        locationId: 'loc-1',
-        role: 'reserve',
-        state: 'published',
-        layoutVersionId: null,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        product: { id: '11111111-1111-1111-1111-111111111111', name: 'Product One', sku: 'SKU-1', imageUrl: null }
-      }
-    ];
-    mockDeletePolicyRoleMutateAsync.mockImplementation(async (roleId: string) => {
-      mockPolicyAssignments = mockPolicyAssignments.filter((row) => row.id !== roleId);
-    });
-
-    const renderer = renderInspector(createWorkspace());
-    openContainerDetail(renderer.root);
-    expect(renderer.root.findByProps({ 'data-testid': 'policy-legacy-conflict' })).toBeTruthy();
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'edit-policy-action' }).props.onClick();
-    });
-    const primaryRadio = renderer.root.findAllByType('input')[0];
-    act(() => {
-      primaryRadio.props.onChange();
-    });
-    await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Save policy for location' }).props.onClick();
-    });
-    act(() => {
-      renderer.update(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
-    });
-
-    expect(mockDeletePolicyRoleMutateAsync).toHaveBeenCalledWith('role-reserve');
-    expect(flattenText(renderer.toJSON())).toContain('Primary pick');
-  });
-
-  it('does not expose edit flow in cell-overview and shows policy hint', () => {
-    const renderer = renderInspector(createWorkspace());
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Picking policy is defined for SKU at this location.');
-    expect(text).not.toContain('Edit container policy');
-    expect(renderer.root.findAllByProps({ 'data-testid': 'edit-policy-action' })).toHaveLength(0);
+    expect(text).toContain('Structural default: Reserve');
+    expect(text).toContain('Effective role: Primary Pick');
+    expect(text).toContain('Source: Explicit override');
   });
 
-  it('shows explicit guard when container does not resolve to exactly one active SKU', () => {
+  it('renders none/none/none state with neutral explanatory copy', () => {
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'none',
+      effectiveRole: 'none',
+      effectiveRoleSource: 'none',
+      conflictingPublishedRoles: []
+    };
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Structural default: None');
+    expect(text).toContain('Effective role: None');
+    expect(text).toContain('Source: None');
+    expect(renderer.root.findByProps({ 'data-testid': 'location-role-none-note' })).toBeTruthy();
+  });
+
+  it('renders explicit conflict state and explanatory note', () => {
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Structural default: Reserve');
+    expect(text).toContain('Effective role: Conflict');
+    expect(text).toContain('Source: Conflict');
+    expect(renderer.root.findByProps({ 'data-testid': 'location-role-conflict-note' })).toBeTruthy();
+  });
+
+  it('does not claim effective role when product context is missing', () => {
     setContainerContext([
       {
         locationCode: 'LOC-01',
@@ -1874,25 +1734,24 @@ describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
         systemCode: 'C-001',
         externalCode: null,
         containerType: 'pallet',
-        itemRef: 'noise-row',
-        quantity: 0,
-        uom: 'EA',
-        product: {
-          id: '11111111-1111-1111-1111-111111111111',
-          sku: 'SKU-1',
-          name: 'Product One',
-          isActive: true
-        }
+        itemRef: null,
+        quantity: null,
+        uom: null,
+        product: null
       }
     ]);
+    mockEffectiveRoleResponse = null;
+
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('does not resolve to one active SKU');
-    expect(renderer.root.findAllByProps({ 'data-testid': 'edit-policy-action' })).toHaveLength(0);
+    expect(text).toContain('Structural default: Reserve');
+    expect(text).toContain('Effective role: Not computed');
+    expect(text).toContain('Source: Not computed');
+    expect(renderer.root.findByProps({ 'data-testid': 'location-role-product-context-required' })).toBeTruthy();
   });
 
-  it('shows explicit guard for multi active SKU ambiguity', () => {
+  it('falls back to Unknown structural default when direct lookup is unavailable', () => {
     setContainerContext([
       {
         locationCode: 'LOC-01',
@@ -1902,16 +1761,37 @@ describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
         systemCode: 'C-001',
         externalCode: null,
         containerType: 'pallet',
-        itemRef: 'product:a',
-        quantity: 2,
-        uom: 'EA',
-        product: {
-          id: '11111111-1111-1111-1111-111111111111',
-          sku: 'SKU-1',
-          name: 'Product One',
-          isActive: true
-        }
-      },
+        itemRef: null,
+        quantity: null,
+        uom: null,
+        product: null
+      }
+    ]);
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
+    ];
+    mockEffectiveRoleResponse = null;
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    expect(flattenText(renderer.toJSON())).toContain('Structural default: Unknown');
+  });
+
+  it('hides edit-policy affordance in container-detail and keeps overview hint read-only', () => {
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'edit-policy-action' })).toHaveLength(0);
+
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
+    });
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Location role context is shown for container detail.');
+    expect(text).not.toContain('To edit policy');
+  });
+
+  it('calls effective-role hook with null productId when no product context exists', () => {
+    setContainerContext([
       {
         locationCode: 'LOC-01',
         locationType: 'rack_slot',
@@ -1920,20 +1800,17 @@ describe('StorageInspectorV2 policy summary + edit flow (PR5)', () => {
         systemCode: 'C-001',
         externalCode: null,
         containerType: 'pallet',
-        itemRef: 'product:b',
-        quantity: 1,
-        uom: 'EA',
-        product: {
-          id: '22222222-2222-2222-2222-222222222222',
-          sku: 'SKU-2',
-          name: 'Product Two',
-          isActive: true
-        }
+        itemRef: null,
+        quantity: null,
+        uom: null,
+        product: null
       }
     ]);
+
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
-    expect(flattenText(renderer.toJSON())).toContain('resolves to multiple active SKUs');
+    expect(renderer.root.findByProps({ 'data-testid': 'location-role-context' })).toBeTruthy();
+    expect(mockUseLocationEffectiveRole).toHaveBeenLastCalledWith('loc-1', null);
   });
 });
 
@@ -1975,10 +1852,10 @@ describe('StorageInspectorV2 move container flow', () => {
 
   beforeEach(() => {
     resetStorageFocusStore();
-    mockPolicyAssignments = [];
     mockProductsSearchResults = [];
-    mockCreatePolicyRoleMutateAsync.mockReset();
-    mockDeletePolicyRoleMutateAsync.mockReset();
+    mockEffectiveRoleResponse = null;
+    mockEffectiveRoleLoading = false;
+    mockUseLocationEffectiveRole.mockReset();
     mockMoveContainer.mockReset();
     mockInvalidatePlacement.mockReset();
     mockInvalidateQueries.mockReset();
