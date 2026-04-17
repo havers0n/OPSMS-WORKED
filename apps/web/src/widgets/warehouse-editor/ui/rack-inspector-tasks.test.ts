@@ -151,7 +151,7 @@ describe('RackInspector tasks', () => {
     expect(summaryText(renderer)).toContain('errors');
     expect(summaryText(renderer)).toContain('warnings');
     expect(hasText(renderer, 'Display Code')).toBe(false);
-    expect(hasText(renderer, 'Preset Generator')).toBe(false);
+    expect(hasText(renderer, 'Generate structure')).toBe(false);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
     expect(hasText(renderer, 'Face B Relationship')).toBe(false);
     expect(summaryText(renderer)).not.toContain('Policies');
@@ -203,7 +203,31 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Display Code')).toBe(true);
     expect(hasText(renderer, 'Kind')).toBe(true);
     expect(hasText(renderer, 'Face A')).toBe(true);
-    expect(hasText(renderer, 'Preset Generator')).toBe(true);
+    const faceStructureOrder = renderer.root
+      .findAll(
+        (node) =>
+          node.props['data-testid'] === 'structure-face-manual-sections' ||
+          node.props['data-testid'] === 'structure-face-generate-structure'
+      )
+      .map((node) => node.props['data-testid']);
+    expect(faceStructureOrder).toEqual([
+      'structure-face-manual-sections',
+      'structure-face-generate-structure'
+    ]);
+
+    expect(hasText(renderer, 'Manual sections')).toBe(true);
+    expect(hasText(renderer, 'Generate structure')).toBe(true);
+    expect(hasText(renderer, 'Creates or replaces structure for this face using preset values.')).toBe(true);
+
+    const manualSections = renderer.root.findByProps({ 'data-testid': 'structure-face-manual-sections' });
+    const generatorSection = renderer.root.findByProps({ 'data-testid': 'structure-face-generate-structure' });
+    expect(nodeText(manualSections)).toContain('Current persisted structure for this face.');
+    expect(nodeText(manualSections)).toContain('Sections (');
+    expect(nodeText(generatorSection)).toContain('Generate structure');
+    expect(nodeText(generatorSection)).toContain('Preset values');
+    expect(generatorSection.findAllByProps({ 'data-testid': 'structure-face-manual-preview' })).toHaveLength(0);
+    expect(manualSections.findAllByProps({ 'data-testid': 'structure-face-manual-preview' })).toHaveLength(1);
+
     expect(hasText(renderer, 'Face-level defaults')).toBe(true);
     expect(hasText(renderer, 'Editing Face A defaults. Applies only to this face at this level.')).toBe(true);
     // addressing moved out
@@ -256,6 +280,8 @@ describe('RackInspector tasks', () => {
     });
 
     expect(hasText(renderer, 'Face B')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-manual-sections' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-generate-structure' })).toHaveLength(1);
     expect(hasText(renderer, 'Face-level defaults')).toBe(true);
     expect(hasText(renderer, 'Editing Face B defaults. Applies only to this face at this level.')).toBe(true);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
@@ -276,7 +302,7 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Numbering')).toBe(true);
     expect(hasText(renderer, 'Preview Addresses')).toBe(true);
     // structure content should not be in addressing
-    expect(hasText(renderer, 'Preset Generator')).toBe(false);
+    expect(hasText(renderer, 'Generate structure')).toBe(false);
     expect(hasText(renderer, 'Display Code')).toBe(false);
     // geometry not in addressing
     expect(hasText(renderer, 'Position X')).toBe(false);
@@ -294,7 +320,7 @@ describe('RackInspector tasks', () => {
 
     expect(useEditorStore.getState().objectWorkContext).toBe('face-mode');
     expect(hasText(renderer, 'Display Code')).toBe(true);
-    expect(hasText(renderer, 'Preset Generator')).toBe(true);
+    expect(hasText(renderer, 'Generate structure')).toBe(true);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
     expect(hasText(renderer, 'Face B Relationship')).toBe(false);
   });

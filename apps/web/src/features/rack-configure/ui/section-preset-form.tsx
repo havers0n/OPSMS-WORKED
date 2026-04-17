@@ -132,8 +132,8 @@ export function SectionPresetForm({
 
   return (
     <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
-      <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-        Preset Generator
+      <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+        Preset values
       </div>
 
       <div className="flex flex-wrap items-end gap-4">

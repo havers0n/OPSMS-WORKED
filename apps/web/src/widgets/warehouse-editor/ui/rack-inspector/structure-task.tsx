@@ -132,23 +132,51 @@ function FaceStructureBlock({
   const applyFacePreset = useApplyFacePreset();
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
         Face {face.side}
       </div>
-      <SectionPresetForm
-        rackId={rack.id}
-        side={face.side}
-        totalLength={face.faceLength ?? rack.totalLength}
-        existingSectionCount={face.sections.length}
-        initialSectionCount={face.sections.length || 3}
-        initialLevelCount={face.sections[0]?.levels.length || 4}
-        initialSlotCount={face.sections[0]?.levels[0]?.slotCount || 3}
-        readOnly={readOnly}
-        onApply={applyFacePreset}
-      />
-      {face.sections.length > 0 && <FrontElevationPreview face={face} side={face.side} />}
-      <FaceTab title={`Face ${face.side}`} rackId={rack.id} face={face} readOnly={readOnly} />
+
+      <section
+        data-testid="structure-face-manual-sections"
+        className="flex flex-col gap-3 rounded-[14px] border border-[var(--border-muted)] bg-white p-4"
+      >
+        <div className="flex flex-col gap-1">
+          <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Manual sections</h4>
+          <p className="text-xs text-slate-500">
+            Current persisted structure for this face. Use this table for ongoing section edits.
+          </p>
+        </div>
+        {face.sections.length > 0 && (
+          <div data-testid="structure-face-manual-preview">
+            <FrontElevationPreview face={face} side={face.side} />
+          </div>
+        )}
+        <FaceTab title={`Face ${face.side}`} rackId={rack.id} face={face} readOnly={readOnly} />
+      </section>
+
+      <section
+        data-testid="structure-face-generate-structure"
+        className="flex flex-col gap-2 rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4"
+      >
+        <div className="flex flex-col gap-1">
+          <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Generate structure</h4>
+          <p className="text-xs text-slate-500">
+            Creates or replaces structure for this face using preset values.
+          </p>
+        </div>
+        <SectionPresetForm
+          rackId={rack.id}
+          side={face.side}
+          totalLength={face.faceLength ?? rack.totalLength}
+          existingSectionCount={face.sections.length}
+          initialSectionCount={face.sections.length || 3}
+          initialLevelCount={face.sections[0]?.levels.length || 4}
+          initialSlotCount={face.sections[0]?.levels[0]?.slotCount || 3}
+          readOnly={readOnly}
+          onApply={applyFacePreset}
+        />
+      </section>
     </div>
   );
 }
