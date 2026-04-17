@@ -68,6 +68,22 @@ function hasText(renderer: TestRenderer.ReactTestRenderer, text: string) {
   return JSON.stringify(renderer.toJSON()).includes(text);
 }
 
+function summaryText(renderer: TestRenderer.ReactTestRenderer) {
+  const summary = renderer.root.findByProps({ 'data-testid': 'rack-inspector-summary' });
+  const textParts: string[] = [];
+  const walk = (node: TestRenderer.ReactTestInstance) => {
+    for (const child of node.children) {
+      if (typeof child === 'string') {
+        textParts.push(child);
+      } else {
+        walk(child);
+      }
+    }
+  };
+  walk(summary);
+  return textParts.join(' ');
+}
+
 function clickTab(
   renderer: TestRenderer.ReactTestRenderer,
   tab: 'geometry' | 'structure' | 'addressing' | 'face-mode'
@@ -84,7 +100,7 @@ afterEach(() => {
 });
 
 describe('RackInspector tasks', () => {
-  it('shows the 4-tab task nav only in layout mode', () => {
+  it('shows the 3-tab task nav only in layout mode', () => {
     const draft = createLayoutDraftFixture();
     act(() => {
       useEditorStore.getState().initializeDraft(draft);
@@ -97,7 +113,6 @@ describe('RackInspector tasks', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-geometry' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-structure' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-addressing' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-face-mode' })).toHaveLength(1);
   });
 
   it('defaults to Geometry task on rack select', () => {
@@ -112,10 +127,22 @@ describe('RackInspector tasks', () => {
     expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
     expect(hasText(renderer, 'Position X')).toBe(true);
     expect(hasText(renderer, 'Rotate 90°')).toBe(true);
+    expect(summaryText(renderer)).toContain('Faces');
+    expect(summaryText(renderer)).toContain('Single');
+    expect(summaryText(renderer)).toContain('Cells');
+    expect(summaryText(renderer)).toContain('Levels');
+    expect(summaryText(renderer)).toContain('Validation:');
+    expect(summaryText(renderer)).toContain('0');
+    expect(summaryText(renderer)).toContain('errors');
+    expect(summaryText(renderer)).toContain('warnings');
     expect(hasText(renderer, 'Display Code')).toBe(false);
     expect(hasText(renderer, 'Preset Generator')).toBe(false);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
     expect(hasText(renderer, 'Face B Relationship')).toBe(false);
+    expect(summaryText(renderer)).not.toContain('Policies');
+    expect(summaryText(renderer)).not.toContain('Face Config');
+    expect(summaryText(renderer)).not.toContain('rotation');
+    expect(summaryText(renderer)).not.toContain('Default roles');
   });
 
   it('switches to Structure task and shows only section editing content', () => {
@@ -165,24 +192,21 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Position X')).toBe(false);
   });
 
-  it('switches to Face Mode task and shows mode init controls when Face B is unconfigured', () => {
+  it('falls back to Structure task when objectWorkContext is face-mode', () => {
     const draft = createLayoutDraftFixture();
     act(() => {
       useEditorStore.getState().initializeDraft(draft);
       useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+      useEditorStore.getState().setObjectWorkContext('face-mode');
     });
 
     const renderer = renderInspector(createWorkspace(draft));
 
-    clickTab(renderer, 'face-mode');
-
     expect(useEditorStore.getState().objectWorkContext).toBe('face-mode');
-    // Face B is unconfigured in fixture, so we should see init options
-    expect(hasText(renderer, 'Mirror Face A')).toBe(true);
-    expect(hasText(renderer, 'Start from Scratch')).toBe(true);
-    // structure/addressing content should not be here
-    expect(hasText(renderer, 'Preset Generator')).toBe(false);
+    expect(hasText(renderer, 'Display Code')).toBe(true);
+    expect(hasText(renderer, 'Preset Generator')).toBe(true);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
+    expect(hasText(renderer, 'Face B Relationship')).toBe(false);
   });
 
   it('task switch preserves draft edits made in a previous task', () => {
@@ -310,10 +334,37 @@ describe('RackInspector tasks', () => {
     });
 
     const renderer = renderInspector(createWorkspace(draft));
+    expect(summaryText(renderer)).toContain('Paired / Independent');
+    expect(summaryText(renderer)).toContain('Default roles');
+    expect(summaryText(renderer)).toContain('Mixed');
+  });
 
-    clickTab(renderer, 'structure');
+  it('shows aligned default roles when independent paired faces match', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'independent';
+    rack.faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3, structuralDefaultRole: 'primary_pick' }]
+      }
+    ];
+    rack.faces[0].sections[0].levels[0].structuralDefaultRole = 'primary_pick';
 
-    expect(hasText(renderer, 'Mixed')).toBe(true);
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    expect(summaryText(renderer)).toContain('Paired / Independent');
+    expect(summaryText(renderer)).toContain('Default roles');
+    expect(summaryText(renderer)).toContain('Aligned');
   });
 
   it('shows read-only inherited Level Defaults for mirrored Face B', () => {
@@ -333,10 +384,41 @@ describe('RackInspector tasks', () => {
 
     const renderer = renderInspector(createWorkspace(draft));
 
+    expect(summaryText(renderer)).toContain('Paired / Mirrored');
+    expect(summaryText(renderer)).not.toContain('Default roles');
+
     clickTab(renderer, 'structure');
 
     expect(hasText(renderer, 'Face B mirrors Face A')).toBe(true);
     expect(hasText(renderer, 'Face B is mirrored; edits apply through Face A.')).toBe(true);
     expect(hasText(renderer, 'Face B is mirrored, so default roles are inherited from Face A.')).toBe(true);
+  });
+
+  it('keeps task body stable when summary is collapsed and expanded', () => {
+    const draft = createLayoutDraftFixture();
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    expect(hasText(renderer, 'Position X')).toBe(true);
+
+    const collapseButton = renderer.root.findByProps({ title: 'Collapse summary' });
+    act(() => {
+      collapseButton.props.onClick();
+    });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary-collapsed' })).toHaveLength(1);
+    expect(hasText(renderer, 'Position X')).toBe(true);
+
+    const expandButton = renderer.root.findByProps({ title: 'Expand summary' });
+    act(() => {
+      expandButton.props.onClick();
+    });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(1);
+    expect(hasText(renderer, 'Position X')).toBe(true);
   });
 });

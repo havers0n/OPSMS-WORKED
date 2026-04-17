@@ -25,34 +25,64 @@ function InspectorSummaryBar({
   rack,
   faceA,
   faceB,
-  rackCells
+  rackCells,
+  issues
 }: {
   rack: Rack;
   faceA: RackFace | null;
   faceB: RackFace | null;
   rackCells: Array<{ address: { raw: string } }>;
+  issues: LayoutValidationIssue[];
 }) {
   const [isOpen, setIsOpen] = useState(true);
 
-  const faceBMode = faceB
-    ? resolveRackFaceRelationshipMode(faceB) === 'mirrored'
-      ? 'Mirror'
-      : 'Indep.'
-    : 'Off';
+  const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
+  const faceBConfigured = !!faceB && faceB.enabled;
+  const facesSummary =
+    rack.kind !== 'paired' || !faceBConfigured
+      ? 'Single'
+      : faceBRelationshipMode === 'mirrored'
+        ? 'Paired / Mirrored'
+        : 'Paired / Independent';
 
-  const totalLevels = Math.max(
-    0,
-    ...[faceA, faceB]
-      .filter((f): f is RackFace => !!f)
-      .flatMap((f) => f.sections)
-      .map((s) => s.levels.length)
-  );
+  const totalLevels = Array.from(
+    new Set(
+      [faceA, faceB]
+        .filter((f): f is RackFace => !!f)
+        .flatMap((f) => f.sections.flatMap((s) => s.levels.map((level) => level.ordinal)))
+    )
+  ).length;
 
-  const slotDir = faceA?.slotNumberingDirection ?? 'ltr';
+  const { errors, warnings } = validationSummary(issues);
+
+  const comparableDefaultRoleState = useMemo(() => {
+    if (!faceA || !faceB || !faceB.enabled) return null;
+    if (resolveRackFaceRelationshipMode(faceB) === 'mirrored') return null;
+
+    const ordinalsA = new Set(faceA.sections.flatMap((section) => section.levels.map((level) => level.ordinal)));
+    const ordinalsB = new Set(faceB.sections.flatMap((section) => section.levels.map((level) => level.ordinal)));
+    const sharedOrdinals = [...ordinalsA].filter((ordinal) => ordinalsB.has(ordinal));
+    if (sharedOrdinals.length === 0) return null;
+
+    const resolveLevelRole = (face: RackFace, ordinal: number) => {
+      const sampleLevel = face.sections
+        .flatMap((section) => section.levels)
+        .find((level) => level.ordinal === ordinal);
+      return sampleLevel?.structuralDefaultRole ?? 'none';
+    };
+
+    const hasMixedRoles = sharedOrdinals.some(
+      (ordinal) => resolveLevelRole(faceA, ordinal) !== resolveLevelRole(faceB, ordinal)
+    );
+    return hasMixedRoles ? 'Mixed' : 'Aligned';
+  }, [faceA, faceB]);
 
   if (!isOpen) {
     return (
-      <div className="flex w-7 shrink-0 flex-col border-r border-[var(--border-muted)] bg-[var(--surface-secondary)]">
+      <div
+        data-testid="rack-inspector-summary-collapsed"
+        className="flex w-7 shrink-0 flex-col border-r border-[var(--border-muted)] bg-[var(--surface-secondary)]"
+      >
         <button
           type="button"
           title="Expand summary"
@@ -66,7 +96,10 @@ function InspectorSummaryBar({
   }
 
   return (
-    <div className="flex w-40 shrink-0 flex-col border-r border-[var(--border-muted)] bg-[var(--surface-secondary)]">
+    <div
+      data-testid="rack-inspector-summary"
+      className="flex w-44 shrink-0 flex-col border-r border-[var(--border-muted)] bg-[var(--surface-secondary)]"
+    >
       <div className="flex items-center justify-between px-3 pt-3 pb-1">
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Summary
@@ -81,78 +114,36 @@ function InspectorSummaryBar({
         </button>
       </div>
 
-      <div className="flex flex-col gap-5 overflow-y-auto px-3 pb-4 pt-2">
-        <div className="flex flex-col gap-1">
-          <div className="text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-800">{rackCells.length}</span> slots
-          </div>
-          <div className="text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-800">{totalLevels}</span> levels
-          </div>
-          <div className="text-[11px] text-slate-600">
+      <div className="flex flex-col gap-2 overflow-y-auto px-3 pb-3 pt-2 text-[11px]">
+        <div data-testid="rack-inspector-summary-faces" className="flex items-center justify-between gap-2 text-slate-600">
+          <span>Faces</span>
+          <span className="font-semibold text-slate-800">{facesSummary}</span>
+        </div>
+        <div data-testid="rack-inspector-summary-cells" className="flex items-center justify-between gap-2 text-slate-600">
+          <span>Cells</span>
+          <span className="font-semibold text-slate-800">{rackCells.length}</span>
+        </div>
+        <div data-testid="rack-inspector-summary-levels" className="flex items-center justify-between gap-2 text-slate-600">
+          <span>Levels</span>
+          <span className="font-semibold text-slate-800">{totalLevels}</span>
+        </div>
+        <div data-testid="rack-inspector-summary-validation" className="rounded-md border border-[var(--border-muted)] bg-white px-2 py-1.5 text-slate-600">
+          <div>
+            Validation:{' '}
             <span className="font-semibold text-slate-800">
-              {rack.totalLength.toFixed(1)} × {rack.depth.toFixed(1)}
-            </span>{' '}
-            m
-          </div>
-          <div className="text-[11px] text-slate-600">
-            <span className="font-semibold text-slate-800">{rack.rotationDeg}°</span> rotation
-          </div>
-          <div className="text-[11px] text-slate-600">
-            Face B: <span className="font-semibold text-slate-800">{faceBMode}</span>
-          </div>
-          <div className="text-[11px] text-slate-600">
-            {rack.kind === 'paired' ? 'Paired' : 'Single'}
+              {errors.length} errors, {warnings.length} warnings
+            </span>
           </div>
         </div>
-
-        <div>
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Policies
+        {comparableDefaultRoleState && (
+          <div
+            data-testid="rack-inspector-summary-default-roles"
+            className="flex items-center justify-between gap-2 text-slate-600"
+          >
+            <span>Default roles</span>
+            <span className="font-semibold text-slate-800">{comparableDefaultRoleState}</span>
           </div>
-          <div className="flex flex-col gap-1.5">
-            {[
-              { color: 'bg-blue-500', label: 'Pick' },
-              { color: 'bg-amber-500', label: 'Reserve' },
-              { color: 'bg-slate-300', label: 'None' }
-            ].map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <div className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
-                <div className="text-[11px] text-slate-600">{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Face Config
-          </div>
-          <div className="flex flex-col gap-1">
-            {(
-              [
-                { dir: 'ltr', arrow: '→', slots: '01 02 03', label: 'LTR' },
-                { dir: 'rtl', arrow: '←', slots: '03 02 01', label: 'RTL' }
-              ] as const
-            ).map(({ dir, arrow, slots, label }) => (
-              <div
-                key={dir}
-                className={cn(
-                  'flex items-center gap-1 rounded-md px-2 py-1 text-[11px]',
-                  slotDir === dir
-                    ? 'bg-white shadow-sm ring-1 ring-black/5 text-slate-700'
-                    : 'text-slate-400'
-                )}
-              >
-                <span>{arrow}</span>
-                <span className="font-mono">{slots}</span>
-                {slotDir === dir && (
-                  <span className="ml-auto text-[9px] font-semibold text-slate-500">{label}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -356,6 +347,7 @@ export function RackInspector({
           faceA={faceA}
           faceB={faceB}
           rackCells={rackCells}
+          issues={rackIssues}
         />
         <div className="flex-1 overflow-y-auto">{renderTaskBody()}</div>
       </div>
