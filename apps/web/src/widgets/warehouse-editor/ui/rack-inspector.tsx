@@ -62,8 +62,16 @@ function InspectorSummaryBar({
             <span className="font-semibold text-slate-800">{totalLevels}</span> levels
           </div>
           <div className="text-[11px] text-slate-600">
-            Face B:{' '}
-            <span className="font-semibold text-slate-800">{faceBMode}</span>
+            <span className="font-semibold text-slate-800">
+              {rack.totalLength.toFixed(1)} × {rack.depth.toFixed(1)}
+            </span>{' '}
+            m
+          </div>
+          <div className="text-[11px] text-slate-600">
+            <span className="font-semibold text-slate-800">{rack.rotationDeg}°</span> rotation
+          </div>
+          <div className="text-[11px] text-slate-600">
+            Face B: <span className="font-semibold text-slate-800">{faceBMode}</span>
           </div>
           <div className="text-[11px] text-slate-600">
             {rack.kind === 'paired' ? 'Paired' : 'Single'}
@@ -305,10 +313,6 @@ export function RackInspector({
         <div className="px-5 pt-2 pb-3">
           <div className="min-w-0">
             <div className="text-xl font-semibold text-slate-900">Rack {rack.displayCode}</div>
-            <div className="mt-0.5 text-xs text-slate-500">
-              {rack.kind === 'paired' ? 'Paired' : 'Single'} | {rack.totalLength.toFixed(1)} m x{' '}
-              {rack.depth.toFixed(1)} m | {rack.rotationDeg} deg
-            </div>
             {showTaskNav && (
               <InspectorTaskNav value={objectWorkContext} onChange={setObjectWorkContext} />
             )}
