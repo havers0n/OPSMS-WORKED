@@ -45,7 +45,7 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const WIDTH = 220;
-  const HEIGHT = 180;
+  const HEIGHT = 200;
   const PADDING = 20;
   const SVG_WIDTH = WIDTH - PADDING * 2;
   const SVG_HEIGHT = HEIGHT - PADDING * 2;
@@ -72,6 +72,11 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   const dimLabelOffset = 4;
   const labelWidth = 58;
   const labelHeight = 18;
+  const rotationChipWidth = 92;
+  const rotationChipHeight = 18;
+  const rotationChipX = WIDTH / 2 - 52;
+  const rotationChipY = HEIGHT - PADDING - 22;
+  const labelGap = 8;
 
   const getRotationLabel = () => {
     if (normalizedRotation === 0) return '0°';
@@ -90,26 +95,54 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   const rotatedDepthPoint = rotatePoint(depthTextX, depthTextY, normalizedRotation, centerX, centerY);
   const labelHalfW = labelWidth / 2;
   const labelHalfH = labelHeight / 2;
-  const lengthLabelX = clamp(
-    rotatedLengthPoint.x,
-    PADDING + labelHalfW + 2,
-    WIDTH - PADDING - labelHalfW - 2
-  );
-  const lengthLabelY = clamp(
-    rotatedLengthPoint.y,
-    PADDING + labelHalfH + 2,
-    HEIGHT - PADDING - labelHalfH - 2
-  );
-  const depthLabelX = clamp(
-    rotatedDepthPoint.x,
-    PADDING + labelHalfW + 2,
-    WIDTH - PADDING - labelHalfW - 2
-  );
-  const depthLabelY = clamp(
-    rotatedDepthPoint.y,
-    PADDING + labelHalfH + 2,
-    HEIGHT - PADDING - labelHalfH - 2
-  );
+
+  const placeLabel = (rawX: number, rawY: number) => {
+    let x = clamp(rawX, PADDING + labelHalfW + 2, WIDTH - PADDING - labelHalfW - 2);
+    let y = clamp(rawY, PADDING + labelHalfH + 2, HEIGHT - PADDING - labelHalfH - 2);
+
+    const overlapsRotationChip =
+      Math.abs(x - (rotationChipX + rotationChipWidth / 2)) <= (labelHalfW + rotationChipWidth / 2 + labelGap) &&
+      Math.abs(y - (rotationChipY + rotationChipHeight / 2)) <= (labelHalfH + rotationChipHeight / 2 + labelGap);
+
+    if (overlapsRotationChip) {
+      const liftedY = rotationChipY - labelGap - labelHalfH;
+      y = clamp(liftedY, PADDING + labelHalfH + 2, HEIGHT - PADDING - labelHalfH - 2);
+    }
+
+    return { x, y };
+  };
+
+  const lengthPlaced = placeLabel(rotatedLengthPoint.x, rotatedLengthPoint.y);
+  const depthPlacedInitial = placeLabel(rotatedDepthPoint.x, rotatedDepthPoint.y);
+
+  let depthPlaced = depthPlacedInitial;
+  const labelsOverlap =
+    Math.abs(lengthPlaced.x - depthPlaced.x) <= (labelWidth + labelGap) &&
+    Math.abs(lengthPlaced.y - depthPlaced.y) <= (labelHeight + labelGap);
+
+  if (labelsOverlap) {
+    const tryDown = clamp(
+      depthPlaced.y + labelHeight + labelGap,
+      PADDING + labelHalfH + 2,
+      HEIGHT - PADDING - labelHalfH - 2
+    );
+    const tryUp = clamp(
+      depthPlaced.y - labelHeight - labelGap,
+      PADDING + labelHalfH + 2,
+      HEIGHT - PADDING - labelHalfH - 2
+    );
+    const downDistance = Math.abs(tryDown - depthPlaced.y);
+    const upDistance = Math.abs(tryUp - depthPlaced.y);
+    depthPlaced = {
+      x: depthPlaced.x,
+      y: downDistance >= upDistance ? tryDown : tryUp
+    };
+  }
+
+  const lengthLabelX = lengthPlaced.x;
+  const lengthLabelY = lengthPlaced.y;
+  const depthLabelX = depthPlaced.x;
+  const depthLabelY = depthPlaced.y;
 
   const openEditor = (field: Exclude<ActiveEditor, null>) => {
     if (readOnly) return;
@@ -170,7 +203,7 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
         data-testid="geometry-blueprint-svg"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full bg-slate-50 rounded-lg"
-        style={{ maxHeight: '180px' }}
+        style={{ maxHeight: '200px' }}
       >
         <g
           data-testid="geometry-blueprint-rack-group"
@@ -306,10 +339,10 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
           style={{ cursor: readOnly ? 'default' : 'pointer' }}
         >
           <rect
-            x={WIDTH / 2 - 52}
-            y={HEIGHT - PADDING - 22}
-            width={92}
-            height={18}
+            x={rotationChipX}
+            y={rotationChipY}
+            width={rotationChipWidth}
+            height={rotationChipHeight}
             rx="8"
             fill={readOnly ? '#f8fafc' : '#ffffff'}
             stroke={readOnly ? '#cbd5e1' : '#94a3b8'}
