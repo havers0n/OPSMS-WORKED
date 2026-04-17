@@ -1,6 +1,6 @@
 import { resolveRackFaceRelationshipMode } from '@wos/domain';
 import type { Rack, RackFace } from '@wos/domain';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { FaceTab } from '@/features/rack-configure/ui/face-tab';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
@@ -17,6 +17,25 @@ import { PolicyLegendVisual } from './policy-legend-visual';
 
 function cn(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(' ');
+}
+
+function StructureSection({
+  title,
+  testId,
+  children
+}: {
+  title: string;
+  testId: string;
+  children: ReactNode;
+}) {
+  return (
+    <section data-testid={testId} className="flex flex-col gap-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+        {title}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 function FaceBControl({
@@ -36,7 +55,10 @@ function FaceBControl({
   const faceBConfigured = !!faceB && (isMirrored || faceB.sections.length > 0);
 
   return (
-    <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
+    <div
+      data-testid="structure-topology-face-b-control"
+      className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4"
+    >
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
           Face B
@@ -127,9 +149,6 @@ function FaceStructureBlock({
       />
       {face.sections.length > 0 && <FrontElevationPreview face={face} side={face.side} />}
       <FaceTab title={`Face ${face.side}`} rackId={rack.id} face={face} readOnly={readOnly} />
-      {face.sections.length > 0 && (
-        <LevelDefaultsPanel rackId={rack.id} face={face} readOnly={readOnly} />
-      )}
     </div>
   );
 }
@@ -154,64 +173,78 @@ export function StructureTask({
 
   const effectiveActiveFace = showFaceTabs ? activeFaceSide : 'A';
   const activeFaceData = effectiveActiveFace === 'A' ? faceA : faceB;
+  const policyFace = showFaceTabs ? activeFaceData : faceA;
 
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
-      <StructureIdentityPanel rack={rack} readOnly={readOnly} />
-      <FaceModeIsometric rack={rack} faceB={faceB} />
-      <FaceBControl rack={rack} faceB={faceB} readOnly={readOnly} />
-
-      {showFaceTabs && (
-        <div className="flex gap-1 rounded-xl border border-[var(--border-muted)] bg-white p-1 shadow-sm">
-          {(['A', 'B'] as const).map((side) => (
-            <button
-              key={side}
-              type="button"
-              onClick={() => setActiveFaceSide(side)}
-              className={cn(
-                'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-                effectiveActiveFace === side
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              )}
-            >
-              Face {side}
-            </button>
-          ))}
+      <StructureSection title="Topology" testId="structure-section-topology">
+        <div data-testid="structure-topology-identity">
+          <StructureIdentityPanel rack={rack} readOnly={readOnly} />
         </div>
-      )}
+        <FaceModeIsometric rack={rack} faceB={faceB} />
+        <FaceBControl rack={rack} faceB={faceB} readOnly={readOnly} />
+      </StructureSection>
 
-      {showFaceTabs && activeFaceData && (
-        <FaceStructureBlock rack={rack} face={activeFaceData} readOnly={readOnly} />
-      )}
-
-      {!showFaceTabs && faceA && (
-        <FaceStructureBlock rack={rack} face={faceA} readOnly={readOnly} />
-      )}
-
-      {isMirrored && faceA && (
-        <div className="flex flex-col gap-3">
-          <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Face B mirrors Face A. Switch to Independent above to edit separately.
+      <StructureSection title="Face Structure" testId="structure-section-face-structure">
+        {showFaceTabs && (
+          <div
+            data-testid="structure-face-switcher"
+            className="flex gap-1 rounded-xl border border-[var(--border-muted)] bg-white p-1 shadow-sm"
+          >
+            {(['A', 'B'] as const).map((side) => (
+              <button
+                key={side}
+                type="button"
+                data-testid={`structure-face-switch-${side}`}
+                onClick={() => setActiveFaceSide(side)}
+                className={cn(
+                  'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+                  effectiveActiveFace === side
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                )}
+              >
+                Face {side}
+              </button>
+            ))}
           </div>
-          <div className="opacity-60 grayscale-[0.5]">
-            <LevelDefaultsPanel
-              rackId={rack.id}
-              face={faceA}
-              readOnly={true}
-              heading="Face B level defaults"
-              description="Face B is mirrored, so default roles are inherited from Face A."
-            />
-          </div>
-        </div>
-      )}
+        )}
 
-      <div>
-        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-          Policies
+        {showFaceTabs && activeFaceData && (
+          <FaceStructureBlock rack={rack} face={activeFaceData} readOnly={readOnly} />
+        )}
+
+        {!showFaceTabs && faceA && (
+          <FaceStructureBlock rack={rack} face={faceA} readOnly={readOnly} />
+        )}
+      </StructureSection>
+
+      <StructureSection title="Policies" testId="structure-section-policies">
+        <div data-testid="structure-policies-face-defaults">
+          {policyFace && (
+            <LevelDefaultsPanel rackId={rack.id} face={policyFace} readOnly={readOnly} />
+          )}
         </div>
+
+        {isMirrored && faceA && (
+          <div data-testid="structure-policies-mirrored-face-b" className="flex flex-col gap-3">
+            <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              Face B mirrors Face A. Switch to Independent above to edit separately.
+            </div>
+            <div className="opacity-60 grayscale-[0.5]">
+              <LevelDefaultsPanel
+                rackId={rack.id}
+                face={faceA}
+                readOnly={true}
+                heading="Face B level defaults"
+                description="Face B is mirrored, so default roles are inherited from Face A."
+              />
+            </div>
+          </div>
+        )}
+
         <PolicyLegendVisual />
-        <div className="mt-4">
+        <div data-testid="structure-policies-rack-apply" className="mt-4">
           <RackLevelDefaultsPanel
             rackId={rack.id}
             faceA={faceA}
@@ -219,7 +252,7 @@ export function StructureTask({
             readOnly={readOnly}
           />
         </div>
-      </div>
+      </StructureSection>
     </div>
   );
 }

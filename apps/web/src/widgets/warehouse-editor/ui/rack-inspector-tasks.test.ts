@@ -68,6 +68,21 @@ function hasText(renderer: TestRenderer.ReactTestRenderer, text: string) {
   return JSON.stringify(renderer.toJSON()).includes(text);
 }
 
+function nodeText(node: TestRenderer.ReactTestInstance) {
+  const textParts: string[] = [];
+  const walk = (next: TestRenderer.ReactTestInstance) => {
+    for (const child of next.children) {
+      if (typeof child === 'string') {
+        textParts.push(child);
+      } else {
+        walk(child);
+      }
+    }
+  };
+  walk(node);
+  return textParts.join(' ');
+}
+
 function summaryText(renderer: TestRenderer.ReactTestRenderer) {
   const summary = renderer.root.findByProps({ 'data-testid': 'rack-inspector-summary' });
   const textParts: string[] = [];
@@ -157,10 +172,39 @@ describe('RackInspector tasks', () => {
     clickTab(renderer, 'structure');
 
     expect(useEditorStore.getState().objectWorkContext).toBe('structure');
+    const sectionOrder = renderer.root
+      .findAll(
+        (node) =>
+          typeof node.props['data-testid'] === 'string' &&
+          node.props['data-testid'].startsWith('structure-section-')
+      )
+      .map((node) => node.props['data-testid']);
+    expect(sectionOrder).toEqual([
+      'structure-section-topology',
+      'structure-section-face-structure',
+      'structure-section-policies'
+    ]);
+
+    const topologyOrder = renderer.root
+      .findAll(
+        (node) =>
+          node.props['data-testid'] === 'structure-topology-identity' ||
+          node.props['data-testid'] === 'structure-topology-face-b-control'
+      )
+      .map((node) => node.props['data-testid']);
+    expect(topologyOrder).toEqual([
+      'structure-topology-identity',
+      'structure-topology-face-b-control'
+    ]);
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-policies-face-defaults' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-policies-rack-apply' })).toHaveLength(1);
     expect(hasText(renderer, 'Display Code')).toBe(true);
     expect(hasText(renderer, 'Kind')).toBe(true);
     expect(hasText(renderer, 'Face A')).toBe(true);
     expect(hasText(renderer, 'Preset Generator')).toBe(true);
+    expect(hasText(renderer, 'Face-level defaults')).toBe(true);
     // addressing moved out
     expect(hasText(renderer, 'Numbering direction')).toBe(false);
     expect(hasText(renderer, 'Preview Addresses')).toBe(false);
@@ -169,6 +213,50 @@ describe('RackInspector tasks', () => {
     // geometry not in structure
     expect(hasText(renderer, 'Position X')).toBe(false);
     expect(hasText(renderer, 'Rotate 90°')).toBe(false);
+  });
+
+  it('keeps one active face switcher and does not duplicate face selection in Policies', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'independent';
+    rack.faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3, structuralDefaultRole: 'reserve' }]
+      }
+    ];
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'structure');
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
+
+    const policiesSection = renderer.root.findByProps({ 'data-testid': 'structure-section-policies' });
+    const policyFaceButtons = policiesSection.findAll(
+      (node) =>
+        node.type === 'button' &&
+        (node.children.includes('Face A') || node.children.includes('Face B'))
+    );
+    expect(policyFaceButtons).toHaveLength(0);
+
+    const faceBButton = renderer.root.findByProps({ 'data-testid': 'structure-face-switch-B' });
+    act(() => {
+      faceBButton.props.onClick();
+    });
+
+    expect(hasText(renderer, 'Face B')).toBe(true);
+    expect(hasText(renderer, 'Face-level defaults')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
   });
 
   it('switches to Addressing task and shows numbering + preview only', () => {
@@ -388,6 +476,15 @@ describe('RackInspector tasks', () => {
     expect(summaryText(renderer)).not.toContain('Default roles');
 
     clickTab(renderer, 'structure');
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'structure-policies-mirrored-face-b' })).toHaveLength(1);
+    const policiesSection = renderer.root.findByProps({ 'data-testid': 'structure-section-policies' });
+    expect(nodeText(policiesSection)).toContain('Face B mirrors Face A');
+    expect(nodeText(policiesSection)).toContain('Face B is mirrored; edits apply through Face A.');
+    expect(nodeText(policiesSection)).toContain(
+      'Face B is mirrored, so default roles are inherited from Face A.'
+    );
 
     expect(hasText(renderer, 'Face B mirrors Face A')).toBe(true);
     expect(hasText(renderer, 'Face B is mirrored; edits apply through Face A.')).toBe(true);
