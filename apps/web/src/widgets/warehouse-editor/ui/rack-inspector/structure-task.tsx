@@ -1,5 +1,6 @@
 import { resolveRackFaceRelationshipMode } from '@wos/domain';
 import type { Rack, RackFace } from '@wos/domain';
+import { useState } from 'react';
 import { FaceTab } from '@/features/rack-configure/ui/face-tab';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
@@ -142,49 +143,77 @@ export function StructureTask({
   faceB: RackFace | null;
   readOnly: boolean;
 }) {
-  const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : 'independent';
+  const [activeFaceSide, setActiveFaceSide] = useState<'A' | 'B'>('A');
+
+  const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
   const isMirrored = !!faceB && faceBRelationshipMode === 'mirrored';
   const faceBConfigured = !!faceB && (isMirrored || faceB.sections.length > 0);
+  const showFaceTabs = faceBConfigured && !isMirrored;
+
+  const effectiveActiveFace = showFaceTabs ? activeFaceSide : 'A';
+  const activeFaceData = effectiveActiveFace === 'A' ? faceA : faceB;
 
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
       <StructureIdentityPanel rack={rack} readOnly={readOnly} />
       <FaceBControl rack={rack} faceB={faceB} readOnly={readOnly} />
-      <RackLevelDefaultsPanel
-        rackId={rack.id}
-        faceA={faceA}
-        faceB={faceB}
-        readOnly={readOnly}
-      />
 
-      {faceA && <FaceStructureBlock rack={rack} face={faceA} readOnly={readOnly} />}
-
-      {isMirrored && (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Face B mirrors Face A. Switch to Independent above to edit separately.
-          </div>
-          {faceA && (
-            <div className="opacity-60 grayscale-[0.5]">
-              <LevelDefaultsPanel
-                rackId={rack.id}
-                face={faceA}
-                readOnly={true}
-                heading="Face B Overrides (Advanced)"
-                description="Face B is mirrored, so overrides are inherited from Face A."
-              />
-              <div className="mt-2 text-[10px] text-slate-400 italic px-1">
-                Face B overrides are inherited from Face A while mirrored.
-              </div>
-            </div>
-          )}
+      {showFaceTabs && (
+        <div className="flex gap-1 rounded-xl border border-[var(--border-muted)] bg-white p-1 shadow-sm">
+          {(['A', 'B'] as const).map((side) => (
+            <button
+              key={side}
+              type="button"
+              onClick={() => setActiveFaceSide(side)}
+              className={cn(
+                'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+                effectiveActiveFace === side
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              )}
+            >
+              Face {side}
+            </button>
+          ))}
         </div>
       )}
 
-      {!isMirrored && faceBConfigured && faceB && (
-        <FaceStructureBlock rack={rack} face={faceB} readOnly={readOnly} />
+      {showFaceTabs && activeFaceData && (
+        <FaceStructureBlock rack={rack} face={activeFaceData} readOnly={readOnly} />
       )}
 
+      {!showFaceTabs && faceA && (
+        <FaceStructureBlock rack={rack} face={faceA} readOnly={readOnly} />
+      )}
+
+      {isMirrored && faceA && (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Face B mirrors Face A. Switch to Independent above to edit separately.
+          </div>
+          <div className="opacity-60 grayscale-[0.5]">
+            <LevelDefaultsPanel
+              rackId={rack.id}
+              face={faceA}
+              readOnly={true}
+              heading="Face B Overrides (Advanced)"
+              description="Face B is mirrored, so overrides are inherited from Face A."
+            />
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+          Policies
+        </div>
+        <RackLevelDefaultsPanel
+          rackId={rack.id}
+          faceA={faceA}
+          faceB={faceB}
+          readOnly={readOnly}
+        />
+      </div>
     </div>
   );
 }
