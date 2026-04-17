@@ -13,7 +13,6 @@ import {
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { AddressingTask } from './rack-inspector/addressing-task';
-import { FaceModeTask } from './rack-inspector/face-mode-task';
 import { GeometryTask } from './rack-inspector/geometry-task';
 import { InspectorTaskNav } from './rack-inspector/inspector-task-nav';
 import { StructureTask } from './rack-inspector/structure-task';
@@ -173,7 +172,15 @@ export function RackInspector({
           />
         );
       case 'face-mode':
-        return <FaceModeTask rack={rack} faceB={faceB} readOnly={!isLayoutEditable} />;
+        // face-mode tab removed from nav; graceful fallback to structure
+        return (
+          <StructureTask
+            rack={rack}
+            faceA={faceA}
+            faceB={faceB}
+            readOnly={!isLayoutEditable}
+          />
+        );
     }
   };
 

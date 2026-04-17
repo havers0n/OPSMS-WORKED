@@ -3,8 +3,7 @@ import type { ObjectWorkContext } from '@/widgets/warehouse-editor/model/editor-
 const TASK_OPTIONS: Array<{ value: ObjectWorkContext; label: string }> = [
   { value: 'geometry', label: 'Geometry' },
   { value: 'structure', label: 'Structure' },
-  { value: 'addressing', label: 'Addressing' },
-  { value: 'face-mode', label: 'Face Mode' }
+  { value: 'addressing', label: 'Addressing' }
 ];
 
 function cn(...classes: (string | false | undefined | null)[]) {

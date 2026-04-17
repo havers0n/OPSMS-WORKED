@@ -3,10 +3,97 @@ import type { Rack, RackFace } from '@wos/domain';
 import { FaceTab } from '@/features/rack-configure/ui/face-tab';
 import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevation-preview';
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
-import { useApplyFacePreset } from '@/widgets/warehouse-editor/model/editor-selectors';
+import {
+  useApplyFacePreset,
+  useResetFaceB,
+  useSetFaceBRelationship
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 import { StructureIdentityPanel } from './structure-identity-panel';
 import { LevelDefaultsPanel } from './level-defaults-panel';
 import { RackLevelDefaultsPanel } from './rack-level-defaults-panel';
+
+function cn(...classes: (string | false | undefined | null)[]) {
+  return classes.filter(Boolean).join(' ');
+}
+
+function FaceBControl({
+  rack,
+  faceB,
+  readOnly
+}: {
+  rack: Rack;
+  faceB: RackFace | null;
+  readOnly: boolean;
+}) {
+  const setFaceBRelationship = useSetFaceBRelationship();
+  const resetFaceB = useResetFaceB();
+
+  const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
+  const isMirrored = !!faceB && faceBRelationshipMode === 'mirrored';
+  const faceBConfigured = !!faceB && (isMirrored || faceB.sections.length > 0);
+
+  return (
+    <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Face B
+        </div>
+        {faceBConfigured && !readOnly && (
+          <button
+            type="button"
+            onClick={() => resetFaceB(rack.id)}
+            className="text-[11px] text-red-400 hover:text-red-600"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      <div className="flex gap-1 rounded-xl border border-[var(--border-muted)] bg-white p-1">
+        {!faceBConfigured && (
+          <button
+            type="button"
+            disabled
+            className="flex-1 rounded-lg px-3 py-2 text-xs font-medium bg-slate-900 text-white shadow-sm"
+          >
+            Off
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => setFaceBRelationship(rack.id, 'mirrored')}
+          className={cn(
+            'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed',
+            faceBConfigured && isMirrored
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-700 disabled:text-slate-400'
+          )}
+        >
+          Mirror A
+        </button>
+        <button
+          type="button"
+          disabled={readOnly}
+          onClick={() => {
+            if (!faceBConfigured) {
+              setFaceBRelationship(rack.id, 'independent', { initFrom: 'scratch' });
+            } else if (isMirrored) {
+              setFaceBRelationship(rack.id, 'independent', { initFrom: 'copy' });
+            }
+          }}
+          className={cn(
+            'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed',
+            faceBConfigured && !isMirrored
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-500 hover:text-slate-700 disabled:text-slate-400'
+          )}
+        >
+          Independent
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function FaceStructureBlock({
   rack,
@@ -62,6 +149,7 @@ export function StructureTask({
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
       <StructureIdentityPanel rack={rack} readOnly={readOnly} />
+      <FaceBControl rack={rack} faceB={faceB} readOnly={readOnly} />
       <RackLevelDefaultsPanel
         rackId={rack.id}
         faceA={faceA}
@@ -74,7 +162,7 @@ export function StructureTask({
       {isMirrored && (
         <div className="flex flex-col gap-4">
           <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Face B mirrors Face A. To edit Face B structure independently, switch to the Face Mode task.
+            Face B mirrors Face A. Switch to Independent above to edit separately.
           </div>
           {faceA && (
             <div className="opacity-60 grayscale-[0.5]">
@@ -97,11 +185,6 @@ export function StructureTask({
         <FaceStructureBlock rack={rack} face={faceB} readOnly={readOnly} />
       )}
 
-      {!faceBConfigured && !isMirrored && (
-        <div className="rounded-[14px] border border-dashed border-[var(--border-muted)] bg-[var(--surface-secondary)] px-4 py-4 text-center text-sm text-slate-500">
-          Face B is not configured. Use the Face Mode task to add a second face.
-        </div>
-      )}
     </div>
   );
 }
