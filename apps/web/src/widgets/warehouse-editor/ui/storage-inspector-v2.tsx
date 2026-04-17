@@ -7,7 +7,6 @@ import { useLocationByCell } from '@/entities/location/api/use-location-by-cell'
 import { locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
-import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
 import { useLocationEffectiveRole } from '@/entities/product-location-role/api/use-location-effective-role';
 import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
 import {
@@ -42,13 +41,11 @@ import {
   type MoveTaskState,
   type TaskKind
 } from './storage-inspector-v2/mode';
-import {
-  ContainerTypeSelect,
-  InspectorFooter,
-  OccupancyBar,
-  SectionHeader,
-  StatusBadge
-} from './storage-inspector-v2/shared';
+import { EmptyState } from './storage-inspector-v2/empty-state';
+import { LoadingState } from './storage-inspector-v2/loading-state';
+import { RackOverviewPanel } from './storage-inspector-v2/rack-overview-panel';
+import { CellOverviewPanel } from './storage-inspector-v2/cell-overview-panel';
+import { ContainerDetailPanel } from './storage-inspector-v2/container-detail-panel';
 import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-container-panel';
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
@@ -61,103 +58,6 @@ export type { MoveTaskState } from './storage-inspector-v2/mode';
 
 interface StorageInspectorV2Props {
   workspace: FloorWorkspace | null;
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-      <div className="flex flex-col items-center justify-center flex-1 px-8 text-center">
-        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
-          <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-            />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </div>
-        <p className="text-sm font-medium text-gray-700">No location selected</p>
-        <p className="text-xs text-gray-500 mt-1 leading-relaxed">Select a location from the navigator to view details</p>
-      </div>
-      <InspectorFooter />
-    </div>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-      <div className="flex flex-col items-center justify-center flex-1 px-8 text-center">
-        <p className="text-sm text-gray-400">Loading location…</p>
-      </div>
-      <InspectorFooter />
-    </div>
-  );
-}
-
-function RackOverviewPanel({ rackId }: { rackId: string }) {
-  const { data, isLoading, isError } = useRackInspector(rackId);
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-        <div className="flex flex-col items-center justify-center flex-1 px-8 text-center">
-          <p className="text-sm text-gray-400">Loading rack…</p>
-        </div>
-        <InspectorFooter />
-      </div>
-    );
-  }
-
-  if (isError || !data) {
-    return (
-      <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-        <div className="flex flex-col items-center justify-center flex-1 px-8 text-center">
-          <p className="text-sm text-red-500">Failed to load rack data</p>
-        </div>
-        <InspectorFooter />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label={`Rack overview: ${data.displayCode}`}>
-      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <span className="font-mono font-semibold text-gray-900">{data.displayCode}</span>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <span className="capitalize">{data.kind}</span>
-            <span className="text-gray-300">·</span>
-            <span>{data.axis}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <SectionHeader title="Occupancy" />
-        <div className="px-4 py-3 border-b border-gray-200 space-y-2">
-          <OccupancyBar rate={data.occupancySummary.occupancyRate} />
-          <div className="text-xs text-gray-500">
-            {data.occupancySummary.occupiedCells} / {data.occupancySummary.totalCells} cells occupied
-          </div>
-        </div>
-
-        <SectionHeader title="Levels" />
-        <div className="px-4 py-3 space-y-1.5">
-          {data.levels.map((level) => (
-            <div key={level.levelOrdinal} className="flex justify-between items-center text-xs text-gray-700">
-              <span className="font-medium">L{level.levelOrdinal}:</span>
-              <span className="text-gray-500">{level.occupiedCells}/{level.totalCells}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <InspectorFooter />
-    </div>
-  );
 }
 
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
@@ -1030,272 +930,65 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     };
 
     return (
-      <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label={`Container detail: ${displayCode}`}>
-        <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
-          <button onClick={() => setSelectedContainerId(null)} className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2" aria-label="Back to cell overview">
-            ← Back
-          </button>
-          <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
-            <span>{rackDisplayCode}</span>
-            <span className="text-gray-300">/</span>
-            <span>Level {activeLevel}</span>
-            <span className="text-gray-300">/</span>
-            <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <SectionHeader title="Container" />
-          <div className="px-4 py-3 border-b border-gray-200 space-y-1">
-            <div className="font-mono text-sm font-semibold text-gray-900">{displayCode}</div>
-            {first && (
-              <>
-                <div className="text-xs text-gray-500 capitalize">Type: {first.containerType}</div>
-                <div className="text-xs text-gray-500 capitalize">Status: {first.containerStatus}</div>
-              </>
-            )}
-          </div>
-
-          <SectionHeader title="Location Role" />
-          <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="location-role-context">
-            {selectedProduct && (
-              <p className="text-xs text-gray-700">
-                SKU: <span className="font-mono text-gray-900">{selectedProduct.sku ?? selectedProduct.name}</span>
-              </p>
-            )}
-            <p className="text-xs text-gray-700">
-              Structural default: <span className="font-medium text-gray-900">{structuralDefaultText}</span>
-            </p>
-            <p className="text-xs text-gray-700">
-              Effective role: <span className="font-medium text-gray-900">{effectiveRoleText}</span>
-            </p>
-            <p className="text-xs text-gray-700">
-              Source: <span className="font-medium text-gray-900">{sourceText}</span>
-            </p>
-
-            {!hasProductContext && (
-              <p className="text-xs text-gray-500" data-testid="location-role-product-context-required">
-                Product context required to resolve explicit override.
-              </p>
-            )}
-
-            {isConflict && (
-              <p className="text-xs text-amber-700" data-testid="location-role-conflict-note">
-                Multiple published explicit roles exist for this product/location.
-              </p>
-            )}
-
-            {showNoneExplanation && (
-              <p className="text-xs text-gray-500" data-testid="location-role-none-note">
-                No structural default or explicit override applies here.
-              </p>
-            )}
-          </div>
-
-          {canShowOverrideEntry && (
-            <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="override-task-entry">
-              <button
-                onClick={openEditOverrideTask}
-                className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2"
-                data-testid="edit-override-action"
-              >
-                {hasExplicitOverride ? 'Edit override' : 'Set override'}
-              </button>
-            </div>
-          )}
-
-          {canShowRepairConflictEntry && (
-            <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="repair-conflict-task-entry">
-              <button
-                onClick={openRepairConflictTask}
-                className="w-full text-sm font-medium text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded px-3 py-2"
-                data-testid="repair-conflict-action"
-              >
-                Repair conflict
-              </button>
-            </div>
-          )}
-
-          <div className="px-4 py-3 border-b border-gray-200">
-            {isEmptyContainer && (
-              <button
-                onClick={openAddProductTask}
-                className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 mb-2"
-                data-testid="add-product-action"
-              >
-                Add product
-              </button>
-            )}
-            <button
-              onClick={() => {
-                if (!cellId || !locationId) return;
-                setMoveTaskState({
-                  sourceContainerId: mode.containerId,
-                  sourceCellId: cellId,
-                  sourceLocationId: locationId,
-                  sourceRackId: rackId,
-                  sourceLevel: activeLevel,
-                  sourceLocationCode: locationCode,
-                  sourceContainerDisplayCode: displayCode,
-                  targetCellId: null,
-                  stage: 'selecting-target',
-                  errorMessage: null
-                });
-                setTaskKind('move-container');
-              }}
-              className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2"
-              data-testid="move-container-action"
-            >
-              Move container
-            </button>
-          </div>
-
-          <SectionHeader title="Inventory" />
-          <div className="px-4 py-3">
-            {items.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">Empty container</p>
-            ) : (
-              <div className="space-y-1.5">
-                {items.map((row, idx) => {
-                  const label = row.product?.name ?? row.product?.sku ?? row.itemRef ?? '—';
-                  const qty = row.quantity ?? 0;
-                  const uom = row.uom ?? '';
-                  return (
-                    <div key={`${row.containerId}-${row.itemRef ?? idx}`} className="flex items-baseline justify-between gap-2 text-xs">
-                      <div className="min-w-0 flex-1">
-                        {row.product?.sku && <span className="font-mono text-gray-500">{row.product.sku}</span>}
-                        <span className="text-gray-600 ml-1.5 truncate">{label}</span>
-                      </div>
-                      <span className="font-medium text-gray-700 flex-shrink-0 tabular-nums">{qty} {uom}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <InspectorFooter />
-      </div>
+      <ContainerDetailPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        displayCode={displayCode}
+        firstRow={first}
+        items={items}
+        selectedProduct={selectedProduct}
+        structuralDefaultText={structuralDefaultText}
+        effectiveRoleText={effectiveRoleText}
+        sourceText={sourceText}
+        hasProductContext={hasProductContext}
+        isConflict={isConflict}
+        showNoneExplanation={showNoneExplanation}
+        canShowOverrideEntry={canShowOverrideEntry}
+        hasExplicitOverride={hasExplicitOverride}
+        canShowRepairConflictEntry={canShowRepairConflictEntry}
+        isEmptyContainer={isEmptyContainer}
+        onBack={() => setSelectedContainerId(null)}
+        onOpenEditOverrideTask={openEditOverrideTask}
+        onOpenRepairConflictTask={openRepairConflictTask}
+        onOpenAddProductTask={openAddProductTask}
+        onStartMoveContainer={() => {
+          if (!cellId || !locationId) return;
+          setMoveTaskState({
+            sourceContainerId: mode.containerId,
+            sourceCellId: cellId,
+            sourceLocationId: locationId,
+            sourceRackId: rackId,
+            sourceLevel: activeLevel,
+            sourceLocationCode: locationCode,
+            sourceContainerDisplayCode: displayCode,
+            targetCellId: null,
+            stage: 'selecting-target',
+            errorMessage: null
+          });
+          setTaskKind('move-container');
+        }}
+      />
     );
   }
 
+  const cellOverviewItems = storageRows.filter((row) => row.itemRef !== null || row.quantity !== null);
+  const cellOverviewPreview = cellOverviewItems.slice(0, INVENTORY_PREVIEW_LIMIT);
+  const cellOverviewOverflow = cellOverviewItems.length - INVENTORY_PREVIEW_LIMIT;
+
   return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label={`Location inspector: ${locationCode}`}>
-      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
-        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
-          <span>{rackDisplayCode}</span>
-          <span className="text-gray-300">/</span>
-          <span>Level {activeLevel}</span>
-          <span className="text-gray-300">/</span>
-          <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <SectionHeader title="Status" />
-        <div className="px-4 py-3 border-b border-gray-200 space-y-2">
-          <StatusBadge occupied={isOccupied} />
-          {storageRows[0]?.locationType && (
-            <div className="text-xs text-gray-600">
-              <span className="text-gray-400">Type:</span> {storageRows[0].locationType.replace('_', ' ')}
-            </div>
-          )}
-        </div>
-
-        <SectionHeader title="Current Contents" />
-        <div className="px-4 py-3 border-b border-gray-200">
-          {!isOccupied ? (
-            <p className="text-sm text-gray-400 italic">None</p>
-          ) : (
-            <div className="space-y-2">
-              {containers.map(({ containerId, rows }) => {
-                const first = rows[0];
-                const displayCode = first.externalCode ?? first.systemCode;
-                return (
-                  <button
-                    key={containerId}
-                    onClick={() => setSelectedContainerId(containerId)}
-                    className="w-full text-left bg-gray-50 border border-gray-200 rounded px-3 py-2 space-y-1 hover:bg-blue-50 hover:border-blue-200 transition-colors"
-                    aria-label={`View container ${displayCode}`}
-                  >
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">Container</div>
-                    <div className="font-mono text-sm font-semibold text-gray-900">{displayCode}</div>
-                    <div className="text-xs text-gray-500 capitalize">Status: {first.containerStatus}</div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <SectionHeader title="Inventory" />
-        <div className="px-4 py-3">
-          {!isOccupied ? (
-            <p className="text-sm text-gray-400 italic">0 items</p>
-          ) : (
-            (() => {
-              const allItems = storageRows.filter((row) => row.itemRef !== null || row.quantity !== null);
-              const preview = allItems.slice(0, INVENTORY_PREVIEW_LIMIT);
-              const overflow = allItems.length - INVENTORY_PREVIEW_LIMIT;
-
-              if (allItems.length === 0) {
-                return <p className="text-sm text-gray-400 italic">0 items</p>;
-              }
-
-              return (
-                <div className="space-y-1.5">
-                  {preview.map((row, idx) => {
-                    const label = row.product?.name ?? row.product?.sku ?? row.itemRef ?? '—';
-                    const qty = row.quantity ?? 0;
-                    const uom = row.uom ?? '';
-                    return (
-                      <div key={`${row.containerId}-${row.itemRef ?? idx}`} className="flex items-baseline justify-between gap-2 text-xs">
-                        <div className="min-w-0 flex-1">
-                          {row.product?.sku && <span className="font-mono text-gray-500">{row.product.sku}</span>}
-                          <span className="text-gray-600 ml-1.5 truncate">{label}</span>
-                        </div>
-                        <span className="font-medium text-gray-700 flex-shrink-0 tabular-nums">{qty} {uom}</span>
-                      </div>
-                    );
-                  })}
-                  {overflow > 0 && (
-                    <p className="text-xs text-gray-400 pt-0.5">
-                      +{overflow} more item{overflow > 1 ? 's' : ''}
-                    </p>
-                  )}
-                </div>
-              );
-            })()
-          )}
-        </div>
-
-        <SectionHeader title="Override" />
-        <div className="px-4 py-3 border-b border-gray-200" data-testid="cell-override-hint">
-          <p className="text-xs text-gray-600">Location role context is shown for container detail.</p>
-          <p className="text-xs text-gray-500 mt-1">Select a container with one active SKU to resolve effective role.</p>
-        </div>
-
-        <SectionHeader title="Actions" />
-        <div className="px-4 py-3 space-y-2">
-          <button
-            onClick={openCreateTask}
-            className="w-full text-left px-3 py-2 text-sm rounded border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors"
-            aria-label="Create container at this location"
-          >
-            Create container
-          </button>
-          <button
-            onClick={openCreateWithProductTask}
-            className="w-full text-left px-3 py-2 text-sm rounded border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-colors"
-            aria-label="Create container with product at this location"
-          >
-            Create container with product
-          </button>
-        </div>
-      </div>
-
-      <InspectorFooter />
-    </div>
+    <CellOverviewPanel
+      rackDisplayCode={rackDisplayCode}
+      activeLevel={activeLevel}
+      locationCode={locationCode}
+      isOccupied={isOccupied}
+      locationType={storageRows[0]?.locationType ?? null}
+      containers={containers}
+      inventoryPreviewRows={cellOverviewPreview}
+      inventoryOverflow={cellOverviewOverflow}
+      onSelectContainer={setSelectedContainerId}
+      onOpenCreateTask={openCreateTask}
+      onOpenCreateWithProductTask={openCreateWithProductTask}
+    />
   );
 }
