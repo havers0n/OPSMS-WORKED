@@ -269,4 +269,74 @@ describe('RackInspector tasks', () => {
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-level-pager' })).toHaveLength(0);
   });
+
+  it('shows rack-level apply panel in Structure task', () => {
+    const draft = createLayoutDraftFixture();
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+
+    clickTab(renderer, 'structure');
+
+    expect(hasText(renderer, 'Apply to Whole Rack Level')).toBe(true);
+    expect(hasText(renderer, 'This action applies the selected role to all editable faces at this level.')).toBe(true);
+    expect(hasText(renderer, 'Reapplying at rack level overwrites face-level differences for this level.')).toBe(true);
+    expect(hasText(renderer, 'Pick')).toBe(true);
+    expect(hasText(renderer, 'Res')).toBe(true);
+    expect(hasText(renderer, 'None')).toBe(true);
+  });
+
+  it('shows mixed row state when face overrides diverge', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    draft.racks[rackId].kind = 'paired';
+    draft.racks[rackId].faces[1].enabled = true;
+    draft.racks[rackId].faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3, structuralDefaultRole: 'reserve' }]
+      }
+    ];
+    draft.racks[rackId].faces[0].sections[0].levels[0].structuralDefaultRole = 'primary_pick';
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+
+    clickTab(renderer, 'structure');
+
+    expect(hasText(renderer, 'Mixed')).toBe(true);
+  });
+
+  it('shows read-only inherited Level Defaults for mirrored Face B', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].isMirrored = true;
+    rack.faces[1].relationshipMode = 'mirrored';
+    rack.faces[1].mirrorSourceFaceId = rack.faces[0].id;
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+
+    clickTab(renderer, 'structure');
+
+    expect(hasText(renderer, 'Face B mirrors Face A')).toBe(true);
+    expect(hasText(renderer, 'Face B is mirrored; edits apply through Face A.')).toBe(true);
+    expect(hasText(renderer, 'Face B overrides are inherited from Face A while mirrored.')).toBe(true);
+  });
 });

@@ -109,6 +109,10 @@ export const useUpdateFaceConfig = () => useEditorStore((state) => state.updateF
 export const useUpdateSectionLength = () => useEditorStore((state) => state.updateSectionLength);
 export const useUpdateSectionSlots = () => useEditorStore((state) => state.updateSectionSlots);
 export const useUpdateLevelCount = () => useEditorStore((state) => state.updateLevelCount);
+export const useUpdateRackLevelStructuralDefaultRole = () =>
+  useEditorStore((state) => state.updateRackLevelStructuralDefaultRole);
+export const useUpdateLevelStructuralDefaultRole = () =>
+  useEditorStore((state) => state.updateLevelStructuralDefaultRole);
 export const useAddSection = () => useEditorStore((state) => state.addSection);
 export const useDeleteSection = () => useEditorStore((state) => state.deleteSection);
 export const useAddLevel = () => useEditorStore((state) => state.addLevel);

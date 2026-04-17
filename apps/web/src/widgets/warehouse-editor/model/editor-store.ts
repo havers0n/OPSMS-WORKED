@@ -161,6 +161,8 @@ type EditorStore = {
   updateSectionLength: (rackId: string, side: 'A' | 'B', sectionId: string, length: number) => void;
   updateSectionSlots: (rackId: string, side: 'A' | 'B', sectionId: string, slotCount: number) => void;
   updateLevelCount: (rackId: string, side: 'A' | 'B', sectionId: string, count: number) => void;
+  updateRackLevelStructuralDefaultRole: (rackId: string, ordinal: number, role: 'primary_pick' | 'reserve' | 'none') => void;
+  updateLevelStructuralDefaultRole: (rackId: string, side: 'A' | 'B', ordinal: number, role: 'primary_pick' | 'reserve' | 'none') => void;
   addSection: (rackId: string, side: 'A' | 'B') => void;
   deleteSection: (rackId: string, side: 'A' | 'B', sectionId: string) => void;
   addLevel: (rackId: string, side: 'A' | 'B', sectionId: string) => void;
@@ -972,6 +974,61 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
                     }
                     return { ...section, levels: section.levels.slice(0, target) };
                   })
+                }
+              : face
+          )
+        })),
+      });
+    }),
+  updateRackLevelStructuralDefaultRole: (rackId: string, ordinal: number, role: 'primary_pick' | 'reserve' | 'none') =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      return markDraftChanged(state, {
+        draft: updateRackInDraft(state.draft, rackId, (rack) => {
+          const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
+          const faceBIsMirrored = !!faceB && resolveRackFaceRelationshipMode(faceB) === 'mirrored';
+
+          return {
+            ...rack,
+            faces: rack.faces.map((face) => {
+              const shouldUpdateFace =
+                face.side === 'A' ||
+                (face.side === 'B' && face.enabled && !faceBIsMirrored);
+
+              if (!shouldUpdateFace) return face;
+
+              return {
+                ...face,
+                sections: face.sections.map((section) => ({
+                  ...section,
+                  levels: section.levels.map((level) =>
+                    level.ordinal === ordinal ? { ...level, structuralDefaultRole: role } : level
+                  )
+                }))
+              };
+            })
+          };
+        }),
+      });
+    }),
+  updateLevelStructuralDefaultRole: (rackId: string, side: 'A' | 'B', ordinal: number, role: 'primary_pick' | 'reserve' | 'none') =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      return markDraftChanged(state, {
+        draft: updateRackInDraft(state.draft, rackId, (rack) => ({
+          ...rack,
+          faces: rack.faces.map((face) =>
+            face.side === side
+              ? {
+                  ...face,
+                  sections: face.sections.map((section) => ({
+                    ...section,
+                    levels: section.levels.map((level) =>
+                      level.ordinal === ordinal ? { ...level, structuralDefaultRole: role } : level
+                    )
+                  }))
                 }
               : face
           )

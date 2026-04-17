@@ -5,6 +5,8 @@ import { FrontElevationPreview } from '@/features/rack-configure/ui/front-elevat
 import { SectionPresetForm } from '@/features/rack-configure/ui/section-preset-form';
 import { useApplyFacePreset } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { StructureIdentityPanel } from './structure-identity-panel';
+import { LevelDefaultsPanel } from './level-defaults-panel';
+import { RackLevelDefaultsPanel } from './rack-level-defaults-panel';
 
 function FaceStructureBlock({
   rack,
@@ -35,6 +37,9 @@ function FaceStructureBlock({
       />
       {face.sections.length > 0 && <FrontElevationPreview face={face} side={face.side} />}
       <FaceTab title={`Face ${face.side}`} rackId={rack.id} face={face} readOnly={readOnly} />
+      {face.sections.length > 0 && (
+        <LevelDefaultsPanel rackId={rack.id} face={face} readOnly={readOnly} />
+      )}
     </div>
   );
 }
@@ -57,12 +62,34 @@ export function StructureTask({
   return (
     <div className="flex flex-col gap-6 px-5 py-5">
       <StructureIdentityPanel rack={rack} readOnly={readOnly} />
+      <RackLevelDefaultsPanel
+        rackId={rack.id}
+        faceA={faceA}
+        faceB={faceB}
+        readOnly={readOnly}
+      />
 
       {faceA && <FaceStructureBlock rack={rack} face={faceA} readOnly={readOnly} />}
 
       {isMirrored && (
-        <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          Face B mirrors Face A. To edit Face B structure independently, switch to the Face Mode task.
+        <div className="flex flex-col gap-4">
+          <div className="rounded-[14px] border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            Face B mirrors Face A. To edit Face B structure independently, switch to the Face Mode task.
+          </div>
+          {faceA && (
+            <div className="opacity-60 grayscale-[0.5]">
+              <LevelDefaultsPanel
+                rackId={rack.id}
+                face={faceA}
+                readOnly={true}
+                heading="Face B Overrides (Advanced)"
+                description="Face B is mirrored, so overrides are inherited from Face A."
+              />
+              <div className="mt-2 text-[10px] text-slate-400 italic px-1">
+                Face B overrides are inherited from Face A while mirrored.
+              </div>
+            </div>
+          )}
         </div>
       )}
 

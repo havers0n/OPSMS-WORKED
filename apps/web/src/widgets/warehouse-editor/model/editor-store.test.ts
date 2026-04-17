@@ -1116,4 +1116,142 @@ describe('editor-store', () => {
     expect(faceB?.mirrorSourceFaceId).toBeNull();
     expect(faceB?.sections).toEqual([]);
   });
+
+  it('updates structuralDefaultRole for all levels with a given ordinal in a face', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+
+    // Setup multiple sections and levels
+    const faceA = draft.racks[rackId].faces.find((f) => f.side === 'A')!;
+    faceA.sections = [
+      {
+        id: 'section-a-1',
+        ordinal: 1,
+        length: 2.5,
+        levels: [
+          { id: 'level-a-1-1', ordinal: 1, slotCount: 3 },
+          { id: 'level-a-1-2', ordinal: 2, slotCount: 3 }
+        ]
+      },
+      {
+        id: 'section-a-2',
+        ordinal: 2,
+        length: 2.5,
+        levels: [{ id: 'level-a-2-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    useEditorStore.getState().initializeDraft(draft);
+
+    // Initial state check
+    expect(
+      useEditorStore.getState().draft?.racks[rackId].faces[0].sections[0].levels[0]
+        .structuralDefaultRole
+    ).toBeUndefined();
+
+    // Update Level 1 to 'primary_pick'
+    useEditorStore
+      .getState()
+      .updateLevelStructuralDefaultRole(rackId, 'A', 1, 'primary_pick');
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    const updatedFaceA = updatedRack.faces.find((f) => f.side === 'A')!;
+
+    // Both sections should have Level 1 updated
+    const s1l1 = updatedFaceA.sections[0].levels.find((l) => l.ordinal === 1)!;
+    expect(s1l1.structuralDefaultRole).toBe('primary_pick');
+
+    const s2l1 = updatedFaceA.sections[1].levels.find((l) => l.ordinal === 1)!;
+    expect(s2l1.structuralDefaultRole).toBe('primary_pick');
+
+    // Section 1 Level 2 should remain unchanged
+    const s1l2 = updatedFaceA.sections[0].levels.find((l) => l.ordinal === 2)!;
+    expect(s1l2.structuralDefaultRole).toBeUndefined();
+
+    expect(useEditorStore.getState().isDraftDirty).toBe(true);
+  });
+
+  it('rack-level apply writes role to both independent faces for the same level', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    draft.racks[rackId].kind = 'paired';
+    draft.racks[rackId].faces[1].enabled = true;
+    draft.racks[rackId].faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore
+      .getState()
+      .updateRackLevelStructuralDefaultRole(rackId, 1, 'reserve');
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    const faceA = updatedRack.faces.find((face) => face.side === 'A')!;
+    const faceB = updatedRack.faces.find((face) => face.side === 'B')!;
+    expect(faceA.sections[0].levels[0].structuralDefaultRole).toBe('reserve');
+    expect(faceB.sections[0].levels[0].structuralDefaultRole).toBe('reserve');
+  });
+
+  it('rack-level reapply overwrites face-level divergence for the same level', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    draft.racks[rackId].kind = 'paired';
+    draft.racks[rackId].faces[1].enabled = true;
+    draft.racks[rackId].faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore
+      .getState()
+      .updateLevelStructuralDefaultRole(rackId, 'A', 1, 'primary_pick');
+    useEditorStore
+      .getState()
+      .updateLevelStructuralDefaultRole(rackId, 'B', 1, 'reserve');
+
+    let updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    expect(updatedRack.faces.find((face) => face.side === 'A')?.sections[0].levels[0].structuralDefaultRole).toBe('primary_pick');
+    expect(updatedRack.faces.find((face) => face.side === 'B')?.sections[0].levels[0].structuralDefaultRole).toBe('reserve');
+
+    useEditorStore
+      .getState()
+      .updateRackLevelStructuralDefaultRole(rackId, 1, 'none');
+
+    updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    expect(updatedRack.faces.find((face) => face.side === 'A')?.sections[0].levels[0].structuralDefaultRole).toBe('none');
+    expect(updatedRack.faces.find((face) => face.side === 'B')?.sections[0].levels[0].structuralDefaultRole).toBe('none');
+  });
+
+  it('rack-level apply updates only Face A when Face B is mirrored', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].isMirrored = true;
+    rack.faces[1].relationshipMode = 'mirrored';
+    rack.faces[1].mirrorSourceFaceId = rack.faces[0].id;
+    rack.faces[1].sections = [];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore
+      .getState()
+      .updateRackLevelStructuralDefaultRole(rackId, 1, 'reserve');
+
+    const updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    const faceA = updatedRack.faces.find((face) => face.side === 'A')!;
+    const faceB = updatedRack.faces.find((face) => face.side === 'B')!;
+    expect(faceA.sections[0].levels[0].structuralDefaultRole).toBe('reserve');
+    expect(faceB.sections).toEqual([]);
+  });
 });
