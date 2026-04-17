@@ -1,15 +1,42 @@
 import type { RackFace } from '@wos/domain';
 
-export function SlotDirectionVisual({ face }: { face: RackFace }) {
+type SlotNumberingDirection = 'ltr' | 'rtl';
+
+export function SlotDirectionVisual({
+  rackId,
+  side,
+  face,
+  disabled,
+  onUpdate
+}: {
+  rackId: string;
+  side: 'A' | 'B';
+  face: RackFace;
+  disabled?: boolean;
+  onUpdate: (
+    rackId: string,
+    side: 'A' | 'B',
+    patch: { slotNumberingDirection?: SlotNumberingDirection }
+  ) => void;
+}) {
   const isLTR = face.slotNumberingDirection === 'ltr';
+  const canEdit = !disabled;
+
+  const selectDirection = (slotNumberingDirection: SlotNumberingDirection) => {
+    if (!canEdit) return;
+    onUpdate(rackId, side, { slotNumberingDirection });
+  };
 
   return (
-    <div className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 shadow-sm">
+    <div
+      data-testid={`addressing-direction-control-${side}`}
+      className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 shadow-sm"
+    >
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-        Slot Numbering Direction
+        Numbering · Face {side}
       </div>
 
-      <svg viewBox="0 0 280 100" className="w-full bg-slate-50 rounded-lg" style={{ maxHeight: '90px' }}>
+      <svg viewBox="0 0 280 100" className="w-full rounded-lg bg-slate-50" style={{ maxHeight: '90px' }}>
         {/* LTR */}
         <g>
           <text x="45" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
@@ -46,6 +73,21 @@ export function SlotDirectionVisual({ face }: { face: RackFace }) {
           <text x="45" y="80" className="text-[9px] fill-slate-500" textAnchor="middle">
             01, 02, 03...
           </text>
+          <rect
+            x="8"
+            y="8"
+            width="74"
+            height="80"
+            fill="transparent"
+            rx="7"
+            role="button"
+            data-testid={`addressing-direction-${side}-ltr`}
+            data-active={isLTR}
+            data-disabled={!canEdit}
+            aria-label={`Face ${side} numbering left to right`}
+            onClick={() => selectDirection('ltr')}
+            style={{ cursor: canEdit ? 'pointer' : 'not-allowed' }}
+          />
         </g>
 
         {/* RTL */}
@@ -84,6 +126,21 @@ export function SlotDirectionVisual({ face }: { face: RackFace }) {
           <text x="215" y="80" className="text-[9px] fill-slate-500" textAnchor="middle">
             03, 02, 01...
           </text>
+          <rect
+            x="178"
+            y="8"
+            width="74"
+            height="80"
+            fill="transparent"
+            rx="7"
+            role="button"
+            data-testid={`addressing-direction-${side}-rtl`}
+            data-active={!isLTR}
+            data-disabled={!canEdit}
+            aria-label={`Face ${side} numbering right to left`}
+            onClick={() => selectDirection('rtl')}
+            style={{ cursor: canEdit ? 'pointer' : 'not-allowed' }}
+          />
         </g>
       </svg>
     </div>

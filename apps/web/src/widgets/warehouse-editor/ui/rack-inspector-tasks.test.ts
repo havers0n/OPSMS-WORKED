@@ -121,6 +121,19 @@ function clickTopologyOption(
   });
 }
 
+function clickAddressingDirection(
+  renderer: TestRenderer.ReactTestRenderer,
+  side: 'A' | 'B',
+  direction: 'ltr' | 'rtl'
+) {
+  const control = renderer.root.findByProps({
+    'data-testid': `addressing-direction-${side}-${direction}`
+  });
+  act(() => {
+    control.props.onClick();
+  });
+}
+
 function findOrdinalRow(scope: TestRenderer.ReactTestInstance, ordinal: number) {
   const label = String(ordinal).padStart(2, '0');
   const ordinalNode = scope.findAll(
@@ -325,7 +338,7 @@ describe('RackInspector tasks', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
   });
 
-  it('switches to Addressing task and shows numbering + preview only', () => {
+  it('switches to Addressing task with canonical SVG control and secondary preview', () => {
     const draft = createLayoutDraftFixture();
     act(() => {
       useEditorStore.getState().initializeDraft(draft);
@@ -338,12 +351,117 @@ describe('RackInspector tasks', () => {
 
     expect(useEditorStore.getState().objectWorkContext).toBe('addressing');
     expect(hasText(renderer, 'Numbering')).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-A' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-B' })).toHaveLength(0);
     expect(hasText(renderer, 'Preview Addresses')).toBe(true);
+    expect(hasText(renderer, 'derived from the current draft')).toBe(true);
+    expect(hasText(renderer, 'Address Format')).toBe(false);
+    expect(hasText(renderer, '1 -> N')).toBe(false);
+    expect(hasText(renderer, 'N -> 1')).toBe(false);
     // structure content should not be in addressing
     expect(hasText(renderer, 'Generate structure')).toBe(false);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(1);
     // geometry not in addressing
     expect(hasText(renderer, 'Position X')).toBe(false);
+  });
+
+  it('uses SVG click targets as the only numbering direction editor', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'addressing');
+
+    const faceA = () =>
+      useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'A');
+
+    expect(faceA()?.slotNumberingDirection).toBe('ltr');
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'addressing-direction-A-ltr' }).props['data-active']
+    ).toBe(true);
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'addressing-direction-A-rtl' }).props['data-active']
+    ).toBe(false);
+
+    clickAddressingDirection(renderer, 'A', 'rtl');
+    expect(faceA()?.slotNumberingDirection).toBe('rtl');
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'addressing-direction-A-ltr' }).props['data-active']
+    ).toBe(false);
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'addressing-direction-A-rtl' }).props['data-active']
+    ).toBe(true);
+
+    clickAddressingDirection(renderer, 'A', 'ltr');
+    expect(faceA()?.slotNumberingDirection).toBe('ltr');
+  });
+
+  it('keeps per-face addressing ownership by topology mode', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'independent';
+    rack.faces[1].sections = [
+      {
+        id: 'section-b-1',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: 'level-b-1', ordinal: 1, slotCount: 3 }]
+      }
+    ];
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'addressing');
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-A' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-B' })).toHaveLength(1);
+    expect(hasText(renderer, 'Face B mirrors Face A and uses reversed numbering automatically.')).toBe(false);
+
+    act(() => {
+      useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
+    });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-A' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-B' })).toHaveLength(0);
+    expect(hasText(renderer, 'Face B mirrors Face A and uses reversed numbering automatically.')).toBe(true);
+  });
+
+  it('renders read-only SVG state but blocks direction writes when layout is not editable', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    draft.state = 'published';
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    clickTab(renderer, 'addressing');
+
+    const faceA = () =>
+      useEditorStore.getState().draft?.racks[rackId].faces.find((face) => face.side === 'A');
+
+    expect(faceA()?.slotNumberingDirection).toBe('ltr');
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'addressing-direction-A-ltr' }).props['data-disabled']
+    ).toBe(true);
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'addressing-direction-A-rtl' }).props['data-disabled']
+    ).toBe(true);
+
+    clickAddressingDirection(renderer, 'A', 'rtl');
+    expect(faceA()?.slotNumberingDirection).toBe('ltr');
   });
 
   it('falls back to Structure task when objectWorkContext is face-mode', () => {

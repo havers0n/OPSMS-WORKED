@@ -1,8 +1,6 @@
 import { resolveRackFaceRelationshipMode } from '@wos/domain';
 import type { Rack, RackFace } from '@wos/domain';
 import { useUpdateFaceConfig } from '@/widgets/warehouse-editor/model/editor-selectors';
-import { NumberingPanel } from './numbering-panel';
-import { AddressAnatomy } from './address-anatomy';
 import { SlotDirectionVisual } from './slot-direction-visual';
 
 const MAX_PREVIEW_ADDRESSES = 6;
@@ -31,37 +29,28 @@ export function AddressingTask({
 
   return (
     <div className="flex flex-col gap-4 px-5 py-5">
-      <AddressAnatomy faceA={faceA} faceB={faceB} />
-
-      <div className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 text-sm text-slate-600 shadow-sm">
-        Numbering controls live here. Addresses shown below are a <strong>preview</strong> derived
-        from the current draft — they are not a committed address record.
+      <div className="rounded-[14px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] px-4 py-2 text-xs text-slate-500">
+        Preview below is derived from the current draft and is not a committed address record.
       </div>
 
       {faceA && (
-        <>
-          <NumberingPanel
-            rackId={rack.id}
-            side="A"
-            slotNumberingDirection={faceA.slotNumberingDirection}
-            disabled={readOnly}
-            onUpdate={updateFaceConfig}
-          />
-          <SlotDirectionVisual face={faceA} />
-        </>
+        <SlotDirectionVisual
+          rackId={rack.id}
+          side="A"
+          face={faceA}
+          disabled={readOnly}
+          onUpdate={updateFaceConfig}
+        />
       )}
 
       {faceB && !isMirrored && faceBConfigured && (
-        <>
-          <NumberingPanel
-            rackId={rack.id}
-            side="B"
-            slotNumberingDirection={faceB.slotNumberingDirection}
-            disabled={readOnly}
-            onUpdate={updateFaceConfig}
-          />
-          <SlotDirectionVisual face={faceB} />
-        </>
+        <SlotDirectionVisual
+          rackId={rack.id}
+          side="B"
+          face={faceB}
+          disabled={readOnly}
+          onUpdate={updateFaceConfig}
+        />
       )}
 
       {isMirrored && (
