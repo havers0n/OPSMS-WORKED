@@ -29,7 +29,9 @@ export type LocationEffectiveRole = {
 export const productLocationRoleKeys = {
   all: ['product-location-role'] as const,
   byLocation: (locationId: string | null) =>
-    [...productLocationRoleKeys.all, 'by-location', locationId ?? 'none'] as const
+    [...productLocationRoleKeys.all, 'by-location', locationId ?? 'none'] as const,
+  effectiveRole: (locationId: string | null, productId: string | null) =>
+    [...productLocationRoleKeys.all, 'effective-role', locationId ?? 'none', productId ?? 'none'] as const
 };
 
 async function fetchLocationProductAssignments(
@@ -56,7 +58,7 @@ export function locationProductAssignmentsQueryOptions(locationId: string | null
 
 export function locationEffectiveRoleQueryOptions(locationId: string | null, productId: string | null) {
   return queryOptions({
-    queryKey: [...productLocationRoleKeys.all, 'effective-role', locationId ?? 'none', productId ?? 'none'] as const,
+    queryKey: productLocationRoleKeys.effectiveRole(locationId, productId),
     queryFn: () => fetchLocationEffectiveRole(locationId as string, productId as string),
     enabled: Boolean(locationId && productId)
   });

@@ -9,6 +9,12 @@ import { useLocationStorage } from '@/entities/location/api/use-location-storage
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
 import { useLocationEffectiveRole } from '@/entities/product-location-role/api/use-location-effective-role';
+import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
+import {
+  useCreateProductLocationRole,
+  useDeleteProductLocationRole
+} from '@/entities/product-location-role/api/mutations';
+import { productLocationRoleKeys } from '@/entities/product-location-role/api/queries';
 import { createContainer } from '@/features/container-create/api/mutations';
 import { addInventoryItem } from '@/features/inventory-add/api/mutations';
 import { moveContainer as moveContainerApi, placeContainer } from '@/features/placement-actions/api/mutations';
@@ -47,6 +53,7 @@ import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-con
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
+import { EditPolicyTaskPanel } from './storage-inspector-v2/task-edit-policy-panel';
 
 export { resolvePanelMode, resolveActiveMode } from './storage-inspector-v2/mode';
 export type { MoveTaskState } from './storage-inspector-v2/mode';
@@ -186,6 +193,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [addProductQuantity, setAddProductQuantity] = useState('');
   const [addProductUom, setAddProductUom] = useState('');
   const [addProductErrorMessage, setAddProductErrorMessage] = useState<string | null>(null);
+  const [editOverrideIsSubmitting, setEditOverrideIsSubmitting] = useState(false);
+  const [editOverrideErrorMessage, setEditOverrideErrorMessage] = useState<string | null>(null);
 
   const taskKindRef = useRef<TaskKind | null>(null);
   taskKindRef.current = taskKind;
@@ -202,10 +211,13 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const locationId = locationRef?.locationId ?? null;
 
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
+  const { data: locationProductAssignments = [] } = useLocationProductAssignments(locationId);
+  const createProductLocationRole = useCreateProductLocationRole();
+  const deleteProductLocationRole = useDeleteProductLocationRole(locationId);
 
   const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
   const effectiveRoleContainerRows =
-    mode.kind === 'container-detail'
+    mode.kind === 'container-detail' || mode.kind === 'task-edit-policy'
       ? storageRows.filter((row) => row.containerId === mode.containerId)
       : [];
   const effectiveRoleActiveProducts = getActiveProducts(effectiveRoleContainerRows);
@@ -253,6 +265,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setAddProductErrorMessage(null);
   };
 
+  const resetEditOverrideTaskState = () => {
+    setEditOverrideIsSubmitting(false);
+    setEditOverrideErrorMessage(null);
+  };
+
   useEffect(() => {
     if (taskKindRef.current === 'move-container') {
       const current = moveTaskRef.current;
@@ -268,7 +285,33 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetCreateTaskState();
     resetCreateWithProductTaskState();
     resetAddProductTaskState();
+    resetEditOverrideTaskState();
   }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (taskKind !== 'edit-policy') return;
+    const baseMode = resolvePanelMode(rackId, cellId, selectedContainerId);
+    if (baseMode.kind !== 'container-detail') {
+      closeEditOverrideTask();
+      return;
+    }
+
+    const containerRows = storageRows.filter((row) => row.containerId === baseMode.containerId);
+    const activeProducts = getActiveProducts(containerRows);
+    const productId = activeProducts.length === 1 ? activeProducts[0].id : null;
+    const isConflict = effectiveRoleContext?.effectiveRoleSource === 'conflict';
+    if (!locationId || !productId || isConflict) {
+      closeEditOverrideTask();
+    }
+  }, [
+    taskKind,
+    rackId,
+    cellId,
+    selectedContainerId,
+    storageRows,
+    locationId,
+    effectiveRoleContext?.effectiveRoleSource
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedCellAddress = publishedCells.find((cell) => cell.id === cellId)?.address.raw ?? null;
   const locationCode = storageRows[0]?.locationCode ?? selectedCellAddress ?? cellId;
@@ -286,6 +329,12 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const closeAddProductTask = () => {
     setTaskKind(null);
     resetAddProductTaskState();
+  };
+
+  const closeEditOverrideTask = () => {
+    if (editOverrideIsSubmitting) return;
+    setTaskKind(null);
+    resetEditOverrideTaskState();
   };
 
   const openCreateTask = () => {
@@ -460,6 +509,20 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setSelectedContainerId(movedContainerId);
   };
 
+  const refetchOverrideReadSurface = async (productId: string) => {
+    if (!locationId) return;
+    await Promise.all([
+      queryClient.refetchQueries({
+        queryKey: productLocationRoleKeys.byLocation(locationId),
+        exact: true
+      }),
+      queryClient.refetchQueries({
+        queryKey: productLocationRoleKeys.effectiveRole(locationId, productId),
+        exact: true
+      })
+    ]);
+  };
+
   if (mode.kind === 'empty') {
     return <EmptyState />;
   }
@@ -629,6 +692,108 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
+  if (mode.kind === 'task-edit-policy') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const activeProducts = getActiveProducts(containerRows);
+    const selectedProduct = activeProducts.length === 1 ? activeProducts[0] : null;
+    const selectedProductId = selectedProduct?.id ?? null;
+
+    if (!locationId || !selectedProduct || !selectedProductId) {
+      return <LoadingState />;
+    }
+
+    const explicitAssignments = locationProductAssignments.filter(
+      (assignment) =>
+        assignment.locationId === locationId &&
+        assignment.productId === selectedProductId &&
+        assignment.state === 'published'
+    );
+    const hasExplicitOverride = explicitAssignments.length > 0;
+    const firstExplicitRole = explicitAssignments.find(
+      (assignment) => assignment.role === 'primary_pick' || assignment.role === 'reserve'
+    )?.role;
+    const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none');
+    const effectiveRoleText =
+      effectiveRoleContext == null
+        ? 'Unknown'
+        : effectiveRoleContext.effectiveRoleSource === 'conflict'
+          ? 'Conflict'
+          : semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none');
+    const sourceText =
+      effectiveRoleContext == null ? 'Unknown' : effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource);
+    const defaultRole = firstExplicitRole ?? 'primary_pick';
+
+    const handleSaveOverride = async (role: 'primary_pick' | 'reserve') => {
+      setEditOverrideIsSubmitting(true);
+      setEditOverrideErrorMessage(null);
+      try {
+        for (const assignment of explicitAssignments) {
+          await deleteProductLocationRole.mutateAsync(assignment.id);
+        }
+
+        await createProductLocationRole.mutateAsync({
+          locationId,
+          productId: selectedProductId,
+          role
+        });
+
+        await refetchOverrideReadSurface(selectedProductId);
+        setTaskKind(null);
+        resetEditOverrideTaskState();
+      } catch (error) {
+        await refetchOverrideReadSurface(selectedProductId);
+        setEditOverrideErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Could not save explicit override. Canonical state was refreshed.'
+        );
+      } finally {
+        setEditOverrideIsSubmitting(false);
+      }
+    };
+
+    const handleClearOverride = async () => {
+      setEditOverrideIsSubmitting(true);
+      setEditOverrideErrorMessage(null);
+      try {
+        for (const assignment of explicitAssignments) {
+          await deleteProductLocationRole.mutateAsync(assignment.id);
+        }
+        await refetchOverrideReadSurface(selectedProductId);
+        setTaskKind(null);
+        resetEditOverrideTaskState();
+      } catch (error) {
+        await refetchOverrideReadSurface(selectedProductId);
+        setEditOverrideErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Could not clear explicit override. Canonical state was refreshed.'
+        );
+      } finally {
+        setEditOverrideIsSubmitting(false);
+      }
+    };
+
+    return (
+      <EditPolicyTaskPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        product={selectedProduct}
+        structuralDefaultText={structuralDefaultText}
+        effectiveRoleText={effectiveRoleText}
+        sourceText={sourceText}
+        hasExplicitOverride={hasExplicitOverride}
+        defaultRole={defaultRole}
+        isSubmitting={editOverrideIsSubmitting}
+        errorMessage={editOverrideErrorMessage}
+        onCancel={closeEditOverrideTask}
+        onSave={handleSaveOverride}
+        onClear={handleClearOverride}
+      />
+    );
+  }
+
   if (mode.kind === 'container-detail') {
     const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
     const first = containerRows[0];
@@ -646,8 +811,20 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     const structuralDefaultText =
       structuralDefaultRole === null ? 'Unknown' : semanticRoleLabel(structuralDefaultRole);
     const hasProductContext = selectedProduct !== null;
+    const selectedProductId = selectedProduct?.id ?? null;
     const isEffectiveRoleLoading = hasProductContext && effectiveRoleLoading;
     const isConflict = effectiveRoleContext?.effectiveRoleSource === 'conflict';
+    const explicitAssignments = selectedProductId
+      ? locationProductAssignments.filter(
+          (assignment) =>
+            assignment.locationId === locationId &&
+            assignment.productId === selectedProductId &&
+            assignment.state === 'published'
+        )
+      : [];
+    const hasExplicitOverride = explicitAssignments.length > 0;
+    const canShowOverrideEntry = Boolean(locationId && selectedProductId);
+    const canOpenOverrideTask = canShowOverrideEntry && !isConflict;
 
     const effectiveRoleText = hasProductContext
       ? isEffectiveRoleLoading
@@ -671,6 +848,12 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       effectiveRoleContext?.structuralDefaultRole === 'none' &&
       effectiveRoleContext.effectiveRoleSource === 'none' &&
       effectiveRoleContext.effectiveRole === 'none';
+
+    const openEditOverrideTask = () => {
+      if (!canOpenOverrideTask) return;
+      resetEditOverrideTaskState();
+      setTaskKind('edit-policy');
+    };
 
     return (
       <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden" role="complementary" aria-label={`Container detail: ${displayCode}`}>
@@ -734,6 +917,24 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
               </p>
             )}
           </div>
+
+          {canShowOverrideEntry && (
+            <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="override-task-entry">
+              <button
+                onClick={openEditOverrideTask}
+                disabled={!canOpenOverrideTask}
+                className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="edit-override-action"
+              >
+                {hasExplicitOverride ? 'Edit override' : 'Set override'}
+              </button>
+              {isConflict && (
+                <p className="text-xs text-amber-700" data-testid="override-task-conflict-disabled-note">
+                  Override editing is unavailable while this product/location is in conflict.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="px-4 py-3 border-b border-gray-200">
             {isEmptyContainer && (
