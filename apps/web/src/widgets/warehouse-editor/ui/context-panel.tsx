@@ -68,6 +68,7 @@ import type {
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
+import { faceAtViewportEdge } from '@/shared/lib/rack-face-labels';
 import { resolveContextPanelIntent, type ContextPanelIntent } from './context-panel-logic';
 import { StorageCellContextPanel } from './mode-panels/storage-cell-context-panel';
 import { StorageWorkflowContextPanel } from './mode-panels/storage-workflow-context-panel';
@@ -214,12 +215,6 @@ function ViewRackLevelPanel({
   );
 }
 
-const RACK_SIDE_LABELS: Record<RackSideFocus, string> = {
-  north: 'North side',
-  east: 'East side',
-  south: 'South side',
-  west: 'West side'
-};
 
 export function RackContextPanel({
   workspace
@@ -362,7 +357,7 @@ function RackSideContextPanel({
       <div className="rounded-xl border border-[var(--border-muted)] bg-white p-3">
         <div className="text-sm font-semibold text-slate-900">Rack {rack.displayCode}</div>
         <div className="mt-1 text-xs font-medium text-[var(--accent)]">
-          {RACK_SIDE_LABELS[side]}
+          {`Face ${faceAtViewportEdge(rack.rotationDeg, side)}`}
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
           Use this edge for adjacency and access launchers. Full rack structure stays in the inspector.

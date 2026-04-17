@@ -15,6 +15,7 @@ import {
   useSetSelectedRackId,
   useUpdateRackGeneral
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { formatRackAxis } from '@/shared/lib/rack-face-labels';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -249,7 +250,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
                   </button>
                   <span className="text-sm text-slate-500">
                     Current: <span className="font-semibold text-slate-800">{rack.rotationDeg}°</span>
-                    <span className="ml-1.5 text-slate-400">({rack.axis})</span>
+                    <span className="ml-1.5 text-slate-400">({formatRackAxis(rack.axis)})</span>
                   </span>
                 </div>
               </FieldRow>
@@ -457,7 +458,7 @@ export function RackCreationWizard({ rack }: { rack: Rack }) {
             <div className="grid w-full grid-cols-2 gap-2 text-xs">
               {[
                 { label: 'Type', value: rack.kind === 'paired' ? 'Paired' : 'Single' },
-                { label: 'Axis', value: rack.axis },
+                { label: 'Axis', value: formatRackAxis(rack.axis) },
                 { label: 'Face A', value: `${faceALength.toFixed(1)} m` },
                 { label: 'Sections A', value: String(faceA.sections.length) },
               ].map(({ label, value }) => (

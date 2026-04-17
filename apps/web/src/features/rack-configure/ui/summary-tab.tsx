@@ -1,5 +1,6 @@
 import { resolveRackFaceRelationshipMode, type LayoutValidationResult, type Rack, type RackFace } from '@wos/domain';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { formatRackAxis } from '@/shared/lib/rack-face-labels';
 
 function faceSummary(face: RackFace) {
   const totalLength = face.sections.reduce((sum, s) => sum + s.length, 0);
@@ -96,7 +97,7 @@ export function SummaryTab({
         <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
           <div className="flex justify-between"><span className="text-slate-500">Display Code</span><span className="font-mono font-medium text-slate-800">{rack.displayCode}</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Kind</span><span className="font-medium capitalize text-slate-800">{rack.kind}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Axis</span><span className="font-mono font-medium text-slate-800">{rack.axis}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Axis</span><span className="font-medium text-slate-800">{formatRackAxis(rack.axis)}</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Rotation</span><span className="font-medium text-slate-800">{rack.rotationDeg}°</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Length</span><span className="font-medium text-slate-800">{rack.totalLength.toFixed(1)} m</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Depth</span><span className="font-medium text-slate-800">{rack.depth.toFixed(1)} m</span></div>

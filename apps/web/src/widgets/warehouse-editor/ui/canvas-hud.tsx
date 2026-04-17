@@ -1,6 +1,7 @@
 import type { Cell, Rack, Wall, Zone } from '@wos/domain';
 import { Minus, Plus, SlidersHorizontal } from 'lucide-react';
 import type { RackSideFocus } from '@/widgets/warehouse-editor/model/editor-types';
+import { faceAtViewportEdge } from '@/shared/lib/rack-face-labels';
 import type { CanvasRect } from '@/entities/layout-version/lib/canvas-geometry';
 import {
   ObjectLocalAffordanceBar,
@@ -87,19 +88,6 @@ function LayoutRackAffordanceBar({ rack, anchorRect, viewport }: LayoutRackAffor
   );
 }
 
-const RACK_SIDE_HANDLE_LABELS: Record<RackSideFocus, string> = {
-  north: 'N',
-  east: 'E',
-  south: 'S',
-  west: 'W'
-};
-
-const RACK_SIDE_HANDLE_TITLES: Record<RackSideFocus, string> = {
-  north: 'Focus north side',
-  east: 'Focus east side',
-  south: 'Focus south side',
-  west: 'Focus west side'
-};
 
 function getRackSideHandleStyle({
   side,
@@ -148,23 +136,26 @@ function RackSideFocusHandles({
   anchorRect,
   viewport,
   activeSide,
+  rotationDeg,
   onSelectSide
 }: {
   anchorRect: CanvasRect;
   viewport: { width: number; height: number };
   activeSide: RackSideFocus | null;
+  rotationDeg: number;
   onSelectSide: (side: RackSideFocus) => void;
 }) {
   return (
     <>
       {(['north', 'east', 'south', 'west'] as RackSideFocus[]).map((side) => {
         const isActive = activeSide === side;
+        const face = faceAtViewportEdge(rotationDeg, side);
 
         return (
           <button
             key={side}
             type="button"
-            title={RACK_SIDE_HANDLE_TITLES[side]}
+            title={`Focus Face ${face}`}
             onClick={() => onSelectSide(side)}
             className="pointer-events-auto absolute z-20 flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold shadow-md transition-colors"
             style={{
@@ -174,7 +165,7 @@ function RackSideFocusHandles({
               color: isActive ? '#fff' : 'var(--text-primary)'
             }}
           >
-            {RACK_SIDE_HANDLE_LABELS[side]}
+            {face}
           </button>
         );
       })}
@@ -365,6 +356,7 @@ export function CanvasHud({
           anchorRect={selectedRackAnchorRect}
           viewport={viewport}
           activeSide={selectedRackSideFocus}
+          rotationDeg={selectedRack.rotationDeg}
           onSelectSide={onSelectRackSide}
         />
       )}
