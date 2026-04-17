@@ -379,10 +379,10 @@ describe('resolveActiveMode', () => {
     expect(resolveActiveMode(base, 'create-container')).toEqual(base);
   });
 
-  it('overrides container-detail to task-edit-policy for policy task', () => {
+  it('overrides container-detail to task-edit-override for override task', () => {
     const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
-    expect(resolveActiveMode(base, 'edit-policy')).toEqual({
-      kind: 'task-edit-policy',
+    expect(resolveActiveMode(base, 'edit-override')).toEqual({
+      kind: 'task-edit-override',
       cellId: 'c1',
       containerId: 'ct1'
     });
@@ -1821,7 +1821,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     act(() => {
       editOverrideButton.props.onClick();
     });
-    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-policy-panel' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
     expect(renderer.root.findByProps({ 'data-testid': 'override-task-conflict-disabled-note' })).toBeTruthy();
   });
 
@@ -1912,7 +1912,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     });
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('Location role context is shown for container detail.');
-    expect(text).not.toContain('To edit policy');
+    expect(text).not.toContain('To edit override');
   });
 
   it('opens dedicated override task panel from the entry action', () => {
@@ -1921,7 +1921,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'edit-override-action' }).props.onClick();
     });
-    expect(renderer.root.findByProps({ 'data-testid': 'task-edit-policy-panel' })).toBeTruthy();
+    expect(renderer.root.findByProps({ 'data-testid': 'task-edit-override-panel' })).toBeTruthy();
     expect(flattenText(renderer.toJSON())).toContain('Edit explicit override');
   });
 
@@ -1934,7 +1934,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     act(() => {
       renderer.root.findByProps({ 'aria-label': 'Cancel edit override' }).props.onClick();
     });
-    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-policy-panel' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
     expect(mockCreateProductLocationRoleMutateAsync).not.toHaveBeenCalled();
     expect(mockDeleteProductLocationRoleMutateAsync).not.toHaveBeenCalled();
   });
@@ -1976,7 +1976,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       ],
       exact: true
     });
-    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-policy-panel' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
   });
 
   it('partial failure in replace flow keeps task open, refetches, and shows error', async () => {
@@ -1994,7 +1994,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       renderer.root.findByProps({ 'aria-label': 'Save override for location' }).props.onClick();
     });
 
-    expect(renderer.root.findByProps({ 'data-testid': 'task-edit-policy-panel' })).toBeTruthy();
+    expect(renderer.root.findByProps({ 'data-testid': 'task-edit-override-panel' })).toBeTruthy();
     expect(flattenText(renderer.toJSON())).toContain('create failed');
     expect(mockRefetchQueries).toHaveBeenCalledWith({
       queryKey: ['product-location-role', 'by-location', 'loc-1'],
@@ -2019,7 +2019,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 
     expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('assignment-clear');
     expect(mockCreateProductLocationRoleMutateAsync).not.toHaveBeenCalled();
-    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-policy-panel' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
   });
 
   it('calls effective-role hook with null productId when no product context exists', () => {

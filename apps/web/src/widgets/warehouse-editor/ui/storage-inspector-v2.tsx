@@ -53,7 +53,7 @@ import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-con
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
-import { EditPolicyTaskPanel } from './storage-inspector-v2/task-edit-policy-panel';
+import { EditOverrideTaskPanel } from './storage-inspector-v2/task-edit-override-panel';
 
 export { resolvePanelMode, resolveActiveMode } from './storage-inspector-v2/mode';
 export type { MoveTaskState } from './storage-inspector-v2/mode';
@@ -217,7 +217,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
   const effectiveRoleContainerRows =
-    mode.kind === 'container-detail' || mode.kind === 'task-edit-policy'
+    mode.kind === 'container-detail' || mode.kind === 'task-edit-override'
       ? storageRows.filter((row) => row.containerId === mode.containerId)
       : [];
   const effectiveRoleActiveProducts = getActiveProducts(effectiveRoleContainerRows);
@@ -289,7 +289,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (taskKind !== 'edit-policy') return;
+    if (taskKind !== 'edit-override') return;
     const baseMode = resolvePanelMode(rackId, cellId, selectedContainerId);
     if (baseMode.kind !== 'container-detail') {
       closeEditOverrideTask();
@@ -692,7 +692,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
-  if (mode.kind === 'task-edit-policy') {
+  if (mode.kind === 'task-edit-override') {
     const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
     const activeProducts = getActiveProducts(containerRows);
     const selectedProduct = activeProducts.length === 1 ? activeProducts[0] : null;
@@ -775,7 +775,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     };
 
     return (
-      <EditPolicyTaskPanel
+      <EditOverrideTaskPanel
         rackDisplayCode={rackDisplayCode}
         activeLevel={activeLevel}
         locationCode={locationCode}
@@ -852,7 +852,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     const openEditOverrideTask = () => {
       if (!canOpenOverrideTask) return;
       resetEditOverrideTaskState();
-      setTaskKind('edit-policy');
+      setTaskKind('edit-override');
     };
 
     return (
@@ -1090,8 +1090,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           )}
         </div>
 
-        <SectionHeader title="Policy" />
-        <div className="px-4 py-3 border-b border-gray-200" data-testid="cell-policy-hint">
+        <SectionHeader title="Override" />
+        <div className="px-4 py-3 border-b border-gray-200" data-testid="cell-override-hint">
           <p className="text-xs text-gray-600">Location role context is shown for container detail.</p>
           <p className="text-xs text-gray-500 mt-1">Select a container with one active SKU to resolve effective role.</p>
         </div>

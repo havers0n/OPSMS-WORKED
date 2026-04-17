@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ActiveContainerProduct } from './helpers';
 import type { ProductLocationRoleValue } from '@wos/domain';
 
-export interface EditPolicyTaskPanelProps {
+export interface EditOverrideTaskPanelProps {
   rackDisplayCode: string;
   activeLevel: number;
   locationCode: string;
@@ -19,7 +19,7 @@ export interface EditPolicyTaskPanelProps {
   onClear: () => Promise<void>;
 }
 
-export function EditPolicyTaskPanel({
+export function EditOverrideTaskPanel({
   rackDisplayCode,
   activeLevel,
   locationCode,
@@ -34,7 +34,7 @@ export function EditPolicyTaskPanel({
   onCancel,
   onSave,
   onClear
-}: EditPolicyTaskPanelProps) {
+}: EditOverrideTaskPanelProps) {
   const [selectedRole, setSelectedRole] = useState<ProductLocationRoleValue>(defaultRole);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export function EditPolicyTaskPanel({
       className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
       role="complementary"
       aria-label="Edit override for location"
-      data-testid="task-edit-policy-panel"
+      data-testid="task-edit-override-panel"
     >
       <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
         <button

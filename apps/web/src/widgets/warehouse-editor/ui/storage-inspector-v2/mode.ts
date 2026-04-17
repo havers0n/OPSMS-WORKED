@@ -4,7 +4,7 @@ export type PanelMode =
   | { kind: 'cell-overview'; cellId: string }
   | { kind: 'container-detail'; cellId: string; containerId: string }
   | { kind: 'task-add-product-to-container'; cellId: string; containerId: string }
-  | { kind: 'task-edit-policy'; cellId: string; containerId: string }
+  | { kind: 'task-edit-override'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
   | { kind: 'task-create-container-with-product'; cellId: string }
   | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
@@ -13,7 +13,7 @@ export type TaskKind =
   | 'create-container'
   | 'create-container-with-product'
   | 'move-container'
-  | 'edit-policy'
+  | 'edit-override'
   | 'add-product-to-container';
 
 /**
@@ -67,8 +67,8 @@ export function resolveActiveMode(
     };
   }
 
-  if (base.kind === 'container-detail' && taskKind === 'edit-policy') {
-    return { kind: 'task-edit-policy', cellId: base.cellId, containerId: base.containerId };
+  if (base.kind === 'container-detail' && taskKind === 'edit-override') {
+    return { kind: 'task-edit-override', cellId: base.cellId, containerId: base.containerId };
   }
 
   if (base.kind === 'container-detail' && taskKind === 'add-product-to-container') {
