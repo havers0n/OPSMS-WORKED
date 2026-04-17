@@ -54,6 +54,7 @@ import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
 import { EditOverrideTaskPanel } from './storage-inspector-v2/task-edit-override-panel';
+import { RepairConflictTaskPanel } from './storage-inspector-v2/task-repair-conflict-panel';
 
 export { resolvePanelMode, resolveActiveMode } from './storage-inspector-v2/mode';
 export type { MoveTaskState } from './storage-inspector-v2/mode';
@@ -195,6 +196,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [addProductErrorMessage, setAddProductErrorMessage] = useState<string | null>(null);
   const [editOverrideIsSubmitting, setEditOverrideIsSubmitting] = useState(false);
   const [editOverrideErrorMessage, setEditOverrideErrorMessage] = useState<string | null>(null);
+  const [repairConflictIsSubmitting, setRepairConflictIsSubmitting] = useState(false);
+  const [repairConflictErrorMessage, setRepairConflictErrorMessage] = useState<string | null>(null);
 
   const taskKindRef = useRef<TaskKind | null>(null);
   taskKindRef.current = taskKind;
@@ -217,7 +220,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
   const effectiveRoleContainerRows =
-    mode.kind === 'container-detail' || mode.kind === 'task-edit-override'
+    mode.kind === 'container-detail' ||
+    mode.kind === 'task-edit-override' ||
+    mode.kind === 'task-repair-conflict'
       ? storageRows.filter((row) => row.containerId === mode.containerId)
       : [];
   const effectiveRoleActiveProducts = getActiveProducts(effectiveRoleContainerRows);
@@ -270,6 +275,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setEditOverrideErrorMessage(null);
   };
 
+  const resetRepairConflictTaskState = () => {
+    setRepairConflictIsSubmitting(false);
+    setRepairConflictErrorMessage(null);
+  };
+
   useEffect(() => {
     if (taskKindRef.current === 'move-container') {
       const current = moveTaskRef.current;
@@ -286,6 +296,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetCreateWithProductTaskState();
     resetAddProductTaskState();
     resetEditOverrideTaskState();
+    resetRepairConflictTaskState();
   }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -313,6 +324,40 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     effectiveRoleContext?.effectiveRoleSource
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (taskKind !== 'repair-conflict') return;
+    const baseMode = resolvePanelMode(rackId, cellId, selectedContainerId);
+    if (baseMode.kind !== 'container-detail') {
+      closeRepairConflictTask();
+      return;
+    }
+
+    const containerRows = storageRows.filter((row) => row.containerId === baseMode.containerId);
+    const activeProducts = getActiveProducts(containerRows);
+    const productId = activeProducts.length === 1 ? activeProducts[0].id : null;
+    if (!locationId || !productId) {
+      closeRepairConflictTask();
+      return;
+    }
+
+    // Do not close while canonical effective role is still loading.
+    if (effectiveRoleLoading) return;
+
+    const source = effectiveRoleContext?.effectiveRoleSource;
+    if (source != null && source !== 'conflict') {
+      closeRepairConflictTask();
+    }
+  }, [
+    taskKind,
+    rackId,
+    cellId,
+    selectedContainerId,
+    storageRows,
+    locationId,
+    effectiveRoleLoading,
+    effectiveRoleContext?.effectiveRoleSource
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const selectedCellAddress = publishedCells.find((cell) => cell.id === cellId)?.address.raw ?? null;
   const locationCode = storageRows[0]?.locationCode ?? selectedCellAddress ?? cellId;
 
@@ -337,6 +382,12 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetEditOverrideTaskState();
   };
 
+  const closeRepairConflictTask = () => {
+    if (repairConflictIsSubmitting) return;
+    setTaskKind(null);
+    resetRepairConflictTaskState();
+  };
+
   const openCreateTask = () => {
     resetCreateTaskState();
     setTaskKind('create-container');
@@ -350,6 +401,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const openAddProductTask = () => {
     resetAddProductTaskState();
     setTaskKind('add-product-to-container');
+  };
+
+  const openRepairConflictTask = () => {
+    resetRepairConflictTaskState();
+    setTaskKind('repair-conflict');
   };
 
   const handleCreateTaskConfirm = async () => {
@@ -794,6 +850,124 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
+  if (mode.kind === 'task-repair-conflict') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const activeProducts = getActiveProducts(containerRows);
+    const selectedProduct = activeProducts.length === 1 ? activeProducts[0] : null;
+    const selectedProductId = selectedProduct?.id ?? null;
+
+    if (!locationId || !selectedProduct || !selectedProductId) {
+      return <LoadingState />;
+    }
+
+    const targetAssignments = locationProductAssignments.filter(
+      (assignment) =>
+        assignment.locationId === locationId &&
+        assignment.productId === selectedProductId &&
+        assignment.state === 'published'
+    );
+    const conflictingRoles =
+      targetAssignments.length > 0
+        ? Array.from(new Set(targetAssignments.map((assignment) => assignment.role)))
+        : (effectiveRoleContext?.conflictingPublishedRoles ?? []);
+    const conflictingRowCount = targetAssignments.length;
+    const conflictingRowIds = targetAssignments.map((assignment) => assignment.id);
+    const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none');
+    const effectiveRoleText = 'Conflict';
+    const sourceText = 'Conflict';
+    const canRepair = targetAssignments.length > 0;
+
+    const resolveConflict = async (role: 'primary_pick' | 'reserve') => {
+      if (!canRepair) {
+        setRepairConflictErrorMessage(
+          'Cannot repair conflict: missing published explicit rows for this product/location.'
+        );
+        return;
+      }
+      setRepairConflictIsSubmitting(true);
+      setRepairConflictErrorMessage(null);
+      try {
+        for (const assignment of targetAssignments) {
+          await deleteProductLocationRole.mutateAsync(assignment.id);
+        }
+
+        await createProductLocationRole.mutateAsync({
+          locationId,
+          productId: selectedProductId,
+          role
+        });
+
+        await refetchOverrideReadSurface(selectedProductId);
+        setTaskKind(null);
+        resetRepairConflictTaskState();
+      } catch (error) {
+        await refetchOverrideReadSurface(selectedProductId);
+        setRepairConflictErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Could not repair conflict. Canonical state was refreshed.'
+        );
+      } finally {
+        setRepairConflictIsSubmitting(false);
+      }
+    };
+
+    const clearConflictOverrides = async () => {
+      if (!canRepair) {
+        setRepairConflictErrorMessage(
+          'Cannot repair conflict: missing published explicit rows for this product/location.'
+        );
+        return;
+      }
+      setRepairConflictIsSubmitting(true);
+      setRepairConflictErrorMessage(null);
+      try {
+        for (const assignment of targetAssignments) {
+          await deleteProductLocationRole.mutateAsync(assignment.id);
+        }
+
+        await refetchOverrideReadSurface(selectedProductId);
+        setTaskKind(null);
+        resetRepairConflictTaskState();
+      } catch (error) {
+        await refetchOverrideReadSurface(selectedProductId);
+        setRepairConflictErrorMessage(
+          error instanceof Error
+            ? error.message
+            : 'Could not clear explicit overrides. Canonical state was refreshed.'
+        );
+      } finally {
+        setRepairConflictIsSubmitting(false);
+      }
+    };
+
+    const noTargetsMessage = canRepair
+      ? null
+      : 'Cannot repair conflict because canonical published explicit rows are unavailable for this product/location.';
+    const combinedErrorMessage =
+      repairConflictErrorMessage ?? noTargetsMessage;
+
+    return (
+      <RepairConflictTaskPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        product={selectedProduct}
+        structuralDefaultText={structuralDefaultText}
+        effectiveRoleText={effectiveRoleText}
+        sourceText={sourceText}
+        conflictingRoles={conflictingRoles}
+        conflictingRowCount={conflictingRowCount}
+        conflictingRowIds={conflictingRowIds}
+        isSubmitting={repairConflictIsSubmitting}
+        errorMessage={combinedErrorMessage}
+        onCancel={closeRepairConflictTask}
+        onResolve={resolveConflict}
+        onClear={clearConflictOverrides}
+      />
+    );
+  }
+
   if (mode.kind === 'container-detail') {
     const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
     const first = containerRows[0];
@@ -823,8 +997,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         )
       : [];
     const hasExplicitOverride = explicitAssignments.length > 0;
-    const canShowOverrideEntry = Boolean(locationId && selectedProductId);
-    const canOpenOverrideTask = canShowOverrideEntry && !isConflict;
+    const canShowOverrideEntry = Boolean(locationId && selectedProductId && !isConflict);
+    const canShowRepairConflictEntry = Boolean(locationId && selectedProductId && isConflict);
 
     const effectiveRoleText = hasProductContext
       ? isEffectiveRoleLoading
@@ -850,7 +1024,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       effectiveRoleContext.effectiveRole === 'none';
 
     const openEditOverrideTask = () => {
-      if (!canOpenOverrideTask) return;
+      if (!canShowOverrideEntry) return;
       resetEditOverrideTaskState();
       setTaskKind('edit-override');
     };
@@ -922,17 +1096,23 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
             <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="override-task-entry">
               <button
                 onClick={openEditOverrideTask}
-                disabled={!canOpenOverrideTask}
-                className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2"
                 data-testid="edit-override-action"
               >
                 {hasExplicitOverride ? 'Edit override' : 'Set override'}
               </button>
-              {isConflict && (
-                <p className="text-xs text-amber-700" data-testid="override-task-conflict-disabled-note">
-                  Override editing is unavailable while this product/location is in conflict.
-                </p>
-              )}
+            </div>
+          )}
+
+          {canShowRepairConflictEntry && (
+            <div className="px-4 py-3 border-b border-gray-200 space-y-2" data-testid="repair-conflict-task-entry">
+              <button
+                onClick={openRepairConflictTask}
+                className="w-full text-sm font-medium text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded px-3 py-2"
+                data-testid="repair-conflict-action"
+              >
+                Repair conflict
+              </button>
             </div>
           )}
 

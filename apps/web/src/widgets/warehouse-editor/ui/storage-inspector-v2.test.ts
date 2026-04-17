@@ -388,6 +388,15 @@ describe('resolveActiveMode', () => {
     });
   });
 
+  it('overrides container-detail to task-repair-conflict for repair task', () => {
+    const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
+    expect(resolveActiveMode(base, 'repair-conflict')).toEqual({
+      kind: 'task-repair-conflict',
+      cellId: 'c1',
+      containerId: 'ct1'
+    });
+  });
+
   it('overrides container-detail to task-add-product-to-container for add-product task', () => {
     const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
     expect(resolveActiveMode(base, 'add-product-to-container')).toEqual({
@@ -1803,7 +1812,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     expect(renderer.root.findByProps({ 'data-testid': 'location-role-conflict-note' })).toBeTruthy();
   });
 
-  it('hard-blocks task entry in conflict state', () => {
+  it('shows repair-conflict entry only in conflict state with valid product context', () => {
     mockLocationProductAssignments = [makePublishedAssignment({ id: 'assignment-conflict' })];
     mockEffectiveRoleResponse = {
       locationId: 'loc-1',
@@ -1816,13 +1825,62 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
-    const editOverrideButton = renderer.root.findByProps({ 'data-testid': 'edit-override-action' });
-    expect(editOverrideButton.props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' })).toBeTruthy();
+    expect(renderer.root.findAllByProps({ 'data-testid': 'override-task-entry' })).toHaveLength(0);
+  });
+
+  it('hides repair-conflict entry when context is not in conflict', () => {
+    mockLocationProductAssignments = [makePublishedAssignment({ id: 'assignment-edit' })];
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'repair-conflict-task-entry' })).toHaveLength(0);
+    expect(renderer.root.findByProps({ 'data-testid': 'override-task-entry' })).toBeTruthy();
+  });
+
+  it('opening repair-conflict entry enters dedicated repair task mode', () => {
+    mockLocationProductAssignments = [makePublishedAssignment({ id: 'assignment-conflict' })];
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
     act(() => {
-      editOverrideButton.props.onClick();
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
     });
-    expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
-    expect(renderer.root.findByProps({ 'data-testid': 'override-task-conflict-disabled-note' })).toBeTruthy();
+    expect(renderer.root.findByProps({ 'data-testid': 'task-repair-conflict-panel' })).toBeTruthy();
+    expect(flattenText(renderer.toJSON())).toContain('Repair explicit override conflict');
+  });
+
+  it('repair panel shows conflict details with role summary and row count', () => {
+    mockLocationProductAssignments = [
+      makePublishedAssignment({ id: 'assignment-primary', role: 'primary_pick' }),
+      makePublishedAssignment({ id: 'assignment-reserve', role: 'reserve' })
+    ];
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
+    });
+
+    expect(flattenText(renderer.toJSON())).toContain('Roles present: Primary Pick, Reserve');
+    expect(flattenText(renderer.toJSON())).toContain('Published explicit rows: 2');
+    expect(flattenText(renderer.toJSON())).toContain('Row IDs: assignment-primary, assignment-reserve');
   });
 
   it('does not claim effective role when product context is missing', () => {
@@ -2020,6 +2078,189 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('assignment-clear');
     expect(mockCreateProductLocationRoleMutateAsync).not.toHaveBeenCalled();
     expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
+  });
+
+  it('repair as Primary Pick deletes only targeted published rows, creates one, refetches, and exits', async () => {
+    mockLocationProductAssignments = [
+      makePublishedAssignment({ id: 'target-primary', role: 'primary_pick' }),
+      makePublishedAssignment({ id: 'target-reserve', role: 'reserve' }),
+      makePublishedAssignment({
+        id: 'other-product',
+        productId: '22222222-2222-2222-2222-222222222222',
+        role: 'reserve'
+      }),
+      makePublishedAssignment({
+        id: 'other-location',
+        locationId: 'loc-2',
+        role: 'primary_pick'
+      }),
+      makePublishedAssignment({
+        id: 'draft-same-pair',
+        state: 'draft',
+        role: 'primary_pick'
+      })
+    ];
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+    mockDeleteProductLocationRoleMutateAsync.mockResolvedValue(undefined);
+    mockCreateProductLocationRoleMutateAsync.mockResolvedValue({
+      id: 'assignment-fixed',
+      role: 'primary_pick'
+    });
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-primary-pick-action' }).props.onClick();
+    });
+
+    expect(mockDeleteProductLocationRoleMutateAsync.mock.calls).toEqual([
+      ['target-primary'],
+      ['target-reserve']
+    ]);
+    expect(mockCreateProductLocationRoleMutateAsync).toHaveBeenCalledWith({
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      role: 'primary_pick'
+    });
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      queryKey: ['product-location-role', 'by-location', 'loc-1'],
+      exact: true
+    });
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      queryKey: [
+        'product-location-role',
+        'effective-role',
+        'loc-1',
+        '11111111-1111-1111-1111-111111111111'
+      ],
+      exact: true
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-repair-conflict-panel' })).toHaveLength(0);
+  });
+
+  it('repair as Reserve deletes targeted rows, creates reserve row, refetches, and exits', async () => {
+    mockLocationProductAssignments = [
+      makePublishedAssignment({ id: 'target-one', role: 'primary_pick' }),
+      makePublishedAssignment({ id: 'target-two', role: 'reserve' })
+    ];
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+    mockDeleteProductLocationRoleMutateAsync.mockResolvedValue(undefined);
+    mockCreateProductLocationRoleMutateAsync.mockResolvedValue({
+      id: 'assignment-fixed',
+      role: 'reserve'
+    });
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-reserve-action' }).props.onClick();
+    });
+
+    expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('target-one');
+    expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('target-two');
+    expect(mockCreateProductLocationRoleMutateAsync).toHaveBeenCalledWith({
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      role: 'reserve'
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-repair-conflict-panel' })).toHaveLength(0);
+  });
+
+  it('repair clear explicit overrides deletes targeted rows, refetches, and exits', async () => {
+    mockLocationProductAssignments = [
+      makePublishedAssignment({ id: 'target-clear-one', role: 'primary_pick' }),
+      makePublishedAssignment({ id: 'target-clear-two', role: 'reserve' })
+    ];
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+    mockDeleteProductLocationRoleMutateAsync.mockResolvedValue(undefined);
+    mockCreateProductLocationRoleMutateAsync.mockResolvedValue(undefined);
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-clear-action' }).props.onClick();
+    });
+
+    expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('target-clear-one');
+    expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('target-clear-two');
+    expect(mockCreateProductLocationRoleMutateAsync).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-repair-conflict-panel' })).toHaveLength(0);
+  });
+
+  it('repair partial failure keeps task open, refetches, and shows error', async () => {
+    mockLocationProductAssignments = [
+      makePublishedAssignment({ id: 'target-failure-one', role: 'primary_pick' }),
+      makePublishedAssignment({ id: 'target-failure-two', role: 'reserve' })
+    ];
+    mockEffectiveRoleResponse = {
+      locationId: 'loc-1',
+      productId: '11111111-1111-1111-1111-111111111111',
+      structuralDefaultRole: 'reserve',
+      effectiveRole: null,
+      effectiveRoleSource: 'conflict',
+      conflictingPublishedRoles: ['primary_pick', 'reserve']
+    };
+    mockDeleteProductLocationRoleMutateAsync.mockResolvedValue(undefined);
+    mockCreateProductLocationRoleMutateAsync.mockRejectedValue(new Error('repair create failed'));
+
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'repair-conflict-primary-pick-action' }).props.onClick();
+    });
+
+    expect(renderer.root.findByProps({ 'data-testid': 'task-repair-conflict-panel' })).toBeTruthy();
+    expect(flattenText(renderer.toJSON())).toContain('repair create failed');
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      queryKey: ['product-location-role', 'by-location', 'loc-1'],
+      exact: true
+    });
+    expect(mockRefetchQueries).toHaveBeenCalledWith({
+      queryKey: [
+        'product-location-role',
+        'effective-role',
+        'loc-1',
+        '11111111-1111-1111-1111-111111111111'
+      ],
+      exact: true
+    });
   });
 
   it('calls effective-role hook with null productId when no product context exists', () => {

@@ -5,6 +5,7 @@ export type PanelMode =
   | { kind: 'container-detail'; cellId: string; containerId: string }
   | { kind: 'task-add-product-to-container'; cellId: string; containerId: string }
   | { kind: 'task-edit-override'; cellId: string; containerId: string }
+  | { kind: 'task-repair-conflict'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
   | { kind: 'task-create-container-with-product'; cellId: string }
   | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
@@ -14,6 +15,7 @@ export type TaskKind =
   | 'create-container-with-product'
   | 'move-container'
   | 'edit-override'
+  | 'repair-conflict'
   | 'add-product-to-container';
 
 /**
@@ -69,6 +71,10 @@ export function resolveActiveMode(
 
   if (base.kind === 'container-detail' && taskKind === 'edit-override') {
     return { kind: 'task-edit-override', cellId: base.cellId, containerId: base.containerId };
+  }
+
+  if (base.kind === 'container-detail' && taskKind === 'repair-conflict') {
+    return { kind: 'task-repair-conflict', cellId: base.cellId, containerId: base.containerId };
   }
 
   if (base.kind === 'container-detail' && taskKind === 'add-product-to-container') {
