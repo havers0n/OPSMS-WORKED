@@ -1,13 +1,59 @@
+import { useState } from 'react';
 import type { Rack } from '@wos/domain';
+import {
+  useRotateRack,
+  useUpdateRackGeneral
+} from '@/widgets/warehouse-editor/model/editor-selectors';
 
-export function GeometryBlueprint({ rack }: { rack: Rack }) {
+type ActiveEditor = 'length' | 'depth' | null;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function rotatePoint(x: number, y: number, deg: number, cx: number, cy: number) {
+  if (deg === 0) {
+    return { x, y };
+  }
+
+  const radians = (deg * Math.PI) / 180;
+  const dx = x - cx;
+  const dy = y - cy;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  return {
+    x: cx + dx * cos - dy * sin,
+    y: cy + dx * sin + dy * cos
+  };
+}
+
+function parsePositiveNumber(rawValue: string) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; readOnly?: boolean }) {
+  const updateRackGeneral = useUpdateRackGeneral();
+  const rotateRack = useRotateRack();
+
+  const [activeEditor, setActiveEditor] = useState<ActiveEditor>(null);
+  const [draftValue, setDraftValue] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   const WIDTH = 220;
-  const HEIGHT = 160;
+  const HEIGHT = 180;
   const PADDING = 20;
   const SVG_WIDTH = WIDTH - PADDING * 2;
   const SVG_HEIGHT = HEIGHT - PADDING * 2;
 
-  const aspect = rack.totalLength / rack.depth;
+  const normalizedRotation = ((rack.rotationDeg ?? 0) % 360 + 360) % 360;
+  const safeLength = Math.max(rack.totalLength, 0.1);
+  const safeDepth = Math.max(rack.depth, 0.1);
+  const aspect = safeLength / safeDepth;
   let rectW = SVG_WIDTH;
   let rectH = SVG_HEIGHT;
 
@@ -19,15 +65,101 @@ export function GeometryBlueprint({ rack }: { rack: Rack }) {
 
   const offsetX = PADDING + (SVG_WIDTH - rectW) / 2;
   const offsetY = PADDING + (SVG_HEIGHT - rectH) / 2;
+  const centerX = offsetX + rectW / 2;
+  const centerY = offsetY + rectH / 2;
+  const dimOffset = 10;
+  const dimTick = 4;
+  const dimLabelOffset = 4;
+  const labelWidth = 58;
+  const labelHeight = 18;
 
   const getRotationLabel = () => {
-    const deg = rack.rotationDeg ?? 0;
-    if (deg === 0) return '0°';
-    if (deg === 90) return '90°';
-    if (deg === 180) return '180°';
-    if (deg === 270) return '270°';
-    return deg + '°';
+    if (normalizedRotation === 0) return '0°';
+    if (normalizedRotation === 90) return '90°';
+    if (normalizedRotation === 180) return '180°';
+    if (normalizedRotation === 270) return '270°';
+    return `${normalizedRotation}°`;
   };
+
+  const lengthTextX = clamp(centerX, PADDING + 30, WIDTH - PADDING - 30);
+  const lengthTextY = clamp(offsetY - dimOffset - dimLabelOffset, PADDING + 12, HEIGHT - PADDING - 12);
+  const depthTextX = clamp(offsetX - dimOffset - dimLabelOffset, PADDING + 14, WIDTH - PADDING - 14);
+  const depthTextY = clamp(centerY, PADDING + 12, HEIGHT - PADDING - 12);
+
+  const rotatedLengthPoint = rotatePoint(lengthTextX, lengthTextY, normalizedRotation, centerX, centerY);
+  const rotatedDepthPoint = rotatePoint(depthTextX, depthTextY, normalizedRotation, centerX, centerY);
+  const labelHalfW = labelWidth / 2;
+  const labelHalfH = labelHeight / 2;
+  const lengthLabelX = clamp(
+    rotatedLengthPoint.x,
+    PADDING + labelHalfW + 2,
+    WIDTH - PADDING - labelHalfW - 2
+  );
+  const lengthLabelY = clamp(
+    rotatedLengthPoint.y,
+    PADDING + labelHalfH + 2,
+    HEIGHT - PADDING - labelHalfH - 2
+  );
+  const depthLabelX = clamp(
+    rotatedDepthPoint.x,
+    PADDING + labelHalfW + 2,
+    WIDTH - PADDING - labelHalfW - 2
+  );
+  const depthLabelY = clamp(
+    rotatedDepthPoint.y,
+    PADDING + labelHalfH + 2,
+    HEIGHT - PADDING - labelHalfH - 2
+  );
+
+  const openEditor = (field: Exclude<ActiveEditor, null>) => {
+    if (readOnly) return;
+    setValidationError(null);
+    setActiveEditor(field);
+    setDraftValue(field === 'length' ? String(rack.totalLength) : String(rack.depth));
+  };
+
+  const closeEditor = () => {
+    setActiveEditor(null);
+    setDraftValue('');
+    setValidationError(null);
+  };
+
+  const commitEditor = () => {
+    if (!activeEditor) return true;
+
+    const parsedValue = parsePositiveNumber(draftValue);
+    if (parsedValue === null) {
+      setValidationError('Enter a valid number > 0');
+      return false;
+    }
+
+    if (activeEditor === 'length') {
+      updateRackGeneral(rack.id, { totalLength: parsedValue });
+    } else {
+      updateRackGeneral(rack.id, { depth: parsedValue });
+    }
+
+    closeEditor();
+    return true;
+  };
+
+  const handleRotationAction = () => {
+    if (readOnly) return;
+    closeEditor();
+    rotateRack(rack.id);
+  };
+
+  const activeAnchor =
+    activeEditor === 'length'
+      ? { x: lengthLabelX, y: lengthLabelY }
+      : { x: depthLabelX, y: depthLabelY };
+  const editorWidth = 112;
+  const editorHeight = 42;
+  const editorX = clamp(activeAnchor.x - editorWidth / 2, PADDING, WIDTH - PADDING - editorWidth);
+  const editorY = clamp(activeAnchor.y + 10, PADDING, HEIGHT - PADDING - editorHeight);
+
+  const isLengthEditing = activeEditor === 'length';
+  const isDepthEditing = activeEditor === 'depth';
 
   return (
     <div className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 shadow-sm">
@@ -35,99 +167,205 @@ export function GeometryBlueprint({ rack }: { rack: Rack }) {
         Top-Down View
       </div>
       <svg
+        data-testid="geometry-blueprint-svg"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full bg-slate-50 rounded-lg"
-        style={{ maxHeight: '140px' }}
+        style={{ maxHeight: '180px' }}
       >
-        {/* Dimension lines and labels */}
-        <line
-          x1={offsetX}
-          y1={offsetY - 10}
-          x2={offsetX + rectW}
-          y2={offsetY - 10}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        <line x1={offsetX} y1={offsetY - 14} x2={offsetX} y2={offsetY - 6} stroke="#cbd5e1" strokeWidth="1" />
-        <line
-          x1={offsetX + rectW}
-          y1={offsetY - 14}
-          x2={offsetX + rectW}
-          y2={offsetY - 6}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        <text
-          x={offsetX + rectW / 2}
-          y={offsetY - 15}
-          textAnchor="middle"
-          className="text-[10px] fill-slate-600"
+        <g
+          data-testid="geometry-blueprint-rack-group"
+          transform={`rotate(${normalizedRotation} ${centerX} ${centerY})`}
         >
-          {rack.totalLength.toFixed(1)}m
-        </text>
+          <line
+            x1={offsetX}
+            y1={offsetY - dimOffset}
+            x2={offsetX + rectW}
+            y2={offsetY - dimOffset}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
+          <line
+            x1={offsetX}
+            y1={offsetY - dimOffset - dimTick}
+            x2={offsetX}
+            y2={offsetY - dimOffset + dimTick}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
+          <line
+            x1={offsetX + rectW}
+            y1={offsetY - dimOffset - dimTick}
+            x2={offsetX + rectW}
+            y2={offsetY - dimOffset + dimTick}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
 
-        {/* Rack rectangle */}
-        <rect
-          x={offsetX}
-          y={offsetY}
-          width={rectW}
-          height={rectH}
-          fill="none"
-          stroke="#1e293b"
-          strokeWidth="2"
-          rx="2"
-        />
+          <rect
+            data-testid="geometry-blueprint-rack-rect"
+            x={offsetX}
+            y={offsetY}
+            width={rectW}
+            height={rectH}
+            fill="none"
+            stroke="#1e293b"
+            strokeWidth="2"
+            rx="2"
+          />
 
-        {/* Depth indicator on side */}
-        <line
-          x1={offsetX - 10}
-          y1={offsetY}
-          x2={offsetX - 10}
-          y2={offsetY + rectH}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        <line
-          x1={offsetX - 14}
-          y1={offsetY}
-          x2={offsetX - 6}
-          y2={offsetY}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        <line
-          x1={offsetX - 14}
-          y1={offsetY + rectH}
-          x2={offsetX - 6}
-          y2={offsetY + rectH}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-        <text
-          x={offsetX - 20}
-          y={offsetY + rectH / 2}
-          textAnchor="end"
-          dominantBaseline="middle"
-          className="text-[10px] fill-slate-600"
-        >
-          {rack.depth.toFixed(1)}m
-        </text>
+          <line
+            x1={offsetX - dimOffset}
+            y1={offsetY}
+            x2={offsetX - dimOffset}
+            y2={offsetY + rectH}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
+          <line
+            x1={offsetX - dimOffset - dimTick}
+            y1={offsetY}
+            x2={offsetX - dimOffset + dimTick}
+            y2={offsetY}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
+          <line
+            x1={offsetX - dimOffset - dimTick}
+            y1={offsetY + rectH}
+            x2={offsetX - dimOffset + dimTick}
+            y2={offsetY + rectH}
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
 
-        {/* Rotation indicator arrow */}
-        <g transform={`translate(${offsetX + rectW / 2}, ${offsetY + rectH / 2})`}>
-          <circle cx="0" cy="0" r="12" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="2,2" />
-          <line x1="0" y1="-12" x2="0" y2="-18" stroke="#3b82f6" strokeWidth="2" />
-          <polygon points="0,-18 -2,-14 2,-14" fill="#3b82f6" />
+          <g data-testid="geometry-blueprint-arrow-group" transform={`translate(${centerX}, ${centerY})`}>
+            <circle cx="0" cy="0" r="12" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="2,2" />
+            <line x1="0" y1="-12" x2="0" y2="-18" stroke="#3b82f6" strokeWidth="2" />
+            <polygon points="0,-18 -3,-14 3,-14" fill="#3b82f6" />
+          </g>
         </g>
 
-        {/* Rotation label */}
-        <text
-          x={offsetX + rectW + 8}
-          y={offsetY + rectH + 18}
-          className="text-[10px] fill-slate-600 font-semibold"
+        <g
+          data-testid="geometry-blueprint-length-action"
+          onClick={() => openEditor('length')}
+          style={{ cursor: readOnly ? 'default' : 'pointer' }}
+          transform={`translate(${lengthLabelX} ${lengthLabelY})`}
         >
-          Rotation: {getRotationLabel()}
-        </text>
+          <rect
+            x={-labelHalfW}
+            y={-labelHalfH}
+            width={labelWidth}
+            height={labelHeight}
+            rx="8"
+            fill={isLengthEditing ? '#dbeafe' : '#ffffff'}
+            stroke={readOnly ? '#cbd5e1' : '#94a3b8'}
+            strokeWidth="1"
+          />
+          <text
+            data-testid="geometry-blueprint-length-label"
+            x="0"
+            y="3"
+            textAnchor="middle"
+            className="text-[10px] fill-slate-700"
+          >
+            {`${rack.totalLength.toFixed(1)}m`}
+          </text>
+        </g>
+
+        <g
+          data-testid="geometry-blueprint-depth-action"
+          onClick={() => openEditor('depth')}
+          style={{ cursor: readOnly ? 'default' : 'pointer' }}
+          transform={`translate(${depthLabelX} ${depthLabelY})`}
+        >
+          <rect
+            x={-labelHalfW}
+            y={-labelHalfH}
+            width={labelWidth}
+            height={labelHeight}
+            rx="8"
+            fill={isDepthEditing ? '#dbeafe' : '#ffffff'}
+            stroke={readOnly ? '#cbd5e1' : '#94a3b8'}
+            strokeWidth="1"
+          />
+          <text
+            data-testid="geometry-blueprint-depth-label"
+            x="0"
+            y="3"
+            textAnchor="middle"
+            className="text-[10px] fill-slate-700"
+          >
+            {`${rack.depth.toFixed(1)}m`}
+          </text>
+        </g>
+
+        <g
+          data-testid="geometry-blueprint-rotation-action"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={handleRotationAction}
+          style={{ cursor: readOnly ? 'default' : 'pointer' }}
+        >
+          <rect
+            x={WIDTH / 2 - 52}
+            y={HEIGHT - PADDING - 22}
+            width={92}
+            height={18}
+            rx="8"
+            fill={readOnly ? '#f8fafc' : '#ffffff'}
+            stroke={readOnly ? '#cbd5e1' : '#94a3b8'}
+            strokeWidth="1"
+          />
+          <text
+            data-testid="geometry-blueprint-rotation-label"
+            x={WIDTH / 2}
+            y={HEIGHT - PADDING - 10}
+            textAnchor="middle"
+            className="text-[10px] fill-slate-700 font-semibold"
+          >
+            {`Rotation: ${getRotationLabel()}`}
+          </text>
+        </g>
+
+        {activeEditor && (
+          <foreignObject
+            data-testid="geometry-blueprint-inline-editor"
+            x={editorX}
+            y={editorY}
+            width={editorWidth}
+            height={editorHeight}
+          >
+            <div className="h-full w-full rounded-md border border-slate-300 bg-white/95 p-1 shadow" xmlns="http://www.w3.org/1999/xhtml">
+              <input
+                data-testid="geometry-blueprint-inline-input"
+                autoFocus
+                value={draftValue}
+                onChange={(event) => {
+                  setDraftValue(event.target.value);
+                  if (validationError) setValidationError(null);
+                }}
+                onBlur={() => {
+                  void commitEditor();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void commitEditor();
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeEditor();
+                  }
+                }}
+                className="h-6 w-full rounded border border-slate-300 px-1 text-[11px] text-slate-700"
+              />
+              {validationError && (
+                <div data-testid="geometry-blueprint-inline-error" className="mt-0.5 text-[10px] text-red-600">
+                  {validationError}
+                </div>
+              )}
+            </div>
+          </foreignObject>
+        )}
       </svg>
     </div>
   );

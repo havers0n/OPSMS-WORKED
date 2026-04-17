@@ -109,6 +109,13 @@ function clickTab(
   });
 }
 
+function clickGeometryAdvancedToggle(renderer: TestRenderer.ReactTestRenderer) {
+  const button = renderer.root.findByProps({ 'data-testid': 'geometry-advanced-toggle' });
+  act(() => {
+    button.props.onClick();
+  });
+}
+
 function clickTopologyOption(
   renderer: TestRenderer.ReactTestRenderer,
   topology: 'single' | 'mirrored' | 'independent'
@@ -196,8 +203,10 @@ describe('RackInspector tasks', () => {
     const renderer = renderInspector(createWorkspace(draft));
 
     expect(useEditorStore.getState().objectWorkContext).toBe('geometry');
-    expect(hasText(renderer, 'Position X')).toBe(true);
-    expect(hasText(renderer, 'Rotate 90°')).toBe(true);
+    expect(hasText(renderer, 'Position X')).toBe(false);
+    expect(hasText(renderer, 'Rotate 90°')).toBe(false);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-toggle' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-panel' })).toHaveLength(0);
     expect(summaryText(renderer)).toContain('Faces');
     expect(summaryText(renderer)).toContain('Single');
     expect(summaryText(renderer)).toContain('Cells');
@@ -214,6 +223,173 @@ describe('RackInspector tasks', () => {
     expect(summaryText(renderer)).not.toContain('Face Config');
     expect(summaryText(renderer)).not.toContain('rotation');
     expect(summaryText(renderer)).not.toContain('Default roles');
+  });
+
+  it('renders truthful geometry preview rotation, in-SVG labels, and arrow ownership', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+
+    const svg = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-svg' });
+    const rackGroupBefore = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rack-group' });
+    const rackRectBefore = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rack-rect' });
+    const arrowBefore = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-arrow-group' });
+    const lengthLabelBefore = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-length-label' });
+    const depthLabelBefore = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-depth-label' });
+    const rotationLabelBefore = renderer.root.findByProps({
+      'data-testid': 'geometry-blueprint-rotation-label'
+    });
+
+    expect(svg.type).toBe('svg');
+    expect(rackGroupBefore.props.transform).toContain('rotate(0 ');
+    expect(arrowBefore.parent?.props['data-testid']).toBe('geometry-blueprint-rack-group');
+    expect(nodeText(lengthLabelBefore)).toContain('m');
+    expect(nodeText(depthLabelBefore)).toContain('m');
+    expect(nodeText(rotationLabelBefore)).toContain('Rotation:');
+    expect(nodeText(rotationLabelBefore)).toContain('0°');
+
+    const rackShapeBefore = {
+      x: rackRectBefore.props.x,
+      y: rackRectBefore.props.y,
+      width: rackRectBefore.props.width,
+      height: rackRectBefore.props.height
+    };
+
+    const rotateButton = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rotation-action' });
+    act(() => {
+      rotateButton.props.onClick();
+    });
+
+    const rackGroupAfter = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rack-group' });
+    const rackRectAfter = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rack-rect' });
+    const arrowAfter = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-arrow-group' });
+    const rotationLabelAfter = renderer.root.findByProps({
+      'data-testid': 'geometry-blueprint-rotation-label'
+    });
+
+    expect(rackGroupAfter.props.transform).toContain('rotate(90 ');
+    expect(arrowAfter.parent?.props['data-testid']).toBe('geometry-blueprint-rack-group');
+    expect(nodeText(rotationLabelAfter)).toContain('Rotation:');
+    expect(nodeText(rotationLabelAfter)).toContain('90°');
+    expect({
+      x: rackRectAfter.props.x,
+      y: rackRectAfter.props.y,
+      width: rackRectAfter.props.width,
+      height: rackRectAfter.props.height
+    }).toEqual(rackShapeBefore);
+  });
+
+  it('edits length/depth from SVG and keeps only one inline editor active', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+
+    const lengthAction = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-length-action' });
+    act(() => {
+      lengthAction.props.onClick();
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-editor' })).toHaveLength(1);
+
+    let inlineInput = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-inline-input' });
+    act(() => {
+      inlineInput.props.onChange({ target: { value: '6.7' } });
+    });
+    act(() => {
+      inlineInput.props.onKeyDown({ key: 'Enter', preventDefault: () => undefined });
+    });
+    expect(useEditorStore.getState().draft?.racks[rackId].totalLength).toBe(6.7);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-editor' })).toHaveLength(0);
+
+    const depthAction = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-depth-action' });
+    act(() => {
+      depthAction.props.onClick();
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-editor' })).toHaveLength(1);
+
+    // Opening another field replaces prior editor (single active editor invariant).
+    act(() => {
+      lengthAction.props.onClick();
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-editor' })).toHaveLength(1);
+
+    inlineInput = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-inline-input' });
+    act(() => {
+      inlineInput.props.onChange({ target: { value: '2.9' } });
+    });
+    act(() => {
+      inlineInput.props.onBlur();
+    });
+    expect(useEditorStore.getState().draft?.racks[rackId].totalLength).toBe(2.9);
+  });
+
+  it('blocks invalid inline commit and rotation still applies while closing stale editor', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    const startingLength = useEditorStore.getState().draft?.racks[rackId].totalLength;
+    const lengthAction = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-length-action' });
+    act(() => {
+      lengthAction.props.onClick();
+    });
+
+    const inlineInput = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-inline-input' });
+    act(() => {
+      inlineInput.props.onChange({ target: { value: '' } });
+    });
+    act(() => {
+      inlineInput.props.onBlur();
+    });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-error' })).toHaveLength(1);
+    expect(useEditorStore.getState().draft?.racks[rackId].totalLength).toBe(startingLength);
+
+    const rotationAction = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rotation-action' });
+    act(() => {
+      rotationAction.props.onClick();
+    });
+
+    expect(useEditorStore.getState().draft?.racks[rackId].rotationDeg).toBe(90);
+    expect(useEditorStore.getState().draft?.racks[rackId].totalLength).toBe(startingLength);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-editor' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-error' })).toHaveLength(0);
+  });
+
+  it('keeps advanced geometry form collapsed by default and expandable with position fields', () => {
+    const draft = createLayoutDraftFixture();
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-panel' })).toHaveLength(0);
+    expect(hasText(renderer, 'Position X')).toBe(false);
+    expect(hasText(renderer, 'Rotate 90°')).toBe(false);
+
+    clickGeometryAdvancedToggle(renderer);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-panel' })).toHaveLength(1);
+    expect(hasText(renderer, 'Position X')).toBe(true);
+    expect(hasText(renderer, 'Position Y')).toBe(true);
+    expect(hasText(renderer, 'Rotate 90°')).toBe(true);
+
+    clickGeometryAdvancedToggle(renderer);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-panel' })).toHaveLength(0);
+    expect(hasText(renderer, 'Position X')).toBe(false);
   });
 
   it('switches to Structure task and shows only section editing content', () => {
@@ -491,9 +667,7 @@ describe('RackInspector tasks', () => {
 
     const renderer = renderInspector(createWorkspace(draft));
 
-    const rotateButton = renderer.root.findAll(
-      (node) => node.type === 'button' && node.children.some((child) => child === 'Rotate 90°')
-    )[0];
+    const rotateButton = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-rotation-action' });
     act(() => {
       rotateButton.props.onClick();
     });
@@ -557,7 +731,7 @@ describe('RackInspector tasks', () => {
     });
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
-    expect(hasText(renderer, 'Position X')).toBe(true);
+    expect(hasText(renderer, 'Position X')).toBe(false);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-readonly' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(0);
     expect(hasText(renderer, 'Face A')).toBe(true);
@@ -1046,7 +1220,7 @@ describe('RackInspector tasks', () => {
     });
 
     const renderer = renderInspector(createWorkspace(draft));
-    expect(hasText(renderer, 'Position X')).toBe(true);
+    expect(hasText(renderer, 'Position X')).toBe(false);
 
     const collapseButton = renderer.root.findByProps({ title: 'Collapse summary' });
     act(() => {
@@ -1055,7 +1229,7 @@ describe('RackInspector tasks', () => {
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary-collapsed' })).toHaveLength(1);
-    expect(hasText(renderer, 'Position X')).toBe(true);
+    expect(hasText(renderer, 'Position X')).toBe(false);
 
     const expandButton = renderer.root.findByProps({ title: 'Expand summary' });
     act(() => {
@@ -1063,6 +1237,6 @@ describe('RackInspector tasks', () => {
     });
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(1);
-    expect(hasText(renderer, 'Position X')).toBe(true);
+    expect(hasText(renderer, 'Position X')).toBe(false);
   });
 });
