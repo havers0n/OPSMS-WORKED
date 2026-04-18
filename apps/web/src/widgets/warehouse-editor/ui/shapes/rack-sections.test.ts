@@ -70,12 +70,16 @@ function renderSections(geometry = baseGeometry) {
   return renderer;
 }
 
+function getSectionNumberTexts(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root
+    .findAll((node) => String(node.type) === 'Text' && /^\d+$/.test(String(node.props.text)))
+    .map((node) => String(node.props.text));
+}
+
 describe('RackSections numbering', () => {
   it('renders structural section numbers when section geometry is large enough', () => {
     const renderer = renderSections();
-    const textValues = renderer.root
-      .findAll((node) => String(node.type) === 'Text')
-      .map((node) => String(node.props.text));
+    const textValues = getSectionNumberTexts(renderer);
     expect(textValues).toEqual(['1', '2']);
   });
 
@@ -85,7 +89,92 @@ describe('RackSections numbering', () => {
       width: 24,
       faceAWidth: 24
     });
-    const textNodes = renderer.root.findAll((node) => String(node.type) === 'Text');
+    const textNodes = renderer.root.findAll(
+      (node) => String(node.type) === 'Text' && /^\d+$/.test(String(node.props.text))
+    );
     expect(textNodes).toHaveLength(0);
+  });
+
+  it('places section labels in top section-owned rails (not section-body center)', () => {
+    const renderer = renderSections();
+    const labels = renderer.root.findAll(
+      (node) => String(node.type) === 'Text' && /^\d+$/.test(String(node.props.text))
+    );
+
+    expect(labels).toHaveLength(2);
+    for (const label of labels) {
+      expect(Number(label.props.y)).toBeLessThan(20);
+      expect(Number(label.props.y)).toBeLessThan(baseGeometry.height / 2);
+    }
+  });
+
+  it('keeps the same rail ownership in paired racks for both faces', () => {
+    const faceA = createFace('face-a');
+    const faceB = {
+      ...createFace('face-b'),
+      side: 'B' as const
+    };
+    const pairedGeometry = {
+      ...baseGeometry,
+      isPaired: true,
+      spineY: 40
+    };
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackSections, {
+          geometry: pairedGeometry,
+          faceA,
+          faceB,
+          isSelected: false
+        })
+      );
+    });
+
+    const labels = renderer.root
+      .findAll((node) => String(node.type) === 'Text' && /^\d+$/.test(String(node.props.text)))
+      .map((node) => Number(node.props.y))
+      .sort((a, b) => a - b);
+
+    expect(labels).toHaveLength(4);
+    expect(labels[0]).toBeLessThan(pairedGeometry.spineY);
+    expect(labels[1]).toBeLessThan(pairedGeometry.spineY);
+    expect(labels[2]).toBeGreaterThan(pairedGeometry.spineY);
+    expect(labels[3]).toBeGreaterThan(pairedGeometry.spineY);
+  });
+
+  it('renders face tokens from face/header rail owner only', () => {
+    const faceA = createFace('face-a');
+    const faceB = {
+      ...createFace('face-b'),
+      side: 'B' as const
+    };
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackSections, {
+          geometry: {
+            ...baseGeometry,
+            isPaired: true,
+            spineY: 40
+          },
+          faceA,
+          faceB,
+          isSelected: false
+        })
+      );
+    });
+    const faceTokens = renderer.root
+      .findAll(
+        (node) =>
+          String(node.type) === 'Text' &&
+          node.props.name === 'face-token-label' &&
+          (node.props.text === 'A' || node.props.text === 'B')
+      )
+      .map((node) => String(node.props.text))
+      .sort();
+
+    expect(faceTokens).toEqual(['A', 'B']);
   });
 });

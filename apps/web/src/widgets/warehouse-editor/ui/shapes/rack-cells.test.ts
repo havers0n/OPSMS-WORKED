@@ -194,6 +194,12 @@ function getTextValues(renderer: TestRenderer.ReactTestRenderer) {
     .map((node) => String(node.props.text));
 }
 
+function getTextValuesByOwner(renderer: TestRenderer.ReactTestRenderer, owner: string) {
+  return renderer.root
+    .findAll((node) => String(node.type) === 'Text' && node.props.name === owner)
+    .map((node) => String(node.props.text));
+}
+
 describe('RackCells', () => {
   const threeLevelIds = ['level-high', 'level-mid', 'level-low'];
 
@@ -313,7 +319,7 @@ describe('RackCells', () => {
       levelIds: ['level-only'],
       slotCount: 2
     });
-    const labels = getTextValues(renderer).filter((value) => /^\d+$/.test(value));
+    const labels = getTextValuesByOwner(renderer, 'slot-label').filter((value) => /^\d+$/.test(value));
     expect(labels).toEqual(['1', '2']);
   });
 
@@ -327,8 +333,8 @@ describe('RackCells', () => {
       slotCount: 2
     });
 
-    const ltrLabels = getTextValues(ltrRenderer).filter((value) => /^\d+$/.test(value));
-    const rtlLabels = getTextValues(rtlRenderer).filter((value) => /^\d+$/.test(value));
+    const ltrLabels = getTextValuesByOwner(ltrRenderer, 'slot-label').filter((value) => /^\d+$/.test(value));
+    const rtlLabels = getTextValuesByOwner(rtlRenderer, 'slot-label').filter((value) => /^\d+$/.test(value));
 
     expect(ltrLabels).toEqual(['1', '2']);
     expect(rtlLabels).toEqual(['2', '1']);
@@ -340,8 +346,14 @@ describe('RackCells', () => {
       slotCount: 2,
       selectedCellId: 'cell-level-only-1'
     });
-    const addressLabels = getTextValues(renderer).filter((value) => value.startsWith('ADDR-'));
+    const addressLabels = getTextValuesByOwner(renderer, 'focused-address-label').filter((value) =>
+      value.startsWith('ADDR-')
+    );
     expect(addressLabels).toEqual(['ADDR-level-only-1']);
+    const slotOwnerAddresses = getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
+      value.startsWith('ADDR-')
+    );
+    expect(slotOwnerAddresses).toEqual([]);
   });
 
   it('reveals full address for highlighted cells', () => {
@@ -350,7 +362,9 @@ describe('RackCells', () => {
       slotCount: 2,
       highlightedCellIds: new Set(['cell-level-only-2'])
     });
-    const addressLabels = getTextValues(renderer).filter((value) => value.startsWith('ADDR-'));
+    const addressLabels = getTextValuesByOwner(renderer, 'focused-address-label').filter((value) =>
+      value.startsWith('ADDR-')
+    );
     expect(addressLabels).toEqual(['ADDR-level-only-2']);
   });
 

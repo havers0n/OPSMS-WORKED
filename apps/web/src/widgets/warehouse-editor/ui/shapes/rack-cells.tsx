@@ -16,7 +16,7 @@ import {
   CellInteractionOverlay,
   CellExceptionOverlay
 } from './rack-cell-overlays';
-import { CellLabelOverlay } from './rack-label-overlays';
+import { CellInteriorSlotLabel, FocusedCellAddressOverlay } from './rack-label-overlays';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
@@ -105,6 +105,17 @@ type FaceProps = {
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
+type FocusedAddressLabel = {
+  key: string;
+  addressText: string;
+  geometry: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+};
+
 function FaceCells({
   face,
   rackId,
@@ -130,6 +141,7 @@ function FaceCells({
   const isRtl = face.slotNumberingDirection === 'rtl';
   const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
   const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
+  const focusedAddressLabels: FocusedAddressLabel[] = [];
 
   const inset = 4;
   const cellH = bandH - inset * 2;
@@ -171,6 +183,7 @@ function FaceCells({
           const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
           const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
           const shouldRevealAddress = isSelected || isHighlighted || isWorkflowSource;
+          const addressText = cell?.address?.raw ?? null;
           const runtime = cellId ? cellRuntimeById.get(cellId) : null;
           const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
 
@@ -198,6 +211,13 @@ function FaceCells({
             width: Math.max(1, cellW),
             height: Math.max(1, cellH - 1)
           };
+          if (shouldRevealAddress && addressText) {
+            focusedAddressLabels.push({
+              key: `${sec.id}-${level.id}-slot-${slotLabel}`,
+              addressText,
+              geometry: cellGeometry
+            });
+          }
 
           return (
             <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
@@ -229,16 +249,23 @@ function FaceCells({
                 visualState={visualState}
                 isHighlighted={isHighlighted}
               />
-              <CellLabelOverlay
+              <CellInteriorSlotLabel
                 slotNumber={slotLabel}
-                addressText={cell?.address?.raw ?? null}
-                revealAddress={shouldRevealAddress}
                 geometry={cellGeometry}
               />
             </Group>
           );
         });
       })}
+      <Group listening={false} name="focused-address-overlay-group">
+        {focusedAddressLabels.map((overlay) => (
+          <FocusedCellAddressOverlay
+            key={overlay.key}
+            addressText={overlay.addressText}
+            geometry={overlay.geometry}
+          />
+        ))}
+      </Group>
     </Group>
   );
 }

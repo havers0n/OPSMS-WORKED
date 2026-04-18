@@ -26,6 +26,7 @@ function canRenderLabel(text: string, geometry: LabelGeometry, options: LabelFit
 }
 
 const SECTION_LABEL_COLOR = '#0f172a';
+const FACE_TOKEN_LABEL_COLOR = '#0f172a';
 const SLOT_LABEL_COLOR = '#0f172a';
 const ADDRESS_LABEL_COLOR = '#1e293b';
 
@@ -67,15 +68,49 @@ export function SectionLabelOverlay({
   );
 }
 
-export function CellLabelOverlay({
+export function FaceTokenRailLabel({
+  faceToken,
+  geometry
+}: {
+  faceToken: 'A' | 'B';
+  geometry: LabelGeometry;
+}) {
+  const fontSize = 10;
+  if (
+    !canRenderLabel(faceToken, geometry, {
+      fontSize,
+      minWidth: 14,
+      minHeight: 12,
+      padX: 2,
+      padY: 1
+    })
+  ) {
+    return null;
+  }
+
+  return (
+    <Text
+      x={geometry.x}
+      y={geometry.y + Math.max(0, (geometry.height - fontSize) / 2)}
+      width={geometry.width}
+      text={faceToken}
+      fontSize={fontSize}
+      fontStyle="bold"
+      fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+      fill={FACE_TOKEN_LABEL_COLOR}
+      align="left"
+      listening={false}
+      opacity={0.9}
+      name="face-token-label"
+    />
+  );
+}
+
+export function CellInteriorSlotLabel({
   slotNumber,
-  addressText,
-  revealAddress,
   geometry
 }: {
   slotNumber: number;
-  addressText: string | null;
-  revealAddress: boolean;
   geometry: LabelGeometry;
 }) {
   const slotText = String(slotNumber);
@@ -88,50 +123,60 @@ export function CellLabelOverlay({
     padY: 1
   });
 
-  const shouldTryAddress = revealAddress && !!addressText;
+  if (!canRenderSlot) return null;
+
+  return (
+    <Group listening={false}>
+      <Text
+        x={geometry.x}
+        y={geometry.y + 1}
+        width={geometry.width}
+        text={slotText}
+        fontSize={slotFontSize}
+        fontStyle="bold"
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+        fill={SLOT_LABEL_COLOR}
+        align="center"
+        opacity={0.92}
+        name="slot-label"
+      />
+    </Group>
+  );
+}
+
+export function FocusedCellAddressOverlay({
+  addressText,
+  geometry
+}: {
+  addressText: string;
+  geometry: LabelGeometry;
+}) {
   const addressFontSize = 8;
   const canRenderAddress =
-    shouldTryAddress &&
-    canRenderLabel(addressText as string, geometry, {
+    canRenderLabel(addressText, geometry, {
       fontSize: addressFontSize,
       minWidth: 38,
       minHeight: 18,
       padX: 2,
       padY: 1
-    }) &&
-    geometry.height >= slotFontSize + addressFontSize + 6;
+    }) && geometry.height >= addressFontSize + 6;
 
-  if (!canRenderSlot && !canRenderAddress) return null;
+  if (!canRenderAddress) return null;
 
   return (
     <Group listening={false}>
-      {canRenderSlot && (
-        <Text
-          x={geometry.x}
-          y={geometry.y + 1}
-          width={geometry.width}
-          text={slotText}
-          fontSize={slotFontSize}
-          fontStyle="bold"
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill={SLOT_LABEL_COLOR}
-          align="center"
-          opacity={0.92}
-        />
-      )}
-      {canRenderAddress && (
-        <Text
-          x={geometry.x}
-          y={geometry.y + geometry.height - addressFontSize - 1}
-          width={geometry.width}
-          text={addressText as string}
-          fontSize={addressFontSize}
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill={ADDRESS_LABEL_COLOR}
-          align="center"
-          opacity={0.85}
-        />
-      )}
+      <Text
+        x={geometry.x}
+        y={geometry.y + geometry.height - addressFontSize - 1}
+        width={geometry.width}
+        text={addressText}
+        fontSize={addressFontSize}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+        fill={ADDRESS_LABEL_COLOR}
+        align="center"
+        opacity={0.85}
+        name="focused-address-label"
+      />
     </Group>
   );
 }

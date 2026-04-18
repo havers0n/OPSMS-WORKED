@@ -1,7 +1,7 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { RackFace } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
-import { SectionLabelOverlay } from './rack-label-overlays';
+import { FaceTokenRailLabel, SectionLabelOverlay } from './rack-label-overlays';
 
 type Props = {
   geometry: CanvasRackGeometry;
@@ -15,6 +15,12 @@ const DIVIDER_STROKE = '#94a3b8';
 const DIVIDER_STROKE_SEL = '#0f6a8e';
 const SECTION_FILL_A_SEL = 'rgba(14, 165, 233, 0.12)';
 const SECTION_FILL_B_SEL = 'rgba(124, 58, 237, 0.12)';
+const FACE_TOKEN_RAIL_TOP_INSET = 2;
+const FACE_TOKEN_RAIL_LEFT_INSET = 6;
+const FACE_TOKEN_RAIL_HEIGHT = 12;
+const FACE_TOKEN_RAIL_WIDTH = 20;
+const SECTION_LABEL_RAIL_TOP_INSET = 6;
+const SECTION_LABEL_RAIL_HEIGHT = 14;
 
 export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = false }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
@@ -60,19 +66,35 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
         />
       ))}
 
+      <FaceTokenRailLabel
+        faceToken="A"
+        geometry={{
+          x: FACE_TOKEN_RAIL_LEFT_INSET,
+          y: FACE_TOKEN_RAIL_TOP_INSET,
+          width: Math.min(FACE_TOKEN_RAIL_WIDTH, Math.max(0, faceAWidth - FACE_TOKEN_RAIL_LEFT_INSET - 2)),
+          height: Math.min(FACE_TOKEN_RAIL_HEIGHT, Math.max(0, faceABottom - FACE_TOKEN_RAIL_TOP_INSET - 2))
+        }}
+      />
+
       {faceA.sections.map((sec, i) => {
         const x0 = faceAOffsets[i];
         const x1 = faceAOffsets[i + 1];
         const sectionW = x1 - x0;
+        const sectionTop = 4;
+        const sectionBottom = faceABottom - 4;
+        const railHeight = Math.max(
+          0,
+          Math.min(SECTION_LABEL_RAIL_HEIGHT, sectionBottom - sectionTop - SECTION_LABEL_RAIL_TOP_INSET)
+        );
         return (
           <SectionLabelOverlay
             key={`sa-label-${sec.id}`}
             sectionNumber={sec.ordinal}
             geometry={{
               x: x0 + 1,
-              y: 4,
+              y: sectionTop + SECTION_LABEL_RAIL_TOP_INSET,
               width: Math.max(1, sectionW - 2),
-              height: Math.max(1, faceABottom - 8)
+              height: railHeight
             }}
           />
         );
@@ -108,19 +130,37 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
         />
       ))}
 
+      {isPaired && faceB && (
+        <FaceTokenRailLabel
+          faceToken="B"
+          geometry={{
+            x: FACE_TOKEN_RAIL_LEFT_INSET,
+            y: faceBTop + FACE_TOKEN_RAIL_TOP_INSET,
+            width: Math.min(FACE_TOKEN_RAIL_WIDTH, Math.max(0, faceBWidth - FACE_TOKEN_RAIL_LEFT_INSET - 2)),
+            height: Math.min(FACE_TOKEN_RAIL_HEIGHT, Math.max(0, height - faceBTop - FACE_TOKEN_RAIL_TOP_INSET - 2))
+          }}
+        />
+      )}
+
       {isPaired && faceB && faceB.sections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
         const sectionW = x1 - x0;
+        const sectionTop = faceBTop + 4;
+        const sectionBottom = height - 4;
+        const railHeight = Math.max(
+          0,
+          Math.min(SECTION_LABEL_RAIL_HEIGHT, sectionBottom - sectionTop - SECTION_LABEL_RAIL_TOP_INSET)
+        );
         return (
           <SectionLabelOverlay
             key={`sb-label-${sec.id}`}
             sectionNumber={sec.ordinal}
             geometry={{
               x: x0 + 1,
-              y: faceBTop + 4,
+              y: sectionTop + SECTION_LABEL_RAIL_TOP_INSET,
               width: Math.max(1, sectionW - 2),
-              height: Math.max(1, height - faceBTop - 8)
+              height: railHeight
             }}
           />
         );
