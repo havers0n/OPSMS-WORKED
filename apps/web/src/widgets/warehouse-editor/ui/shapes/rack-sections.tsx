@@ -1,6 +1,7 @@
 import { Group, Line, Rect } from 'react-konva';
 import type { RackFace } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
+import { SectionLabelOverlay } from './rack-label-overlays';
 
 type Props = {
   geometry: CanvasRackGeometry;
@@ -59,6 +60,24 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
         />
       ))}
 
+      {faceA.sections.map((sec, i) => {
+        const x0 = faceAOffsets[i];
+        const x1 = faceAOffsets[i + 1];
+        const sectionW = x1 - x0;
+        return (
+          <SectionLabelOverlay
+            key={`sa-label-${sec.id}`}
+            sectionNumber={sec.ordinal}
+            geometry={{
+              x: x0 + 1,
+              y: 4,
+              width: Math.max(1, sectionW - 2),
+              height: Math.max(1, faceABottom - 8)
+            }}
+          />
+        );
+      })}
+
       {isSelected && isPaired && faceB && faceB.sections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
@@ -88,6 +107,24 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
           opacity={isSelected ? 0.9 : 0.5}
         />
       ))}
+
+      {isPaired && faceB && faceB.sections.map((sec, i) => {
+        const x0 = faceBOffsets[i];
+        const x1 = faceBOffsets[i + 1];
+        const sectionW = x1 - x0;
+        return (
+          <SectionLabelOverlay
+            key={`sb-label-${sec.id}`}
+            sectionNumber={sec.ordinal}
+            geometry={{
+              x: x0 + 1,
+              y: faceBTop + 4,
+              width: Math.max(1, sectionW - 2),
+              height: Math.max(1, height - faceBTop - 8)
+            }}
+          />
+        );
+      })}
     </Group>
   );
 }

@@ -153,6 +153,16 @@ function renderRackLayer(params: {
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('RackLayer high-LOD cell mounting', () => {
+  it('does not mount RackSections when section rendering is inactive (lod=0)', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      lod: 0
+    });
+    const sections = renderer.root.findAll((node) => String(node.type) === 'RackSections');
+    expect(sections).toHaveLength(0);
+  });
+
   it('renders RackCells for visible unselected racks at high LOD with level 0', () => {
     const renderer = renderRackLayer({
       selectedRackIds: [],

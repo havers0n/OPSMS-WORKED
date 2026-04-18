@@ -16,6 +16,7 @@ import {
   CellInteractionOverlay,
   CellExceptionOverlay
 } from './rack-cell-overlays';
+import { CellLabelOverlay } from './rack-label-overlays';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
@@ -169,6 +170,7 @@ function FaceCells({
           const isSelected = selectedCellId === cellId;
           const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
           const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
+          const shouldRevealAddress = isSelected || isHighlighted || isWorkflowSource;
           const runtime = cellId ? cellRuntimeById.get(cellId) : null;
           const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
 
@@ -226,6 +228,12 @@ function FaceCells({
                 geometry={cellGeometry}
                 visualState={visualState}
                 isHighlighted={isHighlighted}
+              />
+              <CellLabelOverlay
+                slotNumber={slotLabel}
+                addressText={cell?.address?.raw ?? null}
+                revealAddress={shouldRevealAddress}
+                geometry={cellGeometry}
               />
             </Group>
           );

@@ -9,7 +9,9 @@ vi.mock('react-konva', () => ({
   Group: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Group', props, children),
   Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
-    createElement('Rect', props, children)
+    createElement('Rect', props, children),
+  Text: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Text', props, children)
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -27,12 +29,13 @@ const geometry = {
   spineY: 0
 };
 
-function createFace(levelIds: string[]): RackFace {
+function createFace(levelIds: string[], options?: { slotCount?: number; direction?: 'ltr' | 'rtl' }): RackFace {
+  const slotCount = options?.slotCount ?? 2;
   return {
     id: 'face-a',
     side: 'A',
     enabled: true,
-    slotNumberingDirection: 'ltr',
+    slotNumberingDirection: options?.direction ?? 'ltr',
     isMirrored: false,
     mirrorSourceFaceId: null,
     sections: [
@@ -43,18 +46,18 @@ function createFace(levelIds: string[]): RackFace {
         levels: levelIds.map((id, idx) => ({
           id,
           ordinal: levelIds.length - idx,
-          slotCount: 2
+          slotCount
         }))
       }
     ]
   };
 }
 
-function createCellsMap(levelIds: string[]) {
+function createCellsMap(levelIds: string[], slotCount = 2) {
   const byStructure = new Map<string, Cell>();
 
   for (const levelId of levelIds) {
-    for (const slotNo of [1, 2]) {
+    for (let slotNo = 1; slotNo <= slotCount; slotNo += 1) {
       byStructure.set(
         buildCellStructureKey({
           rackId: 'rack-1',
@@ -63,7 +66,20 @@ function createCellsMap(levelIds: string[]) {
           rackLevelId: levelId,
           slotNo
         }),
-        { id: `cell-${levelId}-${slotNo}` } as Cell
+        {
+          id: `cell-${levelId}-${slotNo}`,
+          address: {
+            raw: `ADDR-${levelId}-${slotNo}`,
+            parts: {
+              rackCode: '01',
+              face: 'A',
+              section: 1,
+              level: 1,
+              slot: slotNo
+            },
+            sortKey: `0001-A-01-01-0${slotNo}`
+          }
+        } as Cell
       );
     }
   }
@@ -89,6 +105,40 @@ function renderRackCells(activeLevelIndex: number, levelIds: string[], isInterac
     );
   });
 
+  return renderer;
+}
+
+function renderRackCellsWithProps(params: {
+  geometryOverride?: typeof geometry;
+  faceA?: RackFace;
+  activeLevelIndex?: number;
+  levelIds?: string[];
+  slotCount?: number;
+  selectedCellId?: string | null;
+  workflowSourceCellId?: string | null;
+  highlightedCellIds?: Set<string>;
+}) {
+  const levelIds = params.levelIds ?? ['level-only'];
+  const slotCount = params.slotCount ?? 2;
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      createElement(RackCells, {
+        geometry: params.geometryOverride ?? geometry,
+        rackId: 'rack-1',
+        faceA: params.faceA ?? createFace(levelIds, { slotCount }),
+        faceB: null,
+        isSelected: true,
+        activeLevelIndex: params.activeLevelIndex ?? 0,
+        publishedCellsByStructure: createCellsMap(levelIds, slotCount),
+        highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
+        selectedCellId: params.selectedCellId ?? null,
+        workflowSourceCellId: params.workflowSourceCellId ?? null,
+        isInteractive: false,
+        onCellClick: () => undefined
+      })
+    );
+  });
   return renderer;
 }
 
@@ -136,6 +186,12 @@ function getCellBounds(activeLevelIndex: number, levelIds: string[]) {
   const yMax = Math.max(...rects.map((node) => Number(node.props.y) + Number(node.props.height)));
 
   return { xMin, yMin, xMax, yMax };
+}
+
+function getTextValues(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root
+    .findAll((node) => String(node.type) === 'Text')
+    .map((node) => String(node.props.text));
 }
 
 describe('RackCells', () => {
@@ -250,6 +306,75 @@ describe('RackCells', () => {
     }
 
     expect(clicked).toEqual(['cell-level-3-1', 'cell-level-3-2']);
+  });
+
+  it('renders slot numbers when cell geometry fits', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2
+    });
+    const labels = getTextValues(renderer).filter((value) => /^\d+$/.test(value));
+    expect(labels).toEqual(['1', '2']);
+  });
+
+  it('respects slot numbering direction when rendering slot labels', () => {
+    const ltrRenderer = renderRackCellsWithProps({
+      faceA: createFace(['level-only'], { slotCount: 2, direction: 'ltr' }),
+      slotCount: 2
+    });
+    const rtlRenderer = renderRackCellsWithProps({
+      faceA: createFace(['level-only'], { slotCount: 2, direction: 'rtl' }),
+      slotCount: 2
+    });
+
+    const ltrLabels = getTextValues(ltrRenderer).filter((value) => /^\d+$/.test(value));
+    const rtlLabels = getTextValues(rtlRenderer).filter((value) => /^\d+$/.test(value));
+
+    expect(ltrLabels).toEqual(['1', '2']);
+    expect(rtlLabels).toEqual(['2', '1']);
+  });
+
+  it('reveals full address only for selected cells, not globally', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1'
+    });
+    const addressLabels = getTextValues(renderer).filter((value) => value.startsWith('ADDR-'));
+    expect(addressLabels).toEqual(['ADDR-level-only-1']);
+  });
+
+  it('reveals full address for highlighted cells', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      highlightedCellIds: new Set(['cell-level-only-2'])
+    });
+    const addressLabels = getTextValues(renderer).filter((value) => value.startsWith('ADDR-'));
+    expect(addressLabels).toEqual(['ADDR-level-only-2']);
+  });
+
+  it('hides labels cleanly when geometry is too small while keeping cell rendering', () => {
+    const renderer = renderRackCellsWithProps({
+      geometryOverride: {
+        ...geometry,
+        width: 12,
+        faceAWidth: 12
+      },
+      levelIds: ['level-only'],
+      slotCount: 2
+    });
+    const labels = getTextValues(renderer);
+    expect(labels).toHaveLength(0);
+    const cellRects = renderer.root
+      .findAll((node) => String(node.type) === 'Rect')
+      .filter((node) => node.props.fillEnabled === true);
+    expect(cellRects.length).toBeGreaterThan(0);
+  });
+
+  it('keeps cell click behavior unchanged when labels are present', () => {
+    const clicked = clickCellIdsWithCollector(0, ['level-only']);
+    expect(clicked).toEqual(['cell-level-only-1', 'cell-level-only-2']);
   });
 });
 
