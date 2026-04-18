@@ -68,6 +68,16 @@ function getIdentityGroup(renderer: TestRenderer.ReactTestRenderer) {
 }
 
 describe('RackBody identity label ownership', () => {
+  it('renders paired face B stripe on the outer edge, not the internal seam', () => {
+    const renderer = renderRackBody({ isPaired: true });
+    const faceBStripe = renderer.root.find(
+      (node) => String(node.type) === 'Rect' && String(node.props.fill) === '#7c3aed'
+    );
+
+    // height=80 -> stripeH clamps to 8 => outer edge starts at y=72
+    expect(faceBStripe.props.y).toBe(72);
+  });
+
   it('keeps rack code in a stable leading shell anchor across all prominence states', () => {
     const dominantAnchor = getIdentityGroup(renderRackBody({ prominence: 'dominant' }));
     const secondaryAnchor = getIdentityGroup(renderRackBody({ prominence: 'secondary' }));

@@ -179,7 +179,9 @@ export function RackBody({
       {isPaired && (
         <Rect
           x={0}
-          y={spineY}
+          // Face B band must stay on the outer edge of the paired rack.
+          // Using spineY places it on the internal seam (between faces).
+          y={Math.max(0, height - stripeH)}
           width={faceBWidth}
           height={stripeH}
           fill={C.stripeB}
