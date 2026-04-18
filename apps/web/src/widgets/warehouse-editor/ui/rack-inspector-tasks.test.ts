@@ -207,6 +207,7 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Rotate 90°')).toBe(false);
     expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-toggle' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-panel' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-quick-actions' })).toHaveLength(1);
     expect(summaryText(renderer)).toContain('Faces');
     expect(summaryText(renderer)).toContain('Single');
     expect(summaryText(renderer)).toContain('Cells');
@@ -696,6 +697,54 @@ describe('RackInspector tasks', () => {
     expect(useEditorStore.getState().draft?.racks[rackId].displayCode).toBe('77');
   });
 
+  it('runs rack quick actions from inspector header and preserves delete confirmation flow', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    const initialRackCount = useEditorStore.getState().draft?.rackIds.length ?? 0;
+
+    const rotateButton = renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-rotate' });
+    act(() => {
+      rotateButton.props.onClick();
+    });
+    expect(useEditorStore.getState().draft?.racks[rackId].rotationDeg).toBe(90);
+
+    const duplicateButton = renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-duplicate' });
+    act(() => {
+      duplicateButton.props.onClick();
+    });
+    expect(useEditorStore.getState().draft?.rackIds.length).toBe(initialRackCount + 1);
+
+    const deleteButton = renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-delete' });
+    act(() => {
+      deleteButton.props.onClick();
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-delete-confirm' })).toHaveLength(1);
+
+    const cancelDelete = renderer.root.findByProps({ 'data-testid': 'rack-inspector-delete-cancel' });
+    act(() => {
+      cancelDelete.props.onClick();
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-delete-confirm' })).toHaveLength(0);
+
+    const deleteButtonAgain = renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-delete' });
+    act(() => {
+      deleteButtonAgain.props.onClick();
+    });
+    const confirmDelete = renderer.root.findByProps({
+      'data-testid': 'rack-inspector-delete-confirm-button'
+    });
+    act(() => {
+      confirmDelete.props.onClick();
+    });
+    expect(useEditorStore.getState().draft?.rackIds.length).toBe(initialRackCount);
+  });
+
   it('rack-change resets task back to Geometry', () => {
     const draft = createLayoutDraftFixture();
     act(() => {
@@ -731,6 +780,7 @@ describe('RackInspector tasks', () => {
     });
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-task-nav' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-quick-actions' })).toHaveLength(0);
     expect(hasText(renderer, 'Position X')).toBe(false);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-readonly' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(0);

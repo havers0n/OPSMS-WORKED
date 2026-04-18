@@ -20,7 +20,7 @@ export function InspectorTaskNav({
   return (
     <div
       data-testid="rack-inspector-task-nav"
-      className="mt-4 flex rounded-xl border border-[var(--border-muted)] bg-white p-1 shadow-sm"
+      className="mt-2 flex rounded-xl border border-[var(--border-muted)] bg-white p-0.5 shadow-sm"
     >
       {TASK_OPTIONS.map((option) => (
         <button
@@ -29,7 +29,7 @@ export function InspectorTaskNav({
           data-testid={`rack-inspector-task-${option.value}`}
           onClick={() => onChange(option.value)}
           className={cn(
-            'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+            'flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
             value === option.value
               ? 'bg-slate-900 text-white shadow-sm'
               : 'text-slate-500 hover:text-slate-700'

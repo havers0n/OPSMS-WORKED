@@ -121,8 +121,9 @@ export function ContextPanel({
   const toggleContextPanelMode = useToggleContextPanelMode();
 
   const intent = resolveContextPanelIntent({ scope, editorMode, viewMode, selection });
+  const hideLayoutRackContext = intent === 'rack-context' && viewMode === 'layout';
 
-  if (intent === 'hidden') return null;
+  if (intent === 'hidden' || hideLayoutRackContext) return null;
 
   const config = INTENT_CONFIG[intent];
   const showExpandToggle = intent === 'cell-context' || intent === 'workflow';

@@ -32,7 +32,7 @@ vi.mock('@/widgets/warehouse-editor/model/editor-selectors', async () => {
 
 vi.mock('./context-panel/layout-context-panel', () => ({
   LayoutContextPanel: ({ intent, viewMode }: { intent: ContextPanelIntent; viewMode: ViewMode }) =>
-    intent === 'rack-context' && viewMode === 'layout'
+    intent === 'rack-side-context' && viewMode === 'layout'
       ? React.createElement('div', { 'data-testid': 'layout-context-owner' }, 'layout-context-owner')
       : null
 }));
@@ -68,8 +68,19 @@ beforeEach(() => {
 });
 
 describe('ContextPanel shell routing', () => {
-  it('routes rack-context in layout mode to the layout owner', () => {
+  it('hides rack-context shell in layout mode', () => {
     mockIntent = 'rack-context';
+    mockViewMode = 'layout';
+
+    const renderer = renderContextPanel();
+
+    expect(renderer.toJSON()).toBeNull();
+    expect(renderer.root.findAllByProps({ 'data-testid': 'layout-context-owner' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-context-owner' })).toHaveLength(0);
+  });
+
+  it('routes rack-side-context in layout mode to the layout owner', () => {
+    mockIntent = 'rack-side-context';
     mockViewMode = 'layout';
 
     const renderer = renderContextPanel();
