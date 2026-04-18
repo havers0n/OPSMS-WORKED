@@ -1,4 +1,4 @@
-import { Group, Rect } from 'react-konva';
+import { Group } from 'react-konva';
 import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
@@ -10,6 +10,12 @@ import {
   resolveCellVisualState,
   type CellVisualPalette
 } from './rack-cells-visual-state';
+import {
+  CellBaseVisual,
+  CellRuntimeOverlay,
+  CellInteractionOverlay,
+  CellExceptionOverlay
+} from './rack-cell-overlays';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
@@ -184,23 +190,42 @@ function FaceCells({
             },
             visualPalette
           );
+          const cellGeometry = {
+            x: cellX + 0.5,
+            y: cellY + 0.5,
+            width: Math.max(1, cellW),
+            height: Math.max(1, cellH - 1)
+          };
 
           return (
             <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
-              <Rect
-                x={cellX + 0.5}
-                y={cellY + 0.5}
-                width={Math.max(1, cellW)}
-                height={Math.max(1, cellH - 1)}
-                cornerRadius={1}
-                fill={visualState.fill}
-                stroke={visualState.stroke}
-                strokeWidth={visualState.strokeWidth}
-                opacity={visualState.opacity}
-                onClick={visualState.isClickable ? (event) => {
-                  event.cancelBubble = true;
-                  onCellClick(cellId, { x: event.evt.clientX, y: event.evt.clientY });
-                } : undefined}
+              <CellBaseVisual
+                geometry={cellGeometry}
+                visualState={visualState}
+                isSelected={isSelected}
+                isWorkflowSource={isWorkflowSource}
+                isHighlighted={isHighlighted}
+              />
+              <CellRuntimeOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+                isSelected={isSelected}
+                isWorkflowSource={isWorkflowSource}
+                isHighlighted={isHighlighted}
+              />
+              <CellInteractionOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+                isSelected={isSelected}
+                isWorkflowSource={isWorkflowSource}
+                isHighlighted={isHighlighted}
+                isClickable={visualState.isClickable}
+                onCellClick={cellId !== null ? (anchor) => onCellClick(cellId, anchor) : undefined}
+              />
+              <CellExceptionOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+                isHighlighted={isHighlighted}
               />
             </Group>
           );

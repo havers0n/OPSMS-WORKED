@@ -1,7 +1,7 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
+import { buildCellStructureKey, type Cell, type RackFace, type OperationsCellRuntime } from '@wos/domain';
 import { RackCells } from './rack-cells';
 import { resolveCellVisualState, type CellVisualPalette } from './rack-cells-visual-state';
 
@@ -379,5 +379,250 @@ describe('rack-cells visual-state precedence', () => {
     expect(visual.stroke).toBe('occupied-stroke');
     expect(visual.opacity).toBe(0.98);
     expect(visual.strokeWidth).toBe(0.9);
+  });
+});
+
+type LayeredRenderOptions = {
+  runtimeStatus?: 'stocked' | 'pick_active' | 'reserved' | 'quarantined' | 'empty' | null;
+  selected?: boolean;
+  highlighted?: boolean;
+  workflowSource?: boolean;
+  occupied?: boolean;
+  workflowScope?: boolean;
+  interactive?: boolean;
+  missingCellIdentity?: boolean;
+};
+
+const CELL_FILL_A_RACK_SELECTED = '#c7e7fb';
+const CELL_STROKE_A_RACK_SELECTED = '#38bdf8';
+const CELL_FILL_SELECTED = '#fef3c7';
+const CELL_STROKE_SELECTED = '#f59e0b';
+const CELL_FILL_WORKFLOW_SOURCE = '#dbeafe';
+const CELL_STROKE_WORKFLOW_SOURCE = '#2563eb';
+const CELL_FILL_LOCKED = '#e2e8f0';
+const CELL_STROKE_LOCKED = '#cbd5e1';
+const CELL_FILL_STOCKED = '#bbf7d0';
+const CELL_STROKE_STOCKED = '#16a34a';
+const CELL_FILL_PICK_ACTIVE = '#bfdbfe';
+const CELL_STROKE_HIGHLIGHTED = '#f97316';
+const CELL_STROKE_OCCUPIED_A = '#22c55e';
+
+function createSingleSlotFace(levelId: string): RackFace {
+  return {
+    id: 'face-a',
+    side: 'A',
+    enabled: true,
+    slotNumberingDirection: 'ltr',
+    isMirrored: false,
+    mirrorSourceFaceId: null,
+    sections: [
+      {
+        id: 'section-a',
+        ordinal: 1,
+        length: 5,
+        levels: [{ id: levelId, ordinal: 1, slotCount: 1 }]
+      }
+    ]
+  };
+}
+
+function createSingleSlotCellsMap(levelId: string, includeCell: boolean) {
+  const byStructure = new Map<string, Cell>();
+  if (!includeCell) return byStructure;
+  byStructure.set(
+    buildCellStructureKey({
+      rackId: 'rack-1',
+      rackFaceId: 'face-a',
+      rackSectionId: 'section-a',
+      rackLevelId: levelId,
+      slotNo: 1
+    }),
+    { id: `cell-${levelId}-1` } as Cell
+  );
+  return byStructure;
+}
+
+function renderLayeredCell(options: LayeredRenderOptions = {}) {
+  const levelId = 'level-only';
+  const cellId = `cell-${levelId}-1`;
+  const cellsMap = createSingleSlotCellsMap(levelId, !options.missingCellIdentity);
+  const occupiedCellIds = options.occupied ? new Set<string>([cellId]) : new Set<string>();
+  const highlightedCellIds = options.highlighted ? new Set<string>([cellId]) : new Set<string>();
+  const cellRuntimeById = new Map<string, OperationsCellRuntime>(
+    options.runtimeStatus
+      ? [[cellId, { status: options.runtimeStatus } as OperationsCellRuntime]]
+      : []
+  );
+  let renderer!: TestRenderer.ReactTestRenderer;
+
+  act(() => {
+    renderer = TestRenderer.create(
+      createElement(RackCells, {
+        geometry,
+        rackId: 'rack-1',
+        faceA: createSingleSlotFace(levelId),
+        faceB: null,
+        isSelected: true,
+        activeLevelIndex: 0,
+        publishedCellsByStructure: cellsMap,
+        occupiedCellIds,
+        highlightedCellIds,
+        cellRuntimeById,
+        isWorkflowScope: options.workflowScope ?? false,
+        isInteractive: options.interactive ?? true,
+        selectedCellId: options.selected ? cellId : '__none__',
+        workflowSourceCellId: options.workflowSource ? cellId : null,
+        onCellClick: () => undefined
+      })
+    );
+  });
+
+  return { renderer, cellId };
+}
+
+function getRects(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll((node) => String(node.type) === 'Rect');
+}
+
+function getHitRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter((rect) =>
+    rect.props.opacity === 0 &&
+    rect.props.fillEnabled === false &&
+    rect.props.strokeEnabled === false
+  );
+}
+
+function getFillRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+}
+
+function getStrokeRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter((rect) => rect.props.strokeEnabled === true);
+}
+
+describe('RackCells layered channel ownership characterization', () => {
+  it('selected + runtime keeps selected visual precedence and clickability', () => {
+    const { renderer } = renderLayeredCell({
+      selected: true,
+      runtimeStatus: 'reserved'
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+    const hitRects = getHitRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_SELECTED);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_SELECTED);
+    expect(hitRects).toHaveLength(1);
+    expect(typeof hitRects[0]?.props.onClick).toBe('function');
+  });
+
+  it('highlighted + runtime keeps runtime fill and highlighted stroke split across overlays', () => {
+    const { renderer } = renderLayeredCell({
+      highlighted: true,
+      runtimeStatus: 'stocked'
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
+    expect(fillRects[0]?.props.strokeEnabled).toBe(false);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_HIGHLIGHTED);
+    expect(strokeRects[0]?.props.fillEnabled).toBe(false);
+  });
+
+  it('workflow source + runtime keeps workflow-source precedence', () => {
+    const { renderer } = renderLayeredCell({
+      workflowSource: true,
+      runtimeStatus: 'quarantined'
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_WORKFLOW_SOURCE);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_WORKFLOW_SOURCE);
+  });
+
+  it('workflow locked + occupied keeps locked suppression and disables click', () => {
+    const { renderer } = renderLayeredCell({
+      workflowScope: true,
+      occupied: true
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+    const hitRects = getHitRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_LOCKED);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_LOCKED);
+    expect(hitRects).toHaveLength(1);
+    expect(hitRects[0]?.props.onClick).toBeUndefined();
+  });
+
+  it('passive + runtime keeps runtime projection and clickability unchanged', () => {
+    const { renderer } = renderLayeredCell({
+      runtimeStatus: 'pick_active',
+      interactive: true
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+    const hitRects = getHitRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_PICK_ACTIVE);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_WORKFLOW_SOURCE);
+    expect(hitRects).toHaveLength(1);
+    expect(typeof hitRects[0]?.props.onClick).toBe('function');
+  });
+
+  it('missing cell identity keeps base visuals and no click handler', () => {
+    const { renderer } = renderLayeredCell({
+      missingCellIdentity: true
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+    const hitRects = getHitRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_A_RACK_SELECTED);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_A_RACK_SELECTED);
+    expect(fillRects[0]?.props.opacity).toBe(0.18);
+    expect(hitRects).toHaveLength(1);
+    expect(hitRects[0]?.props.onClick).toBeUndefined();
+  });
+
+  it('occupied fallback without runtime keeps occupied fallback visuals', () => {
+    const { renderer } = renderLayeredCell({
+      occupied: true
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_OCCUPIED_A);
+  });
+
+  it('runtime without occupied fallback keeps runtime visuals', () => {
+    const { renderer } = renderLayeredCell({
+      runtimeStatus: 'stocked',
+      occupied: false
+    });
+    const fillRects = getFillRects(renderer);
+    const strokeRects = getStrokeRects(renderer);
+
+    expect(fillRects).toHaveLength(1);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
+    expect(strokeRects).toHaveLength(1);
+    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_STOCKED);
   });
 });
