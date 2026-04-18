@@ -115,6 +115,7 @@ function renderRackCellsWithProps(params: {
   geometryOverride?: typeof geometry;
   faceA?: RackFace;
   activeLevelIndex?: number;
+  rackRotationDeg?: 0 | 90 | 180 | 270;
   levelIds?: string[];
   slotCount?: number;
   selectedCellId?: string | null;
@@ -134,7 +135,7 @@ function renderRackCellsWithProps(params: {
         faceA: params.faceA ?? createFace(levelIds, { slotCount }),
         faceB: null,
         isSelected: true,
-        rackRotationDeg: 0,
+        rackRotationDeg: params.rackRotationDeg ?? 0,
         activeLevelIndex: params.activeLevelIndex ?? 0,
         publishedCellsByStructure: createCellsMap(levelIds, slotCount),
         highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
@@ -443,6 +444,37 @@ describe('RackCells', () => {
     );
     for (const node of baselineRotators) {
       expect(Math.abs(Number(node.props.rotation))).toBe(0);
+    }
+  });
+
+  it('counter-rotates focused full-address labels for 90/180/270 while keeping anchor pivot stable', () => {
+    const selectedCellId = 'cell-level-only-1';
+    const baseRenderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId,
+      rackRotationDeg: 0
+    });
+
+    const baseRotator = baseRenderer.root.find(
+      (node) => String(node.type) === 'Group' && node.props.name === 'focused-address-label-rotator'
+    );
+    const baseAnchor = { x: Number(baseRotator.props.x), y: Number(baseRotator.props.y) };
+    expect(Math.abs(Number(baseRotator.props.rotation))).toBe(0);
+
+    for (const rotation of [90, 180, 270] as const) {
+      const rotatedRenderer = renderRackCellsWithProps({
+        levelIds: ['level-only'],
+        slotCount: 2,
+        selectedCellId,
+        rackRotationDeg: rotation
+      });
+      const rotator = rotatedRenderer.root.find(
+        (node) => String(node.type) === 'Group' && node.props.name === 'focused-address-label-rotator'
+      );
+      expect(Number(rotator.props.rotation)).toBe(-rotation);
+      expect(Number(rotator.props.x)).toBe(baseAnchor.x);
+      expect(Number(rotator.props.y)).toBe(baseAnchor.y);
     }
   });
 

@@ -202,10 +202,12 @@ export function CellInteriorSlotLabel({
 
 export function FocusedCellAddressOverlay({
   addressText,
-  geometry
+  geometry,
+  rackRotationDeg = 0
 }: {
   addressText: string;
   geometry: LabelGeometry;
+  rackRotationDeg?: 0 | 90 | 180 | 270;
 }) {
   const addressFontSize = 8;
   const canRenderAddress =
@@ -219,11 +221,20 @@ export function FocusedCellAddressOverlay({
 
   if (!canRenderAddress) return null;
 
+  const anchorX = geometry.x + geometry.width / 2;
+  const anchorY = geometry.y + geometry.height - addressFontSize / 2 - 1;
+
   return (
-    <Group listening={false}>
+    <Group
+      x={anchorX}
+      y={anchorY}
+      rotation={-rackRotationDeg}
+      listening={false}
+      name="focused-address-label-rotator"
+    >
       <Text
-        x={geometry.x}
-        y={geometry.y + geometry.height - addressFontSize - 1}
+        x={-geometry.width / 2}
+        y={-addressFontSize / 2}
         width={geometry.width}
         text={addressText}
         fontSize={addressFontSize}

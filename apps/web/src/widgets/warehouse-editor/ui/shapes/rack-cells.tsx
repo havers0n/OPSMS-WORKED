@@ -283,6 +283,7 @@ function FaceCells({
             key={overlay.key}
             addressText={overlay.addressText}
             geometry={overlay.geometry}
+            rackRotationDeg={rackRotationDeg}
           />
         ))}
       </Group>
