@@ -1,5 +1,6 @@
 import { Group, Line, Rect, Text } from 'react-konva';
 import type { CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
+import type { LabelProminence, RackCodePlacement } from './rack-label-reveal-policy';
 
 const C = {
   fillDefault: '#ffffff',
@@ -25,7 +26,9 @@ type Props = {
   isSelected: boolean;
   isHovered: boolean;
   isPassive?: boolean;
-  lod: 0 | 1 | 2;
+  showRackCode: boolean;
+  rackCodeProminence: LabelProminence;
+  rackCodePlacement: RackCodePlacement;
 };
 
 export function RackBody({
@@ -35,7 +38,9 @@ export function RackBody({
   isSelected,
   isHovered,
   isPassive = false,
-  lod
+  showRackCode,
+  rackCodeProminence,
+  rackCodePlacement
 }: Props) {
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
 
@@ -48,19 +53,66 @@ export function RackBody({
   const faceAOverhang = isPaired && faceAWidth > faceBWidth;
   const faceBOverhang = isPaired && faceBWidth > faceAWidth;
 
-  const labelFontSize = lod === 0 ? 12 : 11;
-  const labelPadX = lod === 0 ? 10 : 8;
+  const labelFontSize =
+    rackCodeProminence === 'dominant' ? 11 : rackCodeProminence === 'secondary' ? 10 : 9;
+  const labelFontStyle = rackCodeProminence === 'background' ? 'normal' : 'bold';
+  const labelTextOpacity =
+    rackCodeProminence === 'dominant' ? 0.95 : rackCodeProminence === 'secondary' ? 0.82 : 0.64;
+  const labelBgOpacity =
+    rackCodeProminence === 'dominant' ? 0.96 : rackCodeProminence === 'secondary' ? 0.8 : 0.5;
+  const labelStrokeOpacity =
+    rackCodeProminence === 'dominant' ? 0.18 : rackCodeProminence === 'secondary' ? 0.12 : 0.08;
+  const labelShadowOpacity =
+    rackCodeProminence === 'dominant' ? 0.08 : rackCodeProminence === 'secondary' ? 0.04 : 0;
+  const labelPadX = 8;
   const labelPadY = 4;
+  const isVertical = rotationDeg === 90 || rotationDeg === 270;
+  const isLowerLeftMidPlacement = rackCodePlacement === 'lower-left-mid';
+  const labelStartInsetX = isLowerLeftMidPlacement ? 1 : 10;
+  const labelLayoutFontSize = 11;
+  const labelLayoutHeight = labelLayoutFontSize + labelPadY * 2;
   const labelWidth = Math.min(
     Math.max(width - 12, 30),
-    Math.max(38, displayCode.length * (labelFontSize * 0.62) + labelPadX * 2)
+    Math.max(38, displayCode.length * (labelLayoutFontSize * 0.62) + labelPadX * 2)
   );
-  const labelHeight = labelFontSize + labelPadY * 2;
-  const labelY = lod === 0
-    ? height / 2
+  const labelHeight = labelLayoutHeight;
+  const quietPlacementInset = 1;
+  const horizontalInset = isLowerLeftMidPlacement ? quietPlacementInset : 6;
+  let labelX = Math.max(
+    labelWidth / 2 + horizontalInset,
+    Math.min(width - labelWidth / 2 - horizontalInset, labelStartInsetX + labelWidth / 2)
+  );
+  // Shell-owned identity zone:
+  // - header-left for stage0/1/2
+  // - quieter lower-left-mid variant for stage3 to avoid top-lane competition with cell labels.
+  // For vertical racks, keep this lane near top to avoid floating in-between.
+  const headerLabelY = 14;
+  const lowerMidLabelY = isVertical
+    ? labelHeight / 2 + quietPlacementInset
     : isPaired
-      ? Math.min(spineY - 10, stripeH + labelHeight / 2 + 4)
-      : height / 2;
+      ? Math.max(labelHeight / 2 + 6, spineY - labelHeight / 2 - 2)
+      : Math.max(labelHeight / 2 + 6, height * 0.45);
+  const verticalInset = isLowerLeftMidPlacement ? quietPlacementInset : 6;
+  let labelY = Math.max(
+    labelHeight / 2 + verticalInset,
+    Math.min(height - labelHeight / 2 - 6, rackCodePlacement === 'lower-left-mid' ? lowerMidLabelY : headerLabelY)
+  );
+
+  if (isLowerLeftMidPlacement && isVertical) {
+    const cx = width / 2;
+    const cy = height / 2;
+    // Rotated rack bbox for 90/270: width=height(local), height=width(local).
+    const screenTargetX = cx - height / 2 + quietPlacementInset + labelWidth / 2;
+    const screenTargetY = cy - width / 2 + quietPlacementInset + labelHeight / 2;
+    const theta = (rotationDeg * Math.PI) / 180;
+    const cosInv = Math.cos(-theta);
+    const sinInv = Math.sin(-theta);
+    const dx = screenTargetX - cx;
+    const dy = screenTargetY - cy;
+    // Inverse-rotate desired screen top-left anchor back into local rack coordinates.
+    labelX = cx + dx * cosInv - dy * sinInv;
+    labelY = cy + dx * sinInv + dy * cosInv;
+  }
 
   return (
     <Group listening={false} opacity={isPassive && !isSelected ? 0.5 : 1}>
@@ -155,30 +207,45 @@ export function RackBody({
         />
       )}
 
-      <Group x={width / 2} y={labelY} rotation={-rotationDeg}>
-        <Rect
-          x={-labelWidth / 2}
-          y={-labelHeight / 2}
-          width={labelWidth}
-          height={labelHeight}
-          cornerRadius={999}
-          fill={C.pillBg}
-          shadowColor="#0f172a"
-          shadowBlur={4}
-          shadowOpacity={0.08}
-        />
-        <Text
-          x={-labelWidth / 2}
-          y={-labelHeight / 2 + labelPadY}
-          width={labelWidth}
-          text={displayCode}
-          fontSize={labelFontSize}
-          fontStyle="bold"
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fill={C.codeText}
-          align="center"
-        />
-      </Group>
+      {showRackCode && (
+        <Group x={labelX} y={labelY} rotation={-rotationDeg}>
+          <Rect
+            x={-labelWidth / 2}
+            y={-labelHeight / 2}
+            width={labelWidth}
+            height={labelHeight}
+            cornerRadius={999}
+            fill={C.pillBg}
+            opacity={labelBgOpacity}
+            shadowColor="#0f172a"
+            shadowBlur={4}
+            shadowOpacity={labelShadowOpacity}
+          />
+          <Rect
+            x={-labelWidth / 2}
+            y={-labelHeight / 2}
+            width={labelWidth}
+            height={labelHeight}
+            cornerRadius={999}
+            stroke={C.codeText}
+            strokeWidth={0.6}
+            opacity={labelStrokeOpacity}
+            listening={false}
+          />
+          <Text
+            x={-labelWidth / 2}
+            y={-labelHeight / 2 + labelPadY}
+            width={labelWidth}
+            text={displayCode}
+            fontSize={labelFontSize}
+            fontStyle={labelFontStyle}
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+            fill={C.codeText}
+            opacity={labelTextOpacity}
+            align="center"
+          />
+        </Group>
+      )}
     </Group>
   );
 }

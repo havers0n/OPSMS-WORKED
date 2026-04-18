@@ -63,7 +63,12 @@ function renderSections(geometry = baseGeometry) {
         geometry,
         faceA: createFace('face-a'),
         faceB: null,
-        isSelected: false
+        isSelected: false,
+        rackRotationDeg: 0,
+        showFaceToken: true,
+        showSectionNumbers: true,
+        faceTokenProminence: 'dominant',
+        sectionNumberProminence: 'dominant'
       })
     );
   });
@@ -127,13 +132,20 @@ describe('RackSections numbering', () => {
           geometry: pairedGeometry,
           faceA,
           faceB,
-          isSelected: false
+          isSelected: false,
+          rackRotationDeg: 0,
+          showFaceToken: true,
+          showSectionNumbers: true,
+          faceTokenProminence: 'dominant',
+          sectionNumberProminence: 'dominant'
         })
       );
     });
 
     const labels = renderer.root
-      .findAll((node) => String(node.type) === 'Text' && /^\d+$/.test(String(node.props.text)))
+      .findAll(
+        (node) => String(node.type) === 'Group' && node.props.name === 'section-label-rotator'
+      )
       .map((node) => Number(node.props.y))
       .sort((a, b) => a - b);
 
@@ -161,7 +173,12 @@ describe('RackSections numbering', () => {
           },
           faceA,
           faceB,
-          isSelected: false
+          isSelected: false,
+          rackRotationDeg: 0,
+          showFaceToken: true,
+          showSectionNumbers: true,
+          faceTokenProminence: 'dominant',
+          sectionNumberProminence: 'dominant'
         })
       );
     });
@@ -176,5 +193,78 @@ describe('RackSections numbering', () => {
       .sort();
 
     expect(faceTokens).toEqual(['A', 'B']);
+  });
+
+  it('does not render face token for single racks', () => {
+    const renderer = renderSections();
+    const faceTokens = renderer.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.name === 'face-token-label'
+    );
+    expect(faceTokens).toHaveLength(0);
+  });
+
+  it('hides section labels when stage gate disables section namespace', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackSections, {
+          geometry: baseGeometry,
+          faceA: createFace('face-a'),
+          faceB: null,
+          isSelected: false,
+          rackRotationDeg: 0,
+          showFaceToken: true,
+          showSectionNumbers: false,
+          faceTokenProminence: 'dominant',
+          sectionNumberProminence: 'background'
+        })
+      );
+    });
+
+    const sectionLabels = renderer.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.name === 'section-label'
+    );
+    expect(sectionLabels).toHaveLength(0);
+  });
+
+  it('keeps face and section label text horizontal by counter-rotating in vertical racks', () => {
+    const faceA = createFace('face-a');
+    const faceB = {
+      ...createFace('face-b'),
+      side: 'B' as const
+    };
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackSections, {
+          geometry: {
+            ...baseGeometry,
+            isPaired: true,
+            spineY: 40
+          },
+          faceA,
+          faceB,
+          isSelected: false,
+          rackRotationDeg: 90,
+          showFaceToken: true,
+          showSectionNumbers: true,
+          faceTokenProminence: 'dominant',
+          sectionNumberProminence: 'dominant'
+        })
+      );
+    });
+
+    const faceRotators = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && node.props.name === 'face-token-label-rotator'
+    );
+    const sectionRotators = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && node.props.name === 'section-label-rotator'
+    );
+
+    expect(faceRotators.length).toBeGreaterThan(0);
+    expect(sectionRotators.length).toBeGreaterThan(0);
+    for (const node of [...faceRotators, ...sectionRotators]) {
+      expect(node.props.rotation).toBe(-90);
+    }
   });
 });

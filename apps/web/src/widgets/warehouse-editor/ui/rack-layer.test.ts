@@ -21,6 +21,10 @@ vi.mock('./shapes/rack-cells', () => ({
   RackCells: (props: Record<string, unknown>) => createElement('RackCells', props)
 }));
 
+vi.mock('./shapes/rack-body', () => ({
+  RackBody: (props: Record<string, unknown>) => createElement('RackBody', props)
+}));
+
 vi.mock('./shapes/rack-sections', () => ({
   RackSections: (props: Record<string, unknown>) => createElement('RackSections', props)
 }));
@@ -92,6 +96,7 @@ function renderRackLayer(params: {
   primarySelectedRackId: string | null;
   selectedRackActiveLevel?: number;
   lod?: 0 | 1 | 2;
+  zoom?: number;
   isLayoutMode?: boolean;
   isStorageMode?: boolean;
   canSelectCells?: boolean;
@@ -125,6 +130,7 @@ function renderRackLayer(params: {
       isViewMode: false,
       isWorkflowScope: params.isWorkflowScope ?? false,
       lod: params.lod ?? 2,
+      zoom: params.zoom ?? 1.5,
       minRackDistance: 0,
       moveSourceCellId: null,
       moveSourceRackId: null,
@@ -236,6 +242,82 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.rackId).toBe('rack-1');
     expect(rackCells[0]?.props.semanticLevels).toEqual([1, 3]);
+  });
+});
+
+describe('RackLayer reveal hierarchy policy wiring', () => {
+  it('maps lod=0 to stage0 global namespace: rack dominant only', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      lod: 0,
+      zoom: 0.8
+    });
+
+    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
+    expect(rackBody.props.showRackCode).toBe(true);
+    expect(rackBody.props.rackCodeProminence).toBe('dominant');
+    expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
+    expect(renderer.root.findAll((node) => String(node.type) === 'RackSections')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => String(node.type) === 'RackCells')).toHaveLength(0);
+  });
+
+  it('maps early lod=1 to stage1: rack demoted + face only', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      lod: 1,
+      zoom: 0.95
+    });
+
+    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
+    const rackSections = renderer.root.findAll((node) => String(node.type) === 'RackSections')[0];
+    expect(rackBody.props.rackCodeProminence).toBe('secondary');
+    expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
+    expect(rackSections.props.showFaceToken).toBe(true);
+    expect(rackSections.props.showSectionNumbers).toBe(false);
+    expect(renderer.root.findAll((node) => String(node.type) === 'RackCells')).toHaveLength(0);
+  });
+
+  it('maps late lod=1 to stage2: section dominant, rack/face demoted, no cell numbers', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      lod: 1,
+      zoom: 1.2
+    });
+
+    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
+    const rackSections = renderer.root.findAll((node) => String(node.type) === 'RackSections')[0];
+    expect(rackBody.props.rackCodeProminence).toBe('background');
+    expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
+    expect(rackSections.props.showFaceToken).toBe(true);
+    expect(rackSections.props.faceTokenProminence).toBe('secondary');
+    expect(rackSections.props.showSectionNumbers).toBe(true);
+    expect(rackSections.props.sectionNumberProminence).toBe('dominant');
+    expect(renderer.root.findAll((node) => String(node.type) === 'RackCells')).toHaveLength(0);
+  });
+
+  it('maps lod=2 to stage3: cell dominant, section hidden, rack/face quiet', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      lod: 2,
+      zoom: 1.5
+    });
+
+    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
+    const rackSections = renderer.root.findAll((node) => String(node.type) === 'RackSections')[0];
+    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells')[0];
+    expect(rackBody.props.rackCodeProminence).toBe('background');
+    expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
+    expect(rackSections.props.showFaceToken).toBe(true);
+    expect(rackSections.props.faceTokenProminence).toBe('background');
+    expect(rackSections.props.showSectionNumbers).toBe(false);
+    expect(rackSections.props.sectionNumberProminence).toBe('background');
+    expect(rackCells.props.showCellNumbers).toBe(true);
+    expect(rackCells.props.cellNumberProminence).toBe('dominant');
+    expect(rackCells.props.showFocusedFullAddress).toBe(true);
   });
 });
 

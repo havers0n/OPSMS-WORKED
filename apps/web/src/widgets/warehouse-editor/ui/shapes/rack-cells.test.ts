@@ -97,10 +97,13 @@ function renderRackCells(activeLevelIndex: number, levelIds: string[], isInterac
         faceA: createFace(levelIds),
         faceB: null,
         isSelected: true,
+        rackRotationDeg: 0,
         activeLevelIndex,
         publishedCellsByStructure: createCellsMap(levelIds),
         isInteractive,
-        onCellClick: () => undefined
+        onCellClick: () => undefined,
+        showCellNumbers: true,
+        showFocusedFullAddress: true
       })
     );
   });
@@ -117,6 +120,8 @@ function renderRackCellsWithProps(params: {
   selectedCellId?: string | null;
   workflowSourceCellId?: string | null;
   highlightedCellIds?: Set<string>;
+  showCellNumbers?: boolean;
+  showFocusedFullAddress?: boolean;
 }) {
   const levelIds = params.levelIds ?? ['level-only'];
   const slotCount = params.slotCount ?? 2;
@@ -129,11 +134,14 @@ function renderRackCellsWithProps(params: {
         faceA: params.faceA ?? createFace(levelIds, { slotCount }),
         faceB: null,
         isSelected: true,
+        rackRotationDeg: 0,
         activeLevelIndex: params.activeLevelIndex ?? 0,
         publishedCellsByStructure: createCellsMap(levelIds, slotCount),
         highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
         selectedCellId: params.selectedCellId ?? null,
         workflowSourceCellId: params.workflowSourceCellId ?? null,
+        showCellNumbers: params.showCellNumbers ?? true,
+        showFocusedFullAddress: params.showFocusedFullAddress ?? true,
         isInteractive: false,
         onCellClick: () => undefined
       })
@@ -153,10 +161,13 @@ function clickCellIdsWithCollector(activeLevelIndex: number, levelIds: string[])
         faceA: createFace(levelIds),
         faceB: null,
         isSelected: true,
+        rackRotationDeg: 0,
         activeLevelIndex,
         publishedCellsByStructure: createCellsMap(levelIds),
         isInteractive: true,
-        onCellClick: (cellId: string) => selected.push(cellId)
+        onCellClick: (cellId: string) => selected.push(cellId),
+        showCellNumbers: true,
+        showFocusedFullAddress: true
       })
     );
   });
@@ -254,11 +265,14 @@ describe('RackCells', () => {
           faceA: createFace(threeLevelIds),
           faceB: null,
           isSelected: true,
+          rackRotationDeg: 0,
           activeLevelIndex: 0,
           semanticLevels: [],
           publishedCellsByStructure: createCellsMap(threeLevelIds),
           isInteractive: false,
-          onCellClick: () => undefined
+          onCellClick: () => undefined,
+          showCellNumbers: true,
+          showFocusedFullAddress: true
         })
       );
     });
@@ -294,11 +308,14 @@ describe('RackCells', () => {
           faceA: sparseFace,
           faceB: null,
           isSelected: true,
+          rackRotationDeg: 0,
           activeLevelIndex: 1,
           semanticLevels: [1, 3, 5],
           publishedCellsByStructure: createCellsMap(['level-1', 'level-3', 'level-5']),
           isInteractive: true,
-          onCellClick: (cellId: string) => clicked.push(cellId)
+          onCellClick: (cellId: string) => clicked.push(cellId),
+          showCellNumbers: true,
+          showFocusedFullAddress: true
         })
       );
     });
@@ -366,6 +383,67 @@ describe('RackCells', () => {
       value.startsWith('ADDR-')
     );
     expect(addressLabels).toEqual(['ADDR-level-only-2']);
+  });
+
+  it('keeps focused full-address reveal independent from cell-number stage gate', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      showCellNumbers: false
+    });
+
+    const slotLabels = getTextValuesByOwner(renderer, 'slot-label').filter((value) => /^\d+$/.test(value));
+    const addressLabels = getTextValuesByOwner(renderer, 'focused-address-label').filter((value) =>
+      value.startsWith('ADDR-')
+    );
+
+    expect(slotLabels).toEqual([]);
+    expect(addressLabels).toEqual(['ADDR-level-only-1']);
+  });
+
+  it('counter-rotates slot labels to stay horizontal in vertical racks', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      showCellNumbers: true
+    });
+
+    let verticalRenderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      verticalRenderer = TestRenderer.create(
+        createElement(RackCells, {
+          geometry,
+          rackId: 'rack-1',
+          faceA: createFace(['level-only'], { slotCount: 2 }),
+          faceB: null,
+          isSelected: true,
+          rackRotationDeg: 90,
+          activeLevelIndex: 0,
+          publishedCellsByStructure: createCellsMap(['level-only'], 2),
+          isInteractive: false,
+          onCellClick: () => undefined,
+          showCellNumbers: true,
+          showFocusedFullAddress: true
+        })
+      );
+    });
+
+    const rotators = verticalRenderer.root.findAll(
+      (node) => String(node.type) === 'Group' && node.props.name === 'slot-label-rotator'
+    );
+    expect(rotators.length).toBeGreaterThan(0);
+    for (const node of rotators) {
+      expect(node.props.rotation).toBe(-90);
+    }
+
+    // Baseline sanity: horizontal rack keeps zero counter-rotation.
+    const baselineRotators = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && node.props.name === 'slot-label-rotator'
+    );
+    for (const node of baselineRotators) {
+      expect(Math.abs(Number(node.props.rotation))).toBe(0);
+    }
   });
 
   it('hides labels cleanly when geometry is too small while keeping cell rendering', () => {

@@ -16,6 +16,8 @@ import {
   CellInteractionOverlay,
   CellExceptionOverlay
 } from './rack-cell-overlays';
+import type { LabelProminence } from './rack-label-reveal-policy';
+import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
 import { CellInteriorSlotLabel, FocusedCellAddressOverlay } from './rack-label-overlays';
 
 const MIN_CELL_W = 5;
@@ -99,8 +101,12 @@ type FaceProps = {
   semanticLevels: number[];
   isWorkflowScope: boolean;
   isRackPassive: boolean;
+  rackRotationDeg: 0 | 90 | 180 | 270;
   selectedCellId: string | null;
   workflowSourceCellId: string | null;
+  showCellNumbers: boolean;
+  cellNumberProminence: LabelProminence;
+  showFocusedFullAddress: boolean;
   visualPalette: CellVisualPalette;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
@@ -132,8 +138,12 @@ function FaceCells({
   semanticLevels,
   isWorkflowScope,
   isRackPassive,
+  rackRotationDeg,
   selectedCellId,
   workflowSourceCellId,
+  showCellNumbers,
+  cellNumberProminence,
+  showFocusedFullAddress,
   visualPalette,
   onCellClick
 }: FaceProps) {
@@ -182,7 +192,13 @@ function FaceCells({
           const isSelected = selectedCellId === cellId;
           const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
           const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
-          const shouldRevealAddress = isSelected || isHighlighted || isWorkflowSource;
+          const shouldRevealAddress =
+            showFocusedFullAddress &&
+            shouldShowFocusedFullAddress({
+              isSelected,
+              isHighlighted,
+              isWorkflowSource
+            });
           const addressText = cell?.address?.raw ?? null;
           const runtime = cellId ? cellRuntimeById.get(cellId) : null;
           const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
@@ -249,10 +265,14 @@ function FaceCells({
                 visualState={visualState}
                 isHighlighted={isHighlighted}
               />
-              <CellInteriorSlotLabel
-                slotNumber={slotLabel}
-                geometry={cellGeometry}
-              />
+              {showCellNumbers && (
+                <CellInteriorSlotLabel
+                  slotNumber={slotLabel}
+                  geometry={cellGeometry}
+                  prominence={cellNumberProminence}
+                  counterRotationDeg={rackRotationDeg}
+                />
+              )}
             </Group>
           );
         });
@@ -285,9 +305,13 @@ type Props = {
   isInteractive?: boolean;
   isWorkflowScope?: boolean;
   isPassive?: boolean;
+  rackRotationDeg?: 0 | 90 | 180 | 270;
   selectedCellId?: string | null;
   workflowSourceCellId?: string | null;
   onCellClick?: (cellId: string, anchor: { x: number; y: number }) => void;
+  showCellNumbers?: boolean;
+  cellNumberProminence?: LabelProminence;
+  showFocusedFullAddress?: boolean;
 };
 
 const noop = () => undefined;
@@ -307,9 +331,13 @@ export function RackCells({
   isInteractive = false,
   isWorkflowScope = false,
   isPassive = false,
+  rackRotationDeg = 0,
   selectedCellId = null,
   workflowSourceCellId = null,
-  onCellClick = noop
+  onCellClick = noop,
+  showCellNumbers = true,
+  cellNumberProminence = 'dominant',
+  showFocusedFullAddress = true
 }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const faceABandH = isPaired ? spineY : height;
@@ -334,8 +362,12 @@ export function RackCells({
         semanticLevels={normalizedSemanticLevels}
         isWorkflowScope={isWorkflowScope}
         isRackPassive={isPassive}
+        rackRotationDeg={rackRotationDeg}
         selectedCellId={selectedCellId}
         workflowSourceCellId={workflowSourceCellId}
+        showCellNumbers={showCellNumbers}
+        cellNumberProminence={cellNumberProminence}
+        showFocusedFullAddress={showFocusedFullAddress}
         visualPalette={isSelected
           ? { ...CELL_VISUAL_PALETTE_A, baseFill: CELL_FILL_A_RACK_SELECTED, baseStroke: CELL_STROKE_A_RACK_SELECTED }
           : CELL_VISUAL_PALETTE_A}
@@ -358,8 +390,12 @@ export function RackCells({
           semanticLevels={normalizedSemanticLevels}
           isWorkflowScope={isWorkflowScope}
           isRackPassive={isPassive}
+          rackRotationDeg={rackRotationDeg}
           selectedCellId={selectedCellId}
           workflowSourceCellId={workflowSourceCellId}
+          showCellNumbers={showCellNumbers}
+          cellNumberProminence={cellNumberProminence}
+          showFocusedFullAddress={showFocusedFullAddress}
           visualPalette={isSelected
             ? { ...CELL_VISUAL_PALETTE_B, baseFill: CELL_FILL_B_RACK_SELECTED, baseStroke: CELL_STROKE_B_RACK_SELECTED }
             : CELL_VISUAL_PALETTE_B}

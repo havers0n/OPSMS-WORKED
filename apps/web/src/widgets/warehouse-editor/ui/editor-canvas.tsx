@@ -635,6 +635,7 @@ export function EditorCanvas({
                 isViewMode={isViewMode}
                 isWorkflowScope={isPlacementMoveMode}
                 lod={lod}
+                zoom={zoom}
                 minRackDistance={minRackDistance}
                 moveSourceCellId={moveSourceCellId}
                 moveSourceRackId={moveSourceRackId}

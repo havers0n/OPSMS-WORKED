@@ -6,6 +6,7 @@ import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
 import { collectRackSemanticLevels } from '@/widgets/warehouse-editor/model/storage-level-mapping';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
+import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
 import { RackSections } from './shapes/rack-sections';
 
 type SnapGuide = {
@@ -30,6 +31,7 @@ type RackLayerProps = {
   isViewMode: boolean;
   isWorkflowScope: boolean;
   lod: 0 | 1 | 2;
+  zoom: number;
   minRackDistance: number;
   moveSourceCellId: string | null;
   moveSourceRackId: string | null;
@@ -76,6 +78,7 @@ export function RackLayer({
   isViewMode,
   isWorkflowScope,
   lod,
+  zoom,
   minRackDistance,
   moveSourceCellId,
   moveSourceRackId,
@@ -98,6 +101,8 @@ export function RackLayer({
   onV2StorageCellSelect,
   onV2StorageRackSelect,
 }: RackLayerProps) {
+  const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
+
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     if (!isLayoutEditable) return;
 
@@ -264,7 +269,9 @@ export function RackLayer({
               isSelected={isSelected}
               isHovered={isHovered}
               isPassive={isRackPassive}
-              lod={lod}
+              showRackCode={labelRevealPolicy.showRackCode}
+              rackCodeProminence={labelRevealPolicy.rackCodeProminence}
+              rackCodePlacement={labelRevealPolicy.rackCodePlacement}
             />
 
             {lod >= 1 && faceA && (
@@ -274,6 +281,11 @@ export function RackLayer({
                 faceB={geometry.isPaired ? faceB : null}
                 isSelected={isSelected}
                 isPassive={isRackPassive}
+                showFaceToken={labelRevealPolicy.showFaceToken}
+                showSectionNumbers={labelRevealPolicy.showSectionNumbers}
+                faceTokenProminence={labelRevealPolicy.faceTokenProminence}
+                sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
+                rackRotationDeg={rack.rotationDeg}
               />
             )}
 
@@ -296,6 +308,10 @@ export function RackLayer({
                 selectedCellId={canvasSelectedCellId}
                 workflowSourceCellId={moveSourceCellId}
                 onCellClick={handleCellClick}
+                showCellNumbers={labelRevealPolicy.showCellNumbers}
+                cellNumberProminence={labelRevealPolicy.cellNumberProminence}
+                showFocusedFullAddress={labelRevealPolicy.showFocusedFullAddress}
+                rackRotationDeg={rack.rotationDeg}
               />
             )}
           </Group>

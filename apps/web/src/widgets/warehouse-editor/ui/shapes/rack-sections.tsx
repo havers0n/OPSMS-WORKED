@@ -2,6 +2,7 @@ import { Group, Line, Rect } from 'react-konva';
 import type { RackFace } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 import { FaceTokenRailLabel, SectionLabelOverlay } from './rack-label-overlays';
+import type { LabelProminence } from './rack-label-reveal-policy';
 
 type Props = {
   geometry: CanvasRackGeometry;
@@ -9,6 +10,11 @@ type Props = {
   faceB: RackFace | null;
   isSelected: boolean;
   isPassive?: boolean;
+  rackRotationDeg?: 0 | 90 | 180 | 270;
+  showFaceToken: boolean;
+  showSectionNumbers: boolean;
+  faceTokenProminence: LabelProminence;
+  sectionNumberProminence: LabelProminence;
 };
 
 const DIVIDER_STROKE = '#94a3b8';
@@ -22,7 +28,18 @@ const FACE_TOKEN_RAIL_WIDTH = 20;
 const SECTION_LABEL_RAIL_TOP_INSET = 6;
 const SECTION_LABEL_RAIL_HEIGHT = 14;
 
-export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = false }: Props) {
+export function RackSections({
+  geometry,
+  faceA,
+  faceB,
+  isSelected,
+  isPassive = false,
+  rackRotationDeg = 0,
+  showFaceToken,
+  showSectionNumbers,
+  faceTokenProminence,
+  sectionNumberProminence
+}: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const divider = isSelected ? DIVIDER_STROKE_SEL : DIVIDER_STROKE;
 
@@ -66,17 +83,21 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
         />
       ))}
 
-      <FaceTokenRailLabel
-        faceToken="A"
-        geometry={{
-          x: FACE_TOKEN_RAIL_LEFT_INSET,
-          y: FACE_TOKEN_RAIL_TOP_INSET,
-          width: Math.min(FACE_TOKEN_RAIL_WIDTH, Math.max(0, faceAWidth - FACE_TOKEN_RAIL_LEFT_INSET - 2)),
+      {isPaired && showFaceToken && (
+        <FaceTokenRailLabel
+          faceToken="A"
+          geometry={{
+            x: FACE_TOKEN_RAIL_LEFT_INSET,
+            y: FACE_TOKEN_RAIL_TOP_INSET,
+            width: Math.min(FACE_TOKEN_RAIL_WIDTH, Math.max(0, faceAWidth - FACE_TOKEN_RAIL_LEFT_INSET - 2)),
           height: Math.min(FACE_TOKEN_RAIL_HEIGHT, Math.max(0, faceABottom - FACE_TOKEN_RAIL_TOP_INSET - 2))
         }}
+        prominence={faceTokenProminence}
+        counterRotationDeg={rackRotationDeg}
       />
+      )}
 
-      {faceA.sections.map((sec, i) => {
+      {showSectionNumbers && faceA.sections.map((sec, i) => {
         const x0 = faceAOffsets[i];
         const x1 = faceAOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -96,6 +117,8 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
               width: Math.max(1, sectionW - 2),
               height: railHeight
             }}
+            prominence={sectionNumberProminence}
+            counterRotationDeg={rackRotationDeg}
           />
         );
       })}
@@ -130,7 +153,7 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
         />
       ))}
 
-      {isPaired && faceB && (
+      {isPaired && faceB && showFaceToken && (
         <FaceTokenRailLabel
           faceToken="B"
           geometry={{
@@ -139,10 +162,12 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
             width: Math.min(FACE_TOKEN_RAIL_WIDTH, Math.max(0, faceBWidth - FACE_TOKEN_RAIL_LEFT_INSET - 2)),
             height: Math.min(FACE_TOKEN_RAIL_HEIGHT, Math.max(0, height - faceBTop - FACE_TOKEN_RAIL_TOP_INSET - 2))
           }}
+          prominence={faceTokenProminence}
+          counterRotationDeg={rackRotationDeg}
         />
       )}
 
-      {isPaired && faceB && faceB.sections.map((sec, i) => {
+      {showSectionNumbers && isPaired && faceB && faceB.sections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -162,6 +187,8 @@ export function RackSections({ geometry, faceA, faceB, isSelected, isPassive = f
               width: Math.max(1, sectionW - 2),
               height: railHeight
             }}
+            prominence={sectionNumberProminence}
+            counterRotationDeg={rackRotationDeg}
           />
         );
       })}
