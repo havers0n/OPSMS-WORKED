@@ -5,7 +5,6 @@ import { faceAtViewportEdge } from '@/shared/lib/rack-face-labels';
 import type { CanvasRect } from '@/entities/layout-version/lib/canvas-geometry';
 import {
   ObjectLocalAffordanceBar,
-  ObjectLocalAffordanceDivider,
   ObjectLocalAffordanceButton
 } from './object-local-affordance-bar';
 
@@ -37,57 +36,6 @@ type CanvasHudProps = {
   onZoomReset: () => void;
   onZoomIn: () => void;
 };
-
-type LayoutRackAffordanceBarProps = {
-  rack: Rack;
-  anchorRect: CanvasRect;
-  viewport: { width: number; height: number };
-};
-
-function GeometryValue({
-  label,
-  value
-}: {
-  label: 'X' | 'Y' | 'L' | 'D' | 'R';
-  value: string;
-}) {
-  return (
-    <div className="flex items-baseline gap-1 whitespace-nowrap">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-        {label}
-      </span>
-      <span className="font-mono text-[11px] font-semibold text-slate-900">{value}</span>
-    </div>
-  );
-}
-
-function LayoutRackAffordanceBar({ rack, anchorRect, viewport }: LayoutRackAffordanceBarProps) {
-  const values = [
-    { label: 'X' as const, value: rack.x.toFixed(2) },
-    { label: 'Y' as const, value: rack.y.toFixed(2) },
-    { label: 'L' as const, value: rack.totalLength.toFixed(1) },
-    { label: 'D' as const, value: rack.depth.toFixed(1) },
-    { label: 'R' as const, value: `${rack.rotationDeg}°` }
-  ];
-
-  return (
-    <ObjectLocalAffordanceBar anchorRect={anchorRect} viewport={viewport}>
-      <div
-        data-testid="rack-geometry-affordance-bar"
-        className="flex items-center gap-1"
-        aria-label="Selected rack geometry"
-      >
-        {values.map((item, index) => (
-          <div key={item.label} className="flex items-center gap-1">
-            {index > 0 ? <ObjectLocalAffordanceDivider /> : null}
-            <GeometryValue label={item.label} value={item.value} />
-          </div>
-        ))}
-      </div>
-    </ObjectLocalAffordanceBar>
-  );
-}
-
 
 function getRackSideHandleStyle({
   side,
@@ -341,14 +289,6 @@ export function CanvasHud({
             Move target selection active · Click a destination cell
           </div>
         </div>
-      )}
-
-      {shouldShowLayoutRackGeometryBar && selectedRack && selectedRackAnchorRect && (
-        <LayoutRackAffordanceBar
-          rack={selectedRack}
-          anchorRect={selectedRackAnchorRect}
-          viewport={viewport}
-        />
       )}
 
       {shouldShowLayoutRackSideHandles && selectedRack && selectedRackAnchorRect && (
