@@ -6,6 +6,10 @@ import {
   collectFaceSemanticLevels,
   resolveSemanticLevelForIndex
 } from '@/widgets/warehouse-editor/model/storage-level-mapping';
+import {
+  resolveCellVisualState,
+  type CellVisualPalette
+} from './rack-cells-visual-state';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
@@ -40,16 +44,44 @@ const CELL_FILL_EMPTY = '#e2e8f0';
 const CELL_STROKE_EMPTY = '#94a3b8';
 const CELL_STROKE_HIGHLIGHTED = '#f97316';
 
+const CELL_VISUAL_PALETTE_A: CellVisualPalette = {
+  baseFill: CELL_FILL_A,
+  baseStroke: CELL_STROKE,
+  occupiedFill: CELL_FILL_OCCUPIED_A,
+  occupiedStroke: CELL_STROKE_OCCUPIED_A,
+  selectedFill: CELL_FILL_SELECTED,
+  selectedStroke: CELL_STROKE_SELECTED,
+  workflowSourceFill: CELL_FILL_WORKFLOW_SOURCE,
+  workflowSourceStroke: CELL_STROKE_WORKFLOW_SOURCE,
+  highlightedStroke: CELL_STROKE_HIGHLIGHTED,
+  lockedFill: CELL_FILL_LOCKED,
+  lockedStroke: CELL_STROKE_LOCKED,
+  stockedFill: CELL_FILL_STOCKED,
+  stockedStroke: CELL_STROKE_STOCKED,
+  pickActiveFill: CELL_FILL_PICK_ACTIVE,
+  pickActiveStroke: CELL_STROKE_PICK_ACTIVE,
+  reservedFill: CELL_FILL_RESERVED,
+  reservedStroke: CELL_STROKE_RESERVED,
+  quarantinedFill: CELL_FILL_QUARANTINED,
+  quarantinedStroke: CELL_STROKE_QUARANTINED,
+  emptyFill: CELL_FILL_EMPTY,
+  emptyStroke: CELL_STROKE_EMPTY
+};
+
+const CELL_VISUAL_PALETTE_B: CellVisualPalette = {
+  ...CELL_VISUAL_PALETTE_A,
+  baseFill: CELL_FILL_B,
+  baseStroke: CELL_STROKE_B,
+  occupiedFill: CELL_FILL_OCCUPIED_B,
+  occupiedStroke: CELL_STROKE_OCCUPIED_B
+};
+
 type FaceProps = {
   face: RackFace;
   rackId: string;
   totalWidth: number;
   bandY: number;
   bandH: number;
-  cellFill: string;
-  cellStroke: string;
-  occupiedCellFill: string;
-  occupiedCellStroke: string;
   isRackSelected: boolean;
   publishedCellsByStructure: Map<string, Cell>;
   occupiedCellIds: Set<string>;
@@ -62,6 +94,7 @@ type FaceProps = {
   isRackPassive: boolean;
   selectedCellId: string | null;
   workflowSourceCellId: string | null;
+  visualPalette: CellVisualPalette;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
@@ -71,10 +104,6 @@ function FaceCells({
   totalWidth,
   bandY,
   bandH,
-  cellFill,
-  cellStroke,
-  occupiedCellFill,
-  occupiedCellStroke,
   isRackSelected,
   publishedCellsByStructure,
   occupiedCellIds,
@@ -87,6 +116,7 @@ function FaceCells({
   isRackPassive,
   selectedCellId,
   workflowSourceCellId,
+  visualPalette,
   onCellClick
 }: FaceProps) {
   if (!face.sections.length) return null;
@@ -134,70 +164,26 @@ function FaceCells({
           const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
           const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
           const runtime = cellId ? cellRuntimeById.get(cellId) : null;
-          const isOccupied = cellId !== null && occupiedCellIds.has(cellId) && !isSelected;
-          const isWorkflowTargetLocked =
-            isWorkflowScope &&
-            cellId !== null &&
-            !isSelected &&
-            !isWorkflowSource &&
-            isOccupied;
-          const canSelectWorkflowTarget =
-            !isWorkflowScope || (cellId !== null && !isWorkflowSource && !isOccupied);
+          const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
 
           const cellX = secX + slotIndex * slotW;
           const cellY = bandY + inset;
           const cellW = slotW - 1;
-          const statusFillStroke = runtime
-            ? runtime.status === 'quarantined'
-              ? { fill: CELL_FILL_QUARANTINED, stroke: CELL_STROKE_QUARANTINED }
-              : runtime.status === 'pick_active'
-                ? { fill: CELL_FILL_PICK_ACTIVE, stroke: CELL_STROKE_PICK_ACTIVE }
-                : runtime.status === 'reserved'
-                  ? { fill: CELL_FILL_RESERVED, stroke: CELL_STROKE_RESERVED }
-                  : runtime.status === 'stocked'
-                    ? { fill: CELL_FILL_STOCKED, stroke: CELL_STROKE_STOCKED }
-                    : { fill: CELL_FILL_EMPTY, stroke: CELL_STROKE_EMPTY }
-            : null;
-
-          const fill = (() => {
-            if (isSelected) return CELL_FILL_SELECTED;
-            if (isWorkflowSource) return CELL_FILL_WORKFLOW_SOURCE;
-            if (isWorkflowTargetLocked) return CELL_FILL_LOCKED;
-            if (statusFillStroke) return statusFillStroke.fill;
-            if (isOccupied) return occupiedCellFill;
-            return cellFill;
-          })();
-
-          const stroke = (() => {
-            if (isSelected) return CELL_STROKE_SELECTED;
-            if (isWorkflowSource) return CELL_STROKE_WORKFLOW_SOURCE;
-            if (isHighlighted) return CELL_STROKE_HIGHLIGHTED;
-            if (isWorkflowTargetLocked) return CELL_STROKE_LOCKED;
-            if (statusFillStroke) return statusFillStroke.stroke;
-            if (isOccupied) return occupiedCellStroke;
-            return cellStroke;
-          })();
-          const opacity = !cell
-            ? 0.18
-            : isSelected || isWorkflowSource || isHighlighted
-              ? 0.98
-              : isWorkflowTargetLocked
-                ? 0.24
-                : isRackPassive
-                  ? 0.4
-                  : isOccupied || runtime
-                    ? 0.98
-                    : isRackSelected
-                      ? 0.9
-                      : 0.72;
-          const strokeWidth = isSelected
-            ? 1.4
-            : isWorkflowSource || isHighlighted
-              ? 1.2
-              : isOccupied || isRackSelected
-                ? 0.9
-                : 0.5;
-          const cellClickable = isInteractive && cellId !== null && canSelectWorkflowTarget;
+          const visualState = resolveCellVisualState(
+            {
+              isInteractive,
+              isWorkflowScope,
+              isRackPassive,
+              isRackSelected,
+              hasCellIdentity: cellId !== null,
+              isSelected,
+              isWorkflowSource,
+              isHighlighted,
+              isOccupiedByFallback: isOccupied,
+              runtimeStatus: runtime?.status ?? null
+            },
+            visualPalette
+          );
 
           return (
             <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
@@ -207,11 +193,11 @@ function FaceCells({
                 width={Math.max(1, cellW)}
                 height={Math.max(1, cellH - 1)}
                 cornerRadius={1}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={strokeWidth}
-                opacity={opacity}
-                onClick={cellClickable ? (event) => {
+                fill={visualState.fill}
+                stroke={visualState.stroke}
+                strokeWidth={visualState.strokeWidth}
+                opacity={visualState.opacity}
+                onClick={visualState.isClickable ? (event) => {
                   event.cancelBubble = true;
                   onCellClick(cellId, { x: event.evt.clientX, y: event.evt.clientY });
                 } : undefined}
@@ -278,10 +264,6 @@ export function RackCells({
         totalWidth={faceAWidth}
         bandY={0}
         bandH={faceABandH}
-        cellFill={isSelected ? CELL_FILL_A_RACK_SELECTED : CELL_FILL_A}
-        cellStroke={isSelected ? CELL_STROKE_A_RACK_SELECTED : CELL_STROKE}
-        occupiedCellFill={CELL_FILL_OCCUPIED_A}
-        occupiedCellStroke={CELL_STROKE_OCCUPIED_A}
         isRackSelected={isSelected}
         publishedCellsByStructure={publishedCellsByStructure}
         occupiedCellIds={occupiedCellIds}
@@ -294,6 +276,9 @@ export function RackCells({
         isRackPassive={isPassive}
         selectedCellId={selectedCellId}
         workflowSourceCellId={workflowSourceCellId}
+        visualPalette={isSelected
+          ? { ...CELL_VISUAL_PALETTE_A, baseFill: CELL_FILL_A_RACK_SELECTED, baseStroke: CELL_STROKE_A_RACK_SELECTED }
+          : CELL_VISUAL_PALETTE_A}
         onCellClick={onCellClick}
       />
       {isPaired && faceB && (
@@ -303,10 +288,6 @@ export function RackCells({
           totalWidth={faceBWidth}
           bandY={spineY}
           bandH={height - spineY}
-          cellFill={isSelected ? CELL_FILL_B_RACK_SELECTED : CELL_FILL_B}
-          cellStroke={isSelected ? CELL_STROKE_B_RACK_SELECTED : CELL_STROKE_B}
-          occupiedCellFill={CELL_FILL_OCCUPIED_B}
-          occupiedCellStroke={CELL_STROKE_OCCUPIED_B}
           isRackSelected={isSelected}
           publishedCellsByStructure={publishedCellsByStructure}
           occupiedCellIds={occupiedCellIds}
@@ -319,6 +300,9 @@ export function RackCells({
           isRackPassive={isPassive}
           selectedCellId={selectedCellId}
           workflowSourceCellId={workflowSourceCellId}
+          visualPalette={isSelected
+            ? { ...CELL_VISUAL_PALETTE_B, baseFill: CELL_FILL_B_RACK_SELECTED, baseStroke: CELL_STROKE_B_RACK_SELECTED }
+            : CELL_VISUAL_PALETTE_B}
           onCellClick={onCellClick}
         />
       )}
