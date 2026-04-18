@@ -1,5 +1,6 @@
 import { Lock } from 'lucide-react';
 import type { CSSProperties } from 'react';
+import { Badge } from '@/shared/ui/badge';
 
 type WorkspaceStatusBadgeProps = {
   variant: 'badge';
@@ -30,7 +31,7 @@ export function WorkspaceStatus(props: WorkspaceStatusProps) {
   }
 
   return (
-    <span
+    <Badge
       className="group relative flex cursor-help items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
       style={props.style}
     >
@@ -42,6 +43,6 @@ export function WorkspaceStatus(props: WorkspaceStatusProps) {
           {props.tooltip}
         </div>
       )}
-    </span>
+    </Badge>
   );
 }

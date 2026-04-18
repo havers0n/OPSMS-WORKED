@@ -6,6 +6,7 @@ import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-
 import { usePublishLayout } from '@/features/layout-publish/model/use-publish-layout';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { BffRequestError } from '@/shared/api/bff/client';
+import { Button } from '@/shared/ui/button';
 import {
   useDraftDirtyState,
   useDraftPersistenceStatus,
@@ -122,73 +123,79 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
 
   if (isPublishedMode) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="solid"
+        size="sm"
         disabled={isBusy}
         onClick={handleCreateDraft}
-        className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="gap-1.5 text-white disabled:opacity-50"
         style={{ background: 'var(--accent)' }}
       >
         <FilePlus2 className="h-3.5 w-3.5" />
         {createDraft.isPending ? 'Creating…' : 'Create Draft'}
-      </button>
+      </Button>
     );
   }
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon"
         disabled
         title="Undo (coming soon)"
-        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
+        className="text-slate-300"
       >
         <Undo2 className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         disabled
         title="Redo (coming soon)"
-        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-300 disabled:cursor-not-allowed"
+        className="text-slate-300"
       >
         <Redo2 className="h-3.5 w-3.5" />
-      </button>
+      </Button>
 
       <div className="mx-1 h-4 w-px bg-slate-200" />
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="icon"
         disabled={!actions.canValidateDraft || isBusy}
         onClick={handleValidate}
         title="Validate layout"
-        className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+        className="disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
       >
         <SearchCheck className="h-3.5 w-3.5" />
-      </button>
+      </Button>
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         disabled={!actions.canSaveDraft || isBusy || persistenceStatus === 'conflict'}
         onClick={handleSaveDraft}
         title="Save draft"
-        className="flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+        className="gap-1 px-2 font-medium disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
       >
         <Save className="h-3.5 w-3.5" />
         Save
-      </button>
+      </Button>
 
-      <button
-        type="button"
+      <Button
+        variant="solid"
+        size="sm"
         disabled={!actions.canPublishDraft || isBusy || persistenceStatus === 'conflict'}
         onClick={handlePublish}
-        className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
+        className="gap-1.5 text-white disabled:opacity-30"
         style={{ background: 'var(--accent)' }}
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
         Publish
-      </button>
+      </Button>
     </>
   );
 }
