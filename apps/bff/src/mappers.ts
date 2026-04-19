@@ -11,6 +11,8 @@ import {
   locationOccupancyRowSchema,
   locationStorageSnapshotRowSchema,
   parseCellAddress,
+  productPackagingLevelSchema,
+  productUnitProfileSchema,
   containerTypeSchema,
   floorSchema,
   layoutLifecycleInfoSchema,
@@ -53,6 +55,8 @@ import {
   type Wave,
   type WaveSummary,
   type Product,
+  type ProductPackagingLevel,
+  type ProductUnitProfile,
   type Wall,
   type WallType,
   type Zone,
@@ -147,6 +151,39 @@ type ProductRow = {
   updated_at: string;
 };
 
+export type UnitProfileRow = {
+  product_id: string;
+  unit_weight_g: number | null;
+  unit_width_mm: number | null;
+  unit_height_mm: number | null;
+  unit_depth_mm: number | null;
+  weight_class: 'light' | 'medium' | 'heavy' | 'very_heavy' | null;
+  size_class: 'small' | 'medium' | 'large' | 'oversized' | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PackagingLevelRow = {
+  id: string;
+  product_id: string;
+  code: string;
+  name: string;
+  base_unit_qty: number;
+  is_base: boolean;
+  can_pick: boolean;
+  can_store: boolean;
+  is_default_pick_uom: boolean;
+  barcode: string | null;
+  pack_weight_g: number | null;
+  pack_width_mm: number | null;
+  pack_height_mm: number | null;
+  pack_depth_mm: number | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -165,6 +202,43 @@ export function mapProductRowToDomain(row: ProductRow): Product {
     permalink: row.permalink,
     imageUrls: normalizeStringArray(row.image_urls),
     imageFiles: normalizeStringArray(row.image_files),
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+}
+
+export function mapUnitProfileRowToDomain(row: UnitProfileRow): ProductUnitProfile {
+  return productUnitProfileSchema.parse({
+    productId: row.product_id,
+    unitWeightG: row.unit_weight_g,
+    unitWidthMm: row.unit_width_mm,
+    unitHeightMm: row.unit_height_mm,
+    unitDepthMm: row.unit_depth_mm,
+    weightClass: row.weight_class,
+    sizeClass: row.size_class,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  });
+}
+
+export function mapPackagingLevelRowToDomain(row: PackagingLevelRow): ProductPackagingLevel {
+  return productPackagingLevelSchema.parse({
+    id: row.id,
+    productId: row.product_id,
+    code: row.code,
+    name: row.name,
+    baseUnitQty: row.base_unit_qty,
+    isBase: row.is_base,
+    canPick: row.can_pick,
+    canStore: row.can_store,
+    isDefaultPickUom: row.is_default_pick_uom,
+    barcode: row.barcode,
+    packWeightG: row.pack_weight_g,
+    packWidthMm: row.pack_width_mm,
+    packHeightMm: row.pack_height_mm,
+    packDepthMm: row.pack_depth_mm,
+    sortOrder: row.sort_order,
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at
