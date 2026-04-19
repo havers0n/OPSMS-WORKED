@@ -48,7 +48,9 @@ import {
   waveSummarySchema,
   waveStatusSchema,
   rackInspectorPayloadSchema,
-  locationEffectiveRoleSchema
+  locationEffectiveRoleSchema,
+  productUnitProfileSchema,
+  productPackagingLevelSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -267,6 +269,79 @@ export const effectiveLocationRoleQuerySchema = z.object({
   productId: z.string().uuid()
 });
 export const effectiveLocationRoleResponseSchema = locationEffectiveRoleSchema;
+
+// ── Product Unit Profile ─────────────────────────────────────────────────────
+
+export const productUnitProfileResponseSchema = productUnitProfileSchema;
+
+export const upsertUnitProfileBodySchema = z.object({
+  unitWeightG: z.number().int().positive().nullable().optional(),
+  unitWidthMm: z.number().int().positive().nullable().optional(),
+  unitHeightMm: z.number().int().positive().nullable().optional(),
+  unitDepthMm: z.number().int().positive().nullable().optional(),
+  weightClass: z.enum(['light', 'medium', 'heavy', 'very_heavy']).nullable().optional(),
+  sizeClass: z.enum(['small', 'medium', 'large', 'oversized']).nullable().optional()
+});
+
+// ── Product Packaging Levels ─────────────────────────────────────────────────
+
+export const productPackagingLevelResponseSchema = productPackagingLevelSchema;
+export const productPackagingLevelsResponseSchema = z.array(productPackagingLevelSchema);
+
+export const createPackagingLevelBodySchema = z.object({
+  code: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  baseUnitQty: z.number().int().min(1),
+  isBase: z.boolean(),
+  canPick: z.boolean().optional().default(true),
+  canStore: z.boolean().optional().default(true),
+  isDefaultPickUom: z.boolean().optional().default(false),
+  barcode: z.string().nullable().optional(),
+  packWeightG: z.number().int().positive().nullable().optional(),
+  packWidthMm: z.number().int().positive().nullable().optional(),
+  packHeightMm: z.number().int().positive().nullable().optional(),
+  packDepthMm: z.number().int().positive().nullable().optional(),
+  sortOrder: z.number().int().optional().default(0),
+  isActive: z.boolean().optional().default(true)
+});
+
+export const patchPackagingLevelBodySchema = z.object({
+  code: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).optional(),
+  baseUnitQty: z.number().int().min(1).optional(),
+  isBase: z.boolean().optional(),
+  canPick: z.boolean().optional(),
+  canStore: z.boolean().optional(),
+  isDefaultPickUom: z.boolean().optional(),
+  barcode: z.string().nullable().optional(),
+  packWeightG: z.number().int().positive().nullable().optional(),
+  packWidthMm: z.number().int().positive().nullable().optional(),
+  packHeightMm: z.number().int().positive().nullable().optional(),
+  packDepthMm: z.number().int().positive().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+  isActive: z.boolean().optional()
+});
+
+// Batch replace-all: each item in the set (id optional — present means update, absent means create)
+export const packagingLevelSetItemSchema = z.object({
+  id: z.string().uuid().optional(),
+  code: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  baseUnitQty: z.number().int().min(1),
+  isBase: z.boolean(),
+  canPick: z.boolean(),
+  canStore: z.boolean(),
+  isDefaultPickUom: z.boolean(),
+  barcode: z.string().nullable().optional(),
+  packWeightG: z.number().int().positive().nullable().optional(),
+  packWidthMm: z.number().int().positive().nullable().optional(),
+  packHeightMm: z.number().int().positive().nullable().optional(),
+  packDepthMm: z.number().int().positive().nullable().optional(),
+  sortOrder: z.number().int(),
+  isActive: z.boolean()
+});
+
+export const setPackagingLevelsBodySchema = z.array(packagingLevelSetItemSchema);
 
 export const patchLocationGeometryBodySchema = z.object({
   floorX: z.number().nullable(),
