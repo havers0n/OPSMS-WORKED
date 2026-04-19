@@ -9,6 +9,7 @@ import {
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useSites } from '@/entities/site/api/use-sites';
+import { Divider } from '@/shared/ui/divider';
 import { useDraftDirtyState, useLayoutDraftState, useResetDraft } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { shouldProceedWithContextSwitch } from '../lib/layout-context';
 
@@ -95,7 +96,7 @@ export function WorkspaceNav({ statusBadge, onContextSwitched }: WorkspaceNavPro
             </span>
           )}
 
-          <div className="mx-2 h-4 w-px bg-slate-200" />
+          <Divider orientation="vertical" className="mx-2 h-4 bg-slate-200" />
           {statusBadge}
         </>
       )}

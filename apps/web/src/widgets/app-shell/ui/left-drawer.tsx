@@ -2,6 +2,8 @@ import { BarChart3, Eye, Layers, LayoutGrid, Package, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
+import { Drawer } from '@/shared/ui/drawer';
+import { IconButton } from '@/shared/ui/icon-button';
 
 type NavigationItem =
   | { label: string; description: string; icon: typeof LayoutGrid; enabled: true; to: string }
@@ -51,24 +53,26 @@ export function LeftDrawer() {
   if (isCollapsed) return null;
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-900/90 bg-slate-950 text-slate-200">
-      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-4">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
-            WOS
+    <Drawer
+      className="w-56 max-w-none border-y-0 border-l-0 border-r border-r-slate-900/90 bg-slate-950 text-slate-200 [&_[role=separator]]:bg-slate-800"
+      bodyClassName="px-2 py-2"
+      header={
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
+              WOS
+            </div>
+            <div className="mt-0.5 text-sm font-semibold text-white">Warehouse Ops</div>
           </div>
-          <div className="mt-0.5 text-sm font-semibold text-white">Warehouse Ops</div>
+          <IconButton
+            icon={<X className="h-4 w-4" />}
+            onClick={toggle}
+            className="rounded-lg text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+          />
         </div>
-        <button
-          type="button"
-          onClick={toggle}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-1 p-2">
+      }
+    >
+      <nav className="flex flex-1 flex-col gap-1">
         {items.map((item) => {
           const Icon = item.icon;
 
@@ -128,6 +132,6 @@ export function LeftDrawer() {
           );
         })}
       </nav>
-    </aside>
+    </Drawer>
   );
 }

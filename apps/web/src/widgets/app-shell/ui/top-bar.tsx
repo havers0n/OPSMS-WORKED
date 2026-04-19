@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useActiveFloorId, useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
+import { IconButton } from '@/shared/ui/icon-button';
+import { TopBarShell } from '@/shared/ui/top-bar-shell';
 import {
   useDraftDirtyState,
   useDraftPersistenceStatus,
@@ -86,59 +88,57 @@ export function TopBar() {
       : null;
 
   return (
-    <header
-      className="flex h-11 shrink-0 items-center justify-between border-b"
+    <TopBarShell
+      className="shrink-0 [&>div]:h-11"
       style={{
-        borderColor: 'var(--border-strong)',
         background: 'var(--surface-primary)'
       }}
-    >
-      <div className="flex h-full items-center">
-        <div
-          className="flex h-full items-center gap-2 border-r px-3"
-          style={{ borderColor: 'var(--border-muted)' }}
-        >
-          <button
-            type="button"
-            onClick={toggle}
-            title={isCollapsed ? 'Open navigation' : 'Close navigation'}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+      left={
+        <div className="flex h-full items-center">
+          <div
+            className="flex h-full items-center gap-2 border-r px-3"
+            style={{ borderColor: 'var(--border-muted)' }}
           >
-            <Menu className="h-4 w-4" />
-          </button>
-          <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
-            W
-          </span>
-          <span className="text-sm font-semibold text-slate-700">Warehouse Ops</span>
-        </div>
-
-        <WorkspaceNav
-          onContextSwitched={() => setStatusMessage(null)}
-          statusBadge={
-            <WorkspaceStatus
-              variant="badge"
-              label={workspaceStateLabel}
-              isCurrentModeLocked={isCurrentModeLocked}
-              style={workspaceStateStyle}
-              tooltip={workspaceTooltip}
+            <IconButton
+              icon={<Menu className="h-4 w-4" />}
+              onClick={toggle}
+              title={isCollapsed ? 'Open navigation' : 'Close navigation'}
+              className="rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             />
-          }
-        />
-      </div>
+            <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
+              W
+            </span>
+            <span className="text-sm font-semibold text-slate-700">Warehouse Ops</span>
+          </div>
 
-      <ViewModeSwitcher />
-
-      <div className="flex h-full items-center">
-        <div
-          className="flex h-full items-center gap-1 border-l px-3"
-          style={{ borderColor: 'var(--border-muted)' }}
-        >
-          <WorkspaceStatus variant="inline" message={inlineStatusMessage} />
-          <WorkspaceActions onStatusMessageChange={setStatusMessage} />
+          <WorkspaceNav
+            onContextSwitched={() => setStatusMessage(null)}
+            statusBadge={
+              <WorkspaceStatus
+                variant="badge"
+                label={workspaceStateLabel}
+                isCurrentModeLocked={isCurrentModeLocked}
+                style={workspaceStateStyle}
+                tooltip={workspaceTooltip}
+              />
+            }
+          />
         </div>
+      }
+      center={<ViewModeSwitcher />}
+      right={
+        <div className="flex h-full items-center">
+          <div
+            className="flex h-full items-center gap-1 border-l px-3"
+            style={{ borderColor: 'var(--border-muted)' }}
+          >
+            <WorkspaceStatus variant="inline" message={inlineStatusMessage} />
+            <WorkspaceActions onStatusMessageChange={setStatusMessage} />
+          </div>
 
-        <AccountControls />
-      </div>
-    </header>
+          <AccountControls />
+        </div>
+      }
+    />
   );
 }

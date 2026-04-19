@@ -7,6 +7,9 @@ import { usePublishLayout } from '@/features/layout-publish/model/use-publish-la
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { Button } from '@/shared/ui/button';
+import { Divider } from '@/shared/ui/divider';
+import { IconButton } from '@/shared/ui/icon-button';
+import { ToolRail } from '@/shared/ui/tool-rail';
 import {
   useDraftDirtyState,
   useDraftPersistenceStatus,
@@ -138,39 +141,37 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
   }
 
   return (
-    <>
-      <Button
+    <ToolRail
+      orientation="horizontal"
+      className="gap-1 border-0 bg-transparent p-0"
+      aria-label="Workspace actions"
+    >
+      <IconButton
+        icon={<Undo2 className="h-3.5 w-3.5" />}
         variant="ghost"
-        size="icon"
         disabled
         title="Undo (coming soon)"
         className="text-slate-300"
-      >
-        <Undo2 className="h-3.5 w-3.5" />
-      </Button>
-      <Button
+      />
+      <IconButton
+        icon={<Redo2 className="h-3.5 w-3.5" />}
         variant="ghost"
-        size="icon"
         disabled
         title="Redo (coming soon)"
         className="text-slate-300"
-      >
-        <Redo2 className="h-3.5 w-3.5" />
-      </Button>
+      />
 
-      <div className="mx-1 h-4 w-px bg-slate-200" />
+      <Divider orientation="vertical" className="mx-1 h-4 bg-slate-200" />
 
-      <Button
+      <IconButton
+        icon={<SearchCheck className="h-3.5 w-3.5" />}
         variant="ghost"
-        size="icon"
         disabled={!actions.canValidateDraft || isBusy}
         onClick={handleValidate}
         title="Validate layout"
         className="disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
-      >
-        <SearchCheck className="h-3.5 w-3.5" />
-      </Button>
+      />
 
       <Button
         variant="ghost"
@@ -196,6 +197,6 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         <CheckCircle2 className="h-3.5 w-3.5" />
         Publish
       </Button>
-    </>
+    </ToolRail>
   );
 }

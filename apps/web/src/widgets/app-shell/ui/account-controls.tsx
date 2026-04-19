@@ -1,5 +1,6 @@
 import { LogOut } from 'lucide-react';
 import { useAuth } from '@/app/providers/auth-provider';
+import { Button } from '@/shared/ui/button';
 
 export function AccountControls() {
   const { user, memberships, currentTenantId, signOut } = useAuth();
@@ -14,14 +15,14 @@ export function AccountControls() {
         </div>
         <div className="text-xs text-slate-700">{user?.email ?? ''}</div>
       </div>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={() => void signOut()}
-        className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
+        className="h-8 gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
       >
         <LogOut className="h-3.5 w-3.5" />
         Sign Out
-      </button>
+      </Button>
     </div>
   );
 }

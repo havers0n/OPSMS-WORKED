@@ -1,5 +1,6 @@
 import { useSetViewMode, useViewMode } from '@/widgets/warehouse-editor/model/editor-selectors';
 import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
+import { Button } from '@/shared/ui/button';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'view', label: 'View' },
@@ -20,11 +21,13 @@ export function ViewModeSwitcher() {
         {VIEW_MODES.map((mode) => {
           const isActive = viewMode === mode.id;
           return (
-            <button
+            <Button
               key={mode.id}
-              type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setViewMode(mode.id)}
-              className="relative rounded-md px-3 py-1 text-xs font-medium transition-all"
+              className="h-auto rounded-md px-3 py-1 text-xs font-medium transition-all hover:bg-transparent"
+              aria-pressed={isActive}
               style={
                 isActive
                   ? {
@@ -37,7 +40,7 @@ export function ViewModeSwitcher() {
               }
             >
               {mode.label}
-            </button>
+            </Button>
           );
         })}
       </div>
