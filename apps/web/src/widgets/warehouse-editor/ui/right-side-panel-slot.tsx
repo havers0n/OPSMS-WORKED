@@ -1,4 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
+import { Panel } from '@/shared/ui/panel';
 import {
   useActiveTask,
   useEditorSelection,
@@ -26,8 +27,10 @@ export function RightSidePanelSlot({ workspace, onCloseInspector }: RightSidePan
       className="shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
       style={{ width: isOpen ? '560px' : '0px' }}
     >
-      <div
-        className="h-full overflow-hidden border-l transition-transform duration-300 ease-in-out"
+      <Panel
+        padding="none"
+        tone="default"
+        className="h-full overflow-hidden rounded-none border-y-0 border-r-0 transition-transform duration-300 ease-in-out"
         style={{
           width: '560px',
           borderColor: 'var(--border-muted)',
@@ -39,7 +42,7 @@ export function RightSidePanelSlot({ workspace, onCloseInspector }: RightSidePan
         ) : route === 'inspector-surface' ? (
           <InspectorSurface workspace={workspace} onClose={onCloseInspector} />
         ) : null}
-      </div>
+      </Panel>
     </div>
   );
 }

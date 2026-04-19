@@ -1,5 +1,8 @@
 import { Minus, Menu, MousePointer2, PlusSquare, Square } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Divider } from '@/shared/ui/divider';
+import { IconButton } from '@/shared/ui/icon-button';
+import { ToolRail as ShellToolRail } from '@/shared/ui/tool-rail';
 import { useToggleDrawer } from '@/app/store/ui-selectors';
 import {
   useClearSelection,
@@ -62,25 +65,24 @@ export function ToolRail() {
           : 'select';
 
   return (
-    <aside
-      className="flex w-12 shrink-0 flex-col items-center border-r py-2"
+    <ShellToolRail
+      orientation="vertical"
+      className="h-full w-12 shrink-0 rounded-none border-y-0 border-l-0 bg-transparent p-2"
       style={{
         background: 'var(--surface-primary)',
         borderColor: 'var(--border-muted)'
       }}
     >
       <div className="flex flex-col items-center gap-1">
-        <button
-          type="button"
+        <IconButton
+          icon={<Menu className="h-4 w-4" />}
           title="Navigation menu"
           onClick={toggleDrawer}
-          className="group relative flex h-9 w-9 flex-col items-center justify-center rounded-lg transition-all"
+          className="group relative h-9 w-9 rounded-lg transition-all"
           style={{ color: 'var(--text-muted)' }}
-        >
-          <Menu className="h-4 w-4" />
-        </button>
+        />
 
-        <div className="my-1 w-5 border-t" style={{ borderColor: 'var(--border-muted)' }} />
+        <Divider className="my-1 w-5" style={{ background: 'var(--border-muted)' }} />
 
         {tools.map((tool) => {
           const Icon = tool.icon;
@@ -91,9 +93,9 @@ export function ToolRail() {
             (tool.editorMode !== 'select' && !isLayoutEditable);
 
           return (
-            <button
+            <IconButton
               key={tool.id}
-              type="button"
+              icon={<Icon className="h-4 w-4" />}
               title={tool.label}
               disabled={isDisabled}
               onClick={() => {
@@ -103,7 +105,7 @@ export function ToolRail() {
                 }
                 setEditorMode(tool.editorMode);
               }}
-              className="group relative flex h-9 w-9 flex-col items-center justify-center rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-30"
+              className="group relative h-9 w-9 rounded-lg transition-all disabled:opacity-30"
               style={
                 isActive
                   ? {
@@ -115,8 +117,6 @@ export function ToolRail() {
                     }
               }
             >
-              <Icon className="h-4 w-4" />
-
               {/* Tooltip */}
               <span
                 className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-md transition-opacity group-hover:opacity-100"
@@ -135,7 +135,7 @@ export function ToolRail() {
                   style={{ background: 'var(--accent)' }}
                 />
               )}
-            </button>
+            </IconButton>
           );
         })}
       </div>
@@ -149,6 +149,6 @@ export function ToolRail() {
           {MODE_LABELS[viewMode]}
         </span>
       </div>
-    </aside>
+    </ShellToolRail>
   );
 }

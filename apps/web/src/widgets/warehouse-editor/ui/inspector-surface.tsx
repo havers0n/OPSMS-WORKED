@@ -1,4 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
+import { InspectorShell } from '@/shared/ui/inspector-shell';
 import { InspectorRouter } from './inspector-router';
 
 type InspectorSurfaceProps = {
@@ -8,8 +9,12 @@ type InspectorSurfaceProps = {
 
 export function InspectorSurface({ workspace, onClose }: InspectorSurfaceProps) {
   return (
-    <div data-testid="inspector-surface" className="h-full">
+    <InspectorShell
+      data-testid="inspector-surface"
+      className="h-full rounded-none border-0 bg-transparent"
+      contentClassName="h-full space-y-0 p-0"
+    >
       <InspectorRouter workspace={workspace} onClose={onClose} />
-    </div>
+    </InspectorShell>
   );
 }
