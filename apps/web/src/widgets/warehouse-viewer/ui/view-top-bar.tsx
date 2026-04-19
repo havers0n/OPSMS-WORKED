@@ -1,5 +1,6 @@
 import { ChevronRight, LogOut, Menu, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '@/app/providers/auth-provider';
 import {
   useActiveFloorId,
@@ -24,11 +25,27 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'storage', label: 'Storage' }
 ];
 
-export function ViewTopBar() {
+type LocateFeedback = {
+  kind: 'idle' | 'found' | 'not-found' | 'invalid' | 'error';
+  message: string | null;
+};
+
+type ViewTopBarProps = {
+  onLocateSubmit?: (query: string) => void;
+  locateFeedback?: LocateFeedback;
+  locateDisabled?: boolean;
+};
+
+export function ViewTopBar({
+  onLocateSubmit,
+  locateFeedback = { kind: 'idle', message: null },
+  locateDisabled = false
+}: ViewTopBarProps = {}) {
   const toggle = useToggleDrawer();
   const isCollapsed = useIsDrawerCollapsed();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [locateQuery, setLocateQuery] = useState('');
 
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
@@ -54,6 +71,14 @@ export function ViewTopBar() {
 
   // Normalize: Layout authoring is not available in the read-only viewer route.
   const activeViewMode = viewMode === 'layout' ? 'view' : viewMode;
+  const feedbackColor =
+    locateFeedback.kind === 'error'
+      ? 'text-red-600'
+      : locateFeedback.kind === 'not-found' || locateFeedback.kind === 'invalid'
+        ? 'text-amber-600'
+        : locateFeedback.kind === 'found'
+          ? 'text-emerald-600'
+          : 'text-slate-500';
 
   return (
     <header
@@ -120,7 +145,7 @@ export function ViewTopBar() {
       </div>
 
       {/* ── Center: read-only View + Storage tabs ─────────────────────── */}
-      <div className="flex flex-1 items-center justify-center px-4">
+      <div className="flex flex-1 items-center justify-center gap-3 px-4">
         <div
           className="flex items-center gap-0.5 rounded-lg p-0.5"
           style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
@@ -149,6 +174,35 @@ export function ViewTopBar() {
             );
           })}
         </div>
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!onLocateSubmit) return;
+            onLocateSubmit(locateQuery);
+          }}
+        >
+          <input
+            aria-label="Locate cell address"
+            placeholder="Locate cell address"
+            value={locateQuery}
+            onChange={(event) => setLocateQuery(event.target.value)}
+            disabled={locateDisabled}
+            className="h-7 w-48 rounded-md border px-2 text-xs text-slate-700 outline-none focus:ring-1 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:text-slate-400"
+            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+          />
+          <button
+            type="submit"
+            disabled={locateDisabled}
+            className="flex h-7 items-center rounded-md border px-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+          >
+            Locate
+          </button>
+          {locateFeedback.message && (
+            <span className={`text-xs ${feedbackColor}`}>{locateFeedback.message}</span>
+          )}
+        </form>
       </div>
 
       {/* ── Right: Open Editor + user ─────────────────────────────────── */}
