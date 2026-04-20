@@ -31,7 +31,7 @@ type LocateFeedback = {
 };
 
 type ViewTopBarProps = {
-  onLocateSubmit?: (query: string) => void;
+  onLocateSubmit: (query: string) => void;
   locateFeedback?: LocateFeedback;
   locateDisabled?: boolean;
 };
@@ -40,7 +40,7 @@ export function ViewTopBar({
   onLocateSubmit,
   locateFeedback = { kind: 'idle', message: null },
   locateDisabled = false
-}: ViewTopBarProps = {}) {
+}: ViewTopBarProps) {
   const toggle = useToggleDrawer();
   const isCollapsed = useIsDrawerCollapsed();
   const navigate = useNavigate();
@@ -178,7 +178,6 @@ export function ViewTopBar({
           className="flex items-center gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!onLocateSubmit) return;
             onLocateSubmit(locateQuery);
           }}
         >

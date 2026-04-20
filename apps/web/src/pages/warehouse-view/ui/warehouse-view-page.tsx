@@ -52,8 +52,9 @@ export function WarehouseViewPage() {
   const [searchParams] = useSearchParams();
   const targetFloorId = searchParams.get('floor');
   const targetCellId = searchParams.get('cell');
-  const returnTaskId = searchParams.get('returnTaskId');
-  const returnTaskNumber = searchParams.get('returnTaskNumber');
+  const returnTaskId = searchParams.get('returnTaskId')?.trim() ?? '';
+  const returnTaskNumber = searchParams.get('returnTaskNumber')?.trim() ?? '';
+  const shouldShowReturnTaskBar = returnTaskId.length > 0 && returnTaskNumber.length > 0;
 
   // Auto-select first site if none selected
   useEffect(() => {
@@ -250,7 +251,7 @@ export function WarehouseViewPage() {
         locateFeedback={locateFeedback}
         locateDisabled={publishedCellsQuery.isLoading}
       />
-      {returnTaskId && returnTaskNumber && (
+      {shouldShowReturnTaskBar && (
         <div
           className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
           style={{
