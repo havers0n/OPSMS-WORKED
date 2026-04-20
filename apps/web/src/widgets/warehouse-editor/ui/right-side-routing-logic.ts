@@ -11,6 +11,11 @@ export function hasInspectableLayoutSelection(selection: EditorSelection): boole
   return selection.type === 'zone' || selection.type === 'wall';
 }
 
+export function hasInspectableViewSelection(selection: EditorSelection): boolean {
+  if (selection.type === 'rack') return selection.rackIds.length > 0;
+  return selection.type !== 'none';
+}
+
 export function resolveRightSideRoute(
   viewMode: ViewMode,
   selection: EditorSelection,
@@ -21,5 +26,9 @@ export function resolveRightSideRoute(
     return hasInspectableLayoutSelection(selection) ? 'inspector-surface' : 'closed';
   }
 
-  return 'inspector-surface';
+  if (viewMode === 'view') {
+    return hasInspectableViewSelection(selection) ? 'inspector-surface' : 'closed';
+  }
+
+  return 'inspector-surface'; // storage mode keeps persistent inspector shell behavior
 }

@@ -44,9 +44,13 @@ describe('resolveRightSideRoute', () => {
     );
   });
 
-  it('characterizes current transitional behavior: non-layout idle routes remain inspector-based', () => {
-    expect(resolveRightSideRoute('view', noSelection, null)).toBe('inspector-surface');
+  it('closes view mode by default and keeps storage mode inspector-based', () => {
+    expect(resolveRightSideRoute('view', noSelection, null)).toBe('closed');
     expect(resolveRightSideRoute('storage', noSelection, null)).toBe('inspector-surface');
+    expect(resolveRightSideRoute('view', cellSelection('cell-1'), null)).toBe('inspector-surface');
+    expect(resolveRightSideRoute('view', containerSelection('container-1'), null)).toBe(
+      'inspector-surface'
+    );
     expect(resolveRightSideRoute('view', rackSelection(['rack-1']), rackCreationTask('rack-1'))).toBe(
       'inspector-surface'
     );

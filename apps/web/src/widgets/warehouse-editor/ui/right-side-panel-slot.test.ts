@@ -184,6 +184,21 @@ describe('RightSidePanelSlot', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
   });
 
+  it('keeps view mode closed by default when there is no selection', () => {
+    act(() => {
+      useModeStore.setState({
+        viewMode: 'view',
+        editorMode: 'select'
+      });
+      useInteractionStore.getState().clearSelection();
+    });
+
+    const renderer = renderSlot();
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
+  });
+
   it('keeps storage workflow ownership out of task surface (storage mode remains inspector-based)', () => {
     act(() => {
       useModeStore.setState({
