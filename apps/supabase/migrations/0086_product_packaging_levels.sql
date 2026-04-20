@@ -33,9 +33,7 @@ create table public.product_packaging_levels (
 );
 
 comment on table public.product_packaging_levels is
-  'Allowed packaging forms for a product SKU. Quantities are relative to base units. ' ||
-  'Schema enforces at most one base row and at most one default pick UOM per product; ' ||
-  'application layer enforces that exactly one base row exists before saving.';
+'Allowed packaging forms for a product SKU. Quantities are relative to base units. Application layer must validate that exactly one base row exists before product use.';
 
 -- Enforce: at most one base row per product
 create unique index product_packaging_levels_one_base_per_product
