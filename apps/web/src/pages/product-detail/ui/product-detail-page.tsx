@@ -417,80 +417,50 @@ export function ProductDetailPage() {
   return (
     <section className="flex h-full w-full flex-1 overflow-hidden">
       <div className="m-4 flex h-full w-full flex-col overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <header className="border-b border-slate-200 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={handleBack}
-                className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to catalog
-              </button>
-              <h1 className="mt-2 truncate text-xl font-semibold text-slate-900">{product.name}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                <span>{product.sku ?? 'SKU not defined'}</span>
-                <span className="text-slate-300">|</span>
-                <span>{product.externalProductId}</span>
-                <span className="text-slate-300">|</span>
-                <span>{product.source}</span>
+        <div className="flex flex-col gap-3 p-4 md:gap-4 md:p-5">
+          <header className="rounded-xl border border-slate-200 bg-slate-50/40 p-4 md:p-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to catalog
+                </button>
+
+                <h1 className="mt-2 text-xl font-semibold text-slate-900 md:text-2xl">{product.name}</h1>
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+                  <span>{product.sku ?? 'SKU not defined'}</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="break-all">{product.externalProductId}</span>
+                  <span className="text-slate-300">|</span>
+                  <span>{product.source}</span>
+                </div>
+
+                <div className="mt-1 text-xs text-slate-500">
+                  Updated: {new Date(product.updatedAt).toLocaleString()}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-700">
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
+                    Status: {product.isActive ? 'active' : 'inactive'}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
+                    Profile: {getProfileCompleteness(unitProfileQuery.data)}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
+                    Packaging levels: {packagingLevelsQuery.data?.length ?? '-'}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
+                    Default pick UOM: {defaultPickLevel?.code ?? 'Not set'}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Status: {product.isActive ? 'active' : 'inactive'}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Profile: {getProfileCompleteness(unitProfileQuery.data)}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Packaging levels: {packagingLevelsQuery.data?.length ?? '-'}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Default pick UOM: {defaultPickLevel?.code ?? 'Not set'}
-              </span>
-            </div>
-          </div>
-        </header>
-
-        <div className="flex flex-col gap-4 p-5">
-          <section className="rounded-xl border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-slate-900">Identity</h2>
-            </div>
-            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Name</dt>
-                  <dd className="mt-1 text-sm font-medium text-slate-900">{product.name}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">SKU</dt>
-                  <dd className="mt-1 text-sm text-slate-700">{product.sku ?? 'Not defined'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">External ID</dt>
-                  <dd className="mt-1 break-all text-sm text-slate-700">{product.externalProductId}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Source</dt>
-                  <dd className="mt-1 text-sm text-slate-700">{product.source}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
-                  <dd className="mt-1 text-sm text-slate-700">{product.isActive ? 'Active' : 'Inactive'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Updated</dt>
-                  <dd className="mt-1 text-sm text-slate-700">
-                    {new Date(product.updatedAt).toLocaleString()}
-                  </dd>
-                </div>
-              </dl>
-
-              <aside className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <aside className="rounded-lg border border-slate-200 bg-white p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Media</p>
                   <span className="text-xs text-slate-500">
@@ -503,7 +473,7 @@ export function ProductDetailPage() {
                   onClick={handleOpenLightbox}
                   disabled={!selectedImageUrl}
                   className={[
-                    'group relative h-52 w-full overflow-hidden rounded-md border border-slate-200 bg-white',
+                    'group relative h-52 w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50',
                     selectedImageUrl
                       ? 'cursor-zoom-in hover:border-cyan-300 focus-visible:border-cyan-400'
                       : 'cursor-default'
@@ -555,10 +525,10 @@ export function ProductDetailPage() {
                 ) : null}
               </aside>
             </div>
-          </section>
+          </header>
 
-          <section className="rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
               <h2 className="text-sm font-semibold text-slate-900">Unit Profile</h2>
               {unitProfileQuery.isLoading || unitProfileQuery.isError ? null : isUnitProfileEditing ? (
                 <div className="flex items-center gap-2">
@@ -569,7 +539,7 @@ export function ProductDetailPage() {
                     type="button"
                     onClick={cancelUnitProfileEdit}
                     disabled={upsertUnitProfileMutation.isPending}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -577,7 +547,7 @@ export function ProductDetailPage() {
                     type="button"
                     onClick={() => void saveUnitProfile()}
                     disabled={upsertUnitProfileMutation.isPending}
-                    className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {upsertUnitProfileMutation.isPending ? 'Saving...' : 'Save'}
                   </button>
@@ -586,7 +556,7 @@ export function ProductDetailPage() {
                 <button
                   type="button"
                   onClick={beginUnitProfileEdit}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Edit
                 </button>
@@ -789,7 +759,7 @@ export function ProductDetailPage() {
                 </div>
               </div>
             ) : !unitProfileQuery.data ? (
-              <div className="p-4 text-sm text-slate-600">Unit profile not defined yet.</div>
+              <div className="px-4 py-5 text-sm text-slate-600">Unit profile not defined yet.</div>
             ) : (
               <div className="grid gap-4 p-4 lg:grid-cols-2">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -847,8 +817,8 @@ export function ProductDetailPage() {
             )}
           </section>
 
-          <section className="rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
               <h2 className="text-sm font-semibold text-slate-900">Packaging Levels</h2>
               {packagingLevelsQuery.isLoading || packagingLevelsQuery.isError ? null : isPackagingEditing ? (
                 <div className="flex items-center gap-2">
@@ -859,7 +829,7 @@ export function ProductDetailPage() {
                     type="button"
                     onClick={addPackagingRow}
                     disabled={replacePackagingLevelsMutation.isPending}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add row
                   </button>
@@ -867,7 +837,7 @@ export function ProductDetailPage() {
                     type="button"
                     onClick={cancelPackagingEdit}
                     disabled={replacePackagingLevelsMutation.isPending}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -875,7 +845,7 @@ export function ProductDetailPage() {
                     type="button"
                     onClick={() => void savePackagingLevels()}
                     disabled={replacePackagingLevelsMutation.isPending}
-                    className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {replacePackagingLevelsMutation.isPending ? 'Saving...' : 'Save'}
                   </button>
@@ -884,7 +854,7 @@ export function ProductDetailPage() {
                 <button
                   type="button"
                   onClick={beginPackagingEdit}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Edit
                 </button>
@@ -1179,7 +1149,7 @@ export function ProductDetailPage() {
                 </div>
               </div>
             ) : !packagingLevelsQuery.data || packagingLevelsQuery.data.length === 0 ? (
-              <div className="p-4 text-sm text-slate-600">Packaging levels not defined yet.</div>
+              <div className="px-4 py-5 text-sm text-slate-600">Packaging levels not defined yet.</div>
             ) : (
               <div className="overflow-auto">
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
