@@ -1,7 +1,12 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ProductUnitProfile } from '@wos/domain';
+import {
+  useReplaceProductPackagingLevels,
+  useUpsertProductUnitProfile
+} from '@/entities/product/api/mutations';
 import {
   productPackagingLevelsQueryOptions,
   productQueryOptions,
@@ -9,6 +14,18 @@ import {
 } from '@/entities/product/api/queries';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { routes } from '@/shared/config/routes';
+import {
+  buildPackagingLevelsComparable,
+  buildUnitProfileComparable,
+  createEmptyPackagingLevelDraft,
+  createPackagingLevelDraft,
+  createUnitProfileDraft,
+  type PackagingLevelDraft,
+  type PackagingRowField,
+  type UnitProfileNumericField,
+  validatePackagingLevelsDraft,
+  validateUnitProfileDraft
+} from './section-editing';
 
 function formatClass(value: string | null) {
   if (!value) return 'Not defined';
@@ -59,6 +76,43 @@ export function ProductDetailPage() {
     productError instanceof BffRequestError && productError.status === 404;
 
   const defaultPickLevel = packagingLevelsQuery.data?.find((level) => level.isDefaultPickUom) ?? null;
+  const upsertUnitProfileMutation = useUpsertProductUnitProfile();
+  const replacePackagingLevelsMutation = useReplaceProductPackagingLevels();
+
+  const [isUnitProfileEditing, setIsUnitProfileEditing] = useState(false);
+  const [unitProfileDraft, setUnitProfileDraft] = useState(() => createUnitProfileDraft(null));
+  const [unitProfileFieldErrors, setUnitProfileFieldErrors] = useState<Partial<Record<UnitProfileNumericField, string>>>({});
+  const [unitProfileSaveError, setUnitProfileSaveError] = useState<string | null>(null);
+
+  const [isPackagingEditing, setIsPackagingEditing] = useState(false);
+  const [packagingDraft, setPackagingDraft] = useState<PackagingLevelDraft[]>([]);
+  const [packagingRowErrors, setPackagingRowErrors] = useState<
+    Record<string, Partial<Record<PackagingRowField, string>>>
+  >({});
+  const [packagingSectionErrors, setPackagingSectionErrors] = useState<string[]>([]);
+  const [packagingSaveError, setPackagingSaveError] = useState<string | null>(null);
+
+  const sourcePackagingDraft = useMemo(
+    () => (packagingLevelsQuery.data ?? []).map((level, index) => createPackagingLevelDraft(level, index)),
+    [packagingLevelsQuery.data]
+  );
+
+  const unitProfileDirty = useMemo(() => {
+    if (!isUnitProfileEditing) return false;
+    const sourceComparable = buildUnitProfileComparable(createUnitProfileDraft(unitProfileQuery.data));
+    const draftComparable = buildUnitProfileComparable(unitProfileDraft);
+
+    if (!sourceComparable || !draftComparable) return true;
+    return JSON.stringify(sourceComparable) !== JSON.stringify(draftComparable);
+  }, [isUnitProfileEditing, unitProfileDraft, unitProfileQuery.data]);
+
+  const packagingDirty = useMemo(() => {
+    if (!isPackagingEditing) return false;
+    return (
+      JSON.stringify(buildPackagingLevelsComparable(sourcePackagingDraft)) !==
+      JSON.stringify(buildPackagingLevelsComparable(packagingDraft))
+    );
+  }, [isPackagingEditing, packagingDraft, sourcePackagingDraft]);
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -67,6 +121,126 @@ export function ProductDetailPage() {
     }
 
     navigate(returnTo);
+  }
+
+  function beginUnitProfileEdit() {
+    setUnitProfileDraft(createUnitProfileDraft(unitProfileQuery.data));
+    setUnitProfileFieldErrors({});
+    setUnitProfileSaveError(null);
+    setIsUnitProfileEditing(true);
+  }
+
+  function cancelUnitProfileEdit() {
+    setIsUnitProfileEditing(false);
+    setUnitProfileDraft(createUnitProfileDraft(unitProfileQuery.data));
+    setUnitProfileFieldErrors({});
+    setUnitProfileSaveError(null);
+  }
+
+  async function saveUnitProfile() {
+    if (!productId) return;
+
+    const validation = validateUnitProfileDraft(unitProfileDraft);
+    if (!validation.payload) {
+      setUnitProfileFieldErrors(validation.fieldErrors);
+      return;
+    }
+
+    setUnitProfileFieldErrors({});
+    setUnitProfileSaveError(null);
+
+    try {
+      await upsertUnitProfileMutation.mutateAsync({
+        productId,
+        body: validation.payload
+      });
+      await unitProfileQuery.refetch();
+      setIsUnitProfileEditing(false);
+    } catch (error) {
+      setUnitProfileSaveError(error instanceof Error ? error.message : 'Failed to save unit profile.');
+    }
+  }
+
+  function beginPackagingEdit() {
+    setPackagingDraft(sourcePackagingDraft);
+    setPackagingRowErrors({});
+    setPackagingSectionErrors([]);
+    setPackagingSaveError(null);
+    setIsPackagingEditing(true);
+  }
+
+  function cancelPackagingEdit() {
+    setIsPackagingEditing(false);
+    setPackagingDraft(sourcePackagingDraft);
+    setPackagingRowErrors({});
+    setPackagingSectionErrors([]);
+    setPackagingSaveError(null);
+  }
+
+  function updatePackagingRow(draftId: string, patch: Partial<PackagingLevelDraft>) {
+    setPackagingDraft((rows) =>
+      rows.map((row) =>
+        row.draftId === draftId
+          ? {
+              ...row,
+              ...patch
+            }
+          : row
+      )
+    );
+    setPackagingRowErrors((current) => {
+      if (!current[draftId]) return current;
+      const next = { ...current };
+      delete next[draftId];
+      return next;
+    });
+    setPackagingSectionErrors([]);
+    setPackagingSaveError(null);
+  }
+
+  function addPackagingRow() {
+    const draftId = `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setPackagingDraft((rows) => [...rows, createEmptyPackagingLevelDraft(draftId)]);
+    setPackagingSectionErrors([]);
+    setPackagingSaveError(null);
+  }
+
+  function removePackagingRow(draftId: string) {
+    setPackagingDraft((rows) => rows.filter((row) => row.draftId !== draftId));
+    setPackagingRowErrors((current) => {
+      if (!current[draftId]) return current;
+      const next = { ...current };
+      delete next[draftId];
+      return next;
+    });
+    setPackagingSectionErrors([]);
+    setPackagingSaveError(null);
+  }
+
+  async function savePackagingLevels() {
+    if (!productId) return;
+
+    const validation = validatePackagingLevelsDraft(packagingDraft);
+    if (!validation.payload) {
+      setPackagingRowErrors(validation.rowErrors);
+      setPackagingSectionErrors(validation.sectionErrors);
+      return;
+    }
+
+    setPackagingRowErrors({});
+    setPackagingSectionErrors([]);
+    setPackagingSaveError(null);
+
+    try {
+      await replacePackagingLevelsMutation.mutateAsync({
+        productId,
+        levels: validation.payload
+      });
+      await packagingLevelsQuery.refetch();
+      setIsPackagingEditing(false);
+    } catch (error) {
+      setPackagingSaveError(error instanceof Error ? error.message : 'Failed to save packaging levels.');
+    }
   }
 
   if (!productId) {
@@ -219,8 +393,39 @@ export function ProductDetailPage() {
           </section>
 
           <section className="rounded-xl border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-slate-900">Unit Profile</h2>
+              {unitProfileQuery.isLoading || unitProfileQuery.isError ? null : isUnitProfileEditing ? (
+                <div className="flex items-center gap-2">
+                  {unitProfileDirty ? (
+                    <span className="text-xs font-medium text-amber-700">Unsaved changes</span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={cancelUnitProfileEdit}
+                    disabled={upsertUnitProfileMutation.isPending}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveUnitProfile()}
+                    disabled={upsertUnitProfileMutation.isPending}
+                    className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {upsertUnitProfileMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={beginUnitProfileEdit}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Edit
+                </button>
+              )}
             </div>
 
             {unitProfileQuery.isLoading ? (
@@ -241,6 +446,182 @@ export function ProductDetailPage() {
                 >
                   Retry
                 </button>
+              </div>
+            ) : isUnitProfileEditing ? (
+              <div className="space-y-4 p-4">
+                {unitProfileSaveError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {unitProfileSaveError}
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Exact Measurements
+                    </h3>
+                    <div className="mt-3 grid gap-2">
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-slate-500">Weight (g)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={unitProfileDraft.unitWeightG}
+                          onChange={(event) => {
+                            setUnitProfileDraft((current) => ({
+                              ...current,
+                              unitWeightG: event.target.value
+                            }));
+                            setUnitProfileFieldErrors((current) => ({
+                              ...current,
+                              unitWeightG: undefined
+                            }));
+                            setUnitProfileSaveError(null);
+                          }}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                        />
+                        {unitProfileFieldErrors.unitWeightG ? (
+                          <span className="text-xs text-red-700">{unitProfileFieldErrors.unitWeightG}</span>
+                        ) : null}
+                      </label>
+
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-slate-500">Width (mm)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={unitProfileDraft.unitWidthMm}
+                          onChange={(event) => {
+                            setUnitProfileDraft((current) => ({
+                              ...current,
+                              unitWidthMm: event.target.value
+                            }));
+                            setUnitProfileFieldErrors((current) => ({
+                              ...current,
+                              unitWidthMm: undefined
+                            }));
+                            setUnitProfileSaveError(null);
+                          }}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                        />
+                        {unitProfileFieldErrors.unitWidthMm ? (
+                          <span className="text-xs text-red-700">{unitProfileFieldErrors.unitWidthMm}</span>
+                        ) : null}
+                      </label>
+
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-slate-500">Height (mm)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={unitProfileDraft.unitHeightMm}
+                          onChange={(event) => {
+                            setUnitProfileDraft((current) => ({
+                              ...current,
+                              unitHeightMm: event.target.value
+                            }));
+                            setUnitProfileFieldErrors((current) => ({
+                              ...current,
+                              unitHeightMm: undefined
+                            }));
+                            setUnitProfileSaveError(null);
+                          }}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                        />
+                        {unitProfileFieldErrors.unitHeightMm ? (
+                          <span className="text-xs text-red-700">{unitProfileFieldErrors.unitHeightMm}</span>
+                        ) : null}
+                      </label>
+
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-slate-500">Depth (mm)</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={unitProfileDraft.unitDepthMm}
+                          onChange={(event) => {
+                            setUnitProfileDraft((current) => ({
+                              ...current,
+                              unitDepthMm: event.target.value
+                            }));
+                            setUnitProfileFieldErrors((current) => ({
+                              ...current,
+                              unitDepthMm: undefined
+                            }));
+                            setUnitProfileSaveError(null);
+                          }}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                        />
+                        {unitProfileFieldErrors.unitDepthMm ? (
+                          <span className="text-xs text-red-700">{unitProfileFieldErrors.unitDepthMm}</span>
+                        ) : null}
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Fallback Classes
+                    </h3>
+                    <div className="mt-3 grid gap-2">
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-slate-500">Weight class</span>
+                        <select
+                          value={unitProfileDraft.weightClass}
+                          onChange={(event) => {
+                            setUnitProfileDraft((current) => ({
+                              ...current,
+                              weightClass: event.target.value as
+                                | ''
+                                | 'light'
+                                | 'medium'
+                                | 'heavy'
+                                | 'very_heavy'
+                            }));
+                            setUnitProfileSaveError(null);
+                          }}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                        >
+                          <option value="">Not defined</option>
+                          <option value="light">Light</option>
+                          <option value="medium">Medium</option>
+                          <option value="heavy">Heavy</option>
+                          <option value="very_heavy">Very heavy</option>
+                        </select>
+                      </label>
+
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-slate-500">Size class</span>
+                        <select
+                          value={unitProfileDraft.sizeClass}
+                          onChange={(event) => {
+                            setUnitProfileDraft((current) => ({
+                              ...current,
+                              sizeClass: event.target.value as
+                                | ''
+                                | 'small'
+                                | 'medium'
+                                | 'large'
+                                | 'oversized'
+                            }));
+                            setUnitProfileSaveError(null);
+                          }}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
+                        >
+                          <option value="">Not defined</option>
+                          <option value="small">Small</option>
+                          <option value="medium">Medium</option>
+                          <option value="large">Large</option>
+                          <option value="oversized">Oversized</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : !unitProfileQuery.data ? (
               <div className="p-4 text-sm text-slate-600">Unit profile not defined yet.</div>
@@ -302,8 +683,47 @@ export function ProductDetailPage() {
           </section>
 
           <section className="rounded-xl border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-slate-900">Packaging Levels</h2>
+              {packagingLevelsQuery.isLoading || packagingLevelsQuery.isError ? null : isPackagingEditing ? (
+                <div className="flex items-center gap-2">
+                  {packagingDirty ? (
+                    <span className="text-xs font-medium text-amber-700">Unsaved changes</span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={addPackagingRow}
+                    disabled={replacePackagingLevelsMutation.isPending}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Add row
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelPackagingEdit}
+                    disabled={replacePackagingLevelsMutation.isPending}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void savePackagingLevels()}
+                    disabled={replacePackagingLevelsMutation.isPending}
+                    className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {replacePackagingLevelsMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={beginPackagingEdit}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Edit
+                </button>
+              )}
             </div>
 
             {packagingLevelsQuery.isLoading ? (
@@ -324,6 +744,248 @@ export function ProductDetailPage() {
                 >
                   Retry
                 </button>
+              </div>
+            ) : isPackagingEditing ? (
+              <div className="space-y-3 p-4">
+                {packagingSaveError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {packagingSaveError}
+                  </div>
+                ) : null}
+                {packagingSectionErrors.length > 0 ? (
+                  <ul className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {packagingSectionErrors.map((error, index) => (
+                      <li key={`${error}-${index}`}>{error}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {packagingDraft.length === 0 ? (
+                  <div className="text-sm text-slate-600">
+                    No rows in draft yet. Add a row and ensure the final set has exactly one base row.
+                  </div>
+                ) : null}
+
+                <div className="overflow-auto">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2">Code</th>
+                        <th className="px-3 py-2">Name</th>
+                        <th className="px-3 py-2">Base qty</th>
+                        <th className="px-3 py-2">Flags</th>
+                        <th className="px-3 py-2">Barcode</th>
+                        <th className="px-3 py-2">Pack dims/weight</th>
+                        <th className="px-3 py-2">State</th>
+                        <th className="px-3 py-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {packagingDraft.map((row) => {
+                        const rowError = packagingRowErrors[row.draftId] ?? {};
+                        return (
+                          <tr key={row.draftId} className="align-top">
+                            <td className="px-3 py-2">
+                              <input
+                                value={row.code}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    code: event.target.value
+                                  })
+                                }
+                                className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                              />
+                              {rowError.code ? <p className="mt-1 text-xs text-red-700">{rowError.code}</p> : null}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                value={row.name}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    name: event.target.value
+                                  })
+                                }
+                                className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                              />
+                              {rowError.name ? <p className="mt-1 text-xs text-red-700">{rowError.name}</p> : null}
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={row.baseUnitQty}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    baseUnitQty: event.target.value
+                                  })
+                                }
+                                className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                              />
+                              {rowError.baseUnitQty ? (
+                                <p className="mt-1 text-xs text-red-700">{rowError.baseUnitQty}</p>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="grid gap-1 text-xs text-slate-700">
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.isBase}
+                                    onChange={(event) =>
+                                      updatePackagingRow(row.draftId, {
+                                        isBase: event.target.checked
+                                      })
+                                    }
+                                  />
+                                  Base
+                                </label>
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.canPick}
+                                    onChange={(event) =>
+                                      updatePackagingRow(row.draftId, {
+                                        canPick: event.target.checked
+                                      })
+                                    }
+                                  />
+                                  canPick
+                                </label>
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.canStore}
+                                    onChange={(event) =>
+                                      updatePackagingRow(row.draftId, {
+                                        canStore: event.target.checked
+                                      })
+                                    }
+                                  />
+                                  canStore
+                                </label>
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.isDefaultPickUom}
+                                    onChange={(event) =>
+                                      updatePackagingRow(row.draftId, {
+                                        isDefaultPickUom: event.target.checked
+                                      })
+                                    }
+                                  />
+                                  Default pick
+                                </label>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                value={row.barcode}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    barcode: event.target.value
+                                  })
+                                }
+                                className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="grid gap-1">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  placeholder="Weight g"
+                                  value={row.packWeightG}
+                                  onChange={(event) =>
+                                    updatePackagingRow(row.draftId, {
+                                      packWeightG: event.target.value
+                                    })
+                                  }
+                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                                />
+                                {rowError.packWeightG ? (
+                                  <p className="text-xs text-red-700">{rowError.packWeightG}</p>
+                                ) : null}
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  placeholder="Width mm"
+                                  value={row.packWidthMm}
+                                  onChange={(event) =>
+                                    updatePackagingRow(row.draftId, {
+                                      packWidthMm: event.target.value
+                                    })
+                                  }
+                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                                />
+                                {rowError.packWidthMm ? (
+                                  <p className="text-xs text-red-700">{rowError.packWidthMm}</p>
+                                ) : null}
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  placeholder="Height mm"
+                                  value={row.packHeightMm}
+                                  onChange={(event) =>
+                                    updatePackagingRow(row.draftId, {
+                                      packHeightMm: event.target.value
+                                    })
+                                  }
+                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                                />
+                                {rowError.packHeightMm ? (
+                                  <p className="text-xs text-red-700">{rowError.packHeightMm}</p>
+                                ) : null}
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  placeholder="Depth mm"
+                                  value={row.packDepthMm}
+                                  onChange={(event) =>
+                                    updatePackagingRow(row.draftId, {
+                                      packDepthMm: event.target.value
+                                    })
+                                  }
+                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+                                />
+                                {rowError.packDepthMm ? (
+                                  <p className="text-xs text-red-700">{rowError.packDepthMm}</p>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <label className="inline-flex items-center gap-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={row.isActive}
+                                  onChange={(event) =>
+                                    updatePackagingRow(row.draftId, {
+                                      isActive: event.target.checked
+                                    })
+                                  }
+                                />
+                                Active
+                              </label>
+                            </td>
+                            <td className="px-3 py-2">
+                              <button
+                                type="button"
+                                onClick={() => removePackagingRow(row.draftId)}
+                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : !packagingLevelsQuery.data || packagingLevelsQuery.data.length === 0 ? (
               <div className="p-4 text-sm text-slate-600">Packaging levels not defined yet.</div>
