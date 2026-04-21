@@ -1,7 +1,7 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import type { Rack, RackFace } from '@wos/domain';
+import { buildCellStructureKey, type Cell, type Rack, type RackFace } from '@wos/domain';
 import { RackLayer } from './rack-layer';
 
 vi.mock('react-konva', () => ({
@@ -107,6 +107,9 @@ function renderRackLayer(params: {
   clearHighlightedCellIds?: () => void;
   setPlacementMoveTargetCellId?: (cellId: string | null) => void;
   racks?: Rack[];
+  publishedCellsByStructure?: Map<string, Cell>;
+  onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
+  onV2StorageRackSelect?: (params: { rackId: string }) => void;
 }) {
   const racks = params.racks ?? [createRack('rack-1', 0), createRack('rack-2', 10)];
   const rackLookup = Object.fromEntries(racks.map((rack) => [rack.id, rack])) as Record<string, Rack>;
@@ -135,7 +138,7 @@ function renderRackLayer(params: {
       moveSourceCellId: null,
       moveSourceRackId: null,
       occupiedCellIds: new Set<string>(),
-      publishedCellsByStructure: new Map(),
+      publishedCellsByStructure: params.publishedCellsByStructure ?? new Map(),
       primarySelectedRackId: params.primarySelectedRackId,
       rackLookup,
       racks,
@@ -149,7 +152,9 @@ function renderRackLayer(params: {
       setSelectedRackIds: params.setSelectedRackIds ?? (() => undefined),
       setSnapGuides: () => undefined,
       toggleRackSelection: () => undefined,
-      updateRackPosition: () => undefined
+      updateRackPosition: () => undefined,
+      onV2StorageCellSelect: params.onV2StorageCellSelect,
+      onV2StorageRackSelect: params.onV2StorageRackSelect
       })
     );
   });
@@ -371,7 +376,11 @@ describe('RackLayer storage interaction depth', () => {
     expect(rackGroups.length).toBeGreaterThan(0);
 
     act(() => {
-      rackGroups[0].props.onClick({ evt: {}, cancelBubble: false });
+      rackGroups[0].props.onClick({
+        evt: {},
+        cancelBubble: false,
+        currentTarget: { getRelativePointerPosition: () => null }
+      });
     });
 
     expect(clearHighlightedCellIds).toHaveBeenCalledTimes(1);
@@ -444,5 +453,84 @@ describe('RackLayer storage interaction depth', () => {
     expect(setSelectedRackIds).not.toHaveBeenCalled();
     expect(setSelectedCellId).not.toHaveBeenCalled();
     expect(clearHighlightedCellIds).not.toHaveBeenCalled();
+  });
+
+  it('storage V2 rack click resolves visible cell target before rack fallback', () => {
+    const onV2StorageCellSelect = vi.fn();
+    const onV2StorageRackSelect = vi.fn();
+    const rack = createRack('rack-1', 0);
+    const face = rack.faces[0]!;
+    const section = face.sections[0]!;
+    const level = section.levels[0]!;
+    const cellKey = buildCellStructureKey({
+      rackId: rack.id,
+      rackFaceId: face.id,
+      rackSectionId: section.id,
+      rackLevelId: level.id,
+      slotNo: 1
+    });
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: 'rack-1',
+      isLayoutMode: false,
+      isStorageMode: true,
+      canSelectCells: true,
+      canSelectRack: true,
+      racks: [rack],
+      onV2StorageCellSelect,
+      onV2StorageRackSelect,
+      publishedCellsByStructure: new Map([
+        [cellKey, { id: 'cell-1' } as Cell]
+      ])
+    });
+
+    const rackGroups = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+    );
+
+    act(() => {
+      rackGroups[0].props.onClick({
+        evt: {},
+        cancelBubble: false,
+        currentTarget: { getRelativePointerPosition: () => ({ x: 5, y: 5 }) }
+      });
+    });
+
+    expect(onV2StorageCellSelect).toHaveBeenCalledWith({ cellId: 'cell-1', rackId: 'rack-1' });
+    expect(onV2StorageRackSelect).not.toHaveBeenCalled();
+  });
+
+  it('storage V2 rack click falls back to rack-only when no cell target resolves', () => {
+    const onV2StorageCellSelect = vi.fn();
+    const onV2StorageRackSelect = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: 'rack-1',
+      isLayoutMode: false,
+      isStorageMode: true,
+      canSelectCells: true,
+      canSelectRack: true,
+      racks: [createRack('rack-1', 0)],
+      onV2StorageCellSelect,
+      onV2StorageRackSelect,
+      publishedCellsByStructure: new Map()
+    });
+
+    const rackGroups = renderer.root.findAll(
+      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+    );
+
+    act(() => {
+      rackGroups[0].props.onClick({
+        evt: {},
+        cancelBubble: false,
+        currentTarget: { getRelativePointerPosition: () => ({ x: 5, y: 5 }) }
+      });
+    });
+
+    expect(onV2StorageCellSelect).not.toHaveBeenCalled();
+    expect(onV2StorageRackSelect).toHaveBeenCalledWith({ rackId: 'rack-1' });
   });
 });

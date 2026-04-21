@@ -1,9 +1,12 @@
-import type { Cell, OperationsCellRuntime, Rack } from '@wos/domain';
+import { buildCellStructureKey, type Cell, type OperationsCellRuntime, type Rack, type RackFace } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
-import { getRackGeometry, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
+import { getRackGeometry, getSectionWidths, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
-import { collectRackSemanticLevels } from '@/widgets/warehouse-editor/model/storage-level-mapping';
+import {
+  collectRackSemanticLevels,
+  resolveSemanticLevelForIndex
+} from '@/widgets/warehouse-editor/model/storage-level-mapping';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
@@ -13,6 +16,142 @@ type SnapGuide = {
   type: 'x' | 'y';
   position: number;
 };
+
+const MIN_CELL_W = 5;
+const MIN_CELL_H = 4;
+const CELL_INSET = 4;
+
+type LocalPoint = { x: number; y: number };
+
+function resolveCellIdFromFaceAtPoint({
+  face,
+  rackId,
+  totalWidth,
+  bandY,
+  bandH,
+  activeLevelIndex,
+  semanticLevels,
+  point,
+  publishedCellsByStructure
+}: {
+  face: RackFace;
+  rackId: string;
+  totalWidth: number;
+  bandY: number;
+  bandH: number;
+  activeLevelIndex: number;
+  semanticLevels: number[];
+  point: LocalPoint;
+  publishedCellsByStructure: Map<string, Cell>;
+}): string | null {
+  if (!face.enabled || face.sections.length === 0) return null;
+
+  const inset = CELL_INSET;
+  const cellH = bandH - inset * 2;
+  if (cellH < MIN_CELL_H) return null;
+
+  const isRtl = face.slotNumberingDirection === 'rtl';
+  const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
+  const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
+  const semanticLevel = resolveSemanticLevelForIndex(semanticLevels, activeLevelIndex);
+  if (semanticLevel === null) return null;
+
+  for (let si = 0; si < orderedSections.length; si += 1) {
+    const sec = orderedSections[si];
+    const secX = sectionOffsets[si] ?? 0;
+    const secW = (sectionOffsets[si + 1] ?? 0) - secX;
+    if (secW < MIN_CELL_W * 2) continue;
+
+    const level = sec.levels.find((sectionLevel) => sectionLevel.ordinal === semanticLevel) ?? null;
+    if (!level) continue;
+    const slotCount = level.slotCount;
+    if (!slotCount) continue;
+
+    const slotW = secW / slotCount;
+    if (slotW < MIN_CELL_W) continue;
+    if (cellH < MIN_CELL_H) continue;
+
+    for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
+      const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
+      const cellX = secX + slotIndex * slotW;
+      const cellY = bandY + inset;
+      const cellW = slotW - 1;
+      const rect = {
+        x: cellX + 0.5,
+        y: cellY + 0.5,
+        width: Math.max(1, cellW),
+        height: Math.max(1, cellH - 1)
+      };
+
+      if (
+        point.x >= rect.x &&
+        point.x <= rect.x + rect.width &&
+        point.y >= rect.y &&
+        point.y <= rect.y + rect.height
+      ) {
+        const cell = publishedCellsByStructure.get(
+          buildCellStructureKey({
+            rackId,
+            rackFaceId: face.id,
+            rackSectionId: sec.id,
+            rackLevelId: level.id,
+            slotNo: slotLabel
+          })
+        );
+        return cell?.id ?? null;
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolveCellIdFromRackPoint({
+  rack,
+  point,
+  activeLevelIndex,
+  publishedCellsByStructure
+}: {
+  rack: Rack;
+  point: LocalPoint;
+  activeLevelIndex: number;
+  publishedCellsByStructure: Map<string, Cell>;
+}): string | null {
+  const geometry = getRackGeometry(rack);
+  const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
+  const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
+  if (!faceA) return null;
+  const semanticLevels = collectRackSemanticLevels(rack);
+
+  const cellIdInFaceA = resolveCellIdFromFaceAtPoint({
+    face: faceA,
+    rackId: rack.id,
+    totalWidth: geometry.faceAWidth,
+    bandY: 0,
+    bandH: geometry.isPaired ? geometry.spineY : geometry.height,
+    activeLevelIndex,
+    semanticLevels,
+    point,
+    publishedCellsByStructure
+  });
+  if (cellIdInFaceA) return cellIdInFaceA;
+
+  if (geometry.isPaired && faceB) {
+    return resolveCellIdFromFaceAtPoint({
+      face: faceB,
+      rackId: rack.id,
+      totalWidth: geometry.faceBWidth,
+      bandY: geometry.spineY,
+      bandH: geometry.height - geometry.spineY,
+      activeLevelIndex,
+      semanticLevels,
+      point,
+      publishedCellsByStructure
+    });
+  }
+
+  return null;
+}
 
 type RackLayerProps = {
   activeCellRackId: string | null;
@@ -138,7 +277,7 @@ export function RackLayer({
    * In storage mode: uses V2 callback when provided, else falls back to legacy.
    */
   const handleRackPress = (
-    rackId: string,
+    rack: Rack,
     event: Konva.KonvaEventObject<MouseEvent | TouchEvent>
   ) => {
     // Defensive guard: explicit cell clicks must not be downgraded into rack clicks.
@@ -150,25 +289,47 @@ export function RackLayer({
     if (!isLayoutMode) {
       clearHighlightedCellIds();
       if (isStorageMode) {
+        const pointer = event.currentTarget.getRelativePointerPosition();
+        const resolvedCellId =
+          canSelectCells && pointer
+            ? resolveCellIdFromRackPoint({
+                rack,
+                point: pointer,
+                activeLevelIndex: rack.id === primarySelectedRackId ? selectedRackActiveLevel : 0,
+                publishedCellsByStructure
+              })
+            : null;
+        if (resolvedCellId) {
+          if (isWorkflowScope) {
+            setPlacementMoveTargetCellId(resolvedCellId);
+            return;
+          }
+          if (onV2StorageCellSelect) {
+            onV2StorageCellSelect({ cellId: resolvedCellId, rackId: rack.id });
+          } else {
+            setSelectedCellId(resolvedCellId);
+          }
+          return;
+        }
         if (onV2StorageRackSelect) {
           // V2: single writer — focus store handles clearing the selected cell
-          onV2StorageRackSelect({ rackId });
+          onV2StorageRackSelect({ rackId: rack.id });
         } else {
           // Legacy: dual-write to editor store
           setSelectedCellId(null);
-          setSelectedRackIds([rackId]);
+          setSelectedRackIds([rack.id]);
         }
       } else {
-        setSelectedRackIds([rackId]);
+        setSelectedRackIds([rack.id]);
       }
       return;
     }
 
     const pointerEvent = event.evt as unknown as PointerEvent;
     if (pointerEvent.ctrlKey || pointerEvent.metaKey) {
-      toggleRackSelection(rackId);
+      toggleRackSelection(rack.id);
     } else {
-      setSelectedRackId(rackId);
+      setSelectedRackId(rack.id);
     }
   };
 
@@ -227,8 +388,8 @@ export function RackLayer({
               // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
               event.cancelBubble = true;
             }}
-            onClick={(event) => handleRackPress(rack.id, event)}
-            onTap={(event) => handleRackPress(rack.id, event)}
+            onClick={(event) => handleRackPress(rack, event)}
+            onTap={(event) => handleRackPress(rack, event)}
             onMouseEnter={() => {
               if (canSelectRack) setHoveredRackId(rack.id);
             }}
