@@ -1,15 +1,20 @@
 import { useRackInspector } from '@/entities/rack/api/use-rack-inspector';
 import { RackStatusSummary } from '@/entities/rack/ui/rack-status-summary';
-import { InspectorFooter } from './shared';
+import {
+  inspectorBodyPaddingClassName,
+  inspectorScrollBodyClassName,
+  inspectorShellClassName,
+  InspectorFooter
+} from './shared';
 
 export function RackOverviewPanel({ rackId }: { rackId: string }) {
   const { data, isLoading, isError } = useRackInspector(rackId);
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-        <div className="flex flex-col items-center justify-center flex-1 px-8 text-center">
-          <p className="text-sm text-gray-400">Loading rack…</p>
+      <div className={inspectorShellClassName}>
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <p className="text-sm text-gray-400">Loading rack...</p>
         </div>
         <InspectorFooter />
       </div>
@@ -18,8 +23,8 @@ export function RackOverviewPanel({ rackId }: { rackId: string }) {
 
   if (isError || !data) {
     return (
-      <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-        <div className="flex flex-col items-center justify-center flex-1 px-8 text-center">
+      <div className={inspectorShellClassName}>
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <p className="text-sm text-red-500">Failed to load rack data</p>
         </div>
         <InspectorFooter />
@@ -28,15 +33,17 @@ export function RackOverviewPanel({ rackId }: { rackId: string }) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
-        <RackStatusSummary
-          displayCode={data.displayCode}
-          kind={data.kind}
-          axis={data.axis}
-          occupancySummary={data.occupancySummary}
-          levels={data.levels}
-        />
+    <div className={inspectorShellClassName}>
+      <div className={inspectorScrollBodyClassName}>
+        <div className={inspectorBodyPaddingClassName}>
+          <RackStatusSummary
+            displayCode={data.displayCode}
+            kind={data.kind}
+            axis={data.axis}
+            occupancySummary={data.occupancySummary}
+            levels={data.levels}
+          />
+        </div>
       </div>
 
       <InspectorFooter />

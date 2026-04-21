@@ -1,5 +1,10 @@
 import type { Product } from '@wos/domain';
-import { TaskPanelBreadcrumb } from './shared';
+import {
+  TaskPanelBreadcrumb,
+  inspectorFooterActionsClassName,
+  inspectorHeaderClassName,
+  inspectorShellClassName
+} from './shared';
 
 export interface AddProductToContainerTaskPanelProps {
   rackDisplayCode: string;
@@ -56,19 +61,19 @@ export function AddProductToContainerTaskPanel({
 
   return (
     <div
-      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      className={inspectorShellClassName}
       role="complementary"
       aria-label="Add product to container"
       data-testid="task-add-product-to-container-panel"
     >
-      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+      <div className={inspectorHeaderClassName}>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
           aria-label="Cancel add product to container"
         >
-          ← Cancel
+          Cancel
         </button>
         <TaskPanelBreadcrumb
           rackDisplayCode={rackDisplayCode}
@@ -94,7 +99,7 @@ export function AddProductToContainerTaskPanel({
             value={productSearch}
             onChange={(event) => onProductSearchChange(event.target.value)}
             disabled={isSubmitting}
-            placeholder="Search by name or SKU…"
+            placeholder="Search by name or SKU..."
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
             aria-label="Add product search"
           />
@@ -159,7 +164,7 @@ export function AddProductToContainerTaskPanel({
           </div>
         </div>
 
-        {!locationId && <p className="text-xs text-gray-400">Resolving location…</p>}
+        {!locationId && <p className="text-xs text-gray-400">Resolving location...</p>}
 
         {errorMessage && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -168,14 +173,14 @@ export function AddProductToContainerTaskPanel({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+      <div className={`${inspectorFooterActionsClassName} flex gap-2`}>
         <button
           onClick={onConfirm}
           disabled={!canSubmit}
           className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Confirm add product to container"
         >
-          {isSubmitting ? 'Adding…' : 'Add product'}
+          {isSubmitting ? 'Adding...' : 'Add product'}
         </button>
         <button
           onClick={onCancel}

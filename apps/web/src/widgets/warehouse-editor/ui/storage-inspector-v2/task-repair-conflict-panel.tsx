@@ -1,6 +1,11 @@
 import type { ProductLocationRoleValue } from '@wos/domain';
 import type { ActiveContainerProduct } from './helpers';
-import { TaskPanelBreadcrumb } from './shared';
+import {
+  TaskPanelBreadcrumb,
+  inspectorFooterActionsClassName,
+  inspectorHeaderClassName,
+  inspectorShellClassName
+} from './shared';
 
 export interface RepairConflictTaskPanelProps {
   rackDisplayCode: string;
@@ -45,19 +50,19 @@ export function RepairConflictTaskPanel({
 
   return (
     <div
-      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      className={inspectorShellClassName}
       role="complementary"
       aria-label="Repair location conflict"
       data-testid="task-repair-conflict-panel"
     >
-      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+      <div className={inspectorHeaderClassName}>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
           aria-label="Cancel conflict repair"
         >
-          ← Cancel
+          Cancel
         </button>
         <TaskPanelBreadcrumb
           rackDisplayCode={rackDisplayCode}
@@ -105,14 +110,14 @@ export function RepairConflictTaskPanel({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-gray-200 flex flex-col gap-2 flex-shrink-0">
+      <div className={`${inspectorFooterActionsClassName} flex flex-col gap-2`}>
         <button
           onClick={() => void onResolve('primary_pick')}
           disabled={isSubmitting}
           className="w-full px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="repair-conflict-primary-pick-action"
         >
-          {isSubmitting ? 'Repairing…' : 'Resolve as Primary Pick'}
+          {isSubmitting ? 'Repairing...' : 'Resolve as Primary Pick'}
         </button>
         <button
           onClick={() => void onResolve('reserve')}
