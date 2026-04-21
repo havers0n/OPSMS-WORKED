@@ -1,0 +1,442 @@
+import { buildCellAddress, buildCellStructureKey, type Cell, type LocationStorageSnapshotRow, type OperationsCellRuntime, type Product, type Rack, type RackFace, type RackLevel, type RackSection } from '@wos/domain';
+import { getRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
+
+function makeLevel(id: string, ordinal: number, slotCount: number, structuralDefaultRole?: 'primary_pick' | 'reserve' | 'none'): RackLevel {
+  return {
+    id,
+    ordinal,
+    slotCount,
+    structuralDefaultRole
+  };
+}
+
+function makeSection(id: string, ordinal: number, length: number, levels: RackLevel[]): RackSection {
+  return {
+    id,
+    ordinal,
+    length,
+    levels
+  };
+}
+
+function makeFace({
+  id,
+  side,
+  slotNumberingDirection = 'ltr',
+  sections,
+  relationshipMode,
+  faceLength
+}: {
+  id: string;
+  side: 'A' | 'B';
+  slotNumberingDirection?: 'ltr' | 'rtl';
+  sections: RackSection[];
+  relationshipMode?: 'mirrored' | 'independent';
+  faceLength?: number;
+}): RackFace {
+  return {
+    id,
+    side,
+    enabled: true,
+    slotNumberingDirection,
+    relationshipMode,
+    isMirrored: relationshipMode === 'mirrored',
+    mirrorSourceFaceId: relationshipMode === 'mirrored' ? 'face-a' : null,
+    faceLength,
+    sections
+  };
+}
+
+function makeRack({
+  id,
+  displayCode,
+  kind,
+  faces,
+  totalLength = 4.8,
+  depth = 2.4,
+  rotationDeg = 0
+}: {
+  id: string;
+  displayCode: string;
+  kind: 'single' | 'paired';
+  faces: RackFace[];
+  totalLength?: number;
+  depth?: number;
+  rotationDeg?: 0 | 90 | 180 | 270;
+}): Rack {
+  return {
+    id,
+    displayCode,
+    kind,
+    axis: 'WE',
+    faces,
+    x: 0,
+    y: 0,
+    totalLength,
+    depth,
+    rotationDeg
+  };
+}
+
+function makeCell({
+  id,
+  rackId,
+  rackFaceId,
+  rackSectionId,
+  rackLevelId,
+  slotNo,
+  rackCode,
+  face,
+  section,
+  level
+}: {
+  id: string;
+  rackId: string;
+  rackFaceId: string;
+  rackSectionId: string;
+  rackLevelId: string;
+  slotNo: number;
+  rackCode: string;
+  face: 'A' | 'B';
+  section: number;
+  level: number;
+}): Cell {
+  return {
+    id,
+    cellCode: `cell-code-${id}`,
+    layoutVersionId: 'layout-version-story',
+    rackId,
+    rackFaceId,
+    rackSectionId,
+    rackLevelId,
+    slotNo,
+    address: buildCellAddress({ rackCode, face, section, level, slot: slotNo }),
+    status: 'active'
+  };
+}
+
+function makeProduct(id: string, sku: string, name: string): Product {
+  return {
+    id,
+    source: 'storybook',
+    externalProductId: sku,
+    sku,
+    name,
+    permalink: null,
+    imageUrls: [],
+    imageFiles: [],
+    isActive: true,
+    createdAt: '2026-04-01T08:00:00.000Z',
+    updatedAt: '2026-04-01T08:00:00.000Z'
+  };
+}
+
+function makeStorageRow({
+  containerId,
+  systemCode,
+  externalCode,
+  containerType,
+  containerStatus,
+  locationCode,
+  product,
+  quantity,
+  uom,
+  itemRef
+}: {
+  containerId: string;
+  systemCode: string;
+  externalCode: string | null;
+  containerType: string;
+  containerStatus: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  locationCode: string;
+  product: Product | null;
+  quantity: number | null;
+  uom: string | null;
+  itemRef: string | null;
+}): LocationStorageSnapshotRow {
+  return {
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    floorId: '22222222-2222-4222-8222-222222222222',
+    locationId: '33333333-3333-4333-8333-333333333333',
+    locationCode,
+    locationType: 'rack_slot',
+    cellId: '44444444-4444-4444-8444-444444444444',
+    containerId,
+    systemCode,
+    externalCode,
+    containerType,
+    containerStatus,
+    placedAt: '2026-04-01T09:30:00.000Z',
+    itemRef,
+    product,
+    quantity,
+    uom,
+    packagingState: null,
+    productPackagingLevelId: null,
+    packCount: null
+  };
+}
+
+const faceALevels = [
+  makeLevel('level-a-3', 3, 4, 'reserve'),
+  makeLevel('level-a-2', 2, 4, 'primary_pick'),
+  makeLevel('level-a-1', 1, 4, 'primary_pick')
+];
+
+const faceBLevels = [
+  makeLevel('level-b-3', 3, 4, 'reserve'),
+  makeLevel('level-b-2', 2, 4, 'reserve'),
+  makeLevel('level-b-1', 1, 4, 'none')
+];
+
+const faceA = makeFace({
+  id: 'face-a',
+  side: 'A',
+  sections: [
+    makeSection('section-a-1', 1, 2.2, faceALevels),
+    makeSection('section-a-2', 2, 2.6, faceALevels)
+  ],
+  faceLength: 4.8
+});
+
+const faceB = makeFace({
+  id: 'face-b',
+  side: 'B',
+  sections: [
+    makeSection('section-b-1', 1, 2.0, faceBLevels),
+    makeSection('section-b-2', 2, 2.0, faceBLevels)
+  ],
+  relationshipMode: 'independent',
+  faceLength: 4
+});
+
+export const singleRackStory = makeRack({
+  id: 'rack-single-story',
+  displayCode: 'R-01',
+  kind: 'single',
+  faces: [faceA]
+});
+
+export const pairedRackStory = makeRack({
+  id: 'rack-paired-story',
+  displayCode: 'R-14',
+  kind: 'paired',
+  faces: [faceA, faceB]
+});
+
+export const singleRackGeometryStory = getRackGeometry(singleRackStory);
+export const pairedRackGeometryStory = getRackGeometry(pairedRackStory);
+
+export const faceAStory = faceA;
+export const faceBStory = faceB;
+
+const publishedCells = [
+  makeCell({
+    id: 'cell-a-2-1',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceA.id,
+    rackSectionId: 'section-a-1',
+    rackLevelId: 'level-a-2',
+    slotNo: 1,
+    rackCode: pairedRackStory.displayCode,
+    face: 'A',
+    section: 1,
+    level: 2
+  }),
+  makeCell({
+    id: 'cell-a-2-2',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceA.id,
+    rackSectionId: 'section-a-1',
+    rackLevelId: 'level-a-2',
+    slotNo: 2,
+    rackCode: pairedRackStory.displayCode,
+    face: 'A',
+    section: 1,
+    level: 2
+  }),
+  makeCell({
+    id: 'cell-a-2-3',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceA.id,
+    rackSectionId: 'section-a-1',
+    rackLevelId: 'level-a-2',
+    slotNo: 3,
+    rackCode: pairedRackStory.displayCode,
+    face: 'A',
+    section: 1,
+    level: 2
+  }),
+  makeCell({
+    id: 'cell-a-2-4',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceA.id,
+    rackSectionId: 'section-a-1',
+    rackLevelId: 'level-a-2',
+    slotNo: 4,
+    rackCode: pairedRackStory.displayCode,
+    face: 'A',
+    section: 1,
+    level: 2
+  }),
+  makeCell({
+    id: 'cell-a-2b-1',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceA.id,
+    rackSectionId: 'section-a-2',
+    rackLevelId: 'level-a-2',
+    slotNo: 1,
+    rackCode: pairedRackStory.displayCode,
+    face: 'A',
+    section: 2,
+    level: 2
+  }),
+  makeCell({
+    id: 'cell-a-2b-2',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceA.id,
+    rackSectionId: 'section-a-2',
+    rackLevelId: 'level-a-2',
+    slotNo: 2,
+    rackCode: pairedRackStory.displayCode,
+    face: 'A',
+    section: 2,
+    level: 2
+  }),
+  makeCell({
+    id: 'cell-b-1-1',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceB.id,
+    rackSectionId: 'section-b-1',
+    rackLevelId: 'level-b-1',
+    slotNo: 1,
+    rackCode: pairedRackStory.displayCode,
+    face: 'B',
+    section: 1,
+    level: 1
+  }),
+  makeCell({
+    id: 'cell-b-1-2',
+    rackId: pairedRackStory.id,
+    rackFaceId: faceB.id,
+    rackSectionId: 'section-b-1',
+    rackLevelId: 'level-b-1',
+    slotNo: 2,
+    rackCode: pairedRackStory.displayCode,
+    face: 'B',
+    section: 1,
+    level: 1
+  })
+];
+
+export const publishedCellsByStructureStory = new Map(
+  publishedCells.map((cell) => [buildCellStructureKey(cell), cell])
+);
+
+export const occupiedCellIdsStory = new Set(['cell-a-2-2', 'cell-a-2-3', 'cell-b-1-1']);
+
+export const cellRuntimeByIdStory = new Map<string, OperationsCellRuntime>([
+  [
+    'cell-a-2-2',
+    {
+      cellId: 'cell-a-2-2',
+      cellAddress: 'R-14-A.01.02.02',
+      status: 'stocked',
+      pickActive: false,
+      reserved: false,
+      quarantined: false,
+      stocked: true,
+      containerCount: 1,
+      totalQuantity: 18,
+      containers: []
+    }
+  ],
+  [
+    'cell-a-2-3',
+    {
+      cellId: 'cell-a-2-3',
+      cellAddress: 'R-14-A.01.02.03',
+      status: 'pick_active',
+      pickActive: true,
+      reserved: false,
+      quarantined: false,
+      stocked: false,
+      containerCount: 1,
+      totalQuantity: 6,
+      containers: []
+    }
+  ],
+  [
+    'cell-b-1-1',
+    {
+      cellId: 'cell-b-1-1',
+      cellAddress: 'R-14-B.01.01.01',
+      status: 'quarantined',
+      pickActive: false,
+      reserved: false,
+      quarantined: true,
+      stocked: false,
+      containerCount: 1,
+      totalQuantity: 2,
+      containers: []
+    }
+  ]
+]);
+
+export const highlightedCellIdsStory = new Set(['cell-a-2-4']);
+
+const productBlue = makeProduct('55555555-5555-4555-8555-555555555555', 'SKU-BLUE-01', 'Blue totes');
+const productAmber = makeProduct('66666666-6666-4666-8666-666666666666', 'SKU-AMBER-08', 'Amber fasteners');
+
+export const containerStorageRowsStory = [
+  makeStorageRow({
+    containerId: '77777777-7777-4777-8777-777777777777',
+    systemCode: 'CNT-00192',
+    externalCode: 'PAL-A19',
+    containerType: 'pallet',
+    containerStatus: 'active',
+    locationCode: 'R-14-A.01.02.02',
+    product: productBlue,
+    quantity: 12,
+    uom: 'pcs',
+    itemRef: 'ITEM-BLUE-01'
+  }),
+  makeStorageRow({
+    containerId: '77777777-7777-4777-8777-777777777777',
+    systemCode: 'CNT-00192',
+    externalCode: 'PAL-A19',
+    containerType: 'pallet',
+    containerStatus: 'active',
+    locationCode: 'R-14-A.01.02.02',
+    product: productAmber,
+    quantity: 6,
+    uom: 'boxes',
+    itemRef: 'ITEM-AMBER-08'
+  }),
+  makeStorageRow({
+    containerId: '88888888-8888-4888-8888-888888888888',
+    systemCode: 'CNT-00911',
+    externalCode: null,
+    containerType: 'bin',
+    containerStatus: 'quarantined',
+    locationCode: 'R-14-A.01.02.02',
+    product: null,
+    quantity: null,
+    uom: null,
+    itemRef: null
+  })
+];
+
+export const groupedContainersStory = [
+  {
+    containerId: '77777777-7777-4777-8777-777777777777',
+    rows: containerStorageRowsStory.slice(0, 2)
+  },
+  {
+    containerId: '88888888-8888-4888-8888-888888888888',
+    rows: containerStorageRowsStory.slice(2)
+  }
+];
+
+export const inventoryPreviewRowsStory = containerStorageRowsStory.slice(0, 2);
+export const selectedProductStory = productBlue;
