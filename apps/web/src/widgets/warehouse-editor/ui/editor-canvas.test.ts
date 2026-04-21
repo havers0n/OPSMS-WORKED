@@ -3,6 +3,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, FloorWorkspace, LayoutDraft } from '@wos/domain';
 import type { EditorSelection, ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
+import { resolvePanelMode } from './storage-inspector-v2/mode';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
 import { EditorCanvas } from './editor-canvas';
 
@@ -13,6 +14,8 @@ let mockSelectedRackActiveLevel = 2;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
 let rackLayerLastProps: Record<string, unknown> | null = null;
+let storageFocusSelectCellSpy = vi.fn();
+let storageFocusSelectRackSpy = vi.fn();
 
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) => createElement('Layer', props, children),
@@ -80,8 +83,8 @@ vi.mock('@/widgets/warehouse-editor/model/v2/v2-selectors', () => ({
   useStorageFocusActiveLevel: () => null,
   useStorageFocusSelectedCellId: () => (mockSelection.type === 'cell' ? mockSelection.cellId : null),
   useStorageFocusSelectedRackId: () => mockSelectedRackId,
-  useStorageFocusSelectCell: () => () => undefined,
-  useStorageFocusSelectRack: () => () => undefined,
+  useStorageFocusSelectCell: () => storageFocusSelectCellSpy,
+  useStorageFocusSelectRack: () => storageFocusSelectRackSpy,
   useStorageFocusHandleEmptyCanvasClick: () => () => undefined
 }));
 
@@ -200,14 +203,15 @@ vi.mock('./use-canvas-scene-model', () => ({
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function renderCanvas(workspace: FloorWorkspace) {
+function renderCanvas(workspace: FloorWorkspace, params?: { isStorageV2?: boolean }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
       createElement(EditorCanvas, {
         workspace,
         onAddRack: () => undefined,
-        onOpenInspector: () => undefined
+        onOpenInspector: () => undefined,
+        isStorageV2: params?.isStorageV2
       })
     );
   });
@@ -217,6 +221,8 @@ function renderCanvas(workspace: FloorWorkspace) {
 describe('EditorCanvas storage active-rack wiring', () => {
   beforeEach(() => {
     rackLayerLastProps = null;
+    storageFocusSelectCellSpy = vi.fn();
+    storageFocusSelectRackSpy = vi.fn();
   });
 
   it('passes selected cell parent rack id to RackLayer in storage mode', () => {
@@ -380,5 +386,79 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
+  });
+
+  it('storage V2 canvas cell callback writes selectCell with cell/rack/level', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = null;
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map([
+      ['cell-1', {
+        id: 'cell-1',
+        layoutVersionId: 'lv-1',
+        rackId,
+        rackFaceId: 'face-a',
+        rackSectionId: 'section-a',
+        rackLevelId: 'level-1',
+        slotNo: 1,
+        address: {
+          raw: '01-A.01.01.01',
+          parts: { rackCode: '01', face: 'A', section: 1, level: 3, slot: 1 },
+          sortKey: '0001-A-01-03-01'
+        },
+        cellCode: 'CELL-1',
+        status: 'active'
+      } satisfies Cell]
+    ]);
+
+    renderCanvas(
+      {
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      },
+      { isStorageV2: true }
+    );
+
+    const onV2StorageCellSelect = rackLayerLastProps?.onV2StorageCellSelect as ((params: { cellId: string; rackId: string }) => void);
+    expect(typeof onV2StorageCellSelect).toBe('function');
+    act(() => {
+      onV2StorageCellSelect({ cellId: 'cell-1', rackId });
+    });
+
+    expect(storageFocusSelectCellSpy).toHaveBeenCalledWith({ cellId: 'cell-1', rackId, level: 3 });
+
+    const panelMode = resolvePanelMode(rackId, 'cell-1', null);
+    expect(panelMode).toEqual({ kind: 'cell-overview', cellId: 'cell-1' });
+  });
+
+  it('storage V2 canvas rack callback writes rack-only focus', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas(
+      {
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      },
+      { isStorageV2: true }
+    );
+
+    const onV2StorageRackSelect = rackLayerLastProps?.onV2StorageRackSelect as ((params: { rackId: string }) => void);
+    expect(typeof onV2StorageRackSelect).toBe('function');
+    act(() => {
+      onV2StorageRackSelect({ rackId });
+    });
+
+    expect(storageFocusSelectRackSpy).toHaveBeenCalledWith({ rackId });
+    expect(storageFocusSelectCellSpy).not.toHaveBeenCalled();
   });
 });
