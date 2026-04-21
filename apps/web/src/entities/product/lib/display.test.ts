@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getProductLabel, getProductMeta } from './display';
+import { getProductLabel, getProductMeta, resolveProductDisplayImages } from './display';
 
 const product = {
   id: '8c393d26-d4d8-4e84-b772-c1f7b9d8c111',
@@ -33,5 +33,27 @@ describe('product display helpers', () => {
     expect(getProductMeta('product:8c393d26-d4d8-4e84-b772-c1f7b9d8c111', null)).toBe(
       'Catalog product unavailable'
     );
+  });
+
+  it('resolves ordered display images from URLs first and then files', () => {
+    expect(resolveProductDisplayImages(product)).toEqual([
+      'https://artos.co.il/wp-content/uploads/2026/01/in-ear-soumd-pic@4x-8-scaled.png'
+    ]);
+  });
+
+  it('filters invalid sources and deduplicates while preserving stable order', () => {
+    expect(
+      resolveProductDisplayImages({
+        ...product,
+        imageUrls: [
+          '  https://cdn.example.com/p-1.jpg  ',
+          '',
+          'ftp://cdn.example.com/p-2.jpg',
+          '/assets/p-3.jpg',
+          'https://cdn.example.com/p-1.jpg'
+        ],
+        imageFiles: ['  ', 'artos_assets/images/private.png', '/assets/p-3.jpg', '/assets/p-4.jpg']
+      })
+    ).toEqual(['https://cdn.example.com/p-1.jpg', '/assets/p-3.jpg', '/assets/p-4.jpg']);
   });
 });
