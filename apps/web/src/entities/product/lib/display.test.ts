@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getProductLabel, getProductMeta } from './display';
+import {
+  getProductLabel,
+  getProductMeta,
+  resolveProductPermalink,
+  resolveProductPrimaryImage
+} from './display';
 
 const product = {
   id: '8c393d26-d4d8-4e84-b772-c1f7b9d8c111',
@@ -33,5 +38,44 @@ describe('product display helpers', () => {
     expect(getProductMeta('product:8c393d26-d4d8-4e84-b772-c1f7b9d8c111', null)).toBe(
       'Catalog product unavailable'
     );
+  });
+
+  it('resolves primary image from imageUrls first', () => {
+    expect(resolveProductPrimaryImage(product)).toBe(product.imageUrls[0]);
+  });
+
+  it('uses imageFiles only when imageUrls are missing and image file is directly displayable', () => {
+    expect(
+      resolveProductPrimaryImage({
+        ...product,
+        imageUrls: [],
+        imageFiles: ['https://cdn.example.com/products/19917.png']
+      })
+    ).toBe('https://cdn.example.com/products/19917.png');
+  });
+
+  it('does not fake storage paths from imageFiles as displayable urls', () => {
+    expect(
+      resolveProductPrimaryImage({
+        ...product,
+        imageUrls: [],
+        imageFiles: ['artos_assets/images/19917_00_07a809fd58.png']
+      })
+    ).toBeNull();
+  });
+
+  it('does not fallback to imageFiles when imageUrls are present but unusable', () => {
+    expect(
+      resolveProductPrimaryImage({
+        ...product,
+        imageUrls: ['not-a-url'],
+        imageFiles: ['https://cdn.example.com/products/19917.png']
+      })
+    ).toBeNull();
+  });
+
+  it('returns permalink only when it is an http(s) url', () => {
+    expect(resolveProductPermalink(product)).toBe(product.permalink);
+    expect(resolveProductPermalink({ ...product, permalink: 'artos.co.il/product/19917' })).toBeNull();
   });
 });

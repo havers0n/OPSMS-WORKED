@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Package, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ProductUnitProfile } from '@wos/domain';
 import {
@@ -12,6 +12,10 @@ import {
   productQueryOptions,
   productUnitProfileQueryOptions
 } from '@/entities/product/api/queries';
+import {
+  resolveProductPermalink,
+  resolveProductPrimaryImage
+} from '@/entities/product/lib/display';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { routes } from '@/shared/config/routes';
 import {
@@ -99,6 +103,7 @@ export function ProductDetailPage() {
   >({});
   const [packagingSectionErrors, setPackagingSectionErrors] = useState<string[]>([]);
   const [packagingSaveError, setPackagingSaveError] = useState<string | null>(null);
+  const [isPrimaryImageLoadFailed, setIsPrimaryImageLoadFailed] = useState(false);
 
   const sourcePackagingDraft = useMemo(
     () => (packagingLevelsQuery.data ?? []).map((level, index) => createPackagingLevelDraft(level, index)),
@@ -121,6 +126,12 @@ export function ProductDetailPage() {
       JSON.stringify(buildPackagingLevelsComparable(packagingDraft))
     );
   }, [isPackagingEditing, packagingDraft, sourcePackagingDraft]);
+  const primaryImageSrc = useMemo(() => resolveProductPrimaryImage(product), [product]);
+  const productPermalink = useMemo(() => resolveProductPermalink(product), [product]);
+
+  useEffect(() => {
+    setIsPrimaryImageLoadFailed(false);
+  }, [primaryImageSrc]);
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -328,7 +339,7 @@ export function ProductDetailPage() {
     <section className="flex h-full w-full flex-1 overflow-hidden">
       <div className="m-4 flex h-full w-full flex-col overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
               <button
                 type="button"
@@ -346,22 +357,51 @@ export function ProductDetailPage() {
                 <span className="text-slate-300">|</span>
                 <span>{product.source}</span>
               </div>
+              {productPermalink ? (
+                <a
+                  href={productPermalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Open source page
+                </a>
+              ) : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Status: {product.isActive ? 'active' : 'inactive'}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Profile: {getProfileCompleteness(unitProfileQuery.data)}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Packaging levels: {packagingLevelsQuery.data?.length ?? '-'}
-              </span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-                Default pick UOM: {defaultPickLevel?.code ?? 'Not set'}
-              </span>
+            <div className="w-full shrink-0 sm:w-40">
+              <div className="flex h-36 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                {primaryImageSrc && !isPrimaryImageLoadFailed ? (
+                  <img
+                    src={primaryImageSrc}
+                    alt={product.name}
+                    onError={() => setIsPrimaryImageLoadFailed(true)}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center">
+                    <Package className="h-5 w-5 text-slate-400" />
+                    <span className="text-xs text-slate-600">
+                      {primaryImageSrc && isPrimaryImageLoadFailed ? 'Image unavailable' : 'No product image'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+              Status: {product.isActive ? 'active' : 'inactive'}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+              Profile: {getProfileCompleteness(unitProfileQuery.data)}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+              Packaging levels: {packagingLevelsQuery.data?.length ?? '-'}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+              Default pick UOM: {defaultPickLevel?.code ?? 'Not set'}
+            </span>
           </div>
         </header>
 
