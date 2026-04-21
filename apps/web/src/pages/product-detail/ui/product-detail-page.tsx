@@ -27,7 +27,6 @@ import {
   validatePackagingLevelsDraft,
   validateUnitProfileDraft
 } from './section-editing';
-import { derivePackagingHierarchy } from './packaging-hierarchy';
 import { derivePackagingEditorSemantics } from './packaging-editor-semantics';
 
 function formatClass(value: string | null) {
@@ -113,10 +112,6 @@ export function ProductDetailPage() {
 
   const sourcePackagingDraft = useMemo(
     () => (packagingLevelsQuery.data ?? []).map((level, index) => createPackagingLevelDraft(level, index)),
-    [packagingLevelsQuery.data]
-  );
-  const packagingHierarchy = useMemo(
-    () => derivePackagingHierarchy(packagingLevelsQuery.data ?? []),
     [packagingLevelsQuery.data]
   );
   const packagingEditorSemantics = useMemo(
@@ -1194,121 +1189,69 @@ export function ProductDetailPage() {
             ) : !packagingLevelsQuery.data || packagingLevelsQuery.data.length === 0 ? (
               <div className="px-4 py-5 text-sm text-slate-600">Packaging levels not defined yet.</div>
             ) : (
-              <div className="space-y-3 p-4">
-                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      Packaging hierarchy
-                    </h3>
-                    <span className="text-xs text-slate-500">How levels nest from base-unit quantities</span>
-                  </div>
-
-                  <p className="mt-2 text-sm text-slate-700">{packagingHierarchy.topMessage}</p>
-
-                  <div className="mt-3 space-y-2">
-                    {packagingHierarchy.entries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="rounded-md border border-slate-200 bg-white p-2.5"
-                        style={{ marginLeft: `${entry.indent * 14}px` }}
-                      >
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-slate-900">
-                          <span className="font-medium">{entry.name}</span>
-                          <span className="font-mono text-xs text-slate-500">{entry.code}</span>
-                          {entry.isReferenceRoot ? (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                              Root reference
-                            </span>
-                          ) : null}
-                          {!entry.isActive ? (
-                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                              inactive
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-xs text-slate-700">{entry.baseUnitQty} units</p>
-                        {entry.nestedChildLabel && entry.nestedCount ? (
-                          <p className="text-xs text-slate-600">
-                            = {entry.nestedCount} {entry.nestedChildLabel}
-                            {entry.nestedCount === 1 ? '' : 's'}
-                          </p>
-                        ) : null}
-                        {entry.hint ? <p className="mt-1 text-xs text-amber-700">{entry.hint}</p> : null}
-                      </div>
-                    ))}
-                  </div>
-
-                  {packagingHierarchy.inactiveCount > 0 ? (
-                    <p className="mt-3 text-xs text-slate-500">
-                      Inactive levels are excluded from active hierarchy inference and remain listed in detailed truth.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="overflow-auto rounded-lg border border-slate-200">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-2.5">Code</th>
-                        <th className="px-4 py-2.5">Name</th>
-                        <th className="px-4 py-2.5">Base qty</th>
-                        <th className="px-4 py-2.5">Markers</th>
-                        <th className="px-4 py-2.5">canPick</th>
-                        <th className="px-4 py-2.5">canStore</th>
-                        <th className="px-4 py-2.5">Barcode</th>
-                        <th className="px-4 py-2.5">Dimensions / Weight</th>
-                        <th className="px-4 py-2.5">State</th>
+              <div className="overflow-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5">Code</th>
+                      <th className="px-4 py-2.5">Name</th>
+                      <th className="px-4 py-2.5">Base qty</th>
+                      <th className="px-4 py-2.5">Markers</th>
+                      <th className="px-4 py-2.5">canPick</th>
+                      <th className="px-4 py-2.5">canStore</th>
+                      <th className="px-4 py-2.5">Barcode</th>
+                      <th className="px-4 py-2.5">Dimensions / Weight</th>
+                      <th className="px-4 py-2.5">State</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {packagingLevelsQuery.data.map((level) => (
+                      <tr key={level.id}>
+                        <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{level.baseUnitQty}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap gap-1">
+                            {level.isBase && (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                                Base
+                              </span>
+                            )}
+                            {level.isDefaultPickUom && (
+                              <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                                Default pick
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-700">{level.canPick ? 'Yes' : 'No'}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{level.canStore ? 'Yes' : 'No'}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                          {level.barcode ?? 'Not defined'}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-slate-600">
+                          {level.packWidthMm && level.packHeightMm && level.packDepthMm
+                            ? `${level.packWidthMm}x${level.packHeightMm}x${level.packDepthMm} mm`
+                            : 'Dims: not defined'}
+                          <br />
+                          {level.packWeightG ? `Weight: ${level.packWeightG} g` : 'Weight: not defined'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={[
+                              'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                              level.isActive
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-slate-200 text-slate-600'
+                            ].join(' ')}
+                          >
+                            {level.isActive ? 'active' : 'inactive'}
+                          </span>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {packagingLevelsQuery.data.map((level) => (
-                        <tr key={level.id}>
-                          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
-                          <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
-                          <td className="px-4 py-2.5 text-slate-700">{level.baseUnitQty}</td>
-                          <td className="px-4 py-2.5">
-                            <div className="flex flex-wrap gap-1">
-                              {level.isBase && (
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                                  Base
-                                </span>
-                              )}
-                              {level.isDefaultPickUom && (
-                                <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
-                                  Default pick
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-slate-700">{level.canPick ? 'Yes' : 'No'}</td>
-                          <td className="px-4 py-2.5 text-slate-700">{level.canStore ? 'Yes' : 'No'}</td>
-                          <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
-                            {level.barcode ?? 'Not defined'}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-slate-600">
-                            {level.packWidthMm && level.packHeightMm && level.packDepthMm
-                              ? `${level.packWidthMm}x${level.packHeightMm}x${level.packDepthMm} mm`
-                              : 'Dims: not defined'}
-                            <br />
-                            {level.packWeightG ? `Weight: ${level.packWeightG} g` : 'Weight: not defined'}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <span
-                              className={[
-                                'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                                level.isActive
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : 'bg-slate-200 text-slate-600'
-                              ].join(' ')}
-                            >
-                              {level.isActive ? 'active' : 'inactive'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
