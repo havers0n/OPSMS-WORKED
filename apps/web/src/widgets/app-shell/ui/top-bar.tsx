@@ -15,6 +15,7 @@ import {
   useSetSelectedCellId,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { useStorageFocusSelectCell } from '@/widgets/warehouse-editor/model/v2/v2-selectors';
 import { AccountControls } from './account-controls';
 import { ViewModeSwitcher } from './view-mode-switcher';
 import { WorkspaceActions } from './workspace-actions';
@@ -25,6 +26,7 @@ type LocateFeedback = {
   kind: 'idle' | 'found' | 'not-found' | 'invalid' | 'error';
   message: string | null;
 };
+type LocateMatch = { cellId: string; rackId: string; level: number | null };
 
 function normalizeLocateToken(value: string): string {
   return value.trim().toUpperCase().replace(/[\s\-_.\/:]+/g, '');
@@ -39,6 +41,8 @@ function WarehouseViewLocateInline() {
   const activeFloorId = useActiveFloorId();
   const setSelectedCellId = useSetSelectedCellId();
   const setHighlightedCellIds = useSetHighlightedCellIds();
+  const viewMode = useViewMode();
+  const selectStorageFocusCell = useStorageFocusSelectCell();
   const publishedCellsQuery = usePublishedCells(activeFloorId);
   const publishedCells = publishedCellsQuery.data ?? [];
   const feedbackColor =
@@ -55,31 +59,43 @@ function WarehouseViewLocateInline() {
     if (publishedCellsQuery.isError) return 'Locate is unavailable: failed to load published cells.';
     if (publishedCells.length === 0) return 'Locate is unavailable: no published cells found for this floor.';
 
-    const byNormalizedAddress = new Map<string, string>();
+    const byNormalizedAddress = new Map<string, LocateMatch>();
     for (const cell of publishedCells) {
       const rawAddress = cell.address?.raw;
       if (typeof rawAddress !== 'string' || rawAddress.trim() === '') {
         return 'Locate is unavailable: some published cells are missing stable address.raw.';
       }
+      if (!cell.rackId) {
+        return 'Locate is unavailable: some published cells are missing rack context.';
+      }
       const normalizedAddress = normalizeLocateToken(rawAddress);
       if (!normalizedAddress) {
         return 'Locate is unavailable: some published cells have invalid address.raw.';
       }
+      const resolvedLevel = Number.isFinite(cell.address?.parts?.level) ? cell.address.parts.level : null;
       const existingCellId = byNormalizedAddress.get(normalizedAddress);
-      if (existingCellId && existingCellId !== cell.id) {
+      if (existingCellId && existingCellId.cellId !== cell.id) {
         return 'Locate is unavailable: duplicate normalized address.raw detected.';
       }
-      byNormalizedAddress.set(normalizedAddress, cell.id);
+      byNormalizedAddress.set(normalizedAddress, {
+        cellId: cell.id,
+        rackId: cell.rackId,
+        level: resolvedLevel
+      });
     }
 
     return null;
   }, [activeFloorId, publishedCellsQuery.isError, publishedCells]);
 
   const locateLookupByAddress = useMemo(() => {
-    if (locateDataGapReason) return new Map<string, string>();
-    const lookup = new Map<string, string>();
+    if (locateDataGapReason) return new Map<string, LocateMatch>();
+    const lookup = new Map<string, LocateMatch>();
     for (const cell of publishedCells) {
-      lookup.set(normalizeLocateToken(cell.address.raw), cell.id);
+      lookup.set(normalizeLocateToken(cell.address.raw), {
+        cellId: cell.id,
+        rackId: cell.rackId,
+        level: Number.isFinite(cell.address?.parts?.level) ? cell.address.parts.level : null
+      });
     }
     return lookup;
   }, [locateDataGapReason, publishedCells]);
@@ -116,8 +132,8 @@ function WarehouseViewLocateInline() {
       return;
     }
 
-    const matchedCellId = locateLookupByAddress.get(normalizedQuery);
-    if (!matchedCellId) {
+    const matchedCell = locateLookupByAddress.get(normalizedQuery);
+    if (!matchedCell) {
       setLocateFeedback({
         kind: 'not-found',
         message: `Cell "${locateQuery.trim()}" not found.`
@@ -125,8 +141,16 @@ function WarehouseViewLocateInline() {
       return;
     }
 
-    setSelectedCellId(matchedCellId);
-    setHighlightedCellIds([matchedCellId]);
+    if (viewMode === 'storage') {
+      selectStorageFocusCell({
+        cellId: matchedCell.cellId,
+        rackId: matchedCell.rackId,
+        level: matchedCell.level
+      });
+    } else {
+      setSelectedCellId(matchedCell.cellId);
+    }
+    setHighlightedCellIds([matchedCell.cellId]);
     setLocateFeedback({
       kind: 'found',
       message: `Located ${locateQuery.trim()}.`

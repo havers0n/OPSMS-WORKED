@@ -4,11 +4,13 @@ import { createLayoutDraftFixture } from './__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import { resetStorageFocusStore, useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function resetStore() {
+  resetStorageFocusStore();
   // Reset mode-store
   useModeStore.setState({
     viewMode: 'layout',
@@ -779,7 +781,7 @@ describe('editor-store', () => {
       expect(after).toEqual(before);
     });
 
-    it('runtime transition preserves saved persistence invariant fields (before/after lock)', () => {
+  it('runtime transition preserves saved persistence invariant fields (before/after lock)', () => {
       const draft = createLayoutDraftFixture();
       useEditorStore.getState().initializeDraft(draft);
       useEditorStore.getState().markDraftSaved({
@@ -800,6 +802,39 @@ describe('editor-store', () => {
 
       const after = capturePersistenceInvariantFields();
       expect(after).toEqual(before);
+    });
+
+    it('clears StorageFocusStore when leaving storage mode', () => {
+      useEditorStore.getState().setViewMode('storage');
+      useStorageFocusStore.getState().selectCell({
+        cellId: 'cell-storage-1',
+        rackId: 'rack-storage-1',
+        level: 2
+      });
+
+      useEditorStore.getState().setViewMode('layout');
+
+      expect(useStorageFocusStore.getState()).toMatchObject({
+        selectedCellId: null,
+        selectedRackId: null,
+        activeLevel: null
+      });
+    });
+
+    it('does not blanket-reset StorageFocusStore on non-storage transitions', () => {
+      useStorageFocusStore.getState().selectCell({
+        cellId: 'cell-persist-1',
+        rackId: 'rack-persist-1',
+        level: 4
+      });
+
+      useEditorStore.getState().setViewMode('view');
+
+      expect(useStorageFocusStore.getState()).toMatchObject({
+        selectedCellId: 'cell-persist-1',
+        selectedRackId: 'rack-persist-1',
+        activeLevel: 4
+      });
     });
   });
 

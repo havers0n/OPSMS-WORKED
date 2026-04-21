@@ -5,6 +5,7 @@ import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fix
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import { resetStorageFocusStore, useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { TopBar } from './top-bar';
 
@@ -21,6 +22,11 @@ type ValidationResult = {
 
 const mockValidateMutateAsync = vi.fn();
 const mockPublishMutateAsync = vi.fn();
+let mockPublishedCellsQuery: { data: Array<{ id: string; rackId: string; address: { raw: string; parts: { level: number } } }>; isLoading: boolean; isError: boolean } = {
+  data: [],
+  isLoading: false,
+  isError: false
+};
 
 let mockValidationState: {
   cachedResult: ValidationResult | null;
@@ -72,6 +78,10 @@ vi.mock('@/entities/layout-version/api/use-floor-workspace', () => ({
   })
 }));
 
+vi.mock('@/entities/cell/api/use-published-cells', () => ({
+  usePublishedCells: () => mockPublishedCellsQuery
+}));
+
 vi.mock('@/features/layout-draft-save/model/use-create-layout-draft', () => ({
   useCreateLayoutDraft: () => ({
     isPending: false,
@@ -103,6 +113,7 @@ vi.mock('@/features/layout-validate/model/use-layout-validation', () => ({
 }));
 
 function resetStores() {
+  resetStorageFocusStore();
   useModeStore.setState({
     viewMode: 'layout',
     editorMode: 'select'
@@ -137,12 +148,44 @@ function collectText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
     .join(' ');
 }
 
+function setPathname(pathname: string) {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      location: { pathname }
+    }
+  });
+}
+
+async function submitLocate(renderer: TestRenderer.ReactTestRenderer, value: string) {
+  const input = renderer.root.findByProps({ 'aria-label': 'Locate cell address' });
+  const locateForm = renderer.root
+    .findAll((instance) => instance.type === 'form')
+    .find((form) => form.findAllByProps({ 'aria-label': 'Locate cell address' }).length > 0);
+
+  if (!locateForm) throw new Error('Locate form was not found');
+
+  await act(async () => {
+    input.props.onChange({ target: { value } });
+  });
+
+  await act(async () => {
+    locateForm.props.onSubmit({ preventDefault: () => undefined });
+  });
+}
+
 describe('TopBar lifecycle wording', () => {
   beforeEach(() => {
     resetStores();
+    setPathname('/operations');
     mockValidationState = {
       cachedResult: null,
       isPending: false
+    };
+    mockPublishedCellsQuery = {
+      data: [],
+      isLoading: false,
+      isError: false
     };
     mockValidateMutateAsync.mockReset();
     mockPublishMutateAsync.mockReset();
@@ -248,5 +291,67 @@ describe('TopBar lifecycle wording', () => {
 
     expect(text).toContain('Rack R-01 has overlapping cells.');
     expect(text).not.toContain('Save failed');
+  });
+
+  it('routes storage-mode locate through StorageFocusStore with coherent level/rack state', async () => {
+    useModeStore.setState({ viewMode: 'storage', editorMode: 'select' });
+    setPathname('/warehouse');
+    mockPublishedCellsQuery = {
+      data: [
+        {
+          id: 'cell-storage-1',
+          rackId: 'rack-storage-1',
+          address: { raw: 'A-01-03-07', parts: { level: 3 } }
+        }
+      ],
+      isLoading: false,
+      isError: false
+    };
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(TopBar));
+    });
+
+    await submitLocate(renderer, 'a010307');
+
+    expect(useStorageFocusStore.getState()).toMatchObject({
+      selectedCellId: 'cell-storage-1',
+      selectedRackId: 'rack-storage-1',
+      activeLevel: 3
+    });
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+    expect(useInteractionStore.getState().highlightedCellIds).toEqual(['cell-storage-1']);
+  });
+
+  it('keeps non-storage locate behavior unchanged (legacy selection + highlight)', async () => {
+    useModeStore.setState({ viewMode: 'view', editorMode: 'select' });
+    setPathname('/warehouse');
+    mockPublishedCellsQuery = {
+      data: [
+        {
+          id: 'cell-view-1',
+          rackId: 'rack-view-1',
+          address: { raw: 'B-02-01-04', parts: { level: 1 } }
+        }
+      ],
+      isLoading: false,
+      isError: false
+    };
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(TopBar));
+    });
+
+    await submitLocate(renderer, 'b020104');
+
+    expect(useInteractionStore.getState().selection).toEqual({ type: 'cell', cellId: 'cell-view-1' });
+    expect(useInteractionStore.getState().highlightedCellIds).toEqual(['cell-view-1']);
+    expect(useStorageFocusStore.getState()).toMatchObject({
+      selectedCellId: null,
+      selectedRackId: null,
+      activeLevel: null
+    });
   });
 });

@@ -22,6 +22,7 @@ import {
 } from './editor-types';
 import { useModeStore } from './mode-store';
 import { useInteractionStore } from './interaction-store';
+import { resetStorageFocusStore } from './v2/storage-focus-store';
 import { createStorageWorkflowActions } from './storage-workflow-actions';
 import {
   buildEmptySection,
@@ -267,9 +268,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   ...initialEditorState,
   setViewMode: (nextViewMode) => {
     const prevSelection = useInteractionStore.getState().selection;
+    const prevViewMode = useModeStore.getState().viewMode;
     // Coordinate: update mode-store, clear interaction, clear workflow
     useModeStore.getState().setViewMode(nextViewMode);
     useModeStore.getState().setEditorMode('select');
+    if (prevViewMode === 'storage' && nextViewMode !== 'storage') {
+      resetStorageFocusStore();
+    }
     // clearForModeSwitch: clears selection and highlightedCellIds
     useInteractionStore.getState().clearForModeSwitch();
     set({
