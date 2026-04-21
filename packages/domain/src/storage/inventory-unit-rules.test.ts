@@ -17,6 +17,9 @@ const baseUnit = {
   serialNo: null,
   expiryDate: null,
   status: 'available' as const,
+  packagingState: 'loose' as const,
+  productPackagingLevelId: null,
+  packCount: null,
   createdAt: '2026-03-13T10:00:00.000Z',
   updatedAt: '2026-03-13T10:00:00.000Z',
   createdBy: null,
@@ -48,6 +51,13 @@ describe('inventory unit execution rules', () => {
       canMergeInventoryUnits(baseUnit, {
         ...baseUnit,
         serialNo: 'SER-001'
+      })
+    ).toBe(false);
+    expect(
+      canMergeInventoryUnits(baseUnit, {
+        ...baseUnit,
+        packagingState: 'sealed',
+        productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
       })
     ).toBe(false);
   });

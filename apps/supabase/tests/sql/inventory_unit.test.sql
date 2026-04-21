@@ -9,6 +9,7 @@ declare
   second_container_uuid uuid;
   product_uuid uuid := gen_random_uuid();
   second_product_uuid uuid := gen_random_uuid();
+  packaging_level_uuid uuid := gen_random_uuid();
   first_unit_uuid uuid;
   second_unit_uuid uuid;
 begin
@@ -31,6 +32,13 @@ begin
   values
     (product_uuid, 'test-suite', 'inventory-unit-001', 'SKU-IU-001', 'Inventory Unit Product'),
     (second_product_uuid, 'test-suite', 'inventory-unit-002', 'SKU-IU-002', 'Inventory Unit Product 2');
+
+  insert into public.product_packaging_levels (
+    id, product_id, code, name, base_unit_qty, is_base, can_pick, can_store, is_default_pick_uom, is_active
+  )
+  values (
+    packaging_level_uuid, product_uuid, 'CTN', 'Carton', 12, false, true, true, false, true
+  );
 
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values (default_tenant_uuid, 'IU-CONT-001', pallet_type_uuid, 'active')
@@ -95,6 +103,24 @@ begin
   exception
     when others then
       if position('Inventory unit tenant' in sqlerrm) = 0 then
+        raise;
+      end if;
+  end;
+
+  begin
+    insert into public.inventory_unit (
+      tenant_id, container_id, product_id, quantity, uom, status,
+      packaging_state, product_packaging_level_id, pack_count
+    )
+    values (
+      default_tenant_uuid, first_container_uuid, second_product_uuid, 12, 'pcs', 'available',
+      'sealed', packaging_level_uuid, 1
+    );
+    raise exception 'Expected packaging level from a different product to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'PACKAGING_LEVEL_PRODUCT_MISMATCH'
+        and position('inventory_unit_packaging_level_product_fkey' in sqlerrm) = 0 then
         raise;
       end if;
   end;

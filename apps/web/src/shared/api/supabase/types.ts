@@ -531,7 +531,10 @@ export type Database = {
           id: string
           legacy_inventory_item_id: string | null
           lot_code: string | null
+          pack_count: number | null
+          packaging_state: string
           product_id: string
+          product_packaging_level_id: string | null
           quantity: number
           serial_no: string | null
           source_inventory_unit_id: string | null
@@ -549,7 +552,10 @@ export type Database = {
           id?: string
           legacy_inventory_item_id?: string | null
           lot_code?: string | null
+          pack_count?: number | null
+          packaging_state?: string
           product_id: string
+          product_packaging_level_id?: string | null
           quantity: number
           serial_no?: string | null
           source_inventory_unit_id?: string | null
@@ -567,7 +573,10 @@ export type Database = {
           id?: string
           legacy_inventory_item_id?: string | null
           lot_code?: string | null
+          pack_count?: number | null
+          packaging_state?: string
           product_id?: string
+          product_packaging_level_id?: string | null
           quantity?: number
           serial_no?: string | null
           source_inventory_unit_id?: string | null
@@ -2072,7 +2081,10 @@ export type Database = {
           inventory_status: string | null
           item_ref: string | null
           lot_code: string | null
+          pack_count: number | null
+          packaging_state: string | null
           product_id: string | null
+          product_packaging_level_id: string | null
           quantity: number | null
           serial_no: string | null
           tenant_id: string | null
@@ -2310,8 +2322,11 @@ export type Database = {
           location_status: string | null
           location_type: string | null
           lot_code: string | null
+          pack_count: number | null
+          packaging_state: string | null
           placed_at: string | null
           product_id: string | null
+          product_packaging_level_id: string | null
           quantity: number | null
           serial_no: string | null
           tenant_id: string | null

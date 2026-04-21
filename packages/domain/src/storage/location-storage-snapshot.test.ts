@@ -20,12 +20,16 @@ describe('location storage snapshot contracts', () => {
         itemRef: 'ITEM-001',
         product: null,
         quantity: 5,
-        uom: 'pcs'
+        uom: 'pcs',
+        packagingState: 'opened',
+        productPackagingLevelId: '945e796c-1fd6-471d-8992-a7810fd3567f',
+        packCount: 1
       })
     ).toMatchObject({
       systemCode: 'CNT-000003',
       itemRef: 'ITEM-001',
-      quantity: 5
+      quantity: 5,
+      packagingState: 'opened'
     });
   });
 });

@@ -32,4 +32,30 @@ describe('addInventoryItem', () => {
       })
     });
   });
+
+  it('serializes optional packaging fields additively', async () => {
+    vi.mocked(bffRequest).mockResolvedValue({ id: 'x' } as never);
+
+    await addInventoryItem({
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
+      quantity: 12,
+      uom: 'pcs',
+      packagingState: 'opened',
+      productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      packCount: 1
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith('/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory', {
+      method: 'POST',
+      body: JSON.stringify({
+        productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
+        quantity: 12,
+        uom: 'pcs',
+        packagingState: 'opened',
+        productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        packCount: 1
+      })
+    });
+  });
 });

@@ -676,7 +676,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_canonical_v')
-      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,item_ref,product_id,quantity,uom')
+      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count')
       .eq('container_id', containerId);
 
     if (error) {
@@ -693,6 +693,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       product_id?: string | null;
       quantity: number | null;
       uom: string | null;
+      packaging_state?: 'sealed' | 'opened' | 'loose' | null;
+      product_packaging_level_id?: string | null;
+      pack_count?: number | null;
     }>);
 
     return parseOrThrow(containerStorageSnapshotResponseSchema, rows.map(mapContainerStorageSnapshotRowToDomain));
@@ -885,7 +888,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       productId: body.productId,
       quantity: body.quantity,
       uom: body.uom,
-      actorId: auth.user.id
+      actorId: auth.user.id,
+      packagingState: body.packagingState,
+      productPackagingLevelId: body.productPackagingLevelId ?? null,
+      packCount: body.packCount ?? null
     });
 
     return parseOrThrow(

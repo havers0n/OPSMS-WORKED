@@ -12,6 +12,9 @@ describe('inventory item storage contracts', () => {
         product: null,
         quantity: 5,
         uom: 'pcs',
+        packagingState: null,
+        productPackagingLevelId: null,
+        packCount: null,
         createdAt: '2026-03-13T10:00:00.000Z',
         createdBy: '945e796c-1fd6-471d-8992-a7810fd3567f'
       })
@@ -32,12 +35,16 @@ describe('inventory item storage contracts', () => {
         product: null,
         quantity: 0,
         uom: 'pcs',
+        packagingState: 'sealed',
+        productPackagingLevelId: '945e796c-1fd6-471d-8992-a7810fd3567f',
+        packCount: 1,
         createdAt: '2026-03-13T10:00:00.000Z',
         createdBy: null
       })
     ).toMatchObject({
       quantity: 0,
-      createdBy: null
+      createdBy: null,
+      packagingState: 'sealed'
     });
   });
 });

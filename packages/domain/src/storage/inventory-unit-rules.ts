@@ -5,8 +5,8 @@ export function isSerialTrackedUnit(unit: Pick<InventoryUnit, 'serialNo'>): bool
 }
 
 export function sameTrackingIdentity(
-  left: Pick<InventoryUnit, 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate'>,
-  right: Pick<InventoryUnit, 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate'>
+  left: Pick<InventoryUnit, 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate' | 'packagingState' | 'productPackagingLevelId'>,
+  right: Pick<InventoryUnit, 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate' | 'packagingState' | 'productPackagingLevelId'>
 ): boolean {
   return (
     left.productId === right.productId &&
@@ -14,13 +14,15 @@ export function sameTrackingIdentity(
     left.status === right.status &&
     left.lotCode === right.lotCode &&
     left.serialNo === right.serialNo &&
-    left.expiryDate === right.expiryDate
+    left.expiryDate === right.expiryDate &&
+    left.packagingState === right.packagingState &&
+    left.productPackagingLevelId === right.productPackagingLevelId
   );
 }
 
 export function canMergeInventoryUnits(
-  left: Pick<InventoryUnit, 'containerId' | 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate'>,
-  right: Pick<InventoryUnit, 'containerId' | 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate'>
+  left: Pick<InventoryUnit, 'containerId' | 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate' | 'packagingState' | 'productPackagingLevelId'>,
+  right: Pick<InventoryUnit, 'containerId' | 'productId' | 'uom' | 'status' | 'lotCode' | 'serialNo' | 'expiryDate' | 'packagingState' | 'productPackagingLevelId'>
 ): boolean {
   if (left.containerId !== right.containerId) {
     return false;

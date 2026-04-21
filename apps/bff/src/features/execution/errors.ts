@@ -30,6 +30,18 @@ export class ExecutionSerialSplitNotAllowedError extends Error {
   }
 }
 
+export class ExecutionOpenedPackagingSplitNotAllowedError extends Error {
+  constructor() {
+    super('Opened packaged inventory cannot be split without repacking.');
+  }
+}
+
+export class ExecutionSealedSplitRequiresWholePacksError extends Error {
+  constructor() {
+    super('Sealed packaged inventory can only be split on whole-pack boundaries.');
+  }
+}
+
 export class ExecutionTargetContainerNotFoundError extends Error {
   constructor() {
     super('Target container was not found for canonical execution.');
@@ -229,6 +241,14 @@ export function mapExecutionTransferError(error: unknown): ApiError | null {
 
   if (error instanceof ExecutionSerialSplitNotAllowedError) {
     return new ApiError(409, 'SERIAL_SPLIT_NOT_ALLOWED', 'Serial-tracked inventory units cannot be split.');
+  }
+
+  if (error instanceof ExecutionOpenedPackagingSplitNotAllowedError) {
+    return new ApiError(422, 'OPENED_PACKAGING_SPLIT_NOT_ALLOWED', 'Opened packaged inventory cannot be split without repacking.');
+  }
+
+  if (error instanceof ExecutionSealedSplitRequiresWholePacksError) {
+    return new ApiError(422, 'SEALED_SPLIT_REQUIRES_WHOLE_PACKS', 'Sealed packaged inventory can only be split on whole-pack boundaries.');
   }
 
   if (error instanceof ExecutionTargetContainerNotFoundError) {

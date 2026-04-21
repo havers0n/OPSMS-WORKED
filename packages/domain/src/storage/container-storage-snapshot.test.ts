@@ -14,11 +14,15 @@ describe('container storage snapshot contracts', () => {
         itemRef: 'ITEM-001',
         product: null,
         quantity: 5,
-        uom: 'pcs'
+        uom: 'pcs',
+        packagingState: 'sealed',
+        productPackagingLevelId: '945e796c-1fd6-471d-8992-a7810fd3567f',
+        packCount: 1
       })
     ).toMatchObject({
       itemRef: 'ITEM-001',
-      quantity: 5
+      quantity: 5,
+      packagingState: 'sealed'
     });
   });
 
@@ -34,12 +38,16 @@ describe('container storage snapshot contracts', () => {
         itemRef: null,
         product: null,
         quantity: null,
-        uom: null
+        uom: null,
+        packagingState: null,
+        productPackagingLevelId: null,
+        packCount: null
       })
     ).toMatchObject({
       itemRef: null,
       quantity: null,
-      uom: null
+      uom: null,
+      packagingState: null
     });
   });
 });
