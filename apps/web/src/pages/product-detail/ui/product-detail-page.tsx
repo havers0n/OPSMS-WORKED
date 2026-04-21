@@ -37,6 +37,14 @@ function formatMeasurement(value: number | null, unit: string) {
   return `${value} ${unit}`;
 }
 
+function parsePositiveInt(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const numeric = Number(trimmed);
+  if (!Number.isInteger(numeric) || numeric <= 0) return null;
+  return numeric;
+}
+
 function getProfileCompleteness(profile: ProductUnitProfile | null | undefined) {
   if (!profile) return 'Missing';
   const hasExact =
@@ -766,26 +774,20 @@ export function ProductDetailPage() {
                   </div>
                 ) : null}
 
-                <div className="overflow-auto">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2">Code</th>
-                        <th className="px-3 py-2">Name</th>
-                        <th className="px-3 py-2">Base qty</th>
-                        <th className="px-3 py-2">Flags</th>
-                        <th className="px-3 py-2">Barcode</th>
-                        <th className="px-3 py-2">Pack dims/weight</th>
-                        <th className="px-3 py-2">State</th>
-                        <th className="px-3 py-2">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {packagingDraft.map((row) => {
-                        const rowError = packagingRowErrors[row.draftId] ?? {};
-                        return (
-                          <tr key={row.draftId} className="align-top">
-                            <td className="px-3 py-2">
+                <div className="space-y-3">
+                  {packagingDraft.map((row) => {
+                    const rowError = packagingRowErrors[row.draftId] ?? {};
+                    const unitWeightG = unitProfileQuery.data?.unitWeightG ?? null;
+                    const parsedBaseQty = parsePositiveInt(row.baseUnitQty);
+                    const estimatedContentWeightG =
+                      unitWeightG !== null && parsedBaseQty !== null ? unitWeightG * parsedBaseQty : null;
+
+                    return (
+                      <div key={row.draftId} className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Code
                               <input
                                 value={row.code}
                                 onChange={(event) =>
@@ -793,11 +795,13 @@ export function ProductDetailPage() {
                                     code: event.target.value
                                   })
                                 }
-                                className="w-28 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
                               />
-                              {rowError.code ? <p className="mt-1 text-xs text-red-700">{rowError.code}</p> : null}
-                            </td>
-                            <td className="px-3 py-2">
+                              {rowError.code ? <span className="text-xs text-red-700">{rowError.code}</span> : null}
+                            </label>
+
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Name
                               <input
                                 value={row.name}
                                 onChange={(event) =>
@@ -805,11 +809,13 @@ export function ProductDetailPage() {
                                     name: event.target.value
                                   })
                                 }
-                                className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
                               />
-                              {rowError.name ? <p className="mt-1 text-xs text-red-700">{rowError.name}</p> : null}
-                            </td>
-                            <td className="px-3 py-2">
+                              {rowError.name ? <span className="text-xs text-red-700">{rowError.name}</span> : null}
+                            </label>
+
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Base qty
                               <input
                                 type="number"
                                 min={1}
@@ -820,65 +826,103 @@ export function ProductDetailPage() {
                                     baseUnitQty: event.target.value
                                   })
                                 }
-                                className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
                               />
                               {rowError.baseUnitQty ? (
-                                <p className="mt-1 text-xs text-red-700">{rowError.baseUnitQty}</p>
+                                <span className="text-xs text-red-700">{rowError.baseUnitQty}</span>
                               ) : null}
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="grid gap-1 text-xs text-slate-700">
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={row.isBase}
-                                    onChange={(event) =>
-                                      updatePackagingRow(row.draftId, {
-                                        isBase: event.target.checked
-                                      })
-                                    }
-                                  />
-                                  Base
-                                </label>
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={row.canPick}
-                                    onChange={(event) =>
-                                      updatePackagingRow(row.draftId, {
-                                        canPick: event.target.checked
-                                      })
-                                    }
-                                  />
-                                  canPick
-                                </label>
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={row.canStore}
-                                    onChange={(event) =>
-                                      updatePackagingRow(row.draftId, {
-                                        canStore: event.target.checked
-                                      })
-                                    }
-                                  />
-                                  canStore
-                                </label>
-                                <label className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={row.isDefaultPickUom}
-                                    onChange={(event) =>
-                                      updatePackagingRow(row.draftId, {
-                                        isDefaultPickUom: event.target.checked
-                                      })
-                                    }
-                                  />
-                                  Default pick
-                                </label>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
+                              {estimatedContentWeightG !== null ? (
+                                <span className="text-xs font-normal text-slate-600">
+                                  Estimated content weight: {estimatedContentWeightG} g ({unitWeightG} g x {parsedBaseQty}
+                                  )
+                                </span>
+                              ) : null}
+                              {unitWeightG === null ? (
+                                <span className="text-xs font-normal text-slate-500">
+                                  Unit weight not defined. Content estimate unavailable.
+                                </span>
+                              ) : null}
+                            </label>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                            <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={row.isBase}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    isBase: event.target.checked
+                                  })
+                                }
+                              />
+                              Base
+                            </label>
+                            <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={row.isDefaultPickUom}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    isDefaultPickUom: event.target.checked
+                                  })
+                                }
+                              />
+                              Default pick
+                            </label>
+                            <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={row.canPick}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    canPick: event.target.checked
+                                  })
+                                }
+                              />
+                              canPick
+                            </label>
+                            <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={row.canStore}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    canStore: event.target.checked
+                                  })
+                                }
+                              />
+                              canStore
+                            </label>
+                            <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={row.isActive}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    isActive: event.target.checked
+                                  })
+                                }
+                              />
+                              Active
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => removePackagingRow(row.draftId)}
+                              className="rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+
+                        <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50">
+                          <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-slate-700">
+                            Advanced
+                          </summary>
+                          <div className="grid gap-3 border-t border-slate-200 p-3 md:grid-cols-2 lg:grid-cols-5">
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Barcode
                               <input
                                 value={row.barcode}
                                 onChange={(event) =>
@@ -886,105 +930,95 @@ export function ProductDetailPage() {
                                     barcode: event.target.value
                                   })
                                 }
-                                className="w-36 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
                               />
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="grid gap-1">
-                                <input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  placeholder="Weight g"
-                                  value={row.packWeightG}
-                                  onChange={(event) =>
-                                    updatePackagingRow(row.draftId, {
-                                      packWeightG: event.target.value
-                                    })
-                                  }
-                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
-                                />
-                                {rowError.packWeightG ? (
-                                  <p className="text-xs text-red-700">{rowError.packWeightG}</p>
-                                ) : null}
-                                <input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  placeholder="Width mm"
-                                  value={row.packWidthMm}
-                                  onChange={(event) =>
-                                    updatePackagingRow(row.draftId, {
-                                      packWidthMm: event.target.value
-                                    })
-                                  }
-                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
-                                />
-                                {rowError.packWidthMm ? (
-                                  <p className="text-xs text-red-700">{rowError.packWidthMm}</p>
-                                ) : null}
-                                <input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  placeholder="Height mm"
-                                  value={row.packHeightMm}
-                                  onChange={(event) =>
-                                    updatePackagingRow(row.draftId, {
-                                      packHeightMm: event.target.value
-                                    })
-                                  }
-                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
-                                />
-                                {rowError.packHeightMm ? (
-                                  <p className="text-xs text-red-700">{rowError.packHeightMm}</p>
-                                ) : null}
-                                <input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  placeholder="Depth mm"
-                                  value={row.packDepthMm}
-                                  onChange={(event) =>
-                                    updatePackagingRow(row.draftId, {
-                                      packDepthMm: event.target.value
-                                    })
-                                  }
-                                  className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
-                                />
-                                {rowError.packDepthMm ? (
-                                  <p className="text-xs text-red-700">{rowError.packDepthMm}</p>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <label className="inline-flex items-center gap-2 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={row.isActive}
-                                  onChange={(event) =>
-                                    updatePackagingRow(row.draftId, {
-                                      isActive: event.target.checked
-                                    })
-                                  }
-                                />
-                                Active
-                              </label>
-                            </td>
-                            <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => removePackagingRow(row.draftId)}
-                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                              >
-                                Remove
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </label>
+
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Manual pack weight (g)
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={row.packWeightG}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    packWeightG: event.target.value
+                                  })
+                                }
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                              />
+                              {rowError.packWeightG ? (
+                                <span className="text-xs text-red-700">{rowError.packWeightG}</span>
+                              ) : null}
+                              {estimatedContentWeightG !== null ? (
+                                <span className="text-xs font-normal text-slate-600">
+                                  Estimated content only: {estimatedContentWeightG} g
+                                </span>
+                              ) : null}
+                            </label>
+
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Pack width (mm)
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={row.packWidthMm}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    packWidthMm: event.target.value
+                                  })
+                                }
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                              />
+                              {rowError.packWidthMm ? (
+                                <span className="text-xs text-red-700">{rowError.packWidthMm}</span>
+                              ) : null}
+                            </label>
+
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Pack height (mm)
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={row.packHeightMm}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    packHeightMm: event.target.value
+                                  })
+                                }
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                              />
+                              {rowError.packHeightMm ? (
+                                <span className="text-xs text-red-700">{rowError.packHeightMm}</span>
+                              ) : null}
+                            </label>
+
+                            <label className="grid gap-1 text-xs font-medium text-slate-700">
+                              Pack depth (mm)
+                              <input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={row.packDepthMm}
+                                onChange={(event) =>
+                                  updatePackagingRow(row.draftId, {
+                                    packDepthMm: event.target.value
+                                  })
+                                }
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                              />
+                              {rowError.packDepthMm ? (
+                                <span className="text-xs text-red-700">{rowError.packDepthMm}</span>
+                              ) : null}
+                            </label>
+                          </div>
+                        </details>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ) : !packagingLevelsQuery.data || packagingLevelsQuery.data.length === 0 ? (
