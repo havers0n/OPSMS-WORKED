@@ -135,7 +135,7 @@ function WarehouseViewLocateInline() {
 
   return (
     <form
-      className="flex items-center gap-2"
+      className="flex h-8 items-center gap-1.5"
       onSubmit={(event) => {
         event.preventDefault();
         handleLocateSubmit();
@@ -147,14 +147,16 @@ function WarehouseViewLocateInline() {
         value={locateQuery}
         onChange={(event) => setLocateQuery(event.target.value)}
         disabled={publishedCellsQuery.isLoading}
-        className="h-7 w-48 rounded-md border px-2 text-xs text-slate-700 outline-none focus:ring-1 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:text-slate-400"
-        style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+        className="h-6 w-[260px] rounded-full border-0 bg-transparent px-3 text-sm text-slate-700 outline-none placeholder:text-slate-500 focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400"
       />
       <button
         type="submit"
         disabled={publishedCellsQuery.isLoading}
-        className="flex h-7 items-center rounded-md border px-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-        style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
+        className="flex h-6 items-center rounded-full border px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-white/40 disabled:cursor-not-allowed disabled:text-slate-400"
+        style={{
+          borderColor: 'rgba(37, 99, 235, 0.45)',
+          background: 'color-mix(in srgb, var(--surface-primary) 55%, transparent)'
+        }}
       >
         Locate
       </button>
@@ -297,10 +299,10 @@ export function TopBar() {
       {shouldShowLocateInline && (
         <div className="pointer-events-none absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2">
           <div
-            className="pointer-events-auto rounded-xl border px-3 py-2 shadow-sm backdrop-blur-sm"
+            className="pointer-events-auto rounded-full border px-3 py-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.08)] backdrop-blur-sm"
             style={{
-              borderColor: 'var(--border-muted)',
-              background: 'color-mix(in srgb, var(--surface-primary) 72%, transparent)'
+              borderColor: 'rgba(37, 99, 235, 0.85)',
+              background: 'color-mix(in srgb, #d1d5db 72%, transparent)'
             }}
           >
             <WarehouseViewLocateInline />
