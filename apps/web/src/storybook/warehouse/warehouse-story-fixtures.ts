@@ -440,3 +440,105 @@ export const groupedContainersStory = [
 
 export const inventoryPreviewRowsStory = containerStorageRowsStory.slice(0, 2);
 export const selectedProductStory = productBlue;
+
+export const rackOverviewSummaryStory = {
+  displayCode: 'R-14',
+  kind: 'paired',
+  axis: 'WE',
+  occupancySummary: {
+    occupancyRate: 0.38,
+    occupiedCells: 6,
+    totalCells: 16
+  },
+  levels: [
+    { levelOrdinal: 3, occupiedCells: 1, totalCells: 4 },
+    { levelOrdinal: 2, occupiedCells: 3, totalCells: 4 },
+    { levelOrdinal: 1, occupiedCells: 2, totalCells: 8 }
+  ]
+};
+
+export const rackOverviewFocusedSummaryStory = {
+  displayCode: 'R-03',
+  kind: 'single',
+  axis: 'NS',
+  occupancySummary: {
+    occupancyRate: 0.5,
+    occupiedCells: 4,
+    totalCells: 8
+  },
+  levels: [
+    { levelOrdinal: 3, occupiedCells: 0, totalCells: 2 },
+    { levelOrdinal: 2, occupiedCells: 1, totalCells: 2 },
+    { levelOrdinal: 1, occupiedCells: 3, totalCells: 4 }
+  ]
+};
+
+export const rackOverviewWarningSummaryStory = {
+  displayCode: 'R-22',
+  kind: 'paired',
+  axis: 'WE',
+  occupancySummary: {
+    occupancyRate: 0.94,
+    occupiedCells: 15,
+    totalCells: 16
+  },
+  levels: [
+    { levelOrdinal: 4, occupiedCells: 4, totalCells: 4 },
+    { levelOrdinal: 3, occupiedCells: 4, totalCells: 4 },
+    { levelOrdinal: 2, occupiedCells: 3, totalCells: 4 },
+    { levelOrdinal: 1, occupiedCells: 4, totalCells: 4 }
+  ]
+};
+
+export const locationContainerCardsStory = [
+  {
+    containerId: '77777777-7777-4777-8777-777777777777',
+    title: 'PAL-A19',
+    secondaryText: 'External code PAL-A19 · pallet · Apr 1, 2026, 9:30 AM',
+    status: 'active',
+    inventoryEntryCount: 2
+  },
+  {
+    containerId: '88888888-8888-4888-8888-888888888888',
+    title: 'CNT-00911',
+    secondaryText: 'Internal only · bin · Apr 1, 2026, 9:30 AM',
+    status: 'quarantined',
+    inventoryEntryCount: 0
+  }
+];
+
+export const locationInventoryItemsStory = [
+  {
+    key: 'ITEM-BLUE-01',
+    imageUrl: null,
+    title: 'Blue totes',
+    meta: 'SKU-BLUE-01',
+    totalQuantity: 12,
+    uom: 'pcs',
+    containerCount: 1
+  },
+  {
+    key: 'ITEM-AMBER-08',
+    imageUrl: null,
+    title: 'Amber fasteners',
+    meta: 'SKU-AMBER-08',
+    totalQuantity: 6,
+    uom: 'boxes',
+    containerCount: 1
+  }
+];
+
+export const locationPolicyAssignmentsStory = [
+  {
+    id: 'policy-1',
+    productName: 'Blue totes',
+    productSku: 'SKU-BLUE-01',
+    role: 'primary_pick'
+  },
+  {
+    id: 'policy-2',
+    productName: 'Amber fasteners',
+    productSku: 'SKU-AMBER-08',
+    role: 'reserve'
+  }
+];
