@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createPackagingLevelDraft,
   createEmptyPackagingLevelDraft,
   createUnitProfileDraft,
   validatePackagingLevelsDraft,
   validateUnitProfileDraft
 } from './section-editing';
+import type { ProductPackagingLevel } from '@wos/domain';
 
 describe('validateUnitProfileDraft', () => {
   it('accepts nullable exact dimensions and nullable fallback classes', () => {
@@ -86,5 +88,41 @@ describe('validatePackagingLevelsDraft', () => {
     expect(result.payload).toBeNull();
     expect(result.sectionErrors).toContain('Packaging levels can contain at most one default pick row.');
     expect(result.sectionErrors).toContain('Row 1: inactive level cannot be default pick.');
+  });
+});
+
+describe('createPackagingLevelDraft', () => {
+  function makeLevel(overrides: Partial<ProductPackagingLevel>): ProductPackagingLevel {
+    return {
+      id: crypto.randomUUID(),
+      productId: crypto.randomUUID(),
+      code: 'EA',
+      name: 'Each',
+      baseUnitQty: 1,
+      isBase: false,
+      canPick: true,
+      canStore: true,
+      isDefaultPickUom: false,
+      barcode: null,
+      packWeightG: null,
+      packWidthMm: null,
+      packHeightMm: null,
+      packDepthMm: null,
+      sortOrder: 0,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...overrides
+    };
+  }
+
+  it('normalizes dirty persisted base rows to quantity 1 in editor draft', () => {
+    const dirtyBase = makeLevel({
+      isBase: true,
+      baseUnitQty: 10
+    });
+
+    const draft = createPackagingLevelDraft(dirtyBase, 0);
+    expect(draft.baseUnitQty).toBe('1');
   });
 });

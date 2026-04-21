@@ -28,6 +28,7 @@ import {
   validateUnitProfileDraft
 } from './section-editing';
 import { derivePackagingHierarchy } from './packaging-hierarchy';
+import { derivePackagingEditorSemantics } from './packaging-editor-semantics';
 
 function formatClass(value: string | null) {
   if (!value) return 'Not defined';
@@ -117,6 +118,10 @@ export function ProductDetailPage() {
   const packagingHierarchy = useMemo(
     () => derivePackagingHierarchy(packagingLevelsQuery.data ?? []),
     [packagingLevelsQuery.data]
+  );
+  const packagingEditorSemantics = useMemo(
+    () => derivePackagingEditorSemantics(packagingDraft),
+    [packagingDraft]
   );
   const resolvedDisplayImages = useMemo(() => resolveProductDisplayImages(product), [product]);
   const displayImages = useMemo(
@@ -281,12 +286,20 @@ export function ProductDetailPage() {
   }
 
   function updatePackagingRow(draftId: string, patch: Partial<PackagingLevelDraft>) {
+    const normalizedPatch =
+      patch.isBase === true
+        ? {
+            ...patch,
+            baseUnitQty: '1'
+          }
+        : patch;
+
     setPackagingDraft((rows) =>
       rows.map((row) =>
         row.draftId === draftId
           ? {
               ...row,
-              ...patch
+              ...normalizedPatch
             }
           : row
       )
@@ -909,13 +922,28 @@ export function ProductDetailPage() {
                 <div className="space-y-3">
                   {packagingDraft.map((row) => {
                     const rowError = packagingRowErrors[row.draftId] ?? {};
+                    const rowSemantics = packagingEditorSemantics[row.draftId];
                     const unitWeightG = unitProfileQuery.data?.unitWeightG ?? null;
-                    const parsedBaseQty = parsePositiveInt(row.baseUnitQty);
+                    const parsedBaseQty = parsePositiveInt(rowSemantics?.quantityInputValue ?? row.baseUnitQty);
                     const estimatedContentWeightG =
                       unitWeightG !== null && parsedBaseQty !== null ? unitWeightG * parsedBaseQty : null;
 
                     return (
-                      <div key={row.draftId} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div
+                        key={row.draftId}
+                        className="rounded-lg border border-slate-200 bg-white p-3"
+                        style={{ marginLeft: `${(rowSemantics?.cueIndent ?? 0) * 10}px` }}
+                      >
+                        <div className="mb-2 flex items-center gap-2 border-l-2 border-cyan-200 pl-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            {rowSemantics?.cueLabel ?? 'Pack level'}
+                          </span>
+                          {row.isBase ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                              Base unit level
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                           <div className="grid gap-3 md:grid-cols-3">
                             <label className="grid gap-1 text-xs font-medium text-slate-700">
@@ -947,21 +975,31 @@ export function ProductDetailPage() {
                             </label>
 
                             <label className="grid gap-1 text-xs font-medium text-slate-700">
-                              Base qty
+                              Contains (single units)
                               <input
                                 type="number"
                                 min={1}
                                 step={1}
-                                value={row.baseUnitQty}
+                                value={rowSemantics?.quantityInputValue ?? row.baseUnitQty}
+                                disabled={rowSemantics?.quantityInputDisabled ?? false}
                                 onChange={(event) =>
                                   updatePackagingRow(row.draftId, {
                                     baseUnitQty: event.target.value
                                   })
                                 }
-                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                                className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
                               />
                               {rowError.baseUnitQty ? (
                                 <span className="text-xs text-red-700">{rowError.baseUnitQty}</span>
+                              ) : null}
+                              {rowSemantics ? (
+                                <span className="text-xs font-normal text-slate-700">{rowSemantics.equivalentLine}</span>
+                              ) : null}
+                              {rowSemantics?.containmentLine ? (
+                                <span className="text-xs font-normal text-slate-600">{rowSemantics.containmentLine}</span>
+                              ) : null}
+                              {rowSemantics?.fallbackLine ? (
+                                <span className="text-xs font-normal text-amber-700">{rowSemantics.fallbackLine}</span>
                               ) : null}
                               {estimatedContentWeightG !== null ? (
                                 <span className="text-xs font-normal text-slate-600">
@@ -988,7 +1026,7 @@ export function ProductDetailPage() {
                                   })
                                 }
                               />
-                              Base
+                              Base level
                             </label>
                             <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
                               <input
@@ -1000,7 +1038,7 @@ export function ProductDetailPage() {
                                   })
                                 }
                               />
-                              Default pick
+                              Default pick level
                             </label>
                             <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
                               <input

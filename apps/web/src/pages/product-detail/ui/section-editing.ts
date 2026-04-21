@@ -77,7 +77,7 @@ export function createPackagingLevelDraft(
     id: level.id,
     code: level.code,
     name: level.name,
-    baseUnitQty: String(level.baseUnitQty),
+    baseUnitQty: level.isBase ? '1' : String(level.baseUnitQty),
     isBase: level.isBase,
     canPick: level.canPick,
     canStore: level.canStore,
