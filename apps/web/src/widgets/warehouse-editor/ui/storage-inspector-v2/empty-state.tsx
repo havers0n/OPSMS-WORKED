@@ -1,9 +1,9 @@
 import { EmptyState as SharedEmptyState } from '@/shared/ui/empty-state';
-import { InspectorFooter } from './shared';
+import { InspectorFooter, inspectorShellClassName } from './shared';
 
 export function EmptyState() {
   return (
-    <div className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden">
+    <div className={inspectorShellClassName}>
       <SharedEmptyState
         title="No location selected"
         description="Select a location from the navigator to view details"

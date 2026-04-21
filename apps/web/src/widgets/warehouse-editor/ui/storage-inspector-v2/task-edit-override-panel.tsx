@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { ActiveContainerProduct } from './helpers';
 import type { ProductLocationRoleValue } from '@wos/domain';
+import {
+  inspectorFooterActionsClassName,
+  inspectorHeaderClassName,
+  inspectorShellClassName
+} from './shared';
 
 export interface EditOverrideTaskPanelProps {
   rackDisplayCode: string;
@@ -43,19 +48,19 @@ export function EditOverrideTaskPanel({
 
   return (
     <div
-      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      className={inspectorShellClassName}
       role="complementary"
       aria-label="Edit override for location"
       data-testid="task-edit-override-panel"
     >
-      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+      <div className={inspectorHeaderClassName}>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
           aria-label="Cancel edit override"
         >
-          ← Cancel
+          Cancel
         </button>
         <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
           <span>{rackDisplayCode}</span>
@@ -114,14 +119,14 @@ export function EditOverrideTaskPanel({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+      <div className={`${inspectorFooterActionsClassName} flex gap-2`}>
         <button
           onClick={() => void onSave(selectedRole)}
           disabled={isSubmitting}
           className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Save override for location"
         >
-          {isSubmitting ? 'Saving…' : 'Save override'}
+          {isSubmitting ? 'Saving...' : 'Save override'}
         </button>
         {hasExplicitOverride && (
           <button

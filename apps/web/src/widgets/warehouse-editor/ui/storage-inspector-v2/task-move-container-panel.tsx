@@ -1,4 +1,9 @@
 import type { MoveTaskState } from './mode';
+import {
+  inspectorFooterActionsClassName,
+  inspectorHeaderClassName,
+  inspectorShellClassName
+} from './shared';
 
 export interface MoveContainerTaskPanelProps {
   moveTaskState: MoveTaskState;
@@ -26,11 +31,11 @@ export function MoveContainerTaskPanel({
 
   return (
     <div
-      className="flex flex-col h-full bg-white border-l border-gray-200 w-96 overflow-hidden"
+      className={inspectorShellClassName}
       role="complementary"
       aria-label="Move container"
     >
-      <div className="px-4 py-3 border-b border-gray-200 flex-shrink-0">
+      <div className={inspectorHeaderClassName}>
         {moveTaskState.stage !== 'success' && (
           <button
             onClick={onCancel}
@@ -38,7 +43,7 @@ export function MoveContainerTaskPanel({
             className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
             aria-label="Cancel move container"
           >
-            ← Cancel
+            Cancel
           </button>
         )}
         <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
@@ -70,18 +75,18 @@ export function MoveContainerTaskPanel({
             </p>
           ) : isTargetSameAsSource ? (
             <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              Same as source — choose a different cell
+              Same as source - choose a different cell
             </p>
           ) : targetLocationLoading ? (
-            <p className="text-sm text-gray-400">Resolving location…</p>
+            <p className="text-sm text-gray-400">Resolving location...</p>
           ) : (
             <p className="font-mono text-sm text-gray-700" data-testid="move-target-selected">
-              {resolvedTargetLocationId ? moveTaskState.targetCellId : '—'}
+              {resolvedTargetLocationId ? moveTaskState.targetCellId : '-'}
             </p>
           )}
         </div>
 
-        {moveTaskState.stage === 'moving' && <p className="text-sm text-gray-500">Moving container…</p>}
+        {moveTaskState.stage === 'moving' && <p className="text-sm text-gray-500">Moving container...</p>}
 
         {moveTaskState.stage === 'success' && (
           <div className="space-y-3">
@@ -108,7 +113,7 @@ export function MoveContainerTaskPanel({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-gray-200 flex gap-2 flex-shrink-0">
+      <div className={`${inspectorFooterActionsClassName} flex gap-2`}>
         {moveTaskState.stage === 'success' ? (
           <button
             onClick={onDone}
@@ -142,7 +147,7 @@ export function MoveContainerTaskPanel({
               aria-label="Confirm move container"
               data-testid="move-confirm-button"
             >
-              {isMoving ? 'Moving…' : 'Confirm move'}
+              {isMoving ? 'Moving...' : 'Confirm move'}
             </button>
             <button
               onClick={onCancel}
