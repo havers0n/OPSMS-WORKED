@@ -4,7 +4,6 @@ import { resetUiStore } from '@/app/store/ui-store';
 import { resetEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { resetNavigationStore } from '@/widgets/warehouse-editor/model/v2/navigation-store';
 import { resetSelectionStore } from '@/widgets/warehouse-editor/model/v2/selection-store';
-import { resetStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 import { resetTaskStore } from '@/widgets/warehouse-editor/model/v2/task-store';
 import { bffRequest } from '@/shared/api/bff/client';
 import { queryClient } from '@/shared/api/supabase/query-client';
@@ -72,13 +71,12 @@ async function resolveWorkspaceSession(): Promise<WorkspaceSession> {
   return bffRequest<WorkspaceSession>('/me');
 }
 
-export function resetLocalWorkspaceState() {
+function resetLocalWorkspaceState() {
   queryClient.clear();
   resetUiStore();
   resetEditorStore();
   resetNavigationStore();
   resetSelectionStore();
-  resetStorageFocusStore();
   resetTaskStore();
 }
 
