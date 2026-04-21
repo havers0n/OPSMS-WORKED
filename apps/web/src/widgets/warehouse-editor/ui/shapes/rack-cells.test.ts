@@ -546,35 +546,43 @@ function resolveVisual(overrides: Partial<Parameters<typeof resolveCellVisualSta
 }
 
 describe('rack-cells visual-state precedence', () => {
-  it('selected + runtime keeps selected visuals', () => {
+  it('selected + runtime keeps runtime semantics and adds selection interaction stroke', () => {
     const visual = resolveVisual({ isSelected: true, runtimeStatus: 'reserved' });
-    expect(visual.fill).toBe('selected-fill');
-    expect(visual.stroke).toBe('selected-stroke');
-    expect(visual.strokeWidth).toBe(1.4);
+    expect(visual.fill).toBe('reserved-fill');
+    expect(visual.stroke).toBe('reserved-stroke');
+    expect(visual.strokeWidth).toBe(0.9);
+    expect(visual.interactionStroke).toBe('selected-stroke');
+    expect(visual.interactionStrokeWidth).toBe(1.8);
     expect(visual.opacity).toBe(0.98);
   });
 
-  it('selected + occupied keeps selected visuals over occupied fallback', () => {
+  it('selected + occupied keeps occupied fallback semantics and adds selection interaction stroke', () => {
     const visual = resolveVisual({ isSelected: true, isOccupiedByFallback: true });
-    expect(visual.fill).toBe('selected-fill');
-    expect(visual.stroke).toBe('selected-stroke');
-    expect(visual.strokeWidth).toBe(1.4);
+    expect(visual.fill).toBe('occupied-fill');
+    expect(visual.stroke).toBe('occupied-stroke');
+    expect(visual.strokeWidth).toBe(0.9);
+    expect(visual.interactionStroke).toBe('selected-stroke');
+    expect(visual.interactionStrokeWidth).toBe(1.8);
     expect(visual.opacity).toBe(0.98);
   });
 
-  it('highlighted + runtime keeps runtime fill and highlighted stroke', () => {
+  it('highlighted + runtime keeps runtime surface and highlighted interaction stroke', () => {
     const visual = resolveVisual({ isHighlighted: true, runtimeStatus: 'stocked' });
     expect(visual.fill).toBe('stocked-fill');
-    expect(visual.stroke).toBe('highlighted-stroke');
-    expect(visual.strokeWidth).toBe(1.2);
+    expect(visual.stroke).toBe('stocked-stroke');
+    expect(visual.strokeWidth).toBe(0.9);
+    expect(visual.interactionStroke).toBe('highlighted-stroke');
+    expect(visual.interactionStrokeWidth).toBe(1.25);
     expect(visual.opacity).toBe(0.98);
   });
 
-  it('workflow source + runtime keeps workflow source visuals', () => {
+  it('workflow source + runtime keeps runtime surface and workflow-source interaction stroke', () => {
     const visual = resolveVisual({ isWorkflowSource: true, runtimeStatus: 'quarantined' });
-    expect(visual.fill).toBe('workflow-source-fill');
-    expect(visual.stroke).toBe('workflow-source-stroke');
-    expect(visual.strokeWidth).toBe(1.2);
+    expect(visual.fill).toBe('quarantined-fill');
+    expect(visual.stroke).toBe('quarantined-stroke');
+    expect(visual.strokeWidth).toBe(0.9);
+    expect(visual.interactionStroke).toBe('workflow-source-stroke');
+    expect(visual.interactionStrokeWidth).toBe(1.5);
     expect(visual.opacity).toBe(0.98);
   });
 
@@ -586,6 +594,7 @@ describe('rack-cells visual-state precedence', () => {
     expect(visual.flags.isWorkflowTargetLocked).toBe(true);
     expect(visual.fill).toBe('locked-fill');
     expect(visual.stroke).toBe('locked-stroke');
+    expect(visual.interactionStroke).toBeNull();
     expect(visual.opacity).toBe(0.24);
     expect(visual.isClickable).toBe(false);
   });
@@ -607,6 +616,7 @@ describe('rack-cells visual-state precedence', () => {
     });
     expect(visual.flags.isMissingCellIdentity).toBe(true);
     expect(visual.opacity).toBe(0.18);
+    expect(visual.interactionStroke).toBeNull();
     expect(visual.isClickable).toBe(false);
   });
 
@@ -653,8 +663,12 @@ const CELL_STROKE_LOCKED = '#cbd5e1';
 const CELL_FILL_STOCKED = '#bbf7d0';
 const CELL_STROKE_STOCKED = '#16a34a';
 const CELL_FILL_PICK_ACTIVE = '#bfdbfe';
+const CELL_FILL_RESERVED = '#fde68a';
+const CELL_FILL_QUARANTINED = '#fecaca';
 const CELL_STROKE_HIGHLIGHTED = '#f97316';
 const CELL_STROKE_OCCUPIED_A = '#22c55e';
+const CELL_STROKE_RESERVED = '#ca8a04';
+const CELL_STROKE_QUARANTINED = '#dc2626';
 
 function createSingleSlotFace(levelId: string): RackFace {
   return {
@@ -749,20 +763,35 @@ function getStrokeRects(renderer: TestRenderer.ReactTestRenderer) {
   return getRects(renderer).filter((rect) => rect.props.strokeEnabled === true);
 }
 
+function getSurfaceFillRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getFillRects(renderer).filter((rect) => rect.props.cornerRadius === 1);
+}
+
+function getSurfaceStrokeRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getStrokeRects(renderer).filter((rect) => rect.props.cornerRadius === 1);
+}
+
+function getSemanticMarkRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getFillRects(renderer).filter((rect) => rect.props.cornerRadius !== 1);
+}
+
 describe('RackCells layered channel ownership characterization', () => {
-  it('selected + runtime keeps selected visual precedence and clickability', () => {
+  it('selected + runtime keeps runtime surface plus selection interaction stroke and clickability', () => {
     const { renderer } = renderLayeredCell({
       selected: true,
       runtimeStatus: 'reserved'
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
+    const markRects = getSemanticMarkRects(renderer);
     const hitRects = getHitRects(renderer);
 
     expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_SELECTED);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_SELECTED);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_RESERVED);
+    expect(strokeRects.map((rect) => rect.props.stroke)).toEqual(
+      expect.arrayContaining([CELL_STROKE_RESERVED, CELL_STROKE_SELECTED])
+    );
+    expect(markRects.length).toBeGreaterThan(0);
     expect(hitRects).toHaveLength(1);
     expect(typeof hitRects[0]?.props.onClick).toBe('function');
   });
@@ -772,29 +801,29 @@ describe('RackCells layered channel ownership characterization', () => {
       highlighted: true,
       runtimeStatus: 'stocked'
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
 
     expect(fillRects).toHaveLength(1);
     expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
-    expect(fillRects[0]?.props.strokeEnabled).toBe(false);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_HIGHLIGHTED);
-    expect(strokeRects[0]?.props.fillEnabled).toBe(false);
+    expect(strokeRects.map((rect) => rect.props.stroke)).toEqual(
+      expect.arrayContaining([CELL_STROKE_STOCKED, CELL_STROKE_HIGHLIGHTED])
+    );
   });
 
-  it('workflow source + runtime keeps workflow-source precedence', () => {
+  it('workflow source + runtime keeps runtime surface plus workflow-source interaction stroke', () => {
     const { renderer } = renderLayeredCell({
       workflowSource: true,
       runtimeStatus: 'quarantined'
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
 
     expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_WORKFLOW_SOURCE);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_WORKFLOW_SOURCE);
+    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_QUARANTINED);
+    expect(strokeRects.map((rect) => rect.props.stroke)).toEqual(
+      expect.arrayContaining([CELL_STROKE_QUARANTINED, CELL_STROKE_WORKFLOW_SOURCE])
+    );
   });
 
   it('workflow locked + occupied keeps locked suppression and disables click', () => {
@@ -802,8 +831,8 @@ describe('RackCells layered channel ownership characterization', () => {
       workflowScope: true,
       occupied: true
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
     const hitRects = getHitRects(renderer);
 
     expect(fillRects).toHaveLength(1);
@@ -819,8 +848,8 @@ describe('RackCells layered channel ownership characterization', () => {
       runtimeStatus: 'pick_active',
       interactive: true
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
     const hitRects = getHitRects(renderer);
 
     expect(fillRects).toHaveLength(1);
@@ -835,8 +864,8 @@ describe('RackCells layered channel ownership characterization', () => {
     const { renderer } = renderLayeredCell({
       missingCellIdentity: true
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
     const hitRects = getHitRects(renderer);
 
     expect(fillRects).toHaveLength(1);
@@ -852,8 +881,8 @@ describe('RackCells layered channel ownership characterization', () => {
     const { renderer } = renderLayeredCell({
       occupied: true
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
 
     expect(fillRects).toHaveLength(1);
     expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
@@ -866,8 +895,8 @@ describe('RackCells layered channel ownership characterization', () => {
       runtimeStatus: 'stocked',
       occupied: false
     });
-    const fillRects = getFillRects(renderer);
-    const strokeRects = getStrokeRects(renderer);
+    const fillRects = getSurfaceFillRects(renderer);
+    const strokeRects = getSurfaceStrokeRects(renderer);
 
     expect(fillRects).toHaveLength(1);
     expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);

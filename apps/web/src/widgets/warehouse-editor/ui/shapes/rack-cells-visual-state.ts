@@ -3,9 +3,20 @@ import type { OperationsCellRuntime } from '@wos/domain';
 type RuntimeStatus = OperationsCellRuntime['status'];
 
 type RuntimeVisual = {
+  kind: Exclude<CellSemanticKind, 'base' | 'occupied_fallback' | 'locked'>;
   fill: string;
   stroke: string;
 };
+
+export type CellSemanticKind =
+  | 'base'
+  | 'occupied_fallback'
+  | 'empty'
+  | 'stocked'
+  | 'reserved'
+  | 'pick_active'
+  | 'quarantined'
+  | 'locked';
 
 export type CellVisualPalette = {
   baseFill: string;
@@ -50,6 +61,7 @@ export type CellVisualFlags = {
   isOccupiedFallback: boolean;
   isWorkflowTargetLocked: boolean;
   canSelectWorkflowTarget: boolean;
+  semanticKind: CellSemanticKind;
 };
 
 export type ResolvedCellVisualState = {
@@ -57,6 +69,8 @@ export type ResolvedCellVisualState = {
   stroke: string;
   opacity: number;
   strokeWidth: number;
+  interactionStroke: string | null;
+  interactionStrokeWidth: number;
   isClickable: boolean;
   flags: CellVisualFlags;
 };
@@ -67,18 +81,18 @@ function resolveRuntimeVisual(
 ): RuntimeVisual | null {
   if (!runtimeStatus) return null;
   if (runtimeStatus === 'quarantined') {
-    return { fill: palette.quarantinedFill, stroke: palette.quarantinedStroke };
+    return { kind: 'quarantined', fill: palette.quarantinedFill, stroke: palette.quarantinedStroke };
   }
   if (runtimeStatus === 'pick_active') {
-    return { fill: palette.pickActiveFill, stroke: palette.pickActiveStroke };
+    return { kind: 'pick_active', fill: palette.pickActiveFill, stroke: palette.pickActiveStroke };
   }
   if (runtimeStatus === 'reserved') {
-    return { fill: palette.reservedFill, stroke: palette.reservedStroke };
+    return { kind: 'reserved', fill: palette.reservedFill, stroke: palette.reservedStroke };
   }
   if (runtimeStatus === 'stocked') {
-    return { fill: palette.stockedFill, stroke: palette.stockedStroke };
+    return { kind: 'stocked', fill: palette.stockedFill, stroke: palette.stockedStroke };
   }
-  return { fill: palette.emptyFill, stroke: palette.emptyStroke };
+  return { kind: 'empty', fill: palette.emptyFill, stroke: palette.emptyStroke };
 }
 
 export function deriveCellVisualFlags(inputs: CellVisualInputs): CellVisualFlags {
@@ -100,7 +114,14 @@ export function deriveCellVisualFlags(inputs: CellVisualInputs): CellVisualFlags
     hasRuntimeStatus,
     isOccupiedFallback,
     isWorkflowTargetLocked,
-    canSelectWorkflowTarget
+    canSelectWorkflowTarget,
+    semanticKind: isWorkflowTargetLocked
+      ? 'locked'
+      : hasRuntimeStatus
+        ? (inputs.runtimeStatus as CellSemanticKind)
+        : isOccupiedFallback
+          ? 'occupied_fallback'
+          : 'base'
   };
 }
 
@@ -111,52 +132,57 @@ export function resolveCellVisualState(
   const flags = deriveCellVisualFlags(inputs);
   const runtimeVisual = resolveRuntimeVisual(inputs.runtimeStatus, palette);
 
-  const fill = (() => {
-    if (inputs.isSelected) return palette.selectedFill;
-    if (inputs.isWorkflowSource) return palette.workflowSourceFill;
-    if (flags.isWorkflowTargetLocked) return palette.lockedFill;
-    if (runtimeVisual) return runtimeVisual.fill;
-    if (flags.isOccupiedFallback) return palette.occupiedFill;
-    return palette.baseFill;
-  })();
+  const fill = flags.isWorkflowTargetLocked
+    ? palette.lockedFill
+    : runtimeVisual
+      ? runtimeVisual.fill
+      : flags.isOccupiedFallback
+        ? palette.occupiedFill
+        : palette.baseFill;
 
-  const stroke = (() => {
-    if (inputs.isSelected) return palette.selectedStroke;
-    if (inputs.isWorkflowSource) return palette.workflowSourceStroke;
-    if (inputs.isHighlighted) return palette.highlightedStroke;
-    if (flags.isWorkflowTargetLocked) return palette.lockedStroke;
-    if (runtimeVisual) return runtimeVisual.stroke;
-    if (flags.isOccupiedFallback) return palette.occupiedStroke;
-    return palette.baseStroke;
-  })();
+  const stroke = flags.isWorkflowTargetLocked
+    ? palette.lockedStroke
+    : runtimeVisual
+      ? runtimeVisual.stroke
+      : flags.isOccupiedFallback
+        ? palette.occupiedStroke
+        : palette.baseStroke;
 
   const opacity = flags.isMissingCellIdentity
     ? 0.18
-    : inputs.isSelected || inputs.isWorkflowSource || inputs.isHighlighted
-      ? 0.98
-      : flags.isWorkflowTargetLocked
-        ? 0.24
-        : inputs.isRackPassive
-          ? 0.4
-          : flags.isOccupiedFallback || flags.hasRuntimeStatus
-            ? 0.98
-            : inputs.isRackSelected
-              ? 0.9
-              : 0.72;
+    : flags.isWorkflowTargetLocked
+      ? 0.24
+      : inputs.isRackPassive
+        ? 0.4
+        : flags.isOccupiedFallback || flags.hasRuntimeStatus
+          ? 0.98
+          : inputs.isRackSelected
+            ? 0.9
+            : 0.72;
 
-  const strokeWidth = inputs.isSelected
-    ? 1.4
-    : inputs.isWorkflowSource || inputs.isHighlighted
-      ? 1.2
-      : flags.isOccupiedFallback || inputs.isRackSelected
+  const strokeWidth =
+    flags.isOccupiedFallback || flags.hasRuntimeStatus || flags.isWorkflowTargetLocked
+      ? 0.9
+      : inputs.isRackSelected
         ? 0.9
         : 0.5;
+
+  const interactionStroke = inputs.isSelected
+    ? palette.selectedStroke
+    : inputs.isWorkflowSource
+      ? palette.workflowSourceStroke
+      : inputs.isHighlighted
+        ? palette.highlightedStroke
+        : null;
+  const interactionStrokeWidth = inputs.isSelected ? 1.8 : inputs.isWorkflowSource ? 1.5 : 1.25;
 
   return {
     fill,
     stroke,
     opacity,
     strokeWidth,
+    interactionStroke,
+    interactionStrokeWidth,
     isClickable: inputs.isInteractive && inputs.hasCellIdentity && flags.canSelectWorkflowTarget,
     flags
   };
