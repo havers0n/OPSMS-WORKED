@@ -1,6 +1,8 @@
-import type { Product } from '@wos/domain';
+import type { Product, ProductPackagingLevel, ProductUnitProfile } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
-import { bffRequest } from '@/shared/api/bff/client';
+import { bffRequest, BffRequestError, resolveBffUrl } from '@/shared/api/bff/client';
+import { supabase } from '@/shared/api/supabase/client';
+import { env } from '@/shared/config/env';
 
 export type ProductCatalogPage = {
   items: Product[];
@@ -15,7 +17,18 @@ export const productKeys = {
   catalog: (query: string | null, page: number, pageSize: number, activeOnly: boolean) =>
     [...productKeys.all, 'catalog', query ?? 'browse', page, pageSize, activeOnly ? 'active' : 'all'] as const,
   search: (query: string | null) => [...productKeys.all, 'search', query ?? 'browse'] as const,
-  detail: (productId: string | null) => [...productKeys.all, 'detail', productId ?? 'none'] as const
+  detail: (productId: string | null) => [...productKeys.all, 'detail', productId ?? 'none'] as const,
+  unitProfile: (productId: string | null) => [...productKeys.all, 'unit-profile', productId ?? 'none'] as const,
+  packagingLevels: (productId: string | null) =>
+    [...productKeys.all, 'packaging-levels', productId ?? 'none'] as const
+};
+
+type BffErrorBody = {
+  code?: string;
+  message?: string;
+  details?: unknown;
+  requestId?: string;
+  errorId?: string;
 };
 
 async function fetchProductCatalog(args: {
@@ -53,6 +66,55 @@ async function fetchProduct(productId: string) {
   return bffRequest<Product>(`/api/products/${productId}`);
 }
 
+async function fetchNullableProductSection<T>(path: string): Promise<T | null> {
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  const headers = new Headers();
+  if (session?.access_token) {
+    headers.set('Authorization', `Bearer ${session.access_token}`);
+  }
+
+  const response = await fetch(resolveBffUrl(env.bffUrl, path), { headers });
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => null)) as BffErrorBody | null;
+    const requestId = errorBody?.requestId ?? response.headers.get('x-request-id');
+    const errorId = errorBody?.errorId ?? null;
+    const message =
+      errorBody?.message ??
+      `BFF request failed with status ${response.status}${requestId ? ` [request ${requestId}]` : ''}${errorId ? ` [error ${errorId}]` : ''}`;
+
+    throw new BffRequestError(
+      response.status,
+      errorBody?.code ?? null,
+      message,
+      requestId,
+      errorId,
+      errorBody?.details ?? null
+    );
+  }
+
+  return (await response.json()) as T;
+}
+
+async function fetchProductUnitProfile(productId: string) {
+  return fetchNullableProductSection<ProductUnitProfile>(`/api/products/${productId}/unit-profile`);
+}
+
+async function fetchProductPackagingLevels(productId: string) {
+  const levels =
+    await fetchNullableProductSection<ProductPackagingLevel[]>(
+      `/api/products/${productId}/packaging-levels`
+    );
+  return levels ?? [];
+}
+
 export function productCatalogQueryOptions(args: {
   query: string | null;
   page: number;
@@ -82,6 +144,22 @@ export function productQueryOptions(productId: string | null) {
   return queryOptions({
     queryKey: productKeys.detail(productId),
     queryFn: () => fetchProduct(productId as string),
+    enabled: Boolean(productId)
+  });
+}
+
+export function productUnitProfileQueryOptions(productId: string | null) {
+  return queryOptions({
+    queryKey: productKeys.unitProfile(productId),
+    queryFn: () => fetchProductUnitProfile(productId as string),
+    enabled: Boolean(productId)
+  });
+}
+
+export function productPackagingLevelsQueryOptions(productId: string | null) {
+  return queryOptions({
+    queryKey: productKeys.packagingLevels(productId),
+    queryFn: () => fetchProductPackagingLevels(productId as string),
     enabled: Boolean(productId)
   });
 }
