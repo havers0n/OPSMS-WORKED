@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Package, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, X } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { ProductUnitProfile } from '@wos/domain';
 import {
@@ -12,10 +12,7 @@ import {
   productQueryOptions,
   productUnitProfileQueryOptions
 } from '@/entities/product/api/queries';
-import {
-  resolveProductPermalink,
-  resolveProductPrimaryImage
-} from '@/entities/product/lib/display';
+import { resolveProductDisplayImages } from '@/entities/product/lib/display';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { routes } from '@/shared/config/routes';
 import {
@@ -57,6 +54,11 @@ function getProfileCompleteness(profile: ProductUnitProfile | null | undefined) 
     profile.unitHeightMm !== null &&
     profile.unitDepthMm !== null;
   return hasExact ? 'Complete' : 'Partial';
+}
+
+function getNextCircularIndex(current: number, delta: number, length: number) {
+  if (length <= 0) return 0;
+  return (current + delta + length) % length;
 }
 
 export function ProductDetailPage() {
@@ -103,12 +105,22 @@ export function ProductDetailPage() {
   >({});
   const [packagingSectionErrors, setPackagingSectionErrors] = useState<string[]>([]);
   const [packagingSaveError, setPackagingSaveError] = useState<string | null>(null);
-  const [isPrimaryImageLoadFailed, setIsPrimaryImageLoadFailed] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [brokenImageUrls, setBrokenImageUrls] = useState<Record<string, true>>({});
 
   const sourcePackagingDraft = useMemo(
     () => (packagingLevelsQuery.data ?? []).map((level, index) => createPackagingLevelDraft(level, index)),
     [packagingLevelsQuery.data]
   );
+  const resolvedDisplayImages = useMemo(() => resolveProductDisplayImages(product), [product]);
+  const displayImages = useMemo(
+    () => resolvedDisplayImages.filter((source) => !brokenImageUrls[source]),
+    [brokenImageUrls, resolvedDisplayImages]
+  );
+  const activeImageIndex =
+    displayImages.length === 0 ? 0 : Math.min(selectedImageIndex, displayImages.length - 1);
+  const selectedImageUrl = displayImages[activeImageIndex] ?? null;
 
   const unitProfileDirty = useMemo(() => {
     if (!isUnitProfileEditing) return false;
@@ -126,12 +138,79 @@ export function ProductDetailPage() {
       JSON.stringify(buildPackagingLevelsComparable(packagingDraft))
     );
   }, [isPackagingEditing, packagingDraft, sourcePackagingDraft]);
-  const primaryImageSrc = useMemo(() => resolveProductPrimaryImage(product), [product]);
-  const productPermalink = useMemo(() => resolveProductPermalink(product), [product]);
 
   useEffect(() => {
-    setIsPrimaryImageLoadFailed(false);
-  }, [primaryImageSrc]);
+    setBrokenImageUrls({});
+    setSelectedImageIndex(0);
+    setLightboxOpen(false);
+  }, [product?.id]);
+
+  useEffect(() => {
+    if (displayImages.length === 0) {
+      if (selectedImageIndex !== 0) {
+        setSelectedImageIndex(0);
+      }
+      if (lightboxOpen) {
+        setLightboxOpen(false);
+      }
+      return;
+    }
+
+    if (selectedImageIndex >= displayImages.length) {
+      setSelectedImageIndex(0);
+    }
+  }, [displayImages.length, lightboxOpen, selectedImageIndex]);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setLightboxOpen(false);
+        return;
+      }
+
+      if (displayImages.length <= 1) return;
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setSelectedImageIndex((current) => getNextCircularIndex(current, -1, displayImages.length));
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        setSelectedImageIndex((current) => getNextCircularIndex(current, 1, displayImages.length));
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [displayImages.length, lightboxOpen]);
+
+  function handleImageLoadError(source: string) {
+    setBrokenImageUrls((current) => {
+      if (current[source]) return current;
+      return {
+        ...current,
+        [source]: true
+      };
+    });
+  }
+
+  function handleOpenLightbox() {
+    if (!selectedImageUrl) return;
+    setLightboxOpen(true);
+  }
+
+  function goToNextImage() {
+    if (displayImages.length <= 1) return;
+    setSelectedImageIndex((current) => getNextCircularIndex(current, 1, displayImages.length));
+  }
+
+  function goToPreviousImage() {
+    if (displayImages.length <= 1) return;
+    setSelectedImageIndex((current) => getNextCircularIndex(current, -1, displayImages.length));
+  }
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -339,7 +418,7 @@ export function ProductDetailPage() {
     <section className="flex h-full w-full flex-1 overflow-hidden">
       <div className="m-4 flex h-full w-full flex-col overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 px-5 py-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <button
                 type="button"
@@ -357,51 +436,22 @@ export function ProductDetailPage() {
                 <span className="text-slate-300">|</span>
                 <span>{product.source}</span>
               </div>
-              {productPermalink ? (
-                <a
-                  href={productPermalink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Open source page
-                </a>
-              ) : null}
             </div>
 
-            <div className="w-full shrink-0 sm:w-40">
-              <div className="flex h-36 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                {primaryImageSrc && !isPrimaryImageLoadFailed ? (
-                  <img
-                    src={primaryImageSrc}
-                    alt={product.name}
-                    onError={() => setIsPrimaryImageLoadFailed(true)}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center">
-                    <Package className="h-5 w-5 text-slate-400" />
-                    <span className="text-xs text-slate-600">
-                      {primaryImageSrc && isPrimaryImageLoadFailed ? 'Image unavailable' : 'No product image'}
-                    </span>
-                  </div>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+                Status: {product.isActive ? 'active' : 'inactive'}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+                Profile: {getProfileCompleteness(unitProfileQuery.data)}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+                Packaging levels: {packagingLevelsQuery.data?.length ?? '-'}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
+                Default pick UOM: {defaultPickLevel?.code ?? 'Not set'}
+              </span>
             </div>
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-              Status: {product.isActive ? 'active' : 'inactive'}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-              Profile: {getProfileCompleteness(unitProfileQuery.data)}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-              Packaging levels: {packagingLevelsQuery.data?.length ?? '-'}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-700">
-              Default pick UOM: {defaultPickLevel?.code ?? 'Not set'}
-            </span>
           </div>
         </header>
 
@@ -410,34 +460,101 @@ export function ProductDetailPage() {
             <div className="border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-slate-900">Identity</h2>
             </div>
-            <dl className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Name</dt>
-                <dd className="mt-1 text-sm font-medium text-slate-900">{product.name}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">SKU</dt>
-                <dd className="mt-1 text-sm text-slate-700">{product.sku ?? 'Not defined'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">External ID</dt>
-                <dd className="mt-1 break-all text-sm text-slate-700">{product.externalProductId}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Source</dt>
-                <dd className="mt-1 text-sm text-slate-700">{product.source}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
-                <dd className="mt-1 text-sm text-slate-700">{product.isActive ? 'Active' : 'Inactive'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Updated</dt>
-                <dd className="mt-1 text-sm text-slate-700">
-                  {new Date(product.updatedAt).toLocaleString()}
-                </dd>
-              </div>
-            </dl>
+            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Name</dt>
+                  <dd className="mt-1 text-sm font-medium text-slate-900">{product.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">SKU</dt>
+                  <dd className="mt-1 text-sm text-slate-700">{product.sku ?? 'Not defined'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">External ID</dt>
+                  <dd className="mt-1 break-all text-sm text-slate-700">{product.externalProductId}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Source</dt>
+                  <dd className="mt-1 text-sm text-slate-700">{product.source}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
+                  <dd className="mt-1 text-sm text-slate-700">{product.isActive ? 'Active' : 'Inactive'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Updated</dt>
+                  <dd className="mt-1 text-sm text-slate-700">
+                    {new Date(product.updatedAt).toLocaleString()}
+                  </dd>
+                </div>
+              </dl>
+
+              <aside className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Media</p>
+                  <span className="text-xs text-slate-500">
+                    {displayImages.length > 0 ? `${activeImageIndex + 1}/${displayImages.length}` : '0 images'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenLightbox}
+                  disabled={!selectedImageUrl}
+                  className={[
+                    'group relative h-52 w-full overflow-hidden rounded-md border border-slate-200 bg-white',
+                    selectedImageUrl
+                      ? 'cursor-zoom-in hover:border-cyan-300 focus-visible:border-cyan-400'
+                      : 'cursor-default'
+                  ].join(' ')}
+                >
+                  {selectedImageUrl ? (
+                    <img
+                      src={selectedImageUrl}
+                      alt={`${product.name} image ${activeImageIndex + 1}`}
+                      className="h-full w-full object-contain p-2"
+                      onError={() => handleImageLoadError(selectedImageUrl)}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center px-3 text-center text-xs text-slate-500">
+                      No displayable product image
+                    </div>
+                  )}
+                  {selectedImageUrl ? (
+                    <span className="absolute bottom-2 right-2 rounded bg-slate-900/80 px-2 py-1 text-[11px] font-medium text-white">
+                      Open
+                    </span>
+                  ) : null}
+                </button>
+
+                {displayImages.length > 1 ? (
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {displayImages.map((source, index) => (
+                      <button
+                        key={source}
+                        type="button"
+                        onClick={() => setSelectedImageIndex(index)}
+                        className={[
+                          'h-14 w-14 shrink-0 overflow-hidden rounded border bg-white p-1',
+                          index === activeImageIndex
+                            ? 'border-cyan-500 ring-1 ring-cyan-300'
+                            : 'border-slate-200 hover:border-slate-300'
+                        ].join(' ')}
+                        aria-label={`Select image ${index + 1}`}
+                      >
+                        <img
+                          src={source}
+                          alt={`${product.name} thumbnail ${index + 1}`}
+                          className="h-full w-full object-contain"
+                          onError={() => handleImageLoadError(source)}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </aside>
+            </div>
           </section>
 
           <section className="rounded-xl border border-slate-200">
@@ -1132,6 +1249,66 @@ export function ProductDetailPage() {
           </section>
         </div>
       </div>
+
+      {lightboxOpen && selectedImageUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col rounded-lg border border-slate-700 bg-slate-900 p-3"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Product image viewer"
+          >
+            <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
+              <span>
+                Image {activeImageIndex + 1} of {displayImages.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(false)}
+                className="inline-flex items-center gap-1 rounded border border-slate-600 px-2 py-1 hover:bg-slate-800"
+              >
+                <X className="h-3.5 w-3.5" />
+                Close
+              </button>
+            </div>
+
+            <div className="relative flex min-h-[300px] flex-1 items-center justify-center overflow-hidden rounded border border-slate-700 bg-slate-950">
+              <img
+                src={selectedImageUrl}
+                alt={`${product.name} image ${activeImageIndex + 1}`}
+                className="max-h-[76vh] w-full object-contain"
+                onError={() => handleImageLoadError(selectedImageUrl)}
+              />
+
+              {displayImages.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={goToPreviousImage}
+                    className="absolute left-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-500 bg-slate-900/70 text-white hover:bg-slate-800"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToNextImage}
+                    className="absolute right-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-500 bg-slate-900/70 text-white hover:bg-slate-800"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

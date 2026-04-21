@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getProductLabel,
   getProductMeta,
+  resolveProductDisplayImages,
   resolveProductPermalink,
   resolveProductPrimaryImage
 } from './display';
@@ -77,5 +78,27 @@ describe('product display helpers', () => {
   it('returns permalink only when it is an http(s) url', () => {
     expect(resolveProductPermalink(product)).toBe(product.permalink);
     expect(resolveProductPermalink({ ...product, permalink: 'artos.co.il/product/19917' })).toBeNull();
+  });
+
+  it('resolves ordered display images from URLs first and then files', () => {
+    expect(resolveProductDisplayImages(product)).toEqual([
+      'https://artos.co.il/wp-content/uploads/2026/01/in-ear-soumd-pic@4x-8-scaled.png'
+    ]);
+  });
+
+  it('filters invalid sources and deduplicates while preserving stable order', () => {
+    expect(
+      resolveProductDisplayImages({
+        ...product,
+        imageUrls: [
+          '  https://cdn.example.com/p-1.jpg  ',
+          '',
+          'ftp://cdn.example.com/p-2.jpg',
+          '/assets/p-3.jpg',
+          'https://cdn.example.com/p-1.jpg'
+        ],
+        imageFiles: ['  ', 'artos_assets/images/private.png', '/assets/p-3.jpg', '/assets/p-4.jpg']
+      })
+    ).toEqual(['https://cdn.example.com/p-1.jpg', '/assets/p-3.jpg', '/assets/p-4.jpg']);
   });
 });

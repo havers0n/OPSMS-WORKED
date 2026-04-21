@@ -8,6 +8,7 @@ function normalizeDisplayableImageSrc(value: string | null | undefined) {
   if (
     trimmed.startsWith('http://') ||
     trimmed.startsWith('https://') ||
+    trimmed.startsWith('//') ||
     trimmed.startsWith('data:image/') ||
     trimmed.startsWith('blob:') ||
     trimmed.startsWith('/')
@@ -16,6 +17,25 @@ function normalizeDisplayableImageSrc(value: string | null | undefined) {
   }
 
   return null;
+}
+
+export function resolveProductDisplayImages(product: Product | null | undefined): string[] {
+  if (!product) return [];
+
+  const orderedSources = [...product.imageUrls, ...product.imageFiles];
+  const seen = new Set<string>();
+  const displayable: string[] = [];
+
+  for (const source of orderedSources) {
+    const normalized = normalizeDisplayableImageSrc(source);
+    if (!normalized) continue;
+    if (seen.has(normalized)) continue;
+
+    seen.add(normalized);
+    displayable.push(normalized);
+  }
+
+  return displayable;
 }
 
 export function resolveProductPrimaryImage(product: Product | null | undefined) {
