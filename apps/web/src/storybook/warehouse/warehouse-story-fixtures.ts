@@ -542,3 +542,48 @@ export const locationPolicyAssignmentsStory = [
     role: 'reserve'
   }
 ];
+
+export const scenarioSelectedCellIdStory = 'cell-a-2-2';
+export const scenarioEmptyCellIdStory = 'cell-a-2-1';
+export const scenarioLocateTargetCellIdStory = 'cell-a-2-3';
+export const scenarioAddressLocateCellIdStory = scenarioSelectedCellIdStory;
+export const scenarioSearchSingleHitCellIdsStory = new Set(['cell-a-2-4']);
+export const scenarioSearchMultipleHitCellIdsStory = new Set(['cell-a-2-4', 'cell-a-2b-2', 'cell-b-1-2']);
+export const scenarioNoSearchHitCellIdsStory = new Set<string>();
+export const scenarioOffLevelLocateContextStory = {
+  activeLevelIndex: 0,
+  targetCellId: scenarioSelectedCellIdStory,
+  targetAddress: 'R-14-A.01.02.02'
+};
+
+export const scenarioStorageSelectedOccupiedContextStory = {
+  selectedCellId: scenarioSelectedCellIdStory,
+  containers: locationContainerCardsStory.slice(0, 1),
+  inventoryItems: locationInventoryItemsStory.slice(0, 1),
+  hasContainers: true,
+  policyAssignments: locationPolicyAssignmentsStory.slice(0, 1),
+  policyPending: false
+};
+
+export const scenarioStorageSelectedEmptyContextStory = {
+  selectedCellId: scenarioEmptyCellIdStory,
+  containers: [],
+  inventoryItems: [],
+  hasContainers: false,
+  policyAssignments: [],
+  policyPending: false
+};
+
+export const scenarioStorageWarningPolicyContextStory = {
+  selectedCellId: 'cell-b-1-1',
+  containers: [
+    {
+      ...locationContainerCardsStory[1],
+      status: 'damaged'
+    }
+  ],
+  inventoryItems: [],
+  hasContainers: true,
+  policyAssignments: [],
+  policyPending: true
+};
