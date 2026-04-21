@@ -6,6 +6,9 @@ export type AddInventoryItemInput = {
   productId: string;
   quantity: number;
   uom: string;
+  packagingState?: 'sealed' | 'opened' | 'loose';
+  productPackagingLevelId?: string | null;
+  packCount?: number | null;
 };
 
 export async function addInventoryItem({

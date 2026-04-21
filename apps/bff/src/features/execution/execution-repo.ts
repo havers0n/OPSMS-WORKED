@@ -5,7 +5,9 @@ import {
   ExecutionContainerNotPlacedError,
   ExecutionInventoryUnitNotFoundError,
   ExecutionInvalidSplitQuantityError,
+  ExecutionOpenedPackagingSplitNotAllowedError,
   ExecutionSerialSplitNotAllowedError,
+  ExecutionSealedSplitRequiresWholePacksError,
   ExecutionTargetContainerNotFoundError,
   ExecutionTargetContainerSameAsSourceError,
   ExecutionTargetContainerTenantMismatchError,
@@ -74,6 +76,10 @@ function mapExecutionRpcError(error: SupabaseLikeError): Error | null {
       return new ExecutionInvalidSplitQuantityError();
     case 'SERIAL_SPLIT_NOT_ALLOWED':
       return new ExecutionSerialSplitNotAllowedError();
+    case 'OPENED_PACKAGING_SPLIT_NOT_ALLOWED':
+      return new ExecutionOpenedPackagingSplitNotAllowedError();
+    case 'SEALED_SPLIT_REQUIRES_WHOLE_PACKS':
+      return new ExecutionSealedSplitRequiresWholePacksError();
     case 'TARGET_CONTAINER_NOT_FOUND':
       return new ExecutionTargetContainerNotFoundError();
     case 'TARGET_CONTAINER_TENANT_MISMATCH':

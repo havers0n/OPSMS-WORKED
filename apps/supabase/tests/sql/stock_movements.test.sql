@@ -30,8 +30,12 @@ declare
   cross_tenant_container_uuid uuid;
   product_uuid uuid := gen_random_uuid();
   serial_product_uuid uuid := gen_random_uuid();
+  packaging_level_uuid uuid := gen_random_uuid();
+  other_packaging_level_uuid uuid := gen_random_uuid();
   source_inventory_unit_uuid uuid;
   serial_inventory_unit_uuid uuid;
+  sealed_inventory_unit_uuid uuid;
+  opened_inventory_unit_uuid uuid;
   split_result jsonb;
   merge_result jsonb;
   transfer_result jsonb;
@@ -81,6 +85,13 @@ begin
   values
     (product_uuid, 'test-suite', 'stage4-product-001', 'SKU-S4-001', 'Stage 4 Product'),
     (serial_product_uuid, 'test-suite', 'stage4-product-serial', 'SKU-S4-SERIAL', 'Stage 4 Serial Product');
+
+  insert into public.product_packaging_levels (
+    id, product_id, code, name, base_unit_qty, is_base, can_pick, can_store, is_default_pick_uom, is_active
+  )
+  values
+    (packaging_level_uuid, product_uuid, 'CTN', 'Carton', 12, false, true, true, false, true),
+    (other_packaging_level_uuid, product_uuid, 'INNER', 'Inner Pack', 6, false, true, true, false, true);
 
   insert into public.sites (id, tenant_id, code, name, timezone)
   values (site_uuid, default_tenant_uuid, 'S4MOV', 'Stage 4 Movement Site', 'UTC');
@@ -209,6 +220,54 @@ begin
     product_id,
     quantity,
     uom,
+    status,
+    packaging_state,
+    product_packaging_level_id,
+    pack_count
+  )
+  values (
+    default_tenant_uuid,
+    source_container_uuid,
+    product_uuid,
+    48,
+    'pcs',
+    'available',
+    'sealed',
+    packaging_level_uuid,
+    4
+  )
+  returning id into sealed_inventory_unit_uuid;
+
+  insert into public.inventory_unit (
+    tenant_id,
+    container_id,
+    product_id,
+    quantity,
+    uom,
+    status,
+    packaging_state,
+    product_packaging_level_id,
+    pack_count
+  )
+  values (
+    default_tenant_uuid,
+    source_container_uuid,
+    product_uuid,
+    6,
+    'pcs',
+    'available',
+    'opened',
+    packaging_level_uuid,
+    1
+  )
+  returning id into opened_inventory_unit_uuid;
+
+  insert into public.inventory_unit (
+    tenant_id,
+    container_id,
+    product_id,
+    quantity,
+    uom,
     status
   )
   values (
@@ -306,6 +365,84 @@ begin
   ) <> 1 then
     raise exception 'Expected merge target container to keep a single exact-match row.';
   end if;
+
+  merge_result := public.split_inventory_unit(sealed_inventory_unit_uuid, 12, merge_target_container_uuid, actor_uuid);
+
+  if (merge_result ->> 'mergeApplied')::boolean then
+    raise exception 'Expected packaging mismatch to prevent merge into loose stock.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.inventory_unit iu
+    where iu.id = (merge_result ->> 'targetInventoryUnitId')::uuid
+      and iu.packaging_state = 'sealed'
+      and iu.product_packaging_level_id = packaging_level_uuid
+      and iu.pack_count = 1
+  ) then
+    raise exception 'Expected packaged split child row to preserve packaging metadata.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.inventory_unit iu
+    where iu.id = sealed_inventory_unit_uuid
+      and iu.quantity = 36
+      and iu.pack_count = 3
+  ) then
+    raise exception 'Expected packaged source row to recompute remaining pack_count after split.';
+  end if;
+
+  insert into public.inventory_unit (
+    tenant_id,
+    container_id,
+    product_id,
+    quantity,
+    uom,
+    status,
+    packaging_state,
+    product_packaging_level_id,
+    pack_count
+  )
+  values (
+    default_tenant_uuid,
+    transfer_target_container_uuid,
+    product_uuid,
+    24,
+    'pcs',
+    'available',
+    'sealed',
+    packaging_level_uuid,
+    2
+  );
+
+  split_result := public.split_inventory_unit(sealed_inventory_unit_uuid, 12, transfer_target_container_uuid, actor_uuid);
+
+  if not (split_result ->> 'mergeApplied')::boolean then
+    raise exception 'Expected packaged rows with same state and level to merge even when pack_count differs.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.inventory_unit iu
+    where iu.id = (split_result ->> 'targetInventoryUnitId')::uuid
+      and iu.quantity = 36
+      and iu.pack_count = 3
+      and iu.packaging_state = 'sealed'
+      and iu.product_packaging_level_id = packaging_level_uuid
+  ) then
+    raise exception 'Expected packaged merge to sum pack_count instead of treating it as merge identity.';
+  end if;
+
+  begin
+    perform public.split_inventory_unit(opened_inventory_unit_uuid, 1, split_target_container_uuid, actor_uuid);
+    raise exception 'Expected opened packaged stock split to fail explicitly.';
+  exception
+    when others then
+      if sqlerrm <> 'OPENED_PACKAGING_SPLIT_NOT_ALLOWED' then
+        raise;
+      end if;
+  end;
 
   begin
     perform public.split_inventory_unit(source_inventory_unit_uuid, 5, split_target_container_uuid, actor_uuid);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const inventoryUnitStatusSchema = z.enum(['available', 'reserved', 'damaged', 'hold']);
+export const inventoryPackagingStateSchema = z.enum(['sealed', 'opened', 'loose']);
 
 export const inventoryUnitSchema = z.object({
   id: z.string().uuid(),
@@ -13,6 +14,9 @@ export const inventoryUnitSchema = z.object({
   serialNo: z.string().trim().min(1).nullable(),
   expiryDate: z.string().nullable(),
   status: inventoryUnitStatusSchema,
+  packagingState: inventoryPackagingStateSchema,
+  productPackagingLevelId: z.string().uuid().nullable(),
+  packCount: z.number().int().positive().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   createdBy: z.string().uuid().nullable(),
@@ -21,4 +25,5 @@ export const inventoryUnitSchema = z.object({
 });
 
 export type InventoryUnitStatus = z.infer<typeof inventoryUnitStatusSchema>;
+export type InventoryPackagingState = z.infer<typeof inventoryPackagingStateSchema>;
 export type InventoryUnit = z.infer<typeof inventoryUnitSchema>;

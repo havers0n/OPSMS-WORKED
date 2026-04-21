@@ -50,7 +50,8 @@ import {
   rackInspectorPayloadSchema,
   locationEffectiveRoleSchema,
   productUnitProfileSchema,
-  productPackagingLevelSchema
+  productPackagingLevelSchema,
+  inventoryPackagingStateSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -83,7 +84,10 @@ export const listContainersQuerySchema = z.object({
 export const addInventoryToContainerBodySchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().positive(),
-  uom: z.string().trim().min(1)
+  uom: z.string().trim().min(1),
+  packagingState: inventoryPackagingStateSchema.optional(),
+  productPackagingLevelId: z.string().uuid().nullable().optional(),
+  packCount: z.number().int().positive().nullable().optional()
 });
 
 export const createInventoryItemBodySchema = z.object({

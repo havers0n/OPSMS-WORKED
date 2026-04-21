@@ -22,8 +22,13 @@ declare
 
   active_product_uuid uuid := gen_random_uuid();
   inactive_product_uuid uuid := gen_random_uuid();
+  other_product_uuid uuid := gen_random_uuid();
   race_status_product_uuid uuid := gen_random_uuid();
   race_product_uuid uuid := gen_random_uuid();
+  active_packaging_level_uuid uuid := gen_random_uuid();
+  inactive_packaging_level_uuid uuid := gen_random_uuid();
+  non_storable_packaging_level_uuid uuid := gen_random_uuid();
+  foreign_packaging_level_uuid uuid := gen_random_uuid();
 
   receive_result jsonb;
   baseline_count integer;
@@ -68,7 +73,17 @@ begin
   insert into public.products (id, source, external_product_id, sku, name, is_active)
   values
     (active_product_uuid, 'test-suite', 'pr07-active', 'SKU-PR07-ACT', 'PR-07 Active Product', true),
-    (inactive_product_uuid, 'test-suite', 'pr07-inactive', 'SKU-PR07-INACT', 'PR-07 Inactive Product', false);
+    (inactive_product_uuid, 'test-suite', 'pr07-inactive', 'SKU-PR07-INACT', 'PR-07 Inactive Product', false),
+    (other_product_uuid, 'test-suite', 'pr07-other', 'SKU-PR07-OTHER', 'PR-07 Other Product', true);
+
+  insert into public.product_packaging_levels (
+    id, product_id, code, name, base_unit_qty, is_base, can_pick, can_store, is_default_pick_uom, is_active
+  )
+  values
+    (active_packaging_level_uuid, active_product_uuid, 'CTN', 'Carton', 12, false, true, true, false, true),
+    (inactive_packaging_level_uuid, active_product_uuid, 'OLD', 'Old Carton', 12, false, true, true, false, false),
+    (non_storable_packaging_level_uuid, active_product_uuid, 'NS', 'Non-Storable', 12, false, true, false, false, true),
+    (foreign_packaging_level_uuid, other_product_uuid, 'OTH', 'Other Carton', 12, false, true, true, false, true);
 
   insert into public.containers (tenant_id, external_code, container_type_id, status)
   values
@@ -118,8 +133,47 @@ begin
       and iu.product_id = active_product_uuid
       and iu.quantity = 5
       and iu.uom = 'pcs'
+      and iu.packaging_state = 'loose'
+      and iu.product_packaging_level_id is null
+      and iu.pack_count is null
   ) then
     raise exception 'Expected receive_inventory_unit success to persist canonical inventory row.';
+  end if;
+
+  receive_result := public.receive_inventory_unit(
+    default_tenant_uuid,
+    success_container_uuid,
+    active_product_uuid,
+    24,
+    'pcs',
+    null,
+    'sealed',
+    active_packaging_level_uuid,
+    2
+  );
+
+  if receive_result -> 'inventoryUnit' ->> 'packaging_state' <> 'sealed' then
+    raise exception 'Expected packaged receive_inventory_unit to return packaging_state.';
+  end if;
+
+  if (receive_result -> 'inventoryUnit' ->> 'product_packaging_level_id')::uuid <> active_packaging_level_uuid then
+    raise exception 'Expected packaged receive_inventory_unit to return product_packaging_level_id.';
+  end if;
+
+  if (receive_result -> 'inventoryUnit' ->> 'pack_count')::integer <> 2 then
+    raise exception 'Expected packaged receive_inventory_unit to return pack_count.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.container_storage_canonical_v csv
+    where csv.container_id = success_container_uuid
+      and csv.product_id = active_product_uuid
+      and csv.packaging_state = 'sealed'
+      and csv.product_packaging_level_id = active_packaging_level_uuid
+      and csv.pack_count = 2
+  ) then
+    raise exception 'Expected canonical container storage view to expose packaging metadata.';
   end if;
 
   -- actor spoofing is ignored: auth.uid() is the source of truth.
@@ -241,6 +295,136 @@ begin
   ) then
     raise exception 'Expected inactive product failure to avoid inserts.';
   end if;
+
+  begin
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      12,
+      'pcs',
+      null,
+      'sealed',
+      null,
+      1
+    );
+    raise exception 'Expected packaged receive without level to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'PACKAGING_LEVEL_REQUIRED' then
+        raise;
+      end if;
+  end;
+
+  if (
+    select count(*)
+    from public.inventory_unit
+    where container_id = success_container_uuid
+      and product_packaging_level_id = active_packaging_level_uuid
+      and pack_count = 1
+  ) <> 0 then
+    raise exception 'Expected failed packaging validations to leave no partial packaged row behind.';
+  end if;
+
+  begin
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      12,
+      'pcs',
+      null,
+      'opened',
+      active_packaging_level_uuid,
+      null
+    );
+    raise exception 'Expected packaged receive without pack_count to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'PACK_COUNT_REQUIRED' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      12,
+      'pcs',
+      null,
+      'loose',
+      active_packaging_level_uuid,
+      1
+    );
+    raise exception 'Expected loose receive with packaging metadata to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'LOOSE_PACKAGING_METADATA_FORBIDDEN' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      12,
+      'pcs',
+      null,
+      'sealed',
+      inactive_packaging_level_uuid,
+      1
+    );
+    raise exception 'Expected receive with inactive packaging level to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'PACKAGING_LEVEL_INACTIVE' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      12,
+      'pcs',
+      null,
+      'sealed',
+      non_storable_packaging_level_uuid,
+      1
+    );
+    raise exception 'Expected receive with non-storable packaging level to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'PACKAGING_LEVEL_NOT_STORABLE' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.receive_inventory_unit(
+      default_tenant_uuid,
+      success_container_uuid,
+      active_product_uuid,
+      12,
+      'pcs',
+      null,
+      'sealed',
+      foreign_packaging_level_uuid,
+      1
+    );
+    raise exception 'Expected receive with other-product packaging level to fail.';
+  exception
+    when others then
+      if sqlerrm <> 'PACKAGING_LEVEL_PRODUCT_MISMATCH' then
+        raise;
+      end if;
+  end;
 
   -- tenant mismatch / unauthorized masking behavior
   begin

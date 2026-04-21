@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { inventoryPackagingStateSchema } from '@wos/domain';
 import { z } from 'zod';
 import { mapReceiveInventoryRpcError } from './errors.js';
 
@@ -10,6 +11,9 @@ const receiveInventoryUnitRpcResultSchema = z.object({
     product_id: z.string().uuid(),
     quantity: z.number(),
     uom: z.string(),
+    packaging_state: inventoryPackagingStateSchema,
+    product_packaging_level_id: z.string().uuid().nullable(),
+    pack_count: z.number().int().positive().nullable(),
     created_at: z.string(),
     created_by: z.string().uuid().nullable()
   }),
@@ -37,6 +41,9 @@ export type ReceiveInventoryUnitParams = {
   quantity: number;
   uom: string;
   actorId: string;
+  packagingState?: 'sealed' | 'opened' | 'loose';
+  productPackagingLevelId?: string | null;
+  packCount?: number | null;
 };
 
 export type InventoryRepo = {
@@ -52,7 +59,10 @@ export function createInventoryRepo(supabase: SupabaseClient): InventoryRepo {
         product_uuid: params.productId,
         quantity: params.quantity,
         uom: params.uom,
-        actor_uuid: params.actorId
+        actor_uuid: params.actorId,
+        packaging_state: params.packagingState ?? 'loose',
+        product_packaging_level_uuid: params.productPackagingLevelId ?? null,
+        pack_count: params.packCount ?? null
       });
 
       if (error) {

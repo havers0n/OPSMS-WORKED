@@ -116,11 +116,15 @@ describe('mapContainerStorageSnapshotRowToDomain', () => {
       container_status: 'active',
       item_ref: null,
       quantity: null,
-      uom: null
+      uom: null,
+      packaging_state: null,
+      product_packaging_level_id: null,
+      pack_count: null
     });
 
     expect(result.systemCode).toBe('CNT-000555');
     expect(result.externalCode).toBeNull();
+    expect(result.packagingState).toBeNull();
   });
 });
 
@@ -141,10 +145,14 @@ describe('mapLocationStorageSnapshotRowToDomain', () => {
       placed_at: '2026-01-01T00:00:00.000Z',
       item_ref: null,
       quantity: null,
-      uom: null
+      uom: null,
+      packaging_state: null,
+      product_packaging_level_id: null,
+      pack_count: null
     });
 
     expect(result.systemCode).toBe('CNT-000556');
     expect(result.externalCode).toBeNull();
+    expect(result.packagingState).toBeNull();
   });
 });

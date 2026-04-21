@@ -15,6 +15,9 @@ describe('inventory unit storage contracts', () => {
         serialNo: null,
         expiryDate: null,
         status: 'available',
+        packagingState: 'sealed',
+        productPackagingLevelId: '945e796c-1fd6-471d-8992-a7810fd3567f',
+        packCount: 1,
         createdAt: '2026-03-13T10:00:00.000Z',
         updatedAt: '2026-03-13T10:05:00.000Z',
         createdBy: '945e796c-1fd6-471d-8992-a7810fd3567f',
@@ -24,7 +27,8 @@ describe('inventory unit storage contracts', () => {
     ).toMatchObject({
       quantity: 5,
       status: 'available',
-      updatedBy: '945e796c-1fd6-471d-8992-a7810fd3567f'
+      updatedBy: '945e796c-1fd6-471d-8992-a7810fd3567f',
+      packagingState: 'sealed'
     });
   });
 });

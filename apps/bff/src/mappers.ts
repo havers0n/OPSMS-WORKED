@@ -336,6 +336,9 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   product?: ProductRow | null;
   quantity: number | null;
   uom: string | null;
+  packaging_state?: 'sealed' | 'opened' | 'loose' | null;
+  product_packaging_level_id?: string | null;
+  pack_count?: number | null;
 }): ContainerStorageSnapshotRow {
   return containerStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
@@ -347,7 +350,10 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
     itemRef: row.item_ref,
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
-    uom: row.uom
+    uom: row.uom,
+    packagingState: row.packaging_state ?? null,
+    productPackagingLevelId: row.product_packaging_level_id ?? null,
+    packCount: row.pack_count ?? null
   });
 }
 
@@ -426,6 +432,9 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
   product?: ProductRow | null;
   quantity: number | null;
   uom: string | null;
+  packaging_state?: 'sealed' | 'opened' | 'loose' | null;
+  product_packaging_level_id?: string | null;
+  pack_count?: number | null;
 }): LocationStorageSnapshotRow {
   return locationStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
@@ -443,7 +452,10 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
     itemRef: row.item_ref,
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
-    uom: row.uom
+    uom: row.uom,
+    packagingState: row.packaging_state ?? null,
+    productPackagingLevelId: row.product_packaging_level_id ?? null,
+    packCount: row.pack_count ?? null
   });
 }
 
@@ -514,6 +526,9 @@ export function mapInventoryUnitRowToDomain(row: {
   serial_no: string | null;
   expiry_date: string | null;
   status: 'available' | 'reserved' | 'damaged' | 'hold';
+  packaging_state: 'sealed' | 'opened' | 'loose';
+  product_packaging_level_id?: string | null;
+  pack_count?: number | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -531,6 +546,9 @@ export function mapInventoryUnitRowToDomain(row: {
     serialNo: row.serial_no,
     expiryDate: row.expiry_date,
     status: row.status,
+    packagingState: row.packaging_state,
+    productPackagingLevelId: row.product_packaging_level_id ?? null,
+    packCount: row.pack_count ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,
@@ -546,6 +564,9 @@ export function mapInventoryUnitRowToLegacyInventoryItemDomain(row: {
   product_id: string;
   quantity: number;
   uom: string;
+  packaging_state?: 'sealed' | 'opened' | 'loose' | null;
+  product_packaging_level_id?: string | null;
+  pack_count?: number | null;
   created_at: string;
   created_by: string | null;
   product?: ProductRow | null;
@@ -558,6 +579,9 @@ export function mapInventoryUnitRowToLegacyInventoryItemDomain(row: {
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
     uom: row.uom,
+    packagingState: row.packaging_state ?? null,
+    productPackagingLevelId: row.product_packaging_level_id ?? null,
+    packCount: row.pack_count ?? null,
     createdAt: row.created_at,
     createdBy: row.created_by
   });
