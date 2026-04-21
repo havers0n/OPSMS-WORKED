@@ -13,6 +13,7 @@ import {
 import {
   CellBaseVisual,
   CellRuntimeOverlay,
+  CellStatusSemanticOverlay,
   CellInteractionOverlay,
   CellExceptionOverlay
 } from './rack-cell-overlays';
@@ -250,6 +251,12 @@ function FaceCells({
                 isSelected={isSelected}
                 isWorkflowSource={isWorkflowSource}
                 isHighlighted={isHighlighted}
+              />
+              <CellStatusSemanticOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+                isSelected={isSelected}
+                isWorkflowSource={isWorkflowSource}
               />
               <CellInteractionOverlay
                 geometry={cellGeometry}
