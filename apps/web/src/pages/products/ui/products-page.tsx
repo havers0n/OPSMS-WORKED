@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { productCatalogQueryOptions } from '@/entities/product/api/queries';
+import { productDetailPath } from '@/shared/config/routes';
 
 const pageSize = 50;
 
 export function ProductsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const navigate = useNavigate();
+  const location = useLocation();
   const { data, isLoading, isFetching, refetch } = useQuery(
     productCatalogQueryOptions({
       query: search,
@@ -22,6 +26,11 @@ export function ProductsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const pageStart = total === 0 ? 0 : page * pageSize + 1;
   const pageEnd = total === 0 ? 0 : Math.min((page + 1) * pageSize, total);
+  const returnTo = `${location.pathname}${location.search}`;
+
+  function openProduct(productId: string) {
+    navigate(productDetailPath(productId), { state: { from: returnTo } });
+  }
 
   return (
     <section className="flex h-full w-full flex-1 overflow-hidden">
@@ -86,12 +95,17 @@ export function ProductsPage() {
                     <th className="w-[18%] px-4 py-2.5">External id</th>
                     <th className="w-[14%] px-4 py-2.5">Source</th>
                     <th className="w-[10%] px-4 py-2.5">Status</th>
-                    <th className="w-[12%] px-4 py-2.5">Updated</th>
+                    <th className="w-[11%] px-4 py-2.5">Updated</th>
+                    <th className="w-[1%] px-4 py-2.5 text-right">Open</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {products.map((product) => (
-                    <tr key={product.id} className="text-slate-700">
+                    <tr
+                      key={product.id}
+                      className="cursor-pointer text-slate-700 transition hover:bg-slate-50"
+                      onClick={() => openProduct(product.id)}
+                    >
                       <td className="px-5 py-2.5 font-medium text-slate-900">{product.name}</td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-600">
                         {product.sku ?? '-'}
@@ -112,6 +126,17 @@ export function ProductsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">
                         {new Date(product.updatedAt).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Link
+                          to={productDetailPath(product.id)}
+                          state={{ from: returnTo }}
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-50"
+                        >
+                          Open
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
                       </td>
                     </tr>
                   ))}

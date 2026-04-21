@@ -3,6 +3,7 @@ export const routes = {
   warehouse: '/warehouse',
   warehouseView: '/warehouse/view',
   products: '/products',
+  productDetail: '/products/:productId',
   operations: '/operations',
   orderDetail: '/operations/orders/:orderId',
   waveDetail: '/operations/waves/:id',
@@ -29,6 +30,10 @@ export function pickTaskDetailPath(
   if (context.waveId) params.set('wave', context.waveId);
   const qs = params.toString();
   return `/operations/pick-tasks/${id}${qs ? `?${qs}` : ''}`;
+}
+
+export function productDetailPath(productId: string) {
+  return `/products/${productId}`;
 }
 
 export function warehouseViewPath(opts?: {

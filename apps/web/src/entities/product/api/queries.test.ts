@@ -16,4 +16,23 @@ describe('productKeys', () => {
     expect(productKeys.detail('product-a')).not.toEqual(productKeys.detail('product-b'));
     expect(productKeys.detail(null)).toEqual(['product', 'detail', 'none']);
   });
+
+  it('keeps section-level detail keys stable', () => {
+    expect(productKeys.unitProfile('product-a')).toEqual([
+      'product',
+      'unit-profile',
+      'product-a'
+    ]);
+    expect(productKeys.unitProfile(null)).toEqual(['product', 'unit-profile', 'none']);
+    expect(productKeys.packagingLevels('product-a')).toEqual([
+      'product',
+      'packaging-levels',
+      'product-a'
+    ]);
+    expect(productKeys.packagingLevels(null)).toEqual([
+      'product',
+      'packaging-levels',
+      'none'
+    ]);
+  });
 });
