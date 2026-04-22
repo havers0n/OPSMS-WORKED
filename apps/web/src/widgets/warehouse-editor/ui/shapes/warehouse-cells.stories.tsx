@@ -10,6 +10,9 @@ import {
   canonicalOccupiedCellRuntimeByIdStory,
   canonicalOccupiedCellIdsStory,
   canonicalPolicyOnlyPanelContextStory,
+  canonicalReservedCellIdStory,
+  canonicalReservedCellRuntimeByIdStory,
+  canonicalReservedOccupiedCellIdsStory,
   canonicalSearchHitAndLocateCellIdsStory,
   canonicalSearchHitCellIdsStory,
   canonicalSelectedCellIdStory,
@@ -168,24 +171,8 @@ export const Reserved: Story = {
   render: () =>
     renderCellProof({
       publishedCellsByStructure: publishedCellsByStructureStory,
-      occupiedCellIds: new Set<string>(['cell-a-2-3']),
-      cellRuntimeById: new Map<string, OperationsCellRuntime>([
-        [
-          'cell-a-2-3',
-          {
-            cellId: 'cell-a-2-3',
-            cellAddress: 'R-14-A.01.02.03',
-            status: 'reserved',
-            pickActive: false,
-            reserved: true,
-            quarantined: false,
-            stocked: false,
-            containerCount: 1,
-            totalQuantity: 8,
-            containers: []
-          }
-        ]
-      ]),
+      occupiedCellIds: canonicalReservedOccupiedCellIdsStory,
+      cellRuntimeById: canonicalReservedCellRuntimeByIdStory,
       highlightedCellIds: new Set<string>(),
       selectedCellId: null,
       locateTargetCellId: null,
@@ -193,6 +180,72 @@ export const Reserved: Story = {
       isWorkflowScope: false,
       isSelected: false
     })
+};
+
+function ReservedProofCase({
+  title,
+  description,
+  highlightedCellIds,
+  selectedCellId,
+  locateTargetCellId
+}: {
+  title: string;
+  description: string;
+  highlightedCellIds: Set<string>;
+  selectedCellId: string | null;
+  locateTargetCellId: string | null;
+}) {
+  return (
+    <div className="space-y-3">
+      <ProofShellLabel title={title} description={description} />
+      {renderCellProof({
+        publishedCellsByStructure: publishedCellsByStructureStory,
+        occupiedCellIds: canonicalReservedOccupiedCellIdsStory,
+        cellRuntimeById: canonicalReservedCellRuntimeByIdStory,
+        highlightedCellIds,
+        selectedCellId,
+        locateTargetCellId,
+        workflowSourceCellId: null,
+        isWorkflowScope: false,
+        isSelected: false
+      })}
+    </div>
+  );
+}
+
+export const ReservedProof: Story = {
+  render: () => (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <ReservedProofCase
+        title="Reserved"
+        description="Lilac dotted storage surface with no interaction overlay."
+        highlightedCellIds={new Set<string>()}
+        selectedCellId={null}
+        locateTargetCellId={null}
+      />
+      <ReservedProofCase
+        title="Reserved + Selected"
+        description="Selection stays outline-only above the reserved surface."
+        highlightedCellIds={new Set<string>()}
+        selectedCellId={canonicalReservedCellIdStory}
+        locateTargetCellId={null}
+      />
+      <ReservedProofCase
+        title="Reserved + Search-Hit"
+        description="Search stays halo-only and does not replace the reserved fill."
+        highlightedCellIds={new Set<string>([canonicalReservedCellIdStory])}
+        selectedCellId={null}
+        locateTargetCellId={null}
+      />
+      <ReservedProofCase
+        title="Reserved + Locate-Target"
+        description="Locate stays halo-only above the reserved surface treatment."
+        highlightedCellIds={new Set<string>()}
+        selectedCellId={null}
+        locateTargetCellId={canonicalReservedCellIdStory}
+      />
+    </div>
+  )
 };
 
 export const SelectionOverlay: Story = {

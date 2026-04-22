@@ -61,6 +61,11 @@
   --wh-blocked-border: #9a5d1b;
   --wh-blocked-text: #6f4313;
 
+  --wh-reserved-fill: rgba(178, 156, 224, 0.34);
+  --wh-reserved-border: #7b67ad;
+  --wh-reserved-dot: rgba(92, 71, 143, 0.28);
+  --wh-reserved-text: #5f4b8d;
+
   --wh-warning-fill: rgba(214, 158, 46, 0.18);
   --wh-warning-border: #b7791f;
   --wh-warning-text: #8a5b10;

@@ -1,4 +1,4 @@
-import { Rect } from 'react-konva';
+import { Circle, Group, Rect } from 'react-konva';
 import type { ResolvedCellVisualState } from './rack-cells-visual-state';
 
 type CellRectGeometry = {
@@ -53,16 +53,57 @@ function LayerRect({
 }
 
 export function CellSurfaceVisual({ geometry, visualState }: CellOverlaySharedProps) {
+  const pattern = visualState.surface.pattern;
+  const dotsVisible =
+    pattern?.kind === 'dots' &&
+    Math.min(geometry.width, geometry.height) >= pattern.minCellSize &&
+    geometry.width > pattern.inset * 2 &&
+    geometry.height > pattern.inset * 2;
+
+  const dotNodes =
+    dotsVisible && pattern
+      ? Array.from(
+          { length: Math.floor((geometry.height - pattern.inset * 2) / pattern.pitch) + 1 },
+          (_, rowIndex) => rowIndex
+        ).flatMap((rowIndex) => {
+          const centerY = geometry.y + pattern.inset + rowIndex * pattern.pitch;
+          if (centerY > geometry.y + geometry.height - pattern.inset) return [];
+
+          return Array.from(
+            { length: Math.floor((geometry.width - pattern.inset * 2) / pattern.pitch) + 1 },
+            (_, columnIndex) => columnIndex
+          ).flatMap((columnIndex) => {
+            const centerX = geometry.x + pattern.inset + columnIndex * pattern.pitch;
+            if (centerX > geometry.x + geometry.width - pattern.inset) return [];
+
+            return (
+              <Circle
+                key={`reserved-dot-${rowIndex}-${columnIndex}`}
+                x={centerX}
+                y={centerY}
+                radius={pattern.radius}
+                listening={false}
+                fill={pattern.color}
+                opacity={pattern.opacity}
+              />
+            );
+          });
+        })
+      : [];
+
   return (
-    <LayerRect
-      geometry={geometry}
-      visualState={visualState}
-      fill={visualState.surface.fill ?? undefined}
-      stroke={visualState.surface.stroke ?? undefined}
-      strokeWidth={visualState.surface.strokeWidth}
-      ownsFill={visualState.surface.fill !== null}
-      ownsStroke={visualState.surface.stroke !== null}
-    />
+    <Group listening={false}>
+      <LayerRect
+        geometry={geometry}
+        visualState={visualState}
+        fill={visualState.surface.fill ?? undefined}
+        stroke={visualState.surface.stroke ?? undefined}
+        strokeWidth={visualState.surface.strokeWidth}
+        ownsFill={visualState.surface.fill !== null}
+        ownsStroke={visualState.surface.stroke !== null}
+      />
+      {dotNodes}
+    </Group>
   );
 }
 

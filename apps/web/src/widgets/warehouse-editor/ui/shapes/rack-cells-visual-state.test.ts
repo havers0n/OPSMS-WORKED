@@ -23,6 +23,7 @@ const palette: CellVisualPalette = {
   workflowSourceStroke: '#workflow-stroke',
   blockedFill: '#blocked-fill',
   blockedStroke: '#blocked-stroke',
+  reservedDot: '#reserved-dot',
   stockedFill: '#stocked-fill',
   stockedStroke: '#stocked-stroke',
   pickActiveFill: '#pick-fill',
@@ -79,6 +80,19 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     expect(state.flags.fillSource).toBe('runtime');
     expect(state.fill).toBe(paintFill);
     expect(state.surface.fill).toBe(paintFill);
+    expect(state.surface.pattern).toEqual(
+      runtimeStatus === 'reserved'
+        ? {
+            kind: 'dots',
+            color: palette.reservedDot,
+            radius: 0.9,
+            pitch: 6,
+            inset: 2,
+            opacity: 0.32,
+            minCellSize: 10
+          }
+        : undefined
+    );
     expect(state.truthMarker).toBeNull();
   });
 
@@ -100,6 +114,7 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     expect(state.flags.isDegradedFill).toBe(true);
     expect(state.fill).toBe(palette.occupiedFill);
     expect(state.stroke).toBe(palette.occupiedStroke);
+    expect(state.surface.pattern).toBeUndefined();
     expect(state.truthMarker).toEqual({
       kind: 'degraded',
       color: palette.occupiedStroke
@@ -119,6 +134,7 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     expect(state.flags.hasFill).toBe(false);
     expect(state.fill).toBe(palette.baseFill);
     expect(state.stroke).toBe(palette.baseStroke);
+    expect(state.surface.pattern).toBeUndefined();
     expect(state.truthMarker).toEqual({
       kind: 'unknown',
       color: palette.baseStroke
@@ -140,6 +156,7 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     expect(state.fill).toBe(palette.occupiedFill);
     expect(state.stroke).toBe(palette.occupiedStroke);
     expect(state.surface.fill).toBe(palette.occupiedFill);
+    expect(state.surface.pattern).toBeUndefined();
     expect(state.badge).toEqual({
       fill: palette.blockedFill,
       stroke: palette.blockedStroke,
@@ -201,6 +218,32 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     expect(locateState.halo?.stroke).toBe(palette.locateTargetStroke);
     expect(workflowState.halo?.stroke).toBe(palette.searchHitStroke);
     expect(workflowState.badge?.stroke).toBe(palette.workflowSourceStroke);
+  });
+
+  it('keeps reserved decoration in the surface channel while overlays stay independent', () => {
+    const state = resolveCellVisualState(
+      createInputs({
+        runtimeStatus: 'reserved',
+        isSelected: true,
+        isLocateTarget: true,
+        isWorkflowSource: true,
+        isSearchHit: true
+      }),
+      palette
+    );
+
+    expect(state.surface.pattern).toEqual({
+      kind: 'dots',
+      color: palette.reservedDot,
+      radius: 0.9,
+      pitch: 6,
+      inset: 2,
+      opacity: 0.32,
+      minCellSize: 10
+    });
+    expect(state.outline?.stroke).toBe(palette.selectedStroke);
+    expect(state.halo?.stroke).toBe(palette.locateTargetStroke);
+    expect(state.badge?.stroke).toBe(palette.workflowSourceStroke);
   });
 
   it('keeps compat fields as derived mirrors from canonical semantics and truth', () => {

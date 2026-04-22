@@ -395,6 +395,12 @@ export const canonicalStorageVariantOccupiedCellIdsStory = new Set<string>([
   'cell-b-1-1'
 ]);
 
+export const canonicalReservedCellIdStory = 'cell-a-2-3';
+export const canonicalReservedCellRuntimeByIdStory = makeRuntimeMap([
+  [canonicalReservedCellIdStory, 'R-14-A.01.02.03', 'reserved']
+]);
+export const canonicalReservedOccupiedCellIdsStory = new Set<string>([canonicalReservedCellIdStory]);
+
 export const canonicalSelectedCellIdStory = 'cell-a-2-2';
 export const canonicalLocateTargetCellIdStory = 'cell-a-2-3';
 export const canonicalWorkflowSourceCellIdStory = 'cell-a-2-2';

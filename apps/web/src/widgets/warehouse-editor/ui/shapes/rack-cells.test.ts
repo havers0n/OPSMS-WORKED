@@ -2,12 +2,15 @@ import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
 import { buildCellStructureKey, type Cell, type RackFace, type OperationsCellRuntime } from '@wos/domain';
+import { CellSurfaceVisual } from './rack-cell-overlays';
 import { RackCells } from './rack-cells';
 import { resolveCellVisualState, type CellVisualPalette } from './rack-cells-visual-state';
 
 vi.mock('react-konva', () => ({
   Group: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Group', props, children),
+  Circle: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Circle', props, children),
   Line: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Line', props, children),
   Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -520,6 +523,7 @@ const TEST_PALETTE: CellVisualPalette = {
   workflowSourceStroke: 'workflow-source-stroke',
   blockedFill: 'blocked-fill',
   blockedStroke: 'blocked-stroke',
+  reservedDot: 'reserved-dot',
   stockedFill: 'stocked-fill',
   stockedStroke: 'stocked-stroke',
   pickActiveFill: 'pick-active-fill',
@@ -646,8 +650,9 @@ const CELL_FILL_LOCKED = 'rgba(120, 61, 18, 0.16)';
 const CELL_STROKE_LOCKED = '#9a5d1b';
 const CELL_FILL_STOCKED = 'rgba(0, 122, 92, 0.14)';
 const CELL_STROKE_STOCKED = '#218367';
-const CELL_FILL_RESERVED = 'rgba(214, 158, 46, 0.18)';
-const CELL_STROKE_RESERVED = '#b7791f';
+const CELL_FILL_RESERVED = 'rgba(178, 156, 224, 0.34)';
+const CELL_STROKE_RESERVED = '#7b67ad';
+const CELL_FILL_RESERVED_DOT = 'rgba(92, 71, 143, 0.28)';
 
 function createSingleSlotFace(levelId: string): RackFace {
   return {
@@ -763,6 +768,12 @@ function getTruthMarkerRects(renderer: TestRenderer.ReactTestRenderer) {
   );
 }
 
+function getDotCircles(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) => String(node.type) === 'Circle' && node.props.fill === CELL_FILL_RESERVED_DOT
+  );
+}
+
 describe('RackCells layered paint ownership', () => {
   it('selected + runtime renders surface plus outline only and keeps clickability', () => {
     const renderer = renderLayeredCell({
@@ -770,12 +781,13 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
 
-    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
     const outlineRects = getOutlineRects(renderer);
     const hitRects = getHitRects(renderer);
 
     expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_RESERVED);
     expect(surfaceRects.map((rect) => rect.props.fill)).not.toContain('selected-fill');
+    expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(outlineRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
     expect(getHaloRects(renderer)).toHaveLength(0);
     expect(getBadgeRects(renderer)).toHaveLength(0);
@@ -787,9 +799,10 @@ describe('RackCells layered paint ownership', () => {
     const renderer = renderLayeredCell({
       selected: true,
       locateTarget: true,
-      runtimeStatus: 'stocked'
+      runtimeStatus: 'reserved'
     });
 
+    expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
     expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
   });
@@ -798,9 +811,10 @@ describe('RackCells layered paint ownership', () => {
     const renderer = renderLayeredCell({
       selected: true,
       searchHit: true,
-      runtimeStatus: 'stocked'
+      runtimeStatus: 'reserved'
     });
 
+    expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
     expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_SEARCH_HIT);
   });
@@ -822,7 +836,7 @@ describe('RackCells layered paint ownership', () => {
       occupied: true
     });
 
-    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
     const badgeRects = getBadgeRects(renderer);
     const hitRects = getHitRects(renderer);
 
@@ -851,11 +865,60 @@ describe('RackCells layered paint ownership', () => {
       occupied: true
     });
 
-    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
     const truthMarkerRects = getTruthMarkerRects(renderer);
 
     expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_STOCKED);
     expect(truthMarkerRects.length).toBeGreaterThan(0);
+  });
+
+  it('reserved renders dot decoration as part of the surface treatment', () => {
+    const renderer = renderLayeredCell({
+      runtimeStatus: 'reserved'
+    });
+
+    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_RESERVED);
+    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_RESERVED);
+    expect(getDotCircles(renderer).length).toBeGreaterThan(0);
+    expect(getHaloRects(renderer)).toHaveLength(0);
+    expect(getBadgeRects(renderer)).toHaveLength(0);
+  });
+
+  it('reserved + locate-target keeps the reserved surface and adds halo only', () => {
+    const renderer = renderLayeredCell({
+      runtimeStatus: 'reserved',
+      locateTarget: true
+    });
+
+    expect(getDotCircles(renderer).length).toBeGreaterThan(0);
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
+    expect(getBadgeRects(renderer)).toHaveLength(0);
+  });
+
+  it('drops reserved dots below the small-cell threshold while keeping the reserved fill', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(CellSurfaceVisual, {
+          geometry: {
+            x: 0,
+            y: 0,
+            width: 9,
+            height: 11
+          },
+          visualState: resolveVisual({
+            runtimeStatus: 'reserved'
+          })
+        })
+      );
+    });
+
+    const filledRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+
+    expect(filledRects.map((rect) => rect.props.fill)).toContain('reserved-fill');
+    expect(getDotCircles(renderer)).toHaveLength(0);
   });
 
   it('missing cell identity keeps base visuals and no click handler', () => {

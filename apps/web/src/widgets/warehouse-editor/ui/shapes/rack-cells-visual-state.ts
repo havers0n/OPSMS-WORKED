@@ -33,6 +33,7 @@ export type CellVisualPalette = {
   workflowSourceStroke: string;
   blockedFill: string;
   blockedStroke: string;
+  reservedDot: string;
   stockedFill: string;
   stockedStroke: string;
   pickActiveFill: string;
@@ -86,10 +87,21 @@ export type CellVisualFlags = {
   fillSource: 'runtime' | 'fallback' | 'none';
 };
 
+export type CellSurfacePattern = {
+  kind: 'dots';
+  color: string;
+  radius: number;
+  pitch: number;
+  inset: number;
+  opacity: number;
+  minCellSize: number;
+};
+
 type CellLayerPaint = {
   fill: string | null;
   stroke: string | null;
   strokeWidth: number;
+  pattern?: CellSurfacePattern | undefined;
   dash?: number[] | undefined;
 };
 
@@ -323,7 +335,19 @@ export function resolveCellVisualState(
     surface: {
       fill: surfacePaint.fill,
       stroke: surfacePaint.stroke,
-      strokeWidth
+      strokeWidth,
+      pattern:
+        semantics.fill === 'reserved'
+          ? {
+              kind: 'dots',
+              color: palette.reservedDot,
+              radius: 0.9,
+              pitch: 6,
+              inset: 2,
+              opacity: 0.32,
+              minCellSize: 10
+            }
+          : undefined
     },
     outline,
     halo,
