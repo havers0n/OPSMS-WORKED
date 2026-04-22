@@ -86,18 +86,30 @@ export type CellVisualFlags = {
   fillSource: 'runtime' | 'fallback' | 'none';
 };
 
+type CellLayerPaint = {
+  fill: string | null;
+  stroke: string | null;
+  strokeWidth: number;
+  dash?: number[] | undefined;
+};
+
+type CellTruthMarkerPaint = {
+  kind: 'degraded' | 'unknown';
+  color: string;
+};
+
 export type ResolvedCellVisualState = {
   semantics: CellCanonicalSemantics;
   flags: CellVisualFlags;
-  // Transitional renderer plumbing derived from canonical semantics. PR4 should remove these.
   fill: string;
   stroke: string;
   opacity: number;
   strokeWidth: number;
-  navigationFill: string | null;
-  navigationStroke: string | null;
-  navigationStrokeWidth: number;
-  navigationDash: number[] | undefined;
+  surface: CellLayerPaint;
+  outline: CellLayerPaint | null;
+  halo: CellLayerPaint | null;
+  badge: CellLayerPaint | null;
+  truthMarker: CellTruthMarkerPaint | null;
   isClickable: boolean;
   compat: {
     semanticKind: LegacySemanticKind;
@@ -238,52 +250,68 @@ export function resolveCellVisualState(
   const semantics = resolveCanonicalSemantics(inputs);
   const flags = deriveCellVisualFlags(inputs);
 
-  const surfacePaint = semantics.interaction.invalidTarget
-    ? { fill: palette.blockedFill, stroke: palette.blockedStroke }
-    : resolveFillPaint(semantics.fill, palette);
+  const surfacePaint = resolveFillPaint(semantics.fill, palette);
 
   const opacity = flags.isMissingCellIdentity
     ? 0.18
-    : semantics.interaction.invalidTarget
-      ? 0.24
-      : inputs.isRackPassive
-        ? 0.4
-        : semantics.fill !== null
-          ? 0.98
-          : inputs.isRackSelected
-            ? 0.9
-            : 0.72;
+    : inputs.isRackPassive
+      ? 0.4
+      : semantics.fill !== null
+        ? 0.98
+        : inputs.isRackSelected
+          ? 0.9
+          : 0.72;
 
-  const strokeWidth =
-    semantics.fill !== null || semantics.interaction.invalidTarget
-      ? 0.9
-      : inputs.isRackSelected
-        ? 0.9
-        : 0.5;
+  const strokeWidth = semantics.fill !== null ? 0.9 : inputs.isRackSelected ? 0.9 : 0.5;
 
-  let navigationFill: string | null = null;
-  let navigationStroke: string | null = null;
-  let navigationStrokeWidth = 0;
-  let navigationDash: number[] | undefined;
+  const outline: CellLayerPaint | null = semantics.interaction.selected
+    ? {
+        fill: null,
+        stroke: palette.selectedStroke,
+        strokeWidth: 2.1
+      }
+    : null;
 
-  if (semantics.interaction.selected) {
-    navigationFill = palette.selectedFill;
-    navigationStroke = palette.selectedStroke;
-    navigationStrokeWidth = 2.1;
-  } else if (semantics.interaction.locateTarget) {
-    navigationFill = palette.locateTargetFill;
-    navigationStroke = palette.locateTargetStroke;
-    navigationStrokeWidth = 1.9;
-  } else if (semantics.interaction.workflowSource) {
-    navigationFill = palette.workflowSourceFill;
-    navigationStroke = palette.workflowSourceStroke;
-    navigationStrokeWidth = 1.6;
-    navigationDash = [3, 2];
-  } else if (semantics.interaction.searchHit) {
-    navigationFill = palette.searchHitFill;
-    navigationStroke = palette.searchHitStroke;
-    navigationStrokeWidth = 1.15;
-  }
+  const halo: CellLayerPaint | null = semantics.interaction.locateTarget
+    ? {
+        fill: palette.locateTargetFill,
+        stroke: palette.locateTargetStroke,
+        strokeWidth: 1.9
+      }
+    : semantics.interaction.searchHit
+      ? {
+          fill: palette.searchHitFill,
+          stroke: palette.searchHitStroke,
+          strokeWidth: 1.15
+        }
+      : null;
+
+  const badge: CellLayerPaint | null = semantics.interaction.invalidTarget
+    ? {
+        fill: palette.blockedFill,
+        stroke: palette.blockedStroke,
+        strokeWidth: 1
+      }
+    : semantics.interaction.workflowSource
+      ? {
+          fill: palette.workflowSourceFill,
+          stroke: palette.workflowSourceStroke,
+          strokeWidth: 1,
+          dash: [3, 2]
+        }
+      : null;
+
+  const truthMarker: CellTruthMarkerPaint | null = semantics.truth.isDegraded
+    ? {
+        kind: 'degraded',
+        color: surfacePaint.stroke
+      }
+    : semantics.truth.isUnknown
+      ? {
+          kind: 'unknown',
+          color: surfacePaint.stroke
+        }
+      : null;
 
   return {
     semantics,
@@ -292,10 +320,15 @@ export function resolveCellVisualState(
     stroke: surfacePaint.stroke,
     opacity,
     strokeWidth,
-    navigationFill,
-    navigationStroke,
-    navigationStrokeWidth,
-    navigationDash,
+    surface: {
+      fill: surfacePaint.fill,
+      stroke: surfacePaint.stroke,
+      strokeWidth
+    },
+    outline,
+    halo,
+    badge,
+    truthMarker,
     isClickable: inputs.isInteractive && inputs.hasCellIdentity && flags.canSelectWorkflowTarget,
     compat: {
       semanticKind: resolveLegacySemanticKind(semantics),

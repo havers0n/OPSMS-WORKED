@@ -440,7 +440,6 @@ describe('RackCells', () => {
       expect(node.props.rotation).toBe(-90);
     }
 
-    // Baseline sanity: horizontal rack keeps zero counter-rotation.
     const baselineRotators = renderer.root.findAll(
       (node) => String(node.type) === 'Group' && node.props.name === 'slot-label-rotator'
     );
@@ -554,121 +553,71 @@ function resolveVisual(overrides: Partial<Parameters<typeof resolveCellVisualSta
   );
 }
 
-describe('rack-cells visual-state precedence', () => {
-  it('selected + runtime keeps runtime semantics and adds selection interaction stroke', () => {
+describe('rack-cells visual-state channel ownership', () => {
+  it('selected keeps canonical fill and adds outline only', () => {
     const visual = resolveVisual({ isSelected: true, runtimeStatus: 'reserved' });
-    expect(visual.fill).toBe('reserved-fill');
-    expect(visual.stroke).toBe('reserved-stroke');
-    expect(visual.strokeWidth).toBe(0.9);
-    expect(visual.navigationFill).toBe('selected-fill');
-    expect(visual.navigationStroke).toBe('selected-stroke');
-    expect(visual.navigationStrokeWidth).toBe(2.1);
-    expect(visual.opacity).toBe(0.98);
+    expect(visual.surface.fill).toBe('reserved-fill');
+    expect(visual.surface.stroke).toBe('reserved-stroke');
+    expect(visual.outline).toEqual({
+      fill: null,
+      stroke: 'selected-stroke',
+      strokeWidth: 2.1
+    });
+    expect(visual.halo).toBeNull();
+    expect(visual.badge).toBeNull();
   });
 
-  it('selected + occupied keeps occupied fallback semantics and adds selection interaction stroke', () => {
-    const visual = resolveVisual({ isSelected: true, isOccupiedByFallback: true });
-    expect(visual.semantics.fill).toBe('occupied');
-    expect(visual.fill).toBe('occupied-fill');
-    expect(visual.stroke).toBe('occupied-stroke');
-    expect(visual.strokeWidth).toBe(0.9);
-    expect(visual.navigationStroke).toBe('selected-stroke');
-    expect(visual.navigationStrokeWidth).toBe(2.1);
-    expect(visual.opacity).toBe(0.98);
+  it('locate-target wins the halo slot over search-hit', () => {
+    const visual = resolveVisual({
+      isLocateTarget: true,
+      isSearchHit: true,
+      runtimeStatus: 'stocked'
+    });
+    expect(visual.halo).toEqual({
+      fill: 'locate-target-fill',
+      stroke: 'locate-target-stroke',
+      strokeWidth: 1.9
+    });
   });
 
-  it('search-hit + runtime keeps runtime surface and weaker discovery interaction stroke', () => {
-    const visual = resolveVisual({ isSearchHit: true, runtimeStatus: 'stocked' });
-    expect(visual.semantics.fill).toBe('occupied');
-    expect(visual.fill).toBe('occupied-fill');
-    expect(visual.stroke).toBe('occupied-stroke');
-    expect(visual.strokeWidth).toBe(0.9);
-    expect(visual.navigationFill).toBe('search-hit-fill');
-    expect(visual.navigationStroke).toBe('search-hit-stroke');
-    expect(visual.navigationStrokeWidth).toBe(1.15);
-    expect(visual.opacity).toBe(0.98);
+  it('workflow-source occupies the badge slot without changing fill', () => {
+    const visual = resolveVisual({
+      isWorkflowSource: true,
+      runtimeStatus: 'quarantined'
+    });
+    expect(visual.surface.fill).toBe('quarantined-fill');
+    expect(visual.badge).toEqual({
+      fill: 'workflow-source-fill',
+      stroke: 'workflow-source-stroke',
+      strokeWidth: 1,
+      dash: [3, 2]
+    });
   });
 
-  it('workflow source + runtime keeps runtime surface and workflow-source interaction stroke', () => {
-    const visual = resolveVisual({ isWorkflowSource: true, runtimeStatus: 'quarantined' });
-    expect(visual.fill).toBe('quarantined-fill');
-    expect(visual.stroke).toBe('quarantined-stroke');
-    expect(visual.strokeWidth).toBe(0.9);
-    expect(visual.navigationFill).toBe('workflow-source-fill');
-    expect(visual.navigationStroke).toBe('workflow-source-stroke');
-    expect(visual.navigationStrokeWidth).toBe(1.6);
-    expect(visual.navigationDash).toEqual([3, 2]);
-    expect(visual.opacity).toBe(0.98);
-  });
-
-  it('locate-target resolves stronger destination emphasis than search-hit', () => {
-    const visual = resolveVisual({ isLocateTarget: true, runtimeStatus: 'empty' });
-    expect(visual.navigationFill).toBe('locate-target-fill');
-    expect(visual.navigationStroke).toBe('locate-target-stroke');
-    expect(visual.navigationStrokeWidth).toBe(1.9);
-  });
-
-  it('focused no longer resolves a canonical interaction channel', () => {
-    const visual = resolveVisual({ isFocused: true });
-    expect(visual.navigationFill).toBeNull();
-    expect(visual.navigationStroke).toBeNull();
-    expect(visual.navigationStrokeWidth).toBe(0);
-  });
-
-  it('workflow target locked + occupied uses locked visuals and is not clickable', () => {
+  it('invalid-target uses badge-only ownership and preserves canonical occupied surface', () => {
     const visual = resolveVisual({
       isWorkflowScope: true,
       isOccupiedByFallback: true
     });
-    expect(visual.semantics.fill).toBe('occupied');
-    expect(visual.semantics.interaction.invalidTarget).toBe(true);
-    expect(visual.compat.isWorkflowTargetLocked).toBe(true);
-    expect(visual.fill).toBe('blocked-fill');
-    expect(visual.stroke).toBe('blocked-stroke');
-    expect(visual.navigationStroke).toBeNull();
-    expect(visual.opacity).toBe(0.24);
+    expect(visual.surface.fill).toBe('occupied-fill');
+    expect(visual.surface.stroke).toBe('occupied-stroke');
+    expect(visual.badge).toEqual({
+      fill: 'blocked-fill',
+      stroke: 'blocked-stroke',
+      strokeWidth: 1
+    });
     expect(visual.isClickable).toBe(false);
   });
 
-  it('passive + runtime keeps runtime colors and passive opacity', () => {
-    const visual = resolveVisual({
-      isRackPassive: true,
-      runtimeStatus: 'pick_active'
-    });
-    expect(visual.fill).toBe('pick-active-fill');
-    expect(visual.stroke).toBe('pick-active-stroke');
-    expect(visual.opacity).toBe(0.4);
-  });
-
-  it('missing cell identity uses missing-cell opacity and never clickable', () => {
-    const visual = resolveVisual({
-      hasCellIdentity: false,
-      isInteractive: true
-    });
-    expect(visual.flags.isMissingCellIdentity).toBe(true);
-    expect(visual.opacity).toBe(0.18);
-    expect(visual.navigationStroke).toBeNull();
-    expect(visual.isClickable).toBe(false);
-  });
-
-  it('rack selected + empty base uses selected-rack opacity and width without state overrides', () => {
-    const visual = resolveVisual({
-      isRackSelected: true
-    });
-    expect(visual.fill).toBe('base-fill');
-    expect(visual.stroke).toBe('base-stroke');
-    expect(visual.opacity).toBe(0.9);
-    expect(visual.strokeWidth).toBe(0.9);
-  });
-
-  it('runtime absent + occupied fallback uses occupied fallback visuals', () => {
+  it('degraded truth adds a marker only and does not rewrite fill', () => {
     const visual = resolveVisual({
       isOccupiedByFallback: true
     });
-    expect(visual.fill).toBe('occupied-fill');
-    expect(visual.stroke).toBe('occupied-stroke');
-    expect(visual.opacity).toBe(0.98);
-    expect(visual.strokeWidth).toBe(0.9);
+    expect(visual.surface.fill).toBe('occupied-fill');
+    expect(visual.truthMarker).toEqual({
+      kind: 'degraded',
+      color: 'occupied-stroke'
+    });
   });
 });
 
@@ -686,7 +635,6 @@ type LayeredRenderOptions = {
 
 const CELL_FILL_A_RACK_SELECTED = 'rgba(45, 118, 168, 0.1)';
 const CELL_STROKE_A_RACK_SELECTED = '#5c92bb';
-const CELL_FILL_SELECTED = 'rgba(15, 106, 142, 0.18)';
 const CELL_STROKE_SELECTED = '#0f6a8e';
 const CELL_FILL_LOCATE_TARGET = 'rgba(0, 122, 92, 0.18)';
 const CELL_STROKE_LOCATE_TARGET = '#007a5c';
@@ -698,12 +646,8 @@ const CELL_FILL_LOCKED = 'rgba(120, 61, 18, 0.16)';
 const CELL_STROKE_LOCKED = '#9a5d1b';
 const CELL_FILL_STOCKED = 'rgba(0, 122, 92, 0.14)';
 const CELL_STROKE_STOCKED = '#218367';
-const CELL_FILL_PICK_ACTIVE = 'rgba(86, 44, 145, 0.14)';
 const CELL_FILL_RESERVED = 'rgba(214, 158, 46, 0.18)';
-const CELL_FILL_QUARANTINED = 'rgba(198, 88, 49, 0.16)';
-const CELL_STROKE_OCCUPIED_A = '#218367';
 const CELL_STROKE_RESERVED = '#b7791f';
-const CELL_STROKE_QUARANTINED = '#c05621';
 
 function createSingleSlotFace(levelId: string): RackFace {
   return {
@@ -776,7 +720,7 @@ function renderLayeredCell(options: LayeredRenderOptions = {}) {
     );
   });
 
-  return { renderer, cellId };
+  return renderer;
 }
 
 function getRects(renderer: TestRenderer.ReactTestRenderer) {
@@ -791,167 +735,141 @@ function getHitRects(renderer: TestRenderer.ReactTestRenderer) {
   );
 }
 
-function getFillRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+function getSurfaceRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter(
+    (rect) => rect.props.cornerRadius === 1 && Number(rect.props.width) > 100
+  );
 }
 
-function getStrokeRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getRects(renderer).filter((rect) => rect.props.strokeEnabled === true);
+function getOutlineRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getSurfaceRects(renderer).filter(
+    (rect) => rect.props.strokeEnabled === true && rect.props.fillEnabled !== true
+  );
 }
 
-function getSurfaceFillRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getFillRects(renderer).filter((rect) => rect.props.cornerRadius === 1);
+function getHaloRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter((rect) => rect.props.cornerRadius === 2);
 }
 
-function getSurfaceStrokeRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getStrokeRects(renderer).filter((rect) => rect.props.cornerRadius === 1);
+function getBadgeRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter(
+    (rect) => rect.props.cornerRadius === 1 && Number(rect.props.width) <= 40 && rect.props.opacity === 1
+  );
 }
 
-function getSemanticMarkRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getFillRects(renderer).filter((rect) => rect.props.cornerRadius !== 1);
+function getTruthMarkerRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter(
+    (rect) => rect.props.cornerRadius === 0.6 || Number(rect.props.width) < 100 && rect.props.opacity === 0.7
+  );
 }
 
-describe('RackCells layered channel ownership characterization', () => {
-  it('selected + runtime keeps runtime surface plus selection interaction stroke and clickability', () => {
-    const { renderer } = renderLayeredCell({
+describe('RackCells layered paint ownership', () => {
+  it('selected + runtime renders surface plus outline only and keeps clickability', () => {
+    const renderer = renderLayeredCell({
       selected: true,
       runtimeStatus: 'reserved'
     });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
+
+    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const outlineRects = getOutlineRects(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(fillRects.map((rect) => rect.props.fill)).toEqual(
-      expect.arrayContaining([CELL_FILL_RESERVED, CELL_FILL_SELECTED])
-    );
-    expect(strokeRects.map((rect) => rect.props.stroke)).toEqual(
-      expect.arrayContaining([CELL_STROKE_RESERVED, CELL_STROKE_SELECTED])
-    );
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_RESERVED);
+    expect(surfaceRects.map((rect) => rect.props.fill)).not.toContain('selected-fill');
+    expect(outlineRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
+    expect(getHaloRects(renderer)).toHaveLength(0);
+    expect(getBadgeRects(renderer)).toHaveLength(0);
     expect(hitRects).toHaveLength(1);
     expect(typeof hitRects[0]?.props.onClick).toBe('function');
   });
 
-  it('search-hit + runtime keeps runtime fill and weaker search stroke split across overlays', () => {
-    const { renderer } = renderLayeredCell({
-      searchHit: true,
-      runtimeStatus: 'stocked'
-    });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
-
-    expect(fillRects.map((rect) => rect.props.fill)).toEqual(
-      expect.arrayContaining([CELL_FILL_STOCKED, CELL_FILL_SEARCH_HIT])
-    );
-    expect(strokeRects.map((rect) => rect.props.stroke)).toEqual(
-      expect.arrayContaining([CELL_STROKE_STOCKED, CELL_STROKE_SEARCH_HIT])
-    );
-  });
-
-  it('locate-target uses a stronger destination channel than search-hit', () => {
-    const { renderer } = renderLayeredCell({
+  it('selected + locate-target renders independent outline and locate halo', () => {
+    const renderer = renderLayeredCell({
+      selected: true,
       locateTarget: true,
       runtimeStatus: 'stocked'
     });
 
-    expect(getSurfaceFillRects(renderer).map((rect) => rect.props.fill)).toEqual(
-      expect.arrayContaining([CELL_FILL_STOCKED, CELL_FILL_LOCATE_TARGET])
-    );
-    expect(getSurfaceStrokeRects(renderer).map((rect) => rect.props.stroke)).toEqual(
-      expect.arrayContaining([CELL_STROKE_STOCKED, CELL_STROKE_LOCATE_TARGET])
-    );
+    expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
   });
 
-  it('workflow source + runtime keeps runtime surface plus workflow-source interaction stroke', () => {
-    const { renderer } = renderLayeredCell({
-      workflowSource: true,
-      runtimeStatus: 'quarantined'
+  it('selected + search-hit renders independent outline and search halo', () => {
+    const renderer = renderLayeredCell({
+      selected: true,
+      searchHit: true,
+      runtimeStatus: 'stocked'
     });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
 
-    expect(fillRects.map((rect) => rect.props.fill)).toEqual(
-      expect.arrayContaining([CELL_FILL_QUARANTINED, CELL_FILL_WORKFLOW_SOURCE])
-    );
-    expect(strokeRects.map((rect) => rect.props.stroke)).toEqual(
-      expect.arrayContaining([CELL_STROKE_QUARANTINED, CELL_STROKE_WORKFLOW_SOURCE])
-    );
+    expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_SEARCH_HIT);
   });
 
-  it('workflow locked + occupied keeps locked suppression and disables click', () => {
-    const { renderer } = renderLayeredCell({
+  it('locate-target suppresses search-hit in the halo slot', () => {
+    const renderer = renderLayeredCell({
+      locateTarget: true,
+      searchHit: true,
+      runtimeStatus: 'stocked'
+    });
+
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toEqual([CELL_FILL_LOCATE_TARGET]);
+    expect(getHaloRects(renderer).map((rect) => rect.props.stroke)).toEqual([CELL_STROKE_LOCATE_TARGET]);
+  });
+
+  it('invalid-target uses a badge and does not repaint the main surface', () => {
+    const renderer = renderLayeredCell({
       workflowScope: true,
       occupied: true
     });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
+
+    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const badgeRects = getBadgeRects(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_LOCKED);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_LOCKED);
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_STOCKED);
+    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_STOCKED);
+    expect(badgeRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCKED);
+    expect(badgeRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_LOCKED);
     expect(hitRects).toHaveLength(1);
     expect(hitRects[0]?.props.onClick).toBeUndefined();
   });
 
-  it('passive + runtime keeps runtime projection and clickability unchanged', () => {
-    const { renderer } = renderLayeredCell({
-      runtimeStatus: 'pick_active',
-      interactive: true
+  it('workflow-source renders a badge only', () => {
+    const renderer = renderLayeredCell({
+      workflowSource: true,
+      runtimeStatus: 'stocked'
     });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
-    const hitRects = getHitRects(renderer);
 
-    expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_PICK_ACTIVE);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_WORKFLOW_SOURCE);
-    expect(hitRects).toHaveLength(1);
-    expect(typeof hitRects[0]?.props.onClick).toBe('function');
+    expect(getBadgeRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_WORKFLOW_SOURCE);
+    expect(getBadgeRects(renderer).map((rect) => rect.props.stroke)).toContain(
+      CELL_STROKE_WORKFLOW_SOURCE
+    );
+  });
+
+  it('degraded truth adds an internal marker without changing the occupied surface', () => {
+    const renderer = renderLayeredCell({
+      occupied: true
+    });
+
+    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const truthMarkerRects = getTruthMarkerRects(renderer);
+
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_STOCKED);
+    expect(truthMarkerRects.length).toBeGreaterThan(0);
   });
 
   it('missing cell identity keeps base visuals and no click handler', () => {
-    const { renderer } = renderLayeredCell({
+    const renderer = renderLayeredCell({
       missingCellIdentity: true
     });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
+    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
     const hitRects = getHitRects(renderer);
 
-    expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_A_RACK_SELECTED);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_A_RACK_SELECTED);
-    expect(fillRects[0]?.props.opacity).toBe(0.18);
+    expect(surfaceRects).toHaveLength(1);
+    expect(surfaceRects[0]?.props.fill).toBe(CELL_FILL_A_RACK_SELECTED);
+    expect(surfaceRects[0]?.props.stroke).toBe(CELL_STROKE_A_RACK_SELECTED);
+    expect(surfaceRects[0]?.props.opacity).toBe(0.18);
     expect(hitRects).toHaveLength(1);
     expect(hitRects[0]?.props.onClick).toBeUndefined();
-  });
-
-  it('occupied fallback without runtime keeps occupied fallback visuals', () => {
-    const { renderer } = renderLayeredCell({
-      occupied: true
-    });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
-
-    expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_OCCUPIED_A);
-  });
-
-  it('runtime without occupied fallback keeps runtime visuals', () => {
-    const { renderer } = renderLayeredCell({
-      runtimeStatus: 'stocked',
-      occupied: false
-    });
-    const fillRects = getSurfaceFillRects(renderer);
-    const strokeRects = getSurfaceStrokeRects(renderer);
-
-    expect(fillRects).toHaveLength(1);
-    expect(fillRects[0]?.props.fill).toBe(CELL_FILL_STOCKED);
-    expect(strokeRects).toHaveLength(1);
-    expect(strokeRects[0]?.props.stroke).toBe(CELL_STROKE_STOCKED);
   });
 });

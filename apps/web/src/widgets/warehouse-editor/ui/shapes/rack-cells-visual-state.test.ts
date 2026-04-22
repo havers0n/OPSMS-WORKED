@@ -53,7 +53,7 @@ function createInputs(overrides: Partial<CellVisualInputs> = {}): CellVisualInpu
   };
 }
 
-describe('rack-cells-visual-state PR3 semantics', () => {
+describe('rack-cells-visual-state PR4 paint normalization', () => {
   it.each([
     { runtimeStatus: 'empty' as const, fill: 'empty', paintFill: palette.emptyFill },
     { runtimeStatus: 'stocked' as const, fill: 'occupied', paintFill: palette.occupiedFill },
@@ -77,11 +77,12 @@ describe('rack-cells-visual-state PR3 semantics', () => {
       source: 'runtime'
     });
     expect(state.flags.fillSource).toBe('runtime');
-    expect(state.flags.isDegradedFill).toBe(false);
     expect(state.fill).toBe(paintFill);
+    expect(state.surface.fill).toBe(paintFill);
+    expect(state.truthMarker).toBeNull();
   });
 
-  it('degrades fallback occupancy only to canonical occupied fill', () => {
+  it('degrades fallback occupancy only to canonical occupied fill and a truth marker', () => {
     const state = resolveCellVisualState(
       createInputs({
         isOccupiedByFallback: true
@@ -97,12 +98,16 @@ describe('rack-cells-visual-state PR3 semantics', () => {
     });
     expect(state.flags.fillSource).toBe('fallback');
     expect(state.flags.isDegradedFill).toBe(true);
-    expect(state.compat.semanticKind).toBe('occupied_fallback');
     expect(state.fill).toBe(palette.occupiedFill);
     expect(state.stroke).toBe(palette.occupiedStroke);
+    expect(state.truthMarker).toEqual({
+      kind: 'degraded',
+      color: palette.occupiedStroke
+    });
+    expect(state.compat.semanticKind).toBe('occupied_fallback');
   });
 
-  it('does not render unknown truth as empty', () => {
+  it('does not render unknown truth as empty and uses an internal marker only', () => {
     const state = resolveCellVisualState(createInputs(), palette);
 
     expect(state.semantics.fill).toBeNull();
@@ -114,9 +119,13 @@ describe('rack-cells-visual-state PR3 semantics', () => {
     expect(state.flags.hasFill).toBe(false);
     expect(state.fill).toBe(palette.baseFill);
     expect(state.stroke).toBe(palette.baseStroke);
+    expect(state.truthMarker).toEqual({
+      kind: 'unknown',
+      color: palette.baseStroke
+    });
   });
 
-  it('keeps invalid-target separate from canonical fill/base semantics', () => {
+  it('keeps invalid-target separate from canonical fill/base semantics and routes it to badge only', () => {
     const state = resolveCellVisualState(
       createInputs({
         isWorkflowScope: true,
@@ -128,13 +137,20 @@ describe('rack-cells-visual-state PR3 semantics', () => {
     expect(state.semantics.base).toBe('frame');
     expect(state.semantics.fill).toBe('occupied');
     expect(state.semantics.interaction.invalidTarget).toBe(true);
-    expect(state.compat.isWorkflowTargetLocked).toBe(true);
-    expect(state.fill).toBe(palette.blockedFill);
-    expect(state.stroke).toBe(palette.blockedStroke);
+    expect(state.fill).toBe(palette.occupiedFill);
+    expect(state.stroke).toBe(palette.occupiedStroke);
+    expect(state.surface.fill).toBe(palette.occupiedFill);
+    expect(state.badge).toEqual({
+      fill: palette.blockedFill,
+      stroke: palette.blockedStroke,
+      strokeWidth: 1
+    });
+    expect(state.halo).toBeNull();
+    expect(state.outline).toBeNull();
     expect(state.isClickable).toBe(false);
   });
 
-  it('removes focused from canonical resolver semantics and derived navigation output', () => {
+  it('removes focused from canonical semantics and derived paint slots', () => {
     const state = resolveCellVisualState(
       createInputs({
         isFocused: true
@@ -149,11 +165,12 @@ describe('rack-cells-visual-state PR3 semantics', () => {
       workflowSource: false,
       invalidTarget: false
     });
-    expect(state.navigationFill).toBeNull();
-    expect(state.navigationStroke).toBeNull();
+    expect(state.outline).toBeNull();
+    expect(state.halo).toBeNull();
+    expect(state.badge).toBeNull();
   });
 
-  it('keeps selected, locate-target, workflow-source, and search-hit precedence in derived navigation plumbing', () => {
+  it('keeps selected independent from halo and badge precedence', () => {
     const selectedState = resolveCellVisualState(
       createInputs({
         isSelected: true,
@@ -166,7 +183,6 @@ describe('rack-cells-visual-state PR3 semantics', () => {
     const locateState = resolveCellVisualState(
       createInputs({
         isLocateTarget: true,
-        isWorkflowSource: true,
         isSearchHit: true
       }),
       palette
@@ -178,17 +194,36 @@ describe('rack-cells-visual-state PR3 semantics', () => {
       }),
       palette
     );
-    const searchState = resolveCellVisualState(
+
+    expect(selectedState.outline?.stroke).toBe(palette.selectedStroke);
+    expect(selectedState.halo?.stroke).toBe(palette.locateTargetStroke);
+    expect(selectedState.badge?.stroke).toBe(palette.workflowSourceStroke);
+    expect(locateState.halo?.stroke).toBe(palette.locateTargetStroke);
+    expect(workflowState.halo?.stroke).toBe(palette.searchHitStroke);
+    expect(workflowState.badge?.stroke).toBe(palette.workflowSourceStroke);
+  });
+
+  it('keeps compat fields as derived mirrors from canonical semantics and truth', () => {
+    const fallbackState = resolveCellVisualState(
       createInputs({
-        isSearchHit: true
+        isOccupiedByFallback: true
+      }),
+      palette
+    );
+    const invalidState = resolveCellVisualState(
+      createInputs({
+        isWorkflowScope: true,
+        isOccupiedByFallback: true
       }),
       palette
     );
 
-    expect(selectedState.navigationStroke).toBe(palette.selectedStroke);
-    expect(locateState.navigationStroke).toBe(palette.locateTargetStroke);
-    expect(workflowState.navigationStroke).toBe(palette.workflowSourceStroke);
-    expect(searchState.navigationStroke).toBe(palette.searchHitStroke);
+    expect(fallbackState.compat.semanticKind).toBe('occupied_fallback');
+    expect(fallbackState.semantics.fill).toBe('occupied');
+    expect(fallbackState.semantics.truth.source).toBe('fallback');
+    expect(invalidState.compat.isWorkflowTargetLocked).toBe(
+      invalidState.semantics.interaction.invalidTarget
+    );
   });
 
   it('resolves identical canonical base and fill for view/storage-style consumers given identical truth', () => {

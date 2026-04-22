@@ -11,11 +11,12 @@ import {
   type CellVisualPalette
 } from './rack-cells-visual-state';
 import {
-  CellBaseVisual,
-  CellRuntimeOverlay,
-  CellStatusSemanticOverlay,
+  CellSurfaceVisual,
+  CellTruthMarkerOverlay,
   CellInteractionOverlay,
-  CellExceptionOverlay
+  CellOutlineOverlay,
+  CellHaloOverlay,
+  CellBadgeOverlay
 } from './rack-cell-overlays';
 import type { LabelProminence } from './rack-label-reveal-policy';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
@@ -183,39 +184,31 @@ function FaceCells({
 
           return (
             <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
-              <CellBaseVisual
+              <CellSurfaceVisual
                 geometry={cellGeometry}
                 visualState={visualState}
-                isSelected={isSelected}
-                isWorkflowSource={isWorkflowSource}
-                isHighlighted={isSearchHit}
               />
-              <CellRuntimeOverlay
+              <CellTruthMarkerOverlay
                 geometry={cellGeometry}
                 visualState={visualState}
-                isSelected={isSelected}
-                isWorkflowSource={isWorkflowSource}
-                isHighlighted={isSearchHit}
               />
-              <CellStatusSemanticOverlay
+              <CellOutlineOverlay
                 geometry={cellGeometry}
                 visualState={visualState}
-                isSelected={isSelected}
-                isWorkflowSource={isWorkflowSource}
+              />
+              <CellHaloOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+              />
+              <CellBadgeOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
               />
               <CellInteractionOverlay
                 geometry={cellGeometry}
                 visualState={visualState}
-                isSelected={isSelected}
-                isWorkflowSource={isWorkflowSource}
-                isHighlighted={isSearchHit}
                 isClickable={visualState.isClickable}
                 onCellClick={cellId !== null ? (anchor) => onCellClick(cellId, anchor) : undefined}
-              />
-              <CellExceptionOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-                isHighlighted={isSearchHit}
               />
               {showCellNumbers && (
                 <CellInteriorSlotLabel
