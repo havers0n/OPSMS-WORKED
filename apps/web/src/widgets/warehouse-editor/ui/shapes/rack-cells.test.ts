@@ -568,18 +568,20 @@ describe('rack-cells visual-state precedence', () => {
 
   it('selected + occupied keeps occupied fallback semantics and adds selection interaction stroke', () => {
     const visual = resolveVisual({ isSelected: true, isOccupiedByFallback: true });
-    expect(visual.fill).toBe('base-fill');
-    expect(visual.stroke).toBe('base-stroke');
-    expect(visual.strokeWidth).toBe(0.5);
+    expect(visual.semantics.fill).toBe('occupied');
+    expect(visual.fill).toBe('occupied-fill');
+    expect(visual.stroke).toBe('occupied-stroke');
+    expect(visual.strokeWidth).toBe(0.9);
     expect(visual.navigationStroke).toBe('selected-stroke');
     expect(visual.navigationStrokeWidth).toBe(2.1);
-    expect(visual.opacity).toBe(0.72);
+    expect(visual.opacity).toBe(0.98);
   });
 
   it('search-hit + runtime keeps runtime surface and weaker discovery interaction stroke', () => {
     const visual = resolveVisual({ isSearchHit: true, runtimeStatus: 'stocked' });
-    expect(visual.fill).toBe('stocked-fill');
-    expect(visual.stroke).toBe('stocked-stroke');
+    expect(visual.semantics.fill).toBe('occupied');
+    expect(visual.fill).toBe('occupied-fill');
+    expect(visual.stroke).toBe('occupied-stroke');
     expect(visual.strokeWidth).toBe(0.9);
     expect(visual.navigationFill).toBe('search-hit-fill');
     expect(visual.navigationStroke).toBe('search-hit-stroke');
@@ -606,11 +608,11 @@ describe('rack-cells visual-state precedence', () => {
     expect(visual.navigationStrokeWidth).toBe(1.9);
   });
 
-  it('focused resolves a softer semantic channel than selected', () => {
+  it('focused no longer resolves a canonical interaction channel', () => {
     const visual = resolveVisual({ isFocused: true });
-    expect(visual.navigationFill).toBe('focused-fill');
-    expect(visual.navigationStroke).toBe('focused-stroke');
-    expect(visual.navigationStrokeWidth).toBe(1.45);
+    expect(visual.navigationFill).toBeNull();
+    expect(visual.navigationStroke).toBeNull();
+    expect(visual.navigationStrokeWidth).toBe(0);
   });
 
   it('workflow target locked + occupied uses locked visuals and is not clickable', () => {
@@ -618,7 +620,9 @@ describe('rack-cells visual-state precedence', () => {
       isWorkflowScope: true,
       isOccupiedByFallback: true
     });
-    expect(visual.flags.isWorkflowTargetLocked).toBe(true);
+    expect(visual.semantics.fill).toBe('occupied');
+    expect(visual.semantics.interaction.invalidTarget).toBe(true);
+    expect(visual.compat.isWorkflowTargetLocked).toBe(true);
     expect(visual.fill).toBe('blocked-fill');
     expect(visual.stroke).toBe('blocked-stroke');
     expect(visual.navigationStroke).toBeNull();

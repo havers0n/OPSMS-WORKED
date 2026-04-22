@@ -2,13 +2,7 @@ import type { OperationsCellRuntime } from '@wos/domain';
 
 type RuntimeStatus = OperationsCellRuntime['status'];
 
-type RuntimeVisual = {
-  kind: Exclude<CellSemanticKind, 'base' | 'occupied_fallback' | 'locked'>;
-  fill: string;
-  stroke: string;
-};
-
-export type CellSemanticKind =
+type LegacySemanticKind =
   | 'base'
   | 'occupied_fallback'
   | 'empty'
@@ -17,6 +11,10 @@ export type CellSemanticKind =
   | 'pick_active'
   | 'quarantined'
   | 'locked';
+
+export type CellFillSemantic = 'empty' | 'occupied' | 'reserved' | 'pick-active' | 'quarantined';
+
+export type CellBaseSemantic = 'frame' | 'missing-identity';
 
 export type CellVisualPalette = {
   baseFill: string;
@@ -62,16 +60,36 @@ export type CellVisualInputs = {
   runtimeStatus: RuntimeStatus | null;
 };
 
+export type CellCanonicalSemantics = {
+  base: CellBaseSemantic;
+  fill: CellFillSemantic | null;
+  interaction: {
+    selected: boolean;
+    locateTarget: boolean;
+    searchHit: boolean;
+    workflowSource: boolean;
+    invalidTarget: boolean;
+  };
+  truth: {
+    isDegraded: boolean;
+    isUnknown: boolean;
+    source: 'runtime' | 'fallback' | 'none';
+  };
+};
+
 export type CellVisualFlags = {
   isMissingCellIdentity: boolean;
-  hasRuntimeStatus: boolean;
-  isOccupiedFallback: boolean;
-  isWorkflowTargetLocked: boolean;
   canSelectWorkflowTarget: boolean;
-  semanticKind: CellSemanticKind;
+  isInvalidTarget: boolean;
+  isDegradedFill: boolean;
+  hasFill: boolean;
+  fillSource: 'runtime' | 'fallback' | 'none';
 };
 
 export type ResolvedCellVisualState = {
+  semantics: CellCanonicalSemantics;
+  flags: CellVisualFlags;
+  // Transitional renderer plumbing derived from canonical semantics. PR4 should remove these.
   fill: string;
   stroke: string;
   opacity: number;
@@ -81,57 +99,135 @@ export type ResolvedCellVisualState = {
   navigationStrokeWidth: number;
   navigationDash: number[] | undefined;
   isClickable: boolean;
-  flags: CellVisualFlags;
+  compat: {
+    semanticKind: LegacySemanticKind;
+    isWorkflowTargetLocked: boolean;
+  };
 };
 
-function resolveRuntimeVisual(
-  runtimeStatus: RuntimeStatus | null,
-  palette: CellVisualPalette
-): RuntimeVisual | null {
-  if (!runtimeStatus) return null;
-  if (runtimeStatus === 'quarantined') {
-    return { kind: 'quarantined', fill: palette.quarantinedFill, stroke: palette.quarantinedStroke };
+function mapRuntimeStatusToFill(runtimeStatus: RuntimeStatus): CellFillSemantic {
+  switch (runtimeStatus) {
+    case 'stocked':
+      return 'occupied';
+    case 'pick_active':
+      return 'pick-active';
+    default:
+      return runtimeStatus;
   }
-  if (runtimeStatus === 'pick_active') {
-    return { kind: 'pick_active', fill: palette.pickActiveFill, stroke: palette.pickActiveStroke };
-  }
-  if (runtimeStatus === 'reserved') {
-    return { kind: 'reserved', fill: palette.reservedFill, stroke: palette.reservedStroke };
-  }
-  if (runtimeStatus === 'stocked') {
-    return { kind: 'stocked', fill: palette.stockedFill, stroke: palette.stockedStroke };
-  }
-  return { kind: 'empty', fill: palette.emptyFill, stroke: palette.emptyStroke };
 }
 
-export function deriveCellVisualFlags(inputs: CellVisualInputs): CellVisualFlags {
-  const isMissingCellIdentity = !inputs.hasCellIdentity;
-  const hasRuntimeStatus = inputs.runtimeStatus !== null;
-  const isOccupiedFallback = inputs.isOccupiedByFallback && !inputs.isSelected;
-  const isWorkflowTargetLocked =
+function resolveCanonicalSemantics(inputs: CellVisualInputs): CellCanonicalSemantics {
+  const invalidTarget =
     inputs.isWorkflowScope &&
     inputs.hasCellIdentity &&
     !inputs.isSelected &&
     !inputs.isLocateTarget &&
     !inputs.isWorkflowSource &&
-    isOccupiedFallback;
-  const canSelectWorkflowTarget =
-    !inputs.isWorkflowScope ||
-    (inputs.hasCellIdentity && !inputs.isWorkflowSource && !isOccupiedFallback);
+    inputs.runtimeStatus === null &&
+    inputs.isOccupiedByFallback;
+
+  if (inputs.runtimeStatus !== null) {
+    return {
+      base: inputs.hasCellIdentity ? 'frame' : 'missing-identity',
+      fill: mapRuntimeStatusToFill(inputs.runtimeStatus),
+      interaction: {
+        selected: inputs.isSelected,
+        locateTarget: inputs.isLocateTarget,
+        searchHit: inputs.isSearchHit,
+        workflowSource: inputs.isWorkflowSource,
+        invalidTarget
+      },
+      truth: {
+        isDegraded: false,
+        isUnknown: false,
+        source: 'runtime'
+      }
+    };
+  }
+
+  if (inputs.isOccupiedByFallback) {
+    return {
+      base: inputs.hasCellIdentity ? 'frame' : 'missing-identity',
+      fill: 'occupied',
+      interaction: {
+        selected: inputs.isSelected,
+        locateTarget: inputs.isLocateTarget,
+        searchHit: inputs.isSearchHit,
+        workflowSource: inputs.isWorkflowSource,
+        invalidTarget
+      },
+      truth: {
+        isDegraded: true,
+        isUnknown: false,
+        source: 'fallback'
+      }
+    };
+  }
 
   return {
-    isMissingCellIdentity,
-    hasRuntimeStatus,
-    isOccupiedFallback,
-    isWorkflowTargetLocked,
-    canSelectWorkflowTarget,
-    semanticKind: isWorkflowTargetLocked
-      ? 'locked'
-      : hasRuntimeStatus
-        ? (inputs.runtimeStatus as CellSemanticKind)
-        : isOccupiedFallback
-          ? 'occupied_fallback'
-          : 'base'
+    base: inputs.hasCellIdentity ? 'frame' : 'missing-identity',
+    fill: null,
+    interaction: {
+      selected: inputs.isSelected,
+      locateTarget: inputs.isLocateTarget,
+      searchHit: inputs.isSearchHit,
+      workflowSource: inputs.isWorkflowSource,
+      invalidTarget
+    },
+    truth: {
+      isDegraded: false,
+      isUnknown: inputs.hasCellIdentity,
+      source: 'none'
+    }
+  };
+}
+
+function resolveFillPaint(
+  fill: CellFillSemantic | null,
+  palette: CellVisualPalette
+): { fill: string; stroke: string } {
+  switch (fill) {
+    case 'empty':
+      return { fill: palette.emptyFill, stroke: palette.emptyStroke };
+    case 'occupied':
+      return { fill: palette.occupiedFill, stroke: palette.occupiedStroke };
+    case 'reserved':
+      return { fill: palette.reservedFill, stroke: palette.reservedStroke };
+    case 'pick-active':
+      return { fill: palette.pickActiveFill, stroke: palette.pickActiveStroke };
+    case 'quarantined':
+      return { fill: palette.quarantinedFill, stroke: palette.quarantinedStroke };
+    default:
+      return { fill: palette.baseFill, stroke: palette.baseStroke };
+  }
+}
+
+function resolveLegacySemanticKind(semantics: CellCanonicalSemantics): LegacySemanticKind {
+  if (semantics.interaction.invalidTarget) return 'locked';
+  if (semantics.fill === null) return 'base';
+  if (semantics.truth.source === 'fallback') return 'occupied_fallback';
+  switch (semantics.fill) {
+    case 'occupied':
+      return 'stocked';
+    case 'pick-active':
+      return 'pick_active';
+    default:
+      return semantics.fill;
+  }
+}
+
+export function deriveCellVisualFlags(inputs: CellVisualInputs): CellVisualFlags {
+  const semantics = resolveCanonicalSemantics(inputs);
+
+  return {
+    isMissingCellIdentity: semantics.base === 'missing-identity',
+    canSelectWorkflowTarget:
+      !inputs.isWorkflowScope ||
+      (inputs.hasCellIdentity && !inputs.isWorkflowSource && !semantics.interaction.invalidTarget),
+    isInvalidTarget: semantics.interaction.invalidTarget,
+    isDegradedFill: semantics.truth.isDegraded,
+    hasFill: semantics.fill !== null,
+    fillSource: semantics.truth.source
   };
 }
 
@@ -139,39 +235,27 @@ export function resolveCellVisualState(
   inputs: CellVisualInputs,
   palette: CellVisualPalette
 ): ResolvedCellVisualState {
+  const semantics = resolveCanonicalSemantics(inputs);
   const flags = deriveCellVisualFlags(inputs);
-  const runtimeVisual = resolveRuntimeVisual(inputs.runtimeStatus, palette);
 
-  const fill = flags.isWorkflowTargetLocked
-    ? palette.blockedFill
-    : runtimeVisual
-      ? runtimeVisual.fill
-      : flags.isOccupiedFallback
-        ? palette.occupiedFill
-        : palette.baseFill;
-
-  const stroke = flags.isWorkflowTargetLocked
-    ? palette.blockedStroke
-    : runtimeVisual
-      ? runtimeVisual.stroke
-      : flags.isOccupiedFallback
-        ? palette.occupiedStroke
-        : palette.baseStroke;
+  const surfacePaint = semantics.interaction.invalidTarget
+    ? { fill: palette.blockedFill, stroke: palette.blockedStroke }
+    : resolveFillPaint(semantics.fill, palette);
 
   const opacity = flags.isMissingCellIdentity
     ? 0.18
-    : flags.isWorkflowTargetLocked
+    : semantics.interaction.invalidTarget
       ? 0.24
       : inputs.isRackPassive
         ? 0.4
-        : flags.isOccupiedFallback || flags.hasRuntimeStatus
+        : semantics.fill !== null
           ? 0.98
           : inputs.isRackSelected
             ? 0.9
             : 0.72;
 
   const strokeWidth =
-    flags.isOccupiedFallback || flags.hasRuntimeStatus || flags.isWorkflowTargetLocked
+    semantics.fill !== null || semantics.interaction.invalidTarget
       ? 0.9
       : inputs.isRackSelected
         ? 0.9
@@ -182,32 +266,30 @@ export function resolveCellVisualState(
   let navigationStrokeWidth = 0;
   let navigationDash: number[] | undefined;
 
-  if (inputs.isSelected) {
+  if (semantics.interaction.selected) {
     navigationFill = palette.selectedFill;
     navigationStroke = palette.selectedStroke;
     navigationStrokeWidth = 2.1;
-  } else if (inputs.isLocateTarget) {
+  } else if (semantics.interaction.locateTarget) {
     navigationFill = palette.locateTargetFill;
     navigationStroke = palette.locateTargetStroke;
     navigationStrokeWidth = 1.9;
-  } else if (inputs.isWorkflowSource) {
+  } else if (semantics.interaction.workflowSource) {
     navigationFill = palette.workflowSourceFill;
     navigationStroke = palette.workflowSourceStroke;
     navigationStrokeWidth = 1.6;
     navigationDash = [3, 2];
-  } else if (inputs.isFocused) {
-    navigationFill = palette.focusedFill;
-    navigationStroke = palette.focusedStroke;
-    navigationStrokeWidth = 1.45;
-  } else if (inputs.isSearchHit) {
+  } else if (semantics.interaction.searchHit) {
     navigationFill = palette.searchHitFill;
     navigationStroke = palette.searchHitStroke;
     navigationStrokeWidth = 1.15;
   }
 
   return {
-    fill,
-    stroke,
+    semantics,
+    flags,
+    fill: surfacePaint.fill,
+    stroke: surfacePaint.stroke,
     opacity,
     strokeWidth,
     navigationFill,
@@ -215,6 +297,9 @@ export function resolveCellVisualState(
     navigationStrokeWidth,
     navigationDash,
     isClickable: inputs.isInteractive && inputs.hasCellIdentity && flags.canSelectWorkflowTarget,
-    flags
+    compat: {
+      semanticKind: resolveLegacySemanticKind(semantics),
+      isWorkflowTargetLocked: semantics.interaction.invalidTarget
+    }
   };
 }

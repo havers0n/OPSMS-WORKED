@@ -62,10 +62,8 @@ export function CellBaseVisual({
   isWorkflowSource: _isWorkflowSource,
   isHighlighted: _isHighlighted
 }: CellOverlaySharedProps) {
-  const ownsFill =
-    !visualState.flags.isWorkflowTargetLocked && !visualState.flags.hasRuntimeStatus;
-  const ownsStroke =
-    !visualState.flags.isWorkflowTargetLocked && !visualState.flags.hasRuntimeStatus;
+  const ownsFill = !visualState.compat.isWorkflowTargetLocked && visualState.semantics.fill === null;
+  const ownsStroke = !visualState.compat.isWorkflowTargetLocked && visualState.semantics.fill === null;
 
   return (
     <LayerRect
@@ -86,8 +84,8 @@ export function CellRuntimeOverlay({
   isWorkflowSource: _isWorkflowSource,
   isHighlighted: _isHighlighted
 }: CellOverlaySharedProps) {
-  const ownsFill = visualState.flags.hasRuntimeStatus && !visualState.flags.isWorkflowTargetLocked;
-  const ownsStroke = visualState.flags.hasRuntimeStatus && !visualState.flags.isWorkflowTargetLocked;
+  const ownsFill = visualState.semantics.fill !== null && !visualState.compat.isWorkflowTargetLocked;
+  const ownsStroke = visualState.semantics.fill !== null && !visualState.compat.isWorkflowTargetLocked;
 
   return (
     <LayerRect
@@ -154,7 +152,7 @@ export function CellStatusSemanticOverlay({
   isSelected,
   isWorkflowSource
 }: Pick<CellOverlaySharedProps, 'geometry' | 'visualState' | 'isSelected' | 'isWorkflowSource'>) {
-  if (visualState.flags.isWorkflowTargetLocked) return null;
+  if (visualState.compat.isWorkflowTargetLocked) return null;
 
   const markOpacity = isSelected || isWorkflowSource ? 0.92 : 0.86;
   const markColor = visualState.stroke;
@@ -165,7 +163,7 @@ export function CellStatusSemanticOverlay({
   const markerH = Math.max(1, geometry.height - inset * 2);
   const thin = Math.max(0.85, Math.min(markerW, markerH) * 0.16);
 
-  if (visualState.flags.semanticKind === 'stocked') {
+  if (visualState.compat.semanticKind === 'stocked') {
     return (
       <Rect
         x={markerX}
@@ -179,7 +177,7 @@ export function CellStatusSemanticOverlay({
     );
   }
 
-  if (visualState.flags.semanticKind === 'reserved') {
+  if (visualState.compat.semanticKind === 'reserved') {
     return (
       <Rect
         x={markerX}
@@ -193,7 +191,7 @@ export function CellStatusSemanticOverlay({
     );
   }
 
-  if (visualState.flags.semanticKind === 'pick_active') {
+  if (visualState.compat.semanticKind === 'pick_active') {
     const barW = Math.max(1, markerW * 0.24);
     return (
       <Rect
@@ -208,7 +206,7 @@ export function CellStatusSemanticOverlay({
     );
   }
 
-  if (visualState.flags.semanticKind === 'quarantined') {
+  if (visualState.compat.semanticKind === 'quarantined') {
     return (
       <>
         <Line
@@ -231,7 +229,7 @@ export function CellStatusSemanticOverlay({
     );
   }
 
-  if (visualState.flags.semanticKind === 'empty') {
+  if (visualState.compat.semanticKind === 'empty') {
     return (
       <Rect
         x={markerX}
@@ -247,7 +245,7 @@ export function CellStatusSemanticOverlay({
     );
   }
 
-  if (visualState.flags.semanticKind === 'occupied_fallback') {
+  if (visualState.compat.semanticKind === 'occupied_fallback') {
     const dot = Math.max(1, Math.min(markerW, markerH) * 0.34);
     return (
       <Rect
@@ -271,8 +269,8 @@ export function CellExceptionOverlay({
   visualState,
   isHighlighted: _isHighlighted
 }: Pick<CellOverlaySharedProps, 'geometry' | 'visualState' | 'isHighlighted'>) {
-  const ownsFill = visualState.flags.isWorkflowTargetLocked;
-  const ownsStroke = visualState.flags.isWorkflowTargetLocked;
+  const ownsFill = visualState.compat.isWorkflowTargetLocked;
+  const ownsStroke = visualState.compat.isWorkflowTargetLocked;
 
   return (
     <LayerRect
