@@ -5,6 +5,7 @@ import type { FloorWorkspace } from '@wos/domain';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StorageNavigator } from './storage-navigator';
 import { StorageInspectorV2 } from './storage-inspector-v2';
+import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 
 type MockCell = {
@@ -47,6 +48,10 @@ vi.mock('@/entities/location/api/use-location-storage', () => ({
     data: locationId ? (mockStorageRowsByLocationId[locationId] ?? []) : [],
     isLoading: false,
   })
+}));
+
+vi.mock('./workspace-canvas-and-panel', () => ({
+  WorkspaceCanvasAndPanel: () => createElement('div', { 'data-testid': 'storage-v2-canvas' }, 'Canvas')
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -111,6 +116,29 @@ function renderV2Pair(workspace: FloorWorkspace) {
           createElement(StorageNavigator, { workspace }),
           createElement(StorageInspectorV2, { workspace })
         )
+      )
+    );
+  });
+  return renderer;
+}
+
+function renderStorageWorkspaceV2(workspace: FloorWorkspace) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false }
+    }
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      createElement(QueryClientProvider, { client: queryClient },
+        createElement(StorageWorkspaceV2, {
+          workspace,
+          onAddRack: () => undefined,
+          onOpenInspector: () => undefined,
+          onCloseInspector: () => undefined
+        })
       )
     );
   });
@@ -219,6 +247,49 @@ describe('Storage V2 focus cutover integration', () => {
     expect(
       tree.includes('No rack context available') || tree.includes('No location selected')
     ).toBe(true);
+  });
+
+  it('StorageWorkspaceV2 hides side panels until rack focus exists, then shows and hides them with focus transitions', async () => {
+    await act(async () => {
+      useStorageFocusStore.getState().clearAllFocus();
+      await Promise.resolve();
+    });
+
+    const renderer = renderStorageWorkspaceV2(createWorkspace());
+
+    expect(renderer.root.findByProps({ 'data-testid': 'storage-v2-canvas' })).toBeTruthy();
+    let tree = JSON.stringify(renderer.toJSON());
+    expect(tree).not.toContain('Search location');
+    expect(tree).not.toContain('No location selected');
+
+    await act(async () => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+      await Promise.resolve();
+    });
+
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('Search location');
+    expect(tree).toContain('R-01');
+
+    clickLocationByAddress(renderer, '01-A.01.01');
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('LOC-01');
+
+    await act(async () => {
+      useStorageFocusStore.getState().handleEmptyCanvasClick();
+      await Promise.resolve();
+    });
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('Search location');
+    expect(tree).toContain('R-01');
+
+    await act(async () => {
+      useStorageFocusStore.getState().handleEmptyCanvasClick();
+      await Promise.resolve();
+    });
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).not.toContain('Search location');
+    expect(tree).not.toContain('No location selected');
   });
 });
 
