@@ -14,6 +14,7 @@ let mockSelectedRackActiveLevel = 2;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
 let rackLayerLastProps: Record<string, unknown> | null = null;
+let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
 
@@ -93,7 +94,10 @@ vi.mock('../lib/use-workspace-layout', () => ({
 }));
 
 vi.mock('./canvas-hud', () => ({
-  CanvasHud: () => null
+  CanvasHud: (props: Record<string, unknown>) => {
+    canvasHudLastProps = props;
+    return null;
+  }
 }));
 
 vi.mock('./rack-layer', () => ({
@@ -221,6 +225,7 @@ function renderCanvas(workspace: FloorWorkspace, params?: { isStorageV2?: boolea
 describe('EditorCanvas storage active-rack wiring', () => {
   beforeEach(() => {
     rackLayerLastProps = null;
+    canvasHudLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
   });
@@ -460,5 +465,24 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
     expect(storageFocusSelectRackSpy).toHaveBeenCalledWith({ rackId });
     expect(storageFocusSelectCellSpy).not.toHaveBeenCalled();
+  });
+
+  it('suppresses storage inspect affordance wiring in active Storage V2 canvas path', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelection = { type: 'cell', cellId: 'cell-1' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas(
+      {
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      },
+      { isStorageV2: true }
+    );
+
+    expect(canvasHudLastProps?.shouldShowStorageCellBar).toBe(false);
   });
 });

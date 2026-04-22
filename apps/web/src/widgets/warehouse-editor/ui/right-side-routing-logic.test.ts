@@ -44,9 +44,11 @@ describe('resolveRightSideRoute', () => {
     );
   });
 
-  it('closes view mode by default and keeps storage mode inspector-based', () => {
+  it('keeps view mode selection-based and disables storage ownership in the legacy slot', () => {
     expect(resolveRightSideRoute('view', noSelection, null)).toBe('closed');
-    expect(resolveRightSideRoute('storage', noSelection, null)).toBe('inspector-surface');
+    expect(resolveRightSideRoute('storage', noSelection, null)).toBe('closed');
+    expect(resolveRightSideRoute('storage', cellSelection('cell-1'), null)).toBe('closed');
+    expect(resolveRightSideRoute('storage', containerSelection('container-1'), null)).toBe('closed');
     expect(resolveRightSideRoute('view', cellSelection('cell-1'), null)).toBe('inspector-surface');
     expect(resolveRightSideRoute('view', containerSelection('container-1'), null)).toBe(
       'inspector-surface'

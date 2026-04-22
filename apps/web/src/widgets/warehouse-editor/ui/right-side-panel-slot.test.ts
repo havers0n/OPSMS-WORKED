@@ -170,7 +170,7 @@ describe('RightSidePanelSlot', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
   });
 
-  it('keeps non-layout behavior inspector-based', () => {
+  it('keeps storage mode closed in the legacy right-side slot', () => {
     act(() => {
       useModeStore.setState({
         viewMode: 'storage',
@@ -181,7 +181,7 @@ describe('RightSidePanelSlot', () => {
     const renderer = renderSlot();
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
   });
 
   it('keeps view mode closed by default when there is no selection', () => {
@@ -199,7 +199,7 @@ describe('RightSidePanelSlot', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
   });
 
-  it('keeps storage workflow ownership out of task surface (storage mode remains inspector-based)', () => {
+  it('keeps storage workflow ownership out of task surface and does not open legacy inspector slot', () => {
     act(() => {
       useModeStore.setState({
         viewMode: 'storage',
@@ -220,10 +220,10 @@ describe('RightSidePanelSlot', () => {
     const renderer = renderSlot();
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
   });
 
-  it('keeps storage move workflow out of task surface as well', () => {
+  it('keeps storage move workflow out of task surface and keeps slot closed', () => {
     act(() => {
       useModeStore.setState({
         viewMode: 'storage',
@@ -246,6 +246,6 @@ describe('RightSidePanelSlot', () => {
     const renderer = renderSlot();
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
   });
 });

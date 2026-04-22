@@ -20,6 +20,11 @@ export type InspectorKind =
 
 type ResolveInspectorKindContext = {
   hasResolvedStorageContainerRackContext: boolean;
+  /**
+   * Legacy storage inspector routing is disabled by default.
+   * PublishedViewer is the only runtime path that should enable this.
+   */
+  enableLegacyStorageRouting: boolean;
 };
 
 /**
@@ -54,7 +59,10 @@ type ResolveInspectorKindContext = {
 export function resolveInspectorKind(
   viewMode: ViewMode,
   selection: EditorSelection,
-  context: ResolveInspectorKindContext = { hasResolvedStorageContainerRackContext: false }
+  context: ResolveInspectorKindContext = {
+    hasResolvedStorageContainerRackContext: false,
+    enableLegacyStorageRouting: false
+  }
 ): InspectorKind | null {
   if (viewMode === 'layout') {
     if (selection.type === 'rack') {
@@ -74,6 +82,7 @@ export function resolveInspectorKind(
     return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
   }
   if (viewMode === 'storage') {
+    if (!context.enableLegacyStorageRouting) return null;
     if (selection.type === 'zone') return 'zone-readonly';
     if (selection.type === 'container') {
       return context.hasResolvedStorageContainerRackContext ? 'storage-shell' : 'placement-container';
