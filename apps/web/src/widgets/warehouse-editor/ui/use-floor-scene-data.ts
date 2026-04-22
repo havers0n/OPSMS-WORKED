@@ -27,7 +27,7 @@ export function useFloorSceneData({ viewMode, workspace }: FloorSceneDataParams)
   const isStorageMode = viewMode === 'storage';
 
   const placementFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
-  const runtimeFloorId = isViewMode ? workspace?.floorId ?? null : null;
+  const runtimeFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
 
   const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
   const { data: floorOperationsCells = [] } = useFloorOperationsCells(runtimeFloorId);

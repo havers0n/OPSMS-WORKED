@@ -128,7 +128,7 @@ describe('useFloorSceneData characterization', () => {
     expect(result.publishedCellsByStructure.size).toBe(1);
   });
 
-  it('uses occupancy and published cells in storage mode but does not load runtime truth', () => {
+  it('uses occupancy, published cells, and runtime truth in storage mode', () => {
     mockOccupancyRows = [{ cellId: 'cell-2' }];
     mockOperationsCells = [createOperationsCell('cell-2', 'pick_active')];
     mockPublishedCells = [createCell('cell-2', 2)];
@@ -136,10 +136,10 @@ describe('useFloorSceneData characterization', () => {
     const result = renderSceneData({ viewMode: 'storage', workspace: createWorkspace() });
 
     expect(occupancySpy).toHaveBeenCalledWith('floor-1');
-    expect(operationsSpy).toHaveBeenCalledWith(null);
+    expect(operationsSpy).toHaveBeenCalledWith('floor-1');
     expect(publishedSpy).toHaveBeenCalledWith('floor-1');
     expect(result.occupiedCellIds.has('cell-2')).toBe(true);
-    expect(result.floorOperationsCellsById.size).toBe(0);
+    expect(result.floorOperationsCellsById.get('cell-2')?.status).toBe('pick_active');
     expect(result.publishedCellsById.get('cell-2')?.id).toBe('cell-2');
   });
 
@@ -158,6 +158,25 @@ describe('useFloorSceneData characterization', () => {
     expect(result.publishedCells).toEqual([]);
   });
 
-  it.todo('will align view and storage base + fill data inputs once PR2 lands');
-});
+  it('aligns view and storage runtime truth inputs at the scene-data boundary', () => {
+    mockOccupancyRows = [{ cellId: 'cell-1' }];
+    mockOperationsCells = [createOperationsCell('cell-1', 'reserved')];
+    mockPublishedCells = [createCell('cell-1', 1)];
 
+    const viewResult = renderSceneData({ viewMode: 'view', workspace: createWorkspace() });
+
+    occupancySpy.mockClear();
+    operationsSpy.mockClear();
+    publishedSpy.mockClear();
+
+    const storageResult = renderSceneData({ viewMode: 'storage', workspace: createWorkspace() });
+
+    expect(occupancySpy).toHaveBeenCalledWith('floor-1');
+    expect(operationsSpy).toHaveBeenCalledWith('floor-1');
+    expect(publishedSpy).toHaveBeenCalledWith('floor-1');
+    expect(storageResult.occupiedCellIds).toEqual(viewResult.occupiedCellIds);
+    expect(storageResult.floorOperationsCellsById).toEqual(viewResult.floorOperationsCellsById);
+    expect(storageResult.publishedCellsById).toEqual(viewResult.publishedCellsById);
+    expect(storageResult.publishedCellsByStructure).toEqual(viewResult.publishedCellsByStructure);
+  });
+});
