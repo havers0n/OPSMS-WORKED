@@ -12,6 +12,10 @@ import {
 } from '@/entities/product/api/queries';
 import { resolveProductDisplayImages } from '@/entities/product/lib/display';
 import { BffRequestError } from '@/shared/api/bff/client';
+import {
+  equalPackagingLevelsComparable,
+  equalUnitProfileComparable
+} from './comparators';
 import { derivePackagingEditorSemantics } from '../ui/packaging-editor-semantics';
 import {
   buildPackagingLevelsComparable,
@@ -108,14 +112,14 @@ export function useProductDetailPageModel(productId: string | null) {
     const draftComparable = buildUnitProfileComparable(unitProfileDraft);
 
     if (!sourceComparable || !draftComparable) return true;
-    return JSON.stringify(sourceComparable) !== JSON.stringify(draftComparable);
+    return !equalUnitProfileComparable(sourceComparable, draftComparable);
   }, [isUnitProfileEditing, unitProfileDraft, unitProfileQuery.data]);
 
   const packagingDirty = useMemo(() => {
     if (!isPackagingEditing) return false;
-    return (
-      JSON.stringify(buildPackagingLevelsComparable(sourcePackagingDraft)) !==
-      JSON.stringify(buildPackagingLevelsComparable(packagingDraft))
+    return !equalPackagingLevelsComparable(
+      buildPackagingLevelsComparable(sourcePackagingDraft),
+      buildPackagingLevelsComparable(packagingDraft)
     );
   }, [isPackagingEditing, packagingDraft, sourcePackagingDraft]);
 
