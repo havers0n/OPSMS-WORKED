@@ -58,7 +58,7 @@ function WorkflowMoveScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Storage',
+  title: 'Warehouse/Proof/Workflow',
   parameters: {
     layout: 'padded'
   }

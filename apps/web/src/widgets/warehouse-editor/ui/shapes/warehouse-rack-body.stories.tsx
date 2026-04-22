@@ -4,7 +4,7 @@ import { WarehouseScene } from '@/storybook/warehouse/warehouse-scene';
 import { pairedRackGeometryStory, singleRackGeometryStory } from '@/storybook/warehouse/warehouse-story-fixtures';
 
 const meta = {
-  title: 'Warehouse/Rack/Body',
+  title: 'Warehouse/Reference/Rack/Body',
   component: RackBody,
   parameters: {
     layout: 'padded'

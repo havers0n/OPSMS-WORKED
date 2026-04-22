@@ -7,7 +7,7 @@ import {
 } from '@/storybook/warehouse/warehouse-story-fixtures';
 
 const meta = {
-  title: 'Warehouse/Inspector/Rack Overview Panel View',
+  title: 'Warehouse/Reference/Inspector/Rack Overview Panel',
   parameters: {
     layout: 'centered'
   },
@@ -35,6 +35,6 @@ export const FocusedLevelState: Story = {
   render: () => <RackOverviewPanelView status="ready" summary={rackOverviewFocusedSummaryStory} />
 };
 
-export const WarningHighOccupancy: Story = {
+export const NearCapacitySummary: Story = {
   render: () => <RackOverviewPanelView status="ready" summary={rackOverviewWarningSummaryStory} />
 };

@@ -3,7 +3,7 @@ import { FaceModeIsometric } from './rack-inspector/face-mode-isometric';
 import { pairedRackStory, singleRackStory, faceBStory } from '@/storybook/warehouse/warehouse-story-fixtures';
 
 const meta = {
-  title: 'Warehouse/Rack/Mode Specific Visuals',
+  title: 'Warehouse/Reference/Rack/Mode Visuals',
   component: FaceModeIsometric,
   args: {
     rack: pairedRackStory,

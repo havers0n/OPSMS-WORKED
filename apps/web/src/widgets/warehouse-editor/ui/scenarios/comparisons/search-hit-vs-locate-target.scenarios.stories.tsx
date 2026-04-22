@@ -47,7 +47,7 @@ function SearchHitVsLocateTargetProofScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Comparisons',
+  title: 'Warehouse/Proof/Overlays',
   parameters: {
     layout: 'padded'
   }

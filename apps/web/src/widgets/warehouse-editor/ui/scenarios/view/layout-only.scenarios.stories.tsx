@@ -13,7 +13,7 @@ function LayoutOnlyScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/View',
+  title: 'Warehouse/Proof/Layout',
   parameters: {
     layout: 'padded'
   }

@@ -44,7 +44,7 @@ function StorageCoreScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Storage',
+  title: 'Warehouse/Proof/Storage',
   parameters: {
     layout: 'padded'
   }

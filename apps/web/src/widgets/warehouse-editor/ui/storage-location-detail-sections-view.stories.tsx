@@ -41,7 +41,7 @@ function SectionsShowcase({
 }
 
 const meta = {
-  title: 'Warehouse/Inspector/Location Detail Sections View',
+  title: 'Warehouse/Reference/Inspector/Location Detail Sections',
   component: SectionsShowcase,
   parameters: {
     layout: 'centered'
@@ -81,7 +81,7 @@ export const MultipleContainersInventory: Story = {
   }
 };
 
-export const WarningPolicyState: Story = {
+export const PendingPolicySection: Story = {
   args: {
     containers: [
       {

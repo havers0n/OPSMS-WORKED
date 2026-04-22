@@ -34,7 +34,7 @@ function PolicyIsNotStateScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Storage',
+  title: 'Warehouse/Proof/Policy',
   parameters: {
     layout: 'padded'
   }

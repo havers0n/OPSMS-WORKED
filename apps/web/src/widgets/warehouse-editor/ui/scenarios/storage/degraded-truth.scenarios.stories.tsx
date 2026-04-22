@@ -44,7 +44,7 @@ function DegradedTruthScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Storage',
+  title: 'Warehouse/Proof/Truth',
   parameters: {
     layout: 'padded'
   }

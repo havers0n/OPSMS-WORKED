@@ -77,7 +77,7 @@ function ViewVsStorageParityScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Comparisons',
+  title: 'Warehouse/Proof/Parity',
   parameters: {
     layout: 'padded'
   }

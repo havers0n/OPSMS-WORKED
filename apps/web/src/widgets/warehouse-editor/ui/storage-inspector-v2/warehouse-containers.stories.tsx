@@ -46,7 +46,7 @@ function CellOverviewShowcase() {
 }
 
 const meta = {
-  title: 'Warehouse/Containers/Storage Panels',
+  title: 'Warehouse/Reference/Containers/Storage Panels',
   component: CellOverviewPanel,
   parameters: {
     layout: 'fullscreen'
@@ -117,7 +117,7 @@ export const ContainerDetail: Story = {
   )
 };
 
-export const ErrorWarningConflict: Story = {
+export const ConflictRepairPanel: Story = {
   args: {
     rackDisplayCode: 'R-14',
     activeLevel: 2,
