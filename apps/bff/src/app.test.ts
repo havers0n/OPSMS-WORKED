@@ -4113,6 +4113,76 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('keeps the public inventory response compatibility-stable when the receive rpc returns canonical extras', async () => {
+    const supabase = createSupabaseStub();
+    supabase.rpc = vi.fn(async (fn: string, args?: Record<string, unknown>) => {
+      if (fn === 'receive_inventory_unit') {
+        return {
+          data: {
+            inventoryUnit: {
+              id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
+              tenant_id: authContext.currentTenant.tenantId,
+              container_id: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+              product_id: productRows[0].id,
+              quantity: 1,
+              uom: 'pcs',
+              lot_code: 'LOT-PR1',
+              serial_no: null,
+              expiry_date: '2027-01-01',
+              packaging_state: 'loose',
+              product_packaging_level_id: null,
+              pack_count: null,
+              container_line_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+              created_at: '2026-03-13T12:30:00.000Z',
+              updated_at: '2026-03-13T12:30:00.000Z',
+              created_by: authContext.user.id
+            },
+            product: productRows[0]
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: productRows[0].id,
+        quantity: 1,
+        uom: 'pcs'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85',
+      tenantId: authContext.currentTenant.tenantId,
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      itemRef: `product:${productRows[0].id}`,
+      product: productResponses[0],
+      quantity: 1,
+      uom: 'pcs',
+      packagingState: 'loose',
+      productPackagingLevelId: null,
+      packCount: null,
+      createdAt: '2026-03-13T12:30:00.000Z',
+      createdBy: authContext.user.id
+    });
+
+    await app.close();
+  });
+
   it('rejects stale publish attempts as draft conflict before rpc', async () => {
     const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
     const supabase = createSupabaseStub();

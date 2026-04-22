@@ -534,6 +534,7 @@ export function mapInventoryUnitRowToDomain(row: {
   created_by: string | null;
   updated_by?: string | null;
   source_inventory_unit_id?: string | null;
+  container_line_id?: string | null;
 }): InventoryUnit {
   return inventoryUnitSchema.parse({
     id: row.id,
@@ -549,6 +550,7 @@ export function mapInventoryUnitRowToDomain(row: {
     packagingState: row.packaging_state,
     productPackagingLevelId: row.product_packaging_level_id ?? null,
     packCount: row.pack_count ?? null,
+    containerLineId: row.container_line_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,

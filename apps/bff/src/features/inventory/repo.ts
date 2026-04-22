@@ -11,10 +11,15 @@ const receiveInventoryUnitRpcResultSchema = z.object({
     product_id: z.string().uuid(),
     quantity: z.number(),
     uom: z.string(),
+    lot_code: z.string().nullable().optional(),
+    serial_no: z.string().nullable().optional(),
+    expiry_date: z.string().nullable().optional(),
     packaging_state: inventoryPackagingStateSchema,
     product_packaging_level_id: z.string().uuid().nullable(),
     pack_count: z.number().int().positive().nullable(),
+    container_line_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
+    updated_at: z.string().optional(),
     created_by: z.string().uuid().nullable()
   }),
   product: z.object({

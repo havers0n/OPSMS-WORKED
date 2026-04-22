@@ -17,6 +17,7 @@ export const inventoryUnitSchema = z.object({
   packagingState: inventoryPackagingStateSchema,
   productPackagingLevelId: z.string().uuid().nullable(),
   packCount: z.number().int().positive().nullable(),
+  containerLineId: z.string().uuid().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   createdBy: z.string().uuid().nullable(),
