@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { WarehouseScenarioComposer } from '@/storybook/warehouse/warehouse-scenario-composer';
 import {
-  canonicalLocateTargetCellIdStory,
+  canonicalEmptyCellRuntimeByIdStory,
+  canonicalEmptyOccupiedCellIdsStory,
   canonicalOccupiedCellRuntimeByIdStory,
-  canonicalOccupiedCellIdsStory,
-  canonicalSearchHitAndLocateCellIdsStory
+  canonicalOccupiedCellIdsStory
 } from '@/storybook/warehouse/warehouse-story-fixtures';
 
 function ProofLabel({ title, description }: { title: string; description: string }) {
@@ -16,30 +16,27 @@ function ProofLabel({ title, description }: { title: string; description: string
   );
 }
 
-function SearchHitVsLocateTargetProofScene() {
+function StorageCoreScene() {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <div className="space-y-3">
         <ProofLabel
-          title="Search Hits"
-          description="Multiple matches share the weaker discovery halo."
+          title="Empty"
+          description="Published cells with runtime-confirmed empty truth."
         />
         <WarehouseScenarioComposer
-          occupiedCellIds={canonicalOccupiedCellIdsStory}
-          cellRuntimeById={canonicalOccupiedCellRuntimeByIdStory}
-          highlightedCellIds={canonicalSearchHitAndLocateCellIdsStory}
+          occupiedCellIds={canonicalEmptyOccupiedCellIdsStory}
+          cellRuntimeById={canonicalEmptyCellRuntimeByIdStory}
         />
       </div>
       <div className="space-y-3">
         <ProofLabel
-          title="Locate Target"
-          description="The locate target keeps the stronger destination halo and suppresses the search-hit halo on that cell."
+          title="Occupied"
+          description="Same geometry with storage truth changed to occupied."
         />
         <WarehouseScenarioComposer
           occupiedCellIds={canonicalOccupiedCellIdsStory}
           cellRuntimeById={canonicalOccupiedCellRuntimeByIdStory}
-          highlightedCellIds={canonicalSearchHitAndLocateCellIdsStory}
-          locateTargetCellId={canonicalLocateTargetCellIdStory}
         />
       </div>
     </div>
@@ -47,7 +44,7 @@ function SearchHitVsLocateTargetProofScene() {
 }
 
 const meta = {
-  title: 'Warehouse/Scenarios/Comparisons',
+  title: 'Warehouse/Scenarios/Storage',
   parameters: {
     layout: 'padded'
   }
@@ -56,6 +53,6 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const SearchHitVsLocateTargetProof: Story = {
-  render: () => <SearchHitVsLocateTargetProofScene />
+export const StorageCoreProof: Story = {
+  render: () => <StorageCoreScene />
 };

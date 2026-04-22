@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
+import type { Cell } from '@wos/domain';
+import type { OperationsCellRuntime } from '@wos/domain';
 import { RackBody } from '@/widgets/warehouse-editor/ui/shapes/rack-body';
 import { RackCells } from '@/widgets/warehouse-editor/ui/shapes/rack-cells';
 import { RackSections } from '@/widgets/warehouse-editor/ui/shapes/rack-sections';
 import { WarehouseScene } from './warehouse-scene';
 import {
-  cellRuntimeByIdStory,
   faceAStory,
   faceBStory,
-  occupiedCellIdsStory,
   pairedRackGeometryStory,
   pairedRackStory,
   publishedCellsByStructureStory
@@ -15,11 +15,16 @@ import {
 
 type WarehouseScenarioComposerProps = {
   activeLevelIndex?: number;
+  publishedCellsByStructure?: Map<string, Cell>;
+  occupiedCellIds?: Set<string>;
+  cellRuntimeById?: Map<string, OperationsCellRuntime>;
+  isRackSelected?: boolean;
+  showCells?: boolean;
   selectedCellId?: string | null;
   locateTargetCellId?: string | null;
   workflowSourceCellId?: string | null;
   highlightedCellIds?: Set<string>;
-  occupiedCellIds?: Set<string>;
+  isWorkflowScope?: boolean;
   isPassive?: boolean;
   showFocusedFullAddress?: boolean;
   panel?: ReactNode;
@@ -27,11 +32,16 @@ type WarehouseScenarioComposerProps = {
 
 export function WarehouseScenarioComposer({
   activeLevelIndex = 1,
+  publishedCellsByStructure = publishedCellsByStructureStory,
+  occupiedCellIds = new Set<string>(),
+  cellRuntimeById = new Map<string, OperationsCellRuntime>(),
+  isRackSelected = false,
+  showCells = true,
   selectedCellId = null,
   locateTargetCellId = null,
   workflowSourceCellId = null,
   highlightedCellIds = new Set<string>(),
-  occupiedCellIds = occupiedCellIdsStory,
+  isWorkflowScope = false,
   isPassive = false,
   showFocusedFullAddress = true,
   panel
@@ -46,7 +56,7 @@ export function WarehouseScenarioComposer({
           geometry={pairedRackGeometryStory}
           displayCode={pairedRackStory.displayCode}
           rotationDeg={0}
-          isSelected={true}
+          isSelected={isRackSelected}
           isHovered={false}
           isPassive={isPassive}
           showRackCode={true}
@@ -57,7 +67,7 @@ export function WarehouseScenarioComposer({
           geometry={pairedRackGeometryStory}
           faceA={faceAStory}
           faceB={faceBStory}
-          isSelected={true}
+          isSelected={isRackSelected}
           isPassive={isPassive}
           rackRotationDeg={0}
           showFaceToken={true}
@@ -65,28 +75,30 @@ export function WarehouseScenarioComposer({
           faceTokenProminence="dominant"
           sectionNumberProminence="dominant"
         />
-        <RackCells
-          geometry={pairedRackGeometryStory}
-          rackId={pairedRackStory.id}
-          faceA={faceAStory}
-          faceB={faceBStory}
-          isSelected={true}
-          activeLevelIndex={activeLevelIndex}
-          publishedCellsByStructure={publishedCellsByStructureStory}
-          occupiedCellIds={occupiedCellIds}
-          cellRuntimeById={cellRuntimeByIdStory}
-          highlightedCellIds={highlightedCellIds}
-          isInteractive={false}
-          isWorkflowScope={false}
-          isPassive={isPassive}
-          rackRotationDeg={0}
-          selectedCellId={selectedCellId}
-          locateTargetCellId={locateTargetCellId}
-          workflowSourceCellId={workflowSourceCellId}
-          showCellNumbers={true}
-          cellNumberProminence="dominant"
-          showFocusedFullAddress={showFocusedFullAddress}
-        />
+        {showCells ? (
+          <RackCells
+            geometry={pairedRackGeometryStory}
+            rackId={pairedRackStory.id}
+            faceA={faceAStory}
+            faceB={faceBStory}
+            isSelected={isRackSelected}
+            activeLevelIndex={activeLevelIndex}
+            publishedCellsByStructure={publishedCellsByStructure}
+            occupiedCellIds={occupiedCellIds}
+            cellRuntimeById={cellRuntimeById}
+            highlightedCellIds={highlightedCellIds}
+            isInteractive={false}
+            isWorkflowScope={isWorkflowScope}
+            isPassive={isPassive}
+            rackRotationDeg={0}
+            selectedCellId={selectedCellId}
+            locateTargetCellId={locateTargetCellId}
+            workflowSourceCellId={workflowSourceCellId}
+            showCellNumbers={true}
+            cellNumberProminence="dominant"
+            showFocusedFullAddress={showFocusedFullAddress}
+          />
+        ) : null}
       </WarehouseScene>
 
       {panel ? (

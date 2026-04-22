@@ -1,7 +1,23 @@
-import { buildCellAddress, buildCellStructureKey, type Cell, type LocationStorageSnapshotRow, type OperationsCellRuntime, type Product, type Rack, type RackFace, type RackLevel, type RackSection } from '@wos/domain';
+import {
+  buildCellAddress,
+  buildCellStructureKey,
+  type Cell,
+  type LocationStorageSnapshotRow,
+  type OperationsCellRuntime,
+  type Product,
+  type Rack,
+  type RackFace,
+  type RackLevel,
+  type RackSection
+} from '@wos/domain';
 import { getRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 
-function makeLevel(id: string, ordinal: number, slotCount: number, structuralDefaultRole?: 'primary_pick' | 'reserve' | 'none'): RackLevel {
+function makeLevel(
+  id: string,
+  ordinal: number,
+  slotCount: number,
+  structuralDefaultRole?: 'primary_pick' | 'reserve' | 'none'
+): RackLevel {
   return {
     id,
     ordinal,
@@ -113,6 +129,29 @@ function makeCell({
     address: buildCellAddress({ rackCode, face, section, level, slot: slotNo }),
     status: 'active'
   };
+}
+
+function makeRuntime(cellId: string, cellAddress: string, status: OperationsCellRuntime['status']) {
+  return {
+    cellId,
+    cellAddress,
+    status,
+    pickActive: status === 'pick_active',
+    reserved: status === 'reserved',
+    quarantined: status === 'quarantined',
+    stocked: status === 'stocked',
+    containerCount: 1,
+    totalQuantity: 8,
+    containers: []
+  } satisfies OperationsCellRuntime;
+}
+
+function makeRuntimeMap(
+  entries: Array<[cellId: string, cellAddress: string, status: OperationsCellRuntime['status']]>
+) {
+  return new Map<string, OperationsCellRuntime>(
+    entries.map(([cellId, cellAddress, status]) => [cellId, makeRuntime(cellId, cellAddress, status)])
+  );
 }
 
 function makeProduct(id: string, sku: string, name: string): Product {
@@ -333,60 +372,54 @@ export const publishedCellsByStructureStory = new Map(
   publishedCells.map((cell) => [buildCellStructureKey(cell), cell])
 );
 
-export const occupiedCellIdsStory = new Set(['cell-a-2-2', 'cell-a-2-3', 'cell-b-1-1']);
+export const layoutOnlyPublishedCellsByStructureStory = new Map<string, Cell>();
+export const canonicalEmptyOccupiedCellIdsStory = new Set<string>();
+export const canonicalEmptyCellRuntimeByIdStory = new Map<string, OperationsCellRuntime>();
 
-export const cellRuntimeByIdStory = new Map<string, OperationsCellRuntime>([
-  [
-    'cell-a-2-2',
-    {
-      cellId: 'cell-a-2-2',
-      cellAddress: 'R-14-A.01.02.02',
-      status: 'stocked',
-      pickActive: false,
-      reserved: false,
-      quarantined: false,
-      stocked: true,
-      containerCount: 1,
-      totalQuantity: 18,
-      containers: []
-    }
-  ],
-  [
-    'cell-a-2-3',
-    {
-      cellId: 'cell-a-2-3',
-      cellAddress: 'R-14-A.01.02.03',
-      status: 'pick_active',
-      pickActive: true,
-      reserved: false,
-      quarantined: false,
-      stocked: false,
-      containerCount: 1,
-      totalQuantity: 6,
-      containers: []
-    }
-  ],
-  [
-    'cell-b-1-1',
-    {
-      cellId: 'cell-b-1-1',
-      cellAddress: 'R-14-B.01.01.01',
-      status: 'quarantined',
-      pickActive: false,
-      reserved: false,
-      quarantined: true,
-      stocked: false,
-      containerCount: 1,
-      totalQuantity: 2,
-      containers: []
-    }
-  ]
+export const canonicalOccupiedCellIdsStory = new Set<string>(['cell-a-2-2']);
+export const canonicalOccupiedCellRuntimeByIdStory = makeRuntimeMap([
+  ['cell-a-2-2', 'R-14-A.01.02.02', 'stocked']
 ]);
 
-export const highlightedCellIdsStory = new Set(['cell-a-2-4']);
+export const canonicalStorageVariantCellRuntimeByIdStory = makeRuntimeMap([
+  ['cell-a-2-2', 'R-14-A.01.02.02', 'stocked'],
+  ['cell-a-2-3', 'R-14-A.01.02.03', 'reserved'],
+  ['cell-a-2-4', 'R-14-A.01.02.04', 'pick_active'],
+  ['cell-b-1-1', 'R-14-B.01.01.01', 'quarantined']
+]);
 
-const productBlue = makeProduct('55555555-5555-4555-8555-555555555555', 'SKU-BLUE-01', 'Blue totes');
-const productAmber = makeProduct('66666666-6666-4666-8666-666666666666', 'SKU-AMBER-08', 'Amber fasteners');
+export const canonicalStorageVariantOccupiedCellIdsStory = new Set<string>([
+  'cell-a-2-2',
+  'cell-a-2-3',
+  'cell-a-2-4',
+  'cell-b-1-1'
+]);
+
+export const canonicalSelectedCellIdStory = 'cell-a-2-2';
+export const canonicalLocateTargetCellIdStory = 'cell-a-2-3';
+export const canonicalWorkflowSourceCellIdStory = 'cell-a-2-2';
+export const canonicalSearchHitCellIdsStory = new Set<string>(['cell-a-2-4']);
+export const canonicalSearchHitAndLocateCellIdsStory = new Set<string>([
+  'cell-a-2-3',
+  'cell-a-2-4',
+  'cell-a-2b-2'
+]);
+
+export const degradedOccupiedCellIdsStory = new Set<string>(['cell-a-2-2']);
+export const degradedOccupiedCellRuntimeByIdStory = new Map<string, OperationsCellRuntime>();
+export const unknownTruthCellRuntimeByIdStory = new Map<string, OperationsCellRuntime>();
+export const unknownTruthOccupiedCellIdsStory = new Set<string>();
+
+const productBlue = makeProduct(
+  '55555555-5555-4555-8555-555555555555',
+  'SKU-BLUE-01',
+  'Blue totes'
+);
+const productAmber = makeProduct(
+  '66666666-6666-4666-8666-666666666666',
+  'SKU-AMBER-08',
+  'Amber fasteners'
+);
 
 export const containerStorageRowsStory = [
   makeStorageRow({
@@ -494,14 +527,14 @@ export const locationContainerCardsStory = [
   {
     containerId: '77777777-7777-4777-8777-777777777777',
     title: 'PAL-A19',
-    secondaryText: 'External code PAL-A19 · pallet · Apr 1, 2026, 9:30 AM',
+    secondaryText: 'External code PAL-A19 | pallet | Apr 1, 2026, 9:30 AM',
     status: 'active',
     inventoryEntryCount: 2
   },
   {
     containerId: '88888888-8888-4888-8888-888888888888',
     title: 'CNT-00911',
-    secondaryText: 'Internal only · bin · Apr 1, 2026, 9:30 AM',
+    secondaryText: 'Internal only | bin | Apr 1, 2026, 9:30 AM',
     status: 'quarantined',
     inventoryEntryCount: 0
   }
@@ -543,21 +576,8 @@ export const locationPolicyAssignmentsStory = [
   }
 ];
 
-export const scenarioSelectedCellIdStory = 'cell-a-2-2';
-export const scenarioEmptyCellIdStory = 'cell-a-2-1';
-export const scenarioLocateTargetCellIdStory = 'cell-a-2-3';
-export const scenarioAddressLocateCellIdStory = scenarioSelectedCellIdStory;
-export const scenarioSearchSingleHitCellIdsStory = new Set(['cell-a-2-4']);
-export const scenarioSearchMultipleHitCellIdsStory = new Set(['cell-a-2-4', 'cell-a-2b-2', 'cell-b-1-2']);
-export const scenarioNoSearchHitCellIdsStory = new Set<string>();
-export const scenarioOffLevelLocateContextStory = {
-  activeLevelIndex: 0,
-  targetCellId: scenarioSelectedCellIdStory,
-  targetAddress: 'R-14-A.01.02.02'
-};
-
-export const scenarioStorageSelectedOccupiedContextStory = {
-  selectedCellId: scenarioSelectedCellIdStory,
+export const canonicalOccupiedPanelContextStory = {
+  selectedCellId: canonicalSelectedCellIdStory,
   containers: locationContainerCardsStory.slice(0, 1),
   inventoryItems: locationInventoryItemsStory.slice(0, 1),
   hasContainers: true,
@@ -565,8 +585,8 @@ export const scenarioStorageSelectedOccupiedContextStory = {
   policyPending: false
 };
 
-export const scenarioStorageSelectedEmptyContextStory = {
-  selectedCellId: scenarioEmptyCellIdStory,
+export const canonicalEmptyPanelContextStory = {
+  selectedCellId: 'cell-a-2-1',
   containers: [],
   inventoryItems: [],
   hasContainers: false,
@@ -574,16 +594,11 @@ export const scenarioStorageSelectedEmptyContextStory = {
   policyPending: false
 };
 
-export const scenarioStorageWarningPolicyContextStory = {
-  selectedCellId: 'cell-b-1-1',
-  containers: [
-    {
-      ...locationContainerCardsStory[1],
-      status: 'damaged'
-    }
-  ],
+export const canonicalPolicyOnlyPanelContextStory = {
+  selectedCellId: canonicalSelectedCellIdStory,
+  containers: [],
   inventoryItems: [],
-  hasContainers: true,
-  policyAssignments: [],
-  policyPending: true
+  hasContainers: false,
+  policyAssignments: locationPolicyAssignmentsStory,
+  policyPending: false
 };
