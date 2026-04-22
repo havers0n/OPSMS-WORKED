@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Cell, OperationsCellRuntime } from '@wos/domain';
+import type { ReactNode } from 'react';
 import { RackCells } from './rack-cells';
 import { WarehouseScenarioComposer } from '@/storybook/warehouse/warehouse-scenario-composer';
 import { WarehouseScene } from '@/storybook/warehouse/warehouse-scene';
@@ -44,9 +45,13 @@ type ProofArgs = {
   isSelected: boolean;
 };
 
-function renderCellProof(args: ProofArgs) {
-  return (
-    <WarehouseScene width={Math.ceil(pairedRackGeometryStory.width + 40)} height={Math.ceil(pairedRackGeometryStory.height + 40)}>
+const proofSceneWidth = Math.ceil(pairedRackGeometryStory.width + 40);
+const proofSceneHeight = Math.ceil(pairedRackGeometryStory.height + 40);
+
+function renderCellProof(args: ProofArgs, options?: { scale?: number }) {
+  const scale = options?.scale ?? 1;
+  const scene = (
+    <WarehouseScene width={proofSceneWidth} height={proofSceneHeight}>
       <RackCells
         geometry={pairedRackGeometryStory}
         rackId={pairedRackStory.id}
@@ -71,6 +76,24 @@ function renderCellProof(args: ProofArgs) {
       />
     </WarehouseScene>
   );
+
+  if (scale === 1) {
+    return scene;
+  }
+
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        width: Math.ceil(proofSceneWidth * scale),
+        height: Math.ceil(proofSceneHeight * scale)
+      }}
+    >
+      <div className="origin-top-left" style={{ transform: `scale(${scale})` }}>
+        {scene}
+      </div>
+    </div>
+  );
 }
 
 function ProofShellLabel({
@@ -84,6 +107,23 @@ function ProofShellLabel({
     <div className="space-y-1">
       <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</div>
       <div className="text-sm text-slate-700">{description}</div>
+    </div>
+  );
+}
+
+function ProofComparisonCard({
+  title,
+  description,
+  proof
+}: {
+  title: string;
+  description: string;
+  proof: ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <ProofShellLabel title={title} description={description} />
+      {proof}
     </div>
   );
 }
@@ -114,6 +154,28 @@ function StoragePanel() {
 const meta = {
   title: 'Warehouse/Proof/Cell Semantics',
   component: RackCells,
+  args: {
+    geometry: pairedRackGeometryStory,
+    rackId: pairedRackStory.id,
+    faceA: faceAStory,
+    faceB: faceBStory,
+    isSelected: false,
+    activeLevelIndex: 1,
+    publishedCellsByStructure: publishedCellsByStructureStory,
+    occupiedCellIds: canonicalOccupiedCellIdsStory,
+    cellRuntimeById: canonicalOccupiedCellRuntimeByIdStory,
+    highlightedCellIds: new Set<string>(),
+    isInteractive: false,
+    isWorkflowScope: false,
+    isPassive: false,
+    rackRotationDeg: 0,
+    selectedCellId: null,
+    locateTargetCellId: null,
+    workflowSourceCellId: null,
+    showCellNumbers: true,
+    cellNumberProminence: 'dominant',
+    showFocusedFullAddress: true
+  },
   parameters: {
     layout: 'padded'
   },
@@ -294,33 +356,101 @@ export const WorkflowMove: Story = {
 };
 
 export const DegradedTruth: Story = {
-  render: () =>
-    renderCellProof({
-      publishedCellsByStructure: publishedCellsByStructureStory,
-      occupiedCellIds: degradedOccupiedCellIdsStory,
-      cellRuntimeById: degradedOccupiedCellRuntimeByIdStory,
-      highlightedCellIds: new Set<string>(),
-      selectedCellId: null,
-      locateTargetCellId: null,
-      workflowSourceCellId: null,
-      isWorkflowScope: false,
-      isSelected: false
-    })
+  render: () => (
+    <div className="space-y-4">
+      <ProofShellLabel
+        title="Degraded Truth"
+        description="Comparison proof: degraded truth keeps the ordinary occupied fill and is distinguished only by an internal marker."
+      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ProofComparisonCard
+          title="Ordinary Occupied"
+          description="Authoritative runtime occupied cell, with no degraded marker."
+          proof={renderCellProof(
+            {
+              publishedCellsByStructure: publishedCellsByStructureStory,
+              occupiedCellIds: canonicalOccupiedCellIdsStory,
+              cellRuntimeById: canonicalOccupiedCellRuntimeByIdStory,
+              highlightedCellIds: new Set<string>(),
+              selectedCellId: null,
+              locateTargetCellId: null,
+              workflowSourceCellId: null,
+              isWorkflowScope: false,
+              isSelected: false
+            },
+            { scale: 1.45 }
+          )}
+        />
+        <ProofComparisonCard
+          title="Degraded Truth"
+          description="Fallback occupancy reuses occupied fill and proves uncertainty through the internal marker only."
+          proof={renderCellProof(
+            {
+              publishedCellsByStructure: publishedCellsByStructureStory,
+              occupiedCellIds: degradedOccupiedCellIdsStory,
+              cellRuntimeById: degradedOccupiedCellRuntimeByIdStory,
+              highlightedCellIds: new Set<string>(),
+              selectedCellId: null,
+              locateTargetCellId: null,
+              workflowSourceCellId: null,
+              isWorkflowScope: false,
+              isSelected: false
+            },
+            { scale: 1.45 }
+          )}
+        />
+      </div>
+    </div>
+  )
 };
 
 export const UnknownTruth: Story = {
-  render: () =>
-    renderCellProof({
-      publishedCellsByStructure: publishedCellsByStructureStory,
-      occupiedCellIds: unknownTruthOccupiedCellIdsStory,
-      cellRuntimeById: unknownTruthCellRuntimeByIdStory,
-      highlightedCellIds: new Set<string>(),
-      selectedCellId: null,
-      locateTargetCellId: null,
-      workflowSourceCellId: null,
-      isWorkflowScope: false,
-      isSelected: false
-    })
+  render: () => (
+    <div className="space-y-4">
+      <ProofShellLabel
+        title="Unknown Truth"
+        description="Comparison proof: unknown truth remains layout-like in fill/base and is distinguished only by an internal marker."
+      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ProofComparisonCard
+          title="Layout Only"
+          description="Pure structure with no storage truth marker."
+          proof={renderCellProof(
+            {
+              publishedCellsByStructure: layoutOnlyPublishedCellsByStructureStory,
+              occupiedCellIds: canonicalEmptyOccupiedCellIdsStory,
+              cellRuntimeById: canonicalEmptyCellRuntimeByIdStory,
+              highlightedCellIds: new Set<string>(),
+              selectedCellId: null,
+              locateTargetCellId: null,
+              workflowSourceCellId: null,
+              isWorkflowScope: false,
+              isSelected: false
+            },
+            { scale: 1.45 }
+          )}
+        />
+        <ProofComparisonCard
+          title="Unknown Truth"
+          description="No invented fill class; the proof signal comes from the internal unknown marker only."
+          proof={renderCellProof(
+            {
+              publishedCellsByStructure: publishedCellsByStructureStory,
+              occupiedCellIds: unknownTruthOccupiedCellIdsStory,
+              cellRuntimeById: unknownTruthCellRuntimeByIdStory,
+              highlightedCellIds: new Set<string>(),
+              selectedCellId: null,
+              locateTargetCellId: null,
+              workflowSourceCellId: null,
+              isWorkflowScope: false,
+              isSelected: false
+            },
+            { scale: 1.45 }
+          )}
+        />
+      </div>
+    </div>
+  )
 };
 
 export const PolicyIsNotState: Story = {

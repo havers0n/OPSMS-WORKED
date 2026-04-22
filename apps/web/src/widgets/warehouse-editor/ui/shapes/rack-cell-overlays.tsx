@@ -118,7 +118,7 @@ export function CellTruthMarkerOverlay({ geometry, visualState }: CellOverlaySha
   const centerY = geometry.y + geometry.height / 2;
 
   if (marker.kind === 'degraded') {
-    const dot = Math.max(1, Math.min(markerW, markerH) * 0.34);
+    const dot = Math.max(1, Math.min(markerW, markerH) * 0.42);
     return (
       <Rect
         x={centerX - dot / 2}
@@ -128,7 +128,7 @@ export function CellTruthMarkerOverlay({ geometry, visualState }: CellOverlaySha
         cornerRadius={0.6}
         listening={false}
         fill={marker.color}
-        opacity={0.86}
+        opacity={0.92}
       />
     );
   }
@@ -142,8 +142,8 @@ export function CellTruthMarkerOverlay({ geometry, visualState }: CellOverlaySha
       listening={false}
       fillEnabled={false}
       stroke={marker.color}
-      strokeWidth={Math.max(0.85, Math.min(markerW, markerH) * 0.16)}
-      opacity={0.7}
+      strokeWidth={Math.max(1, Math.min(markerW, markerH) * 0.2)}
+      opacity={0.82}
     />
   );
 }
@@ -197,20 +197,23 @@ export function CellOutlineOverlay({ geometry, visualState }: CellOverlaySharedP
 export function CellHaloOverlay({ geometry, visualState }: CellOverlaySharedProps) {
   const halo = visualState.halo;
   if (halo === null) return null;
+  const isLocateTargetHalo = visualState.semantics.interaction.locateTarget;
+  const haloOutset = isLocateTargetHalo ? 2 : 1;
 
   return (
     <Rect
-      x={geometry.x - 1}
-      y={geometry.y - 1}
-      width={geometry.width + 2}
-      height={geometry.height + 2}
-      cornerRadius={2}
+      x={geometry.x - haloOutset}
+      y={geometry.y - haloOutset}
+      width={geometry.width + haloOutset * 2}
+      height={geometry.height + haloOutset * 2}
+      cornerRadius={isLocateTargetHalo ? 3 : 2}
       listening={false}
       fill={halo.fill ?? undefined}
       fillEnabled={halo.fill !== null}
       stroke={halo.stroke ?? undefined}
       strokeEnabled={halo.stroke !== null}
       strokeWidth={halo.strokeWidth}
+      strokeScaleEnabled={!isLocateTargetHalo ? undefined : false}
       dash={halo.dash}
       opacity={1}
     />

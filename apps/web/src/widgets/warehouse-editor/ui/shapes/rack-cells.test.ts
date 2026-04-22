@@ -580,7 +580,7 @@ describe('rack-cells visual-state channel ownership', () => {
     expect(visual.halo).toEqual({
       fill: 'locate-target-fill',
       stroke: 'locate-target-stroke',
-      strokeWidth: 1.9
+      strokeWidth: 2.6
     });
   });
 
@@ -753,7 +753,7 @@ function getOutlineRects(renderer: TestRenderer.ReactTestRenderer) {
 }
 
 function getHaloRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getRects(renderer).filter((rect) => rect.props.cornerRadius === 2);
+  return getRects(renderer).filter((rect) => Number(rect.props.cornerRadius) >= 2);
 }
 
 function getBadgeRects(renderer: TestRenderer.ReactTestRenderer) {
@@ -764,7 +764,15 @@ function getBadgeRects(renderer: TestRenderer.ReactTestRenderer) {
 
 function getTruthMarkerRects(renderer: TestRenderer.ReactTestRenderer) {
   return getRects(renderer).filter(
-    (rect) => rect.props.cornerRadius === 0.6 || Number(rect.props.width) < 100 && rect.props.opacity === 0.7
+    (rect) =>
+      rect.props.cornerRadius === 0.6 ||
+      (
+        Number(rect.props.width) < 100 &&
+        rect.props.fillEnabled === false &&
+        rect.props.strokeEnabled === true &&
+        Number(rect.props.opacity) >= 0.8 &&
+        Number(rect.props.opacity) < 1
+      )
   );
 }
 
@@ -801,10 +809,16 @@ describe('RackCells layered paint ownership', () => {
       locateTarget: true,
       runtimeStatus: 'reserved'
     });
+    const haloRects = getHaloRects(renderer);
+    const surfaceRect = getSurfaceRects(renderer).find((rect) => rect.props.fillEnabled === true);
 
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
-    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
+    expect(haloRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
+    expect(haloRects[0]?.props.strokeScaleEnabled).toBe(false);
+    expect(haloRects[0]?.props.strokeWidth).toBe(2.6);
+    expect(Number(haloRects[0]?.props.x)).toBeLessThan(Number(surfaceRect?.props.x));
+    expect(Number(haloRects[0]?.props.width)).toBeGreaterThan(Number(surfaceRect?.props.width));
   });
 
   it('selected + search-hit renders independent outline and search halo', () => {
@@ -870,6 +884,24 @@ describe('RackCells layered paint ownership', () => {
 
     expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_STOCKED);
     expect(truthMarkerRects.length).toBeGreaterThan(0);
+  });
+
+  it('unknown truth keeps the base surface and adds only an internal marker', () => {
+    const renderer = renderLayeredCell();
+
+    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const truthMarkerRects = getRects(renderer).filter(
+      (rect) =>
+        rect.props.fillEnabled === false &&
+        typeof rect.props.stroke === 'string' &&
+        Number(rect.props.opacity) === 0.82
+    );
+
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_A_RACK_SELECTED);
+    expect(truthMarkerRects.length).toBeGreaterThan(0);
+    expect(truthMarkerRects[0]?.props.fillEnabled).toBe(false);
+    expect(getHaloRects(renderer)).toHaveLength(0);
+    expect(getBadgeRects(renderer)).toHaveLength(0);
   });
 
   it('reserved renders dot decoration as part of the surface treatment', () => {

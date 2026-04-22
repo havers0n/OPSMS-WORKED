@@ -288,7 +288,7 @@ export function resolveCellVisualState(
     ? {
         fill: palette.locateTargetFill,
         stroke: palette.locateTargetStroke,
-        strokeWidth: 1.9
+        strokeWidth: 2.6
       }
     : semantics.interaction.searchHit
       ? {

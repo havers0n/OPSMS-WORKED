@@ -214,8 +214,10 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
 
     expect(selectedState.outline?.stroke).toBe(palette.selectedStroke);
     expect(selectedState.halo?.stroke).toBe(palette.locateTargetStroke);
+    expect(selectedState.halo?.strokeWidth).toBe(2.6);
     expect(selectedState.badge?.stroke).toBe(palette.workflowSourceStroke);
     expect(locateState.halo?.stroke).toBe(palette.locateTargetStroke);
+    expect(locateState.halo?.strokeWidth).toBe(2.6);
     expect(workflowState.halo?.stroke).toBe(palette.searchHitStroke);
     expect(workflowState.badge?.stroke).toBe(palette.workflowSourceStroke);
   });
@@ -243,6 +245,7 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     });
     expect(state.outline?.stroke).toBe(palette.selectedStroke);
     expect(state.halo?.stroke).toBe(palette.locateTargetStroke);
+    expect(state.halo?.strokeWidth).toBe(2.6);
     expect(state.badge?.stroke).toBe(palette.workflowSourceStroke);
   });
 
