@@ -940,6 +940,26 @@ describe('editor-store', () => {
     });
   });
 
+  it('duplicateRack keeps the duplicated rack at the source coordinates', () => {
+    const draft = createLayoutDraftFixture();
+    const sourceRackId = draft.rackIds[0];
+    const sourceRack = draft.racks[sourceRackId];
+
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().duplicateRack(sourceRackId);
+
+    const nextDraft = useEditorStore.getState().draft;
+    expect(nextDraft).not.toBeNull();
+    expect(nextDraft?.rackIds).toHaveLength(2);
+
+    const duplicateRackId = nextDraft?.rackIds.find((id) => id !== sourceRackId);
+    expect(duplicateRackId).toBeTruthy();
+
+    const duplicateRack = nextDraft?.racks[duplicateRackId!];
+    expect(duplicateRack?.x).toBe(sourceRack.x);
+    expect(duplicateRack?.y).toBe(sourceRack.y);
+  });
+
   it('generates UUID ids for all new entities sent to save', () => {
     useEditorStore.getState().initializeDraft(createUuidLayoutDraftFixture());
     useEditorStore.getState().createRack(120, 80);

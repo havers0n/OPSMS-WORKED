@@ -759,8 +759,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...structuredClone(source),
         id: newRackId,
         displayCode,
-        x: source.x + 80,
-        y: source.y + 80,
+        x: source.x,
+        y: source.y,
         faces: source.faces.map((face) => ({
           ...synchronizeRackFaceRelationship({
             ...face,
