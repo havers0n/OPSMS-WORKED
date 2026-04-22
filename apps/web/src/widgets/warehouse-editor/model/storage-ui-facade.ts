@@ -17,6 +17,13 @@ import {
 } from './editor-selectors';
 export { resolveStorageFocusContext } from './storage-focus';
 
+/**
+ * Legacy storage facade bridge.
+ *
+ * Storage V2 runtime ownership lives in model/v2/storage-focus-store.ts and
+ * StorageInspectorV2. This facade remains only for deferred legacy/viewer
+ * paths and must not be treated as active Storage V2 inspector ownership.
+ */
 export const useStorageSelection = useEditorSelection;
 export const useStorageSelectedRackActiveLevel = useSelectedRackActiveLevel;
 export const useStorageSetSelectedRackActiveLevel = useSetSelectedRackActiveLevel;

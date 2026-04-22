@@ -161,6 +161,11 @@ type InspectorRouterProps = {
   workspace: FloorWorkspace | null;
   /** Called by layout-mode inspectors when the user clicks the close button. */
   onClose: () => void;
+  /**
+   * Legacy storage inspector routing is intentionally opt-in.
+   * PublishedViewer is the only runtime path expected to enable it.
+   */
+  enableLegacyStorageRouting?: boolean;
 };
 
 /**
@@ -180,19 +185,30 @@ type InspectorRouterProps = {
  *   storage + unresolved/no-source container → ContainerPlacementInspector
  *   view + none                → PlacementModePanel
  */
-export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
+export function InspectorRouter({
+  workspace,
+  onClose,
+  enableLegacyStorageRouting = false
+}: InspectorRouterProps) {
   const viewMode = useViewMode();
   const selection = useEditorSelection();
+  if (viewMode === 'storage' && !enableLegacyStorageRouting) {
+    return null;
+  }
   if (viewMode === 'storage' && selection.type === 'container') {
     return (
       <StorageContainerRouteGate
         workspace={workspace}
         onClose={onClose}
+        enableLegacyStorageRouting={enableLegacyStorageRouting}
       />
     );
   }
 
-  const kind = resolveInspectorKind(viewMode, selection);
+  const kind = resolveInspectorKind(viewMode, selection, {
+    hasResolvedStorageContainerRackContext: false,
+    enableLegacyStorageRouting
+  });
 
   switch (kind) {
     case 'rack-structure':
@@ -229,7 +245,8 @@ export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
 
 function StorageContainerRouteGate({
   workspace,
-  onClose
+  onClose,
+  enableLegacyStorageRouting = false
 }: InspectorRouterProps) {
   const selection = useStorageSelection();
   const selectedRackActiveLevel = useStorageSelectedRackActiveLevel();
@@ -245,7 +262,8 @@ function StorageContainerRouteGate({
     publishedCellsById
   });
   const kind = resolveInspectorKind('storage', selection, {
-    hasResolvedStorageContainerRackContext: storageFocusContext.hasResolvedRackContext
+    hasResolvedStorageContainerRackContext: storageFocusContext.hasResolvedRackContext,
+    enableLegacyStorageRouting
   });
 
   if (kind === 'storage-shell') {

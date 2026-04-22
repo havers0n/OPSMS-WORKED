@@ -5,16 +5,25 @@ import { InspectorRouter } from './inspector-router';
 type InspectorSurfaceProps = {
   workspace: FloorWorkspace | null;
   onClose: () => void;
+  enableLegacyStorageRouting?: boolean;
 };
 
-export function InspectorSurface({ workspace, onClose }: InspectorSurfaceProps) {
+export function InspectorSurface({
+  workspace,
+  onClose,
+  enableLegacyStorageRouting = false
+}: InspectorSurfaceProps) {
   return (
     <InspectorShell
       data-testid="inspector-surface"
       className="h-full rounded-none border-0 bg-transparent"
       contentClassName="h-full space-y-0 p-0"
     >
-      <InspectorRouter workspace={workspace} onClose={onClose} />
+      <InspectorRouter
+        workspace={workspace}
+        onClose={onClose}
+        enableLegacyStorageRouting={enableLegacyStorageRouting}
+      />
     </InspectorShell>
   );
 }

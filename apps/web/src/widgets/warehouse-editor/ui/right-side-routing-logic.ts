@@ -30,5 +30,5 @@ export function resolveRightSideRoute(
     return hasInspectableViewSelection(selection) ? 'inspector-surface' : 'closed';
   }
 
-  return 'inspector-surface'; // storage mode keeps persistent inspector shell behavior
+  return 'closed';
 }

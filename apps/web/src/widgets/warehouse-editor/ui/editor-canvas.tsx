@@ -501,7 +501,9 @@ export function EditorCanvas({
             shouldShowLayoutRackSideHandles={shouldShowLayoutRackSideHandles}
             shouldShowLayoutZoneBar={shouldShowLayoutZoneBar}
             shouldShowLayoutWallBar={shouldShowLayoutWallBar}
-            shouldShowStorageCellBar={shouldShowStorageCellBar}
+            // In Storage V2, inspector ownership lives in StorageInspectorV2.
+            // Prevent dead "Inspect" affordance wiring from the legacy path.
+            shouldShowStorageCellBar={isStorageV2Active ? false : shouldShowStorageCellBar}
             selectedRack={selectedRack}
             selectedRackAnchorRect={selectedRackAnchorRect}
             selectedRackSideFocus={selectedRackSideFocus}
