@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { Cell, OperationsCellRuntime } from '@wos/domain';
 import { RackCells } from './rack-cells';
+import { WarehouseScenarioComposer } from '@/storybook/warehouse/warehouse-scenario-composer';
 import { WarehouseScene } from '@/storybook/warehouse/warehouse-scene';
 import {
   canonicalEmptyCellRuntimeByIdStory,
@@ -8,6 +9,7 @@ import {
   canonicalLocateTargetCellIdStory,
   canonicalOccupiedCellRuntimeByIdStory,
   canonicalOccupiedCellIdsStory,
+  canonicalPolicyOnlyPanelContextStory,
   canonicalSearchHitAndLocateCellIdsStory,
   canonicalSearchHitCellIdsStory,
   canonicalSelectedCellIdStory,
@@ -25,6 +27,7 @@ import {
   unknownTruthCellRuntimeByIdStory,
   unknownTruthOccupiedCellIdsStory
 } from '@/storybook/warehouse/warehouse-story-fixtures';
+import { StorageLocationSectionsPanel } from '../scenarios/scenario-panels';
 
 type ProofArgs = {
   publishedCellsByStructure: Map<string, Cell>;
@@ -64,6 +67,44 @@ function renderCellProof(args: ProofArgs) {
         showFocusedFullAddress={true}
       />
     </WarehouseScene>
+  );
+}
+
+function ProofShellLabel({
+  title,
+  description
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{title}</div>
+      <div className="text-sm text-slate-700">{description}</div>
+    </div>
+  );
+}
+
+function EmptyReadOnlyPanel() {
+  return (
+    <div className="space-y-3 p-3">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+        Read-only shell context. Base and fill stay identical to storage for the same truth.
+      </div>
+    </div>
+  );
+}
+
+function StoragePanel() {
+  return (
+    <StorageLocationSectionsPanel
+      containers={canonicalPolicyOnlyPanelContextStory.containers}
+      sourceCellId={canonicalSelectedCellIdStory}
+      inventoryItems={canonicalPolicyOnlyPanelContextStory.inventoryItems}
+      hasContainers={canonicalPolicyOnlyPanelContextStory.hasContainers}
+      policyAssignments={canonicalPolicyOnlyPanelContextStory.policyAssignments}
+      policyPending={canonicalPolicyOnlyPanelContextStory.policyPending}
+    />
   );
 }
 
@@ -114,6 +155,37 @@ export const StorageVariants: Story = {
       publishedCellsByStructure: publishedCellsByStructureStory,
       occupiedCellIds: canonicalStorageVariantOccupiedCellIdsStory,
       cellRuntimeById: canonicalStorageVariantCellRuntimeByIdStory,
+      highlightedCellIds: new Set<string>(),
+      selectedCellId: null,
+      locateTargetCellId: null,
+      workflowSourceCellId: null,
+      isWorkflowScope: false,
+      isSelected: false
+    })
+};
+
+export const Reserved: Story = {
+  render: () =>
+    renderCellProof({
+      publishedCellsByStructure: publishedCellsByStructureStory,
+      occupiedCellIds: new Set<string>(['cell-a-2-3']),
+      cellRuntimeById: new Map<string, OperationsCellRuntime>([
+        [
+          'cell-a-2-3',
+          {
+            cellId: 'cell-a-2-3',
+            cellAddress: 'R-14-A.01.02.03',
+            status: 'reserved',
+            pickActive: false,
+            reserved: true,
+            quarantined: false,
+            stocked: false,
+            containerCount: 1,
+            totalQuantity: 8,
+            containers: []
+          }
+        ]
+      ]),
       highlightedCellIds: new Set<string>(),
       selectedCellId: null,
       locateTargetCellId: null,
@@ -219,4 +291,34 @@ export const PolicyIsNotState: Story = {
       }
     }
   }
+};
+
+export const ViewVsStorageParity: Story = {
+  render: () => (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <div className="space-y-3">
+        <ProofShellLabel
+          title="View"
+          description="Read-only shell. Same base and occupied fill as storage."
+        />
+        <WarehouseScenarioComposer
+          occupiedCellIds={canonicalOccupiedCellIdsStory}
+          cellRuntimeById={canonicalOccupiedCellRuntimeByIdStory}
+          panel={<EmptyReadOnlyPanel />}
+        />
+      </div>
+      <div className="space-y-3">
+        <ProofShellLabel
+          title="Storage"
+          description="Operational shell. Same base and occupied fill, with panel behavior only changing around the canvas."
+        />
+        <WarehouseScenarioComposer
+          occupiedCellIds={canonicalOccupiedCellIdsStory}
+          cellRuntimeById={canonicalOccupiedCellRuntimeByIdStory}
+          selectedCellId={canonicalSelectedCellIdStory}
+          panel={<StoragePanel />}
+        />
+      </div>
+    </div>
+  )
 };
