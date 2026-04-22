@@ -174,6 +174,7 @@ type RackLayerProps = {
   minRackDistance: number;
   moveSourceCellId: string | null;
   moveSourceRackId: string | null;
+  temporaryLocateTargetCellId: string | null;
   occupiedCellIds: Set<string>;
   publishedCellsByStructure: Map<string, Cell>;
   primarySelectedRackId: string | null;
@@ -221,6 +222,7 @@ export function RackLayer({
   minRackDistance,
   moveSourceCellId,
   moveSourceRackId,
+  temporaryLocateTargetCellId,
   occupiedCellIds,
   publishedCellsByStructure,
   primarySelectedRackId,
@@ -467,6 +469,7 @@ export function RackLayer({
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}
                 selectedCellId={canvasSelectedCellId}
+                locateTargetCellId={temporaryLocateTargetCellId}
                 workflowSourceCellId={moveSourceCellId}
                 onCellClick={handleCellClick}
                 showCellNumbers={labelRevealPolicy.showCellNumbers}

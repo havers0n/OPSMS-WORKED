@@ -20,71 +20,10 @@ import {
 import type { LabelProminence } from './rack-label-reveal-policy';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
 import { CellInteriorSlotLabel, FocusedCellAddressOverlay } from './rack-label-overlays';
+import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
-
-const CELL_FILL_A = '#e0f2fe';
-const CELL_FILL_B = '#ede9fe';
-const CELL_STROKE = '#bae6fd';
-const CELL_STROKE_B = '#ddd6fe';
-const CELL_FILL_A_RACK_SELECTED = '#c7e7fb';
-const CELL_FILL_B_RACK_SELECTED = '#ddd0fb';
-const CELL_STROKE_A_RACK_SELECTED = '#38bdf8';
-const CELL_STROKE_B_RACK_SELECTED = '#a78bfa';
-const CELL_FILL_SELECTED = '#fef3c7';
-const CELL_STROKE_SELECTED = '#f59e0b';
-const CELL_FILL_WORKFLOW_SOURCE = '#dbeafe';
-const CELL_STROKE_WORKFLOW_SOURCE = '#2563eb';
-const CELL_FILL_LOCKED = '#e2e8f0';
-const CELL_STROKE_LOCKED = '#cbd5e1';
-const CELL_FILL_OCCUPIED_A = '#bbf7d0';
-const CELL_FILL_OCCUPIED_B = '#c4b5fd';
-const CELL_STROKE_OCCUPIED_A = '#22c55e';
-const CELL_STROKE_OCCUPIED_B = '#7c3aed';
-const CELL_FILL_STOCKED = '#bbf7d0';
-const CELL_STROKE_STOCKED = '#16a34a';
-const CELL_FILL_PICK_ACTIVE = '#bfdbfe';
-const CELL_STROKE_PICK_ACTIVE = '#2563eb';
-const CELL_FILL_RESERVED = '#fde68a';
-const CELL_STROKE_RESERVED = '#ca8a04';
-const CELL_FILL_QUARANTINED = '#fecaca';
-const CELL_STROKE_QUARANTINED = '#dc2626';
-const CELL_FILL_EMPTY = '#e2e8f0';
-const CELL_STROKE_EMPTY = '#94a3b8';
-const CELL_STROKE_HIGHLIGHTED = '#f97316';
-
-const CELL_VISUAL_PALETTE_A: CellVisualPalette = {
-  baseFill: CELL_FILL_A,
-  baseStroke: CELL_STROKE,
-  occupiedFill: CELL_FILL_OCCUPIED_A,
-  occupiedStroke: CELL_STROKE_OCCUPIED_A,
-  selectedFill: CELL_FILL_SELECTED,
-  selectedStroke: CELL_STROKE_SELECTED,
-  workflowSourceFill: CELL_FILL_WORKFLOW_SOURCE,
-  workflowSourceStroke: CELL_STROKE_WORKFLOW_SOURCE,
-  highlightedStroke: CELL_STROKE_HIGHLIGHTED,
-  lockedFill: CELL_FILL_LOCKED,
-  lockedStroke: CELL_STROKE_LOCKED,
-  stockedFill: CELL_FILL_STOCKED,
-  stockedStroke: CELL_STROKE_STOCKED,
-  pickActiveFill: CELL_FILL_PICK_ACTIVE,
-  pickActiveStroke: CELL_STROKE_PICK_ACTIVE,
-  reservedFill: CELL_FILL_RESERVED,
-  reservedStroke: CELL_STROKE_RESERVED,
-  quarantinedFill: CELL_FILL_QUARANTINED,
-  quarantinedStroke: CELL_STROKE_QUARANTINED,
-  emptyFill: CELL_FILL_EMPTY,
-  emptyStroke: CELL_STROKE_EMPTY
-};
-
-const CELL_VISUAL_PALETTE_B: CellVisualPalette = {
-  ...CELL_VISUAL_PALETTE_A,
-  baseFill: CELL_FILL_B,
-  baseStroke: CELL_STROKE_B,
-  occupiedFill: CELL_FILL_OCCUPIED_B,
-  occupiedStroke: CELL_STROKE_OCCUPIED_B
-};
 
 type FaceProps = {
   face: RackFace;
@@ -104,6 +43,7 @@ type FaceProps = {
   isRackPassive: boolean;
   rackRotationDeg: 0 | 90 | 180 | 270;
   selectedCellId: string | null;
+  locateTargetCellId: string | null;
   workflowSourceCellId: string | null;
   showCellNumbers: boolean;
   cellNumberProminence: LabelProminence;
@@ -141,6 +81,7 @@ function FaceCells({
   isRackPassive,
   rackRotationDeg,
   selectedCellId,
+  locateTargetCellId,
   workflowSourceCellId,
   showCellNumbers,
   cellNumberProminence,
@@ -191,13 +132,15 @@ function FaceCells({
           );
           const cellId = cell?.id ?? null;
           const isSelected = selectedCellId === cellId;
+          const isFocused = isSelected && showFocusedFullAddress;
+          const isLocateTarget = locateTargetCellId !== null && locateTargetCellId === cellId;
           const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
-          const isHighlighted = cellId !== null && highlightedCellIds.has(cellId);
+          const isSearchHit = cellId !== null && highlightedCellIds.has(cellId);
           const shouldRevealAddress =
             showFocusedFullAddress &&
             shouldShowFocusedFullAddress({
               isSelected,
-              isHighlighted,
+              isHighlighted: isSearchHit,
               isWorkflowSource
             });
           const addressText = cell?.address?.raw ?? null;
@@ -215,8 +158,10 @@ function FaceCells({
               isRackSelected,
               hasCellIdentity: cellId !== null,
               isSelected,
+              isFocused,
+              isLocateTarget,
               isWorkflowSource,
-              isHighlighted,
+              isSearchHit,
               isOccupiedByFallback: isOccupied,
               runtimeStatus: runtime?.status ?? null
             },
@@ -243,14 +188,14 @@ function FaceCells({
                 visualState={visualState}
                 isSelected={isSelected}
                 isWorkflowSource={isWorkflowSource}
-                isHighlighted={isHighlighted}
+                isHighlighted={isSearchHit}
               />
               <CellRuntimeOverlay
                 geometry={cellGeometry}
                 visualState={visualState}
                 isSelected={isSelected}
                 isWorkflowSource={isWorkflowSource}
-                isHighlighted={isHighlighted}
+                isHighlighted={isSearchHit}
               />
               <CellStatusSemanticOverlay
                 geometry={cellGeometry}
@@ -263,14 +208,14 @@ function FaceCells({
                 visualState={visualState}
                 isSelected={isSelected}
                 isWorkflowSource={isWorkflowSource}
-                isHighlighted={isHighlighted}
+                isHighlighted={isSearchHit}
                 isClickable={visualState.isClickable}
                 onCellClick={cellId !== null ? (anchor) => onCellClick(cellId, anchor) : undefined}
               />
               <CellExceptionOverlay
                 geometry={cellGeometry}
                 visualState={visualState}
-                isHighlighted={isHighlighted}
+                isHighlighted={isSearchHit}
               />
               {showCellNumbers && (
                 <CellInteriorSlotLabel
@@ -315,6 +260,7 @@ type Props = {
   isPassive?: boolean;
   rackRotationDeg?: 0 | 90 | 180 | 270;
   selectedCellId?: string | null;
+  locateTargetCellId?: string | null;
   workflowSourceCellId?: string | null;
   onCellClick?: (cellId: string, anchor: { x: number; y: number }) => void;
   showCellNumbers?: boolean;
@@ -341,6 +287,7 @@ export function RackCells({
   isPassive = false,
   rackRotationDeg = 0,
   selectedCellId = null,
+  locateTargetCellId = null,
   workflowSourceCellId = null,
   onCellClick = noop,
   showCellNumbers = true,
@@ -372,13 +319,15 @@ export function RackCells({
         isRackPassive={isPassive}
         rackRotationDeg={rackRotationDeg}
         selectedCellId={selectedCellId}
+        locateTargetCellId={locateTargetCellId}
         workflowSourceCellId={workflowSourceCellId}
         showCellNumbers={showCellNumbers}
         cellNumberProminence={cellNumberProminence}
         showFocusedFullAddress={showFocusedFullAddress}
-        visualPalette={isSelected
-          ? { ...CELL_VISUAL_PALETTE_A, baseFill: CELL_FILL_A_RACK_SELECTED, baseStroke: CELL_STROKE_A_RACK_SELECTED }
-          : CELL_VISUAL_PALETTE_A}
+        visualPalette={getWarehouseSemanticCellPalette({
+          rackSelected: isSelected,
+          faceTone: 'primary'
+        })}
         onCellClick={onCellClick}
       />
       {isPaired && faceB && (
@@ -400,13 +349,15 @@ export function RackCells({
           isRackPassive={isPassive}
           rackRotationDeg={rackRotationDeg}
           selectedCellId={selectedCellId}
+          locateTargetCellId={locateTargetCellId}
           workflowSourceCellId={workflowSourceCellId}
           showCellNumbers={showCellNumbers}
           cellNumberProminence={cellNumberProminence}
           showFocusedFullAddress={showFocusedFullAddress}
-          visualPalette={isSelected
-            ? { ...CELL_VISUAL_PALETTE_B, baseFill: CELL_FILL_B_RACK_SELECTED, baseStroke: CELL_STROKE_B_RACK_SELECTED }
-            : CELL_VISUAL_PALETTE_B}
+          visualPalette={getWarehouseSemanticCellPalette({
+            rackSelected: isSelected,
+            faceTone: 'secondary'
+          })}
           onCellClick={onCellClick}
         />
       )}

@@ -80,7 +80,7 @@ function SearchHitVsLocateTargetScene() {
           >
             Locate target
           </div>
-          <WarehouseScenarioComposer workflowSourceCellId={scenarioLocateTargetCellIdStory} />
+          <WarehouseScenarioComposer locateTargetCellId={scenarioLocateTargetCellIdStory} />
         </div>
       </div>
     </div>

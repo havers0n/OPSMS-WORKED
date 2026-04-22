@@ -22,6 +22,7 @@ function LayerRect({
   fill,
   stroke,
   strokeWidth,
+  dash,
   ownsFill,
   ownsStroke
 }: {
@@ -30,6 +31,7 @@ function LayerRect({
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+  dash?: number[];
   ownsFill: boolean;
   ownsStroke: boolean;
 }) {
@@ -47,6 +49,7 @@ function LayerRect({
       stroke={stroke}
       strokeEnabled={ownsStroke}
       strokeWidth={ownsStroke ? (strokeWidth ?? visualState.strokeWidth) : 0}
+      dash={ownsStroke ? dash : undefined}
       opacity={visualState.opacity}
     />
   );
@@ -106,23 +109,24 @@ type CellInteractionOverlayProps = CellOverlaySharedProps & {
 export function CellInteractionOverlay({
   geometry,
   visualState,
-  isSelected,
-  isWorkflowSource,
-  isHighlighted,
+  isSelected: _isSelected,
+  isWorkflowSource: _isWorkflowSource,
+  isHighlighted: _isHighlighted,
   isClickable,
   onCellClick
 }: CellInteractionOverlayProps) {
-  const ownsFill = false;
-  const ownsStroke =
-    visualState.interactionStroke !== null && (isSelected || isWorkflowSource || isHighlighted);
+  const ownsFill = visualState.navigationFill !== null;
+  const ownsStroke = visualState.navigationStroke !== null;
 
   return (
     <>
       <LayerRect
         geometry={geometry}
         visualState={visualState}
-        stroke={visualState.interactionStroke ?? undefined}
-        strokeWidth={visualState.interactionStrokeWidth}
+        fill={visualState.navigationFill ?? undefined}
+        stroke={visualState.navigationStroke ?? undefined}
+        strokeWidth={visualState.navigationStrokeWidth}
+        dash={visualState.navigationDash}
         ownsFill={ownsFill}
         ownsStroke={ownsStroke}
       />
@@ -265,10 +269,10 @@ export function CellStatusSemanticOverlay({
 export function CellExceptionOverlay({
   geometry,
   visualState,
-  isHighlighted
+  isHighlighted: _isHighlighted
 }: Pick<CellOverlaySharedProps, 'geometry' | 'visualState' | 'isHighlighted'>) {
   const ownsFill = visualState.flags.isWorkflowTargetLocked;
-  const ownsStroke = visualState.flags.isWorkflowTargetLocked && !isHighlighted;
+  const ownsStroke = visualState.flags.isWorkflowTargetLocked;
 
   return (
     <LayerRect

@@ -67,6 +67,7 @@ import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
+import { getWarehouseCanvasChromeTokens } from './shapes/warehouse-semantic-canvas-palette';
 
 const EMPTY_RACK_IDS: string[] = [];
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
@@ -351,6 +352,14 @@ export function EditorCanvas({
     shouldShowStorageCellBar
   } = scene.hud;
   const { walls, zones } = scene.layers;
+  const canvasChromeTokens = getWarehouseCanvasChromeTokens();
+  // Temporary bounded bridge for this PR only: move-target is the only runtime
+  // source currently mapped into the canvas-local locate-target channel.
+  // This is not the universal upstream locate contract.
+  const temporaryLocateTargetCellId =
+    isPlacementMoveMode && activeStorageWorkflow?.kind === 'move-container'
+      ? activeStorageWorkflow.targetCellId
+      : null;
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
@@ -478,7 +487,13 @@ export function EditorCanvas({
           : isLayoutDrawToolActive
             ? 'crosshair'
             : 'default',
-        background: isPlacing ? '#f0fdfe' : isDrawingZone ? '#f0fdf4' : isDrawingWall ? '#fef9f0' : '#f1f5f9'
+        background: isPlacing
+          ? canvasChromeTokens.backgroundLocate
+          : isDrawingZone
+            ? canvasChromeTokens.backgroundZone
+            : isDrawingWall
+              ? canvasChromeTokens.backgroundWall
+              : canvasChromeTokens.background
       }}
     >
       {!layoutDraft && (
@@ -548,7 +563,7 @@ export function EditorCanvas({
                   <Line
                     key={`mn-v-${x}`}
                     points={[x, gridLineData.minor!.startY, x, gridLineData.minor!.endY]}
-                    stroke={isPlacing ? '#a5f3fc' : '#e2e8f0'}
+                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMinor}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     opacity={0.6}
@@ -558,7 +573,7 @@ export function EditorCanvas({
                   <Line
                     key={`mn-h-${y}`}
                     points={[gridLineData.minor!.startX, y, gridLineData.minor!.endX, y]}
-                    stroke={isPlacing ? '#a5f3fc' : '#e2e8f0'}
+                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMinor}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     opacity={0.6}
@@ -569,7 +584,7 @@ export function EditorCanvas({
                   <Line
                     key={`mj-v-${x}`}
                     points={[x, gridLineData.major.startY, x, gridLineData.major.endY]}
-                    stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
+                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMajor}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     opacity={0.7}
@@ -579,15 +594,15 @@ export function EditorCanvas({
                   <Line
                     key={`mj-h-${y}`}
                     points={[gridLineData.major.startX, y, gridLineData.major.endX, y]}
-                    stroke={isPlacing ? '#a5f3fc' : '#cbd5e1'}
+                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMajor}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     opacity={0.7}
                   />
                 ))}
                 {/* Origin marker at world (0, 0) */}
-                <Line points={[-14, 0, 14, 0]} stroke="#94a3b8" strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
-                <Line points={[0, -14, 0, 14]} stroke="#94a3b8" strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
+                <Line points={[-14, 0, 14, 0]} stroke={canvasChromeTokens.originStroke} strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
+                <Line points={[0, -14, 0, 14]} stroke={canvasChromeTokens.originStroke} strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
               </Layer>
 
               <ZoneLayer
@@ -641,6 +656,7 @@ export function EditorCanvas({
                 minRackDistance={minRackDistance}
                 moveSourceCellId={moveSourceCellId}
                 moveSourceRackId={moveSourceRackId}
+                temporaryLocateTargetCellId={temporaryLocateTargetCellId}
                 occupiedCellIds={occupiedCellIds}
                 publishedCellsByStructure={publishedCellsByStructure}
                 primarySelectedRackId={primarySelectedRackId}
@@ -669,8 +685,8 @@ export function EditorCanvas({
                     y={Math.min(marquee.y1, marquee.y2)}
                     width={Math.abs(marquee.x2 - marquee.x1)}
                     height={Math.abs(marquee.y2 - marquee.y1)}
-                    fill="rgba(59,130,246,0.08)"
-                    stroke="#3b82f6"
+                    fill={canvasChromeTokens.marqueeFill}
+                    stroke={canvasChromeTokens.marqueeStroke}
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     dash={[4, 3]}

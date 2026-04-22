@@ -25,11 +25,16 @@ export type CellVisualPalette = {
   occupiedStroke: string;
   selectedFill: string;
   selectedStroke: string;
+  focusedFill: string;
+  focusedStroke: string;
+  locateTargetFill: string;
+  locateTargetStroke: string;
+  searchHitFill: string;
+  searchHitStroke: string;
   workflowSourceFill: string;
   workflowSourceStroke: string;
-  highlightedStroke: string;
-  lockedFill: string;
-  lockedStroke: string;
+  blockedFill: string;
+  blockedStroke: string;
   stockedFill: string;
   stockedStroke: string;
   pickActiveFill: string;
@@ -49,8 +54,10 @@ export type CellVisualInputs = {
   isRackSelected: boolean;
   hasCellIdentity: boolean;
   isSelected: boolean;
+  isFocused: boolean;
+  isLocateTarget: boolean;
   isWorkflowSource: boolean;
-  isHighlighted: boolean;
+  isSearchHit: boolean;
   isOccupiedByFallback: boolean;
   runtimeStatus: RuntimeStatus | null;
 };
@@ -69,8 +76,10 @@ export type ResolvedCellVisualState = {
   stroke: string;
   opacity: number;
   strokeWidth: number;
-  interactionStroke: string | null;
-  interactionStrokeWidth: number;
+  navigationFill: string | null;
+  navigationStroke: string | null;
+  navigationStrokeWidth: number;
+  navigationDash: number[] | undefined;
   isClickable: boolean;
   flags: CellVisualFlags;
 };
@@ -103,6 +112,7 @@ export function deriveCellVisualFlags(inputs: CellVisualInputs): CellVisualFlags
     inputs.isWorkflowScope &&
     inputs.hasCellIdentity &&
     !inputs.isSelected &&
+    !inputs.isLocateTarget &&
     !inputs.isWorkflowSource &&
     isOccupiedFallback;
   const canSelectWorkflowTarget =
@@ -133,7 +143,7 @@ export function resolveCellVisualState(
   const runtimeVisual = resolveRuntimeVisual(inputs.runtimeStatus, palette);
 
   const fill = flags.isWorkflowTargetLocked
-    ? palette.lockedFill
+    ? palette.blockedFill
     : runtimeVisual
       ? runtimeVisual.fill
       : flags.isOccupiedFallback
@@ -141,7 +151,7 @@ export function resolveCellVisualState(
         : palette.baseFill;
 
   const stroke = flags.isWorkflowTargetLocked
-    ? palette.lockedStroke
+    ? palette.blockedStroke
     : runtimeVisual
       ? runtimeVisual.stroke
       : flags.isOccupiedFallback
@@ -167,22 +177,43 @@ export function resolveCellVisualState(
         ? 0.9
         : 0.5;
 
-  const interactionStroke = inputs.isSelected
-    ? palette.selectedStroke
-    : inputs.isWorkflowSource
-      ? palette.workflowSourceStroke
-      : inputs.isHighlighted
-        ? palette.highlightedStroke
-        : null;
-  const interactionStrokeWidth = inputs.isSelected ? 1.8 : inputs.isWorkflowSource ? 1.5 : 1.25;
+  let navigationFill: string | null = null;
+  let navigationStroke: string | null = null;
+  let navigationStrokeWidth = 0;
+  let navigationDash: number[] | undefined;
+
+  if (inputs.isSelected) {
+    navigationFill = palette.selectedFill;
+    navigationStroke = palette.selectedStroke;
+    navigationStrokeWidth = 2.1;
+  } else if (inputs.isLocateTarget) {
+    navigationFill = palette.locateTargetFill;
+    navigationStroke = palette.locateTargetStroke;
+    navigationStrokeWidth = 1.9;
+  } else if (inputs.isWorkflowSource) {
+    navigationFill = palette.workflowSourceFill;
+    navigationStroke = palette.workflowSourceStroke;
+    navigationStrokeWidth = 1.6;
+    navigationDash = [3, 2];
+  } else if (inputs.isFocused) {
+    navigationFill = palette.focusedFill;
+    navigationStroke = palette.focusedStroke;
+    navigationStrokeWidth = 1.45;
+  } else if (inputs.isSearchHit) {
+    navigationFill = palette.searchHitFill;
+    navigationStroke = palette.searchHitStroke;
+    navigationStrokeWidth = 1.15;
+  }
 
   return {
     fill,
     stroke,
     opacity,
     strokeWidth,
-    interactionStroke,
-    interactionStrokeWidth,
+    navigationFill,
+    navigationStroke,
+    navigationStrokeWidth,
+    navigationDash,
     isClickable: inputs.isInteractive && inputs.hasCellIdentity && flags.canSelectWorkflowTarget,
     flags
   };

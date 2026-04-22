@@ -16,6 +16,7 @@ import {
 type WarehouseScenarioComposerProps = {
   activeLevelIndex?: number;
   selectedCellId?: string | null;
+  locateTargetCellId?: string | null;
   workflowSourceCellId?: string | null;
   highlightedCellIds?: Set<string>;
   occupiedCellIds?: Set<string>;
@@ -27,6 +28,7 @@ type WarehouseScenarioComposerProps = {
 export function WarehouseScenarioComposer({
   activeLevelIndex = 1,
   selectedCellId = null,
+  locateTargetCellId = null,
   workflowSourceCellId = null,
   highlightedCellIds = new Set<string>(),
   occupiedCellIds = occupiedCellIdsStory,
@@ -79,6 +81,7 @@ export function WarehouseScenarioComposer({
           isPassive={isPassive}
           rackRotationDeg={0}
           selectedCellId={selectedCellId}
+          locateTargetCellId={locateTargetCellId}
           workflowSourceCellId={workflowSourceCellId}
           showCellNumbers={true}
           cellNumberProminence="dominant"

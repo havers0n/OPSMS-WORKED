@@ -105,7 +105,7 @@ export const SelectedVsFocused: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Foundational comparison for the selected and focused navigation channels.'
+        story: 'Canvas proof for selected structural emphasis vs the softer derived focused state.'
       }
     }
   }

@@ -102,6 +102,9 @@ function renderRackLayer(params: {
   canSelectCells?: boolean;
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
+  temporaryLocateTargetCellId?: string | null;
+  moveSourceCellId?: string | null;
+  moveSourceRackId?: string | null;
   setSelectedCellId?: (cellId: string | null) => void;
   setSelectedRackIds?: (rackIds: string[]) => void;
   clearHighlightedCellIds?: () => void;
@@ -135,9 +138,10 @@ function renderRackLayer(params: {
       lod: params.lod ?? 2,
       zoom: params.zoom ?? 1.5,
       minRackDistance: 0,
-      moveSourceCellId: null,
-      moveSourceRackId: null,
-      occupiedCellIds: new Set<string>(),
+      moveSourceCellId: params.moveSourceCellId ?? null,
+      moveSourceRackId: params.moveSourceRackId ?? null,
+      temporaryLocateTargetCellId: params.temporaryLocateTargetCellId ?? null,
+  occupiedCellIds: new Set<string>(),
       publishedCellsByStructure: params.publishedCellsByStructure ?? new Map(),
       primarySelectedRackId: params.primarySelectedRackId,
       rackLookup,
@@ -183,6 +187,7 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.activeLevelIndex).toBe(0);
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
+    expect(rackCells[0]?.props.locateTargetCellId).toBeNull();
   });
 
   it('renders selected rack with selectedRackActiveLevel and others with level 0', () => {
@@ -410,6 +415,20 @@ describe('RackLayer storage interaction depth', () => {
 
     expect(setPlacementMoveTargetCellId).toHaveBeenCalledWith('cell-9');
     expect(setSelectedCellId).not.toHaveBeenCalled();
+  });
+
+  it('passes temporary locate-target channel separately from workflow-source', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      temporaryLocateTargetCellId: 'cell-target',
+      moveSourceCellId: 'cell-source',
+      moveSourceRackId: 'rack-1'
+    });
+
+    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    expect(rackCells[0]?.props.locateTargetCellId).toBe('cell-target');
+    expect(rackCells[0]?.props.workflowSourceCellId).toBe('cell-source');
   });
 
   it('keeps section rendering non-interactive (no section selection semantics)', () => {

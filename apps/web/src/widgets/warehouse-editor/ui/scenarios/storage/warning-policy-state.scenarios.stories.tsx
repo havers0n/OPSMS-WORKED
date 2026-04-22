@@ -45,7 +45,7 @@ function WarningPolicyComparisonPanel() {
           Problem vs Navigation
         </div>
         <div className="mt-1 text-sm font-semibold" style={{ color: 'var(--wh-text-primary)' }}>
-          Warning, conflict, and override should not read like navigation emphasis.
+          Problem semantics stay distinct from navigation emphasis on canvas.
         </div>
         <div className="mt-3 grid gap-3">
           <SemanticStateRow
