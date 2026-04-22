@@ -1,4 +1,4 @@
-import type { Rack, RackFace } from '@wos/domain';
+import type { Cell, Rack, RackFace } from '@wos/domain';
 
 function normalizeSemanticLevels(levels: number[]) {
   return Array.from(new Set(levels)).sort((left, right) => left - right);
@@ -22,11 +22,37 @@ export function collectRackSemanticLevels(rack: Rack) {
   return collectFaceSemanticLevels(rack.faces);
 }
 
+export function collectRackPublishedSemanticLevels(
+  publishedCells: Iterable<Cell>,
+  rackId: string | null
+) {
+  if (!rackId) return [];
+
+  const levels: number[] = [];
+  for (const cell of publishedCells) {
+    if (cell.rackId !== rackId || cell.status !== 'active') continue;
+    const semanticLevel = cell.address.parts.level;
+    if (Number.isFinite(semanticLevel)) {
+      levels.push(semanticLevel);
+    }
+  }
+
+  return normalizeSemanticLevels(levels);
+}
+
+export function resolveInitialRackSemanticLevel(
+  publishedCells: Iterable<Cell>,
+  rackId: string | null
+) {
+  return collectRackPublishedSemanticLevels(publishedCells, rackId)[0] ?? null;
+}
+
 export function resolveSemanticLevelForIndex(
   semanticLevels: number[],
-  activeLevelIndex: number
+  activeLevelIndex: number | null
 ) {
-  const safeIndex = Number.isFinite(activeLevelIndex) ? Math.max(0, Math.floor(activeLevelIndex)) : 0;
+  if (typeof activeLevelIndex !== 'number' || !Number.isFinite(activeLevelIndex)) return null;
+  const safeIndex = Math.max(0, Math.floor(activeLevelIndex));
   return semanticLevels[safeIndex] ?? null;
 }
 

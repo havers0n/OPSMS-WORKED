@@ -50,7 +50,11 @@ import {
   useStorageFocusSelectRack,
   useStorageFocusHandleEmptyCanvasClick,
 } from '@/widgets/warehouse-editor/model/v2/v2-selectors';
-import { resolveIndexForSemanticLevel } from '@/widgets/warehouse-editor/model/storage-level-mapping';
+import {
+  collectRackSemanticLevels,
+  resolveIndexForSemanticLevel,
+  resolveInitialRackSemanticLevel
+} from '@/widgets/warehouse-editor/model/storage-level-mapping';
 import {
   GRID_SIZE,
   isRackInViewport,
@@ -289,7 +293,10 @@ export function EditorCanvas({
   // V2 rack-select callback — only when V2 is active.
   const onV2StorageRackSelect = isStorageV2Active
     ? ({ rackId }: { rackId: string }) => {
-        storageFocusSelectRack({ rackId });
+        storageFocusSelectRack({
+          rackId,
+          level: resolveInitialRackSemanticLevel(publishedCellsById.values(), rackId)
+        });
       }
     : undefined;
 
@@ -308,28 +315,16 @@ export function EditorCanvas({
       : selectedRackId;
   const selectedRackActiveLevelIndex = useMemo(() => {
     if (!isStorageV2Active) return selectedRackActiveLevel;
-    if (!primarySelectedRackId) return 0;
-    if (storageFocusActiveLevel === null) return 0;
+    if (!primarySelectedRackId) return null;
+    if (storageFocusActiveLevel === null) return null;
 
     const layout = placementLayout ?? layoutDraft;
     const rack = layout?.racks[primarySelectedRackId] ?? null;
-    if (!rack) return 0;
+    if (!rack) return null;
 
-    const semanticLevels = Array.from(
-      new Set(
-        rack.faces
-          .filter((face) => face.enabled)
-          .flatMap((face) =>
-            face.sections.flatMap((section) =>
-              section.levels
-                .map((level) => level.ordinal)
-                .filter((ordinal): ordinal is number => Number.isFinite(ordinal))
-            )
-          )
-      )
-    ).sort((a, b) => a - b);
+    const semanticLevels = collectRackSemanticLevels(rack);
     const idx = resolveIndexForSemanticLevel(semanticLevels, storageFocusActiveLevel);
-    return idx ?? 0;
+    return idx;
   }, [
     isStorageV2Active,
     selectedRackActiveLevel,

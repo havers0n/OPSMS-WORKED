@@ -2,6 +2,7 @@ import type { FloorWorkspace, Rack } from '@wos/domain';
 import React, { useMemo, useState } from 'react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
+import { collectRackPublishedSemanticLevels } from '@/widgets/warehouse-editor/model/storage-level-mapping';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -20,7 +21,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const selectedCellId = useStorageFocusSelectedCellId();
   const rackId = useStorageFocusSelectedRackId();
-  const activeLevel = useStorageFocusActiveLevel() ?? 1;
+  const activeLevel = useStorageFocusActiveLevel();
 
   const selectCell = useStorageFocusSelectCell();
   const setActiveLevel = useStorageFocusSetActiveLevel();
@@ -39,17 +40,11 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   }, [occupancyRows]);
 
   const availableLevels = useMemo(() => {
-    const levels = new Set<number>();
-    for (const cell of publishedCells) {
-      if (cell.rackId === rackId) {
-        levels.add(cell.address.parts.level);
-      }
-    }
-    return Array.from(levels).sort((a, b) => a - b);
+    return collectRackPublishedSemanticLevels(publishedCells, rackId);
   }, [publishedCells, rackId]);
 
   const cellsForLevel = useMemo(() => {
-    if (!rackId) return [];
+    if (!rackId || activeLevel === null) return [];
     return publishedCells.filter(
       (cell) =>
         cell.rackId === rackId &&
@@ -80,6 +75,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const isLoading = cellsLoading || occupancyLoading;
   const noRackContext = !rackId && !isLoading;
+  const hasPublishedLevels = availableLevels.length > 0;
 
   return (
     <div className="flex h-full w-72 flex-col overflow-hidden border-r border-gray-200 bg-white">
@@ -96,19 +92,25 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Level</span>
           <div className="ml-auto flex gap-1">
-            {(availableLevels.length > 0 ? availableLevels : [1, 2, 3]).map((level) => (
-              <button
-                key={level}
-                className={`min-w-8 rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
-                  activeLevel === level
-                    ? 'border-blue-300 bg-blue-50 text-blue-900'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-                onClick={() => setActiveLevel(level)}
-              >
-                L{level}
-              </button>
-            ))}
+            {hasPublishedLevels ? (
+              availableLevels.map((level) => (
+                <button
+                  key={level}
+                  className={`min-w-8 rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
+                    activeLevel === level
+                      ? 'border-blue-300 bg-blue-50 text-blue-900'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                  onClick={() => setActiveLevel(level)}
+                >
+                  L{level}
+                </button>
+              ))
+            ) : (
+              <span className="text-xs text-gray-400">
+                {rackId ? 'No published levels' : 'Select rack'}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -152,6 +154,14 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
           </div>
         ) : isLoading ? (
           <div className="px-3 py-6 text-sm text-gray-400">Loading locations...</div>
+        ) : !hasPublishedLevels ? (
+          <div className="px-3 py-6 text-sm text-gray-500">
+            This rack has no published storage locations.
+          </div>
+        ) : activeLevel === null ? (
+          <div className="px-3 py-6 text-sm text-gray-500">
+            Select a published level to browse locations.
+          </div>
         ) : cellsForLevel.length === 0 ? (
           <div className="px-3 py-6 text-sm text-gray-500">No locations for level {activeLevel}</div>
         ) : visibleCells.length === 0 && filtersActive ? (

@@ -38,7 +38,7 @@ type FaceProps = {
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   highlightedCellIds: Set<string>;
   isInteractive: boolean;
-  activeLevelIndex: number;
+  activeLevelIndex: number | null;
   semanticLevels: number[];
   isWorkflowScope: boolean;
   isRackPassive: boolean;
@@ -242,7 +242,7 @@ type Props = {
   faceA: RackFace;
   faceB: RackFace | null;
   isSelected: boolean;
-  activeLevelIndex: number;
+  activeLevelIndex: number | null;
   semanticLevels?: number[];
   publishedCellsByStructure: Map<string, Cell>;
   occupiedCellIds?: Set<string>;

@@ -39,7 +39,7 @@ function resolveCellIdFromFaceAtPoint({
   totalWidth: number;
   bandY: number;
   bandH: number;
-  activeLevelIndex: number;
+  activeLevelIndex: number | null;
   semanticLevels: number[];
   point: LocalPoint;
   publishedCellsByStructure: Map<string, Cell>;
@@ -114,7 +114,7 @@ function resolveCellIdFromRackPoint({
 }: {
   rack: Rack;
   point: LocalPoint;
-  activeLevelIndex: number;
+  activeLevelIndex: number | null;
   publishedCellsByStructure: Map<string, Cell>;
 }): string | null {
   const geometry = getRackGeometry(rack);
@@ -180,7 +180,7 @@ type RackLayerProps = {
   primarySelectedRackId: string | null;
   rackLookup: Record<string, Rack>;
   racks: Rack[];
-  selectedRackActiveLevel: number;
+  selectedRackActiveLevel: number | null;
   selectedRackIds: string[];
   setHighlightedCellIds: (cellIds: string[]) => void;
   setHoveredRackId: (rackId: string | null) => void;

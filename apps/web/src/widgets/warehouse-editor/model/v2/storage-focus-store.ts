@@ -19,6 +19,7 @@ import { create } from 'zustand'
  *   - selectCell always sets all three fields (cellId, rackId, level) atomically
  *   - selectRack always clears selectedCellId (rack-level focus, not cell)
  *   - setActiveLevel always clears selectedCellId (level changed, prior cell is stale)
+ *   - activeLevel in Storage V2 is always a semantic level ordinal, never a 0-based index
  *   - handleEmptyCanvasClick implements two-click collapse:
  *       click #1: clearCell (keep rack+level context), counter → 1
  *       click #2 (consecutive): clearAllFocus, counter → 0
@@ -47,7 +48,8 @@ export type StorageFocusStore = {
 
   /**
    * Rack-level selection (no cell selected).
-   * Clears selectedCellId, sets rack and optional level, resets counter.
+   * Clears selectedCellId, sets rack and semantic level ordinal, resets counter.
+   * `level: null` is only valid for racks that have no published/valid levels.
    */
   selectRack: (params: { rackId: string; level?: number | null }) => void
 

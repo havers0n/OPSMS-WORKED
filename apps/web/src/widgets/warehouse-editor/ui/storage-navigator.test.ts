@@ -150,9 +150,9 @@ describe('StorageNavigator PR7 focus ownership', () => {
     const tree = JSON.stringify(renderer.toJSON());
 
     expect(useStorageFocusStore.getState().selectedRackId).toBeNull();
-    expect(tree).toContain('Current:');
-    expect(tree).toContain('—');
-    expect(tree).toContain('No rack context available');
+    expect(tree).toContain('Rack');
+    expect(tree).toContain('Select rack');
+    expect(tree).toContain('Select a rack on the map to browse locations.');
   });
 
   it('clicking a location writes focus transition to storage-focus-store', () => {
@@ -208,9 +208,54 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(s.selectedCellId).toBeNull();
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
-    expect(tree).toContain('No rack context available');
-    expect(tree).toContain('Current:');
-    expect(tree).toContain('—');
+    expect(tree).toContain('Select a rack on the map to browse locations.');
+    expect(tree).toContain('Select rack');
+  });
+
+  it('does not synthesize fake level 1 for sparse published levels', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [
+      {
+        id: 'cell-3',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.03', parts: { level: 3 } }
+      },
+      {
+        id: 'cell-5',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.05', parts: { level: 5 } }
+      }
+    ];
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 3 });
+    });
+
+    const renderer = renderNavigator(workspace);
+    const tree = JSON.stringify(renderer.toJSON());
+    const buttonLabels = getAllButtons(renderer).map((node) =>
+      Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
+    );
+
+    expect(buttonLabels).toContain('L3');
+    expect(buttonLabels).toContain('L5');
+    expect(buttonLabels).not.toContain('L1');
+    expect(tree).not.toContain('No locations for level 1');
+  });
+
+  it('shows an explicit empty-rack state instead of fallback levels', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [];
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: null });
+    });
+
+    const renderer = renderNavigator(workspace);
+    const tree = JSON.stringify(renderer.toJSON());
+
+    expect(tree).toContain('This rack has no published storage locations.');
+    expect(tree).toContain('No published levels');
+    expect(tree).not.toContain('No locations for level 1');
   });
 });
-

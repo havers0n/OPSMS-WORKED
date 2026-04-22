@@ -92,7 +92,7 @@ function createCellsMap(levelIds: string[], slotCount = 2) {
   return byStructure;
 }
 
-function renderRackCells(activeLevelIndex: number, levelIds: string[], isInteractive = false) {
+function renderRackCells(activeLevelIndex: number | null, levelIds: string[], isInteractive = false) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -156,7 +156,7 @@ function renderRackCellsWithProps(params: {
   return renderer;
 }
 
-function clickCellIdsWithCollector(activeLevelIndex: number, levelIds: string[]) {
+function clickCellIdsWithCollector(activeLevelIndex: number | null, levelIds: string[]) {
   const selected: string[] = [];
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -192,7 +192,7 @@ function clickCellIdsWithCollector(activeLevelIndex: number, levelIds: string[])
   return selected;
 }
 
-function getCellBounds(activeLevelIndex: number, levelIds: string[]) {
+function getCellBounds(activeLevelIndex: number | null, levelIds: string[]) {
   const renderer = renderRackCells(activeLevelIndex, levelIds, false);
   const rects = renderer.root.findAll((node) => String(node.type) === 'Rect');
   if (rects.length === 0) return null;
@@ -289,7 +289,7 @@ describe('RackCells', () => {
     expect(clickableRects).toHaveLength(0);
   });
 
-  it('supports sparse semantic levels via explicit semanticLevels mapping', () => {
+  it('keeps sparse published levels clickable when the resolved semantic level maps to index 1', () => {
     const clicked: string[] = [];
     const sparseFace: RackFace = {
       ...createFace(['level-1', 'level-3', 'level-5']),
@@ -335,6 +335,11 @@ describe('RackCells', () => {
     }
 
     expect(clicked).toEqual(['cell-level-3-1', 'cell-level-3-2']);
+  });
+
+  it('renders no cells when no rack level is resolved yet', () => {
+    const clicked = clickCellIdsWithCollector(null, threeLevelIds);
+    expect(clicked).toEqual([]);
   });
 
   it('renders slot numbers when cell geometry fits', () => {

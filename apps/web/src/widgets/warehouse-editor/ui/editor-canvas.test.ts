@@ -11,6 +11,7 @@ let mockViewMode: ViewMode = 'storage';
 let mockSelection: EditorSelection = { type: 'none' };
 let mockSelectedRackId: string | null = null;
 let mockSelectedRackActiveLevel = 2;
+let mockStorageFocusActiveLevel: number | null = null;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
 let rackLayerLastProps: Record<string, unknown> | null = null;
@@ -81,7 +82,7 @@ vi.mock('@/widgets/warehouse-editor/model/interaction-store', () => ({
 }));
 
 vi.mock('@/widgets/warehouse-editor/model/v2/v2-selectors', () => ({
-  useStorageFocusActiveLevel: () => null,
+  useStorageFocusActiveLevel: () => mockStorageFocusActiveLevel,
   useStorageFocusSelectedCellId: () => (mockSelection.type === 'cell' ? mockSelection.cellId : null),
   useStorageFocusSelectedRackId: () => mockSelectedRackId,
   useStorageFocusSelectCell: () => storageFocusSelectCellSpy,
@@ -228,6 +229,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     canvasHudLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
+    mockStorageFocusActiveLevel = null;
   });
 
   it('passes selected cell parent rack id to RackLayer in storage mode', () => {
@@ -440,13 +442,46 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(panelMode).toEqual({ kind: 'cell-overview', cellId: 'cell-1' });
   });
 
-  it('storage V2 canvas rack callback writes rack-only focus', () => {
+  it('storage V2 canvas rack callback writes the first resolved published level', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
     mockSelection = { type: 'none' };
-    mockPublishedCellsById = new Map();
+    mockPublishedCellsById = new Map([
+      ['cell-5', {
+        id: 'cell-5',
+        layoutVersionId: 'lv-1',
+        rackId,
+        rackFaceId: 'face-a',
+        rackSectionId: 'section-a',
+        rackLevelId: 'level-5',
+        slotNo: 1,
+        address: {
+          raw: '01-A.01.05.01',
+          parts: { rackCode: '01', face: 'A', section: 1, level: 5, slot: 1 },
+          sortKey: '0001-A-01-05-01'
+        },
+        cellCode: 'CELL-5',
+        status: 'active'
+      } satisfies Cell],
+      ['cell-3', {
+        id: 'cell-3',
+        layoutVersionId: 'lv-1',
+        rackId,
+        rackFaceId: 'face-a',
+        rackSectionId: 'section-a',
+        rackLevelId: 'level-3',
+        slotNo: 1,
+        address: {
+          raw: '01-A.01.03.01',
+          parts: { rackCode: '01', face: 'A', section: 1, level: 3, slot: 1 },
+          sortKey: '0001-A-01-03-01'
+        },
+        cellCode: 'CELL-3',
+        status: 'active'
+      } satisfies Cell]
+    ]);
 
     renderCanvas(
       {
@@ -463,8 +498,70 @@ describe('EditorCanvas storage active-rack wiring', () => {
       onV2StorageRackSelect({ rackId });
     });
 
-    expect(storageFocusSelectRackSpy).toHaveBeenCalledWith({ rackId });
+    expect(storageFocusSelectRackSpy).toHaveBeenCalledWith({ rackId, level: 3 });
     expect(storageFocusSelectCellSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selected rack active level null in Storage V2 until a semantic level is resolved', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = rackId;
+    mockStorageFocusActiveLevel = null;
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas(
+      {
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      },
+      { isStorageV2: true }
+    );
+
+    expect(rackLayerLastProps?.selectedRackActiveLevel).toBeNull();
+  });
+
+  it('maps sparse semantic rack focus levels to the matching canvas level index', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    draft.racks[rackId] = {
+      ...draft.racks[rackId],
+      faces: [
+        {
+          ...draft.racks[rackId].faces[0],
+          sections: [
+            {
+              ...draft.racks[rackId].faces[0].sections[0],
+              levels: [
+                { id: 'level-3', ordinal: 3, slotCount: 3 },
+                { id: 'level-5', ordinal: 5, slotCount: 3 }
+              ]
+            }
+          ]
+        },
+        draft.racks[rackId].faces[1]
+      ]
+    };
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = rackId;
+    mockStorageFocusActiveLevel = 3;
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas(
+      {
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      },
+      { isStorageV2: true }
+    );
+
+    expect(rackLayerLastProps?.selectedRackActiveLevel).toBe(0);
   });
 
   it('suppresses storage inspect affordance wiring in active Storage V2 canvas path', () => {
