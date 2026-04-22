@@ -23,6 +23,55 @@
   --shadow-panel: 0 18px 42px rgba(15, 23, 42, 0.1);
   --radius-panel: 22px;
   --radius-card: 16px;
+
+  /* Warehouse semantic baseline: foundational tokens only. */
+  --wh-surface: rgba(255, 255, 255, 0.92);
+  --wh-surface-subtle: rgba(244, 248, 251, 0.92);
+  --wh-border: rgba(148, 163, 184, 0.28);
+  --wh-border-strong: rgba(71, 85, 105, 0.2);
+  --wh-text-primary: #10243e;
+  --wh-text-secondary: #41556d;
+  --wh-text-muted: #687789;
+
+  --wh-selected-fill: rgba(15, 106, 142, 0.18);
+  --wh-selected-border: #0f6a8e;
+  --wh-selected-text: #0c4f69;
+
+  --wh-focused-fill: rgba(45, 118, 168, 0.1);
+  --wh-focused-border: #5c92bb;
+  --wh-focused-text: #2c5e84;
+
+  --wh-locate-target-fill: rgba(0, 122, 92, 0.18);
+  --wh-locate-target-border: #007a5c;
+  --wh-locate-target-text: #005843;
+
+  --wh-search-hit-fill: rgba(211, 141, 0, 0.14);
+  --wh-search-hit-border: #b7791f;
+  --wh-search-hit-text: #86580d;
+
+  --wh-empty-fill: rgba(98, 108, 125, 0.1);
+  --wh-empty-border: #728197;
+  --wh-empty-text: #516173;
+
+  --wh-occupied-fill: rgba(0, 122, 92, 0.14);
+  --wh-occupied-border: #218367;
+  --wh-occupied-text: #14654e;
+
+  --wh-blocked-fill: rgba(120, 61, 18, 0.16);
+  --wh-blocked-border: #9a5d1b;
+  --wh-blocked-text: #6f4313;
+
+  --wh-warning-fill: rgba(214, 158, 46, 0.18);
+  --wh-warning-border: #b7791f;
+  --wh-warning-text: #8a5b10;
+
+  --wh-conflict-fill: rgba(198, 88, 49, 0.16);
+  --wh-conflict-border: #c05621;
+  --wh-conflict-text: #933f17;
+
+  --wh-override-fill: rgba(86, 44, 145, 0.14);
+  --wh-override-border: #6b46c1;
+  --wh-override-text: #553c9a;
 }
 
 html,
