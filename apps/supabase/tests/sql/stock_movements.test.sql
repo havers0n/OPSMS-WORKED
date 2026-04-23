@@ -41,6 +41,8 @@ declare
   transfer_result jsonb;
   pick_result jsonb;
   move_result jsonb;
+  source_line_uuid uuid;
+  target_line_uuid uuid;
 begin
   select id into default_tenant_uuid
   from public.tenants
@@ -324,6 +326,48 @@ begin
     raise exception 'Expected split_inventory_unit to decrement source quantity to 8.';
   end if;
 
+  select iu.container_line_id
+  into source_line_uuid
+  from public.inventory_unit iu
+  where iu.id = source_inventory_unit_uuid;
+
+  select iu.container_line_id
+  into target_line_uuid
+  from public.inventory_unit iu
+  where iu.id = (split_result ->> 'targetInventoryUnitId')::uuid;
+
+  if source_line_uuid is null or target_line_uuid is null then
+    raise exception 'Expected split_inventory_unit projections to point at canonical current container_lines.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.container_lines cl
+    where cl.id = source_line_uuid
+      and cl.line_kind = 'receipt'
+      and cl.qty_each = 10
+      and cl.current_qty_each = 8
+      and cl.current_container_id = source_container_uuid
+      and cl.root_receipt_line_id = cl.id
+      and cl.parent_container_line_id is null
+  ) then
+    raise exception 'Expected source receipt line to keep immutable qty_each=10 while current_qty_each=8.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.container_lines cl
+    where cl.id = target_line_uuid
+      and cl.line_kind = 'current_fragment'
+      and cl.qty_each = 2
+      and cl.current_qty_each = 2
+      and cl.current_container_id = split_target_container_uuid
+      and cl.root_receipt_line_id = source_line_uuid
+      and cl.parent_container_line_id = source_line_uuid
+  ) then
+    raise exception 'Expected split target projection to point at a current_fragment line with source lineage.';
+  end if;
+
   if not exists (
     select 1
     from public.inventory_unit iu
@@ -356,6 +400,22 @@ begin
     raise exception 'Expected exact-match merge target quantity to become 7.';
   end if;
 
+  select iu.container_line_id
+  into target_line_uuid
+  from public.inventory_unit iu
+  where iu.id = (merge_result ->> 'targetInventoryUnitId')::uuid;
+
+  if not exists (
+    select 1
+    from public.container_lines cl
+    where cl.id = target_line_uuid
+      and cl.line_kind = 'receipt'
+      and cl.current_qty_each = 7
+      and cl.current_container_id = merge_target_container_uuid
+  ) then
+    raise exception 'Expected exact-match merge to update the existing target current canonical row.';
+  end if;
+
   if (
     select count(*)
     from public.inventory_unit
@@ -381,6 +441,23 @@ begin
       and iu.pack_count = 1
   ) then
     raise exception 'Expected packaged split child row to preserve packaging metadata.';
+  end if;
+
+  select iu.container_line_id
+  into target_line_uuid
+  from public.inventory_unit iu
+  where iu.id = (merge_result ->> 'targetInventoryUnitId')::uuid;
+
+  if not exists (
+    select 1
+    from public.container_lines cl
+    where cl.id = target_line_uuid
+      and cl.line_kind = 'current_fragment'
+      and cl.current_packaging_state = 'sealed'
+      and cl.current_pack_count = 1
+      and cl.current_qty_each = 12
+  ) then
+    raise exception 'Expected packaged current_fragment to preserve current packaging state and pack count.';
   end if;
 
   if not exists (
