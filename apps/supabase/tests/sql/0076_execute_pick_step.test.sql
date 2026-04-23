@@ -370,18 +370,20 @@ begin
       (default_tenant_uuid, source_container_uuid, product_uuid, 5, 'pcs', 'available'),
       (default_tenant_uuid, source_container_uuid, product_uuid, 4, 'pcs', 'available');
 
-    -- Identify the two IUs by ascending created_at
+    -- Identify the two IUs by intended quantity. created_at is statement-stable
+    -- for the multi-row insert above, so UUID ordering is not a safe proxy for
+    -- insertion order.
     select id into iu_uuid
     from public.inventory_unit
     where container_id = source_container_uuid and product_id = product_uuid
-    order by created_at, id
+      and quantity = 5
     limit 1;
 
     select id into iu_b_uuid
     from public.inventory_unit
     where container_id = source_container_uuid and product_id = product_uuid
-    order by created_at, id
-    offset 1 limit 1;
+      and quantity = 4
+    limit 1;
 
     insert into public.pick_tasks (tenant_id, source_type, source_id, status)
     values (default_tenant_uuid, 'order', order_uuid, 'ready')
