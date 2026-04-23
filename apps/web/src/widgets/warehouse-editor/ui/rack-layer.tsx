@@ -1,7 +1,11 @@
 import { buildCellStructureKey, type Cell, type OperationsCellRuntime, type Rack, type RackFace } from '@wos/domain';
 import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
-import { getRackGeometry, getSectionWidths, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  getRackGeometry,
+  getSectionWidths,
+  WORLD_SCALE
+} from '@/entities/layout-version/lib/canvas-geometry';
 import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
 import {
   collectRackSemanticLevels,
@@ -11,6 +15,7 @@ import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
 import { RackSections } from './shapes/rack-sections';
+import type { CanvasDiagnosticsFlags } from './canvas-diagnostics';
 
 type SnapGuide = {
   type: 'x' | 'y';
@@ -157,6 +162,12 @@ type RackLayerProps = {
   activeCellRackId: string | null;
   canSelectCells: boolean;
   canSelectRack: boolean;
+  diagnosticsFlags: CanvasDiagnosticsFlags;
+  diagnosticsViewport: {
+    canvasOffset: { x: number; y: number };
+    viewport: { width: number; height: number };
+    zoom: number;
+  };
   canvasSelectedCellId: string | null;
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   clearHighlightedCellIds: () => void;
@@ -205,6 +216,8 @@ export function RackLayer({
   activeCellRackId,
   canSelectCells,
   canSelectRack,
+  diagnosticsFlags,
+  diagnosticsViewport,
   canvasSelectedCellId,
   cellRuntimeById,
   clearHighlightedCellIds,
@@ -243,6 +256,9 @@ export function RackLayer({
   onV2StorageRackSelect,
 }: RackLayerProps) {
   const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
+  const labelsEnabled = diagnosticsFlags.labels === 'normal';
+  const hitTestEnabled = diagnosticsFlags.hitTest === 'normal';
+  const renderCells = diagnosticsFlags.cells !== 'off';
 
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     if (!isLayoutEditable) return;
@@ -293,7 +309,7 @@ export function RackLayer({
       if (isStorageMode) {
         const pointer = event.currentTarget.getRelativePointerPosition();
         const resolvedCellId =
-          canSelectCells && pointer
+          hitTestEnabled && canSelectCells && pointer
             ? resolveCellIdFromRackPoint({
                 rack,
                 point: pointer,
@@ -393,10 +409,10 @@ export function RackLayer({
             onClick={(event) => handleRackPress(rack, event)}
             onTap={(event) => handleRackPress(rack, event)}
             onMouseEnter={() => {
-              if (canSelectRack) setHoveredRackId(rack.id);
+              if (hitTestEnabled && canSelectRack) setHoveredRackId(rack.id);
             }}
             onMouseLeave={() => {
-              if (canSelectRack) setHoveredRackId(null);
+              if (hitTestEnabled && canSelectRack) setHoveredRackId(null);
             }}
             onDragStart={() => {
               if (isLayoutEditable && !selectedRackIds.includes(rack.id)) {
@@ -432,7 +448,7 @@ export function RackLayer({
               isSelected={isSelected}
               isHovered={isHovered}
               isPassive={isRackPassive}
-              showRackCode={labelRevealPolicy.showRackCode}
+              showRackCode={labelsEnabled && labelRevealPolicy.showRackCode}
               rackCodeProminence={labelRevealPolicy.rackCodeProminence}
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
             />
@@ -444,15 +460,15 @@ export function RackLayer({
                 faceB={geometry.isPaired ? faceB : null}
                 isSelected={isSelected}
                 isPassive={isRackPassive}
-                showFaceToken={labelRevealPolicy.showFaceToken}
-                showSectionNumbers={labelRevealPolicy.showSectionNumbers}
+                showFaceToken={labelsEnabled && labelRevealPolicy.showFaceToken}
+                showSectionNumbers={labelsEnabled && labelRevealPolicy.showSectionNumbers}
                 faceTokenProminence={labelRevealPolicy.faceTokenProminence}
                 sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
                 rackRotationDeg={rack.rotationDeg}
               />
             )}
 
-            {(lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
+            {renderCells && (lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
               <RackCells
                 geometry={geometry}
                 rackId={rack.id}
@@ -465,16 +481,18 @@ export function RackLayer({
                 occupiedCellIds={occupiedCellIds}
                 cellRuntimeById={cellRuntimeById}
                 highlightedCellIds={highlightedCellIds}
-                isInteractive={canSelectCells}
+                diagnosticsFlags={diagnosticsFlags}
+                diagnosticsViewport={diagnosticsViewport}
+                isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}
                 selectedCellId={canvasSelectedCellId}
                 locateTargetCellId={temporaryLocateTargetCellId}
                 workflowSourceCellId={moveSourceCellId}
                 onCellClick={handleCellClick}
-                showCellNumbers={labelRevealPolicy.showCellNumbers}
+                showCellNumbers={labelsEnabled && labelRevealPolicy.showCellNumbers}
                 cellNumberProminence={labelRevealPolicy.cellNumberProminence}
-                showFocusedFullAddress={labelRevealPolicy.showFocusedFullAddress}
+                showFocusedFullAddress={labelsEnabled && labelRevealPolicy.showFocusedFullAddress}
                 rackRotationDeg={rack.rotationDeg}
               />
             )}

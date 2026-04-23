@@ -15,7 +15,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "perf:dl1": "playwright test e2e/performance/dl1-fps.spec.ts --reporter=line"
+    "perf:dl1": "playwright test e2e/performance/dl1-fps.spec.ts --reporter=line",
+    "perf:dl1:diagnostics": "playwright test e2e/performance/dl1-diagnostics.spec.ts --reporter=line",
+    "perf:dl1:pan": "playwright test e2e/performance/dl1-diagnostics.spec.ts --grep \"dl1:pan\" --reporter=line",
+    "perf:dl1:zoom": "playwright test e2e/performance/dl1-diagnostics.spec.ts --grep \"dl1:zoom\" --reporter=line",
+    "perf:dl1:select": "playwright test e2e/performance/dl1-diagnostics.spec.ts --grep \"dl1:select\" --reporter=line",
+    "perf:dl1:hover": "playwright test e2e/performance/dl1-diagnostics.spec.ts --grep \"dl1:hover\" --reporter=line",
+    "perf:dl1:load": "playwright test e2e/performance/dl1-diagnostics.spec.ts --grep \"dl1:load\" --reporter=line",
+    "perf:dl1:route-preview": "playwright test e2e/performance/dl1-diagnostics.spec.ts --grep \"dl1:route-preview\" --reporter=line"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",

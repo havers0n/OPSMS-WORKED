@@ -22,9 +22,11 @@ import type { LabelProminence } from './rack-label-reveal-policy';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
 import { CellInteriorSlotLabel, FocusedCellAddressOverlay } from './rack-label-overlays';
 import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
+import type { CanvasDiagnosticsFlags } from '../canvas-diagnostics';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
+const VISIBLE_CELL_OVERSCAN_PX = 160;
 
 type FaceProps = {
   face: RackFace;
@@ -50,6 +52,9 @@ type FaceProps = {
   cellNumberProminence: LabelProminence;
   showFocusedFullAddress: boolean;
   visualPalette: CellVisualPalette;
+  diagnosticsFlags: CanvasDiagnosticsFlags;
+  diagnosticsViewport: DiagnosticsViewport;
+  rackGeometry: CanvasRackGeometry;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
@@ -88,6 +93,9 @@ function FaceCells({
   cellNumberProminence,
   showFocusedFullAddress,
   visualPalette,
+  diagnosticsFlags,
+  diagnosticsViewport,
+  rackGeometry,
   onCellClick
 }: FaceProps) {
   if (!face.sections.length) return null;
@@ -174,6 +182,17 @@ function FaceCells({
             width: Math.max(1, cellW),
             height: Math.max(1, cellH - 1)
           };
+          if (
+            diagnosticsFlags.cells === 'visible-only' &&
+            !isLocalCellVisibleInViewport({
+              cellGeometry,
+              diagnosticsViewport,
+              rackGeometry,
+              rackRotationDeg
+            })
+          ) {
+            return null;
+          }
           if (shouldRevealAddress && addressText) {
             focusedAddressLabels.push({
               key: `${sec.id}-${level.id}-slot-${slotLabel}`,
@@ -188,22 +207,26 @@ function FaceCells({
                 geometry={cellGeometry}
                 visualState={visualState}
               />
-              <CellTruthMarkerOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              <CellOutlineOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              <CellHaloOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              <CellBadgeOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
+              {diagnosticsFlags.cellOverlays === 'normal' && (
+                <>
+                  <CellTruthMarkerOverlay
+                    geometry={cellGeometry}
+                    visualState={visualState}
+                  />
+                  <CellOutlineOverlay
+                    geometry={cellGeometry}
+                    visualState={visualState}
+                  />
+                  <CellHaloOverlay
+                    geometry={cellGeometry}
+                    visualState={visualState}
+                  />
+                  <CellBadgeOverlay
+                    geometry={cellGeometry}
+                    visualState={visualState}
+                  />
+                </>
+              )}
               <CellInteractionOverlay
                 geometry={cellGeometry}
                 visualState={visualState}
@@ -256,12 +279,101 @@ type Props = {
   locateTargetCellId?: string | null;
   workflowSourceCellId?: string | null;
   onCellClick?: (cellId: string, anchor: { x: number; y: number }) => void;
+  diagnosticsFlags?: CanvasDiagnosticsFlags;
+  diagnosticsViewport?: DiagnosticsViewport;
   showCellNumbers?: boolean;
   cellNumberProminence?: LabelProminence;
   showFocusedFullAddress?: boolean;
 };
 
 const noop = () => undefined;
+type DiagnosticsViewport = {
+  canvasOffset: { x: number; y: number };
+  viewport: { width: number; height: number };
+  zoom: number;
+};
+
+const DEFAULT_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
+  labels: 'normal',
+  hitTest: 'normal',
+  cells: 'normal',
+  cellOverlays: 'normal'
+};
+
+const DEFAULT_DIAGNOSTICS_VIEWPORT: DiagnosticsViewport = {
+  canvasOffset: { x: 0, y: 0 },
+  viewport: { width: 0, height: 0 },
+  zoom: 1
+};
+
+function rotatePoint(point: { x: number; y: number }, pivot: { x: number; y: number }, rotationDeg: number) {
+  if (rotationDeg === 0) return point;
+  const radians = (rotationDeg * Math.PI) / 180;
+  const sin = Math.sin(radians);
+  const cos = Math.cos(radians);
+  const dx = point.x - pivot.x;
+  const dy = point.y - pivot.y;
+
+  return {
+    x: pivot.x + dx * cos - dy * sin,
+    y: pivot.y + dx * sin + dy * cos
+  };
+}
+
+function isLocalCellVisibleInViewport({
+  cellGeometry,
+  diagnosticsViewport,
+  rackGeometry,
+  rackRotationDeg
+}: {
+  cellGeometry: { x: number; y: number; width: number; height: number };
+  diagnosticsViewport: DiagnosticsViewport;
+  rackGeometry: CanvasRackGeometry;
+  rackRotationDeg: 0 | 90 | 180 | 270;
+}) {
+  if (
+    diagnosticsViewport.zoom <= 0 ||
+    diagnosticsViewport.viewport.width <= 0 ||
+    diagnosticsViewport.viewport.height <= 0
+  ) {
+    return true;
+  }
+
+  const visibleRect = {
+    x: (-diagnosticsViewport.canvasOffset.x / diagnosticsViewport.zoom) - VISIBLE_CELL_OVERSCAN_PX,
+    y: (-diagnosticsViewport.canvasOffset.y / diagnosticsViewport.zoom) - VISIBLE_CELL_OVERSCAN_PX,
+    width: (diagnosticsViewport.viewport.width / diagnosticsViewport.zoom) + VISIBLE_CELL_OVERSCAN_PX * 2,
+    height: (diagnosticsViewport.viewport.height / diagnosticsViewport.zoom) + VISIBLE_CELL_OVERSCAN_PX * 2
+  };
+  const pivot = {
+    x: rackGeometry.centerX,
+    y: rackGeometry.centerY
+  };
+  const localCorners = [
+    { x: cellGeometry.x, y: cellGeometry.y },
+    { x: cellGeometry.x + cellGeometry.width, y: cellGeometry.y },
+    { x: cellGeometry.x + cellGeometry.width, y: cellGeometry.y + cellGeometry.height },
+    { x: cellGeometry.x, y: cellGeometry.y + cellGeometry.height }
+  ];
+  const canvasCorners = localCorners.map((corner) => {
+    const rotated = rotatePoint(corner, pivot, rackRotationDeg);
+    return {
+      x: rackGeometry.x + rotated.x,
+      y: rackGeometry.y + rotated.y
+    };
+  });
+  const minX = Math.min(...canvasCorners.map((point) => point.x));
+  const maxX = Math.max(...canvasCorners.map((point) => point.x));
+  const minY = Math.min(...canvasCorners.map((point) => point.y));
+  const maxY = Math.max(...canvasCorners.map((point) => point.y));
+
+  return (
+    minX <= visibleRect.x + visibleRect.width &&
+    maxX >= visibleRect.x &&
+    minY <= visibleRect.y + visibleRect.height &&
+    maxY >= visibleRect.y
+  );
+}
 
 export function RackCells({
   geometry,
@@ -283,6 +395,8 @@ export function RackCells({
   locateTargetCellId = null,
   workflowSourceCellId = null,
   onCellClick = noop,
+  diagnosticsFlags = DEFAULT_DIAGNOSTICS_FLAGS,
+  diagnosticsViewport = DEFAULT_DIAGNOSTICS_VIEWPORT,
   showCellNumbers = true,
   cellNumberProminence = 'dominant',
   showFocusedFullAddress = true
@@ -321,6 +435,9 @@ export function RackCells({
           rackSelected: isSelected,
           faceTone: 'primary'
         })}
+        diagnosticsFlags={diagnosticsFlags}
+        diagnosticsViewport={diagnosticsViewport}
+        rackGeometry={geometry}
         onCellClick={onCellClick}
       />
       {isPaired && faceB && (
@@ -351,6 +468,9 @@ export function RackCells({
             rackSelected: isSelected,
             faceTone: 'secondary'
           })}
+          diagnosticsFlags={diagnosticsFlags}
+          diagnosticsViewport={diagnosticsViewport}
+          rackGeometry={geometry}
           onCellClick={onCellClick}
         />
       )}

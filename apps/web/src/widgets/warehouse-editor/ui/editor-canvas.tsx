@@ -72,6 +72,7 @@ import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
 import { getWarehouseCanvasChromeTokens } from './shapes/warehouse-semantic-canvas-palette';
+import { useCanvasDiagnosticsFlags } from './canvas-diagnostics';
 
 const EMPTY_RACK_IDS: string[] = [];
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
@@ -98,6 +99,8 @@ export function EditorCanvas({
   const isStorageV2Active = isStorageV2 && viewMode === 'storage';
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
+  const diagnosticsFlags = useCanvasDiagnosticsFlags();
+  const isDiagnosticsHitTestDisabled = diagnosticsFlags.hitTest === 'off';
   const isLayoutEditable = useIsLayoutEditable();
   const selectedRackIds = useInteractionStore((state) =>
     isStorageV2Active
@@ -634,6 +637,12 @@ export function EditorCanvas({
                 activeCellRackId={activeCellRackId}
                 canSelectCells={canSelectCells}
                 canSelectRack={canSelectRack}
+                diagnosticsFlags={diagnosticsFlags}
+                diagnosticsViewport={{
+                  canvasOffset,
+                  viewport,
+                  zoom
+                }}
                 canvasSelectedCellId={canvasSelectedCellId}
                 cellRuntimeById={floorOperationsCellsById}
                 clearHighlightedCellIds={clearHighlightedCellIds}
@@ -660,7 +669,7 @@ export function EditorCanvas({
                 selectedRackActiveLevel={selectedRackActiveLevelIndex}
                 selectedRackIds={effectiveSelectedRackIds}
                 setHighlightedCellIds={setHighlightedCellIds}
-                setHoveredRackId={setHoveredRackId}
+                setHoveredRackId={isDiagnosticsHitTestDisabled ? () => undefined : setHoveredRackId}
                 setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}
                 setSelectedCellId={setSelectedCellId}
                 setSelectedRackId={setSelectedRackId}

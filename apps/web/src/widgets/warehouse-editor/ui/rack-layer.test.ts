@@ -126,6 +126,17 @@ function renderRackLayer(params: {
       canvasSelectedCellId: null,
       cellRuntimeById: new Map(),
       clearHighlightedCellIds: params.clearHighlightedCellIds ?? (() => undefined),
+      diagnosticsFlags: {
+        labels: 'normal',
+        hitTest: 'normal',
+        cells: 'normal',
+        cellOverlays: 'normal'
+      },
+      diagnosticsViewport: {
+        canvasOffset: { x: 0, y: 0 },
+        viewport: { width: 1200, height: 800 },
+        zoom: params.zoom ?? 1.5
+      },
       highlightedCellIds: new Set<string>(),
       hoveredRackId: null,
       isLayoutEditable: true,

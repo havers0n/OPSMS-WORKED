@@ -15,6 +15,46 @@ npm run perf:dl1 --workspace @wos/web
 
 Отчёт пишется в Playwright artifact `dl1-fps-report.json` внутри `apps/web/test-results/...`.
 
+## Диагностика
+
+Полный diagnostics matrix:
+
+```powershell
+npm run perf:dl1:diagnostics --workspace @wos/web
+```
+
+Точечные сценарии:
+
+```powershell
+npm run perf:dl1:pan --workspace @wos/web
+npm run perf:dl1:zoom --workspace @wos/web
+npm run perf:dl1:select --workspace @wos/web
+npm run perf:dl1:hover --workspace @wos/web
+npm run perf:dl1:load --workspace @wos/web
+npm run perf:dl1:route-preview --workspace @wos/web
+```
+
+Diagnostics harness сравнивает варианты `full-render`, `labels-off`, `hit-test-off`, `visible-cells-only`, `surface-only`, `rack-shell-only`. Каждый JSON entry содержит `frameBuckets`, `budgetStatus` и `deltaVsFullRender`.
+
+По умолчанию diagnostics запускается на `native-desktop` и `weak-laptop-cpu-4x`. Low-end профиль можно включить явно:
+
+```powershell
+$env:DL1_DIAGNOSTICS_INCLUDE_LOW_END=1
+npm run perf:dl1:diagnostics --workspace @wos/web
+```
+
+Для быстрых проверок можно сузить matrix:
+
+```powershell
+$env:DL1_DIAGNOSTICS_DURATION_MS=1000
+$env:DL1_DIAGNOSTICS_SCENARIOS="pan"
+$env:DL1_DIAGNOSTICS_VARIANTS="full-render,labels-off"
+$env:DL1_DIAGNOSTICS_PROFILES="native-desktop"
+npm run perf:dl1:diagnostics --workspace @wos/web
+```
+
+Budget failures в diagnostics report-only: они пишутся в JSON как `budgetStatus: "fail"`, но не валят Playwright test.
+
 ## Что измеряется
 
 - `averageFps` и `p50Fps`: общий уровень плавности во время drag/zoom по canvas.
