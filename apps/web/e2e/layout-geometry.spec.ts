@@ -1,9 +1,12 @@
 import { expect, test } from '@playwright/test';
-import type { Rack } from '@wos/domain';
+import { generatePreviewCells, type Rack } from '@wos/domain';
 import { mapLayoutDraftBundleToDomain } from '../src/entities/layout-version/api/mappers';
 import { WORLD_SCALE, getRackCanvasRect } from '../src/entities/layout-version/lib/canvas-geometry';
 import {
   buildDemoWarehouseRackPayloads,
+  demoWarehouseExpectedDraftRowCounts,
+  demoWarehouseExpectedPreviewCellCount,
+  demoWarehouseStructureByRackId,
   demoWarehouseVisualPlacements
 } from './support/demo-warehouse-layout';
 import {
@@ -103,6 +106,15 @@ test.describe('layout geometry round-trip', () => {
       const faceA = rack.faces.find((face) => face.side === 'A');
       expect(faceA?.enabled).toBe(true);
       expect(faceA?.slotNumberingDirection).toBe('ltr');
+      const structureSpec = demoWarehouseStructureByRackId[placement.rackId as keyof typeof demoWarehouseStructureByRackId];
+      expect(faceA?.sections).toHaveLength(structureSpec.sectionsPerFace);
+      expect(
+        faceA?.sections.every(
+          (section) =>
+            section.levels.length === structureSpec.levelsPerSection &&
+            section.levels.every((level) => level.slotCount === structureSpec.slotsPerLevel)
+        )
+      ).toBe(true);
 
       if (placement.faces === 2) {
         const faceB = rack.faces.find((face) => face.side === 'B');
@@ -110,6 +122,7 @@ test.describe('layout geometry round-trip', () => {
         expect(faceB?.slotNumberingDirection).toBe('rtl');
         expect(faceB?.relationshipMode ?? (faceB?.isMirrored ? 'mirrored' : 'independent')).toBe('mirrored');
         expect(faceB?.mirrorSourceFaceId).toBe(faceA?.id ?? null);
+        expect(faceB?.sections).toHaveLength(0);
       }
 
       const worldRect = toWorldRect(rack);
@@ -122,12 +135,16 @@ test.describe('layout geometry round-trip', () => {
       expect(worldRect.height).toBeCloseTo(expectedHeight, 6);
     }
 
+    const previewCells = generatePreviewCells(draft);
+    expect(previewCells).toHaveLength(demoWarehouseExpectedPreviewCellCount);
+    expect(new Set(previewCells.map((cell) => cell.address.raw)).size).toBe(previewCells.length);
+
     const rowCounts = await countLayoutRows(layoutVersionId);
     expect(rowCounts.racks).toBe(10);
     expect(rowCounts.rackFaces).toBe(16);
-    expect(rowCounts.rackSections).toBe(0);
-    expect(rowCounts.rackLevels).toBe(0);
-    expect(rowCounts.cells).toBe(0);
+    expect(rowCounts.rackSections).toBe(demoWarehouseExpectedDraftRowCounts.rackSections);
+    expect(rowCounts.rackLevels).toBe(demoWarehouseExpectedDraftRowCounts.rackLevels);
+    expect(rowCounts.cells).toBe(demoWarehouseExpectedDraftRowCounts.cells);
     expect(await countFloorLocations(floor.id)).toBe(0);
   });
 });

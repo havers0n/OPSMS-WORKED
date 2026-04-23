@@ -24,7 +24,25 @@ where profile_id = (select id from auth.users where email = 'admin@wos.local')
 -- - vertical racks are stored as axis='NS', rotation_deg=90 using the
 --   verified unrotated origin that reproduces the agreed visual bounds
 -- - horizontal racks are stored as axis='WE', rotation_deg=0
--- - this seed is layout-only: racks + rack_faces only
+-- - this seed remains draft-first and structure-only:
+--   racks + rack_faces + rack_sections + rack_levels
+-- - cells/locations/inventory are intentionally not seeded here;
+--   publish generates cells via regenerate_layout_cells()
+
+create or replace function pg_temp.seed_uuid(seed text)
+returns uuid
+language sql
+immutable
+as $$
+  select (
+    substr(hex, 1, 8) || '-' ||
+    substr(hex, 9, 4) || '-' ||
+    substr(hex, 13, 4) || '-' ||
+    substr(hex, 17, 4) || '-' ||
+    substr(hex, 21, 12)
+  )::uuid
+  from (select md5(seed) as hex) hashed;
+$$;
 
 do $$
 declare
@@ -159,5 +177,83 @@ begin
     ('a64f2f0b-2b4f-4f8b-9e9b-01aa01aa01aa'::uuid, 'a64f2f0b-2b4f-4f8b-9e9b-010101010101'::uuid, 'A', true, 'ltr', 'independent', false, null, null),
     ('a64f2f0b-2b4f-4f8b-9e9b-09aa09aa09aa'::uuid, 'a64f2f0b-2b4f-4f8b-9e9b-090909090909'::uuid, 'A', true, 'ltr', 'independent', false, null, null),
     ('a64f2f0b-2b4f-4f8b-9e9b-10aa10aa10aa'::uuid, 'a64f2f0b-2b4f-4f8b-9e9b-101010101010'::uuid, 'A', true, 'ltr', 'independent', false, null, null);
+
+  insert into public.rack_sections (id, rack_face_id, ordinal, length)
+  with rack_structure_spec(display_code, sections_per_face, levels_per_section, slots_per_level) as (
+    values
+      ('01', 6, 3, 3),
+      ('02', 5, 3, 3),
+      ('03', 9, 3, 3),
+      ('04', 9, 3, 3),
+      ('05', 9, 3, 3),
+      ('06', 9, 3, 3),
+      ('07', 10, 3, 3),
+      ('08', 8, 3, 3),
+      ('09', 6, 2, 3),
+      ('10', 6, 2, 3)
+  ),
+  face_a as (
+    select
+      r.display_code,
+      rf.id as rack_face_id,
+      coalesce(rf.face_length, r.total_length) as target_length,
+      spec.sections_per_face
+    from public.racks r
+    join public.rack_faces rf
+      on rf.rack_id = r.id
+     and rf.side = 'A'
+    join rack_structure_spec spec
+      on spec.display_code = r.display_code
+    where r.layout_version_id = demo_layout_version_id
+  )
+  select
+    pg_temp.seed_uuid(format('demo-layout:%s:face:A:section:%s', face_a.display_code, section_ordinal)),
+    face_a.rack_face_id,
+    section_ordinal,
+    case
+      when section_ordinal < face_a.sections_per_face
+        then round(face_a.target_length / face_a.sections_per_face, 3)
+      else face_a.target_length - (round(face_a.target_length / face_a.sections_per_face, 3) * (face_a.sections_per_face - 1))
+    end
+  from face_a
+  cross join lateral generate_series(1, face_a.sections_per_face) as sections(section_ordinal);
+
+  insert into public.rack_levels (id, rack_section_id, ordinal, slot_count, structural_default_role)
+  with rack_structure_spec(display_code, sections_per_face, levels_per_section, slots_per_level) as (
+    values
+      ('01', 6, 3, 3),
+      ('02', 5, 3, 3),
+      ('03', 9, 3, 3),
+      ('04', 9, 3, 3),
+      ('05', 9, 3, 3),
+      ('06', 9, 3, 3),
+      ('07', 10, 3, 3),
+      ('08', 8, 3, 3),
+      ('09', 6, 2, 3),
+      ('10', 6, 2, 3)
+  ),
+  face_a as (
+    select
+      r.display_code,
+      spec.sections_per_face,
+      spec.levels_per_section,
+      spec.slots_per_level
+    from public.racks r
+    join public.rack_faces rf
+      on rf.rack_id = r.id
+     and rf.side = 'A'
+    join rack_structure_spec spec
+      on spec.display_code = r.display_code
+    where r.layout_version_id = demo_layout_version_id
+  )
+  select
+    pg_temp.seed_uuid(format('demo-layout:%s:face:A:section:%s:level:%s', face_a.display_code, section_ordinal, level_ordinal)),
+    pg_temp.seed_uuid(format('demo-layout:%s:face:A:section:%s', face_a.display_code, section_ordinal)),
+    level_ordinal,
+    face_a.slots_per_level,
+    'none'
+  from face_a
+  cross join lateral generate_series(1, face_a.sections_per_face) as sections(section_ordinal)
+  cross join lateral generate_series(1, face_a.levels_per_section) as levels(level_ordinal);
 end
 $$;

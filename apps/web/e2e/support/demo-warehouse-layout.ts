@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export type DemoRackOrientation = 'vertical' | 'horizontal';
 
 export type DemoRackVisualPlacement = {
@@ -49,6 +51,12 @@ export type DraftRackPayload = {
   faces: DraftRackFacePayload[];
 };
 
+type DemoRackStructureSpec = {
+  sectionsPerFace: number;
+  levelsPerSection: number;
+  slotsPerLevel: number;
+};
+
 export const demoWarehouseVisualPlacements: DemoRackVisualPlacement[] = [
   { rackId: '08', orientation: 'vertical', visualX: 0.0, visualY: 0.0, width: 1.0, length: 25.0, faces: 1 },
   { rackId: '07', orientation: 'vertical', visualX: 4.7, visualY: 0.0, width: 2.3, length: 28.0, faces: 2 },
@@ -61,6 +69,19 @@ export const demoWarehouseVisualPlacements: DemoRackVisualPlacement[] = [
   { rackId: '09', orientation: 'horizontal', visualX: 16.0, visualY: 30.8, width: 2.25, length: 17.0, faces: 1 },
   { rackId: '10', orientation: 'horizontal', visualX: 16.0, visualY: 35.5, width: 1.0, length: 18.0, faces: 1 }
 ];
+
+export const demoWarehouseStructureByRackId = {
+  '01': { sectionsPerFace: 6, levelsPerSection: 3, slotsPerLevel: 3 },
+  '02': { sectionsPerFace: 5, levelsPerSection: 3, slotsPerLevel: 3 },
+  '03': { sectionsPerFace: 9, levelsPerSection: 3, slotsPerLevel: 3 },
+  '04': { sectionsPerFace: 9, levelsPerSection: 3, slotsPerLevel: 3 },
+  '05': { sectionsPerFace: 9, levelsPerSection: 3, slotsPerLevel: 3 },
+  '06': { sectionsPerFace: 9, levelsPerSection: 3, slotsPerLevel: 3 },
+  '07': { sectionsPerFace: 10, levelsPerSection: 3, slotsPerLevel: 3 },
+  '08': { sectionsPerFace: 8, levelsPerSection: 3, slotsPerLevel: 3 },
+  '09': { sectionsPerFace: 6, levelsPerSection: 2, slotsPerLevel: 3 },
+  '10': { sectionsPerFace: 6, levelsPerSection: 2, slotsPerLevel: 3 }
+} as const satisfies Record<string, DemoRackStructureSpec>;
 
 const demoRackPayloadIds = {
   '08': { rack: 'a64f2f0b-2b4f-4f8b-9e9b-080808080808', faceA: 'a64f2f0b-2b4f-4f8b-9e9b-08aa08aa08aa' },
@@ -99,6 +120,58 @@ const demoRackPayloadIds = {
   '10': { rack: 'a64f2f0b-2b4f-4f8b-9e9b-101010101010', faceA: 'a64f2f0b-2b4f-4f8b-9e9b-10aa10aa10aa' }
 } as const;
 
+export const demoWarehouseExpectedDraftRowCounts = {
+  rackSections: Object.values(demoWarehouseStructureByRackId).reduce((sum, spec) => sum + spec.sectionsPerFace, 0),
+  rackLevels: Object.values(demoWarehouseStructureByRackId).reduce(
+    (sum, spec) => sum + spec.sectionsPerFace * spec.levelsPerSection,
+    0
+  ),
+  cells: 0
+} as const;
+
+export const demoWarehouseExpectedPreviewCellCount = demoWarehouseVisualPlacements.reduce((sum, placement) => {
+  const spec = demoWarehouseStructureByRackId[placement.rackId as keyof typeof demoWarehouseStructureByRackId];
+  return sum + (spec.sectionsPerFace * spec.levelsPerSection * spec.slotsPerLevel * placement.faces);
+}, 0);
+
+function deterministicUuid(seed: string) {
+  const hex = createHash('md5').update(seed).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function splitRackLength(totalLength: number, sectionCount: number) {
+  const baseLength = Number((totalLength / sectionCount).toFixed(3));
+
+  return Array.from({ length: sectionCount }, (_, index) =>
+    index === sectionCount - 1
+      ? Number((totalLength - baseLength * (sectionCount - 1)).toFixed(3))
+      : baseLength
+  );
+}
+
+function buildFaceSections(placement: DemoRackVisualPlacement): DraftRackSectionPayload[] {
+  const spec = demoWarehouseStructureByRackId[placement.rackId as keyof typeof demoWarehouseStructureByRackId];
+  const sectionLengths = splitRackLength(placement.length, spec.sectionsPerFace);
+
+  return sectionLengths.map((length, sectionIndex) => {
+    const sectionOrdinal = sectionIndex + 1;
+
+    return {
+      id: deterministicUuid(`demo-layout:${placement.rackId}:face:A:section:${sectionOrdinal}`),
+      ordinal: sectionOrdinal,
+      length,
+      levels: Array.from({ length: spec.levelsPerSection }, (_, levelIndex) => {
+        const levelOrdinal = levelIndex + 1;
+        return {
+          id: deterministicUuid(`demo-layout:${placement.rackId}:face:A:section:${sectionOrdinal}:level:${levelOrdinal}`),
+          ordinal: levelOrdinal,
+          slotCount: spec.slotsPerLevel
+        };
+      })
+    };
+  });
+}
+
 // Verified by the geometry round-trip gate in layout-geometry.spec.ts:
 // the repo stores vertical racks as the unrotated origin, then the renderer
 // projects the visible bounds from a 90deg center rotation.
@@ -128,7 +201,7 @@ function buildFacePayloads(placement: DemoRackVisualPlacement): DraftRackFacePay
       relationshipMode: 'independent',
       isMirrored: false,
       mirrorSourceFaceId: null,
-      sections: []
+      sections: buildFaceSections(placement)
     }
   ];
 
@@ -141,6 +214,7 @@ function buildFacePayloads(placement: DemoRackVisualPlacement): DraftRackFacePay
       relationshipMode: 'mirrored',
       isMirrored: true,
       mirrorSourceFaceId: ids.faceA,
+      // Repo-native mirrored Face B resolves structure from Face A.
       sections: []
     });
   }
