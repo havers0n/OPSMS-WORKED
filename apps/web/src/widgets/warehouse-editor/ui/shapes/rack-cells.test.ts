@@ -27,6 +27,8 @@ vi.mock('react-konva', () => ({
     createElement('Line', props, children),
   Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Rect', props, children),
+  Shape: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Shape', props, children),
   Text: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Text', props, children)
 }));
@@ -288,6 +290,27 @@ function countInteractionRects(renderer: TestRenderer.ReactTestRenderer) {
     ).length;
 }
 
+function getBatchedCellBaseShapes(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) =>
+      String(node.type) === 'Shape' &&
+      node.props.wosShapeRole === 'cell-base-batch'
+  );
+}
+
+function getBatchedCellBaseCells(renderer: TestRenderer.ReactTestRenderer) {
+  return getBatchedCellBaseShapes(renderer).flatMap((shape) =>
+    Array.isArray(shape.props.cells) ? shape.props.cells : []
+  );
+}
+
+function getCellBaseRects(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) =>
+      String(node.type) === 'Rect' && node.props.wosRectRole === 'cell-base'
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -311,6 +334,71 @@ describe('RackCells', () => {
     expect(clicked).not.toContain('cell-level-low-2');
     expect(clicked).not.toContain('cell-level-high-1');
     expect(clicked).not.toContain('cell-level-high-2');
+  });
+
+  it('batches visible cell base surfaces into one non-listening Shape per face', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2
+    });
+    const shapes = getBatchedCellBaseShapes(renderer);
+    const cells = getBatchedCellBaseCells(renderer);
+
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]?.props.name).toBe('batched-cell-base-shape');
+    expect(shapes[0]?.props.listening).toBe(false);
+    expect(cells).toHaveLength(2);
+    expect(getCellBaseRects(renderer)).toHaveLength(0);
+  });
+
+  it('passes old cell-local Rect coordinates to the batched Shape without extra transforms', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2
+    });
+    const shape = getBatchedCellBaseShapes(renderer)[0];
+    const cells = getBatchedCellBaseCells(renderer);
+
+    expect(shape?.props.x).toBeUndefined();
+    expect(shape?.props.y).toBeUndefined();
+    expect(shape?.props.offsetX).toBeUndefined();
+    expect(shape?.props.offsetY).toBeUndefined();
+    expect(shape?.props.rotation).toBeUndefined();
+    expect(cells.map((cell) => cell.geometry)).toEqual([
+      { x: 0.5, y: 4.5, width: 99, height: 71 },
+      { x: 100.5, y: 4.5, width: 99, height: 71 }
+    ]);
+  });
+
+  it('keeps no-overlays diagnostics from removing the batched base surface', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      diagnosticsFlags: {
+        labels: 'normal',
+        hitTest: 'normal',
+        cells: 'normal',
+        cellOverlays: 'off',
+        enableProductionCellCulling: true,
+        rackLayerRenderer: 'layer'
+      }
+    });
+    const shapes = getBatchedCellBaseShapes(renderer);
+
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]?.props.disableStroke).toBe(true);
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(
+      getRects(renderer).some((rect) =>
+        [
+          'cell-truth-overlay',
+          'cell-outline-overlay',
+          'cell-halo-overlay',
+          'cell-badge'
+        ].includes(String(rect.props.wosRectRole))
+      )
+    ).toBe(false);
+    expect(countInteractionRects(renderer)).toBe(2);
   });
 
   it('uses equal displayed-band bounds for activeLevelIndex 0 and 1 on same multi-level rack', () => {
@@ -606,10 +694,7 @@ describe('RackCells', () => {
     });
     const labels = getTextValues(renderer);
     expect(labels).toHaveLength(0);
-    const cellRects = renderer.root
-      .findAll((node) => String(node.type) === 'Rect')
-      .filter((node) => node.props.fillEnabled === true);
-    expect(cellRects.length).toBeGreaterThan(0);
+    expect(getBatchedCellBaseCells(renderer).length).toBeGreaterThan(0);
   });
 
   it('keeps cell click behavior unchanged when labels are present', () => {
@@ -628,6 +713,7 @@ describe('RackCells', () => {
     });
 
     expect(countInteractionRects(renderer)).toBe(0);
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(0);
     expect(getTextValuesByOwner(renderer, 'slot-label')).toEqual([]);
   });
 
@@ -643,6 +729,7 @@ describe('RackCells', () => {
     });
 
     expect(countInteractionRects(renderer)).toBe(2);
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
     expect(
       getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
         /^\d+$/.test(value)
@@ -667,6 +754,7 @@ describe('RackCells', () => {
       });
 
       expect(countInteractionRects(renderer)).toBe(1);
+      expect(getBatchedCellBaseCells(renderer)).toHaveLength(1);
     }
   });
 
@@ -979,6 +1067,10 @@ function getSurfaceRects(renderer: TestRenderer.ReactTestRenderer) {
   );
 }
 
+function getSurfaceCells(renderer: TestRenderer.ReactTestRenderer) {
+  return getBatchedCellBaseCells(renderer);
+}
+
 function getOutlineRects(renderer: TestRenderer.ReactTestRenderer) {
   return getSurfaceRects(renderer).filter(
     (rect) =>
@@ -1028,16 +1120,14 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
 
-    const surfaceRects = getRects(renderer).filter(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCells = getSurfaceCells(renderer);
     const outlineRects = getOutlineRects(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_RESERVED
     );
-    expect(surfaceRects.map((rect) => rect.props.fill)).not.toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).not.toContain(
       'selected-fill'
     );
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
@@ -1057,9 +1147,7 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
     const haloRects = getHaloRects(renderer);
-    const surfaceRect = getSurfaceRects(renderer).find(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCell = getSurfaceCells(renderer)[0];
 
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(
@@ -1071,10 +1159,10 @@ describe('RackCells layered paint ownership', () => {
     expect(haloRects[0]?.props.strokeScaleEnabled).toBe(false);
     expect(haloRects[0]?.props.strokeWidth).toBe(2.6);
     expect(Number(haloRects[0]?.props.x)).toBeLessThan(
-      Number(surfaceRect?.props.x)
+      Number(surfaceCell?.geometry.x)
     );
     expect(Number(haloRects[0]?.props.width)).toBeGreaterThan(
-      Number(surfaceRect?.props.width)
+      Number(surfaceCell?.geometry.width)
     );
   });
 
@@ -1115,16 +1203,14 @@ describe('RackCells layered paint ownership', () => {
       occupied: true
     });
 
-    const surfaceRects = getRects(renderer).filter(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCells = getSurfaceCells(renderer);
     const badgeRects = getBadgeRects(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_STOCKED
     );
-    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.stroke)).toContain(
       CELL_STROKE_STOCKED
     );
     expect(badgeRects.map((rect) => rect.props.fill)).toContain(
@@ -1156,12 +1242,10 @@ describe('RackCells layered paint ownership', () => {
       occupied: true
     });
 
-    const surfaceRects = getRects(renderer).filter(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCells = getSurfaceCells(renderer);
     const truthMarkerRects = getTruthMarkerRects(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_STOCKED
     );
     expect(truthMarkerRects.length).toBeGreaterThan(0);
@@ -1170,9 +1254,7 @@ describe('RackCells layered paint ownership', () => {
   it('unknown truth keeps the base surface and adds only an internal marker', () => {
     const renderer = renderLayeredCell();
 
-    const surfaceRects = getSurfaceRects(renderer).filter(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCells = getSurfaceCells(renderer);
     const truthMarkerRects = getRects(renderer).filter(
       (rect) =>
         rect.props.fillEnabled === false &&
@@ -1180,7 +1262,7 @@ describe('RackCells layered paint ownership', () => {
         Number(rect.props.opacity) === 0.82
     );
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_A_RACK_SELECTED
     );
     expect(truthMarkerRects.length).toBeGreaterThan(0);
@@ -1194,14 +1276,12 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
 
-    const surfaceRects = getSurfaceRects(renderer).filter(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCells = getSurfaceCells(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_RESERVED
     );
-    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(
+    expect(surfaceCells.map((cell) => cell.visualState.surface.stroke)).toContain(
       CELL_STROKE_RESERVED
     );
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
@@ -1254,15 +1334,17 @@ describe('RackCells layered paint ownership', () => {
     const renderer = renderLayeredCell({
       missingCellIdentity: true
     });
-    const surfaceRects = getSurfaceRects(renderer).filter(
-      (rect) => rect.props.fillEnabled === true
-    );
+    const surfaceCells = getSurfaceCells(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(surfaceRects).toHaveLength(1);
-    expect(surfaceRects[0]?.props.fill).toBe(CELL_FILL_A_RACK_SELECTED);
-    expect(surfaceRects[0]?.props.stroke).toBe(CELL_STROKE_A_RACK_SELECTED);
-    expect(surfaceRects[0]?.props.opacity).toBe(0.18);
+    expect(surfaceCells).toHaveLength(1);
+    expect(surfaceCells[0]?.visualState.surface.fill).toBe(
+      CELL_FILL_A_RACK_SELECTED
+    );
+    expect(surfaceCells[0]?.visualState.surface.stroke).toBe(
+      CELL_STROKE_A_RACK_SELECTED
+    );
+    expect(surfaceCells[0]?.visualState.opacity).toBe(0.18);
     expect(hitRects).toHaveLength(1);
     expect(hitRects[0]?.props.onClick).toBeUndefined();
   });

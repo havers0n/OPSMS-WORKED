@@ -1,4 +1,4 @@
-import { Circle, Group, Rect } from 'react-konva';
+import { Circle, Group, Rect, Shape } from 'react-konva';
 import type { ResolvedCellVisualState } from './rack-cells-visual-state';
 
 type CellRectGeometry = {
@@ -12,6 +12,86 @@ type CellOverlaySharedProps = {
   geometry: CellRectGeometry;
   visualState: ResolvedCellVisualState;
 };
+
+export type BatchedCellBaseShapeCell = CellOverlaySharedProps;
+
+function drawRoundedRectPath(
+  context: CanvasRenderingContext2D,
+  geometry: CellRectGeometry,
+  radius: number
+) {
+  const x = geometry.x;
+  const y = geometry.y;
+  const width = geometry.width;
+  const height = geometry.height;
+  const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.lineTo(x + width - r, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + r);
+  context.lineTo(x + width, y + height - r);
+  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  context.lineTo(x + r, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - r);
+  context.lineTo(x, y + r);
+  context.quadraticCurveTo(x, y, x + r, y);
+  context.closePath();
+}
+
+function paintCellBase(
+  context: CanvasRenderingContext2D,
+  cell: BatchedCellBaseShapeCell,
+  disableStroke: boolean
+) {
+  const { geometry, visualState } = cell;
+  const fill = visualState.surface.fill;
+  const stroke = disableStroke ? null : visualState.surface.stroke;
+  if (fill === null && stroke === null) return;
+
+  context.save();
+  context.globalAlpha *= visualState.opacity;
+  drawRoundedRectPath(context, geometry, 1);
+  if (fill !== null) {
+    context.fillStyle = fill;
+    context.fill();
+  }
+  if (stroke !== null) {
+    context.strokeStyle = stroke;
+    context.lineWidth = visualState.surface.strokeWidth;
+    context.stroke();
+  }
+  context.restore();
+}
+
+export function BatchedCellBaseShape({
+  cells,
+  disableStroke = false
+}: {
+  cells: BatchedCellBaseShapeCell[];
+  disableStroke?: boolean;
+}) {
+  if (cells.length === 0) return null;
+
+  return (
+    <Shape
+      listening={false}
+      name="batched-cell-base-shape"
+      wosShapeRole="cell-base-batch"
+      cells={cells}
+      disableStroke={disableStroke}
+      sceneFunc={(context) => {
+        const canvasContext = (
+          context as unknown as { _context?: CanvasRenderingContext2D }
+        )._context;
+        if (!canvasContext) return;
+        for (const cell of cells) {
+          paintCellBase(canvasContext, cell, disableStroke);
+        }
+      }}
+    />
+  );
+}
 
 function LayerRect({
   geometry,
@@ -112,6 +192,62 @@ export function CellSurfaceVisual({
       />
       {dotNodes}
     </Group>
+  );
+}
+
+export function CellSurfacePatternVisual({
+  geometry,
+  visualState
+}: CellOverlaySharedProps) {
+  const pattern = visualState.surface.pattern;
+  const dotsVisible =
+    pattern?.kind === 'dots' &&
+    Math.min(geometry.width, geometry.height) >= pattern.minCellSize &&
+    geometry.width > pattern.inset * 2 &&
+    geometry.height > pattern.inset * 2;
+
+  if (!dotsVisible || !pattern) return null;
+
+  return (
+    <>
+      {Array.from(
+        {
+          length:
+            Math.floor(
+              (geometry.height - pattern.inset * 2) / pattern.pitch
+            ) + 1
+        },
+        (_, rowIndex) => rowIndex
+      ).flatMap((rowIndex) => {
+        const centerY = geometry.y + pattern.inset + rowIndex * pattern.pitch;
+        if (centerY > geometry.y + geometry.height - pattern.inset) return [];
+
+        return Array.from(
+          {
+            length:
+              Math.floor(
+                (geometry.width - pattern.inset * 2) / pattern.pitch
+              ) + 1
+          },
+          (_, columnIndex) => columnIndex
+        ).flatMap((columnIndex) => {
+          const centerX = geometry.x + pattern.inset + columnIndex * pattern.pitch;
+          if (centerX > geometry.x + geometry.width - pattern.inset) return [];
+
+          return (
+            <Circle
+              key={`reserved-dot-${rowIndex}-${columnIndex}`}
+              x={centerX}
+              y={centerY}
+              radius={pattern.radius}
+              listening={false}
+              fill={pattern.color}
+              opacity={pattern.opacity}
+            />
+          );
+        });
+      })}
+    </>
   );
 }
 

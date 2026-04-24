@@ -1,6 +1,14 @@
 import { dirname } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { execFile } from 'node:child_process/promises';
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type ConsoleMessage,
+  type Frame,
+  type Page
+} from '@playwright/test';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { signInToWarehouse } from '../support/auth';
 import {
@@ -68,6 +76,23 @@ type RawProbeResult = {
     totalJSHeapSize?: number;
     jsHeapSizeLimit?: number;
   } | null;
+};
+
+type BuildIdentity = {
+  commit: string;
+  dirty: boolean;
+  changedPaths: string[];
+  statusShort: string[];
+};
+
+type FrameProbeMetadata = {
+  id: string;
+  startUrl: string;
+  timeOrigin: number;
+};
+
+type FrameProbeState = FrameProbeMetadata & {
+  stop: () => RawProbeResult;
 };
 
 type RenderCauseCounts = {
@@ -152,6 +177,12 @@ type KonvaRectRoleStyleCounters = {
   strokeWidths: Record<string, number>;
 };
 
+type KonvaShapeRoleCounters = {
+  nodes: number;
+  listeningTrue: number;
+  hitGraphEligible: number;
+};
+
 type KonvaPipelineProbeResult = {
   autoDrawEnabled: boolean | null;
   stageAutoDrawAttr: unknown;
@@ -168,6 +199,8 @@ type KonvaPipelineProbeResult = {
   nodeSceneDrawCostBuckets: Record<string, KonvaNodeDrawCost>;
   rectSceneDrawCostByRole: Record<string, KonvaNodeDrawCost>;
   rectNodeCompositionByRole: Record<string, KonvaRectRoleStyleCounters>;
+  shapeSceneDrawCostByRole: Record<string, KonvaNodeDrawCost>;
+  shapeNodeCompositionByRole: Record<string, KonvaShapeRoleCounters>;
   pointerMoveCalls: number;
   pointerEnterLeaveCalls: number;
   getIntersectionCalls: number;
@@ -258,6 +291,36 @@ type BrowserEnvironment = {
   deviceMemory?: number;
   devicePixelRatio: number;
 };
+
+async function gitOutput(args: string[]) {
+  try {
+    const { stdout } = await execFile('git', args, {
+      cwd: process.cwd()
+    });
+    return stdout.trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+async function getBuildIdentity(): Promise<BuildIdentity> {
+  const commit = await gitOutput(['rev-parse', 'HEAD']);
+  const statusRaw = await gitOutput(['status', '--short']);
+  const statusShort =
+    statusRaw === 'unknown' || statusRaw.length === 0
+      ? []
+      : statusRaw.split(/\r?\n/);
+  const changedPaths = statusShort
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+
+  return {
+    commit,
+    dirty: statusShort.length > 0,
+    changedPaths,
+    statusShort
+  };
+}
 
 const NORMAL_FLAGS: DiagnosticsFlags = {
   labels: 'normal',
@@ -856,6 +919,8 @@ async function startKonvaPipelineProbe(page: Page) {
       nodeSceneDrawCostBuckets: {},
       rectSceneDrawCostByRole: {},
       rectNodeCompositionByRole: {},
+      shapeSceneDrawCostByRole: {},
+      shapeNodeCompositionByRole: {},
       pointerMoveCalls: 0,
       pointerEnterLeaveCalls: 0,
       getIntersectionCalls: 0,
@@ -898,7 +963,13 @@ async function startKonvaPipelineProbe(page: Page) {
         ? rawRole
         : 'unknown';
     };
-
+    const getShapeRole = (node: any) => {
+      const rawRole =
+        typeof node?.getAttr === 'function' ? node.getAttr('wosShapeRole') : null;
+      return typeof rawRole === 'string' && rawRole.length > 0
+        ? rawRole
+        : 'unknown';
+    };
     const readSource = () =>
       global.__WOS_CANVAS_KONVA_SOURCE__ ?? 'unknown';
 
@@ -966,7 +1037,7 @@ async function startKonvaPipelineProbe(page: Page) {
     const recordNodeDrawCost = (
       nodeType: string,
       durationMs: number,
-      rectRole?: string
+      role?: string
     ) => {
       const update = (target: Record<string, KonvaNodeDrawCost>, key: string) => {
         const metric = (target[key] ?? {
@@ -986,14 +1057,17 @@ async function startKonvaPipelineProbe(page: Page) {
       update(probe.nodeSceneDrawCostByType, nodeType);
       update(probe.nodeSceneDrawCostBuckets, normalizeDrawBucket(nodeType));
       if (nodeType === 'Rect') {
-        update(probe.rectSceneDrawCostByRole, rectRole ?? 'unknown');
+        update(probe.rectSceneDrawCostByRole, role ?? 'unknown');
+      }
+      if (nodeType === 'Shape') {
+        update(probe.shapeSceneDrawCostByRole, role ?? 'unknown');
       }
     };
 
     const nodeDrawStack: Array<{ childMs: number }> = [];
     const measureNodeSceneDraw = (
       nodeType: string,
-      rectRole: string | undefined,
+      role: string | undefined,
       callback: () => unknown
     ) => {
       const frame = { childMs: 0 };
@@ -1005,7 +1079,7 @@ async function startKonvaPipelineProbe(page: Page) {
         const totalMs = performance.now() - start;
         nodeDrawStack.pop();
         const exclusiveMs = Math.max(0, totalMs - frame.childMs);
-        recordNodeDrawCost(nodeType, exclusiveMs, rectRole);
+        recordNodeDrawCost(nodeType, exclusiveMs, role);
         const parent = nodeDrawStack[nodeDrawStack.length - 1];
         if (parent) parent.childMs += totalMs;
       }
@@ -1058,7 +1132,11 @@ async function startKonvaPipelineProbe(page: Page) {
         const nodeType = getNodeType(self);
         return measureNodeSceneDraw(
           nodeType,
-          nodeType === 'Rect' ? getRectRole(self) : undefined,
+          nodeType === 'Rect'
+            ? getRectRole(self)
+            : nodeType === 'Shape'
+              ? getShapeRole(self)
+              : undefined,
           () => original.apply(self, args)
         );
       });
@@ -1260,6 +1338,13 @@ async function stopKonvaPipelineProbe(
         ? rawRole
         : 'unknown';
     };
+    const getShapeRole = (node: any) => {
+      const rawRole =
+        typeof node?.getAttr === 'function' ? node.getAttr('wosShapeRole') : null;
+      return typeof rawRole === 'string' && rawRole.length > 0
+        ? rawRole
+        : 'unknown';
+    };
     const readBoolAttr = (node: any, methodName: string, attrName: string) => {
       if (typeof node?.[methodName] === 'function') {
         return node[methodName]() !== false;
@@ -1361,6 +1446,21 @@ async function stopKonvaPipelineProbe(
       }
       probe.rectNodeCompositionByRole[role] = counters;
     };
+    const recordShapeCounters = (
+      role: string,
+      isListening: boolean,
+      isVisible: boolean
+    ) => {
+      const counters = probe.shapeNodeCompositionByRole[role] ?? {
+        nodes: 0,
+        listeningTrue: 0,
+        hitGraphEligible: 0
+      };
+      counters.nodes += 1;
+      if (isListening) counters.listeningTrue += 1;
+      if (isListening && isVisible) counters.hitGraphEligible += 1;
+      probe.shapeNodeCompositionByRole[role] = counters;
+    };
 
     const visit = (
       node: any,
@@ -1383,6 +1483,9 @@ async function stopKonvaPipelineProbe(
       if (isListening && isVisible) composition.hitGraphEligible += 1;
       if (nodeType === 'Rect') {
         recordRectStyleCounters(node, getRectRole(node), isListening, isVisible);
+      }
+      if (nodeType === 'Shape') {
+        recordShapeCounters(getShapeRole(node), isListening, isVisible);
       }
       const children =
         typeof node.getChildren === 'function' ? node.getChildren() : [];
@@ -1461,6 +1564,10 @@ async function stopKonvaPipelineProbe(
         publicProbe.rectSceneDrawCostByRole
       ),
       rectNodeCompositionByRole: publicProbe.rectNodeCompositionByRole,
+      shapeSceneDrawCostByRole: finalizeDrawCost(
+        publicProbe.shapeSceneDrawCostByRole
+      ),
+      shapeNodeCompositionByRole: publicProbe.shapeNodeCompositionByRole,
       autoDrawEnabled:
         typeof global.__WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__ === 'boolean'
           ? global.__WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__
@@ -1477,12 +1584,64 @@ async function stopKonvaPipelineProbe(
   });
 }
 
+type PageStabilityGuard = {
+  assertClean: () => void;
+  dispose: () => void;
+  getReason: () => string | null;
+};
+
+function installPageStabilityGuard(page: Page): PageStabilityGuard {
+  let reason: string | null = null;
+  const fail = (nextReason: string) => {
+    reason ??= nextReason;
+  };
+  const frameNavigatedHandler = (frame: Frame) => {
+    if (frame === page.mainFrame()) {
+      fail(`main frame navigated to ${frame.url()}`);
+    }
+  };
+  const pageErrorHandler = (error: Error) => {
+    fail(`page error: ${error.message}`);
+  };
+  const crashHandler = () => {
+    fail('page crashed');
+  };
+  const consoleHandler = (message: ConsoleMessage) => {
+    const text = message.text();
+    if (
+      message.type() === 'error' ||
+      text.includes('optimized dependencies changed. reloading') ||
+      text.includes('page reload')
+    ) {
+      fail(`console ${message.type()}: ${text}`);
+    }
+  };
+
+  page.on('framenavigated', frameNavigatedHandler);
+  page.on('pageerror', pageErrorHandler);
+  page.on('crash', crashHandler);
+  page.on('console', consoleHandler);
+
+  return {
+    assertClean: () => {
+      if (reason) throw new Error(`DL1 page became unstable: ${reason}`);
+    },
+    dispose: () => {
+      page.off('framenavigated', frameNavigatedHandler);
+      page.off('pageerror', pageErrorHandler);
+      page.off('crash', crashHandler);
+      page.off('console', consoleHandler);
+    },
+    getReason: () => reason
+  };
+}
+
 async function startFrameProbe(page: Page) {
-  await page.evaluate(() => {
-    type ProbeState = {
-      stop: () => RawProbeResult;
-    };
-    const global = window as unknown as { __dl1FrameProbe?: ProbeState };
+  const probeId = `dl1-frame-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+  await page.evaluate((id) => {
+    const global = window as unknown as { __dl1FrameProbe?: FrameProbeState };
     global.__dl1FrameProbe?.stop();
 
     const frameTimes: number[] = [];
@@ -1522,6 +1681,9 @@ async function startFrameProbe(page: Page) {
     rafId = window.requestAnimationFrame(tick);
 
     global.__dl1FrameProbe = {
+      id,
+      startUrl: window.location.href,
+      timeOrigin: performance.timeOrigin,
       stop: () => {
         stopped = true;
         window.cancelAnimationFrame(rafId);
@@ -1546,28 +1708,210 @@ async function startFrameProbe(page: Page) {
         };
       }
     };
+  }, probeId);
+  return probeId;
+}
+
+async function assertFrameProbeAlive(
+  page: Page,
+  probeId: string,
+  guard: PageStabilityGuard
+) {
+  guard.assertClean();
+  await page.evaluate((expectedId) => {
+    const global = window as unknown as {
+      __dl1FrameProbe?: FrameProbeState;
+    };
+    const probe = global.__dl1FrameProbe;
+    if (!probe) {
+      throw new Error(
+        `DL1 frame probe disappeared mid-run. expected=${expectedId}, currentUrl=${window.location.href}`
+      );
+    }
+    if (probe.id !== expectedId) {
+      throw new Error(
+        `DL1 frame probe was replaced mid-run. expected=${expectedId}, actual=${probe.id}, currentUrl=${window.location.href}`
+      );
+    }
+    if (probe.startUrl !== window.location.href) {
+      throw new Error(
+        `DL1 frame probe URL changed mid-run. start=${probe.startUrl}, current=${window.location.href}`
+      );
+    }
+    if (probe.timeOrigin !== performance.timeOrigin) {
+      throw new Error(
+        `DL1 frame probe page context changed mid-run. expectedTimeOrigin=${probe.timeOrigin}, actualTimeOrigin=${performance.timeOrigin}`
+      );
+    }
+  }, probeId);
+}
+
+async function stopFrameProbe(
+  page: Page,
+  probeId: string,
+  guard?: PageStabilityGuard
+) {
+  guard?.assertClean();
+  return page.evaluate(
+    ({ expectedId, guardReason }) => {
+      const global = window as unknown as {
+        __dl1FrameProbe?: FrameProbeState;
+      };
+      const probe = global.__dl1FrameProbe;
+      if (!probe) {
+        throw new Error(
+          `DL1 frame probe disappeared before stop. expected=${expectedId}, currentUrl=${window.location.href}, reason=${guardReason ?? 'none'}`
+        );
+      }
+      if (probe.id !== expectedId) {
+        throw new Error(
+        `DL1 frame probe was replaced before stop. expected=${expectedId}, actual=${probe.id}, currentUrl=${window.location.href}, reason=${guardReason ?? 'none'}`
+        );
+      }
+      const result = probe.stop();
+      global.__dl1FrameProbe = undefined;
+      return result;
+    },
+    { expectedId: probeId, guardReason: guard?.getReason() ?? null }
+  );
+}
+
+type WarehouseCanvasSnapshot = {
+  url: string;
+  readyState: DocumentReadyState;
+  canvasCount: number;
+  canvasBox: { width: number; height: number } | null;
+  hasStage: boolean;
+  stageId: string;
+  layerCount: number;
+  rackLayerNodeCount: number;
+};
+
+async function readWarehouseCanvasSnapshot(
+  page: Page
+): Promise<WarehouseCanvasSnapshot> {
+  return page.evaluate(() => {
+    const global = window as unknown as { __WOS_CANVAS_STAGE__?: any };
+    const stage = global.__WOS_CANVAS_STAGE__;
+    const layers =
+      stage && typeof stage.getLayers === 'function' ? stage.getLayers() : [];
+    const rackLayer = layers.find((layer: any) => {
+      const name =
+        typeof layer.name === 'function'
+          ? layer.name()
+          : typeof layer.getAttr === 'function'
+            ? layer.getAttr('name')
+            : '';
+      return name === 'rack-layer';
+    });
+    const countNodeTree = (node: any): number => {
+      if (!node) return 0;
+      const children =
+        typeof node.getChildren === 'function' ? node.getChildren() : [];
+      return (
+        1 +
+        children.reduce(
+          (sum: number, child: any) => sum + countNodeTree(child),
+          0
+        )
+      );
+    };
+    const canvases = [...document.querySelectorAll('.konvajs-content canvas')];
+    const firstCanvas = canvases[0] ?? null;
+    const rect = firstCanvas?.getBoundingClientRect() ?? null;
+
+    return {
+      url: window.location.href,
+      readyState: document.readyState,
+      canvasCount: canvases.length,
+      canvasBox: rect
+        ? {
+            width: Math.round(rect.width * 100) / 100,
+            height: Math.round(rect.height * 100) / 100
+          }
+        : null,
+      hasStage: !!stage,
+      stageId: String(stage?._id ?? stage?._idCounter ?? 'none'),
+      layerCount: layers.length,
+      rackLayerNodeCount: countNodeTree(rackLayer)
+    };
   });
 }
 
-async function stopFrameProbe(page: Page) {
-  return page.evaluate(() => {
-    const global = window as unknown as {
-      __dl1FrameProbe?: { stop: () => RawProbeResult };
-    };
-    const result = global.__dl1FrameProbe?.stop();
-    global.__dl1FrameProbe = undefined;
+function stableSnapshotFields(snapshot: WarehouseCanvasSnapshot) {
+  return {
+    url: snapshot.url,
+    readyState: snapshot.readyState,
+    canvasCount: snapshot.canvasCount,
+    canvasBox: snapshot.canvasBox,
+    hasStage: snapshot.hasStage,
+    stageId: snapshot.stageId,
+    layerCount: snapshot.layerCount,
+    rackLayerNodeCount: snapshot.rackLayerNodeCount
+  };
+}
 
-    if (!result) {
-      throw new Error('DL1 frame probe was not started.');
+function isUsableCanvasSnapshot(snapshot: WarehouseCanvasSnapshot) {
+  return (
+    snapshot.readyState === 'complete' &&
+    snapshot.canvasCount > 0 &&
+    snapshot.canvasBox !== null &&
+    snapshot.canvasBox.width > 0 &&
+    snapshot.canvasBox.height > 0 &&
+    snapshot.hasStage &&
+    snapshot.layerCount > 0 &&
+    snapshot.rackLayerNodeCount > 0
+  );
+}
+
+function snapshotsEqual(
+  a: WarehouseCanvasSnapshot,
+  b: WarehouseCanvasSnapshot
+) {
+  return (
+    JSON.stringify(stableSnapshotFields(a)) ===
+    JSON.stringify(stableSnapshotFields(b))
+  );
+}
+
+async function waitForStableWarehouseCanvas(
+  page: Page,
+  options: { timeoutMs?: number; settleMs?: number } = {}
+) {
+  const timeoutMs = options.timeoutMs ?? 20000;
+  const settleMs = options.settleMs ?? 650;
+  const deadline = Date.now() + timeoutMs;
+  let previous: WarehouseCanvasSnapshot | null = null;
+  let last: WarehouseCanvasSnapshot | null = null;
+
+  await expect(page.locator('.konvajs-content canvas').first()).toBeVisible({
+    timeout: timeoutMs
+  });
+
+  while (Date.now() < deadline) {
+    const first = await readWarehouseCanvasSnapshot(page);
+    await page.waitForTimeout(settleMs);
+    const second = await readWarehouseCanvasSnapshot(page);
+    last = second;
+
+    if (
+      isUsableCanvasSnapshot(first) &&
+      isUsableCanvasSnapshot(second) &&
+      snapshotsEqual(first, second)
+    ) {
+      return second;
     }
 
-    return result;
-  });
+    previous = first;
+  }
+
+  throw new Error(
+    `layout not stable: ${JSON.stringify({ previous, last }, null, 2)}`
+  );
 }
 
 async function waitForWarehouseCanvas(page: Page) {
-  await expect(page.locator('.konvajs-content canvas').first()).toBeVisible();
-  await page.waitForTimeout(250);
+  await waitForStableWarehouseCanvas(page);
 }
 
 async function getCanvasBox(page: Page) {
@@ -1610,18 +1954,31 @@ async function prepareWarehouseEditor(
   await switchToViewMode(page);
 }
 
-async function samplePan(page: Page, durationMs: number) {
+async function samplePan(
+  page: Page,
+  durationMs: number,
+  probeId?: string,
+  guard?: PageStabilityGuard
+) {
   const box = await getCanvasBox(page);
   const centerX = box.x + box.width / 2;
   const centerY = box.y + box.height / 2;
   const deadline = Date.now() + durationMs;
 
   while (Date.now() < deadline) {
+    if (probeId && guard) {
+      await assertFrameProbeAlive(page, probeId, guard);
+    } else {
+      guard?.assertClean();
+    }
     await page.mouse.move(centerX, centerY);
     await page.mouse.down({ button: 'middle' });
     await page.mouse.move(centerX + 220, centerY + 55, { steps: 20 });
     await page.mouse.move(centerX - 220, centerY - 55, { steps: 20 });
     await page.mouse.up({ button: 'middle' });
+  }
+  if (probeId && guard) {
+    await assertFrameProbeAlive(page, probeId, guard);
   }
 }
 
@@ -2070,6 +2427,31 @@ function formatTopRectContributors(probe: KonvaPipelineProbeResult) {
     .join('\n');
 }
 
+function formatShapeRoleBreakdown(probe: KonvaPipelineProbeResult) {
+  const roles = new Set([
+    ...Object.keys(probe.shapeNodeCompositionByRole),
+    ...Object.keys(probe.shapeSceneDrawCostByRole)
+  ]);
+  if (roles.size === 0) return '-';
+
+  return [...roles]
+    .sort((a, b) => {
+      const aCost = probe.shapeSceneDrawCostByRole[a]?.totalMs ?? 0;
+      const bCost = probe.shapeSceneDrawCostByRole[b]?.totalMs ?? 0;
+      return bCost - aCost;
+    })
+    .map((role) => {
+      const composition = probe.shapeNodeCompositionByRole[role] ?? {
+        nodes: 0,
+        listeningTrue: 0,
+        hitGraphEligible: 0
+      };
+      const cost = probe.shapeSceneDrawCostByRole[role];
+      return `| ${role} | ${composition.nodes} | ${round(cost?.totalMs ?? 0)} | ${cost?.calls ?? 0} | listening=${composition.listeningTrue}, hit=${composition.hitGraphEligible} |`;
+    })
+    .join('\n');
+}
+
 function formatRectVariantComparison(entries: ReportEntry[]) {
   return entries
     .map((entry) => {
@@ -2291,6 +2673,11 @@ Node draw cost by type: ${JSON.stringify(konvaProbe.nodeSceneDrawCostByType)}
 | category | count | total ms | avg ms/node | avg ms/call | style counters | roles |
 | --- | ---: | ---: | ---: | ---: | --- | --- |
 ${formatRectCategoryBreakdown(konvaProbe)}
+
+## Shape Role Breakdown
+| role | count | total ms | calls | counters |
+| --- | ---: | ---: | ---: | --- |
+${formatShapeRoleBreakdown(konvaProbe)}
 
 ## Top Rect Contributors
 ${formatTopRectContributors(konvaProbe)}

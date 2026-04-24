@@ -16,12 +16,13 @@ import {
   type CellVisualPalette
 } from './rack-cells-visual-state';
 import {
-  CellSurfaceVisual,
+  BatchedCellBaseShape,
   CellTruthMarkerOverlay,
   CellInteractionOverlay,
   CellOutlineOverlay,
   CellHaloOverlay,
-  CellBadgeOverlay
+  CellBadgeOverlay,
+  CellSurfacePatternVisual
 } from './rack-cell-overlays';
 import type { LabelProminence } from './rack-label-reveal-policy';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
@@ -80,6 +81,19 @@ type FocusedAddressLabel = {
   };
 };
 
+type RenderedCell = {
+  key: string;
+  cellId: string | null;
+  slotLabel: number;
+  geometry: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  visualState: ReturnType<typeof resolveCellVisualState>;
+};
+
 function FaceCells({
   face,
   rackId,
@@ -113,6 +127,7 @@ function FaceCells({
   const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
   const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
   const focusedAddressLabels: FocusedAddressLabel[] = [];
+  const renderedCells: RenderedCell[] = [];
   let cellsTotal = 0;
   let cellsRendered = 0;
   const metricSourceId = `${rackId}:${face.id}`;
@@ -132,10 +147,10 @@ function FaceCells({
     diagnosticsFlags.enableProductionCellCulling;
   const cellOverlaysOff = diagnosticsFlags.cellOverlays === 'off';
 
-  const sectionCells = orderedSections.map((sec, si) => {
+  orderedSections.forEach((sec, si) => {
     const secX = sectionOffsets[si];
     const secW = sectionOffsets[si + 1] - secX;
-    if (secW < MIN_CELL_W * 2) return null;
+    if (secW < MIN_CELL_W * 2) return;
 
     const semanticLevel = resolveSemanticLevelForIndex(
       semanticLevels,
@@ -147,15 +162,15 @@ function FaceCells({
         : (sec.levels.find(
             (sectionLevel) => sectionLevel.ordinal === semanticLevel
           ) ?? null);
-    if (!level) return null;
+    if (!level) return;
     const slotCount = level.slotCount;
-    if (!slotCount) return null;
+    if (!slotCount) return;
 
     const slotW = secW / slotCount;
-    if (slotW < MIN_CELL_W) return null;
-    if (cellH < MIN_CELL_H) return null;
+    if (slotW < MIN_CELL_W) return;
+    if (cellH < MIN_CELL_H) return;
 
-    return Array.from({ length: slotCount }, (_, slotIndex) => {
+    Array.from({ length: slotCount }, (_, slotIndex) => {
       const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
       const cell = publishedCellsByStructure.get(
         buildCellStructureKey({
@@ -235,60 +250,73 @@ function FaceCells({
         });
       }
 
-      return (
-        <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
-          <CellSurfaceVisual
-            geometry={cellGeometry}
-            visualState={visualState}
-            disableStroke={cellOverlaysOff}
-          />
-          {diagnosticsFlags.cellOverlays === 'normal' && (
-            <>
-              <CellTruthMarkerOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              <CellOutlineOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              <CellHaloOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              <CellBadgeOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-            </>
-          )}
-          <CellInteractionOverlay
-            geometry={cellGeometry}
-            visualState={visualState}
-            isClickable={visualState.isClickable}
-            onCellClick={
-              cellId !== null
-                ? (anchor) => onCellClick(cellId, anchor)
-                : undefined
-            }
-          />
-          {showCellNumbers && (
-            <CellInteriorSlotLabel
-              slotNumber={slotLabel}
-              geometry={cellGeometry}
-              prominence={cellNumberProminence}
-              counterRotationDeg={rackRotationDeg}
-            />
-          )}
-        </Group>
-      );
+      renderedCells.push({
+        key: `${sec.id}-${level.id}-slot-${slotLabel}`,
+        cellId,
+        slotLabel,
+        geometry: cellGeometry,
+        visualState
+      });
     });
   });
   recordCanvasCullingMetrics(metricSourceId, { cellsTotal, cellsRendered });
 
   return (
     <Group listening={isInteractive}>
-      {sectionCells}
+      <BatchedCellBaseShape
+        cells={renderedCells}
+        disableStroke={cellOverlaysOff}
+      />
+      {renderedCells.map((renderedCell) => (
+        <Group key={renderedCell.key}>
+          <CellSurfacePatternVisual
+            geometry={renderedCell.geometry}
+            visualState={renderedCell.visualState}
+          />
+          {diagnosticsFlags.cellOverlays === 'normal' && (
+            <>
+              <CellTruthMarkerOverlay
+                geometry={renderedCell.geometry}
+                visualState={renderedCell.visualState}
+              />
+              <CellOutlineOverlay
+                geometry={renderedCell.geometry}
+                visualState={renderedCell.visualState}
+              />
+              <CellHaloOverlay
+                geometry={renderedCell.geometry}
+                visualState={renderedCell.visualState}
+              />
+              <CellBadgeOverlay
+                geometry={renderedCell.geometry}
+                visualState={renderedCell.visualState}
+              />
+            </>
+          )}
+          <CellInteractionOverlay
+            geometry={renderedCell.geometry}
+            visualState={renderedCell.visualState}
+            isClickable={renderedCell.visualState.isClickable}
+            onCellClick={
+              renderedCell.cellId !== null
+                ? (anchor) => {
+                    if (renderedCell.cellId !== null) {
+                      onCellClick(renderedCell.cellId, anchor);
+                    }
+                  }
+                : undefined
+            }
+          />
+          {showCellNumbers && (
+            <CellInteriorSlotLabel
+              slotNumber={renderedCell.slotLabel}
+              geometry={renderedCell.geometry}
+              prominence={cellNumberProminence}
+              counterRotationDeg={rackRotationDeg}
+            />
+          )}
+        </Group>
+      ))}
       <Group listening={false} name="focused-address-overlay-group">
         {focusedAddressLabels.map((overlay) => (
           <FocusedCellAddressOverlay

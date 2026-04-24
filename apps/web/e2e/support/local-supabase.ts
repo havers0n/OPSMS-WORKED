@@ -126,7 +126,7 @@ async function ensureManagerClient() {
 }
 
 export async function resetWarehouseData() {
-  const tableOrder = ['cells', 'rack_levels', 'rack_sections', 'rack_faces', 'racks', 'layout_versions', 'floors', 'sites'] as const;
+  const tableOrder = ['locations', 'cells', 'rack_levels', 'rack_sections', 'rack_faces', 'racks', 'layout_versions', 'floors', 'sites'] as const;
 
   for (const table of tableOrder) {
     const { error } = await adminClient.from(table).delete().not('id', 'is', null);
