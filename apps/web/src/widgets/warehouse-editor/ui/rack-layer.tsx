@@ -472,6 +472,10 @@ export function RackLayer({
       {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
         const isSelected = overlaysEnabled && selectedRackIds.includes(rack.id);
+        const shouldForceRenderAllCells =
+          rack.id === primarySelectedRackId ||
+          activeCellRackId === rack.id ||
+          moveSourceRackId === rack.id;
         const isHovered = overlaysEnabled && hoveredRackId === rack.id;
         const isRackPassive =
           overlaysEnabled &&
@@ -607,6 +611,7 @@ export function RackLayer({
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
                 isActivelyPanning={isActivelyPanning}
+                forceRenderAllCells={shouldForceRenderAllCells}
                 isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}

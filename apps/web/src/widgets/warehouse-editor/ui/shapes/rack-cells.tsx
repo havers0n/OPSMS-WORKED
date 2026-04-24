@@ -68,6 +68,7 @@ type FaceProps = {
   diagnosticsViewport: DiagnosticsViewport;
   rackGeometry: CanvasRackGeometry;
   isActivelyPanning: boolean;
+  forceRenderAllCells: boolean;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
@@ -123,6 +124,7 @@ function FaceCells({
   diagnosticsViewport,
   rackGeometry,
   isActivelyPanning,
+  forceRenderAllCells,
   onCellClick
 }: FaceProps) {
   const isRtl = face.slotNumberingDirection === 'rtl';
@@ -213,7 +215,11 @@ function FaceCells({
         !shouldRenderCanvasCell({
           cellGeometry,
           canvasOffset: diagnosticsViewport.canvasOffset,
-          forceVisible: isSelected || isLocateTarget || isWorkflowSource,
+          forceVisible:
+            forceRenderAllCells ||
+            isSelected ||
+            isLocateTarget ||
+            isWorkflowSource,
           rackGeometry,
           rackRotationDeg,
           viewport: diagnosticsViewport.viewport,
@@ -357,6 +363,7 @@ type Props = {
   diagnosticsFlags?: CanvasDiagnosticsFlags;
   diagnosticsViewport?: DiagnosticsViewport;
   isActivelyPanning?: boolean;
+  forceRenderAllCells?: boolean;
   showCellNumbers?: boolean;
   cellNumberProminence?: LabelProminence;
   showFocusedFullAddress?: boolean;
@@ -407,6 +414,7 @@ export function RackCells({
   diagnosticsFlags = DEFAULT_DIAGNOSTICS_FLAGS,
   diagnosticsViewport = DEFAULT_DIAGNOSTICS_VIEWPORT,
   isActivelyPanning = false,
+  forceRenderAllCells = false,
   showCellNumbers = true,
   cellNumberProminence = 'dominant',
   showFocusedFullAddress = true
@@ -517,6 +525,7 @@ export function RackCells({
         diagnosticsViewport={diagnosticsViewport}
         rackGeometry={geometry}
         isActivelyPanning={isActivelyPanning}
+        forceRenderAllCells={forceRenderAllCells}
         onCellClick={onCellClick}
       />
       {isPaired && effectiveFaceB && (
@@ -551,6 +560,7 @@ export function RackCells({
           diagnosticsViewport={diagnosticsViewport}
           rackGeometry={geometry}
           isActivelyPanning={isActivelyPanning}
+          forceRenderAllCells={forceRenderAllCells}
           onCellClick={onCellClick}
         />
       )}

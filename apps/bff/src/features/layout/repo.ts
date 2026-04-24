@@ -100,6 +100,7 @@ type LayoutWallRow = {
 
 const publishedCellSelectColumns =
   'id,layout_version_id,rack_id,rack_face_id,rack_section_id,rack_level_id,slot_no,address,address_sort_key,cell_code,x,y,status';
+const PUBLISHED_CELLS_PAGE_SIZE = 1000;
 
 export type LayoutRepo = {
   findVersion(layoutVersionId: string): Promise<LayoutVersionRow | null>;
@@ -346,17 +347,32 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
         return [];
       }
 
-      const { data, error } = await supabase
-        .from('cells')
-        .select(publishedCellSelectColumns)
-        .eq('layout_version_id', publishedVersion.id)
-        .order('address_sort_key', { ascending: true });
+      const rows: CellRow[] = [];
+      let from = 0;
 
-      if (error) {
-        throw error;
+      while (true) {
+        const { data, error } = await supabase
+          .from('cells')
+          .select(publishedCellSelectColumns)
+          .eq('layout_version_id', publishedVersion.id)
+          .order('address_sort_key', { ascending: true })
+          .range(from, from + PUBLISHED_CELLS_PAGE_SIZE - 1);
+
+        if (error) {
+          throw error;
+        }
+
+        const page = (data ?? []) as CellRow[];
+        rows.push(...page);
+
+        if (page.length < PUBLISHED_CELLS_PAGE_SIZE) {
+          break;
+        }
+
+        from += PUBLISHED_CELLS_PAGE_SIZE;
       }
 
-      return ((data ?? []) as CellRow[]).map(mapCellRowToDomain);
+      return rows.map(mapCellRowToDomain);
     },
 
     async createDraft(floorId, actorId) {

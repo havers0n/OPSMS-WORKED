@@ -157,8 +157,10 @@ function renderRackCellsWithProps(params: {
     zoom: number;
   };
   isActivelyPanning?: boolean;
+  forceRenderAllCells?: boolean;
   showCellNumbers?: boolean;
   showFocusedFullAddress?: boolean;
+  isSelected?: boolean;
 }) {
   const levelIds = params.levelIds ?? ['level-only'];
   const slotCount = params.slotCount ?? 2;
@@ -170,7 +172,7 @@ function renderRackCellsWithProps(params: {
         rackId: 'rack-1',
         faceA: params.faceA ?? createFace(levelIds, { slotCount }),
         faceB: null,
-        isSelected: true,
+        isSelected: params.isSelected ?? false,
         rackRotationDeg: params.rackRotationDeg ?? 0,
         activeLevelIndex: params.activeLevelIndex ?? 0,
         publishedCellsByStructure: createCellsMap(levelIds, slotCount),
@@ -181,6 +183,7 @@ function renderRackCellsWithProps(params: {
         diagnosticsFlags: params.diagnosticsFlags,
         diagnosticsViewport: params.diagnosticsViewport,
         isActivelyPanning: params.isActivelyPanning,
+        forceRenderAllCells: params.forceRenderAllCells,
         showCellNumbers: params.showCellNumbers ?? true,
         showFocusedFullAddress: params.showFocusedFullAddress ?? true,
         isInteractive: false,
@@ -416,6 +419,37 @@ describe('RackCells', () => {
     expect(countInteractionRects(renderer)).toBe(2);
     expect(getCellOutlineRoleRects(renderer)).toHaveLength(1);
     expect(getCellOutlineRoleRects(renderer)[0]?.props.visible).toBe(false);
+  });
+
+  it('keeps all cells mounted for the focused rack even when production culling would clip the far slots', () => {
+    const cullingViewport = {
+      canvasOffset: { x: 0, y: 0 },
+      viewport: { width: 100, height: 100 },
+      zoom: 1
+    };
+    const wideGeometry = {
+      ...geometry,
+      width: 1000,
+      faceAWidth: 1000,
+      faceBWidth: 1000,
+      centerX: 500
+    };
+
+    const unselectedRenderer = renderRackCellsWithProps({
+      geometryOverride: wideGeometry,
+      slotCount: 4,
+      diagnosticsViewport: cullingViewport,
+      isSelected: false
+    });
+    const selectedRenderer = renderRackCellsWithProps({
+      geometryOverride: wideGeometry,
+      slotCount: 4,
+      diagnosticsViewport: cullingViewport,
+      forceRenderAllCells: true
+    });
+
+    expect(getBatchedCellBaseCells(unselectedRenderer)).toHaveLength(2);
+    expect(getBatchedCellBaseCells(selectedRenderer)).toHaveLength(4);
   });
 
   it('uses equal displayed-band bounds for activeLevelIndex 0 and 1 on same multi-level rack', () => {

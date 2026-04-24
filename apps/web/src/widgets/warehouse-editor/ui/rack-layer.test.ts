@@ -276,6 +276,22 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
   });
 
+  it('force-renders all cells for the primary rack even when it is not selected', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: 'rack-1'
+    });
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+
+    expect(rackCells).toHaveLength(2);
+    expect(rackCells[0]?.props.rackId).toBe('rack-1');
+    expect(rackCells[0]?.props.forceRenderAllCells).toBe(true);
+    expect(rackCells[1]?.props.rackId).toBe('rack-2');
+    expect(rackCells[1]?.props.forceRenderAllCells).toBe(false);
+  });
+
   it('passes rack-wide semantic level union (enabled faces only) to RackCells', () => {
     const rackA: Rack = {
       ...createRack('rack-1', 0),
