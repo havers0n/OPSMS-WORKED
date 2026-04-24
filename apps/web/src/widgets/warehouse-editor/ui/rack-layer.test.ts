@@ -108,6 +108,7 @@ function renderRackLayer(params: {
   zoom?: number;
   isLayoutMode?: boolean;
   isStorageMode?: boolean;
+  isActivelyPanning?: boolean;
   canSelectCells?: boolean;
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
@@ -154,6 +155,7 @@ function renderRackLayer(params: {
           viewport: { width: 1200, height: 800 },
           zoom: params.zoom ?? 1.5
         },
+        isActivelyPanning: params.isActivelyPanning ?? false,
         highlightedCellIds: new Set<string>(),
         hoveredRackId: null,
         isLayoutEditable: true,
@@ -396,6 +398,31 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
     expect(rackCells.props.showCellNumbers).toBe(true);
     expect(rackCells.props.cellNumberProminence).toBe('dominant');
     expect(rackCells.props.showFocusedFullAddress).toBe(true);
+  });
+
+  it('passes active pan lightweight visual mode without unmounting rack/cell subtrees', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      isActivelyPanning: true
+    });
+
+    const rackBodies = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    );
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+
+    expect(rackBodies).toHaveLength(2);
+    expect(rackSections).toHaveLength(2);
+    expect(rackCells).toHaveLength(2);
+    expect(rackBodies[0]?.props.isActivelyPanning).toBe(true);
+    expect(rackSections[0]?.props.isActivelyPanning).toBe(true);
+    expect(rackCells[0]?.props.isActivelyPanning).toBe(true);
   });
 });
 

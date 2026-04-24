@@ -21,6 +21,7 @@ let mockSelectedRackActiveLevel = 2;
 let mockStorageFocusActiveLevel: number | null = null;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
+let mockIsPanning = false;
 let rackLayerLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
@@ -156,7 +157,7 @@ vi.mock('./use-canvas-viewport-controller', () => ({
     containerRef: { current: null },
     viewport: { width: 1000, height: 800, x: 0, y: 0 },
     canvasOffset: { x: 0, y: 0 },
-    isPanning: false,
+    isPanning: mockIsPanning,
     handleZoom: () => undefined
   })
 }));
@@ -250,6 +251,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
+    mockIsPanning = false;
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
   });
@@ -684,5 +686,39 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
     const racks = rackLayerLastProps?.racks as Array<{ id: string }>;
     expect(racks.map((rack) => rack.id)).toContain(rackId);
+  });
+
+  it('forwards active pan visual mode to RackLayer and restores idle mode', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+    mockIsPanning = true;
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
+
+    act(() => {
+      mockIsPanning = false;
+      renderer.update(
+        createElement(EditorCanvas, {
+          workspace: {
+            floorId: draft.floorId,
+            activeDraft: draft,
+            latestPublished: draft
+          },
+          onAddRack: () => undefined,
+          onOpenInspector: () => undefined
+        })
+      );
+    });
+
+    expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
   });
 });

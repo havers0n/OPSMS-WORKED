@@ -16,6 +16,7 @@ type Props = {
   faceTokenProminence: LabelProminence;
   sectionNumberProminence: LabelProminence;
   disableStrokes?: boolean;
+  isActivelyPanning?: boolean;
 };
 
 const DIVIDER_STROKE = '#94a3b8';
@@ -40,10 +41,12 @@ export function RackSections({
   showSectionNumbers,
   faceTokenProminence,
   sectionNumberProminence,
-  disableStrokes = false
+  disableStrokes = false,
+  isActivelyPanning = false
 }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const divider = isSelected ? DIVIDER_STROKE_SEL : DIVIDER_STROKE;
+  const lightweightVisuals = disableStrokes || isActivelyPanning;
 
   const faceAOffsets = getSectionWidths(faceAWidth, faceA.sections);
   const faceBOffsets = faceB && faceB.sections.length > 0
@@ -55,7 +58,7 @@ export function RackSections({
 
   return (
     <Group listening={false} opacity={isPassive && !isSelected ? 0.45 : 1}>
-      {isSelected && !disableStrokes && faceA.sections.map((sec, i) => {
+      {isSelected && faceA.sections.map((sec, i) => {
         const x0 = faceAOffsets[i];
         const x1 = faceAOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -70,12 +73,14 @@ export function RackSections({
             height={Math.max(1, faceABottom - 8)}
             fill={SECTION_FILL_A_SEL}
             cornerRadius={4}
+            visible={!lightweightVisuals}
+            opacity={lightweightVisuals ? 0 : 1}
             wosRectRole="rack-section"
           />
         );
       })}
 
-      {!disableStrokes && faceAOffsets.slice(1, -1).map((x, i) => (
+      {!lightweightVisuals && faceAOffsets.slice(1, -1).map((x, i) => (
         <Line
           key={`sa-${i}`}
           points={[x, 4, x, faceABottom - 4]}
@@ -126,7 +131,7 @@ export function RackSections({
         );
       })}
 
-      {isSelected && !disableStrokes && isPaired && faceB && faceB.sections.map((sec, i) => {
+      {isSelected && isPaired && faceB && faceB.sections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -141,12 +146,14 @@ export function RackSections({
             height={Math.max(1, height - faceBTop - 8)}
             fill={SECTION_FILL_B_SEL}
             cornerRadius={4}
+            visible={!lightweightVisuals}
+            opacity={lightweightVisuals ? 0 : 1}
             wosRectRole="rack-section"
           />
         );
       })}
 
-      {isPaired && !disableStrokes && faceBOffsets.slice(1, -1).map((x, i) => (
+      {isPaired && !lightweightVisuals && faceBOffsets.slice(1, -1).map((x, i) => (
         <Line
           key={`sb-${i}`}
           points={[x, faceBTop + 4, x, height - 4]}

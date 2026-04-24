@@ -67,6 +67,7 @@ type FaceProps = {
   diagnosticsFlags: CanvasDiagnosticsFlags;
   diagnosticsViewport: DiagnosticsViewport;
   rackGeometry: CanvasRackGeometry;
+  isActivelyPanning: boolean;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
 
@@ -121,6 +122,7 @@ function FaceCells({
   diagnosticsFlags,
   diagnosticsViewport,
   rackGeometry,
+  isActivelyPanning,
   onCellClick
 }: FaceProps) {
   const isRtl = face.slotNumberingDirection === 'rtl';
@@ -282,6 +284,7 @@ function FaceCells({
               <CellOutlineOverlay
                 geometry={renderedCell.geometry}
                 visualState={renderedCell.visualState}
+                isActivelyPanning={isActivelyPanning}
               />
               <CellHaloOverlay
                 geometry={renderedCell.geometry}
@@ -353,6 +356,7 @@ type Props = {
   onCellClick?: (cellId: string, anchor: { x: number; y: number }) => void;
   diagnosticsFlags?: CanvasDiagnosticsFlags;
   diagnosticsViewport?: DiagnosticsViewport;
+  isActivelyPanning?: boolean;
   showCellNumbers?: boolean;
   cellNumberProminence?: LabelProminence;
   showFocusedFullAddress?: boolean;
@@ -402,6 +406,7 @@ export function RackCells({
   onCellClick = noop,
   diagnosticsFlags = DEFAULT_DIAGNOSTICS_FLAGS,
   diagnosticsViewport = DEFAULT_DIAGNOSTICS_VIEWPORT,
+  isActivelyPanning = false,
   showCellNumbers = true,
   cellNumberProminence = 'dominant',
   showFocusedFullAddress = true
@@ -436,6 +441,7 @@ export function RackCells({
       'diagnosticsCells',
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
+      'isActivelyPanning',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -464,6 +470,7 @@ export function RackCells({
       diagnosticsCells: diagnosticsFlags.cells,
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
+      isActivelyPanning,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
@@ -505,6 +512,7 @@ export function RackCells({
         diagnosticsFlags={diagnosticsFlags}
         diagnosticsViewport={diagnosticsViewport}
         rackGeometry={geometry}
+        isActivelyPanning={isActivelyPanning}
         onCellClick={onCellClick}
       />
       {isPaired && faceB && (
@@ -538,6 +546,7 @@ export function RackCells({
           diagnosticsFlags={diagnosticsFlags}
           diagnosticsViewport={diagnosticsViewport}
           rackGeometry={geometry}
+          isActivelyPanning={isActivelyPanning}
           onCellClick={onCellClick}
         />
       )}

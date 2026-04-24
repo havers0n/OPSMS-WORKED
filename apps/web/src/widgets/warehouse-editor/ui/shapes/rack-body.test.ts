@@ -39,6 +39,8 @@ function renderRackBody(params?: {
   placement?: 'header-left' | 'lower-left-mid';
   rotationDeg?: 0 | 90 | 180 | 270;
   isPaired?: boolean;
+  isSelected?: boolean;
+  isActivelyPanning?: boolean;
 }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -47,11 +49,12 @@ function renderRackBody(params?: {
         geometry: params?.isPaired ? pairedGeometry : singleGeometry,
         displayCode: 'R-01',
         rotationDeg: params?.rotationDeg ?? 0,
-        isSelected: false,
+        isSelected: params?.isSelected ?? false,
         isHovered: false,
         showRackCode: true,
         rackCodeProminence: params?.prominence ?? 'dominant',
-        rackCodePlacement: params?.placement ?? 'lower-left-mid'
+        rackCodePlacement: params?.placement ?? 'lower-left-mid',
+        isActivelyPanning: params?.isActivelyPanning
       })
     );
   });
@@ -65,6 +68,10 @@ function getIdentityGroup(renderer: TestRenderer.ReactTestRenderer) {
       typeof node.props.rotation === 'number' &&
       node.findAll((child) => String(child.type) === 'Text' && child.props.text === 'R-01').length > 0
   );
+}
+
+function getRects(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll((node) => String(node.type) === 'Rect');
 }
 
 describe('RackBody identity label ownership', () => {
@@ -159,5 +166,44 @@ describe('RackBody identity label ownership', () => {
     expect(secondaryAnchor.props.x).toBe(backgroundAnchor.props.x);
     expect(dominantAnchor.props.y).toBe(secondaryAnchor.props.y);
     expect(secondaryAnchor.props.y).toBe(backgroundAnchor.props.y);
+  });
+
+  it('keeps full rack body visual effects while idle', () => {
+    const renderer = renderRackBody({ isSelected: true });
+    const rects = getRects(renderer);
+    const body = rects.find((rect) => rect.props.wosRectRole === 'rack-body');
+    const selection = rects.find(
+      (rect) => rect.props.wosRectRole === 'selection-highlight'
+    );
+    const badgeStroke = rects
+      .filter((rect) => rect.props.wosRectRole === 'badge-decoration')
+      .find((rect) => rect.props.strokeEnabled === true);
+
+    expect(body?.props.strokeEnabled).toBe(true);
+    expect(body?.props.shadowBlur).toBeGreaterThan(0);
+    expect(selection?.props.visible).not.toBe(false);
+    expect(selection?.props.opacity).toBeGreaterThan(0);
+    expect(badgeStroke?.props.strokeEnabled).toBe(true);
+  });
+
+  it('uses lightweight visual props during active pan without removing nodes', () => {
+    const renderer = renderRackBody({
+      isSelected: true,
+      isActivelyPanning: true
+    });
+    const rects = getRects(renderer);
+    const body = rects.find((rect) => rect.props.wosRectRole === 'rack-body');
+    const selection = rects.find(
+      (rect) => rect.props.wosRectRole === 'selection-highlight'
+    );
+    const badgeStroke = rects
+      .filter((rect) => rect.props.wosRectRole === 'badge-decoration')
+      .find((rect) => rect.props.strokeWidth === 0);
+
+    expect(body?.props.strokeEnabled).toBe(false);
+    expect(body?.props.shadowBlur).toBe(0);
+    expect(selection).toBeDefined();
+    expect(selection?.props.visible).toBe(false);
+    expect(badgeStroke?.props.strokeEnabled).toBe(false);
   });
 });

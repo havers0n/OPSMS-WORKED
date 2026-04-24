@@ -1,4 +1,11 @@
-import { buildCellStructureKey, type Cell, type OperationsCellRuntime, type Rack, type RackFace } from '@wos/domain';
+import {
+  buildCellStructureKey,
+  resolveRackFaceSections,
+  type Cell,
+  type OperationsCellRuntime,
+  type Rack,
+  type RackFace
+} from '@wos/domain';
 import { useEffect, useRef } from 'react';
 import type Konva from 'konva';
 import { FastLayer, Group, Layer, Rect } from 'react-konva';
@@ -144,6 +151,9 @@ function resolveCellIdFromRackPoint({
   const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
   const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
   if (!faceA) return null;
+  const effectiveFaceB = faceB
+    ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
+    : null;
   const semanticLevels = collectRackSemanticLevels(rack);
 
   const cellIdInFaceA = resolveCellIdFromFaceAtPoint({
@@ -159,9 +169,9 @@ function resolveCellIdFromRackPoint({
   });
   if (cellIdInFaceA) return cellIdInFaceA;
 
-  if (geometry.isPaired && faceB) {
+  if (geometry.isPaired && effectiveFaceB) {
     return resolveCellIdFromFaceAtPoint({
-      face: faceB,
+      face: effectiveFaceB,
       rackId: rack.id,
       totalWidth: geometry.faceBWidth,
       bandY: geometry.spineY,
@@ -186,6 +196,7 @@ type RackLayerProps = {
     viewport: { width: number; height: number };
     zoom: number;
   };
+  isActivelyPanning?: boolean;
   canvasSelectedCellId: string | null;
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   clearHighlightedCellIds: () => void;
@@ -236,6 +247,7 @@ export function RackLayer({
   canSelectRack,
   diagnosticsFlags,
   diagnosticsViewport,
+  isActivelyPanning = false,
   canvasSelectedCellId,
   cellRuntimeById,
   clearHighlightedCellIds,
@@ -327,6 +339,7 @@ export function RackLayer({
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
       'diagnosticsRackLayerRenderer',
+      'isActivelyPanning',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -351,6 +364,7 @@ export function RackLayer({
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
+      isActivelyPanning,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
@@ -467,6 +481,9 @@ export function RackLayer({
           moveSourceRackId !== rack.id;
         const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
         const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
+        const effectiveFaceB = faceB
+          ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
+          : null;
         const semanticLevels = collectRackSemanticLevels(rack);
 
         // Per-rack cell click handler: closure captures rack.id for V2 focus store call.
@@ -552,13 +569,14 @@ export function RackLayer({
               rackCodeProminence={labelRevealPolicy.rackCodeProminence}
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
               disableStrokes={!overlaysEnabled}
+              isActivelyPanning={isActivelyPanning}
             />
 
             {lod >= 1 && faceA && (
               <RackSections
                 geometry={geometry}
                 faceA={faceA}
-                faceB={geometry.isPaired ? faceB : null}
+                faceB={geometry.isPaired ? effectiveFaceB : null}
                 isSelected={isSelected}
                 isPassive={isRackPassive}
                 showFaceToken={labelsEnabled && labelRevealPolicy.showFaceToken}
@@ -567,6 +585,7 @@ export function RackLayer({
                 sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
                 rackRotationDeg={rack.rotationDeg}
                 disableStrokes={!overlaysEnabled}
+                isActivelyPanning={isActivelyPanning}
               />
             )}
 
@@ -575,7 +594,7 @@ export function RackLayer({
                 geometry={geometry}
                 rackId={rack.id}
                 faceA={faceA}
-                faceB={geometry.isPaired ? faceB : null}
+                faceB={geometry.isPaired ? effectiveFaceB : null}
                 isSelected={isSelected}
                 activeLevelIndex={rack.id === primarySelectedRackId ? selectedRackActiveLevel : 0}
                 semanticLevels={semanticLevels}
@@ -587,6 +606,7 @@ export function RackLayer({
                 }
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
+                isActivelyPanning={isActivelyPanning}
                 isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}

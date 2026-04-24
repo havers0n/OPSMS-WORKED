@@ -102,7 +102,8 @@ function LayerRect({
   dash,
   diagnosticsRectRole,
   ownsFill,
-  ownsStroke
+  ownsStroke,
+  visible = true
 }: {
   geometry: CellRectGeometry;
   visualState: ResolvedCellVisualState;
@@ -113,6 +114,7 @@ function LayerRect({
   diagnosticsRectRole: string;
   ownsFill: boolean;
   ownsStroke: boolean;
+  visible?: boolean;
 }) {
   if (!ownsFill && !ownsStroke) return null;
   return (
@@ -130,6 +132,7 @@ function LayerRect({
       strokeWidth={ownsStroke ? (strokeWidth ?? visualState.strokeWidth) : 0}
       dash={ownsStroke ? dash : undefined}
       opacity={visualState.opacity}
+      visible={visible}
       wosRectRole={diagnosticsRectRole}
     />
   );
@@ -324,7 +327,11 @@ export function CellInteractionOverlay({
   );
 }
 
-export function CellOutlineOverlay({ geometry, visualState }: CellOverlaySharedProps) {
+export function CellOutlineOverlay({
+  geometry,
+  visualState,
+  isActivelyPanning = false
+}: CellOverlaySharedProps & { isActivelyPanning?: boolean }) {
   const outline = visualState.outline;
   if (outline === null) return null;
 
@@ -338,6 +345,7 @@ export function CellOutlineOverlay({ geometry, visualState }: CellOverlaySharedP
       diagnosticsRectRole="cell-outline-overlay"
       ownsFill={false}
       ownsStroke={outline.stroke !== null}
+      visible={!isActivelyPanning}
     />
   );
 }

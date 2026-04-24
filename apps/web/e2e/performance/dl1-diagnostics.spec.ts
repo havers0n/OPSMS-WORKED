@@ -73,6 +73,8 @@ type ScenarioName =
 type RawProbeResult = {
   frameTimes: number[];
   longTasks: Array<{ duration: number; startTime: number; name: string }>;
+  panStartFirstFrameMs: number | null;
+  panEndFirstFrameMs: number | null;
   memory: {
     usedJSHeapSize?: number;
     totalJSHeapSize?: number;
@@ -94,6 +96,7 @@ type FrameProbeMetadata = {
 };
 
 type FrameProbeState = FrameProbeMetadata & {
+  markPanTransition: (kind: 'start' | 'end') => void;
   stop: () => RawProbeResult;
 };
 
@@ -238,6 +241,8 @@ type Metrics = {
   droppedFramesOver100Ms: number;
   longTaskCount: number;
   longTaskTotalMs: number;
+  panStartFirstFrameMs: number | null;
+  panEndFirstFrameMs: number | null;
   memory: RawProbeResult['memory'];
 };
 
@@ -568,6 +573,12 @@ function summarizeMetrics(raw: RawProbeResult): {
       droppedFramesOver100Ms: frameTimes.filter((value) => value > 100).length,
       longTaskCount: raw.longTasks.length,
       longTaskTotalMs: round(longTaskTotalMs),
+      panStartFirstFrameMs:
+        raw.panStartFirstFrameMs === null
+          ? null
+          : round(raw.panStartFirstFrameMs),
+      panEndFirstFrameMs:
+        raw.panEndFirstFrameMs === null ? null : round(raw.panEndFirstFrameMs),
       memory: raw.memory
     },
     frameBuckets: summarizeFrameBuckets(frameTimes)
@@ -1648,6 +1659,17 @@ async function startFrameProbe(page: Page) {
 
     const frameTimes: number[] = [];
     const longTasks: RawProbeResult['longTasks'] = [];
+    const pendingPanTransitionMarks: Array<{
+      kind: 'start' | 'end';
+      time: number;
+    }> = [];
+    const panTransitionFrames: {
+      start: number | null;
+      end: number | null;
+    } = {
+      start: null,
+      end: null
+    };
     let previousFrameTime: number | null = null;
     let stopped = false;
     let rafId = 0;
@@ -1676,6 +1698,17 @@ async function startFrameProbe(page: Page) {
       if (previousFrameTime !== null) {
         frameTimes.push(time - previousFrameTime);
       }
+      for (let index = pendingPanTransitionMarks.length - 1; index >= 0; index -= 1) {
+        const mark = pendingPanTransitionMarks[index] as {
+          kind: 'start' | 'end';
+          time: number;
+        };
+        if (time < mark.time) continue;
+        if (panTransitionFrames[mark.kind] === null) {
+          panTransitionFrames[mark.kind] = time - mark.time;
+        }
+        pendingPanTransitionMarks.splice(index, 1);
+      }
       previousFrameTime = time;
       rafId = window.requestAnimationFrame(tick);
     };
@@ -1686,6 +1719,9 @@ async function startFrameProbe(page: Page) {
       id,
       startUrl: window.location.href,
       timeOrigin: performance.timeOrigin,
+      markPanTransition: (kind) => {
+        pendingPanTransitionMarks.push({ kind, time: performance.now() });
+      },
       stop: () => {
         stopped = true;
         window.cancelAnimationFrame(rafId);
@@ -1706,6 +1742,8 @@ async function startFrameProbe(page: Page) {
         return {
           frameTimes,
           longTasks,
+          panStartFirstFrameMs: panTransitionFrames.start,
+          panEndFirstFrameMs: panTransitionFrames.end,
           memory
         };
       }
@@ -1775,6 +1813,26 @@ async function stopFrameProbe(
       return result;
     },
     { expectedId: probeId, guardReason: guard?.getReason() ?? null }
+  );
+}
+
+async function markPanTransitionFrameProbe(
+  page: Page,
+  probeId: string,
+  kind: 'start' | 'end',
+  guard?: PageStabilityGuard
+) {
+  guard?.assertClean();
+  await page.evaluate(
+    ({ expectedId, transitionKind }) => {
+      const global = window as unknown as {
+        __dl1FrameProbe?: FrameProbeState;
+      };
+      const probe = global.__dl1FrameProbe;
+      if (!probe || probe.id !== expectedId) return;
+      probe.markPanTransition(transitionKind);
+    },
+    { expectedId: probeId, transitionKind: kind }
   );
 }
 
@@ -1975,9 +2033,15 @@ async function samplePan(
     }
     await page.mouse.move(centerX, centerY);
     await page.mouse.down({ button: 'middle' });
+    if (probeId) {
+      await markPanTransitionFrameProbe(page, probeId, 'start', guard);
+    }
     await page.mouse.move(centerX + 220, centerY + 55, { steps: 20 });
     await page.mouse.move(centerX - 220, centerY - 55, { steps: 20 });
     await page.mouse.up({ button: 'middle' });
+    if (probeId) {
+      await markPanTransitionFrameProbe(page, probeId, 'end', guard);
+    }
   }
   if (probeId && guard) {
     await assertFrameProbeAlive(page, probeId, guard);
@@ -2517,11 +2581,16 @@ function formatExperimentLine(
     baseline && entry !== baseline
       ? `, p95Delta=${formatDelta(round(entry.metrics.p95FrameMs - baseline.metrics.p95FrameMs))}`
       : '';
+  const transitionFrames =
+    entry.metrics.panStartFirstFrameMs !== null ||
+    entry.metrics.panEndFirstFrameMs !== null
+      ? `, panStartFirstFrameMs=${entry.metrics.panStartFirstFrameMs ?? 'n/a'}, panEndFirstFrameMs=${entry.metrics.panEndFirstFrameMs ?? 'n/a'}`
+      : '';
   const hitGraphNote =
     label === 'no hit graph' && entry.konvaPipeline.drawHitCalls !== 0
       ? ', hit graph still invoked'
       : '';
-  return `- ${label}: p95FrameMs=${entry.metrics.p95FrameMs}, longTaskCount=${entry.metrics.longTaskCount}, drawSceneCost=${entry.konvaPipeline.drawSceneTotalMs}, drawHit=${entry.konvaPipeline.drawHitCalls}${p95Delta}${hitGraphNote}`;
+  return `- ${label}: p95FrameMs=${entry.metrics.p95FrameMs}, longTaskCount=${entry.metrics.longTaskCount}, drawSceneCost=${entry.konvaPipeline.drawSceneTotalMs}, drawHit=${entry.konvaPipeline.drawHitCalls}${p95Delta}${transitionFrames}${hitGraphNote}`;
 }
 
 function recommendHighestImpactFix(entries: ReportEntry[], baseline: ReportEntry) {
@@ -2942,6 +3011,8 @@ test.describe('DL1 diagnostics harness', () => {
           avgFps: entry.metrics.averageFps,
           p95FrameMs: entry.metrics.p95FrameMs,
           worstFrameMs: entry.metrics.worstFrameMs,
+          panStartFirstFrameMs: entry.metrics.panStartFirstFrameMs,
+          panEndFirstFrameMs: entry.metrics.panEndFirstFrameMs,
           offsetUpdates: entry.renderPipeline.offsetUpdates,
           editorRenders:
             entry.renderPipeline.components.EditorCanvas.renders,

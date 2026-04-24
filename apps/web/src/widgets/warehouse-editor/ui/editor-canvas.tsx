@@ -455,7 +455,8 @@ export function EditorCanvas({
       'diagnosticsCells',
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
-      'diagnosticsRackLayerRenderer'
+      'diagnosticsRackLayerRenderer',
+      'isActivelyPanning'
     ],
     snapshot: {
       floorId: workspace?.floorId ?? null,
@@ -477,7 +478,8 @@ export function EditorCanvas({
       diagnosticsCells: diagnosticsFlags.cells,
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
-      diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer
+      diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
+      isActivelyPanning: isPanning
     }
   });
 
@@ -829,6 +831,7 @@ export function EditorCanvas({
                   viewport,
                   zoom
                 }}
+                isActivelyPanning={isPanning}
                 canvasSelectedCellId={canvasSelectedCellId}
                 cellRuntimeById={floorOperationsCellsById}
                 clearHighlightedCellIds={clearHighlightedCellIds}

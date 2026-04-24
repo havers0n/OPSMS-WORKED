@@ -30,6 +30,7 @@ type Props = {
   rackCodeProminence: LabelProminence;
   rackCodePlacement: RackCodePlacement;
   disableStrokes?: boolean;
+  isActivelyPanning?: boolean;
 };
 
 export function RackBody({
@@ -42,12 +43,16 @@ export function RackBody({
   showRackCode,
   rackCodeProminence,
   rackCodePlacement,
-  disableStrokes = false
+  disableStrokes = false,
+  isActivelyPanning = false
 }: Props) {
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
 
-  const fill = isSelected ? C.fillSelected : isHovered ? C.fillHovered : C.fillDefault;
-  const stroke = isSelected ? C.strokeSelected : isHovered ? C.strokeHovered : C.strokeDefault;
+  const lightweightVisuals = disableStrokes || isActivelyPanning;
+  const visualSelected = isActivelyPanning ? false : isSelected;
+  const visualHovered = isActivelyPanning ? false : isHovered;
+  const fill = visualSelected ? C.fillSelected : visualHovered ? C.fillHovered : C.fillDefault;
+  const stroke = visualSelected ? C.strokeSelected : visualHovered ? C.strokeHovered : C.strokeDefault;
   const stripeH = Math.max(4, Math.min(8, height * 0.18));
 
   const minFaceW = Math.min(faceAWidth, faceBWidth);
@@ -117,7 +122,7 @@ export function RackBody({
   }
 
   return (
-    <Group listening={false} opacity={isPassive && !isSelected ? 0.5 : 1}>
+    <Group listening={false} opacity={isActivelyPanning ? 1 : isPassive && !isSelected ? 0.5 : 1}>
       <Rect
         x={0}
         y={0}
@@ -125,17 +130,17 @@ export function RackBody({
         height={height}
         cornerRadius={8}
         fill={fill}
-        stroke={disableStrokes ? undefined : stroke}
-        strokeEnabled={!disableStrokes}
-        strokeWidth={disableStrokes ? 0 : isSelected ? 2 : 1.5}
+        stroke={lightweightVisuals ? undefined : stroke}
+        strokeEnabled={!lightweightVisuals}
+        strokeWidth={lightweightVisuals ? 0 : isSelected ? 2 : 1.5}
         shadowColor="#0f172a"
-        shadowBlur={disableStrokes ? 0 : isSelected ? 12 : 6}
-        shadowOpacity={disableStrokes ? 0 : isSelected ? 0.12 : 0.07}
+        shadowBlur={lightweightVisuals ? 0 : isSelected ? 12 : 6}
+        shadowOpacity={lightweightVisuals ? 0 : isSelected ? 0.12 : 0.07}
         shadowOffsetY={3}
         wosRectRole="rack-body"
       />
 
-      {isSelected && !disableStrokes && (
+      {isSelected && (
         <Rect
           x={4}
           y={4}
@@ -145,7 +150,8 @@ export function RackBody({
           stroke={C.selectionBorder}
           strokeWidth={1}
           dash={[8, 5]}
-          opacity={0.7}
+          opacity={lightweightVisuals ? 0 : 0.7}
+          visible={!lightweightVisuals}
           wosRectRole="selection-highlight"
         />
       )}
@@ -180,7 +186,7 @@ export function RackBody({
         height={stripeH}
         cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
         fill={C.stripeA}
-        opacity={isSelected ? 0.6 : 0.4}
+        opacity={visualSelected ? 0.6 : 0.4}
         wosRectRole="rack-body"
       />
 
@@ -193,12 +199,12 @@ export function RackBody({
           width={faceBWidth}
           height={stripeH}
           fill={C.stripeB}
-          opacity={isSelected ? 0.5 : 0.28}
+          opacity={visualSelected ? 0.5 : 0.28}
           wosRectRole="rack-body"
         />
       )}
 
-      {isPaired && !disableStrokes && (
+      {isPaired && !lightweightVisuals && (
         <Line
           points={[8, spineY, width - 8, spineY]}
           stroke={C.spine}
@@ -208,7 +214,7 @@ export function RackBody({
         />
       )}
 
-      {isAsymmetric && !disableStrokes && (
+      {isAsymmetric && !lightweightVisuals && (
         <Line
           points={[minFaceW, 4, minFaceW, height - 4]}
           stroke={C.boundaryLine}
@@ -229,8 +235,8 @@ export function RackBody({
             fill={C.pillBg}
             opacity={labelBgOpacity}
             shadowColor="#0f172a"
-            shadowBlur={4}
-            shadowOpacity={labelShadowOpacity}
+            shadowBlur={lightweightVisuals ? 0 : 4}
+            shadowOpacity={lightweightVisuals ? 0 : labelShadowOpacity}
             wosRectRole="badge-decoration"
           />
           <Rect
@@ -239,10 +245,10 @@ export function RackBody({
             width={labelWidth}
             height={labelHeight}
             cornerRadius={999}
-            stroke={disableStrokes ? undefined : C.codeText}
-            strokeEnabled={!disableStrokes}
-            strokeWidth={disableStrokes ? 0 : 0.6}
-            opacity={labelStrokeOpacity}
+            stroke={lightweightVisuals ? undefined : C.codeText}
+            strokeEnabled={!lightweightVisuals}
+            strokeWidth={lightweightVisuals ? 0 : 0.6}
+            opacity={lightweightVisuals ? 0 : labelStrokeOpacity}
             listening={false}
             wosRectRole="badge-decoration"
           />

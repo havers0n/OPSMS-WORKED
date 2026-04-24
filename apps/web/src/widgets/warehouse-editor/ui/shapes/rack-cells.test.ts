@@ -156,6 +156,7 @@ function renderRackCellsWithProps(params: {
     viewport: { width: number; height: number };
     zoom: number;
   };
+  isActivelyPanning?: boolean;
   showCellNumbers?: boolean;
   showFocusedFullAddress?: boolean;
 }) {
@@ -179,6 +180,7 @@ function renderRackCellsWithProps(params: {
         workflowSourceCellId: params.workflowSourceCellId ?? null,
         diagnosticsFlags: params.diagnosticsFlags,
         diagnosticsViewport: params.diagnosticsViewport,
+        isActivelyPanning: params.isActivelyPanning,
         showCellNumbers: params.showCellNumbers ?? true,
         showFocusedFullAddress: params.showFocusedFullAddress ?? true,
         isInteractive: false,
@@ -399,6 +401,21 @@ describe('RackCells', () => {
       )
     ).toBe(false);
     expect(countInteractionRects(renderer)).toBe(2);
+  });
+
+  it('keeps base and hit rects mounted while hiding cell outlines during active pan', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      isActivelyPanning: true
+    });
+
+    expect(getBatchedCellBaseShapes(renderer)).toHaveLength(1);
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(getCellOutlineRoleRects(renderer)).toHaveLength(1);
+    expect(getCellOutlineRoleRects(renderer)[0]?.props.visible).toBe(false);
   });
 
   it('uses equal displayed-band bounds for activeLevelIndex 0 and 1 on same multi-level rack', () => {
@@ -1075,6 +1092,12 @@ function getOutlineRects(renderer: TestRenderer.ReactTestRenderer) {
   return getSurfaceRects(renderer).filter(
     (rect) =>
       rect.props.strokeEnabled === true && rect.props.fillEnabled !== true
+  );
+}
+
+function getCellOutlineRoleRects(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).filter(
+    (rect) => rect.props.wosRectRole === 'cell-outline-overlay'
   );
 }
 
