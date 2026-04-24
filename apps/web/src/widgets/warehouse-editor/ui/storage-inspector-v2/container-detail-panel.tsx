@@ -1,4 +1,4 @@
-import type { LocationStorageSnapshotRow, Product } from '@wos/domain';
+import type { LocationStorageSnapshotRow } from '@wos/domain';
 import {
   InspectorFooter,
   inspectorRowCardClassName,
@@ -15,7 +15,7 @@ type ContainerDetailPanelProps = {
   displayCode: string;
   firstRow: LocationStorageSnapshotRow | undefined;
   items: LocationStorageSnapshotRow[];
-  selectedProduct: Product | null;
+  selectedProduct: { sku?: string | null; name?: string | null } | null;
   structuralDefaultText: string;
   effectiveRoleText: string;
   sourceText: string;

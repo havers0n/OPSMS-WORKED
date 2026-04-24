@@ -148,10 +148,15 @@ describe('StorageNavigator PR7 focus ownership', () => {
     const workspace = createWorkspace();
     const renderer = renderNavigator(workspace);
     const tree = JSON.stringify(renderer.toJSON());
+    const buttonLabels = getAllButtons(renderer).map((node) =>
+      Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
+    );
 
     expect(useStorageFocusStore.getState().selectedRackId).toBeNull();
     expect(tree).toContain('Rack');
-    expect(tree).toContain('Select rack');
+    expect(buttonLabels).toContain('L1');
+    expect(buttonLabels).toContain('L2');
+    expect(buttonLabels).toContain('L3');
     expect(tree).toContain('Select a rack on the map to browse locations.');
   });
 
@@ -203,13 +208,18 @@ describe('StorageNavigator PR7 focus ownership', () => {
 
     const renderer = renderNavigator(workspace);
     const tree = JSON.stringify(renderer.toJSON());
+    const buttonLabels = getAllButtons(renderer).map((node) =>
+      Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
+    );
     const s = useStorageFocusStore.getState();
 
     expect(s.selectedCellId).toBeNull();
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
     expect(tree).toContain('Select a rack on the map to browse locations.');
-    expect(tree).toContain('Select rack');
+    expect(buttonLabels).toContain('L1');
+    expect(buttonLabels).toContain('L2');
+    expect(buttonLabels).toContain('L3');
   });
 
   it('does not synthesize fake level 1 for sparse published levels', () => {
@@ -244,7 +254,7 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(tree).not.toContain('No locations for level 1');
   });
 
-  it('shows an explicit empty-rack state instead of fallback levels', () => {
+  it('shows fallback level buttons for empty racks', () => {
     const workspace = createWorkspace();
     mockPublishedCells = [];
     act(() => {
@@ -253,9 +263,13 @@ describe('StorageNavigator PR7 focus ownership', () => {
 
     const renderer = renderNavigator(workspace);
     const tree = JSON.stringify(renderer.toJSON());
+    const buttonLabels = getAllButtons(renderer).map((node) =>
+      Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
+    );
 
-    expect(tree).toContain('This rack has no published storage locations.');
-    expect(tree).toContain('No published levels');
-    expect(tree).not.toContain('No locations for level 1');
+    expect(buttonLabels).toContain('L1');
+    expect(buttonLabels).toContain('L2');
+    expect(buttonLabels).toContain('L3');
+    expect(tree).toContain('No locations for level');
   });
 });

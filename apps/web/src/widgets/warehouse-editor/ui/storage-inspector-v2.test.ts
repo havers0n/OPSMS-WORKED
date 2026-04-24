@@ -663,6 +663,11 @@ describe('StorageInspectorV2 panel modes', () => {
     const text = flattenText(renderer.toJSON());
     // Shows cell-overview breadcrumb elements
     expect(text).toContain('01-A.01.01');
+    expect(text).toContain('Current containers');
+    expect(text).toContain('Current inventory');
+    expect(text).toContain('Location Policy');
+    expect(text).not.toContain('Current Contents');
+    expect(text).not.toContain('Inventory Preview');
     // Does NOT show rack-overview occupancy/levels sections
     expect(text).not.toContain('1 / 4 cells occupied');
   });
@@ -794,7 +799,7 @@ describe('StorageInspectorV2 panel modes', () => {
     // Breadcrumb shows locationCode ('LOC-01') which takes priority over cell address
     expect(text).not.toContain('← Back');
     expect(text).toContain('LOC-01');
-    expect(text).toContain('Current Contents');
+    expect(text).toContain('Current containers');
   });
 
   it('resets local container selection when selectedCellId changes to a different cell', () => {
@@ -1018,7 +1023,7 @@ describe('StorageInspectorV2 task flows', () => {
       root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current Contents');
+    expect(text).toContain('Current containers');
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
 
@@ -1035,7 +1040,7 @@ describe('StorageInspectorV2 task flows', () => {
       root.findByProps({ 'aria-label': 'Cancel create container with product' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current Contents');
+    expect(text).toContain('Current containers');
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
 
@@ -1076,7 +1081,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     // Back to cell-overview (task panel gone)
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current Contents');
+    expect(text).toContain('Current containers');
     expect(text).not.toContain('Cancel create container');
   });
 
@@ -1112,7 +1117,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     // Returns to cell-overview
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current Contents');
+    expect(text).toContain('Current containers');
   });
 
   it('create-container passes externalCode when provided', async () => {
@@ -1259,7 +1264,7 @@ describe('StorageInspectorV2 task flows', () => {
     act(() => {
       root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
     });
-    expect(flattenText(renderer.toJSON())).toContain('Current Contents');
+    expect(flattenText(renderer.toJSON())).toContain('Current containers');
   });
 
   it('shows "Add product" action in container-detail when container is empty', () => {
@@ -1638,7 +1643,7 @@ describe('StorageInspectorV2 task flows', () => {
     });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current Contents');
+    expect(text).toContain('Current containers');
     expect(text).not.toContain('Add product to C-001');
   });
 });
@@ -1969,7 +1974,8 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       renderer.root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Location role context is shown for container detail.');
+    expect(text).toContain('Current containers');
+    expect(text).toContain('Location Policy');
     expect(text).not.toContain('To edit override');
   });
 
@@ -2546,6 +2552,7 @@ describe('StorageInspectorV2 move container flow', () => {
     act(() => {
       renderer.root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
     });
-    expect(flattenText(renderer.toJSON())).toContain('Current Contents');
+    expect(flattenText(renderer.toJSON())).toContain('Current containers');
   });
 });
+

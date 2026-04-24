@@ -88,6 +88,7 @@ export function CurrentContainersSectionView({
                 className="w-full rounded-lg text-left transition-shadow hover:ring-1 hover:ring-[var(--accent)]"
                 style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
                 onClick={() => onContainerClick(container.containerId, sourceCellId)}
+                aria-label={`View container ${container.title}`}
                 data-testid="storage-shell-container-entry"
               >
                 <div className="flex items-start justify-between gap-2 px-3 py-2.5">

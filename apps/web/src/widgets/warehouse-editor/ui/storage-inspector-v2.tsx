@@ -1,8 +1,10 @@
-import type { FloorWorkspace, Product, Rack } from '@wos/domain';
+import type { FloorWorkspace, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
 import React, { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
+import { LocationAddress } from '@/entities/location/ui/location-address';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
@@ -27,7 +29,6 @@ import {
   useStorageFocusSelectCell
 } from '../model/v2/v2-selectors';
 import {
-  INVENTORY_PREVIEW_LIMIT,
   effectiveRoleSourceLabel,
   getActiveProducts,
   groupByContainer,
@@ -44,7 +45,6 @@ import {
 import { EmptyState } from './storage-inspector-v2/empty-state';
 import { LoadingState } from './storage-inspector-v2/loading-state';
 import { RackOverviewPanel } from './storage-inspector-v2/rack-overview-panel';
-import { CellOverviewPanel } from './storage-inspector-v2/cell-overview-panel';
 import { ContainerDetailPanel } from './storage-inspector-v2/container-detail-panel';
 import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-container-panel';
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
@@ -52,12 +52,226 @@ import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-contain
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
 import { EditOverrideTaskPanel } from './storage-inspector-v2/task-edit-override-panel';
 import { RepairConflictTaskPanel } from './storage-inspector-v2/task-repair-conflict-panel';
+import {
+  CurrentContainersSectionView,
+  CurrentInventorySectionView,
+  LocationPolicySummarySectionView,
+  type CurrentContainerCardViewModel,
+  type CurrentInventorySummaryItemViewModel,
+  type LocationPolicySummaryAssignmentViewModel
+} from './storage-location-detail-sections-view';
+import {
+  InspectorFooter,
+  inspectorScrollBodyClassName,
+  inspectorSectionClassName,
+  inspectorSectionTitleClassName,
+  inspectorShellClassName
+} from './storage-inspector-v2/shared';
 
 export { resolvePanelMode, resolveActiveMode } from './storage-inspector-v2/mode';
 export type { MoveTaskState } from './storage-inspector-v2/mode';
 
 interface StorageInspectorV2Props {
   workspace: FloorWorkspace | null;
+}
+
+type GroupedContainer = {
+  containerId: string;
+  rows: LocationStorageSnapshotRow[];
+};
+
+function containerDisplayCode(row: LocationStorageSnapshotRow | undefined, fallback: string) {
+  return row ? (row.externalCode ?? row.systemCode ?? fallback) : fallback;
+}
+
+function buildCurrentContainerCards(containers: GroupedContainer[]): CurrentContainerCardViewModel[] {
+  return containers.map(({ containerId, rows }) => {
+    const first = rows[0];
+    const displayCode = containerDisplayCode(first, containerId);
+    const containerType = first?.containerType ?? 'Container';
+    const status = first?.containerStatus ?? 'active';
+    const inventoryEntryCount = rows.filter((row) => row.itemRef !== null || row.quantity !== null).length;
+
+    return {
+      containerId,
+      title: displayCode,
+      secondaryText: `${containerType} / ${status}`,
+      status,
+      inventoryEntryCount
+    };
+  });
+}
+
+function buildCurrentInventoryItems(rows: LocationStorageSnapshotRow[]): CurrentInventorySummaryItemViewModel[] {
+  const itemMap = new Map<
+    string,
+    CurrentInventorySummaryItemViewModel & { containerIds: Set<string> }
+  >();
+
+  rows
+    .filter((row) => row.itemRef !== null || row.quantity !== null)
+    .forEach((row, index) => {
+      const product = row.product as
+        | {
+            id?: string;
+            sku?: string | null;
+            name?: string | null;
+            imageUrl?: string | null;
+          }
+        | null
+        | undefined;
+      const uom = row.uom ?? '';
+      const key = `${product?.id ?? product?.sku ?? row.itemRef ?? `item-${index}`}::${uom}`;
+      const existing = itemMap.get(key);
+      const title = product?.name ?? product?.sku ?? row.itemRef ?? 'Inventory item';
+
+      if (existing) {
+        existing.totalQuantity += row.quantity ?? 0;
+        existing.containerIds.add(row.containerId);
+        existing.containerCount = existing.containerIds.size;
+        return;
+      }
+
+      itemMap.set(key, {
+        key,
+        imageUrl: product?.imageUrl ?? null,
+        title,
+        meta: product?.sku ?? row.itemRef ?? null,
+        totalQuantity: row.quantity ?? 0,
+        uom,
+        containerCount: 1,
+        containerIds: new Set([row.containerId])
+      });
+    });
+
+  return Array.from(itemMap.values()).map(({ containerIds: _containerIds, ...item }) => item);
+}
+
+function buildPolicyAssignments(
+  assignments: Array<{
+    id: string;
+    productId: string;
+    role: string;
+    state: string;
+    product?: {
+      name?: string | null;
+      sku?: string | null;
+    } | null;
+  }>
+): LocationPolicySummaryAssignmentViewModel[] {
+  return assignments
+    .filter((assignment) => assignment.state === 'published')
+    .map((assignment) => ({
+      id: assignment.id,
+      productName: assignment.product?.name ?? assignment.product?.sku ?? assignment.productId,
+      productSku: assignment.product?.sku ?? null,
+      role: assignment.role
+    }));
+}
+
+function CellSectionOverviewPanel({
+  rackDisplayCode,
+  activeLevel,
+  locationCode,
+  locationType,
+  isOccupied,
+  containers,
+  inventoryItems,
+  policyAssignments,
+  policyPending,
+  sourceCellId,
+  onSelectContainer,
+  onOpenCreateTask,
+  onOpenCreateWithProductTask
+}: {
+  rackDisplayCode: string;
+  activeLevel: number;
+  locationCode: string;
+  locationType: string | null;
+  isOccupied: boolean;
+  containers: CurrentContainerCardViewModel[];
+  inventoryItems: CurrentInventorySummaryItemViewModel[];
+  policyAssignments: LocationPolicySummaryAssignmentViewModel[];
+  policyPending: boolean;
+  sourceCellId: string | null;
+  onSelectContainer: (containerId: string) => void;
+  onOpenCreateTask: () => void;
+  onOpenCreateWithProductTask: () => void;
+}) {
+  return (
+    <div
+      className={inspectorShellClassName}
+      role="complementary"
+      aria-label={`Location inspector: ${locationCode}`}
+    >
+      <div className={inspectorSectionClassName}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="font-mono text-sm font-semibold text-gray-900">{locationCode}</div>
+            <div className="mt-1">
+              <LocationAddress
+                rackDisplayCode={rackDisplayCode}
+                activeLevel={activeLevel}
+                locationCode={locationCode}
+              />
+            </div>
+          </div>
+          {locationType ? (
+            <span className="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500">
+              {locationType.replace('_', ' ')}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-2">
+          <CellStatusChip occupied={isOccupied} />
+        </div>
+      </div>
+
+      <div className={inspectorScrollBodyClassName}>
+        <div className="space-y-3 px-3 py-3">
+          <CurrentContainersSectionView
+            containers={containers}
+            sourceCellId={sourceCellId}
+            onContainerClick={(containerId) => onSelectContainer(containerId)}
+          />
+          <CurrentInventorySectionView
+            inventoryItems={inventoryItems}
+            hasContainers={containers.length > 0}
+          />
+          <div
+            className="rounded-lg"
+            style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
+          >
+            <div className="px-3 py-2.5">
+              <div className={inspectorSectionTitleClassName}>Actions</div>
+            </div>
+            <div className="grid gap-2 border-t border-[var(--border-muted)] px-3 py-3">
+              <button
+                onClick={onOpenCreateTask}
+                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                aria-label="Create container at this location"
+              >
+                Create container
+              </button>
+              <button
+                onClick={onOpenCreateWithProductTask}
+                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                aria-label="Create container with product at this location"
+              >
+                Create container with product
+              </button>
+            </div>
+          </div>
+          <LocationPolicySummarySectionView
+            isPending={policyPending}
+            assignments={policyAssignments}
+          />
+        </div>
+      </div>
+
+      <InspectorFooter />
+    </div>
+  );
 }
 
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
@@ -114,7 +328,10 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const locationId = locationRef?.locationId ?? null;
 
   const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
-  const { data: locationProductAssignments = [] } = useLocationProductAssignments(locationId);
+  const {
+    data: locationProductAssignments = [],
+    isLoading: locationProductAssignmentsLoading
+  } = useLocationProductAssignments(locationId);
   const createProductLocationRole = useCreateProductLocationRole();
   const deleteProductLocationRole = useDeleteProductLocationRole(locationId);
 
@@ -972,20 +1189,22 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
-  const cellOverviewItems = storageRows.filter((row) => row.itemRef !== null || row.quantity !== null);
-  const cellOverviewPreview = cellOverviewItems.slice(0, INVENTORY_PREVIEW_LIMIT);
-  const cellOverviewOverflow = cellOverviewItems.length - INVENTORY_PREVIEW_LIMIT;
+  const cellOverviewContainers = buildCurrentContainerCards(containers);
+  const cellOverviewInventoryItems = buildCurrentInventoryItems(storageRows);
+  const cellOverviewPolicyAssignments = buildPolicyAssignments(locationProductAssignments);
 
   return (
-    <CellOverviewPanel
+    <CellSectionOverviewPanel
       rackDisplayCode={rackDisplayCode}
       activeLevel={activeLevel}
       locationCode={locationCode}
       isOccupied={isOccupied}
       locationType={storageRows[0]?.locationType ?? null}
-      containers={containers}
-      inventoryPreviewRows={cellOverviewPreview}
-      inventoryOverflow={cellOverviewOverflow}
+      containers={cellOverviewContainers}
+      inventoryItems={cellOverviewInventoryItems}
+      policyAssignments={cellOverviewPolicyAssignments}
+      policyPending={locationProductAssignmentsLoading}
+      sourceCellId={cellId}
       onSelectContainer={setSelectedContainerId}
       onOpenCreateTask={openCreateTask}
       onOpenCreateWithProductTask={openCreateWithProductTask}

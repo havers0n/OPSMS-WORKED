@@ -21,6 +21,7 @@ type MockCell = {
 let mockPublishedCells: MockCell[] = [];
 let mockOccupancyRows: Array<{ cellId: string | null; containerId?: string | null; externalCode?: string | null }> = [];
 let mockStorageRowsByLocationId: Record<string, Array<{ locationCode?: string | null; locationType?: string | null; containerId: string; containerStatus: string }>> = {};
+const workspaceCanvasAndPanelSpy = vi.fn();
 
 vi.mock('@/entities/cell/api/use-published-cells', () => ({
   usePublishedCells: () => ({
@@ -51,7 +52,10 @@ vi.mock('@/entities/location/api/use-location-storage', () => ({
 }));
 
 vi.mock('./workspace-canvas-and-panel', () => ({
-  WorkspaceCanvasAndPanel: () => createElement('div', { 'data-testid': 'storage-v2-canvas' }, 'Canvas')
+  WorkspaceCanvasAndPanel: (props: Record<string, unknown>) => {
+    workspaceCanvasAndPanelSpy(props);
+    return createElement('div', { 'data-testid': 'storage-v2-canvas' }, 'Canvas');
+  }
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -168,6 +172,12 @@ function clickButtonByLabel(renderer: TestRenderer.ReactTestRenderer, label: str
   });
 }
 
+function getButtonLabels(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAllByType('button').map((node) =>
+    Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
+  );
+}
+
 describe('Storage V2 focus cutover integration', () => {
   beforeEach(() => {
     resetStorageFocusStore();
@@ -196,6 +206,7 @@ describe('Storage V2 focus cutover integration', () => {
         }
       ]
     };
+    workspaceCanvasAndPanelSpy.mockClear();
     act(() => {
       useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
     });
@@ -249,7 +260,7 @@ describe('Storage V2 focus cutover integration', () => {
     ).toBe(true);
   });
 
-  it('StorageWorkspaceV2 hides side panels until rack focus exists, then shows and hides them with focus transitions', async () => {
+  it('StorageWorkspaceV2 keeps compact V2 shell mounted across rackless and focused states', async () => {
     await act(async () => {
       useStorageFocusStore.getState().clearAllFocus();
       await Promise.resolve();
@@ -258,9 +269,21 @@ describe('Storage V2 focus cutover integration', () => {
     const renderer = renderStorageWorkspaceV2(createWorkspace());
 
     expect(renderer.root.findByProps({ 'data-testid': 'storage-v2-canvas' })).toBeTruthy();
+    expect(workspaceCanvasAndPanelSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        hideContextPanel: true,
+        hideRightPanel: true,
+        isStorageV2: true
+      })
+    );
     let tree = JSON.stringify(renderer.toJSON());
-    expect(tree).not.toContain('Search location');
-    expect(tree).not.toContain('No location selected');
+    let buttonLabels = getButtonLabels(renderer);
+    expect(tree).toContain('Search location');
+    expect(buttonLabels).toContain('L1');
+    expect(buttonLabels).toContain('L2');
+    expect(buttonLabels).toContain('L3');
+    expect(tree).toContain('Select a rack on the map to browse locations.');
+    expect(tree).toContain('No location selected');
 
     await act(async () => {
       useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
@@ -274,6 +297,11 @@ describe('Storage V2 focus cutover integration', () => {
     clickLocationByAddress(renderer, '01-A.01.01');
     tree = JSON.stringify(renderer.toJSON());
     expect(tree).toContain('LOC-01');
+    expect(tree).toContain('Current containers');
+    expect(tree).toContain('Current inventory');
+    expect(tree).toContain('Location Policy');
+    expect(tree).not.toContain('Current Contents');
+    expect(tree).not.toContain('Inventory Preview');
 
     await act(async () => {
       useStorageFocusStore.getState().handleEmptyCanvasClick();
@@ -288,8 +316,13 @@ describe('Storage V2 focus cutover integration', () => {
       await Promise.resolve();
     });
     tree = JSON.stringify(renderer.toJSON());
-    expect(tree).not.toContain('Search location');
-    expect(tree).not.toContain('No location selected');
+    buttonLabels = getButtonLabels(renderer);
+    expect(tree).toContain('Search location');
+    expect(buttonLabels).toContain('L1');
+    expect(buttonLabels).toContain('L2');
+    expect(buttonLabels).toContain('L3');
+    expect(tree).toContain('Select a rack on the map to browse locations.');
+    expect(tree).toContain('No location selected');
   });
 });
 

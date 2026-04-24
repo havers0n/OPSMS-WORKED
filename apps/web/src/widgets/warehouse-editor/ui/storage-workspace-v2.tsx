@@ -1,5 +1,4 @@
 import type { FloorWorkspace } from '@wos/domain';
-import { useStorageFocusSelectedRackId } from '../model/v2/v2-selectors';
 import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
@@ -39,17 +38,13 @@ export function StorageWorkspaceV2({
   onOpenInspector,
   onCloseInspector
 }: StorageWorkspaceV2Props) {
-  const selectedRackId = useStorageFocusSelectedRackId();
-  const showLeftPanel = selectedRackId !== null;
-  const showRightPanel = selectedRackId !== null;
-
   return (
     <div
       role="region"
       aria-label="Storage workspace"
       className="flex h-full w-full overflow-hidden"
     >
-      {showLeftPanel && <StorageNavigator workspace={workspace} />}
+      <StorageNavigator workspace={workspace} />
 
       <WorkspaceCanvasAndPanel
         workspace={workspace}
@@ -61,7 +56,7 @@ export function StorageWorkspaceV2({
         isStorageV2
       />
 
-      {showRightPanel && <StorageInspectorV2 workspace={workspace} />}
+      <StorageInspectorV2 workspace={workspace} />
     </div>
   );
 }
