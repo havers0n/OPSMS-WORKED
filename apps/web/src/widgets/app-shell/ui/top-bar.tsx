@@ -15,6 +15,7 @@ import {
   useSetSelectedCellId,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 import { AccountControls } from './account-controls';
 import { ViewModeSwitcher } from './view-mode-switcher';
 import { WorkspaceActions } from './workspace-actions';
@@ -37,6 +38,7 @@ function WarehouseViewLocateInline() {
     message: null
   });
   const activeFloorId = useActiveFloorId();
+  const viewMode = useViewMode();
   const setSelectedCellId = useSetSelectedCellId();
   const setHighlightedCellIds = useSetHighlightedCellIds();
   const publishedCellsQuery = usePublishedCells(activeFloorId);
@@ -125,8 +127,16 @@ function WarehouseViewLocateInline() {
       return;
     }
 
+    const matchedCell = publishedCells.find((cell) => cell.id === matchedCellId);
     setSelectedCellId(matchedCellId);
     setHighlightedCellIds([matchedCellId]);
+    if (viewMode === 'storage' && matchedCell) {
+      useStorageFocusStore.getState().selectCell({
+        cellId: matchedCell.id,
+        rackId: matchedCell.rackId,
+        level: matchedCell.address.parts.level
+      });
+    }
     setLocateFeedback({
       kind: 'found',
       message: `Located ${locateQuery.trim()}.`

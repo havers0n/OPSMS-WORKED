@@ -12,6 +12,7 @@ import {
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { EditorCanvas } from './editor-canvas';
 import { InspectorRouter } from './inspector-router';
+import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
 
 /**
@@ -37,6 +38,7 @@ export function PublishedViewer() {
   const setEditorMode = useSetEditorMode();
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const inspectorWidth = viewMode === 'layout' ? 560 : 320;
 
   // Bootstrap the store from the published layout so the canvas renders racks.
   // Also reset editorMode to 'select' — the place tool is unavailable in read-only mode
@@ -80,47 +82,58 @@ export function PublishedViewer() {
       className="flex h-full w-full flex-col overflow-hidden"
     >
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <ToolRail />
-
-        <div className="relative min-w-0 flex-1 overflow-hidden">
-          <EditorCanvas
+        {viewMode === 'storage' ? (
+          <StorageWorkspaceV2
             workspace={workspace ?? null}
             onAddRack={handleAddRack}
-            onOpenInspector={() => setInspectorOpen(true)}
+            onOpenInspector={() => undefined}
+            onCloseInspector={handleCloseInspector}
           />
+        ) : (
+          <>
+            <ToolRail />
 
-          {selectedRackId && !inspectorOpen && (
-            <button
-              type="button"
-              onClick={() => setInspectorOpen(true)}
-              title="Open inspector"
-              className="pointer-events-auto absolute bottom-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl shadow-md transition-colors hover:opacity-90"
-              style={{ background: 'var(--accent)', color: '#fff' }}
+            <div className="relative min-w-0 flex-1 overflow-hidden">
+              <EditorCanvas
+                workspace={workspace ?? null}
+                onAddRack={handleAddRack}
+                onOpenInspector={() => setInspectorOpen(true)}
+              />
+
+              {selectedRackId && !inspectorOpen && (
+                <button
+                  type="button"
+                  onClick={() => setInspectorOpen(true)}
+                  title="Open inspector"
+                  className="pointer-events-auto absolute bottom-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl shadow-md transition-colors hover:opacity-90"
+                  style={{ background: 'var(--accent)', color: '#fff' }}
+                >
+                  <PanelRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div
+              className="shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
+              style={{ width: inspectorOpen ? `${inspectorWidth}px` : '0px' }}
             >
-              <PanelRight className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        <div
-          className="shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
-          style={{ width: inspectorOpen ? '320px' : '0px' }}
-        >
-          <div
-            className="h-full overflow-hidden border-l transition-transform duration-300 ease-in-out"
-            style={{
-              width: '320px',
-              borderColor: 'var(--border-muted)',
-              transform: inspectorOpen ? 'translateX(0)' : 'translateX(100%)'
-            }}
-          >
-            <InspectorRouter
-              workspace={workspace ?? null}
-              onClose={handleCloseInspector}
-              enableLegacyStorageRouting
-            />
-          </div>
-        </div>
+              <div
+                className="h-full overflow-hidden border-l transition-transform duration-300 ease-in-out"
+                style={{
+                  width: `${inspectorWidth}px`,
+                  borderColor: 'var(--border-muted)',
+                  transform: inspectorOpen ? 'translateX(0)' : 'translateX(100%)'
+                }}
+              >
+                <InspectorRouter
+                  workspace={workspace ?? null}
+                  onClose={handleCloseInspector}
+                  enableLegacyStorageRouting
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

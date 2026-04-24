@@ -16,6 +16,7 @@ import {
   useSetViewMode,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
+import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
@@ -168,13 +169,28 @@ export function WarehouseViewPage() {
       return;
     }
 
+    const matchedCell = publishedCells.find((cell) => cell.id === matchedCellId);
     setSelectedCellId(matchedCellId);
     setHighlightedCellIds([matchedCellId]);
+    if (viewMode === 'storage' && matchedCell) {
+      useStorageFocusStore.getState().selectCell({
+        cellId: matchedCell.id,
+        rackId: matchedCell.rackId,
+        level: matchedCell.address.parts.level
+      });
+    }
     setLocateFeedback({
       kind: 'found',
       message: `Located ${query.trim()}.`
     });
-  }, [locateDataGapReason, locateLookupByAddress, setHighlightedCellIds, setSelectedCellId]);
+  }, [
+    locateDataGapReason,
+    locateLookupByAddress,
+    publishedCells,
+    setHighlightedCellIds,
+    setSelectedCellId,
+    viewMode
+  ]);
 
   const isLoading =
     sitesQuery.isLoading ||
