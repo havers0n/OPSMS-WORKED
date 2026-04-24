@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import type { Rack } from '@wos/domain';
+import type Konva from 'konva';
 import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { useCameraStore } from '@/widgets/warehouse-editor/model/camera-store';
 import {
@@ -25,9 +27,125 @@ type CanvasOffset = {
 type UseCanvasViewportControllerParams = {
   autoFitRacks: Rack[];
   setCanvasZoom: (zoom: number) => void;
+  stageRef: MutableRefObject<Konva.Stage | null>;
   viewMode: ViewMode;
   zoom: number;
 };
+
+type StageOffset = {
+  x: number;
+  y: number;
+};
+
+type ScreenPoint = {
+  x: number;
+  y: number;
+};
+
+export type TransformOnlyPanState = {
+  isPanning: boolean;
+  panStart: ScreenPoint;
+  offsetAtPanStart: StageOffset;
+  liveOffset: StageOffset;
+};
+
+export function applyTransformOnlyPanPosition(
+  stage: Konva.Stage,
+  offset: StageOffset
+) {
+  stage.position(offset);
+}
+
+export function batchDrawStageLayers(stage: Konva.Stage) {
+  for (const layer of stage.getLayers()) {
+    layer.batchDraw();
+  }
+}
+
+export function isStageCameraOffsetSynced(
+  stage: Konva.Stage,
+  offset: StageOffset
+) {
+  return stage.x() === offset.x && stage.y() === offset.y;
+}
+
+export function createTransformOnlyPanState(
+  initialOffset: StageOffset = { x: 0, y: 0 }
+): TransformOnlyPanState {
+  return {
+    isPanning: false,
+    panStart: { x: 0, y: 0 },
+    offsetAtPanStart: initialOffset,
+    liveOffset: initialOffset
+  };
+}
+
+export function startTransformOnlyPan({
+  committedOffset,
+  pointer,
+  stage,
+  state
+}: {
+  committedOffset: StageOffset;
+  pointer: ScreenPoint;
+  stage: Konva.Stage;
+  state: TransformOnlyPanState;
+}) {
+  state.isPanning = true;
+  state.panStart = pointer;
+  state.offsetAtPanStart = committedOffset;
+  state.liveOffset = committedOffset;
+  applyTransformOnlyPanPosition(stage, state.liveOffset);
+}
+
+export function moveTransformOnlyPan({
+  pointer,
+  scheduleDraw,
+  stage,
+  state
+}: {
+  pointer: ScreenPoint;
+  scheduleDraw: () => void;
+  stage: Konva.Stage;
+  state: TransformOnlyPanState;
+}) {
+  if (!state.isPanning) return null;
+  state.liveOffset = {
+    x: state.offsetAtPanStart.x + pointer.x - state.panStart.x,
+    y: state.offsetAtPanStart.y + pointer.y - state.panStart.y
+  };
+  applyTransformOnlyPanPosition(stage, state.liveOffset);
+  scheduleDraw();
+  return state.liveOffset;
+}
+
+export function finishTransformOnlyPan({
+  cancelDraw,
+  commitOffset,
+  recordOffsetCommit,
+  stage,
+  state
+}: {
+  cancelDraw: () => void;
+  commitOffset: (offset: StageOffset) => void;
+  recordOffsetCommit: () => void;
+  stage: Konva.Stage | null;
+  state: TransformOnlyPanState;
+}) {
+  if (!state.isPanning) return null;
+  state.isPanning = false;
+  cancelDraw();
+  const finalOffset = state.liveOffset;
+  if (stage) {
+    applyTransformOnlyPanPosition(stage, finalOffset);
+  }
+  commitOffset(finalOffset);
+  recordOffsetCommit();
+  if (stage && !isStageCameraOffsetSynced(stage, finalOffset)) {
+    applyTransformOnlyPanPosition(stage, finalOffset);
+  }
+  return finalOffset;
+}
 
 export function getModeEntryMinZoom(viewMode: ViewMode): number {
   return viewMode === 'view' ? LOD_CELL_ENTRY : 0;
@@ -36,6 +154,7 @@ export function getModeEntryMinZoom(viewMode: ViewMode): number {
 export function useCanvasViewportController({
   autoFitRacks,
   setCanvasZoom,
+  stageRef,
   viewMode,
   zoom
 }: UseCanvasViewportControllerParams) {
@@ -55,8 +174,10 @@ export function useCanvasViewportController({
 
   const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
-  const offsetAtPanStartRef = useRef({ x: 0, y: 0 });
+  const panStateRef = useRef(
+    createTransformOnlyPanState({ x: offsetX, y: offsetY })
+  );
+  const panFrameRef = useRef<number | null>(null);
 
   // Track previous viewMode so we can detect the transition TO placement.
   const prevViewModeRef = useRef(viewMode);
@@ -126,32 +247,65 @@ export function useCanvasViewportController({
     const container = containerRef.current;
     if (!container) return;
 
+    const cancelScheduledPanDraw = () => {
+      if (panFrameRef.current === null) return;
+      window.cancelAnimationFrame(panFrameRef.current);
+      panFrameRef.current = null;
+    };
+
+    const schedulePanDraw = () => {
+      if (panFrameRef.current !== null) return;
+      panFrameRef.current = window.requestAnimationFrame(() => {
+        panFrameRef.current = null;
+        const stage = stageRef.current;
+        if (!stage || !isPanningRef.current) return;
+        batchDrawStageLayers(stage);
+      });
+    };
+
     const onMouseDown = (event: MouseEvent) => {
       if (event.button !== 1) return;
+      const stage = stageRef.current;
+      if (!stage) return;
       isPanningRef.current = true;
-      panStartRef.current = { x: event.clientX, y: event.clientY };
       // Snapshot current offset at pan start via getState() — avoids stale closures
       // without needing a ref that mirrors the store value.
       const { offsetX: ox, offsetY: oy } = useCameraStore.getState();
-      offsetAtPanStartRef.current = { x: ox, y: oy };
+      startTransformOnlyPan({
+        committedOffset: { x: ox, y: oy },
+        pointer: { x: event.clientX, y: event.clientY },
+        stage,
+        state: panStateRef.current
+      });
       setIsPanning(true);
       event.preventDefault();
     };
 
     const onMouseMove = (event: MouseEvent) => {
       if (!isPanningRef.current) return;
-      const dx = event.clientX - panStartRef.current.x;
-      const dy = event.clientY - panStartRef.current.y;
-      useCameraStore.getState().setOffset(
-        offsetAtPanStartRef.current.x + dx,
-        offsetAtPanStartRef.current.y + dy
-      );
-      recordCanvasCameraStoreUpdate('offset');
+      const stage = stageRef.current;
+      if (!stage) return;
+      moveTransformOnlyPan({
+        pointer: { x: event.clientX, y: event.clientY },
+        scheduleDraw: schedulePanDraw,
+        stage,
+        state: panStateRef.current
+      });
     };
 
     const onMouseUp = (event: MouseEvent) => {
       if (event.button !== 1) return;
+      if (!isPanningRef.current) return;
       isPanningRef.current = false;
+      finishTransformOnlyPan({
+        cancelDraw: cancelScheduledPanDraw,
+        commitOffset: (offset) => {
+          useCameraStore.getState().setOffset(offset.x, offset.y);
+        },
+        recordOffsetCommit: () => recordCanvasCameraStoreUpdate('offset'),
+        stage: stageRef.current,
+        state: panStateRef.current
+      });
       setIsPanning(false);
     };
 
@@ -160,11 +314,12 @@ export function useCanvasViewportController({
     window.addEventListener('mouseup', onMouseUp);
 
     return () => {
+      cancelScheduledPanDraw();
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [stageRef]);
 
   const handleZoom = useCallback((delta: number, cursor?: CanvasPoint) => {
     const nextZoom = clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)));

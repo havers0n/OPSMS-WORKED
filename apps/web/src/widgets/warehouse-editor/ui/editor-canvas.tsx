@@ -212,6 +212,7 @@ export function EditorCanvas({
     useCanvasViewportController({
       autoFitRacks: racks,
       setCanvasZoom,
+      stageRef,
       viewMode,
       zoom
     });
