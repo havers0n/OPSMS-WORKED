@@ -2071,7 +2071,7 @@ async function runMeasuredScenario({
     await setVariantRuntimeOptions(page, runtimeOptions);
     const browserEnvironment = await getBrowserEnvironment(page);
     await startRenderPipelineProbe(page);
-    await startFrameProbe(page);
+    const frameProbeId = await startFrameProbe(page);
     await page.evaluate((url) => {
       window.history.pushState(null, '', url);
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -2081,7 +2081,7 @@ async function runMeasuredScenario({
       await setRackLayerHitGraphDisabled(page, true);
     }
     await startKonvaPipelineProbe(page);
-    const rawResult = await stopFrameProbe(page);
+    const rawResult = await stopFrameProbe(page, frameProbeId);
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
@@ -2104,14 +2104,14 @@ async function runMeasuredScenario({
     await setVariantRuntimeOptions(page, runtimeOptions);
     const browserEnvironment = await getBrowserEnvironment(page);
     await startRenderPipelineProbe(page);
-    await startFrameProbe(page);
+    const frameProbeId = await startFrameProbe(page);
     await selectFloorById(page, floorId);
     await waitForWarehouseCanvas(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
       await setRackLayerHitGraphDisabled(page, true);
     }
     await startKonvaPipelineProbe(page);
-    const rawResult = await stopFrameProbe(page);
+    const rawResult = await stopFrameProbe(page, frameProbeId);
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
@@ -2137,21 +2137,33 @@ async function runMeasuredScenario({
   if (runtimeOptions?.disableRackLayerHitGraph) {
     await setRackLayerHitGraphDisabled(page, true);
   }
+  await waitForStableWarehouseCanvas(page);
   await startRenderPipelineProbe(page);
   await startKonvaPipelineProbe(page);
-  await startFrameProbe(page);
+  const guard = installPageStabilityGuard(page);
+  const frameProbeId = await startFrameProbe(page);
 
-  if (scenario === 'pan') {
-    await samplePan(page, SAMPLE_DURATION_MS);
-  } else if (scenario === 'zoom') {
-    await sampleZoom(page, SAMPLE_DURATION_MS);
-  } else if (scenario === 'select') {
-    await sampleSelect(page, SAMPLE_DURATION_MS);
-  } else if (scenario === 'hover') {
-    await sampleHover(page, SAMPLE_DURATION_MS);
+  let rawResult: RawProbeResult;
+  try {
+    if (scenario === 'pan') {
+      await samplePan(page, SAMPLE_DURATION_MS, frameProbeId, guard);
+    } else if (scenario === 'zoom') {
+      await sampleZoom(page, SAMPLE_DURATION_MS);
+      await assertFrameProbeAlive(page, frameProbeId, guard);
+    } else if (scenario === 'select') {
+      await sampleSelect(page, SAMPLE_DURATION_MS);
+      await assertFrameProbeAlive(page, frameProbeId, guard);
+    } else if (scenario === 'hover') {
+      await sampleHover(page, SAMPLE_DURATION_MS);
+      await assertFrameProbeAlive(page, frameProbeId, guard);
+    } else {
+      throw new Error(`Unsupported measured scenario: ${scenario}`);
+    }
+
+    rawResult = await stopFrameProbe(page, frameProbeId, guard);
+  } finally {
+    guard.dispose();
   }
-
-  const rawResult = await stopFrameProbe(page);
   const renderPipeline = await stopRenderPipelineProbe(page);
   const konvaPipeline = await stopKonvaPipelineProbe(page);
   if (scenario === 'pan' && runtimeOptions?.rackLayerListeningOffDuringPan) {
@@ -2901,10 +2913,12 @@ test.describe('DL1 diagnostics harness', () => {
         await context.close().catch(() => undefined);
       }
 
+      const buildIdentity = await getBuildIdentity();
       const report = {
         generatedAt: new Date().toISOString(),
         sampleDurationMs: SAMPLE_DURATION_MS,
         scenario,
+        buildIdentity,
         renderPipelineReport: buildRenderPipelineMarkdown(scenario, entries),
         entries
       };
@@ -2944,8 +2958,18 @@ test.describe('DL1 diagnostics harness', () => {
           drawHitMs: entry.konvaPipeline.drawHitTotalMs,
           textDrawMs:
             entry.konvaPipeline.nodeSceneDrawCostBuckets.Text?.totalMs ?? 0,
+          rectCount:
+            entry.konvaPipeline.rackLayerComposition.byType.Rect ?? 0,
           rectDrawMs:
             entry.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ?? 0,
+          shapeCount:
+            entry.konvaPipeline.rackLayerComposition.byType.Shape ?? 0,
+          shapeDrawMs:
+            entry.konvaPipeline.nodeSceneDrawCostByType.Shape?.totalMs ?? 0,
+          cellBaseBatchDrawMs:
+            entry.konvaPipeline.shapeSceneDrawCostByRole['cell-base-batch']
+              ?.totalMs ?? 0,
+          longTaskCount: entry.metrics.longTaskCount,
           cullingRatio: entry.cullingRatio,
           gt100MsPct:
             entry.frameBuckets.gt100To250Ms.percent +
