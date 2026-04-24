@@ -1,5 +1,5 @@
 import { Group } from 'react-konva';
-import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
+import { buildCellStructureKey, isRackFaceMirrored, type Cell, type RackFace } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
 import {
   getSectionWidths,
@@ -413,9 +413,13 @@ export function RackCells({
 }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const faceABandH = isPaired ? spineY : height;
+  const effectiveFaceB =
+    faceB && isRackFaceMirrored(faceB) && faceB.mirrorSourceFaceId === faceA.id
+      ? { ...faceB, sections: faceA.sections }
+      : faceB;
   const normalizedSemanticLevels =
     semanticLevels ??
-    collectFaceSemanticLevels([faceA, ...(faceB ? [faceB] : [])]);
+    collectFaceSemanticLevels([faceA, ...(effectiveFaceB ? [effectiveFaceB] : [])]);
 
   recordCanvasComponentRender({
     component: 'RackCells',
@@ -515,9 +519,9 @@ export function RackCells({
         isActivelyPanning={isActivelyPanning}
         onCellClick={onCellClick}
       />
-      {isPaired && faceB && (
+      {isPaired && effectiveFaceB && (
         <FaceCells
-          face={faceB}
+          face={effectiveFaceB}
           rackId={rackId}
           totalWidth={faceBWidth}
           bandY={spineY}

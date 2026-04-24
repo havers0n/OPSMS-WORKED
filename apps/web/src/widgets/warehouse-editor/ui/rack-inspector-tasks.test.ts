@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { FloorWorkspace, LayoutDraft } from '@wos/domain';
+import { resolveRackFaceSections, type FloorWorkspace, type LayoutDraft } from '@wos/domain';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
@@ -835,20 +835,43 @@ describe('RackInspector tasks', () => {
 
     clickTopologyOption(renderer, 'mirrored');
     updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    let updatedFaceA = updatedRack?.faces.find((face) => face.side === 'A');
     updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
+    if (!updatedRack || !updatedFaceA || !updatedFaceB) {
+      throw new Error('Expected both rack faces after switching independent Face B to mirrored.');
+    }
     expect(updatedRack?.kind).toBe('paired');
-    expect(updatedFaceB?.relationshipMode).toBe('mirrored');
-    expect(updatedFaceB?.sections).toEqual([]);
+    expect(updatedFaceB.relationshipMode).toBe('mirrored');
+    expect(updatedFaceB.isMirrored).toBe(true);
+    expect(updatedFaceB.mirrorSourceFaceId).toBe(updatedFaceA.id);
+    expect(updatedFaceB.sections).toEqual([]);
+    expect(resolveRackFaceSections(updatedFaceB, updatedRack)).toEqual(updatedFaceA.sections);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(0);
+
+    act(() => {
+      useEditorStore.getState().addSection(rackId, 'A');
+    });
+    updatedRack = useEditorStore.getState().draft?.racks[rackId];
+    updatedFaceA = updatedRack?.faces.find((face) => face.side === 'A');
+    updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
+    if (!updatedRack || !updatedFaceA || !updatedFaceB) {
+      throw new Error('Expected both rack faces after editing mirrored Face A.');
+    }
+    expect(resolveRackFaceSections(updatedFaceB, updatedRack)).toEqual(updatedFaceA.sections);
 
     clickTopologyOption(renderer, 'independent');
     updatedRack = useEditorStore.getState().draft?.racks[rackId];
-    const updatedFaceA = updatedRack?.faces.find((face) => face.side === 'A');
+    updatedFaceA = updatedRack?.faces.find((face) => face.side === 'A');
     updatedFaceB = updatedRack?.faces.find((face) => face.side === 'B');
-    expect(updatedFaceB?.relationshipMode).toBe('independent');
-    expect(updatedFaceB?.sections).toHaveLength(updatedFaceA?.sections.length ?? 0);
-    expect(updatedFaceB?.sections[0]?.levels.length).toBe(updatedFaceA?.sections[0]?.levels.length);
-    expect(updatedFaceB?.sections[0]?.id).not.toBe(updatedFaceA?.sections[0]?.id);
+    if (!updatedFaceA || !updatedFaceB) {
+      throw new Error('Expected both rack faces after switching mirrored Face B to independent.');
+    }
+    expect(updatedFaceB.relationshipMode).toBe('independent');
+    expect(updatedFaceB.isMirrored).toBe(false);
+    expect(updatedFaceB.mirrorSourceFaceId).toBeNull();
+    expect(updatedFaceB.sections).not.toEqual(updatedFaceA.sections);
+    const faceASectionIds = new Set(updatedFaceA.sections.map((section) => section.id));
+    expect(updatedFaceB.sections.every((section) => !faceASectionIds.has(section.id))).toBe(true);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);
 
     clickTopologyOption(renderer, 'single');

@@ -3,7 +3,7 @@ import { buildPreviewCellKey } from './cell';
 import { buildCellAddress } from './cell';
 import type { LayoutDraft } from './layout-draft';
 import type { Rack, RackFace, RackLevel, RackSection } from './rack';
-import { isRackFaceMirrored } from './rack';
+import { resolveRackFaceSections } from './rack';
 
 function orderSlots(level: RackLevel, face: RackFace): number[] {
   const slots = Array.from({ length: level.slotCount }, (_, index) => index + 1);
@@ -25,14 +25,7 @@ function resolveSections(
   face: RackFace,
   sourceRack: Rack
 ): Array<{ section: RackSection; addressOrdinal: number }> {
-  let sections: RackSection[];
-
-  if (isRackFaceMirrored(face) && face.mirrorSourceFaceId) {
-    const sourceFace = sourceRack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId);
-    sections = sourceFace ? sourceFace.sections : face.sections;
-  } else {
-    sections = face.sections;
-  }
+  const sections = resolveRackFaceSections(face, sourceRack);
 
   if (face.slotNumberingDirection === 'rtl') {
     // RTL: the far/right end of the rack is address ordinal 1 — reverse section order

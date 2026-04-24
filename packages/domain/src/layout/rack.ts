@@ -55,6 +55,15 @@ export function isRackFaceMirrored(face: RackFace): boolean {
   return resolveRackFaceRelationshipMode(face) === 'mirrored';
 }
 
+export function resolveRackFaceSections(face: RackFace, rack: Rack): RackSection[] {
+  if (!isRackFaceMirrored(face) || !face.mirrorSourceFaceId) {
+    return face.sections;
+  }
+
+  const sourceFace = rack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId);
+  return sourceFace?.sections ?? face.sections;
+}
+
 export function synchronizeRackFaceRelationship(face: RackFace): RackFace {
   const relationshipMode = resolveRackFaceRelationshipMode(face);
   return {

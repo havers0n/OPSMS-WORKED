@@ -1,5 +1,5 @@
 import { Group, Line, Rect } from 'react-konva';
-import type { RackFace } from '@wos/domain';
+import { isRackFaceMirrored, type RackFace } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 import { FaceTokenRailLabel, SectionLabelOverlay } from './rack-label-overlays';
 import type { LabelProminence } from './rack-label-reveal-policy';
@@ -47,11 +47,13 @@ export function RackSections({
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const divider = isSelected ? DIVIDER_STROKE_SEL : DIVIDER_STROKE;
   const lightweightVisuals = disableStrokes || isActivelyPanning;
+  const faceBSections =
+    faceB && isRackFaceMirrored(faceB) && faceB.mirrorSourceFaceId === faceA.id
+      ? faceA.sections
+      : (faceB?.sections ?? []);
 
   const faceAOffsets = getSectionWidths(faceAWidth, faceA.sections);
-  const faceBOffsets = faceB && faceB.sections.length > 0
-    ? getSectionWidths(faceBWidth, faceB.sections)
-    : getSectionWidths(faceAWidth, faceA.sections);
+  const faceBOffsets = getSectionWidths(faceBWidth, faceBSections.length > 0 ? faceBSections : faceA.sections);
 
   const faceABottom = isPaired ? spineY : height;
   const faceBTop = spineY;
@@ -131,7 +133,7 @@ export function RackSections({
         );
       })}
 
-      {isSelected && isPaired && faceB && faceB.sections.map((sec, i) => {
+      {isSelected && isPaired && faceB && faceBSections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -178,7 +180,7 @@ export function RackSections({
         />
       )}
 
-      {showSectionNumbers && isPaired && faceB && faceB.sections.map((sec, i) => {
+      {showSectionNumbers && isPaired && faceB && faceBSections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
         const sectionW = x1 - x0;

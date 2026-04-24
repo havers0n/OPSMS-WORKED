@@ -1,4 +1,4 @@
-import type { Cell, Rack, RackFace } from '@wos/domain';
+import { resolveRackFaceSections, type Cell, type Rack, type RackFace } from '@wos/domain';
 
 function normalizeSemanticLevels(levels: number[]) {
   return Array.from(new Set(levels)).sort((left, right) => left - right);
@@ -19,7 +19,17 @@ export function collectFaceSemanticLevels(faces: RackFace[]) {
 }
 
 export function collectRackSemanticLevels(rack: Rack) {
-  return collectFaceSemanticLevels(rack.faces);
+  return normalizeSemanticLevels(
+    rack.faces
+      .filter((face) => face.enabled)
+      .flatMap((face) =>
+        resolveRackFaceSections(face, rack).flatMap((section) =>
+          section.levels
+            .map((level) => level.ordinal)
+            .filter((ordinal): ordinal is number => Number.isFinite(ordinal))
+        )
+      )
+  );
 }
 
 export function collectRackPublishedSemanticLevels(

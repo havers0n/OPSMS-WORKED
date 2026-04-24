@@ -299,6 +299,42 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[0]?.props.rackId).toBe('rack-1');
     expect(rackCells[0]?.props.semanticLevels).toEqual([1, 3]);
   });
+
+  it('passes Face A sections to the canvas for mirrored Face B', () => {
+    const faceA = createFaceWithLevels('rack-1-face-a', 'A', true, [1, 3]);
+    const faceB: RackFace = {
+      ...createFaceWithLevels('rack-1-face-b', 'B', true, [9]),
+      relationshipMode: 'mirrored',
+      isMirrored: true,
+      mirrorSourceFaceId: faceA.id,
+      sections: []
+    };
+    const rackA: Rack = {
+      ...createRack('rack-1', 0),
+      kind: 'paired',
+      faces: [faceA, faceB]
+    };
+
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      selectedRackActiveLevel: 0,
+      racks: [rackA]
+    });
+
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+
+    expect(rackSections?.props.faceB.id).toBe(faceB.id);
+    expect(rackSections?.props.faceB.sections).toEqual(faceA.sections);
+    expect(rackCells?.props.faceB.id).toBe(faceB.id);
+    expect(rackCells?.props.faceB.sections).toEqual(faceA.sections);
+    expect(rackCells?.props.semanticLevels).toEqual([1, 3]);
+  });
 });
 
 describe('RackLayer reveal hierarchy policy wiring', () => {

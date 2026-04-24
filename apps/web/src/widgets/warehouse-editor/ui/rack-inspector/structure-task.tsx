@@ -139,7 +139,7 @@ export function StructureTask({
     }
 
     if (isMirrored) {
-      setFaceBRelationship(rack.id, 'independent', { initFrom: 'copy' });
+      setFaceBRelationship(rack.id, 'independent', { initFrom: 'scratch' });
     }
   };
 

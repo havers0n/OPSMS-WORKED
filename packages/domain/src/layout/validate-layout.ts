@@ -1,20 +1,10 @@
 import type { LayoutClientPrecheckResult, LayoutValidationIssue } from './validation';
 import type { LayoutDraft } from './layout-draft';
 import { generatePreviewCells } from './generate-cells';
-import type { Rack, RackFace, RackSection } from './rack';
-import { isRackFaceMirrored } from './rack';
+import { isRackFaceMirrored, resolveRackFaceSections } from './rack';
 
 function compareLength(totalLength: number, sectionLengthSum: number) {
   return Math.abs(totalLength - sectionLengthSum) < 0.001;
-}
-
-function resolveSections(face: RackFace, rack: Rack): RackSection[] {
-  if (!isRackFaceMirrored(face) || !face.mirrorSourceFaceId) {
-    return face.sections;
-  }
-
-  const sourceFace = rack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId);
-  return sourceFace?.sections ?? face.sections;
 }
 
 // Local editor precheck only. Server validation remains authoritative for saved drafts and publish.
@@ -66,7 +56,7 @@ export function validateLayoutDraft(layoutDraft: LayoutDraft): LayoutClientPrech
     }
 
     for (const face of enabledFaces) {
-      const sections = resolveSections(face, rack);
+      const sections = resolveRackFaceSections(face, rack);
       const sectionLengthSum = sections.reduce((sum, section) => sum + section.length, 0);
 
       if (sections.length === 0) {
