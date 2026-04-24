@@ -4,8 +4,9 @@ export type CanvasDiagnosticsFlags = {
   labels: 'normal' | 'off';
   hitTest: 'normal' | 'off';
   cells: 'normal' | 'off' | 'visible-only' | 'unculled';
-  cellOverlays: 'normal' | 'surface-only';
+  cellOverlays: 'normal' | 'surface-only' | 'off';
   enableProductionCellCulling: boolean;
+  rackLayerRenderer: 'layer' | 'fast-layer';
 };
 
 export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
@@ -13,7 +14,8 @@ export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   hitTest: 'normal',
   cells: 'normal',
   cellOverlays: 'normal',
-  enableProductionCellCulling: true
+  enableProductionCellCulling: true,
+  rackLayerRenderer: 'layer'
 };
 
 export const CANVAS_DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
@@ -75,6 +77,10 @@ declare global {
       string,
       Record<string, unknown>
     >;
+    __WOS_CANVAS_STAGE__?: import('konva').default.Stage | null;
+    __WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__?: boolean;
+    __WOS_CANVAS_DISABLE_MANUAL_PAN_BATCH_DRAW__?: boolean;
+    __WOS_CANVAS_KONVA_SOURCE__?: string | null;
   }
 }
 
@@ -118,13 +124,18 @@ export function getCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {
     ),
     cellOverlays: resolveOption(
       raw.cellOverlays,
-      ['normal', 'surface-only'] as const,
+      ['normal', 'surface-only', 'off'] as const,
       DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.cellOverlays
     ),
     enableProductionCellCulling:
       typeof raw.enableProductionCellCulling === 'boolean'
         ? raw.enableProductionCellCulling
-        : DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.enableProductionCellCulling
+        : DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.enableProductionCellCulling,
+    rackLayerRenderer: resolveOption(
+      raw.rackLayerRenderer,
+      ['layer', 'fast-layer'] as const,
+      DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.rackLayerRenderer
+    )
   };
 }
 

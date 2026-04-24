@@ -273,7 +273,8 @@ const UNCLIPPED_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   hitTest: 'normal',
   cells: 'unculled',
   cellOverlays: 'normal',
-  enableProductionCellCulling: false
+  enableProductionCellCulling: false,
+  rackLayerRenderer: 'layer'
 };
 
 function countInteractionRects(renderer: TestRenderer.ReactTestRenderer) {

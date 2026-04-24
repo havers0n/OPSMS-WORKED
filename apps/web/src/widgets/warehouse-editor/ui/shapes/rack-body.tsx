@@ -29,6 +29,7 @@ type Props = {
   showRackCode: boolean;
   rackCodeProminence: LabelProminence;
   rackCodePlacement: RackCodePlacement;
+  disableStrokes?: boolean;
 };
 
 export function RackBody({
@@ -40,7 +41,8 @@ export function RackBody({
   isPassive = false,
   showRackCode,
   rackCodeProminence,
-  rackCodePlacement
+  rackCodePlacement,
+  disableStrokes = false
 }: Props) {
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
 
@@ -123,15 +125,17 @@ export function RackBody({
         height={height}
         cornerRadius={8}
         fill={fill}
-        stroke={stroke}
-        strokeWidth={isSelected ? 2 : 1.5}
+        stroke={disableStrokes ? undefined : stroke}
+        strokeEnabled={!disableStrokes}
+        strokeWidth={disableStrokes ? 0 : isSelected ? 2 : 1.5}
         shadowColor="#0f172a"
-        shadowBlur={isSelected ? 12 : 6}
-        shadowOpacity={isSelected ? 0.12 : 0.07}
+        shadowBlur={disableStrokes ? 0 : isSelected ? 12 : 6}
+        shadowOpacity={disableStrokes ? 0 : isSelected ? 0.12 : 0.07}
         shadowOffsetY={3}
+        wosRectRole="rack-body"
       />
 
-      {isSelected && (
+      {isSelected && !disableStrokes && (
         <Rect
           x={4}
           y={4}
@@ -142,6 +146,7 @@ export function RackBody({
           strokeWidth={1}
           dash={[8, 5]}
           opacity={0.7}
+          wosRectRole="selection-highlight"
         />
       )}
 
@@ -153,6 +158,7 @@ export function RackBody({
           height={height - spineY}
           fill={C.emptyZone}
           opacity={0.7}
+          wosRectRole="rack-body"
         />
       )}
       {isAsymmetric && faceBOverhang && (
@@ -163,6 +169,7 @@ export function RackBody({
           height={spineY}
           fill={C.emptyZone}
           opacity={0.7}
+          wosRectRole="rack-body"
         />
       )}
 
@@ -174,6 +181,7 @@ export function RackBody({
         cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
         fill={C.stripeA}
         opacity={isSelected ? 0.6 : 0.4}
+        wosRectRole="rack-body"
       />
 
       {isPaired && (
@@ -186,10 +194,11 @@ export function RackBody({
           height={stripeH}
           fill={C.stripeB}
           opacity={isSelected ? 0.5 : 0.28}
+          wosRectRole="rack-body"
         />
       )}
 
-      {isPaired && (
+      {isPaired && !disableStrokes && (
         <Line
           points={[8, spineY, width - 8, spineY]}
           stroke={C.spine}
@@ -199,7 +208,7 @@ export function RackBody({
         />
       )}
 
-      {isAsymmetric && (
+      {isAsymmetric && !disableStrokes && (
         <Line
           points={[minFaceW, 4, minFaceW, height - 4]}
           stroke={C.boundaryLine}
@@ -222,6 +231,7 @@ export function RackBody({
             shadowColor="#0f172a"
             shadowBlur={4}
             shadowOpacity={labelShadowOpacity}
+            wosRectRole="badge-decoration"
           />
           <Rect
             x={-labelWidth / 2}
@@ -229,10 +239,12 @@ export function RackBody({
             width={labelWidth}
             height={labelHeight}
             cornerRadius={999}
-            stroke={C.codeText}
-            strokeWidth={0.6}
+            stroke={disableStrokes ? undefined : C.codeText}
+            strokeEnabled={!disableStrokes}
+            strokeWidth={disableStrokes ? 0 : 0.6}
             opacity={labelStrokeOpacity}
             listening={false}
+            wosRectRole="badge-decoration"
           />
           <Text
             x={-labelWidth / 2}

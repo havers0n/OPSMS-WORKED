@@ -12,6 +12,8 @@ import { RackLayer } from './rack-layer';
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Layer', props, children),
+  FastLayer: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('FastLayer', props, children),
   Group: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Group', props, children),
   Line: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -144,7 +146,8 @@ function renderRackLayer(params: {
           hitTest: 'normal',
           cells: 'normal',
           cellOverlays: 'normal',
-          enableProductionCellCulling: true
+          enableProductionCellCulling: true,
+          rackLayerRenderer: 'layer'
         },
         diagnosticsViewport: {
           canvasOffset: { x: 0, y: 0 },

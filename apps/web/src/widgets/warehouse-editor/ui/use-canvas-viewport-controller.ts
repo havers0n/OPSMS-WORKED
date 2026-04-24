@@ -53,13 +53,19 @@ export function applyTransformOnlyPanPosition(
   stage: Konva.Stage,
   offset: StageOffset
 ) {
-  stage.position(offset);
+  withKonvaDiagnosticsSource('stage-position', () => {
+    stage.position(offset);
+  });
 }
 
 export function batchDrawStageLayers(stage: Konva.Stage) {
-  for (const layer of stage.getLayers()) {
-    layer.batchDraw();
-  }
+  if (isManualPanBatchDrawDisabled()) return;
+
+  withKonvaDiagnosticsSource('manual-pan-raf', () => {
+    for (const layer of stage.getLayers()) {
+      layer.batchDraw();
+    }
+  });
 }
 
 export function isStageCameraOffsetSynced(
@@ -78,6 +84,27 @@ export function createTransformOnlyPanState(
     offsetAtPanStart: initialOffset,
     liveOffset: initialOffset
   };
+}
+
+function isManualPanBatchDrawDisabled() {
+  return (
+    typeof window !== 'undefined' &&
+    window.__WOS_CANVAS_DISABLE_MANUAL_PAN_BATCH_DRAW__ === true
+  );
+}
+
+function withKonvaDiagnosticsSource<T>(source: string, callback: () => T): T {
+  if (typeof window === 'undefined') {
+    return callback();
+  }
+
+  const previous = window.__WOS_CANVAS_KONVA_SOURCE__ ?? null;
+  window.__WOS_CANVAS_KONVA_SOURCE__ = source;
+  try {
+    return callback();
+  } finally {
+    window.__WOS_CANVAS_KONVA_SOURCE__ = previous;
+  }
 }
 
 export function startTransformOnlyPan({

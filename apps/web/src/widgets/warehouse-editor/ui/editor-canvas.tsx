@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
-import type Konva from 'konva';
+import KonvaRuntime from 'konva';
+import type { default as Konva } from 'konva';
 import {
   useActiveTask,
   useCanvasZoom,
@@ -203,6 +204,18 @@ export function EditorCanvas({
   }, [placementLayout, layoutDraft]);
 
   const stageRef = useRef<Konva.Stage | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    window.__WOS_CANVAS_STAGE__ = stageRef.current;
+    window.__WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__ =
+      KonvaRuntime.autoDrawEnabled;
+    return () => {
+      if (window.__WOS_CANVAS_STAGE__ === stageRef.current) {
+        window.__WOS_CANVAS_STAGE__ = null;
+      }
+    };
+  });
 
   const [snapGuides, setSnapGuides] = useState<
     Array<{ type: 'x' | 'y'; position: number }>
@@ -441,7 +454,8 @@ export function EditorCanvas({
       'diagnosticsHitTest',
       'diagnosticsCells',
       'diagnosticsCellOverlays',
-      'diagnosticsCulling'
+      'diagnosticsCulling',
+      'diagnosticsRackLayerRenderer'
     ],
     snapshot: {
       floorId: workspace?.floorId ?? null,
@@ -462,7 +476,8 @@ export function EditorCanvas({
       diagnosticsHitTest: diagnosticsFlags.hitTest,
       diagnosticsCells: diagnosticsFlags.cells,
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
-      diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling
+      diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
+      diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer
     }
   });
 

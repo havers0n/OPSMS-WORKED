@@ -1,7 +1,7 @@
 import { buildCellStructureKey, type Cell, type OperationsCellRuntime, type Rack, type RackFace } from '@wos/domain';
 import { useEffect, useRef } from 'react';
 import type Konva from 'konva';
-import { Group, Layer, Rect } from 'react-konva';
+import { FastLayer, Group, Layer, Rect } from 'react-konva';
 import {
   getRackGeometry,
   getSectionWidths,
@@ -31,6 +31,7 @@ type SnapGuide = {
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
 const CELL_INSET = 4;
+const EMPTY_CELL_IDS = new Set<string>();
 
 type LocalPoint = { x: number; y: number };
 
@@ -276,6 +277,9 @@ export function RackLayer({
   const labelsEnabled = diagnosticsFlags.labels === 'normal';
   const hitTestEnabled = diagnosticsFlags.hitTest === 'normal';
   const renderCells = diagnosticsFlags.cells !== 'off';
+  const overlaysEnabled = diagnosticsFlags.cellOverlays !== 'off';
+  const RackLayerComponent =
+    diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
 
   useEffect(() => {
@@ -322,6 +326,7 @@ export function RackLayer({
       'diagnosticsCells',
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
+      'diagnosticsRackLayerRenderer',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -345,6 +350,7 @@ export function RackLayer({
       diagnosticsCells: diagnosticsFlags.cells,
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
+      diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
@@ -448,12 +454,13 @@ export function RackLayer({
   // This is necessary because RackCells.onCellClick only receives cellId.
 
   return (
-    <Layer ref={layerRef} name="rack-layer">
+    <RackLayerComponent ref={layerRef} name="rack-layer">
       {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
-        const isSelected = selectedRackIds.includes(rack.id);
-        const isHovered = hoveredRackId === rack.id;
+        const isSelected = overlaysEnabled && selectedRackIds.includes(rack.id);
+        const isHovered = overlaysEnabled && hoveredRackId === rack.id;
         const isRackPassive =
+          overlaysEnabled &&
           isRackPassiveScopeActive &&
           !isSelected &&
           activeCellRackId !== rack.id &&
@@ -531,6 +538,7 @@ export function RackLayer({
               width={geometry.width}
               height={geometry.height}
               fill="transparent"
+              wosRectRole="rack-interaction"
             />
 
             <RackBody
@@ -543,6 +551,7 @@ export function RackLayer({
               showRackCode={labelsEnabled && labelRevealPolicy.showRackCode}
               rackCodeProminence={labelRevealPolicy.rackCodeProminence}
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
+              disableStrokes={!overlaysEnabled}
             />
 
             {lod >= 1 && faceA && (
@@ -557,6 +566,7 @@ export function RackLayer({
                 faceTokenProminence={labelRevealPolicy.faceTokenProminence}
                 sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
                 rackRotationDeg={rack.rotationDeg}
+                disableStrokes={!overlaysEnabled}
               />
             )}
 
@@ -572,15 +582,19 @@ export function RackLayer({
                 publishedCellsByStructure={publishedCellsByStructure}
                 occupiedCellIds={occupiedCellIds}
                 cellRuntimeById={cellRuntimeById}
-                highlightedCellIds={highlightedCellIds}
+                highlightedCellIds={
+                  overlaysEnabled ? highlightedCellIds : EMPTY_CELL_IDS
+                }
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
                 isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}
-                selectedCellId={canvasSelectedCellId}
-                locateTargetCellId={temporaryLocateTargetCellId}
-                workflowSourceCellId={moveSourceCellId}
+                selectedCellId={overlaysEnabled ? canvasSelectedCellId : null}
+                locateTargetCellId={
+                  overlaysEnabled ? temporaryLocateTargetCellId : null
+                }
+                workflowSourceCellId={overlaysEnabled ? moveSourceCellId : null}
                 onCellClick={handleCellClick}
                 showCellNumbers={labelsEnabled && labelRevealPolicy.showCellNumbers}
                 cellNumberProminence={labelRevealPolicy.cellNumberProminence}
@@ -591,6 +605,6 @@ export function RackLayer({
           </Group>
         );
       })}
-    </Layer>
+    </RackLayerComponent>
   );
 }

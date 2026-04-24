@@ -20,6 +20,7 @@ function LayerRect({
   stroke,
   strokeWidth,
   dash,
+  diagnosticsRectRole,
   ownsFill,
   ownsStroke
 }: {
@@ -29,6 +30,7 @@ function LayerRect({
   stroke?: string;
   strokeWidth?: number;
   dash?: number[];
+  diagnosticsRectRole: string;
   ownsFill: boolean;
   ownsStroke: boolean;
 }) {
@@ -48,11 +50,16 @@ function LayerRect({
       strokeWidth={ownsStroke ? (strokeWidth ?? visualState.strokeWidth) : 0}
       dash={ownsStroke ? dash : undefined}
       opacity={visualState.opacity}
+      wosRectRole={diagnosticsRectRole}
     />
   );
 }
 
-export function CellSurfaceVisual({ geometry, visualState }: CellOverlaySharedProps) {
+export function CellSurfaceVisual({
+  geometry,
+  visualState,
+  disableStroke = false
+}: CellOverlaySharedProps & { disableStroke?: boolean }) {
   const pattern = visualState.surface.pattern;
   const dotsVisible =
     pattern?.kind === 'dots' &&
@@ -99,8 +106,9 @@ export function CellSurfaceVisual({ geometry, visualState }: CellOverlaySharedPr
         fill={visualState.surface.fill ?? undefined}
         stroke={visualState.surface.stroke ?? undefined}
         strokeWidth={visualState.surface.strokeWidth}
+        diagnosticsRectRole="cell-base"
         ownsFill={visualState.surface.fill !== null}
-        ownsStroke={visualState.surface.stroke !== null}
+        ownsStroke={!disableStroke && visualState.surface.stroke !== null}
       />
       {dotNodes}
     </Group>
@@ -129,6 +137,7 @@ export function CellTruthMarkerOverlay({ geometry, visualState }: CellOverlaySha
         listening={false}
         fill={marker.color}
         opacity={0.92}
+        wosRectRole="cell-truth-overlay"
       />
     );
   }
@@ -144,6 +153,7 @@ export function CellTruthMarkerOverlay({ geometry, visualState }: CellOverlaySha
       stroke={marker.color}
       strokeWidth={Math.max(1, Math.min(markerW, markerH) * 0.2)}
       opacity={0.82}
+      wosRectRole="cell-truth-overlay"
     />
   );
 }
@@ -155,7 +165,7 @@ type CellInteractionOverlayProps = CellOverlaySharedProps & {
 
 export function CellInteractionOverlay({
   geometry,
-  visualState,
+  visualState: _visualState,
   isClickable,
   onCellClick
 }: CellInteractionOverlayProps) {
@@ -169,6 +179,7 @@ export function CellInteractionOverlay({
       fillEnabled={false}
       strokeEnabled={false}
       opacity={0}
+      wosRectRole="cell-interaction"
       onClick={isClickable && onCellClick ? (event) => {
         event.cancelBubble = true;
         onCellClick({ x: event.evt.clientX, y: event.evt.clientY });
@@ -188,6 +199,7 @@ export function CellOutlineOverlay({ geometry, visualState }: CellOverlaySharedP
       stroke={outline.stroke ?? undefined}
       strokeWidth={outline.strokeWidth}
       dash={outline.dash}
+      diagnosticsRectRole="cell-outline-overlay"
       ownsFill={false}
       ownsStroke={outline.stroke !== null}
     />
@@ -216,6 +228,7 @@ export function CellHaloOverlay({ geometry, visualState }: CellOverlaySharedProp
       strokeScaleEnabled={!isLocateTargetHalo ? undefined : false}
       dash={halo.dash}
       opacity={1}
+      wosRectRole="cell-halo-overlay"
     />
   );
 }
@@ -241,6 +254,7 @@ export function CellBadgeOverlay({ geometry, visualState }: CellOverlaySharedPro
       strokeWidth={badge.strokeWidth}
       dash={badge.dash}
       opacity={1}
+      wosRectRole="cell-badge"
     />
   );
 }

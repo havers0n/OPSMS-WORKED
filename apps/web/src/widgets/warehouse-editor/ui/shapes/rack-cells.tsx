@@ -130,6 +130,7 @@ function FaceCells({
   const cullingEnabled =
     diagnosticsFlags.cells !== 'unculled' &&
     diagnosticsFlags.enableProductionCellCulling;
+  const cellOverlaysOff = diagnosticsFlags.cellOverlays === 'off';
 
   const sectionCells = orderedSections.map((sec, si) => {
     const secX = sectionOffsets[si];
@@ -239,6 +240,7 @@ function FaceCells({
           <CellSurfaceVisual
             geometry={cellGeometry}
             visualState={visualState}
+            disableStroke={cellOverlaysOff}
           />
           {diagnosticsFlags.cellOverlays === 'normal' && (
             <>
@@ -340,7 +342,8 @@ const DEFAULT_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   hitTest: 'normal',
   cells: 'normal',
   cellOverlays: 'normal',
-  enableProductionCellCulling: true
+  enableProductionCellCulling: true,
+  rackLayerRenderer: 'layer'
 };
 
 const DEFAULT_DIAGNOSTICS_VIEWPORT: DiagnosticsViewport = {

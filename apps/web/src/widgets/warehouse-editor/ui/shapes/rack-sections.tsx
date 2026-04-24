@@ -15,6 +15,7 @@ type Props = {
   showSectionNumbers: boolean;
   faceTokenProminence: LabelProminence;
   sectionNumberProminence: LabelProminence;
+  disableStrokes?: boolean;
 };
 
 const DIVIDER_STROKE = '#94a3b8';
@@ -38,7 +39,8 @@ export function RackSections({
   showFaceToken,
   showSectionNumbers,
   faceTokenProminence,
-  sectionNumberProminence
+  sectionNumberProminence,
+  disableStrokes = false
 }: Props) {
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const divider = isSelected ? DIVIDER_STROKE_SEL : DIVIDER_STROKE;
@@ -53,7 +55,7 @@ export function RackSections({
 
   return (
     <Group listening={false} opacity={isPassive && !isSelected ? 0.45 : 1}>
-      {isSelected && faceA.sections.map((sec, i) => {
+      {isSelected && !disableStrokes && faceA.sections.map((sec, i) => {
         const x0 = faceAOffsets[i];
         const x1 = faceAOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -68,11 +70,12 @@ export function RackSections({
             height={Math.max(1, faceABottom - 8)}
             fill={SECTION_FILL_A_SEL}
             cornerRadius={4}
+            wosRectRole="rack-section"
           />
         );
       })}
 
-      {faceAOffsets.slice(1, -1).map((x, i) => (
+      {!disableStrokes && faceAOffsets.slice(1, -1).map((x, i) => (
         <Line
           key={`sa-${i}`}
           points={[x, 4, x, faceABottom - 4]}
@@ -123,7 +126,7 @@ export function RackSections({
         );
       })}
 
-      {isSelected && isPaired && faceB && faceB.sections.map((sec, i) => {
+      {isSelected && !disableStrokes && isPaired && faceB && faceB.sections.map((sec, i) => {
         const x0 = faceBOffsets[i];
         const x1 = faceBOffsets[i + 1];
         const sectionW = x1 - x0;
@@ -138,11 +141,12 @@ export function RackSections({
             height={Math.max(1, height - faceBTop - 8)}
             fill={SECTION_FILL_B_SEL}
             cornerRadius={4}
+            wosRectRole="rack-section"
           />
         );
       })}
 
-      {isPaired && faceBOffsets.slice(1, -1).map((x, i) => (
+      {isPaired && !disableStrokes && faceBOffsets.slice(1, -1).map((x, i) => (
         <Line
           key={`sb-${i}`}
           points={[x, faceBTop + 4, x, height - 4]}
