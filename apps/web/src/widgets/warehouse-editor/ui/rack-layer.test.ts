@@ -1,7 +1,12 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import { buildCellStructureKey, type Cell, type Rack, type RackFace } from '@wos/domain';
+import {
+  buildCellStructureKey,
+  type Cell,
+  type Rack,
+  type RackFace
+} from '@wos/domain';
 import { RackLayer } from './rack-layer';
 
 vi.mock('react-konva', () => ({
@@ -18,7 +23,8 @@ vi.mock('react-konva', () => ({
 }));
 
 vi.mock('./shapes/rack-cells', () => ({
-  RackCells: (props: Record<string, unknown>) => createElement('RackCells', props)
+  RackCells: (props: Record<string, unknown>) =>
+    createElement('RackCells', props)
 }));
 
 vi.mock('./shapes/rack-body', () => ({
@@ -26,7 +32,8 @@ vi.mock('./shapes/rack-body', () => ({
 }));
 
 vi.mock('./shapes/rack-sections', () => ({
-  RackSections: (props: Record<string, unknown>) => createElement('RackSections', props)
+  RackSections: (props: Record<string, unknown>) =>
+    createElement('RackSections', props)
 }));
 
 function createFace(id: string): RackFace {
@@ -114,69 +121,80 @@ function renderRackLayer(params: {
   onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
   onV2StorageRackSelect?: (params: { rackId: string }) => void;
 }) {
-  const racks = params.racks ?? [createRack('rack-1', 0), createRack('rack-2', 10)];
-  const rackLookup = Object.fromEntries(racks.map((rack) => [rack.id, rack])) as Record<string, Rack>;
+  const racks = params.racks ?? [
+    createRack('rack-1', 0),
+    createRack('rack-2', 10)
+  ];
+  const rackLookup = Object.fromEntries(
+    racks.map((rack) => [rack.id, rack])
+  ) as Record<string, Rack>;
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
       createElement(RackLayer, {
-      activeCellRackId: null,
-      canSelectCells: params.canSelectCells ?? false,
-      canSelectRack: params.canSelectRack ?? true,
-      canvasSelectedCellId: null,
-      cellRuntimeById: new Map(),
-      clearHighlightedCellIds: params.clearHighlightedCellIds ?? (() => undefined),
-      diagnosticsFlags: {
-        labels: 'normal',
-        hitTest: 'normal',
-        cells: 'normal',
-        cellOverlays: 'normal'
-      },
-      diagnosticsViewport: {
-        canvasOffset: { x: 0, y: 0 },
-        viewport: { width: 1200, height: 800 },
-        zoom: params.zoom ?? 1.5
-      },
-      highlightedCellIds: new Set<string>(),
-      hoveredRackId: null,
-      isLayoutEditable: true,
-      isLayoutMode: params.isLayoutMode ?? true,
-      isPlacing: false,
-      isRackPassiveScopeActive: false,
-      isStorageMode: params.isStorageMode ?? false,
-      isViewMode: false,
-      isWorkflowScope: params.isWorkflowScope ?? false,
-      lod: params.lod ?? 2,
-      zoom: params.zoom ?? 1.5,
-      minRackDistance: 0,
-      moveSourceCellId: params.moveSourceCellId ?? null,
-      moveSourceRackId: params.moveSourceRackId ?? null,
-      temporaryLocateTargetCellId: params.temporaryLocateTargetCellId ?? null,
-  occupiedCellIds: new Set<string>(),
-      publishedCellsByStructure: params.publishedCellsByStructure ?? new Map(),
-      primarySelectedRackId: params.primarySelectedRackId,
-      rackLookup,
-      racks,
-      selectedRackActiveLevel: params.selectedRackActiveLevel ?? 0,
-      selectedRackIds: params.selectedRackIds,
-      setHighlightedCellIds: () => undefined,
-      setHoveredRackId: () => undefined,
-      setPlacementMoveTargetCellId: params.setPlacementMoveTargetCellId ?? (() => undefined),
-      setSelectedCellId: params.setSelectedCellId ?? (() => undefined),
-      setSelectedRackId: () => undefined,
-      setSelectedRackIds: params.setSelectedRackIds ?? (() => undefined),
-      setSnapGuides: () => undefined,
-      toggleRackSelection: () => undefined,
-      updateRackPosition: () => undefined,
-      onV2StorageCellSelect: params.onV2StorageCellSelect,
-      onV2StorageRackSelect: params.onV2StorageRackSelect
+        activeCellRackId: null,
+        canSelectCells: params.canSelectCells ?? false,
+        canSelectRack: params.canSelectRack ?? true,
+        canvasSelectedCellId: null,
+        cellRuntimeById: new Map(),
+        clearHighlightedCellIds:
+          params.clearHighlightedCellIds ?? (() => undefined),
+        diagnosticsFlags: {
+          labels: 'normal',
+          hitTest: 'normal',
+          cells: 'normal',
+          cellOverlays: 'normal',
+          enableProductionCellCulling: true
+        },
+        diagnosticsViewport: {
+          canvasOffset: { x: 0, y: 0 },
+          viewport: { width: 1200, height: 800 },
+          zoom: params.zoom ?? 1.5
+        },
+        highlightedCellIds: new Set<string>(),
+        hoveredRackId: null,
+        isLayoutEditable: true,
+        isLayoutMode: params.isLayoutMode ?? true,
+        isPlacing: false,
+        isRackPassiveScopeActive: false,
+        isStorageMode: params.isStorageMode ?? false,
+        isViewMode: false,
+        isWorkflowScope: params.isWorkflowScope ?? false,
+        lod: params.lod ?? 2,
+        zoom: params.zoom ?? 1.5,
+        minRackDistance: 0,
+        moveSourceCellId: params.moveSourceCellId ?? null,
+        moveSourceRackId: params.moveSourceRackId ?? null,
+        temporaryLocateTargetCellId: params.temporaryLocateTargetCellId ?? null,
+        occupiedCellIds: new Set<string>(),
+        publishedCellsByStructure:
+          params.publishedCellsByStructure ?? new Map(),
+        primarySelectedRackId: params.primarySelectedRackId,
+        rackLookup,
+        racks,
+        selectedRackActiveLevel: params.selectedRackActiveLevel ?? 0,
+        selectedRackIds: params.selectedRackIds,
+        setHighlightedCellIds: () => undefined,
+        setHoveredRackId: () => undefined,
+        setPlacementMoveTargetCellId:
+          params.setPlacementMoveTargetCellId ?? (() => undefined),
+        setSelectedCellId: params.setSelectedCellId ?? (() => undefined),
+        setSelectedRackId: () => undefined,
+        setSelectedRackIds: params.setSelectedRackIds ?? (() => undefined),
+        setSnapGuides: () => undefined,
+        toggleRackSelection: () => undefined,
+        updateRackPosition: () => undefined,
+        onV2StorageCellSelect: params.onV2StorageCellSelect,
+        onV2StorageRackSelect: params.onV2StorageRackSelect
       })
     );
   });
   return renderer;
 }
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('RackLayer high-LOD cell mounting', () => {
   it('does not mount RackSections when section rendering is inactive (lod=0)', () => {
@@ -185,7 +203,9 @@ describe('RackLayer high-LOD cell mounting', () => {
       primarySelectedRackId: 'rack-1',
       lod: 0
     });
-    const sections = renderer.root.findAll((node) => String(node.type) === 'RackSections');
+    const sections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    );
     expect(sections).toHaveLength(0);
   });
 
@@ -194,7 +214,9 @@ describe('RackLayer high-LOD cell mounting', () => {
       selectedRackIds: [],
       primarySelectedRackId: null
     });
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.activeLevelIndex).toBe(0);
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
@@ -207,7 +229,9 @@ describe('RackLayer high-LOD cell mounting', () => {
       primarySelectedRackId: 'rack-1',
       selectedRackActiveLevel: 1
     });
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.rackId).toBe('rack-1');
     expect(rackCells[0]?.props.activeLevelIndex).toBe(1);
@@ -221,7 +245,9 @@ describe('RackLayer high-LOD cell mounting', () => {
       primarySelectedRackId: 'rack-1',
       selectedRackActiveLevel: 2
     });
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.rackId).toBe('rack-1');
     expect(rackCells[0]?.props.activeLevelIndex).toBe(2);
@@ -235,7 +261,9 @@ describe('RackLayer high-LOD cell mounting', () => {
       primarySelectedRackId: 'rack-1',
       selectedRackActiveLevel: 99
     });
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.rackId).toBe('rack-1');
     expect(rackCells[0]?.props.activeLevelIndex).toBe(99);
@@ -259,7 +287,9 @@ describe('RackLayer high-LOD cell mounting', () => {
       selectedRackActiveLevel: 0,
       racks: [rackA, rackB]
     });
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     expect(rackCells).toHaveLength(2);
     expect(rackCells[0]?.props.rackId).toBe('rack-1');
     expect(rackCells[0]?.props.semanticLevels).toEqual([1, 3]);
@@ -275,12 +305,18 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
       zoom: 0.8
     });
 
-    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
     expect(rackBody.props.showRackCode).toBe(true);
     expect(rackBody.props.rackCodeProminence).toBe('dominant');
     expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
-    expect(renderer.root.findAll((node) => String(node.type) === 'RackSections')).toHaveLength(0);
-    expect(renderer.root.findAll((node) => String(node.type) === 'RackCells')).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RackSections')
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RackCells')
+    ).toHaveLength(0);
   });
 
   it('maps early lod=1 to stage1: rack demoted + face only', () => {
@@ -291,13 +327,19 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
       zoom: 0.95
     });
 
-    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
-    const rackSections = renderer.root.findAll((node) => String(node.type) === 'RackSections')[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
     expect(rackBody.props.rackCodeProminence).toBe('secondary');
     expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
     expect(rackSections.props.showFaceToken).toBe(true);
     expect(rackSections.props.showSectionNumbers).toBe(false);
-    expect(renderer.root.findAll((node) => String(node.type) === 'RackCells')).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RackCells')
+    ).toHaveLength(0);
   });
 
   it('maps late lod=1 to stage2: section dominant, rack/face demoted, no cell numbers', () => {
@@ -308,15 +350,21 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
       zoom: 1.2
     });
 
-    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
-    const rackSections = renderer.root.findAll((node) => String(node.type) === 'RackSections')[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
     expect(rackBody.props.rackCodeProminence).toBe('background');
     expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
     expect(rackSections.props.showFaceToken).toBe(true);
     expect(rackSections.props.faceTokenProminence).toBe('secondary');
     expect(rackSections.props.showSectionNumbers).toBe(true);
     expect(rackSections.props.sectionNumberProminence).toBe('dominant');
-    expect(renderer.root.findAll((node) => String(node.type) === 'RackCells')).toHaveLength(0);
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RackCells')
+    ).toHaveLength(0);
   });
 
   it('maps lod=2 to stage3: cell dominant, section hidden, rack/face quiet', () => {
@@ -327,9 +375,15 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
       zoom: 1.5
     });
 
-    const rackBody = renderer.root.findAll((node) => String(node.type) === 'RackBody')[0];
-    const rackSections = renderer.root.findAll((node) => String(node.type) === 'RackSections')[0];
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells')[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
     expect(rackBody.props.rackCodeProminence).toBe('background');
     expect(rackBody.props.rackCodePlacement).toBe('lower-left-mid');
     expect(rackSections.props.showFaceToken).toBe(true);
@@ -359,7 +413,9 @@ describe('RackLayer storage interaction depth', () => {
       clearHighlightedCellIds
     });
 
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     act(() => {
       rackCells[0].props.onCellClick('cell-1', { x: 10, y: 20 });
     });
@@ -386,7 +442,9 @@ describe('RackLayer storage interaction depth', () => {
     });
 
     const rackGroups = renderer.root.findAll(
-      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+      (node) =>
+        String(node.type) === 'Group' &&
+        typeof node.props.onClick === 'function'
     );
 
     expect(rackGroups.length).toBeGreaterThan(0);
@@ -419,7 +477,9 @@ describe('RackLayer storage interaction depth', () => {
       setSelectedCellId
     });
 
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     act(() => {
       rackCells[0].props.onCellClick('cell-9', { x: 0, y: 0 });
     });
@@ -437,7 +497,9 @@ describe('RackLayer storage interaction depth', () => {
       moveSourceRackId: 'rack-1'
     });
 
-    const rackCells = renderer.root.findAll((node) => String(node.type) === 'RackCells');
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
     expect(rackCells[0]?.props.locateTargetCellId).toBe('cell-target');
     expect(rackCells[0]?.props.workflowSourceCellId).toBe('cell-source');
   });
@@ -451,7 +513,9 @@ describe('RackLayer storage interaction depth', () => {
       isStorageMode: true
     });
 
-    const sectionNodes = renderer.root.findAll((node) => String(node.type) === 'RackSections');
+    const sectionNodes = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    );
     expect(sectionNodes.length).toBeGreaterThan(0);
     expect(sectionNodes[0].props.onClick).toBeUndefined();
     expect(sectionNodes[0].props.onTap).toBeUndefined();
@@ -473,7 +537,9 @@ describe('RackLayer storage interaction depth', () => {
     });
 
     const rackGroups = renderer.root.findAll(
-      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+      (node) =>
+        String(node.type) === 'Group' &&
+        typeof node.props.onClick === 'function'
     );
 
     act(() => {
@@ -510,13 +576,13 @@ describe('RackLayer storage interaction depth', () => {
       racks: [rack],
       onV2StorageCellSelect,
       onV2StorageRackSelect,
-      publishedCellsByStructure: new Map([
-        [cellKey, { id: 'cell-1' } as Cell]
-      ])
+      publishedCellsByStructure: new Map([[cellKey, { id: 'cell-1' } as Cell]])
     });
 
     const rackGroups = renderer.root.findAll(
-      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+      (node) =>
+        String(node.type) === 'Group' &&
+        typeof node.props.onClick === 'function'
     );
 
     act(() => {
@@ -527,7 +593,10 @@ describe('RackLayer storage interaction depth', () => {
       });
     });
 
-    expect(onV2StorageCellSelect).toHaveBeenCalledWith({ cellId: 'cell-1', rackId: 'rack-1' });
+    expect(onV2StorageCellSelect).toHaveBeenCalledWith({
+      cellId: 'cell-1',
+      rackId: 'rack-1'
+    });
     expect(onV2StorageRackSelect).not.toHaveBeenCalled();
   });
 
@@ -549,7 +618,9 @@ describe('RackLayer storage interaction depth', () => {
     });
 
     const rackGroups = renderer.root.findAll(
-      (node) => String(node.type) === 'Group' && typeof node.props.onClick === 'function'
+      (node) =>
+        String(node.type) === 'Group' &&
+        typeof node.props.onClick === 'function'
     );
 
     act(() => {

@@ -39,7 +39,10 @@ import {
   useMinRackDistance,
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
-import type { EditorSelection, RackSelectionFocus } from '@/widgets/warehouse-editor/model/editor-types';
+import type {
+  EditorSelection,
+  RackSelectionFocus
+} from '@/widgets/warehouse-editor/model/editor-types';
 import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import {
@@ -48,7 +51,7 @@ import {
   useStorageFocusSelectedRackId,
   useStorageFocusSelectCell,
   useStorageFocusSelectRack,
-  useStorageFocusHandleEmptyCanvasClick,
+  useStorageFocusHandleEmptyCanvasClick
 } from '@/widgets/warehouse-editor/model/v2/v2-selectors';
 import {
   collectRackSemanticLevels,
@@ -82,7 +85,7 @@ export function EditorCanvas({
   workspace,
   onAddRack: _onAddRack,
   onOpenInspector,
-  isStorageV2 = false,
+  isStorageV2 = false
 }: {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
@@ -175,7 +178,8 @@ export function EditorCanvas({
   // Only wired into the canvas when isStorageV2 && isStorageMode (see isStorageV2Active).
   const storageFocusSelectCell = useStorageFocusSelectCell();
   const storageFocusSelectRack = useStorageFocusSelectRack();
-  const storageFocusHandleEmptyCanvasClick = useStorageFocusHandleEmptyCanvasClick();
+  const storageFocusHandleEmptyCanvasClick =
+    useStorageFocusHandleEmptyCanvasClick();
 
   const isViewMode = viewMode === 'view';
   // In View and Storage mode the published rack tree must be
@@ -186,9 +190,10 @@ export function EditorCanvas({
   // permanent identity mismatch when the draft layout is used instead.
   // Fall back to the draft tree when no published version exists; interaction
   // rights still come from viewMode, not from the selected data source.
-  const placementLayout = isViewMode || viewMode === 'storage'
-    ? (workspace?.latestPublished ?? workspace?.activeDraft ?? null)
-    : null;
+  const placementLayout =
+    isViewMode || viewMode === 'storage'
+      ? (workspace?.latestPublished ?? workspace?.activeDraft ?? null)
+      : null;
   const racks = useMemo(() => {
     const layout = placementLayout ?? layoutDraft;
     return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
@@ -196,38 +201,44 @@ export function EditorCanvas({
 
   const stageRef = useRef<Konva.Stage | null>(null);
 
-  const [snapGuides, setSnapGuides] = useState<Array<{ type: 'x' | 'y'; position: number }>>([]);
+  const [snapGuides, setSnapGuides] = useState<
+    Array<{ type: 'x' | 'y'; position: number }>
+  >([]);
 
-  const {
-    containerRef,
-    viewport,
-    canvasOffset,
-    isPanning,
-    handleZoom
-  } = useCanvasViewportController({
-    autoFitRacks: racks,
-    setCanvasZoom,
-    viewMode,
-    zoom
-  });
-  const visibleRacks = useMemo(
-    () => racks.filter((rack) => isRackInViewport(rack, viewport, canvasOffset, zoom)),
-    [racks, viewport, canvasOffset, zoom]
-  );
-  const effectiveSelectedCellId = isStorageV2Active ? storageFocusSelectedCellId : selectedCellId;
-  const effectiveSelectedRackId = isStorageV2Active ? storageFocusSelectedRackId : selectedRackId;
+  const { containerRef, viewport, canvasOffset, isPanning, handleZoom } =
+    useCanvasViewportController({
+      autoFitRacks: racks,
+      setCanvasZoom,
+      viewMode,
+      zoom
+    });
+  const effectiveSelectedCellId = isStorageV2Active
+    ? storageFocusSelectedCellId
+    : selectedCellId;
+  const effectiveSelectedRackId = isStorageV2Active
+    ? storageFocusSelectedRackId
+    : selectedRackId;
   const effectiveSelectedRackIds = isStorageV2Active
-    ? (storageFocusSelectedRackId ? [storageFocusSelectedRackId] : [])
+    ? storageFocusSelectedRackId
+      ? [storageFocusSelectedRackId]
+      : []
     : selectedRackIds;
   const effectiveSelectedRackFocus = isStorageV2Active
     ? { type: 'body' as const }
     : selectedRackFocus;
   const effectiveSelection = isStorageV2Active
-    ? (storageFocusSelectedCellId
-      ? ({ type: 'cell', cellId: storageFocusSelectedCellId } as EditorSelection)
+    ? storageFocusSelectedCellId
+      ? ({
+          type: 'cell',
+          cellId: storageFocusSelectedCellId
+        } as EditorSelection)
       : storageFocusSelectedRackId
-        ? ({ type: 'rack', rackIds: [storageFocusSelectedRackId], focus: { type: 'body' } } as EditorSelection)
-        : NONE_SELECTION)
+        ? ({
+            type: 'rack',
+            rackIds: [storageFocusSelectedRackId],
+            focus: { type: 'body' }
+          } as EditorSelection)
+        : NONE_SELECTION
     : selection;
 
   const scene = useCanvasSceneModel({
@@ -298,7 +309,10 @@ export function EditorCanvas({
     ? ({ rackId }: { rackId: string }) => {
         storageFocusSelectRack({
           rackId,
-          level: resolveInitialRackSemanticLevel(publishedCellsById.values(), rackId)
+          level: resolveInitialRackSemanticLevel(
+            publishedCellsById.values(),
+            rackId
+          )
         });
       }
     : undefined;
@@ -306,15 +320,15 @@ export function EditorCanvas({
   const primarySelectedRackId = isStorageV2Active
     ? storageFocusSelectedRackId
     : viewMode === 'storage'
-      ? (selection.type === 'rack'
+      ? selection.type === 'rack'
         ? (selection.rackIds[0] ?? null)
         : selection.type === 'cell'
           ? (publishedCellsById.get(selection.cellId)?.rackId ?? null)
           : selection.type === 'container'
-            ? (selection.sourceCellId
+            ? selection.sourceCellId
               ? (publishedCellsById.get(selection.sourceCellId)?.rackId ?? null)
-              : null)
-            : null)
+              : null
+            : null
       : selectedRackId;
   const selectedRackActiveLevelIndex = useMemo(() => {
     if (!isStorageV2Active) return selectedRackActiveLevel;
@@ -326,7 +340,10 @@ export function EditorCanvas({
     if (!rack) return null;
 
     const semanticLevels = collectRackSemanticLevels(rack);
-    const idx = resolveIndexForSemanticLevel(semanticLevels, storageFocusActiveLevel);
+    const idx = resolveIndexForSemanticLevel(
+      semanticLevels,
+      storageFocusActiveLevel
+    );
     return idx;
   }, [
     isStorageV2Active,
@@ -358,6 +375,47 @@ export function EditorCanvas({
     isPlacementMoveMode && activeStorageWorkflow?.kind === 'move-container'
       ? activeStorageWorkflow.targetCellId
       : null;
+  const forcedVisibleRackIds = useMemo(() => {
+    const rackIds = new Set<string>();
+    for (const rackId of effectiveSelectedRackIds) {
+      rackIds.add(rackId);
+    }
+    if (primarySelectedRackId) rackIds.add(primarySelectedRackId);
+    if (activeCellRackId) rackIds.add(activeCellRackId);
+    if (moveSourceRackId) rackIds.add(moveSourceRackId);
+
+    for (const cellId of [
+      effectiveSelectedCellId,
+      canvasSelectedCellId,
+      temporaryLocateTargetCellId,
+      moveSourceCellId
+    ]) {
+      if (!cellId) continue;
+      const rackId = publishedCellsById.get(cellId)?.rackId ?? null;
+      if (rackId) rackIds.add(rackId);
+    }
+
+    return rackIds;
+  }, [
+    activeCellRackId,
+    canvasSelectedCellId,
+    effectiveSelectedCellId,
+    effectiveSelectedRackIds,
+    moveSourceCellId,
+    moveSourceRackId,
+    primarySelectedRackId,
+    publishedCellsById,
+    temporaryLocateTargetCellId
+  ]);
+  const visibleRacks = useMemo(
+    () =>
+      racks.filter(
+        (rack) =>
+          forcedVisibleRackIds.has(rack.id) ||
+          isRackInViewport(rack, viewport, canvasOffset, zoom)
+      ),
+    [canvasOffset, forcedVisibleRackIds, racks, viewport, zoom]
+  );
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
@@ -408,7 +466,9 @@ export function EditorCanvas({
     stageRef,
     viewport,
     // V2: replace clearSelection with focus-store handler in storage V2 path
-    onStorageEmptyClick: isStorageV2Active ? storageFocusHandleEmptyCanvasClick : undefined,
+    onStorageEmptyClick: isStorageV2Active
+      ? storageFocusHandleEmptyCanvasClick
+      : undefined
   });
 
   useCanvasKeyboardShortcuts({
@@ -444,7 +504,14 @@ export function EditorCanvas({
 
   const gridLineData = useMemo(() => {
     if (!viewport.width || !viewport.height) {
-      const empty = { v: [] as number[], h: [] as number[], startX: 0, endX: 0, startY: 0, endY: 0 };
+      const empty = {
+        v: [] as number[],
+        h: [] as number[],
+        startX: 0,
+        endX: 0,
+        startY: 0,
+        endY: 0
+      };
       return { major: empty, minor: null as typeof empty | null };
     }
 
@@ -495,7 +562,10 @@ export function EditorCanvas({
       }}
     >
       {!layoutDraft && (
-        <div className="flex h-full items-center justify-center text-sm" style={{ color: 'var(--text-muted)' }}>
+        <div
+          className="flex h-full items-center justify-center text-sm"
+          style={{ color: 'var(--text-muted)' }}
+        >
           Loading layout...
         </div>
       )}
@@ -516,7 +586,9 @@ export function EditorCanvas({
             shouldShowLayoutWallBar={shouldShowLayoutWallBar}
             // In Storage V2, inspector ownership lives in StorageInspectorV2.
             // Prevent dead "Inspect" affordance wiring from the legacy path.
-            shouldShowStorageCellBar={isStorageV2Active ? false : shouldShowStorageCellBar}
+            shouldShowStorageCellBar={
+              isStorageV2Active ? false : shouldShowStorageCellBar
+            }
             selectedRack={selectedRack}
             selectedRackAnchorRect={selectedRackAnchorRect}
             selectedRackSideFocus={selectedRackSideFocus}
@@ -557,32 +629,61 @@ export function EditorCanvas({
             >
               <Layer listening={false}>
                 {/* Minor grid: 1 m lines — visible when zoom >= MINOR_GRID_ZOOM_THRESHOLD */}
-                {gridLineData.minor && gridLineData.minor.v.map((x) => (
-                  <Line
-                    key={`mn-v-${x}`}
-                    points={[x, gridLineData.minor!.startY, x, gridLineData.minor!.endY]}
-                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMinor}
-                    strokeWidth={1}
-                    strokeScaleEnabled={false}
-                    opacity={0.6}
-                  />
-                ))}
-                {gridLineData.minor && gridLineData.minor.h.map((y) => (
-                  <Line
-                    key={`mn-h-${y}`}
-                    points={[gridLineData.minor!.startX, y, gridLineData.minor!.endX, y]}
-                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMinor}
-                    strokeWidth={1}
-                    strokeScaleEnabled={false}
-                    opacity={0.6}
-                  />
-                ))}
+                {gridLineData.minor &&
+                  gridLineData.minor.v.map((x) => (
+                    <Line
+                      key={`mn-v-${x}`}
+                      points={[
+                        x,
+                        gridLineData.minor!.startY,
+                        x,
+                        gridLineData.minor!.endY
+                      ]}
+                      stroke={
+                        isPlacing
+                          ? canvasChromeTokens.gridLocate
+                          : canvasChromeTokens.gridMinor
+                      }
+                      strokeWidth={1}
+                      strokeScaleEnabled={false}
+                      opacity={0.6}
+                    />
+                  ))}
+                {gridLineData.minor &&
+                  gridLineData.minor.h.map((y) => (
+                    <Line
+                      key={`mn-h-${y}`}
+                      points={[
+                        gridLineData.minor!.startX,
+                        y,
+                        gridLineData.minor!.endX,
+                        y
+                      ]}
+                      stroke={
+                        isPlacing
+                          ? canvasChromeTokens.gridLocate
+                          : canvasChromeTokens.gridMinor
+                      }
+                      strokeWidth={1}
+                      strokeScaleEnabled={false}
+                      opacity={0.6}
+                    />
+                  ))}
                 {/* Major grid: 5 m lines — always visible */}
                 {gridLineData.major.v.map((x) => (
                   <Line
                     key={`mj-v-${x}`}
-                    points={[x, gridLineData.major.startY, x, gridLineData.major.endY]}
-                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMajor}
+                    points={[
+                      x,
+                      gridLineData.major.startY,
+                      x,
+                      gridLineData.major.endY
+                    ]}
+                    stroke={
+                      isPlacing
+                        ? canvasChromeTokens.gridLocate
+                        : canvasChromeTokens.gridMajor
+                    }
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     opacity={0.7}
@@ -591,16 +692,37 @@ export function EditorCanvas({
                 {gridLineData.major.h.map((y) => (
                   <Line
                     key={`mj-h-${y}`}
-                    points={[gridLineData.major.startX, y, gridLineData.major.endX, y]}
-                    stroke={isPlacing ? canvasChromeTokens.gridLocate : canvasChromeTokens.gridMajor}
+                    points={[
+                      gridLineData.major.startX,
+                      y,
+                      gridLineData.major.endX,
+                      y
+                    ]}
+                    stroke={
+                      isPlacing
+                        ? canvasChromeTokens.gridLocate
+                        : canvasChromeTokens.gridMajor
+                    }
                     strokeWidth={1}
                     strokeScaleEnabled={false}
                     opacity={0.7}
                   />
                 ))}
                 {/* Origin marker at world (0, 0) */}
-                <Line points={[-14, 0, 14, 0]} stroke={canvasChromeTokens.originStroke} strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
-                <Line points={[0, -14, 0, 14]} stroke={canvasChromeTokens.originStroke} strokeWidth={1.5} strokeScaleEnabled={false} opacity={0.8} />
+                <Line
+                  points={[-14, 0, 14, 0]}
+                  stroke={canvasChromeTokens.originStroke}
+                  strokeWidth={1.5}
+                  strokeScaleEnabled={false}
+                  opacity={0.8}
+                />
+                <Line
+                  points={[0, -14, 0, 14]}
+                  stroke={canvasChromeTokens.originStroke}
+                  strokeWidth={1.5}
+                  strokeScaleEnabled={false}
+                  opacity={0.8}
+                />
               </Layer>
 
               <ZoneLayer
@@ -669,7 +791,11 @@ export function EditorCanvas({
                 selectedRackActiveLevel={selectedRackActiveLevelIndex}
                 selectedRackIds={effectiveSelectedRackIds}
                 setHighlightedCellIds={setHighlightedCellIds}
-                setHoveredRackId={isDiagnosticsHitTestDisabled ? () => undefined : setHoveredRackId}
+                setHoveredRackId={
+                  isDiagnosticsHitTestDisabled
+                    ? () => undefined
+                    : setHoveredRackId
+                }
                 setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}
                 setSelectedCellId={setSelectedCellId}
                 setSelectedRackId={setSelectedRackId}

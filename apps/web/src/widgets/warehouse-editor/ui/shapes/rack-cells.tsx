@@ -1,7 +1,12 @@
 import { Group } from 'react-konva';
 import { buildCellStructureKey, type Cell, type RackFace } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
-import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  getSectionWidths,
+  shouldRenderCanvasCell,
+  type CanvasRackGeometry,
+  type CanvasViewport
+} from '@/entities/layout-version/lib/canvas-geometry';
 import {
   collectFaceSemanticLevels,
   resolveSemanticLevelForIndex
@@ -20,13 +25,18 @@ import {
 } from './rack-cell-overlays';
 import type { LabelProminence } from './rack-label-reveal-policy';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
-import { CellInteriorSlotLabel, FocusedCellAddressOverlay } from './rack-label-overlays';
+import {
+  CellInteriorSlotLabel,
+  FocusedCellAddressOverlay
+} from './rack-label-overlays';
 import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
-import type { CanvasDiagnosticsFlags } from '../canvas-diagnostics';
+import {
+  recordCanvasCullingMetrics,
+  type CanvasDiagnosticsFlags
+} from '../canvas-diagnostics';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
-const VISIBLE_CELL_OVERSCAN_PX = 160;
 
 type FaceProps = {
   face: RackFace;
@@ -98,153 +108,184 @@ function FaceCells({
   rackGeometry,
   onCellClick
 }: FaceProps) {
-  if (!face.sections.length) return null;
   const isRtl = face.slotNumberingDirection === 'rtl';
   const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
   const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
   const focusedAddressLabels: FocusedAddressLabel[] = [];
+  let cellsTotal = 0;
+  let cellsRendered = 0;
+  const metricSourceId = `${rackId}:${face.id}`;
 
   const inset = 4;
   const cellH = bandH - inset * 2;
-  if (cellH < MIN_CELL_H) return null;
+  if (!face.sections.length || cellH < MIN_CELL_H) {
+    recordCanvasCullingMetrics(metricSourceId, {
+      cellsTotal: 0,
+      cellsRendered: 0
+    });
+    return null;
+  }
+
+  const cullingEnabled =
+    diagnosticsFlags.cells !== 'unculled' &&
+    diagnosticsFlags.enableProductionCellCulling;
+
+  const sectionCells = orderedSections.map((sec, si) => {
+    const secX = sectionOffsets[si];
+    const secW = sectionOffsets[si + 1] - secX;
+    if (secW < MIN_CELL_W * 2) return null;
+
+    const semanticLevel = resolveSemanticLevelForIndex(
+      semanticLevels,
+      activeLevelIndex
+    );
+    const level =
+      semanticLevel === null
+        ? null
+        : (sec.levels.find(
+            (sectionLevel) => sectionLevel.ordinal === semanticLevel
+          ) ?? null);
+    if (!level) return null;
+    const slotCount = level.slotCount;
+    if (!slotCount) return null;
+
+    const slotW = secW / slotCount;
+    if (slotW < MIN_CELL_W) return null;
+    if (cellH < MIN_CELL_H) return null;
+
+    return Array.from({ length: slotCount }, (_, slotIndex) => {
+      const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
+      const cell = publishedCellsByStructure.get(
+        buildCellStructureKey({
+          rackId,
+          rackFaceId: face.id,
+          rackSectionId: sec.id,
+          rackLevelId: level.id,
+          slotNo: slotLabel
+        })
+      );
+      const cellId = cell?.id ?? null;
+      const isSelected = selectedCellId === cellId;
+      const isFocused = isSelected && showFocusedFullAddress;
+      const isLocateTarget =
+        locateTargetCellId !== null && locateTargetCellId === cellId;
+      const isWorkflowSource =
+        workflowSourceCellId !== null && workflowSourceCellId === cellId;
+      const isSearchHit = cellId !== null && highlightedCellIds.has(cellId);
+      const shouldRevealAddress =
+        showFocusedFullAddress &&
+        shouldShowFocusedFullAddress({
+          isSelected,
+          isHighlighted: isSearchHit,
+          isWorkflowSource
+        });
+      const cellX = secX + slotIndex * slotW;
+      const cellY = bandY + inset;
+      const cellW = slotW - 1;
+      const cellGeometry = {
+        x: cellX + 0.5,
+        y: cellY + 0.5,
+        width: Math.max(1, cellW),
+        height: Math.max(1, cellH - 1)
+      };
+      cellsTotal += 1;
+      if (
+        cullingEnabled &&
+        !shouldRenderCanvasCell({
+          cellGeometry,
+          canvasOffset: diagnosticsViewport.canvasOffset,
+          forceVisible: isSelected || isLocateTarget || isWorkflowSource,
+          rackGeometry,
+          rackRotationDeg,
+          viewport: diagnosticsViewport.viewport,
+          zoom: diagnosticsViewport.zoom
+        })
+      ) {
+        return null;
+      }
+
+      cellsRendered += 1;
+      const addressText = cell?.address?.raw ?? null;
+      const runtime = cellId ? cellRuntimeById.get(cellId) : null;
+      const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
+      const visualState = resolveCellVisualState(
+        {
+          isInteractive,
+          isWorkflowScope,
+          isRackPassive,
+          isRackSelected,
+          hasCellIdentity: cellId !== null,
+          isSelected,
+          isFocused,
+          isLocateTarget,
+          isWorkflowSource,
+          isSearchHit,
+          isOccupiedByFallback: isOccupied,
+          runtimeStatus: runtime?.status ?? null
+        },
+        visualPalette
+      );
+      if (shouldRevealAddress && addressText) {
+        focusedAddressLabels.push({
+          key: `${sec.id}-${level.id}-slot-${slotLabel}`,
+          addressText,
+          geometry: cellGeometry
+        });
+      }
+
+      return (
+        <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
+          <CellSurfaceVisual
+            geometry={cellGeometry}
+            visualState={visualState}
+          />
+          {diagnosticsFlags.cellOverlays === 'normal' && (
+            <>
+              <CellTruthMarkerOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+              />
+              <CellOutlineOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+              />
+              <CellHaloOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+              />
+              <CellBadgeOverlay
+                geometry={cellGeometry}
+                visualState={visualState}
+              />
+            </>
+          )}
+          <CellInteractionOverlay
+            geometry={cellGeometry}
+            visualState={visualState}
+            isClickable={visualState.isClickable}
+            onCellClick={
+              cellId !== null
+                ? (anchor) => onCellClick(cellId, anchor)
+                : undefined
+            }
+          />
+          {showCellNumbers && (
+            <CellInteriorSlotLabel
+              slotNumber={slotLabel}
+              geometry={cellGeometry}
+              prominence={cellNumberProminence}
+              counterRotationDeg={rackRotationDeg}
+            />
+          )}
+        </Group>
+      );
+    });
+  });
+  recordCanvasCullingMetrics(metricSourceId, { cellsTotal, cellsRendered });
 
   return (
     <Group listening={isInteractive}>
-      {orderedSections.map((sec, si) => {
-        const secX = sectionOffsets[si];
-        const secW = sectionOffsets[si + 1] - secX;
-        if (secW < MIN_CELL_W * 2) return null;
-
-        const semanticLevel = resolveSemanticLevelForIndex(semanticLevels, activeLevelIndex);
-        const level =
-          semanticLevel === null
-            ? null
-            : sec.levels.find((sectionLevel) => sectionLevel.ordinal === semanticLevel) ?? null;
-        if (!level) return null;
-        const slotCount = level.slotCount;
-        if (!slotCount) return null;
-
-        const slotW = secW / slotCount;
-        if (slotW < MIN_CELL_W) return null;
-        if (cellH < MIN_CELL_H) return null;
-
-        return Array.from({ length: slotCount }, (_, slotIndex) => {
-          const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
-          const cell = publishedCellsByStructure.get(
-            buildCellStructureKey({
-              rackId,
-              rackFaceId: face.id,
-              rackSectionId: sec.id,
-              rackLevelId: level.id,
-              slotNo: slotLabel
-            })
-          );
-          const cellId = cell?.id ?? null;
-          const isSelected = selectedCellId === cellId;
-          const isFocused = isSelected && showFocusedFullAddress;
-          const isLocateTarget = locateTargetCellId !== null && locateTargetCellId === cellId;
-          const isWorkflowSource = workflowSourceCellId !== null && workflowSourceCellId === cellId;
-          const isSearchHit = cellId !== null && highlightedCellIds.has(cellId);
-          const shouldRevealAddress =
-            showFocusedFullAddress &&
-            shouldShowFocusedFullAddress({
-              isSelected,
-              isHighlighted: isSearchHit,
-              isWorkflowSource
-            });
-          const addressText = cell?.address?.raw ?? null;
-          const runtime = cellId ? cellRuntimeById.get(cellId) : null;
-          const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
-
-          const cellX = secX + slotIndex * slotW;
-          const cellY = bandY + inset;
-          const cellW = slotW - 1;
-          const visualState = resolveCellVisualState(
-            {
-              isInteractive,
-              isWorkflowScope,
-              isRackPassive,
-              isRackSelected,
-              hasCellIdentity: cellId !== null,
-              isSelected,
-              isFocused,
-              isLocateTarget,
-              isWorkflowSource,
-              isSearchHit,
-              isOccupiedByFallback: isOccupied,
-              runtimeStatus: runtime?.status ?? null
-            },
-            visualPalette
-          );
-          const cellGeometry = {
-            x: cellX + 0.5,
-            y: cellY + 0.5,
-            width: Math.max(1, cellW),
-            height: Math.max(1, cellH - 1)
-          };
-          if (
-            diagnosticsFlags.cells === 'visible-only' &&
-            !isLocalCellVisibleInViewport({
-              cellGeometry,
-              diagnosticsViewport,
-              rackGeometry,
-              rackRotationDeg
-            })
-          ) {
-            return null;
-          }
-          if (shouldRevealAddress && addressText) {
-            focusedAddressLabels.push({
-              key: `${sec.id}-${level.id}-slot-${slotLabel}`,
-              addressText,
-              geometry: cellGeometry
-            });
-          }
-
-          return (
-            <Group key={`${sec.id}-${level.id}-slot-${slotLabel}`}>
-              <CellSurfaceVisual
-                geometry={cellGeometry}
-                visualState={visualState}
-              />
-              {diagnosticsFlags.cellOverlays === 'normal' && (
-                <>
-                  <CellTruthMarkerOverlay
-                    geometry={cellGeometry}
-                    visualState={visualState}
-                  />
-                  <CellOutlineOverlay
-                    geometry={cellGeometry}
-                    visualState={visualState}
-                  />
-                  <CellHaloOverlay
-                    geometry={cellGeometry}
-                    visualState={visualState}
-                  />
-                  <CellBadgeOverlay
-                    geometry={cellGeometry}
-                    visualState={visualState}
-                  />
-                </>
-              )}
-              <CellInteractionOverlay
-                geometry={cellGeometry}
-                visualState={visualState}
-                isClickable={visualState.isClickable}
-                onCellClick={cellId !== null ? (anchor) => onCellClick(cellId, anchor) : undefined}
-              />
-              {showCellNumbers && (
-                <CellInteriorSlotLabel
-                  slotNumber={slotLabel}
-                  geometry={cellGeometry}
-                  prominence={cellNumberProminence}
-                  counterRotationDeg={rackRotationDeg}
-                />
-              )}
-            </Group>
-          );
-        });
-      })}
+      {sectionCells}
       <Group listening={false} name="focused-address-overlay-group">
         {focusedAddressLabels.map((overlay) => (
           <FocusedCellAddressOverlay
@@ -289,7 +330,7 @@ type Props = {
 const noop = () => undefined;
 type DiagnosticsViewport = {
   canvasOffset: { x: number; y: number };
-  viewport: { width: number; height: number };
+  viewport: CanvasViewport;
   zoom: number;
 };
 
@@ -297,7 +338,8 @@ const DEFAULT_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   labels: 'normal',
   hitTest: 'normal',
   cells: 'normal',
-  cellOverlays: 'normal'
+  cellOverlays: 'normal',
+  enableProductionCellCulling: true
 };
 
 const DEFAULT_DIAGNOSTICS_VIEWPORT: DiagnosticsViewport = {
@@ -305,75 +347,6 @@ const DEFAULT_DIAGNOSTICS_VIEWPORT: DiagnosticsViewport = {
   viewport: { width: 0, height: 0 },
   zoom: 1
 };
-
-function rotatePoint(point: { x: number; y: number }, pivot: { x: number; y: number }, rotationDeg: number) {
-  if (rotationDeg === 0) return point;
-  const radians = (rotationDeg * Math.PI) / 180;
-  const sin = Math.sin(radians);
-  const cos = Math.cos(radians);
-  const dx = point.x - pivot.x;
-  const dy = point.y - pivot.y;
-
-  return {
-    x: pivot.x + dx * cos - dy * sin,
-    y: pivot.y + dx * sin + dy * cos
-  };
-}
-
-function isLocalCellVisibleInViewport({
-  cellGeometry,
-  diagnosticsViewport,
-  rackGeometry,
-  rackRotationDeg
-}: {
-  cellGeometry: { x: number; y: number; width: number; height: number };
-  diagnosticsViewport: DiagnosticsViewport;
-  rackGeometry: CanvasRackGeometry;
-  rackRotationDeg: 0 | 90 | 180 | 270;
-}) {
-  if (
-    diagnosticsViewport.zoom <= 0 ||
-    diagnosticsViewport.viewport.width <= 0 ||
-    diagnosticsViewport.viewport.height <= 0
-  ) {
-    return true;
-  }
-
-  const visibleRect = {
-    x: (-diagnosticsViewport.canvasOffset.x / diagnosticsViewport.zoom) - VISIBLE_CELL_OVERSCAN_PX,
-    y: (-diagnosticsViewport.canvasOffset.y / diagnosticsViewport.zoom) - VISIBLE_CELL_OVERSCAN_PX,
-    width: (diagnosticsViewport.viewport.width / diagnosticsViewport.zoom) + VISIBLE_CELL_OVERSCAN_PX * 2,
-    height: (diagnosticsViewport.viewport.height / diagnosticsViewport.zoom) + VISIBLE_CELL_OVERSCAN_PX * 2
-  };
-  const pivot = {
-    x: rackGeometry.centerX,
-    y: rackGeometry.centerY
-  };
-  const localCorners = [
-    { x: cellGeometry.x, y: cellGeometry.y },
-    { x: cellGeometry.x + cellGeometry.width, y: cellGeometry.y },
-    { x: cellGeometry.x + cellGeometry.width, y: cellGeometry.y + cellGeometry.height },
-    { x: cellGeometry.x, y: cellGeometry.y + cellGeometry.height }
-  ];
-  const canvasCorners = localCorners.map((corner) => {
-    const rotated = rotatePoint(corner, pivot, rackRotationDeg);
-    return {
-      x: rackGeometry.x + rotated.x,
-      y: rackGeometry.y + rotated.y
-    };
-  });
-  const minX = Math.min(...canvasCorners.map((point) => point.x));
-  const maxX = Math.max(...canvasCorners.map((point) => point.x));
-  const minY = Math.min(...canvasCorners.map((point) => point.y));
-  const maxY = Math.max(...canvasCorners.map((point) => point.y));
-
-  return (
-    minX <= visibleRect.x + visibleRect.width &&
-    maxX >= visibleRect.x &&
-    minY <= visibleRect.y + visibleRect.height &&
-    maxY >= visibleRect.y
-  );
-}
 
 export function RackCells({
   geometry,
@@ -404,7 +377,8 @@ export function RackCells({
   const { faceAWidth, faceBWidth, height, isPaired, spineY } = geometry;
   const faceABandH = isPaired ? spineY : height;
   const normalizedSemanticLevels =
-    semanticLevels ?? collectFaceSemanticLevels([faceA, ...(faceB ? [faceB] : [])]);
+    semanticLevels ??
+    collectFaceSemanticLevels([faceA, ...(faceB ? [faceB] : [])]);
 
   return (
     <Group listening={isInteractive}>

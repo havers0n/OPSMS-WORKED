@@ -3,14 +3,15 @@ import type { CellStructureIdentity, Rack, Wall, Zone } from '@wos/domain';
 // ─── Scale constants ────────────────────────────────────────────────────────
 // All world coordinates (rack.x/y, wall.x1/y1, zone.x/y, dimensions) are in metres.
 // WORLD_SCALE converts metres → canvas pixels for rendering.
-export const WORLD_SCALE       = 40;   // px per metre — unified scale for all world coords
-export const GRID_SIZE         = WORLD_SCALE; // minor grid step = 1 m = 40 px
-export const MAJOR_GRID_SIZE   = WORLD_SCALE * 5; // major grid step = 5 m = 200 px
+export const WORLD_SCALE = 40; // px per metre — unified scale for all world coords
+export const GRID_SIZE = WORLD_SCALE; // minor grid step = 1 m = 40 px
+export const MAJOR_GRID_SIZE = WORLD_SCALE * 5; // major grid step = 5 m = 200 px
 export const MINOR_GRID_ZOOM_THRESHOLD = 1.2; // zoom level at which 1 m minor grid appears
 export const ROTATE_HANDLE_SIZE = 28;
 export const MIN_CANVAS_ZOOM = 0.5;
 export const MAX_CANVAS_ZOOM = 3.0;
 export const RACK_VIEWPORT_OVERSCAN_METERS = 2;
+export const CELL_VIEWPORT_OVERSCAN_PX = 160;
 
 // ─── Level-of-Detail thresholds ─────────────────────────────────────────────
 // LOD 0  zoom < ~0.9  → plain block + code label only
@@ -22,8 +23,8 @@ export const RACK_VIEWPORT_OVERSCAN_METERS = 2;
 // fall to threshold − half-band before switching. This prevents flickering
 // when the user hovers near a threshold boundary.
 export const LOD_SECTION_THRESHOLD = 0.9;
-export const LOD_CELL_THRESHOLD    = 1.3;
-export const LOD_HYSTERESIS        = 0.05; // total dead-band width (±0.025 per boundary)
+export const LOD_CELL_THRESHOLD = 1.3;
+export const LOD_HYSTERESIS = 0.05; // total dead-band width (±0.025 per boundary)
 /**
  * Minimum zoom a programmatic auto-fit must target to guarantee LOD 2 entry
  * regardless of the caller's prevLod. Equal to the up-crossing threshold
@@ -53,21 +54,21 @@ export function getCanvasLOD(zoom: number, prevLod: CanvasLOD = 0): CanvasLOD {
 
   // LOD 2 boundary: lower effective threshold when already at LOD 2 (going down),
   // higher when below LOD 2 (going up).
-  const cellThreshold = prevLod >= 2
-    ? LOD_CELL_THRESHOLD - half
-    : LOD_CELL_THRESHOLD + half;
+  const cellThreshold =
+    prevLod >= 2 ? LOD_CELL_THRESHOLD - half : LOD_CELL_THRESHOLD + half;
   if (zoom >= cellThreshold) return 2;
 
   // LOD 1 boundary: same asymmetric logic around LOD_SECTION_THRESHOLD.
-  const sectionThreshold = prevLod >= 1
-    ? LOD_SECTION_THRESHOLD - half
-    : LOD_SECTION_THRESHOLD + half;
+  const sectionThreshold =
+    prevLod >= 1 ? LOD_SECTION_THRESHOLD - half : LOD_SECTION_THRESHOLD + half;
   if (zoom >= sectionThreshold) return 1;
 
   return 0;
 }
 
-export function getCanvasInteractionLevel(lod: CanvasLOD): CanvasInteractionLevel {
+export function getCanvasInteractionLevel(
+  lod: CanvasLOD
+): CanvasInteractionLevel {
   return lod >= 2 ? 'L3' : 'L1';
 }
 
@@ -97,7 +98,7 @@ export type CanvasRect = {
   height: number;
 };
 
-type CanvasViewport = {
+export type CanvasViewport = {
   width: number;
   height: number;
 };
@@ -174,12 +175,14 @@ export function getRackGeometry(rack: Rack): CanvasRackGeometry {
   const faceB = rack.faces.find((f) => f.side === 'B');
 
   const faceALength = faceA?.faceLength ?? rack.totalLength;
-  const faceBLength = isPaired ? (faceB?.faceLength ?? rack.totalLength) : faceALength;
+  const faceBLength = isPaired
+    ? (faceB?.faceLength ?? rack.totalLength)
+    : faceALength;
 
   const faceAWidth = faceALength * WORLD_SCALE;
   const faceBWidth = faceBLength * WORLD_SCALE;
-  const width      = Math.max(faceAWidth, faceBWidth);
-  const height     = rack.depth * WORLD_SCALE;
+  const width = Math.max(faceAWidth, faceBWidth);
+  const height = rack.depth * WORLD_SCALE;
 
   return {
     x: rack.x * WORLD_SCALE,
@@ -188,14 +191,18 @@ export function getRackGeometry(rack: Rack): CanvasRackGeometry {
     height,
     faceAWidth,
     faceBWidth,
-    centerX: width  / 2,
+    centerX: width / 2,
     centerY: height / 2,
     isPaired,
-    spineY: height / 2,
+    spineY: height / 2
   };
 }
 
-function getRotatedBounds(rect: CanvasRect, rotationDeg: number, pivot: { x: number; y: number }): CanvasRect {
+function getRotatedBounds(
+  rect: CanvasRect,
+  rotationDeg: number,
+  pivot: { x: number; y: number }
+): CanvasRect {
   const normalizedDeg = ((rotationDeg % 360) + 360) % 360;
 
   if (normalizedDeg === 0) {
@@ -246,6 +253,93 @@ export function projectCanvasRectToViewport(
   };
 }
 
+export function getCanvasViewportRect(
+  viewport: CanvasViewport,
+  canvasOffset: { x: number; y: number },
+  zoom: number,
+  overscanPx: number = CELL_VIEWPORT_OVERSCAN_PX
+): CanvasRect | null {
+  if (zoom <= 0 || viewport.width <= 0 || viewport.height <= 0) {
+    return null;
+  }
+
+  return {
+    x: -canvasOffset.x / zoom - overscanPx,
+    y: -canvasOffset.y / zoom - overscanPx,
+    width: viewport.width / zoom + overscanPx * 2,
+    height: viewport.height / zoom + overscanPx * 2
+  };
+}
+
+export function doCanvasRectsIntersect(
+  left: CanvasRect,
+  right: CanvasRect
+): boolean {
+  return (
+    left.x <= right.x + right.width &&
+    left.x + left.width >= right.x &&
+    left.y <= right.y + right.height &&
+    left.y + left.height >= right.y
+  );
+}
+
+export function projectLocalRackRectToCanvasRect(
+  rect: CanvasRect,
+  rackGeometry: CanvasRackGeometry,
+  rackRotationDeg: 0 | 90 | 180 | 270
+): CanvasRect {
+  const rotatedRect = getRotatedBounds(rect, rackRotationDeg, {
+    x: rackGeometry.centerX,
+    y: rackGeometry.centerY
+  });
+
+  return {
+    x: rackGeometry.x + rotatedRect.x,
+    y: rackGeometry.y + rotatedRect.y,
+    width: rotatedRect.width,
+    height: rotatedRect.height
+  };
+}
+
+export function shouldRenderCanvasCell({
+  cellGeometry,
+  canvasOffset,
+  forceVisible,
+  overscanPx = CELL_VIEWPORT_OVERSCAN_PX,
+  rackGeometry,
+  rackRotationDeg,
+  viewport,
+  zoom
+}: {
+  cellGeometry: CanvasRect;
+  canvasOffset: { x: number; y: number };
+  forceVisible?: boolean;
+  overscanPx?: number;
+  rackGeometry: CanvasRackGeometry;
+  rackRotationDeg: 0 | 90 | 180 | 270;
+  viewport: CanvasViewport;
+  zoom: number;
+}): boolean {
+  if (forceVisible) return true;
+
+  const viewportRect = getCanvasViewportRect(
+    viewport,
+    canvasOffset,
+    zoom,
+    overscanPx
+  );
+  if (!viewportRect) return true;
+
+  return doCanvasRectsIntersect(
+    projectLocalRackRectToCanvasRect(
+      cellGeometry,
+      rackGeometry,
+      rackRotationDeg
+    ),
+    viewportRect
+  );
+}
+
 export function getRackCanvasRect(rack: Rack): CanvasRect {
   const geometry = getRackGeometry(rack);
   return getRotatedBounds(
@@ -268,7 +362,9 @@ function getRackWorldRect(rack: Rack): CanvasRect {
   const faceA = rack.faces.find((f) => f.side === 'A');
   const faceB = rack.faces.find((f) => f.side === 'B');
   const faceALength = faceA?.faceLength ?? rack.totalLength;
-  const faceBLength = isPaired ? (faceB?.faceLength ?? rack.totalLength) : faceALength;
+  const faceBLength = isPaired
+    ? (faceB?.faceLength ?? rack.totalLength)
+    : faceALength;
   const width = Math.max(faceALength, faceBLength);
   const height = rack.depth;
 
@@ -301,7 +397,10 @@ function getVisibleWorldRect(
     getWorldPointFromViewportPoint({ x: 0, y: 0 }, camera),
     getWorldPointFromViewportPoint({ x: viewport.width, y: 0 }, camera),
     getWorldPointFromViewportPoint({ x: 0, y: viewport.height }, camera),
-    getWorldPointFromViewportPoint({ x: viewport.width, y: viewport.height }, camera)
+    getWorldPointFromViewportPoint(
+      { x: viewport.width, y: viewport.height },
+      camera
+    )
   ];
   const minX = Math.min(...corners.map((point) => point.x));
   const maxX = Math.max(...corners.map((point) => point.x));
@@ -365,16 +464,22 @@ export function getWallCanvasRect(wall: Wall): CanvasRect {
   };
 }
 
-export function getCellCanvasRect(rack: Rack, cell: CellStructureIdentity): CanvasRect | null {
+export function getCellCanvasRect(
+  rack: Rack,
+  cell: CellStructureIdentity
+): CanvasRect | null {
   const geometry = getRackGeometry(rack);
-  const face = rack.faces.find((candidate) => candidate.id === cell.rackFaceId) ?? null;
+  const face =
+    rack.faces.find((candidate) => candidate.id === cell.rackFaceId) ?? null;
 
   if (!face || !face.enabled || face.sections.length === 0) {
     return null;
   }
 
   const orderedSections =
-    face.slotNumberingDirection === 'rtl' ? [...face.sections].reverse() : face.sections;
+    face.slotNumberingDirection === 'rtl'
+      ? [...face.sections].reverse()
+      : face.sections;
   const sectionIndex = orderedSections.findIndex(
     (section) => section.id === cell.rackSectionId
   );
@@ -384,15 +489,24 @@ export function getCellCanvasRect(rack: Rack, cell: CellStructureIdentity): Canv
     return null;
   }
 
-  const orderedLevels = [...section.levels].sort((left, right) => right.ordinal - left.ordinal);
-  const levelIndex = orderedLevels.findIndex((level) => level.id === cell.rackLevelId);
+  const orderedLevels = [...section.levels].sort(
+    (left, right) => right.ordinal - left.ordinal
+  );
+  const levelIndex = orderedLevels.findIndex(
+    (level) => level.id === cell.rackLevelId
+  );
   const slotCount = orderedLevels[0]?.slotCount ?? 0;
   const slotIndex =
     face.slotNumberingDirection === 'rtl'
       ? slotCount - cell.slotNo
       : cell.slotNo - 1;
 
-  if (levelIndex < 0 || slotCount <= 0 || slotIndex < 0 || slotIndex >= slotCount) {
+  if (
+    levelIndex < 0 ||
+    slotCount <= 0 ||
+    slotIndex < 0 ||
+    slotIndex >= slotCount
+  ) {
     return null;
   }
 

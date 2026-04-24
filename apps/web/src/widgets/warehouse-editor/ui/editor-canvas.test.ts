@@ -2,10 +2,17 @@ import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, FloorWorkspace, LayoutDraft } from '@wos/domain';
-import type { EditorSelection, ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
+import type {
+  EditorSelection,
+  ViewMode
+} from '@/widgets/warehouse-editor/model/editor-types';
 import { resolvePanelMode } from './storage-inspector-v2/mode';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
 import { EditorCanvas } from './editor-canvas';
+
+const { mockIsRackInViewport } = vi.hoisted(() => ({
+  mockIsRackInViewport: vi.fn(() => true)
+}));
 
 let mockViewMode: ViewMode = 'storage';
 let mockSelection: EditorSelection = { type: 'none' };
@@ -20,17 +27,21 @@ let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
 
 vi.mock('react-konva', () => ({
-  Layer: ({ children, ...props }: { children?: React.ReactNode }) => createElement('Layer', props, children),
-  Line: ({ children, ...props }: { children?: React.ReactNode }) => createElement('Line', props, children),
-  Rect: ({ children, ...props }: { children?: React.ReactNode }) => createElement('Rect', props, children),
-  Stage: ({ children, ...props }: { children?: React.ReactNode }) => createElement('Stage', props, children)
+  Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Layer', props, children),
+  Line: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Line', props, children),
+  Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Rect', props, children),
+  Stage: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Stage', props, children)
 }));
 
 vi.mock('@/entities/layout-version/lib/canvas-geometry', () => ({
   GRID_SIZE: 1,
   MAJOR_GRID_SIZE: 5,
   MINOR_GRID_ZOOM_THRESHOLD: 999,
-  isRackInViewport: () => true
+  isRackInViewport: mockIsRackInViewport
 }));
 
 vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
@@ -72,18 +83,21 @@ vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
 }));
 
 vi.mock('@/widgets/warehouse-editor/model/editor-store', () => ({
-  useEditorStore: (selector: (state: { selectedRackActiveLevel: number }) => unknown) =>
-    selector({ selectedRackActiveLevel: mockSelectedRackActiveLevel })
+  useEditorStore: (
+    selector: (state: { selectedRackActiveLevel: number }) => unknown
+  ) => selector({ selectedRackActiveLevel: mockSelectedRackActiveLevel })
 }));
 
 vi.mock('@/widgets/warehouse-editor/model/interaction-store', () => ({
-  useInteractionStore: (selector: (state: { selection: EditorSelection }) => unknown) =>
-    selector({ selection: mockSelection })
+  useInteractionStore: (
+    selector: (state: { selection: EditorSelection }) => unknown
+  ) => selector({ selection: mockSelection })
 }));
 
 vi.mock('@/widgets/warehouse-editor/model/v2/v2-selectors', () => ({
   useStorageFocusActiveLevel: () => mockStorageFocusActiveLevel,
-  useStorageFocusSelectedCellId: () => (mockSelection.type === 'cell' ? mockSelection.cellId : null),
+  useStorageFocusSelectedCellId: () =>
+    mockSelection.type === 'cell' ? mockSelection.cellId : null,
   useStorageFocusSelectedRackId: () => mockSelectedRackId,
   useStorageFocusSelectCell: () => storageFocusSelectCellSpy,
   useStorageFocusSelectRack: () => storageFocusSelectRackSpy,
@@ -180,7 +194,7 @@ vi.mock('./use-canvas-scene-model', () => ({
     },
     layers: {
       placementLayout: mockLayoutDraft,
-      racks: [],
+      racks: mockLayoutDraft ? Object.values(mockLayoutDraft.racks) : [],
       walls: [],
       zones: []
     },
@@ -193,7 +207,8 @@ vi.mock('./use-canvas-scene-model', () => ({
     },
     selection: {
       activeCellRackId: null,
-      canvasSelectedCellId: mockSelection.type === 'cell' ? mockSelection.cellId : null,
+      canvasSelectedCellId:
+        mockSelection.type === 'cell' ? mockSelection.cellId : null,
       moveSourceRackId: null,
       selectedRack: null,
       selectedStorageCell: null,
@@ -206,9 +221,14 @@ vi.mock('./use-canvas-scene-model', () => ({
   })
 }));
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-function renderCanvas(workspace: FloorWorkspace, params?: { isStorageV2?: boolean }) {
+function renderCanvas(
+  workspace: FloorWorkspace,
+  params?: { isStorageV2?: boolean }
+) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -230,6 +250,8 @@ describe('EditorCanvas storage active-rack wiring', () => {
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
+    mockIsRackInViewport.mockReset();
+    mockIsRackInViewport.mockReturnValue(true);
   });
 
   it('passes selected cell parent rack id to RackLayer in storage mode', () => {
@@ -241,22 +263,25 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'cell', cellId: 'cell-1' };
     mockPublishedCellsById = new Map([
-      ['cell-1', {
-        id: 'cell-1',
-        layoutVersionId: 'lv-1',
-        rackId,
-        rackFaceId: 'face-a',
-        rackSectionId: 'section-a',
-        rackLevelId: 'level-1',
-        slotNo: 1,
-        address: {
-          raw: '01-A.01.01.01',
-          parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
-          sortKey: '0001-A-01-01-01'
-        },
-        cellCode: 'CELL-1',
-        status: 'active'
-      } satisfies Cell]
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
     ]);
 
     renderCanvas({
@@ -296,22 +321,25 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'rack', rackIds: [rackId] };
     mockPublishedCellsById = new Map([
-      ['cell-1', {
-        id: 'cell-1',
-        layoutVersionId: 'lv-1',
-        rackId,
-        rackFaceId: 'face-a',
-        rackSectionId: 'section-a',
-        rackLevelId: 'level-1',
-        slotNo: 1,
-        address: {
-          raw: '01-A.01.01.01',
-          parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
-          sortKey: '0001-A-01-01-01'
-        },
-        cellCode: 'CELL-1',
-        status: 'active'
-      } satisfies Cell]
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
     ]);
 
     renderCanvas({
@@ -348,24 +376,31 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockViewMode = 'storage';
     mockSelectedRackId = 'rack-stale';
     mockSelectedRackActiveLevel = 2;
-    mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
+    mockSelection = {
+      type: 'container',
+      containerId: 'container-1',
+      sourceCellId: 'cell-1'
+    };
     mockPublishedCellsById = new Map([
-      ['cell-1', {
-        id: 'cell-1',
-        layoutVersionId: 'lv-1',
-        rackId,
-        rackFaceId: 'face-a',
-        rackSectionId: 'section-a',
-        rackLevelId: 'level-1',
-        slotNo: 1,
-        address: {
-          raw: '01-A.01.01.01',
-          parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
-          sortKey: '0001-A-01-01-01'
-        },
-        cellCode: 'CELL-1',
-        status: 'active'
-      } satisfies Cell]
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
     ]);
 
     renderCanvas({
@@ -383,7 +418,11 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockViewMode = 'storage';
     mockSelectedRackId = 'rack-stale';
     mockSelectedRackActiveLevel = 2;
-    mockSelection = { type: 'container', containerId: 'container-1', sourceCellId: 'cell-1' };
+    mockSelection = {
+      type: 'container',
+      containerId: 'container-1',
+      sourceCellId: 'cell-1'
+    };
     mockPublishedCellsById = new Map();
 
     renderCanvas({
@@ -403,22 +442,25 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockSelectedRackId = null;
     mockSelection = { type: 'none' };
     mockPublishedCellsById = new Map([
-      ['cell-1', {
-        id: 'cell-1',
-        layoutVersionId: 'lv-1',
-        rackId,
-        rackFaceId: 'face-a',
-        rackSectionId: 'section-a',
-        rackLevelId: 'level-1',
-        slotNo: 1,
-        address: {
-          raw: '01-A.01.01.01',
-          parts: { rackCode: '01', face: 'A', section: 1, level: 3, slot: 1 },
-          sortKey: '0001-A-01-03-01'
-        },
-        cellCode: 'CELL-1',
-        status: 'active'
-      } satisfies Cell]
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 3, slot: 1 },
+            sortKey: '0001-A-01-03-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
     ]);
 
     renderCanvas(
@@ -430,13 +472,21 @@ describe('EditorCanvas storage active-rack wiring', () => {
       { isStorageV2: true }
     );
 
-    const onV2StorageCellSelect = rackLayerLastProps?.onV2StorageCellSelect as ((params: { cellId: string; rackId: string }) => void);
+    const onV2StorageCellSelect =
+      rackLayerLastProps?.onV2StorageCellSelect as (params: {
+        cellId: string;
+        rackId: string;
+      }) => void;
     expect(typeof onV2StorageCellSelect).toBe('function');
     act(() => {
       onV2StorageCellSelect({ cellId: 'cell-1', rackId });
     });
 
-    expect(storageFocusSelectCellSpy).toHaveBeenCalledWith({ cellId: 'cell-1', rackId, level: 3 });
+    expect(storageFocusSelectCellSpy).toHaveBeenCalledWith({
+      cellId: 'cell-1',
+      rackId,
+      level: 3
+    });
 
     const panelMode = resolvePanelMode(rackId, 'cell-1', null);
     expect(panelMode).toEqual({ kind: 'cell-overview', cellId: 'cell-1' });
@@ -449,38 +499,44 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockViewMode = 'storage';
     mockSelection = { type: 'none' };
     mockPublishedCellsById = new Map([
-      ['cell-5', {
-        id: 'cell-5',
-        layoutVersionId: 'lv-1',
-        rackId,
-        rackFaceId: 'face-a',
-        rackSectionId: 'section-a',
-        rackLevelId: 'level-5',
-        slotNo: 1,
-        address: {
-          raw: '01-A.01.05.01',
-          parts: { rackCode: '01', face: 'A', section: 1, level: 5, slot: 1 },
-          sortKey: '0001-A-01-05-01'
-        },
-        cellCode: 'CELL-5',
-        status: 'active'
-      } satisfies Cell],
-      ['cell-3', {
-        id: 'cell-3',
-        layoutVersionId: 'lv-1',
-        rackId,
-        rackFaceId: 'face-a',
-        rackSectionId: 'section-a',
-        rackLevelId: 'level-3',
-        slotNo: 1,
-        address: {
-          raw: '01-A.01.03.01',
-          parts: { rackCode: '01', face: 'A', section: 1, level: 3, slot: 1 },
-          sortKey: '0001-A-01-03-01'
-        },
-        cellCode: 'CELL-3',
-        status: 'active'
-      } satisfies Cell]
+      [
+        'cell-5',
+        {
+          id: 'cell-5',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-5',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.05.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 5, slot: 1 },
+            sortKey: '0001-A-01-05-01'
+          },
+          cellCode: 'CELL-5',
+          status: 'active'
+        } satisfies Cell
+      ],
+      [
+        'cell-3',
+        {
+          id: 'cell-3',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-3',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.03.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 3, slot: 1 },
+            sortKey: '0001-A-01-03-01'
+          },
+          cellCode: 'CELL-3',
+          status: 'active'
+        } satisfies Cell
+      ]
     ]);
 
     renderCanvas(
@@ -492,13 +548,19 @@ describe('EditorCanvas storage active-rack wiring', () => {
       { isStorageV2: true }
     );
 
-    const onV2StorageRackSelect = rackLayerLastProps?.onV2StorageRackSelect as ((params: { rackId: string }) => void);
+    const onV2StorageRackSelect =
+      rackLayerLastProps?.onV2StorageRackSelect as (params: {
+        rackId: string;
+      }) => void;
     expect(typeof onV2StorageRackSelect).toBe('function');
     act(() => {
       onV2StorageRackSelect({ rackId });
     });
 
-    expect(storageFocusSelectRackSpy).toHaveBeenCalledWith({ rackId, level: 3 });
+    expect(storageFocusSelectRackSpy).toHaveBeenCalledWith({
+      rackId,
+      level: 3
+    });
     expect(storageFocusSelectCellSpy).not.toHaveBeenCalled();
   });
 
@@ -581,5 +643,46 @@ describe('EditorCanvas storage active-rack wiring', () => {
     );
 
     expect(canvasHudLastProps?.shouldShowStorageCellBar).toBe(false);
+  });
+
+  it('keeps an offscreen selected cell parent rack in the RackLayer input', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockIsRackInViewport.mockReturnValue(false);
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = null;
+    mockSelectedRackActiveLevel = 2;
+    mockSelection = { type: 'cell', cellId: 'cell-1' };
+    mockPublishedCellsById = new Map([
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
+    ]);
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    const racks = rackLayerLastProps?.racks as Array<{ id: string }>;
+    expect(racks.map((rack) => rack.id)).toContain(rackId);
   });
 });

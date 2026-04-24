@@ -1,10 +1,22 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { describe, expect, it, vi } from 'vitest';
-import { buildCellStructureKey, type Cell, type RackFace, type OperationsCellRuntime } from '@wos/domain';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  buildCellStructureKey,
+  type Cell,
+  type RackFace,
+  type OperationsCellRuntime
+} from '@wos/domain';
 import { CellSurfaceVisual } from './rack-cell-overlays';
 import { RackCells } from './rack-cells';
-import { resolveCellVisualState, type CellVisualPalette } from './rack-cells-visual-state';
+import {
+  resolveCellVisualState,
+  type CellVisualPalette
+} from './rack-cells-visual-state';
+import {
+  resetCanvasCullingMetrics,
+  type CanvasDiagnosticsFlags
+} from '../canvas-diagnostics';
 
 vi.mock('react-konva', () => ({
   Group: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -19,7 +31,9 @@ vi.mock('react-konva', () => ({
     createElement('Text', props, children)
 }));
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const geometry = {
   x: 0,
@@ -34,7 +48,10 @@ const geometry = {
   spineY: 0
 };
 
-function createFace(levelIds: string[], options?: { slotCount?: number; direction?: 'ltr' | 'rtl' }): RackFace {
+function createFace(
+  levelIds: string[],
+  options?: { slotCount?: number; direction?: 'ltr' | 'rtl' }
+): RackFace {
   const slotCount = options?.slotCount ?? 2;
   return {
     id: 'face-a',
@@ -92,7 +109,11 @@ function createCellsMap(levelIds: string[], slotCount = 2) {
   return byStructure;
 }
 
-function renderRackCells(activeLevelIndex: number | null, levelIds: string[], isInteractive = false) {
+function renderRackCells(
+  activeLevelIndex: number | null,
+  levelIds: string[],
+  isInteractive = false
+) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -124,8 +145,15 @@ function renderRackCellsWithProps(params: {
   levelIds?: string[];
   slotCount?: number;
   selectedCellId?: string | null;
+  locateTargetCellId?: string | null;
   workflowSourceCellId?: string | null;
   highlightedCellIds?: Set<string>;
+  diagnosticsFlags?: CanvasDiagnosticsFlags;
+  diagnosticsViewport?: {
+    canvasOffset: { x: number; y: number };
+    viewport: { width: number; height: number };
+    zoom: number;
+  };
   showCellNumbers?: boolean;
   showFocusedFullAddress?: boolean;
 }) {
@@ -145,7 +173,10 @@ function renderRackCellsWithProps(params: {
         publishedCellsByStructure: createCellsMap(levelIds, slotCount),
         highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
         selectedCellId: params.selectedCellId ?? null,
+        locateTargetCellId: params.locateTargetCellId ?? null,
         workflowSourceCellId: params.workflowSourceCellId ?? null,
+        diagnosticsFlags: params.diagnosticsFlags,
+        diagnosticsViewport: params.diagnosticsViewport,
         showCellNumbers: params.showCellNumbers ?? true,
         showFocusedFullAddress: params.showFocusedFullAddress ?? true,
         isInteractive: false,
@@ -156,7 +187,10 @@ function renderRackCellsWithProps(params: {
   return renderer;
 }
 
-function clickCellIdsWithCollector(activeLevelIndex: number | null, levelIds: string[]) {
+function clickCellIdsWithCollector(
+  activeLevelIndex: number | null,
+  levelIds: string[]
+) {
   const selected: string[] = [];
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -178,7 +212,9 @@ function clickCellIdsWithCollector(activeLevelIndex: number | null, levelIds: st
     );
   });
 
-  for (const rectNode of renderer.root.findAll((node) => String(node.type) === 'Rect')) {
+  for (const rectNode of renderer.root.findAll(
+    (node) => String(node.type) === 'Rect'
+  )) {
     if (typeof rectNode.props.onClick === 'function') {
       act(() => {
         rectNode.props.onClick({
@@ -199,8 +235,12 @@ function getCellBounds(activeLevelIndex: number | null, levelIds: string[]) {
 
   const xMin = Math.min(...rects.map((node) => Number(node.props.x)));
   const yMin = Math.min(...rects.map((node) => Number(node.props.y)));
-  const xMax = Math.max(...rects.map((node) => Number(node.props.x) + Number(node.props.width)));
-  const yMax = Math.max(...rects.map((node) => Number(node.props.y) + Number(node.props.height)));
+  const xMax = Math.max(
+    ...rects.map((node) => Number(node.props.x) + Number(node.props.width))
+  );
+  const yMax = Math.max(
+    ...rects.map((node) => Number(node.props.y) + Number(node.props.height))
+  );
 
   return { xMin, yMin, xMax, yMax };
 }
@@ -211,11 +251,45 @@ function getTextValues(renderer: TestRenderer.ReactTestRenderer) {
     .map((node) => String(node.props.text));
 }
 
-function getTextValuesByOwner(renderer: TestRenderer.ReactTestRenderer, owner: string) {
+function getTextValuesByOwner(
+  renderer: TestRenderer.ReactTestRenderer,
+  owner: string
+) {
   return renderer.root
-    .findAll((node) => String(node.type) === 'Text' && node.props.name === owner)
+    .findAll(
+      (node) => String(node.type) === 'Text' && node.props.name === owner
+    )
     .map((node) => String(node.props.text));
 }
+
+const TEST_DIAGNOSTICS_VIEWPORT = {
+  canvasOffset: { x: 0, y: 0 },
+  viewport: { width: 100, height: 100 },
+  zoom: 1
+};
+
+const UNCLIPPED_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
+  labels: 'normal',
+  hitTest: 'normal',
+  cells: 'unculled',
+  cellOverlays: 'normal',
+  enableProductionCellCulling: false
+};
+
+function countInteractionRects(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root
+    .findAll((node) => String(node.type) === 'Rect')
+    .filter(
+      (rect) =>
+        rect.props.opacity === 0 &&
+        rect.props.fillEnabled === false &&
+        rect.props.strokeEnabled === false
+    ).length;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('RackCells', () => {
   const threeLevelIds = ['level-high', 'level-mid', 'level-low'];
@@ -317,7 +391,11 @@ describe('RackCells', () => {
           rackRotationDeg: 0,
           activeLevelIndex: 1,
           semanticLevels: [1, 3, 5],
-          publishedCellsByStructure: createCellsMap(['level-1', 'level-3', 'level-5']),
+          publishedCellsByStructure: createCellsMap([
+            'level-1',
+            'level-3',
+            'level-5'
+          ]),
           isInteractive: true,
           onCellClick: (cellId: string) => clicked.push(cellId),
           showCellNumbers: true,
@@ -326,10 +404,15 @@ describe('RackCells', () => {
       );
     });
 
-    for (const rectNode of renderer.root.findAll((node) => String(node.type) === 'Rect')) {
+    for (const rectNode of renderer.root.findAll(
+      (node) => String(node.type) === 'Rect'
+    )) {
       if (typeof rectNode.props.onClick === 'function') {
         act(() => {
-          rectNode.props.onClick({ cancelBubble: false, evt: { clientX: 0, clientY: 0 } });
+          rectNode.props.onClick({
+            cancelBubble: false,
+            evt: { clientX: 0, clientY: 0 }
+          });
         });
       }
     }
@@ -347,7 +430,9 @@ describe('RackCells', () => {
       levelIds: ['level-only'],
       slotCount: 2
     });
-    const labels = getTextValuesByOwner(renderer, 'slot-label').filter((value) => /^\d+$/.test(value));
+    const labels = getTextValuesByOwner(renderer, 'slot-label').filter(
+      (value) => /^\d+$/.test(value)
+    );
     expect(labels).toEqual(['1', '2']);
   });
 
@@ -361,8 +446,12 @@ describe('RackCells', () => {
       slotCount: 2
     });
 
-    const ltrLabels = getTextValuesByOwner(ltrRenderer, 'slot-label').filter((value) => /^\d+$/.test(value));
-    const rtlLabels = getTextValuesByOwner(rtlRenderer, 'slot-label').filter((value) => /^\d+$/.test(value));
+    const ltrLabels = getTextValuesByOwner(ltrRenderer, 'slot-label').filter(
+      (value) => /^\d+$/.test(value)
+    );
+    const rtlLabels = getTextValuesByOwner(rtlRenderer, 'slot-label').filter(
+      (value) => /^\d+$/.test(value)
+    );
 
     expect(ltrLabels).toEqual(['1', '2']);
     expect(rtlLabels).toEqual(['2', '1']);
@@ -374,13 +463,15 @@ describe('RackCells', () => {
       slotCount: 2,
       selectedCellId: 'cell-level-only-1'
     });
-    const addressLabels = getTextValuesByOwner(renderer, 'focused-address-label').filter((value) =>
-      value.startsWith('ADDR-')
-    );
+    const addressLabels = getTextValuesByOwner(
+      renderer,
+      'focused-address-label'
+    ).filter((value) => value.startsWith('ADDR-'));
     expect(addressLabels).toEqual(['ADDR-level-only-1']);
-    const slotOwnerAddresses = getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
-      value.startsWith('ADDR-')
-    );
+    const slotOwnerAddresses = getTextValuesByOwner(
+      renderer,
+      'slot-label'
+    ).filter((value) => value.startsWith('ADDR-'));
     expect(slotOwnerAddresses).toEqual([]);
   });
 
@@ -390,9 +481,10 @@ describe('RackCells', () => {
       slotCount: 2,
       highlightedCellIds: new Set(['cell-level-only-2'])
     });
-    const addressLabels = getTextValuesByOwner(renderer, 'focused-address-label').filter((value) =>
-      value.startsWith('ADDR-')
-    );
+    const addressLabels = getTextValuesByOwner(
+      renderer,
+      'focused-address-label'
+    ).filter((value) => value.startsWith('ADDR-'));
     expect(addressLabels).toEqual(['ADDR-level-only-2']);
   });
 
@@ -404,10 +496,13 @@ describe('RackCells', () => {
       showCellNumbers: false
     });
 
-    const slotLabels = getTextValuesByOwner(renderer, 'slot-label').filter((value) => /^\d+$/.test(value));
-    const addressLabels = getTextValuesByOwner(renderer, 'focused-address-label').filter((value) =>
-      value.startsWith('ADDR-')
+    const slotLabels = getTextValuesByOwner(renderer, 'slot-label').filter(
+      (value) => /^\d+$/.test(value)
     );
+    const addressLabels = getTextValuesByOwner(
+      renderer,
+      'focused-address-label'
+    ).filter((value) => value.startsWith('ADDR-'));
 
     expect(slotLabels).toEqual([]);
     expect(addressLabels).toEqual(['ADDR-level-only-1']);
@@ -441,7 +536,9 @@ describe('RackCells', () => {
     });
 
     const rotators = verticalRenderer.root.findAll(
-      (node) => String(node.type) === 'Group' && node.props.name === 'slot-label-rotator'
+      (node) =>
+        String(node.type) === 'Group' &&
+        node.props.name === 'slot-label-rotator'
     );
     expect(rotators.length).toBeGreaterThan(0);
     for (const node of rotators) {
@@ -449,7 +546,9 @@ describe('RackCells', () => {
     }
 
     const baselineRotators = renderer.root.findAll(
-      (node) => String(node.type) === 'Group' && node.props.name === 'slot-label-rotator'
+      (node) =>
+        String(node.type) === 'Group' &&
+        node.props.name === 'slot-label-rotator'
     );
     for (const node of baselineRotators) {
       expect(Math.abs(Number(node.props.rotation))).toBe(0);
@@ -466,9 +565,14 @@ describe('RackCells', () => {
     });
 
     const baseRotator = baseRenderer.root.find(
-      (node) => String(node.type) === 'Group' && node.props.name === 'focused-address-label-rotator'
+      (node) =>
+        String(node.type) === 'Group' &&
+        node.props.name === 'focused-address-label-rotator'
     );
-    const baseAnchor = { x: Number(baseRotator.props.x), y: Number(baseRotator.props.y) };
+    const baseAnchor = {
+      x: Number(baseRotator.props.x),
+      y: Number(baseRotator.props.y)
+    };
     expect(Math.abs(Number(baseRotator.props.rotation))).toBe(0);
 
     for (const rotation of [90, 180, 270] as const) {
@@ -479,7 +583,9 @@ describe('RackCells', () => {
         rackRotationDeg: rotation
       });
       const rotator = rotatedRenderer.root.find(
-        (node) => String(node.type) === 'Group' && node.props.name === 'focused-address-label-rotator'
+        (node) =>
+          String(node.type) === 'Group' &&
+          node.props.name === 'focused-address-label-rotator'
       );
       expect(Number(rotator.props.rotation)).toBe(-rotation);
       expect(Number(rotator.props.x)).toBe(baseAnchor.x);
@@ -508,6 +614,109 @@ describe('RackCells', () => {
   it('keeps cell click behavior unchanged when labels are present', () => {
     const clicked = clickCellIdsWithCollector(0, ['level-only']);
     expect(clicked).toEqual(['cell-level-only-1', 'cell-level-only-2']);
+  });
+
+  it('culls offscreen cells in the default production path', () => {
+    const renderer = renderRackCellsWithProps({
+      geometryOverride: {
+        ...geometry,
+        x: 1000,
+        centerX: 1100
+      },
+      diagnosticsViewport: TEST_DIAGNOSTICS_VIEWPORT
+    });
+
+    expect(countInteractionRects(renderer)).toBe(0);
+    expect(getTextValuesByOwner(renderer, 'slot-label')).toEqual([]);
+  });
+
+  it('renders all cells when the internal unculled safety path is active', () => {
+    const renderer = renderRackCellsWithProps({
+      geometryOverride: {
+        ...geometry,
+        x: 1000,
+        centerX: 1100
+      },
+      diagnosticsFlags: UNCLIPPED_DIAGNOSTICS_FLAGS,
+      diagnosticsViewport: TEST_DIAGNOSTICS_VIEWPORT
+    });
+
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(
+      getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
+        /^\d+$/.test(value)
+      )
+    ).toEqual(['1', '2']);
+  });
+
+  it('force-renders selected, locate-target, and workflow-source cells outside the viewport', () => {
+    for (const forcedProps of [
+      { selectedCellId: 'cell-level-only-1' },
+      { locateTargetCellId: 'cell-level-only-1' },
+      { workflowSourceCellId: 'cell-level-only-1' }
+    ]) {
+      const renderer = renderRackCellsWithProps({
+        geometryOverride: {
+          ...geometry,
+          x: 1000,
+          centerX: 1100
+        },
+        diagnosticsViewport: TEST_DIAGNOSTICS_VIEWPORT,
+        ...forcedProps
+      });
+
+      expect(countInteractionRects(renderer)).toBe(1);
+    }
+  });
+
+  it('records aggregate culling metrics for rendered RackCells faces', () => {
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn()
+    });
+    resetCanvasCullingMetrics();
+
+    renderRackCellsWithProps({
+      geometryOverride: {
+        ...geometry,
+        x: 1000,
+        centerX: 1100
+      },
+      selectedCellId: 'cell-level-only-1',
+      diagnosticsViewport: TEST_DIAGNOSTICS_VIEWPORT
+    });
+
+    expect(window.__WOS_CANVAS_CULLING_METRICS__).toEqual({
+      cellsTotal: 2,
+      cellsRendered: 1,
+      cellsCulled: 1,
+      cullingRatio: 0.5
+    });
+  });
+
+  it('culls labels with their parent cells without globally disabling labels', () => {
+    const hiddenRenderer = renderRackCellsWithProps({
+      geometryOverride: {
+        ...geometry,
+        x: 1000,
+        centerX: 1100
+      },
+      diagnosticsViewport: TEST_DIAGNOSTICS_VIEWPORT
+    });
+    const visibleRenderer = renderRackCellsWithProps({
+      geometryOverride: {
+        ...geometry,
+        x: -350,
+        centerX: -250
+      },
+      diagnosticsViewport: TEST_DIAGNOSTICS_VIEWPORT
+    });
+
+    expect(getTextValuesByOwner(hiddenRenderer, 'slot-label')).toEqual([]);
+    expect(
+      getTextValuesByOwner(visibleRenderer, 'slot-label').filter((value) =>
+        /^\d+$/.test(value)
+      )
+    ).toEqual(['2']);
   });
 });
 
@@ -541,7 +750,9 @@ const TEST_PALETTE: CellVisualPalette = {
   emptyStroke: 'empty-stroke'
 };
 
-function resolveVisual(overrides: Partial<Parameters<typeof resolveCellVisualState>[0]> = {}) {
+function resolveVisual(
+  overrides: Partial<Parameters<typeof resolveCellVisualState>[0]> = {}
+) {
   return resolveCellVisualState(
     {
       isInteractive: true,
@@ -564,7 +775,10 @@ function resolveVisual(overrides: Partial<Parameters<typeof resolveCellVisualSta
 
 describe('rack-cells visual-state channel ownership', () => {
   it('selected keeps canonical fill and adds outline only', () => {
-    const visual = resolveVisual({ isSelected: true, runtimeStatus: 'reserved' });
+    const visual = resolveVisual({
+      isSelected: true,
+      runtimeStatus: 'reserved'
+    });
     expect(visual.surface.fill).toBe('reserved-fill');
     expect(visual.surface.stroke).toBe('reserved-stroke');
     expect(visual.outline).toEqual({
@@ -631,7 +845,13 @@ describe('rack-cells visual-state channel ownership', () => {
 });
 
 type LayeredRenderOptions = {
-  runtimeStatus?: 'stocked' | 'pick_active' | 'reserved' | 'quarantined' | 'empty' | null;
+  runtimeStatus?:
+    | 'stocked'
+    | 'pick_active'
+    | 'reserved'
+    | 'quarantined'
+    | 'empty'
+    | null;
   selected?: boolean;
   locateTarget?: boolean;
   searchHit?: boolean;
@@ -648,7 +868,6 @@ const CELL_STROKE_SELECTED = '#0f6a8e';
 const CELL_FILL_LOCATE_TARGET = 'rgba(0, 122, 92, 0.18)';
 const CELL_STROKE_LOCATE_TARGET = '#007a5c';
 const CELL_FILL_SEARCH_HIT = 'rgba(211, 141, 0, 0.14)';
-const CELL_STROKE_SEARCH_HIT = '#b7791f';
 const CELL_FILL_WORKFLOW_SOURCE = 'rgba(86, 44, 145, 0.14)';
 const CELL_STROKE_WORKFLOW_SOURCE = '#6b46c1';
 const CELL_FILL_LOCKED = 'rgba(120, 61, 18, 0.16)';
@@ -697,9 +916,16 @@ function createSingleSlotCellsMap(levelId: string, includeCell: boolean) {
 function renderLayeredCell(options: LayeredRenderOptions = {}) {
   const levelId = 'level-only';
   const cellId = `cell-${levelId}-1`;
-  const cellsMap = createSingleSlotCellsMap(levelId, !options.missingCellIdentity);
-  const occupiedCellIds = options.occupied ? new Set<string>([cellId]) : new Set<string>();
-  const highlightedCellIds = options.searchHit ? new Set<string>([cellId]) : new Set<string>();
+  const cellsMap = createSingleSlotCellsMap(
+    levelId,
+    !options.missingCellIdentity
+  );
+  const occupiedCellIds = options.occupied
+    ? new Set<string>([cellId])
+    : new Set<string>();
+  const highlightedCellIds = options.searchHit
+    ? new Set<string>([cellId])
+    : new Set<string>();
   const cellRuntimeById = new Map<string, OperationsCellRuntime>(
     options.runtimeStatus
       ? [[cellId, { status: options.runtimeStatus } as OperationsCellRuntime]]
@@ -738,10 +964,11 @@ function getRects(renderer: TestRenderer.ReactTestRenderer) {
 }
 
 function getHitRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getRects(renderer).filter((rect) =>
-    rect.props.opacity === 0 &&
-    rect.props.fillEnabled === false &&
-    rect.props.strokeEnabled === false
+  return getRects(renderer).filter(
+    (rect) =>
+      rect.props.opacity === 0 &&
+      rect.props.fillEnabled === false &&
+      rect.props.strokeEnabled === false
   );
 }
 
@@ -753,17 +980,23 @@ function getSurfaceRects(renderer: TestRenderer.ReactTestRenderer) {
 
 function getOutlineRects(renderer: TestRenderer.ReactTestRenderer) {
   return getSurfaceRects(renderer).filter(
-    (rect) => rect.props.strokeEnabled === true && rect.props.fillEnabled !== true
+    (rect) =>
+      rect.props.strokeEnabled === true && rect.props.fillEnabled !== true
   );
 }
 
 function getHaloRects(renderer: TestRenderer.ReactTestRenderer) {
-  return getRects(renderer).filter((rect) => Number(rect.props.cornerRadius) >= 2);
+  return getRects(renderer).filter(
+    (rect) => Number(rect.props.cornerRadius) >= 2
+  );
 }
 
 function getBadgeRects(renderer: TestRenderer.ReactTestRenderer) {
   return getRects(renderer).filter(
-    (rect) => rect.props.cornerRadius === 1 && Number(rect.props.width) <= 40 && rect.props.opacity === 1
+    (rect) =>
+      rect.props.cornerRadius === 1 &&
+      Number(rect.props.width) <= 40 &&
+      rect.props.opacity === 1
   );
 }
 
@@ -771,19 +1004,19 @@ function getTruthMarkerRects(renderer: TestRenderer.ReactTestRenderer) {
   return getRects(renderer).filter(
     (rect) =>
       rect.props.cornerRadius === 0.6 ||
-      (
-        Number(rect.props.width) < 100 &&
+      (Number(rect.props.width) < 100 &&
         rect.props.fillEnabled === false &&
         rect.props.strokeEnabled === true &&
         Number(rect.props.opacity) >= 0.8 &&
-        Number(rect.props.opacity) < 1
-      )
+        Number(rect.props.opacity) < 1)
   );
 }
 
 function getDotCircles(renderer: TestRenderer.ReactTestRenderer) {
   return renderer.root.findAll(
-    (node) => String(node.type) === 'Circle' && node.props.fill === CELL_FILL_RESERVED_DOT
+    (node) =>
+      String(node.type) === 'Circle' &&
+      node.props.fill === CELL_FILL_RESERVED_DOT
   );
 }
 
@@ -794,14 +1027,22 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
 
-    const surfaceRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
     const outlineRects = getOutlineRects(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_RESERVED);
-    expect(surfaceRects.map((rect) => rect.props.fill)).not.toContain('selected-fill');
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_RESERVED
+    );
+    expect(surfaceRects.map((rect) => rect.props.fill)).not.toContain(
+      'selected-fill'
+    );
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
-    expect(outlineRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
+    expect(outlineRects.map((rect) => rect.props.stroke)).toContain(
+      CELL_STROKE_SELECTED
+    );
     expect(getHaloRects(renderer)).toHaveLength(0);
     expect(getBadgeRects(renderer)).toHaveLength(0);
     expect(hitRects).toHaveLength(1);
@@ -815,15 +1056,25 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
     const haloRects = getHaloRects(renderer);
-    const surfaceRect = getSurfaceRects(renderer).find((rect) => rect.props.fillEnabled === true);
+    const surfaceRect = getSurfaceRects(renderer).find(
+      (rect) => rect.props.fillEnabled === true
+    );
 
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
-    expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
-    expect(haloRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
+    expect(
+      getOutlineRects(renderer).map((rect) => rect.props.stroke)
+    ).toContain(CELL_STROKE_SELECTED);
+    expect(haloRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_LOCATE_TARGET
+    );
     expect(haloRects[0]?.props.strokeScaleEnabled).toBe(false);
     expect(haloRects[0]?.props.strokeWidth).toBe(2.6);
-    expect(Number(haloRects[0]?.props.x)).toBeLessThan(Number(surfaceRect?.props.x));
-    expect(Number(haloRects[0]?.props.width)).toBeGreaterThan(Number(surfaceRect?.props.width));
+    expect(Number(haloRects[0]?.props.x)).toBeLessThan(
+      Number(surfaceRect?.props.x)
+    );
+    expect(Number(haloRects[0]?.props.width)).toBeGreaterThan(
+      Number(surfaceRect?.props.width)
+    );
   });
 
   it('selected + search-hit renders independent outline and search halo', () => {
@@ -834,8 +1085,12 @@ describe('RackCells layered paint ownership', () => {
     });
 
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
-    expect(getOutlineRects(renderer).map((rect) => rect.props.stroke)).toContain(CELL_STROKE_SELECTED);
-    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_SEARCH_HIT);
+    expect(
+      getOutlineRects(renderer).map((rect) => rect.props.stroke)
+    ).toContain(CELL_STROKE_SELECTED);
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_SEARCH_HIT
+    );
   });
 
   it('locate-target suppresses search-hit in the halo slot', () => {
@@ -845,8 +1100,12 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'stocked'
     });
 
-    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toEqual([CELL_FILL_LOCATE_TARGET]);
-    expect(getHaloRects(renderer).map((rect) => rect.props.stroke)).toEqual([CELL_STROKE_LOCATE_TARGET]);
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toEqual([
+      CELL_FILL_LOCATE_TARGET
+    ]);
+    expect(getHaloRects(renderer).map((rect) => rect.props.stroke)).toEqual([
+      CELL_STROKE_LOCATE_TARGET
+    ]);
   });
 
   it('invalid-target uses a badge and does not repaint the main surface', () => {
@@ -855,14 +1114,24 @@ describe('RackCells layered paint ownership', () => {
       occupied: true
     });
 
-    const surfaceRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
     const badgeRects = getBadgeRects(renderer);
     const hitRects = getHitRects(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_STOCKED);
-    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_STOCKED);
-    expect(badgeRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCKED);
-    expect(badgeRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_LOCKED);
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_STOCKED
+    );
+    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(
+      CELL_STROKE_STOCKED
+    );
+    expect(badgeRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_LOCKED
+    );
+    expect(badgeRects.map((rect) => rect.props.stroke)).toContain(
+      CELL_STROKE_LOCKED
+    );
     expect(hitRects).toHaveLength(1);
     expect(hitRects[0]?.props.onClick).toBeUndefined();
   });
@@ -873,7 +1142,9 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'stocked'
     });
 
-    expect(getBadgeRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_WORKFLOW_SOURCE);
+    expect(getBadgeRects(renderer).map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_WORKFLOW_SOURCE
+    );
     expect(getBadgeRects(renderer).map((rect) => rect.props.stroke)).toContain(
       CELL_STROKE_WORKFLOW_SOURCE
     );
@@ -884,17 +1155,23 @@ describe('RackCells layered paint ownership', () => {
       occupied: true
     });
 
-    const surfaceRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
     const truthMarkerRects = getTruthMarkerRects(renderer);
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_STOCKED);
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_STOCKED
+    );
     expect(truthMarkerRects.length).toBeGreaterThan(0);
   });
 
   it('unknown truth keeps the base surface and adds only an internal marker', () => {
     const renderer = renderLayeredCell();
 
-    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getSurfaceRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
     const truthMarkerRects = getRects(renderer).filter(
       (rect) =>
         rect.props.fillEnabled === false &&
@@ -902,7 +1179,9 @@ describe('RackCells layered paint ownership', () => {
         Number(rect.props.opacity) === 0.82
     );
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_A_RACK_SELECTED);
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_A_RACK_SELECTED
+    );
     expect(truthMarkerRects.length).toBeGreaterThan(0);
     expect(truthMarkerRects[0]?.props.fillEnabled).toBe(false);
     expect(getHaloRects(renderer)).toHaveLength(0);
@@ -914,10 +1193,16 @@ describe('RackCells layered paint ownership', () => {
       runtimeStatus: 'reserved'
     });
 
-    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getSurfaceRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
 
-    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(CELL_FILL_RESERVED);
-    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(CELL_STROKE_RESERVED);
+    expect(surfaceRects.map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_RESERVED
+    );
+    expect(surfaceRects.map((rect) => rect.props.stroke)).toContain(
+      CELL_STROKE_RESERVED
+    );
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(getHaloRects(renderer)).toHaveLength(0);
     expect(getBadgeRects(renderer)).toHaveLength(0);
@@ -930,7 +1215,9 @@ describe('RackCells layered paint ownership', () => {
     });
 
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
-    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(CELL_FILL_LOCATE_TARGET);
+    expect(getHaloRects(renderer).map((rect) => rect.props.fill)).toContain(
+      CELL_FILL_LOCATE_TARGET
+    );
     expect(getBadgeRects(renderer)).toHaveLength(0);
   });
 
@@ -952,9 +1239,13 @@ describe('RackCells layered paint ownership', () => {
       );
     });
 
-    const filledRects = getRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const filledRects = getRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
 
-    expect(filledRects.map((rect) => rect.props.fill)).toContain('reserved-fill');
+    expect(filledRects.map((rect) => rect.props.fill)).toContain(
+      'reserved-fill'
+    );
     expect(getDotCircles(renderer)).toHaveLength(0);
   });
 
@@ -962,7 +1253,9 @@ describe('RackCells layered paint ownership', () => {
     const renderer = renderLayeredCell({
       missingCellIdentity: true
     });
-    const surfaceRects = getSurfaceRects(renderer).filter((rect) => rect.props.fillEnabled === true);
+    const surfaceRects = getSurfaceRects(renderer).filter(
+      (rect) => rect.props.fillEnabled === true
+    );
     const hitRects = getHitRects(renderer);
 
     expect(surfaceRects).toHaveLength(1);
