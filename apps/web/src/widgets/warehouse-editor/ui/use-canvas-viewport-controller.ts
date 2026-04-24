@@ -10,6 +10,7 @@ import {
   WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
 import { getRackBoundingBox } from '@/entities/layout-version/lib/rack-spacing';
+import { recordCanvasCameraStoreUpdate } from './canvas-diagnostics';
 
 type CanvasViewport = {
   width: number;
@@ -116,6 +117,7 @@ export function useCanvasViewportController({
 
     // Atomic camera update — zoom and offset written in a single store transaction.
     useCameraStore.getState().setCamera(targetZoom, newOffsetX, newOffsetY);
+    recordCanvasCameraStoreUpdate('camera');
   }, [viewMode]);
   // Intentionally reads viewport/autoFitRacks/zoom via closure at transition time —
   // re-running on their changes would fight the user's manual zoom adjustments.
@@ -144,6 +146,7 @@ export function useCanvasViewportController({
         offsetAtPanStartRef.current.x + dx,
         offsetAtPanStartRef.current.y + dy
       );
+      recordCanvasCameraStoreUpdate('offset');
     };
 
     const onMouseUp = (event: MouseEvent) => {
@@ -174,6 +177,7 @@ export function useCanvasViewportController({
     const camera = useCameraStore.getState();
     const nextCamera = getZoomToCursorCamera(camera, cursor, nextZoom);
     camera.setCamera(nextCamera.zoom, nextCamera.offsetX, nextCamera.offsetY);
+    recordCanvasCameraStoreUpdate('camera');
   }, []);
 
   return {

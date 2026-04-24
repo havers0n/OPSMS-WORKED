@@ -75,7 +75,10 @@ import { useCanvasViewportController } from './use-canvas-viewport-controller';
 import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
 import { getWarehouseCanvasChromeTokens } from './shapes/warehouse-semantic-canvas-palette';
-import { useCanvasDiagnosticsFlags } from './canvas-diagnostics';
+import {
+  recordCanvasComponentRender,
+  useCanvasDiagnosticsFlags
+} from './canvas-diagnostics';
 
 const EMPTY_RACK_IDS: string[] = [];
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
@@ -416,6 +419,51 @@ export function EditorCanvas({
       ),
     [canvasOffset, forcedVisibleRackIds, racks, viewport, zoom]
   );
+
+  recordCanvasComponentRender({
+    component: 'EditorCanvas',
+    propsKeys: ['floorId', 'isStorageV2'],
+    stateKeys: [
+      'zoom',
+      'viewMode',
+      'editorMode',
+      'canvasOffsetX',
+      'canvasOffsetY',
+      'viewportWidth',
+      'viewportHeight',
+      'visibleRackCount',
+      'lod',
+      'selectedRackId',
+      'selectedCellId',
+      'hoveredRackId',
+      'diagnosticsLabels',
+      'diagnosticsHitTest',
+      'diagnosticsCells',
+      'diagnosticsCellOverlays',
+      'diagnosticsCulling'
+    ],
+    snapshot: {
+      floorId: workspace?.floorId ?? null,
+      isStorageV2,
+      zoom,
+      viewMode,
+      editorMode,
+      canvasOffsetX: canvasOffset.x,
+      canvasOffsetY: canvasOffset.y,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      visibleRackCount: visibleRacks.length,
+      lod,
+      selectedRackId: effectiveSelectedRackId,
+      selectedCellId: effectiveSelectedCellId,
+      hoveredRackId,
+      diagnosticsLabels: diagnosticsFlags.labels,
+      diagnosticsHitTest: diagnosticsFlags.hitTest,
+      diagnosticsCells: diagnosticsFlags.cells,
+      diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
+      diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling
+    }
+  });
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;

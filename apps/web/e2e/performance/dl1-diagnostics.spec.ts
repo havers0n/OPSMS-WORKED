@@ -61,6 +61,35 @@ type RawProbeResult = {
   } | null;
 };
 
+type RenderCauseCounts = {
+  stateUpdates: number;
+  propsChanges: number;
+  parentRerenders: number;
+};
+
+type RenderComponentMetrics = {
+  renders: number;
+  causes: RenderCauseCounts;
+  changedKeys: Record<string, number>;
+};
+
+type RenderPipelineDiagnostics = {
+  enabled: boolean;
+  cameraStoreUpdates: number;
+  offsetUpdates: number;
+  zoomCameraUpdates: number;
+  components: {
+    EditorCanvas: RenderComponentMetrics;
+    RackLayer: RenderComponentMetrics;
+    RackCells: RenderComponentMetrics;
+  };
+  konva: {
+    layerDrawCalls: number;
+    layerBatchDrawCalls: number;
+    rackLayerNodeCount: number;
+  };
+};
+
 type FrameBucket = {
   count: number;
   percent: number;
@@ -126,6 +155,7 @@ type ReportEntry = {
   budgetFailures: string[];
   deltaVsProductionCulling: DeltaVsProductionCulling;
   deltaVsFullRender: DeltaVsProductionCulling;
+  renderPipeline: RenderPipelineDiagnostics;
   browserEnvironment: BrowserEnvironment;
   seed: {
     floorId: string;
@@ -496,6 +526,61 @@ async function getCanvasCullingMetrics(page: Page): Promise<CullingMetrics> {
   });
 }
 
+async function startRenderPipelineProbe(page: Page) {
+  await page.evaluate(() => {
+    const createComponentMetrics = () => ({
+      renders: 0,
+      causes: {
+        stateUpdates: 0,
+        propsChanges: 0,
+        parentRerenders: 0
+      },
+      changedKeys: {}
+    });
+    const global = window as unknown as {
+      __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+      __WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__?: Record<
+        string,
+        Record<string, unknown>
+      >;
+    };
+    global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ = {
+      enabled: true,
+      cameraStoreUpdates: 0,
+      offsetUpdates: 0,
+      zoomCameraUpdates: 0,
+      components: {
+        EditorCanvas: createComponentMetrics(),
+        RackLayer: createComponentMetrics(),
+        RackCells: createComponentMetrics()
+      },
+      konva: {
+        layerDrawCalls: 0,
+        layerBatchDrawCalls: 0,
+        rackLayerNodeCount: 0
+      }
+    };
+    global.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
+  });
+}
+
+async function stopRenderPipelineProbe(
+  page: Page
+): Promise<RenderPipelineDiagnostics> {
+  return page.evaluate(() => {
+    const global = window as unknown as {
+      __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+    };
+    const diagnostics = global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
+    if (!diagnostics) {
+      throw new Error('DL1 render pipeline probe was not started.');
+    }
+
+    diagnostics.enabled = false;
+    return diagnostics;
+  });
+}
+
 async function startFrameProbe(page: Page) {
   await page.evaluate(() => {
     type ProbeState = {
@@ -728,6 +813,7 @@ async function runMeasuredScenario({
     await page.goto('/warehouse');
     await setDiagnosticsFlags(page, flags);
     const browserEnvironment = await getBrowserEnvironment(page);
+    await startRenderPipelineProbe(page);
     await startFrameProbe(page);
     await page.evaluate((url) => {
       window.history.pushState(null, '', url);
@@ -735,11 +821,13 @@ async function runMeasuredScenario({
     }, `/warehouse/view?floor=${floorId}`);
     await waitForWarehouseCanvas(page);
     const rawResult = await stopFrameProbe(page);
+    const renderPipeline = await stopRenderPipelineProbe(page);
     const cullingMetrics = await getCanvasCullingMetrics(page);
     return {
       ...summarizeMetrics(rawResult),
       browserEnvironment,
-      cullingMetrics
+      cullingMetrics,
+      renderPipeline
     };
   }
 
@@ -747,20 +835,24 @@ async function runMeasuredScenario({
     await page.goto('/warehouse');
     await setDiagnosticsFlags(page, flags);
     const browserEnvironment = await getBrowserEnvironment(page);
+    await startRenderPipelineProbe(page);
     await startFrameProbe(page);
     await selectFloorById(page, floorId);
     await waitForWarehouseCanvas(page);
     const rawResult = await stopFrameProbe(page);
+    const renderPipeline = await stopRenderPipelineProbe(page);
     const cullingMetrics = await getCanvasCullingMetrics(page);
     return {
       ...summarizeMetrics(rawResult),
       browserEnvironment,
-      cullingMetrics
+      cullingMetrics,
+      renderPipeline
     };
   }
 
   await prepareWarehouseEditor(page, floorId, flags);
   const browserEnvironment = await getBrowserEnvironment(page);
+  await startRenderPipelineProbe(page);
   await startFrameProbe(page);
 
   if (scenario === 'pan') {
@@ -774,8 +866,169 @@ async function runMeasuredScenario({
   }
 
   const rawResult = await stopFrameProbe(page);
+  const renderPipeline = await stopRenderPipelineProbe(page);
   const cullingMetrics = await getCanvasCullingMetrics(page);
-  return { ...summarizeMetrics(rawResult), browserEnvironment, cullingMetrics };
+  return {
+    ...summarizeMetrics(rawResult),
+    browserEnvironment,
+    cullingMetrics,
+    renderPipeline
+  };
+}
+
+function findEntry(
+  entries: ReportEntry[],
+  variant: string,
+  profileName = 'native-desktop'
+) {
+  return (
+    entries.find(
+      (entry) =>
+        entry.variant === variant && entry.profile.name === profileName
+    ) ??
+    entries.find((entry) => entry.variant === variant) ??
+    null
+  );
+}
+
+function formatDelta(value: number | null | undefined) {
+  if (value === null || value === undefined) return 'n/a';
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function summarizeChangedKeys(metrics: RenderComponentMetrics) {
+  return Object.entries(metrics.changedKeys)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([key, count]) => `${key}:${count}`)
+    .join(', ');
+}
+
+function componentRenderLine(
+  name: keyof RenderPipelineDiagnostics['components'],
+  diagnostics: RenderPipelineDiagnostics
+) {
+  const metrics = diagnostics.components[name];
+  const changedKeys = summarizeChangedKeys(metrics);
+  return `${name} renders: ${metrics.renders} (state updates: ${metrics.causes.stateUpdates}, props changes: ${metrics.causes.propsChanges}, parent re-render: ${metrics.causes.parentRerenders}${changedKeys ? `, top changes: ${changedKeys}` : ''})`;
+}
+
+function buildRenderPipelineMarkdown(
+  scenario: ScenarioName,
+  entries: ReportEntry[]
+) {
+  const production = findEntry(entries, 'production-culling');
+  const hitTestOff = findEntry(entries, 'hit-test-off');
+  const labelsOff = findEntry(entries, 'labels-off');
+  const unculled = findEntry(entries, 'unculled-baseline');
+  if (!production) {
+    return '# DL1 Render Pipeline Diagnostics\n\nNo production-culling baseline entry was recorded.';
+  }
+
+  const diagnostics = production.renderPipeline;
+  const drawCalls =
+    diagnostics.konva.layerDrawCalls + diagnostics.konva.layerBatchDrawCalls;
+  const hitP95Delta =
+    hitTestOff && production
+      ? round(hitTestOff.metrics.p95FrameMs - production.metrics.p95FrameMs)
+      : null;
+  const hitLongTaskDelta =
+    hitTestOff && production
+      ? hitTestOff.metrics.longTaskCount - production.metrics.longTaskCount
+      : null;
+  const labelP95Delta =
+    labelsOff && production
+      ? round(labelsOff.metrics.p95FrameMs - production.metrics.p95FrameMs)
+      : null;
+  const labelLongTaskDelta =
+    labelsOff && production
+      ? labelsOff.metrics.longTaskCount - production.metrics.longTaskCount
+      : null;
+  const cullingExplanation =
+    production.cellsCulled > 0
+      ? `Culling removed ${production.cellsCulled} of ${production.cellsTotal} cells.`
+      : 'Culling did not remove cells in this measured viewport/level.';
+  const panClassification =
+    scenario !== 'pan'
+      ? 'Not classified in this scenario; pan classification is based on pan samples only.'
+      : diagnostics.offsetUpdates > 0 &&
+          diagnostics.components.EditorCanvas.renders > 0 &&
+          diagnostics.components.RackLayer.renders > 0 &&
+          drawCalls > 0
+        ? `React-driven: ${diagnostics.offsetUpdates} offset updates correlated with ${diagnostics.components.EditorCanvas.renders} EditorCanvas renders, ${diagnostics.components.RackLayer.renders} RackLayer renders, ${diagnostics.components.RackCells.renders} RackCells renders, and ${drawCalls} rack-layer draw/batchDraw calls.`
+        : diagnostics.offsetUpdates === 0 &&
+            diagnostics.components.EditorCanvas.renders === 0 &&
+            diagnostics.components.RackLayer.renders === 0
+          ? 'Transform-only: no offset updates or React component renders were recorded during the pan sample.'
+          : `Mixed/needs review: offset updates=${diagnostics.offsetUpdates}, EditorCanvas renders=${diagnostics.components.EditorCanvas.renders}, RackLayer renders=${diagnostics.components.RackLayer.renders}, RackCells renders=${diagnostics.components.RackCells.renders}, draw calls=${drawCalls}.`;
+  const rootCauses = [
+    diagnostics.offsetUpdates > 0
+      ? `Camera offset/store updates occurred during the sample: ${diagnostics.offsetUpdates} offset updates.`
+      : 'No camera offset updates were recorded during the sample.',
+    diagnostics.components.RackCells.renders > diagnostics.offsetUpdates
+      ? `RackCells rendered ${diagnostics.components.RackCells.renders} times, exceeding offset updates and indicating per-rack render fan-out.`
+      : `RackCells renders (${diagnostics.components.RackCells.renders}) did not exceed offset updates (${diagnostics.offsetUpdates}).`,
+    production.metrics.longTaskCount > 0
+      ? `Main thread long tasks were present: ${production.metrics.longTaskCount} tasks totaling ${production.metrics.longTaskTotalMs}ms.`
+      : 'No main-thread long tasks were recorded.'
+  ];
+  const recommendedFirstFix =
+    scenario === 'pan' &&
+    diagnostics.offsetUpdates > 0 &&
+    diagnostics.components.EditorCanvas.renders > 0
+      ? 'Prototype pan as a transform-only camera path and re-run this same diagnostics matrix.'
+      : 'Use the largest measured delta in this report as the first optimization target.';
+
+  return `# DL1 Render Pipeline Diagnostics
+
+## React Rendering
+${componentRenderLine('EditorCanvas', diagnostics)}
+${componentRenderLine('RackLayer', diagnostics)}
+${componentRenderLine('RackCells', diagnostics)}
+
+## Konva Rendering
+Layer draw calls: ${diagnostics.konva.layerDrawCalls}
+Layer batchDraw calls: ${diagnostics.konva.layerBatchDrawCalls}
+Konva node count: ${diagnostics.konva.rackLayerNodeCount}
+
+## Pan Architecture
+${panClassification}
+
+Camera/store updates: ${diagnostics.cameraStoreUpdates}
+Offset updates: ${diagnostics.offsetUpdates}
+Zoom camera updates: ${diagnostics.zoomCameraUpdates}
+
+## Hit Test Impact
+p95FrameMs difference: ${formatDelta(hitP95Delta)}
+longTaskCount difference: ${formatDelta(hitLongTaskDelta)}
+Conclusion: ${hitTestOff ? 'Measured by comparing production-culling with hit-test-off.' : 'hit-test-off variant was not recorded.'}
+
+## Label Impact
+p95FrameMs difference: ${formatDelta(labelP95Delta)}
+longTaskCount difference: ${formatDelta(labelLongTaskDelta)}
+Conclusion: ${labelsOff ? `Measured for ${scenario} by comparing production-culling with labels-off.` : 'labels-off variant was not recorded.'}
+
+## Culling Effectiveness
+cellsTotal: ${production.cellsTotal}
+cellsRendered: ${production.cellsRendered}
+cellsCulled: ${production.cellsCulled}
+cullingRatio: ${production.cullingRatio}
+${cullingExplanation}
+${unculled ? `Unculled p95FrameMs delta: ${formatDelta(unculled.deltaVsProductionCulling?.p95FrameMsDelta)}` : 'Unculled baseline was not recorded.'}
+
+## Main Thread Analysis
+longTaskCount: ${production.metrics.longTaskCount}
+longTaskTotalMs: ${production.metrics.longTaskTotalMs}
+worstFrameMs: ${production.metrics.worstFrameMs}
+Conclusion: ${production.metrics.longTaskCount > 0 ? 'Frames include JS main-thread blocking.' : 'No long-task evidence of JS main-thread blocking in this run.'}
+
+## Root Cause
+1. ${rootCauses[0]}
+2. ${rootCauses[1]}
+3. ${rootCauses[2]}
+
+## Recommended First Fix
+- ${recommendedFirstFix}`;
 }
 
 test.describe('DL1 diagnostics harness', () => {
@@ -857,6 +1110,7 @@ test.describe('DL1 diagnostics harness', () => {
                 budgetFailures,
                 deltaVsProductionCulling,
                 deltaVsFullRender: deltaVsProductionCulling,
+                renderPipeline: result.renderPipeline,
                 browserEnvironment: result.browserEnvironment,
                 seed: {
                   floorId: floor.id,
@@ -881,6 +1135,7 @@ test.describe('DL1 diagnostics harness', () => {
         generatedAt: new Date().toISOString(),
         sampleDurationMs: SAMPLE_DURATION_MS,
         scenario,
+        renderPipelineReport: buildRenderPipelineMarkdown(scenario, entries),
         entries
       };
       const reportPath = testInfo.outputPath(
@@ -901,6 +1156,16 @@ test.describe('DL1 diagnostics harness', () => {
           avgFps: entry.metrics.averageFps,
           p95FrameMs: entry.metrics.p95FrameMs,
           worstFrameMs: entry.metrics.worstFrameMs,
+          offsetUpdates: entry.renderPipeline.offsetUpdates,
+          editorRenders:
+            entry.renderPipeline.components.EditorCanvas.renders,
+          rackLayerRenders:
+            entry.renderPipeline.components.RackLayer.renders,
+          rackCellsRenders:
+            entry.renderPipeline.components.RackCells.renders,
+          drawCalls:
+            entry.renderPipeline.konva.layerDrawCalls +
+            entry.renderPipeline.konva.layerBatchDrawCalls,
           cullingRatio: entry.cullingRatio,
           gt100MsPct:
             entry.frameBuckets.gt100To250Ms.percent +

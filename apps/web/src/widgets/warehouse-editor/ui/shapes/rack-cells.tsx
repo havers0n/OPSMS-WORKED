@@ -31,6 +31,7 @@ import {
 } from './rack-label-overlays';
 import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
 import {
+  recordCanvasComponentRender,
   recordCanvasCullingMetrics,
   type CanvasDiagnosticsFlags
 } from '../canvas-diagnostics';
@@ -379,6 +380,67 @@ export function RackCells({
   const normalizedSemanticLevels =
     semanticLevels ??
     collectFaceSemanticLevels([faceA, ...(faceB ? [faceB] : [])]);
+
+  recordCanvasComponentRender({
+    component: 'RackCells',
+    instanceId: rackId,
+    propsKeys: [
+      'geometryX',
+      'geometryY',
+      'geometryWidth',
+      'geometryHeight',
+      'activeLevelIndex',
+      'isInteractive',
+      'isSelected',
+      'isWorkflowScope',
+      'isPassive',
+      'selectedCellId',
+      'locateTargetCellId',
+      'workflowSourceCellId',
+      'showCellNumbers',
+      'showFocusedFullAddress',
+      'cellNumberProminence',
+      'diagnosticsLabels',
+      'diagnosticsHitTest',
+      'diagnosticsCells',
+      'diagnosticsCellOverlays',
+      'diagnosticsCulling',
+      'canvasOffsetX',
+      'canvasOffsetY',
+      'viewportWidth',
+      'viewportHeight',
+      'zoom',
+      'highlightedCellCount'
+    ],
+    snapshot: {
+      geometryX: geometry.x,
+      geometryY: geometry.y,
+      geometryWidth: geometry.width,
+      geometryHeight: geometry.height,
+      activeLevelIndex,
+      isInteractive,
+      isSelected,
+      isWorkflowScope,
+      isPassive,
+      selectedCellId,
+      locateTargetCellId,
+      workflowSourceCellId,
+      showCellNumbers,
+      showFocusedFullAddress,
+      cellNumberProminence,
+      diagnosticsLabels: diagnosticsFlags.labels,
+      diagnosticsHitTest: diagnosticsFlags.hitTest,
+      diagnosticsCells: diagnosticsFlags.cells,
+      diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
+      diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
+      canvasOffsetX: diagnosticsViewport.canvasOffset.x,
+      canvasOffsetY: diagnosticsViewport.canvasOffset.y,
+      viewportWidth: diagnosticsViewport.viewport.width,
+      viewportHeight: diagnosticsViewport.viewport.height,
+      zoom: diagnosticsViewport.zoom,
+      highlightedCellCount: highlightedCellIds.size
+    }
+  });
 
   return (
     <Group listening={isInteractive}>

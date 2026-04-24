@@ -1,4 +1,5 @@
 import { buildCellStructureKey, type Cell, type OperationsCellRuntime, type Rack, type RackFace } from '@wos/domain';
+import { useEffect, useRef } from 'react';
 import type Konva from 'konva';
 import { Group, Layer, Rect } from 'react-konva';
 import {
@@ -15,7 +16,12 @@ import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
 import { RackSections } from './shapes/rack-sections';
-import type { CanvasDiagnosticsFlags } from './canvas-diagnostics';
+import {
+  recordCanvasComponentRender,
+  recordCanvasKonvaLayerDraw,
+  recordCanvasRackLayerNodeCount,
+  type CanvasDiagnosticsFlags
+} from './canvas-diagnostics';
 
 type SnapGuide = {
   type: 'x' | 'y';
@@ -27,6 +33,17 @@ const MIN_CELL_H = 4;
 const CELL_INSET = 4;
 
 type LocalPoint = { x: number; y: number };
+
+function countKonvaNodeTree(node: Konva.Node): number {
+  const container = node as Konva.Container;
+  const children =
+    typeof container.getChildren === 'function' ? container.getChildren() : [];
+  let count = 1;
+  children.forEach((child) => {
+    count += countKonvaNodeTree(child);
+  });
+  return count;
+}
 
 function resolveCellIdFromFaceAtPoint({
   face,
@@ -259,6 +276,81 @@ export function RackLayer({
   const labelsEnabled = diagnosticsFlags.labels === 'normal';
   const hitTestEnabled = diagnosticsFlags.hitTest === 'normal';
   const renderCells = diagnosticsFlags.cells !== 'off';
+  const layerRef = useRef<Konva.Layer | null>(null);
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    const diagnosticLayer = layer as Konva.Layer & {
+      __wosDrawDiagnosticsWrapped?: boolean;
+    };
+    if (!diagnosticLayer.__wosDrawDiagnosticsWrapped) {
+      const originalDraw = layer.draw.bind(layer);
+      const originalBatchDraw = layer.batchDraw.bind(layer);
+      layer.draw = (...args: Parameters<Konva.Layer['draw']>) => {
+        recordCanvasKonvaLayerDraw('draw');
+        return originalDraw(...args);
+      };
+      layer.batchDraw = (...args: Parameters<Konva.Layer['batchDraw']>) => {
+        recordCanvasKonvaLayerDraw('batchDraw');
+        return originalBatchDraw(...args);
+      };
+      diagnosticLayer.__wosDrawDiagnosticsWrapped = true;
+    }
+
+    recordCanvasRackLayerNodeCount(countKonvaNodeTree(layer));
+  });
+
+  recordCanvasComponentRender({
+    component: 'RackLayer',
+    propsKeys: [
+      'rackIds',
+      'zoom',
+      'selectedRackIds',
+      'hoveredRackId',
+      'canvasSelectedCellId',
+      'canSelectCells',
+      'canSelectRack',
+      'isLayoutEditable',
+      'isLayoutMode',
+      'isStorageMode',
+      'isViewMode',
+      'lod',
+      'diagnosticsLabels',
+      'diagnosticsHitTest',
+      'diagnosticsCells',
+      'diagnosticsCellOverlays',
+      'diagnosticsCulling',
+      'canvasOffsetX',
+      'canvasOffsetY',
+      'viewportWidth',
+      'viewportHeight'
+    ],
+    snapshot: {
+      rackIds: racks.map((rack) => rack.id).join('|'),
+      zoom,
+      selectedRackIds: selectedRackIds.join('|'),
+      hoveredRackId,
+      canvasSelectedCellId,
+      canSelectCells,
+      canSelectRack,
+      isLayoutEditable,
+      isLayoutMode,
+      isStorageMode,
+      isViewMode,
+      lod,
+      diagnosticsLabels: diagnosticsFlags.labels,
+      diagnosticsHitTest: diagnosticsFlags.hitTest,
+      diagnosticsCells: diagnosticsFlags.cells,
+      diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
+      diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
+      canvasOffsetX: diagnosticsViewport.canvasOffset.x,
+      canvasOffsetY: diagnosticsViewport.canvasOffset.y,
+      viewportWidth: diagnosticsViewport.viewport.width,
+      viewportHeight: diagnosticsViewport.viewport.height
+    }
+  });
 
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     if (!isLayoutEditable) return;
@@ -356,7 +448,7 @@ export function RackLayer({
   // This is necessary because RackCells.onCellClick only receives cellId.
 
   return (
-    <Layer>
+    <Layer ref={layerRef} name="rack-layer">
       {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
         const isSelected = selectedRackIds.includes(rack.id);
