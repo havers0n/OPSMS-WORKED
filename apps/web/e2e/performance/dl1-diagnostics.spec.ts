@@ -1,6 +1,7 @@
 import { dirname } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { execFile } from 'node:child_process/promises';
+import { execFile as execFileCallback } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   expect,
   test,
@@ -29,6 +30,7 @@ const INCLUDE_LOW_END_PROFILE =
   process.env.DL1_DIAGNOSTICS_INCLUDE_LOW_END === '1';
 const DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 const DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
+const execFile = promisify(execFileCallback);
 
 type DeviceProfile = {
   name: 'native-desktop' | 'weak-laptop-cpu-4x' | 'low-end-cpu-6x';
@@ -297,7 +299,7 @@ async function gitOutput(args: string[]) {
     const { stdout } = await execFile('git', args, {
       cwd: process.cwd()
     });
-    return stdout.trim();
+    return stdout.replace(/\s+$/, '');
   } catch {
     return 'unknown';
   }
