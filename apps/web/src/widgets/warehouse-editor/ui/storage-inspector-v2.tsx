@@ -1,6 +1,6 @@
 import type { FloorWorkspace, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
 import React, { useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
@@ -18,9 +18,17 @@ import {
 import { productLocationRoleKeys } from '@/entities/product-location-role/api/queries';
 import { createContainer } from '@/features/container-create/api/mutations';
 import { addInventoryItem } from '@/features/inventory-add/api/mutations';
-import { moveContainer as moveContainerApi, placeContainer } from '@/features/placement-actions/api/mutations';
+import {
+  moveContainer as moveContainerApi,
+  placeContainer,
+  removeContainer
+} from '@/features/placement-actions/api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
-import { containerKeys, containerStorageQueryOptions } from '@/entities/container/api/queries';
+import {
+  containerKeys,
+  containerListQueryOptions,
+  containerStorageQueryOptions
+} from '@/entities/container/api/queries';
 import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
 import {
   useStorageFocusSelectedCellId,
@@ -49,6 +57,8 @@ import { ContainerDetailPanel } from './storage-inspector-v2/container-detail-pa
 import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-container-panel';
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
+import { PlaceExistingContainerTaskPanel } from './storage-inspector-v2/task-place-existing-panel';
+import { RemoveContainerTaskPanel } from './storage-inspector-v2/task-remove-container-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
 import { EditOverrideTaskPanel } from './storage-inspector-v2/task-edit-override-panel';
 import { RepairConflictTaskPanel } from './storage-inspector-v2/task-repair-conflict-panel';
@@ -169,6 +179,10 @@ function buildPolicyAssignments(
     }));
 }
 
+function errorMessageFromUnknown(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 function CellSectionOverviewPanel({
   rackDisplayCode,
   activeLevel,
@@ -181,6 +195,7 @@ function CellSectionOverviewPanel({
   policyPending,
   sourceCellId,
   onSelectContainer,
+  onOpenPlaceExistingTask,
   onOpenCreateTask,
   onOpenCreateWithProductTask
 }: {
@@ -195,9 +210,13 @@ function CellSectionOverviewPanel({
   policyPending: boolean;
   sourceCellId: string | null;
   onSelectContainer: (containerId: string) => void;
+  onOpenPlaceExistingTask: () => void;
   onOpenCreateTask: () => void;
   onOpenCreateWithProductTask: () => void;
 }) {
+  const hasContainers = containers.length > 0;
+  const hasInventory = inventoryItems.length > 0;
+
   return (
     <div
       className={inspectorShellClassName}
@@ -229,15 +248,19 @@ function CellSectionOverviewPanel({
 
       <div className={inspectorScrollBodyClassName}>
         <div className="space-y-3 px-3 py-3">
-          <CurrentContainersSectionView
-            containers={containers}
-            sourceCellId={sourceCellId}
-            onContainerClick={(containerId) => onSelectContainer(containerId)}
-          />
-          <CurrentInventorySectionView
-            inventoryItems={inventoryItems}
-            hasContainers={containers.length > 0}
-          />
+          {hasContainers ? (
+            <CurrentContainersSectionView
+              containers={containers}
+              sourceCellId={sourceCellId}
+              onContainerClick={(containerId) => onSelectContainer(containerId)}
+            />
+          ) : null}
+          {hasInventory ? (
+            <CurrentInventorySectionView
+              inventoryItems={inventoryItems}
+              hasContainers={hasContainers}
+            />
+          ) : null}
           <div
             className="rounded-lg"
             style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
@@ -247,11 +270,18 @@ function CellSectionOverviewPanel({
             </div>
             <div className="grid gap-2 border-t border-[var(--border-muted)] px-3 py-3">
               <button
+                onClick={onOpenPlaceExistingTask}
+                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                aria-label="Place existing container at this location"
+              >
+                Place existing
+              </button>
+              <button
                 onClick={onOpenCreateTask}
                 className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
                 aria-label="Create container at this location"
               >
-                Create container
+                Create and place here
               </button>
               <button
                 onClick={onOpenCreateWithProductTask}
@@ -262,10 +292,12 @@ function CellSectionOverviewPanel({
               </button>
             </div>
           </div>
-          <LocationPolicySummarySectionView
-            isPending={policyPending}
-            assignments={policyAssignments}
-          />
+          {hasContainers ? (
+            <LocationPolicySummarySectionView
+              isPending={policyPending}
+              assignments={policyAssignments}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -303,11 +335,17 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [createWithProductErrorMessage, setCreateWithProductErrorMessage] = useState<string | null>(null);
   const [createWithProductIsSubmitting, setCreateWithProductIsSubmitting] = useState(false);
 
+  const [placeExistingContainerId, setPlaceExistingContainerId] = useState('');
+  const [placeExistingErrorMessage, setPlaceExistingErrorMessage] = useState<string | null>(null);
+  const [placeExistingIsSubmitting, setPlaceExistingIsSubmitting] = useState(false);
+
   const [addProductSearch, setAddProductSearch] = useState('');
   const [addProductSelectedProduct, setAddProductSelectedProduct] = useState<Product | null>(null);
   const [addProductQuantity, setAddProductQuantity] = useState('');
   const [addProductUom, setAddProductUom] = useState('');
   const [addProductErrorMessage, setAddProductErrorMessage] = useState<string | null>(null);
+  const [removeContainerIsSubmitting, setRemoveContainerIsSubmitting] = useState(false);
+  const [removeContainerErrorMessage, setRemoveContainerErrorMessage] = useState<string | null>(null);
   const [editOverrideIsSubmitting, setEditOverrideIsSubmitting] = useState(false);
   const [editOverrideErrorMessage, setEditOverrideErrorMessage] = useState<string | null>(null);
   const [repairConflictIsSubmitting, setRepairConflictIsSubmitting] = useState(false);
@@ -321,6 +359,10 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const selectCell = useStorageFocusSelectCell();
 
   const { data: containerTypes = [] } = useContainerTypes();
+  const {
+    data: storageContainers = [],
+    isLoading: storageContainersLoading
+  } = useQuery(containerListQueryOptions({ operationalRole: 'storage' }));
   const { data: createWithProductSearchResults = [] } = useProductsSearch(createWithProductSearch.trim() || null);
   const { data: addProductSearchResults = [] } = useProductsSearch(addProductSearch.trim() || null);
 
@@ -379,12 +421,23 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setCreateWithProductIsSubmitting(false);
   };
 
+  const resetPlaceExistingTaskState = () => {
+    setPlaceExistingContainerId('');
+    setPlaceExistingErrorMessage(null);
+    setPlaceExistingIsSubmitting(false);
+  };
+
   const resetAddProductTaskState = () => {
     setAddProductSearch('');
     setAddProductSelectedProduct(null);
     setAddProductQuantity('');
     setAddProductUom('');
     setAddProductErrorMessage(null);
+  };
+
+  const resetRemoveContainerTaskState = () => {
+    setRemoveContainerIsSubmitting(false);
+    setRemoveContainerErrorMessage(null);
   };
 
   const resetEditOverrideTaskState = () => {
@@ -411,7 +464,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setMoveTaskState(null);
     resetCreateTaskState();
     resetCreateWithProductTaskState();
+    resetPlaceExistingTaskState();
     resetAddProductTaskState();
+    resetRemoveContainerTaskState();
     resetEditOverrideTaskState();
     resetRepairConflictTaskState();
   }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -488,9 +543,21 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetCreateWithProductTaskState();
   };
 
+  const closePlaceExistingTask = () => {
+    if (placeExistingIsSubmitting) return;
+    setTaskKind(null);
+    resetPlaceExistingTaskState();
+  };
+
   const closeAddProductTask = () => {
     setTaskKind(null);
     resetAddProductTaskState();
+  };
+
+  const closeRemoveContainerTask = () => {
+    if (removeContainerIsSubmitting) return;
+    setTaskKind(null);
+    resetRemoveContainerTaskState();
   };
 
   const closeEditOverrideTask = () => {
@@ -515,9 +582,19 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setTaskKind('create-container-with-product');
   };
 
+  const openPlaceExistingTask = () => {
+    resetPlaceExistingTaskState();
+    setTaskKind('place-existing');
+  };
+
   const openAddProductTask = () => {
     resetAddProductTaskState();
     setTaskKind('add-product-to-container');
+  };
+
+  const openRemoveContainerTask = () => {
+    resetRemoveContainerTaskState();
+    setTaskKind('remove-container');
   };
 
   const openRepairConflictTask = () => {
@@ -539,20 +616,21 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           externalCode: createExternalCode.trim() || undefined
         });
         containerId = result.containerId;
-      } catch {
-        setCreateErrorMessage('Failed to create container.');
+      } catch (error) {
+        setCreateErrorMessage(errorMessageFromUnknown(error, 'Failed to create container.'));
         return;
       }
 
       try {
         await placeContainer({ containerId, locationId });
-      } catch {
-        setCreateErrorMessage('Failed to place container at this location.');
+      } catch (error) {
+        setCreateErrorMessage(errorMessageFromUnknown(error, 'Failed to place container at this location.'));
         return;
       }
 
       await invalidatePlacementQueries(queryClient, { floorId, containerId });
       await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      setSelectedContainerId(null);
       closeCreateTask();
     } finally {
       setCreateIsSubmitting(false);
@@ -593,15 +671,17 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           externalCode: createWithProductExternalCode.trim() || undefined
         });
         containerId = result.containerId;
-      } catch {
-        setCreateWithProductErrorMessage('Failed to create container.');
+      } catch (error) {
+        setCreateWithProductErrorMessage(errorMessageFromUnknown(error, 'Failed to create container.'));
         return;
       }
 
       try {
         await placeContainer({ containerId, locationId });
-      } catch {
-        setCreateWithProductErrorMessage('Failed to place container at this location.');
+      } catch (error) {
+        setCreateWithProductErrorMessage(
+          errorMessageFromUnknown(error, 'Failed to place container at this location.')
+        );
         return;
       }
 
@@ -612,19 +692,48 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           quantity: Number(createWithProductQuantity),
           uom: createWithProductUom.trim()
         });
-      } catch {
+      } catch (error) {
         await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
         setCreateWithProductErrorMessage(
-          'Container was created and placed, but inventory could not be added. The container is now empty at this location.'
+          errorMessageFromUnknown(
+            error,
+            'Container was created and placed, but inventory could not be added. The container is now empty at this location.'
+          )
         );
         return;
       }
 
       await invalidatePlacementQueries(queryClient, { floorId, containerId });
       await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      setSelectedContainerId(null);
       closeCreateWithProductTask();
     } finally {
       setCreateWithProductIsSubmitting(false);
+    }
+  };
+
+  const handlePlaceExistingConfirm = async () => {
+    if (!locationId || !placeExistingContainerId || placeExistingIsSubmitting) return;
+
+    setPlaceExistingIsSubmitting(true);
+    setPlaceExistingErrorMessage(null);
+
+    try {
+      await placeContainer({ containerId: placeExistingContainerId, locationId });
+      await invalidatePlacementQueries(queryClient, {
+        floorId,
+        containerId: placeExistingContainerId
+      });
+      await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      setSelectedContainerId(null);
+      setTaskKind(null);
+      resetPlaceExistingTaskState();
+    } catch (error) {
+      setPlaceExistingErrorMessage(
+        errorMessageFromUnknown(error, 'Failed to place container at this location.')
+      );
+    } finally {
+      setPlaceExistingIsSubmitting(false);
     }
   };
 
@@ -649,10 +758,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         sourceCellId: moveTaskState.sourceCellId,
         containerId: moveTaskState.sourceContainerId
       });
-      await queryClient.invalidateQueries({
-        queryKey: containerKeys.currentLocation(moveTaskState.sourceContainerId)
-      });
-      handleMoveStageChange('success');
+      setTaskKind(null);
+      setMoveTaskState(null);
+      setSelectedContainerId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Move failed. Please try again.';
       handleMoveStageChange('error', message);
@@ -675,11 +783,28 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     });
   };
 
-  const handleMoveDone = () => {
-    const movedContainerId = moveTaskState!.sourceContainerId;
-    setTaskKind(null);
-    setMoveTaskState(null);
-    setSelectedContainerId(movedContainerId);
+  const handleRemoveContainerConfirm = async (containerId: string) => {
+    if (removeContainerIsSubmitting) return;
+
+    setRemoveContainerIsSubmitting(true);
+    setRemoveContainerErrorMessage(null);
+
+    try {
+      await removeContainer({ containerId });
+      await invalidatePlacementQueries(queryClient, { floorId, containerId });
+      if (locationId) {
+        await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      }
+      setSelectedContainerId(null);
+      setTaskKind(null);
+      resetRemoveContainerTaskState();
+    } catch (error) {
+      setRemoveContainerErrorMessage(
+        errorMessageFromUnknown(error, 'Failed to remove container from location.')
+      );
+    } finally {
+      setRemoveContainerIsSubmitting(false);
+    }
   };
 
   const refetchOverrideReadSurface = async (productId: string) => {
@@ -723,7 +848,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         canConfirm={canConfirm}
         onConfirm={() => void handleMoveConfirm()}
         onCancel={handleMoveCancel}
-        onDone={handleMoveDone}
       />
     );
   }
@@ -734,6 +858,26 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   const isOccupied = storageRows.length > 0;
   const containers = groupByContainer(storageRows);
+
+  if (mode.kind === 'task-place-existing') {
+    return (
+      <PlaceExistingContainerTaskPanel
+        containers={storageContainers}
+        excludedContainerIds={new Set(containers.map((container) => container.containerId))}
+        selectedContainerId={placeExistingContainerId}
+        isLoading={storageContainersLoading}
+        isSubmitting={placeExistingIsSubmitting}
+        locationId={locationId}
+        errorMessage={placeExistingErrorMessage}
+        rackDisplayCode={rackDisplayCode}
+        locationCode={locationCode}
+        activeLevel={activeLevel}
+        onContainerChange={setPlaceExistingContainerId}
+        onConfirm={() => void handlePlaceExistingConfirm()}
+        onCancel={closePlaceExistingTask}
+      />
+    );
+  }
 
   if (mode.kind === 'task-create-container') {
     return (
@@ -861,6 +1005,25 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onUomChange={setAddProductUom}
         onConfirm={() => void handleAddProductConfirm()}
         onCancel={closeAddProductTask}
+      />
+    );
+  }
+
+  if (mode.kind === 'task-remove-container') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const first = containerRows[0];
+    const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
+
+    return (
+      <RemoveContainerTaskPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        containerDisplayCode={displayCode}
+        isSubmitting={removeContainerIsSubmitting}
+        errorMessage={removeContainerErrorMessage}
+        onConfirm={() => void handleRemoveContainerConfirm(mode.containerId)}
+        onCancel={closeRemoveContainerTask}
       />
     );
   }
@@ -1169,6 +1332,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onOpenEditOverrideTask={openEditOverrideTask}
         onOpenRepairConflictTask={openRepairConflictTask}
         onOpenAddProductTask={openAddProductTask}
+        onOpenRemoveContainerTask={openRemoveContainerTask}
         onStartMoveContainer={() => {
           if (!cellId || !locationId) return;
           setMoveTaskState({
@@ -1206,6 +1370,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       policyPending={locationProductAssignmentsLoading}
       sourceCellId={cellId}
       onSelectContainer={setSelectedContainerId}
+      onOpenPlaceExistingTask={openPlaceExistingTask}
       onOpenCreateTask={openCreateTask}
       onOpenCreateWithProductTask={openCreateWithProductTask}
     />

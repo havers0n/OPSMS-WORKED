@@ -111,6 +111,7 @@ export const ContainerDetail: Story = {
         onOpenEditOverrideTask={() => undefined}
         onOpenRepairConflictTask={() => undefined}
         onOpenAddProductTask={() => undefined}
+        onOpenRemoveContainerTask={() => undefined}
         onStartMoveContainer={() => undefined}
       />
     </div>
@@ -155,6 +156,7 @@ export const ConflictRepairPanel: Story = {
         onOpenEditOverrideTask={() => undefined}
         onOpenRepairConflictTask={() => undefined}
         onOpenAddProductTask={() => undefined}
+        onOpenRemoveContainerTask={() => undefined}
         onStartMoveContainer={() => undefined}
       />
     </div>

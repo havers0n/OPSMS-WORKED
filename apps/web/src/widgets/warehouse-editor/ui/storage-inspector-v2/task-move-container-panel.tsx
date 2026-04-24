@@ -13,7 +13,6 @@ export interface MoveContainerTaskPanelProps {
   canConfirm: boolean;
   onConfirm: () => void;
   onCancel: () => void;
-  onDone: () => void;
 }
 
 export function MoveContainerTaskPanel({
@@ -23,8 +22,7 @@ export function MoveContainerTaskPanel({
   resolvedTargetLocationId,
   canConfirm,
   onConfirm,
-  onCancel,
-  onDone
+  onCancel
 }: MoveContainerTaskPanelProps) {
   const isTargetSameAsSource = moveTaskState.targetCellId === moveTaskState.sourceCellId;
   const isMoving = moveTaskState.stage === 'moving';
@@ -36,16 +34,14 @@ export function MoveContainerTaskPanel({
       aria-label="Move container"
     >
       <div className={inspectorHeaderClassName}>
-        {moveTaskState.stage !== 'success' && (
-          <button
-            onClick={onCancel}
-            disabled={isMoving}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
-            aria-label="Cancel move container"
-          >
-            Cancel
-          </button>
-        )}
+        <button
+          onClick={onCancel}
+          disabled={isMoving}
+          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
+          aria-label="Cancel move container"
+        >
+          Cancel
+        </button>
         <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
           <span>{rackDisplayCode}</span>
           <span className="text-gray-300">/</span>
@@ -88,24 +84,6 @@ export function MoveContainerTaskPanel({
 
         {moveTaskState.stage === 'moving' && <p className="text-sm text-gray-500">Moving container...</p>}
 
-        {moveTaskState.stage === 'success' && (
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-green-700" data-testid="move-success-message">
-              Container moved successfully.
-            </p>
-            <div
-              className="bg-amber-50 border border-amber-200 rounded px-3 py-2 text-xs text-amber-800 space-y-1"
-              data-testid="policy-reconciliation-notice"
-            >
-              <p className="font-medium">Policy review required</p>
-              <p>
-                Location-level storage policy is not transferred automatically. Review source and
-                target location policies if needed.
-              </p>
-            </div>
-          </div>
-        )}
-
         {moveTaskState.stage === 'error' && moveTaskState.errorMessage && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
             {moveTaskState.errorMessage}
@@ -114,15 +92,7 @@ export function MoveContainerTaskPanel({
       </div>
 
       <div className={`${inspectorFooterActionsClassName} flex gap-2`}>
-        {moveTaskState.stage === 'success' ? (
-          <button
-            onClick={onDone}
-            className="flex-1 px-3 py-2 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700"
-            data-testid="move-done-button"
-          >
-            Done
-          </button>
-        ) : moveTaskState.stage === 'error' ? (
+        {moveTaskState.stage === 'error' ? (
           <>
             <button
               onClick={onConfirm}

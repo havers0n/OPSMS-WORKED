@@ -8,11 +8,15 @@ export type PanelMode =
   | { kind: 'task-repair-conflict'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
   | { kind: 'task-create-container-with-product'; cellId: string }
+  | { kind: 'task-place-existing'; cellId: string }
+  | { kind: 'task-remove-container'; cellId: string; containerId: string }
   | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
 
 export type TaskKind =
   | 'create-container'
   | 'create-container-with-product'
+  | 'place-existing'
+  | 'remove-container'
   | 'move-container'
   | 'edit-override'
   | 'repair-conflict'
@@ -33,7 +37,7 @@ export type MoveTaskState = {
   sourceLocationCode: string;
   sourceContainerDisplayCode: string;
   targetCellId: string | null;
-  stage: 'selecting-target' | 'moving' | 'success' | 'error';
+  stage: 'selecting-target' | 'moving' | 'error';
   errorMessage: string | null;
 };
 
@@ -85,12 +89,20 @@ export function resolveActiveMode(
     };
   }
 
+  if (base.kind === 'container-detail' && taskKind === 'remove-container') {
+    return { kind: 'task-remove-container', cellId: base.cellId, containerId: base.containerId };
+  }
+
   if (base.kind === 'cell-overview' && taskKind === 'create-container') {
     return { kind: 'task-create-container', cellId: base.cellId };
   }
 
   if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product') {
     return { kind: 'task-create-container-with-product', cellId: base.cellId };
+  }
+
+  if (base.kind === 'cell-overview' && taskKind === 'place-existing') {
+    return { kind: 'task-place-existing', cellId: base.cellId };
   }
 
   return base;

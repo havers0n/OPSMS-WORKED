@@ -31,6 +31,7 @@ type ContainerDetailPanelProps = {
   onOpenRepairConflictTask: () => void;
   onOpenAddProductTask: () => void;
   onStartMoveContainer: () => void;
+  onOpenRemoveContainerTask: () => void;
 };
 
 export function ContainerDetailPanel({
@@ -55,7 +56,8 @@ export function ContainerDetailPanel({
   onOpenEditOverrideTask,
   onOpenRepairConflictTask,
   onOpenAddProductTask,
-  onStartMoveContainer
+  onStartMoveContainer,
+  onOpenRemoveContainerTask
 }: ContainerDetailPanelProps) {
   return (
     <div
@@ -169,6 +171,13 @@ export function ContainerDetailPanel({
               data-testid="move-container-action"
             >
               Move container
+            </button>
+            <button
+              onClick={onOpenRemoveContainerTask}
+              className="h-8 w-full rounded-sm border border-red-200 bg-white px-3 text-left text-sm text-red-700 hover:border-red-300 hover:bg-red-50"
+              data-testid="remove-container-action"
+            >
+              Remove from location
             </button>
           </div>
         </div>

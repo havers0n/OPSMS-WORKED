@@ -119,6 +119,17 @@ vi.mock('@/entities/rack/api/use-rack-inspector', () => ({
 // ── Task panel mocks ──────────────────────────────────────────────────────────
 
 let mockContainerTypes: Array<{ id: string; code: string; description: string; supportsStorage: boolean; supportsPicking: boolean }> = [];
+let mockStorageContainers: Array<{
+  id: string;
+  tenantId: string;
+  systemCode: string;
+  externalCode: string | null;
+  containerTypeId: string;
+  status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  operationalRole: 'storage' | 'pick';
+  createdAt: string;
+  createdBy: string | null;
+}> = [];
 
 vi.mock('@/entities/container/api/use-container-types', () => ({
   useContainerTypes: () => ({ data: mockContainerTypes, isLoading: false }),
@@ -157,6 +168,7 @@ vi.mock('@/entities/location/api/queries', () => ({
 const mockCreateContainer = vi.fn();
 const mockPlaceContainer = vi.fn();
 const mockMoveContainer = vi.fn();
+const mockRemoveContainer = vi.fn();
 const mockAddInventoryItem = vi.fn();
 const mockAddInventoryToContainerMutateAsync = vi.fn();
 let mockAddInventoryToContainerIsPending = false;
@@ -174,6 +186,7 @@ vi.mock('@/features/container-create/api/mutations', () => ({
 vi.mock('@/features/placement-actions/api/mutations', () => ({
   placeContainer: (...args: unknown[]) => mockPlaceContainer(...args),
   moveContainer: (...args: unknown[]) => mockMoveContainer(...args),
+  removeContainer: (...args: unknown[]) => mockRemoveContainer(...args),
 }));
 
 vi.mock('@/features/inventory-add/api/mutations', () => ({
@@ -206,6 +219,10 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
+    useQuery: () => ({
+      data: mockStorageContainers,
+      isLoading: false
+    }),
     useQueryClient: () => ({
       invalidateQueries: mockInvalidateQueries,
       refetchQueries: mockRefetchQueries,
@@ -215,6 +232,11 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 });
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => {
+  mockStorageContainers = [];
+  mockRemoveContainer.mockReset();
+});
 
 function createWorkspace(): FloorWorkspace {
   return {
@@ -663,9 +685,11 @@ describe('StorageInspectorV2 panel modes', () => {
     const text = flattenText(renderer.toJSON());
     // Shows cell-overview breadcrumb elements
     expect(text).toContain('01-A.01.01');
-    expect(text).toContain('Current containers');
-    expect(text).toContain('Current inventory');
-    expect(text).toContain('Location Policy');
+    expect(text).toContain('Actions');
+    expect(text).toContain('Place existing');
+    expect(text).not.toContain('Current containers');
+    expect(text).not.toContain('Current inventory');
+    expect(text).not.toContain('Location Policy');
     expect(text).not.toContain('Current Contents');
     expect(text).not.toContain('Inventory Preview');
     // Does NOT show rack-overview occupancy/levels sections
@@ -1008,6 +1032,103 @@ describe('StorageInspectorV2 task flows', () => {
     expect(root.findByProps({ 'aria-label': 'Cancel create container with product' })).toBeTruthy();
   });
 
+  it('places an existing storage container into the selected location', async () => {
+    mockStorageContainers = [
+      {
+        id: 'existing-container-1',
+        tenantId: 'tenant-1',
+        systemCode: 'CNT-001',
+        externalCode: 'EXT-001',
+        containerTypeId: 'type-1',
+        status: 'active',
+        operationalRole: 'storage',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        createdBy: null
+      }
+    ];
+    mockPlaceContainer.mockResolvedValue({ ok: true });
+
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'aria-label': 'Place existing container at this location' }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': 'Existing container' }).props.onChange({
+        target: { value: 'existing-container-1' }
+      });
+    });
+    await act(async () => {
+      root.findByProps({ 'aria-label': 'Confirm place existing container' }).props.onClick();
+    });
+
+    expect(mockPlaceContainer).toHaveBeenCalledWith({
+      containerId: 'existing-container-1',
+      locationId: 'loc-1'
+    });
+    expect(mockInvalidatePlacement).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ containerId: 'existing-container-1' })
+    );
+    expect(flattenText(renderer.toJSON())).toContain('Actions');
+  });
+
+  it('hides containers already placed in the selected location from place-existing options', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'container-already-here',
+        containerStatus: 'active',
+        systemCode: 'C-HERE',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null,
+        product: null
+      }
+    ];
+    mockStorageContainers = [
+      {
+        id: 'container-already-here',
+        tenantId: 'tenant-1',
+        systemCode: 'C-HERE',
+        externalCode: null,
+        containerTypeId: 'type-1',
+        status: 'active',
+        operationalRole: 'storage',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        createdBy: null
+      },
+      {
+        id: 'container-away',
+        tenantId: 'tenant-1',
+        systemCode: 'C-AWAY',
+        externalCode: null,
+        containerTypeId: 'type-1',
+        status: 'active',
+        operationalRole: 'storage',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        createdBy: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'aria-label': 'Place existing container at this location' }).props.onClick();
+    });
+
+    const optionText = root
+      .findAllByType('option')
+      .map((option) => String(option.props.children))
+      .join(' ');
+    expect(optionText).toContain('C-AWAY - active storage - not in this location');
+    expect(optionText).not.toContain('C-HERE');
+    expect(flattenText(renderer.toJSON())).toContain('1 container already here hidden.');
+  });
+
   it('cancel in create-container task returns to cell-overview without calling mutations', () => {
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1023,7 +1144,8 @@ describe('StorageInspectorV2 task flows', () => {
       root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current containers');
+    expect(text).toContain('Actions');
+    expect(text).not.toContain('Current containers');
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
 
@@ -1040,7 +1162,8 @@ describe('StorageInspectorV2 task flows', () => {
       root.findByProps({ 'aria-label': 'Cancel create container with product' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current containers');
+    expect(text).toContain('Actions');
+    expect(text).not.toContain('Current containers');
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
 
@@ -1081,7 +1204,8 @@ describe('StorageInspectorV2 task flows', () => {
 
     // Back to cell-overview (task panel gone)
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current containers');
+    expect(text).toContain('Actions');
+    expect(text).not.toContain('Current containers');
     expect(text).not.toContain('Cancel create container');
   });
 
@@ -1117,7 +1241,8 @@ describe('StorageInspectorV2 task flows', () => {
 
     // Returns to cell-overview
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current containers');
+    expect(text).toContain('Actions');
+    expect(text).not.toContain('Current containers');
   });
 
   it('create-container passes externalCode when provided', async () => {
@@ -1265,6 +1390,48 @@ describe('StorageInspectorV2 task flows', () => {
       root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
     });
     expect(flattenText(renderer.toJSON())).toContain('Current containers');
+  });
+
+  it('removes a selected container from its current location', async () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'container-remove-1',
+        containerStatus: 'active',
+        systemCode: 'C-REMOVE',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null,
+        product: null
+      }
+    ];
+    mockRemoveContainer.mockResolvedValue({
+      containerId: 'container-remove-1',
+      previousLocationId: 'loc-1',
+      removedAt: '2026-01-01T00:00:00.000Z'
+    });
+
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'aria-label': 'View container C-REMOVE' }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'data-testid': 'remove-container-action' }).props.onClick();
+    });
+    await act(async () => {
+      root.findByProps({ 'aria-label': 'Confirm remove container' }).props.onClick();
+    });
+
+    expect(mockRemoveContainer).toHaveBeenCalledWith({ containerId: 'container-remove-1' });
+    expect(mockInvalidatePlacement).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ containerId: 'container-remove-1' })
+    );
+    expect(flattenText(renderer.toJSON())).toContain('Actions');
   });
 
   it('shows "Add product" action in container-detail when container is empty', () => {
@@ -2444,6 +2611,7 @@ describe('StorageInspectorV2 move container flow', () => {
     expect(mockMoveContainer).not.toHaveBeenCalled();
     // Move task panel gone
     const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Actions');
     expect(text).not.toContain('Click a cell on the canvas');
   });
 
@@ -2478,7 +2646,7 @@ describe('StorageInspectorV2 move container flow', () => {
     );
   });
 
-  it('success stage shows policy reconciliation notice', async () => {
+  it('successful move returns to selected target location overview', async () => {
     mockMoveContainer.mockResolvedValue({
       containerId: 'c-1',
       sourceLocationId: 'loc-source',
@@ -2498,39 +2666,11 @@ describe('StorageInspectorV2 move container flow', () => {
     await act(async () => {
       renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
     });
-    expect(renderer.root.findByProps({ 'data-testid': 'policy-reconciliation-notice' })).toBeTruthy();
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('policy');
-    expect(text).toContain('Container moved successfully');
-  });
-
-  it('"Done" after success clears move task — panel exits move mode', async () => {
-    mockMoveContainer.mockResolvedValue({
-      containerId: 'c-1',
-      sourceLocationId: 'loc-source',
-      targetLocationId: 'loc-target',
-      movementId: 'm-1',
-      occurredAt: '',
-    });
-    let renderer!: TestRenderer.ReactTestRenderer;
-    act(() => {
-      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
-    });
-    openMoveTask(renderer.root);
-    mockLocationRef = { locationId: 'loc-target' };
-    act(() => {
-      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
-    });
-    await act(async () => {
-      renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
-    });
-    act(() => {
-      renderer.root.findByProps({ 'data-testid': 'move-done-button' }).props.onClick();
-    });
-    // Move task cleared — no longer in move mode
-    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Actions');
     expect(text).not.toContain('Click a cell on the canvas');
     expect(text).not.toContain('Confirm move');
+    expect(text).not.toContain('Location Role');
   });
 
   it('existing create-container flow still works after PR4 (no regression)', () => {
@@ -2552,7 +2692,7 @@ describe('StorageInspectorV2 move container flow', () => {
     act(() => {
       renderer.root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
     });
-    expect(flattenText(renderer.toJSON())).toContain('Current containers');
+    expect(flattenText(renderer.toJSON())).toContain('Actions');
   });
 });
 
