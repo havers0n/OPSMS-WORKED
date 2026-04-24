@@ -29,6 +29,8 @@ import {
   containerListQueryOptions,
   containerStorageQueryOptions
 } from '@/entities/container/api/queries';
+import { transferInventoryToContainer } from '@/features/container-inventory/api/mutations';
+import { invalidateContainerInventoryQueries } from '@/features/container-inventory/model/invalidation';
 import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
 import {
   useStorageFocusSelectedCellId,
@@ -60,6 +62,11 @@ import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-contain
 import { PlaceExistingContainerTaskPanel } from './storage-inspector-v2/task-place-existing-panel';
 import { RemoveContainerTaskPanel } from './storage-inspector-v2/task-remove-container-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
+import { TransferToContainerTaskPanel } from './storage-inspector-v2/task-transfer-to-container-panel';
+import {
+  ExtractQuantityTaskPanel,
+  type ExtractTargetMode
+} from './storage-inspector-v2/task-extract-quantity-panel';
 import { EditOverrideTaskPanel } from './storage-inspector-v2/task-edit-override-panel';
 import { RepairConflictTaskPanel } from './storage-inspector-v2/task-repair-conflict-panel';
 import {
@@ -181,6 +188,33 @@ function buildPolicyAssignments(
 
 function errorMessageFromUnknown(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function parsePositiveQuantity(value: string) {
+  const quantity = Number(value);
+  return Number.isFinite(quantity) ? quantity : null;
+}
+
+function validateContentsQuantity(sourceLine: LocationStorageSnapshotRow | null, quantityText: string) {
+  if (!sourceLine?.inventoryUnitId) return 'Inventory unit is not available for this row.';
+  if (quantityText.trim() === '') return 'Quantity is required.';
+  const quantity = parsePositiveQuantity(quantityText);
+  if (quantity === null || quantity <= 0) return 'Quantity must be greater than zero.';
+  if (sourceLine.quantity !== null && quantity > sourceLine.quantity) {
+    return 'Quantity cannot exceed the source quantity.';
+  }
+  return null;
+}
+
+function validateTargetContainer(
+  sourceLine: LocationStorageSnapshotRow | null,
+  targetContainerId: string
+) {
+  if (!targetContainerId) return 'Target container is required.';
+  if (sourceLine && targetContainerId === sourceLine.containerId) {
+    return 'Target container must be different from the source container.';
+  }
+  return null;
 }
 
 function CellSectionOverviewPanel({
@@ -350,6 +384,19 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [editOverrideErrorMessage, setEditOverrideErrorMessage] = useState<string | null>(null);
   const [repairConflictIsSubmitting, setRepairConflictIsSubmitting] = useState(false);
   const [repairConflictErrorMessage, setRepairConflictErrorMessage] = useState<string | null>(null);
+  const [transferSourceRow, setTransferSourceRow] = useState<LocationStorageSnapshotRow | null>(null);
+  const [transferTargetContainerId, setTransferTargetContainerId] = useState('');
+  const [transferQuantity, setTransferQuantity] = useState('');
+  const [transferIsSubmitting, setTransferIsSubmitting] = useState(false);
+  const [transferErrorMessage, setTransferErrorMessage] = useState<string | null>(null);
+  const [extractSourceRow, setExtractSourceRow] = useState<LocationStorageSnapshotRow | null>(null);
+  const [extractTargetMode, setExtractTargetMode] = useState<ExtractTargetMode>('existing-container');
+  const [extractTargetContainerId, setExtractTargetContainerId] = useState('');
+  const [extractNewContainerTypeId, setExtractNewContainerTypeId] = useState('');
+  const [extractNewContainerExternalCode, setExtractNewContainerExternalCode] = useState('');
+  const [extractQuantity, setExtractQuantity] = useState('');
+  const [extractIsSubmitting, setExtractIsSubmitting] = useState(false);
+  const [extractErrorMessage, setExtractErrorMessage] = useState<string | null>(null);
 
   const taskKindRef = useRef<TaskKind | null>(null);
   taskKindRef.current = taskKind;
@@ -450,6 +497,25 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setRepairConflictErrorMessage(null);
   };
 
+  const resetTransferTaskState = () => {
+    setTransferSourceRow(null);
+    setTransferTargetContainerId('');
+    setTransferQuantity('');
+    setTransferIsSubmitting(false);
+    setTransferErrorMessage(null);
+  };
+
+  const resetExtractTaskState = () => {
+    setExtractSourceRow(null);
+    setExtractTargetMode('existing-container');
+    setExtractTargetContainerId('');
+    setExtractNewContainerTypeId('');
+    setExtractNewContainerExternalCode('');
+    setExtractQuantity('');
+    setExtractIsSubmitting(false);
+    setExtractErrorMessage(null);
+  };
+
   useEffect(() => {
     if (taskKindRef.current === 'move-container') {
       const current = moveTaskRef.current;
@@ -469,6 +535,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetRemoveContainerTaskState();
     resetEditOverrideTaskState();
     resetRepairConflictTaskState();
+    resetTransferTaskState();
+    resetExtractTaskState();
   }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -572,6 +640,18 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetRepairConflictTaskState();
   };
 
+  const closeTransferTask = () => {
+    if (transferIsSubmitting) return;
+    setTaskKind(null);
+    resetTransferTaskState();
+  };
+
+  const closeExtractTask = () => {
+    if (extractIsSubmitting) return;
+    setTaskKind(null);
+    resetExtractTaskState();
+  };
+
   const openCreateTask = () => {
     resetCreateTaskState();
     setTaskKind('create-container');
@@ -595,6 +675,22 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const openRemoveContainerTask = () => {
     resetRemoveContainerTaskState();
     setTaskKind('remove-container');
+  };
+
+  const openTransferToContainerTask = (row: LocationStorageSnapshotRow) => {
+    if (!row.inventoryUnitId) return;
+    resetTransferTaskState();
+    setTransferSourceRow(row);
+    setTransferQuantity(row.quantity !== null ? String(row.quantity) : '');
+    setTaskKind('transfer-to-container');
+  };
+
+  const openExtractQuantityTask = (row: LocationStorageSnapshotRow) => {
+    if (!row.inventoryUnitId) return;
+    resetExtractTaskState();
+    setExtractSourceRow(row);
+    setExtractQuantity(row.quantity !== null ? String(row.quantity) : '');
+    setTaskKind('extract-quantity');
   };
 
   const openRepairConflictTask = () => {
@@ -734,6 +830,113 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       );
     } finally {
       setPlaceExistingIsSubmitting(false);
+    }
+  };
+
+  const invalidateContentsActionReadSurface = async (
+    sourceContainerId: string,
+    targetContainerId: string,
+    invalidateContainerList = false
+  ) => {
+    await invalidateContainerInventoryQueries(queryClient, {
+      floorId,
+      sourceCellId: cellId,
+      containerId: sourceContainerId,
+      targetContainerId,
+      locationId,
+      invalidateContainerList
+    });
+  };
+
+  const submitTransferToExistingContainer = async (
+    sourceLine: LocationStorageSnapshotRow,
+    targetContainerId: string,
+    quantity: number
+  ) => {
+    if (!sourceLine.inventoryUnitId) {
+      throw new Error('Inventory unit is not available for this row.');
+    }
+
+    await transferInventoryToContainer({
+      inventoryUnitId: sourceLine.inventoryUnitId,
+      targetContainerId,
+      quantity
+    });
+    await invalidateContentsActionReadSurface(sourceLine.containerId, targetContainerId);
+  };
+
+  const handleTransferConfirm = async () => {
+    const quantityError = validateContentsQuantity(transferSourceRow, transferQuantity);
+    const targetError = validateTargetContainer(transferSourceRow, transferTargetContainerId);
+    if (quantityError || targetError || !transferSourceRow || transferIsSubmitting) {
+      setTransferErrorMessage(quantityError ?? targetError);
+      return;
+    }
+
+    const quantity = parsePositiveQuantity(transferQuantity);
+    if (quantity === null) return;
+
+    setTransferIsSubmitting(true);
+    setTransferErrorMessage(null);
+    try {
+      await submitTransferToExistingContainer(transferSourceRow, transferTargetContainerId, quantity);
+      setTaskKind(null);
+      resetTransferTaskState();
+    } catch (error) {
+      setTransferErrorMessage(errorMessageFromUnknown(error, 'Could not transfer inventory.'));
+    } finally {
+      setTransferIsSubmitting(false);
+    }
+  };
+
+  const handleExtractConfirm = async () => {
+    const quantityError = validateContentsQuantity(extractSourceRow, extractQuantity);
+    const targetError =
+      extractTargetMode === 'existing-container'
+        ? validateTargetContainer(extractSourceRow, extractTargetContainerId)
+        : extractTargetMode === 'new-container'
+          ? extractNewContainerTypeId
+            ? null
+            : 'Container type is required.'
+          : 'Loose extract is not available yet.';
+    if (quantityError || targetError || !extractSourceRow || extractIsSubmitting) {
+      setExtractErrorMessage(quantityError ?? targetError);
+      return;
+    }
+
+    const quantity = parsePositiveQuantity(extractQuantity);
+    if (quantity === null) return;
+
+    setExtractIsSubmitting(true);
+    setExtractErrorMessage(null);
+    try {
+      if (extractTargetMode === 'existing-container') {
+        await submitTransferToExistingContainer(extractSourceRow, extractTargetContainerId, quantity);
+      } else if (extractTargetMode === 'new-container') {
+        if (!locationId) {
+          setExtractErrorMessage('Current location is required.');
+          return;
+        }
+
+        const result = await createContainer({
+          containerTypeId: extractNewContainerTypeId,
+          externalCode: extractNewContainerExternalCode.trim() || undefined
+        });
+        await placeContainer({ containerId: result.containerId, locationId });
+        await transferInventoryToContainer({
+          inventoryUnitId: extractSourceRow.inventoryUnitId as string,
+          targetContainerId: result.containerId,
+          quantity
+        });
+        await invalidateContentsActionReadSurface(extractSourceRow.containerId, result.containerId, true);
+      }
+
+      setTaskKind(null);
+      resetExtractTaskState();
+    } catch (error) {
+      setExtractErrorMessage(errorMessageFromUnknown(error, 'Could not extract inventory.'));
+    } finally {
+      setExtractIsSubmitting(false);
     }
   };
 
@@ -924,6 +1127,89 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onUomChange={setCreateWithProductUom}
         onConfirm={() => void handleCreateWithProductConfirm()}
         onCancel={closeCreateWithProductTask}
+      />
+    );
+  }
+
+  if (mode.kind === 'task-transfer-to-container') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const first = containerRows[0];
+    const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
+    const sourceLine = transferSourceRow ?? null;
+    if (!sourceLine) {
+      return <LoadingState />;
+    }
+    const validationMessage =
+      validateContentsQuantity(sourceLine, transferQuantity) ??
+      validateTargetContainer(sourceLine, transferTargetContainerId);
+
+    return (
+      <TransferToContainerTaskPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        sourceLine={sourceLine}
+        sourceContainerDisplayCode={displayCode}
+        containers={storageContainers}
+        selectedTargetContainerId={transferTargetContainerId}
+        quantity={transferQuantity}
+        isSubmitting={transferIsSubmitting}
+        isLoadingContainers={storageContainersLoading}
+        errorMessage={transferErrorMessage}
+        validationMessage={validationMessage}
+        onTargetContainerChange={setTransferTargetContainerId}
+        onQuantityChange={setTransferQuantity}
+        onConfirm={() => void handleTransferConfirm()}
+        onCancel={closeTransferTask}
+      />
+    );
+  }
+
+  if (mode.kind === 'task-extract-quantity') {
+    const containerRows = storageRows.filter((row) => row.containerId === mode.containerId);
+    const first = containerRows[0];
+    const displayCode = first ? (first.externalCode ?? first.systemCode) : mode.containerId;
+    const sourceLine = extractSourceRow ?? null;
+    if (!sourceLine) {
+      return <LoadingState />;
+    }
+    const validationMessage =
+      validateContentsQuantity(sourceLine, extractQuantity) ??
+      (extractTargetMode === 'existing-container'
+        ? validateTargetContainer(sourceLine, extractTargetContainerId)
+        : extractTargetMode === 'new-container'
+          ? extractNewContainerTypeId
+            ? locationId
+              ? null
+              : 'Current location is required.'
+            : 'Container type is required.'
+          : 'Loose extract is not available yet.');
+
+    return (
+      <ExtractQuantityTaskPanel
+        rackDisplayCode={rackDisplayCode}
+        activeLevel={activeLevel}
+        locationCode={locationCode}
+        sourceLine={sourceLine}
+        sourceContainerDisplayCode={displayCode}
+        containers={storageContainers}
+        containerTypes={containerTypes}
+        targetMode={extractTargetMode}
+        selectedTargetContainerId={extractTargetContainerId}
+        newContainerTypeId={extractNewContainerTypeId}
+        newContainerExternalCode={extractNewContainerExternalCode}
+        quantity={extractQuantity}
+        isSubmitting={extractIsSubmitting}
+        isLoadingContainers={storageContainersLoading}
+        errorMessage={extractErrorMessage}
+        validationMessage={validationMessage}
+        onTargetModeChange={setExtractTargetMode}
+        onTargetContainerChange={setExtractTargetContainerId}
+        onNewContainerTypeChange={setExtractNewContainerTypeId}
+        onNewContainerExternalCodeChange={setExtractNewContainerExternalCode}
+        onQuantityChange={setExtractQuantity}
+        onConfirm={() => void handleExtractConfirm()}
+        onCancel={closeExtractTask}
       />
     );
   }
@@ -1332,6 +1618,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onOpenEditOverrideTask={openEditOverrideTask}
         onOpenRepairConflictTask={openRepairConflictTask}
         onOpenAddProductTask={openAddProductTask}
+        onOpenTransferToContainerTask={openTransferToContainerTask}
+        onOpenExtractQuantityTask={openExtractQuantityTask}
         onOpenRemoveContainerTask={openRemoveContainerTask}
         onStartMoveContainer={() => {
           if (!cellId || !locationId) return;

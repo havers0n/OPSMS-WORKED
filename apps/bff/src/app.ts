@@ -368,6 +368,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       container_type: string;
       container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
       placed_at: string;
+      inventory_unit_id?: string | null;
       product_id?: string | null;
       quantity: number | null;
       uom: string | null;
@@ -676,7 +677,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_canonical_v')
-      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count')
+      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,inventory_unit_id,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count')
       .eq('container_id', containerId);
 
     if (error) {
@@ -690,6 +691,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       external_code: string | null;
       container_type: string;
       container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+      inventory_unit_id?: string | null;
       product_id?: string | null;
       quantity: number | null;
       uom: string | null;

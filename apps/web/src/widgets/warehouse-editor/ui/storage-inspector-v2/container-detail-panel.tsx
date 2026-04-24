@@ -30,6 +30,8 @@ type ContainerDetailPanelProps = {
   onOpenEditOverrideTask: () => void;
   onOpenRepairConflictTask: () => void;
   onOpenAddProductTask: () => void;
+  onOpenTransferToContainerTask: (row: LocationStorageSnapshotRow) => void;
+  onOpenExtractQuantityTask: (row: LocationStorageSnapshotRow) => void;
   onStartMoveContainer: () => void;
   onOpenRemoveContainerTask: () => void;
 };
@@ -56,6 +58,8 @@ export function ContainerDetailPanel({
   onOpenEditOverrideTask,
   onOpenRepairConflictTask,
   onOpenAddProductTask,
+  onOpenTransferToContainerTask,
+  onOpenExtractQuantityTask,
   onStartMoveContainer,
   onOpenRemoveContainerTask
 }: ContainerDetailPanelProps) {
@@ -193,12 +197,30 @@ export function ContainerDetailPanel({
                 const qty = row.quantity ?? 0;
                 const uom = row.uom ?? '';
                 return (
-                  <div key={`${row.containerId}-${row.itemRef ?? idx}`} className={inspectorRowCardClassName}>
+                  <div key={`${row.containerId}-${row.inventoryUnitId ?? row.itemRef ?? idx}`} className={inspectorRowCardClassName}>
                     <div className="min-w-0 flex-1 text-xs text-gray-600">
                       {row.product?.sku ? (
                         <span className="font-mono text-[11px] text-gray-500">{row.product.sku}</span>
                       ) : null}
                       <span className="ml-1.5 truncate">{label}</span>
+                      {row.inventoryUnitId ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => onOpenTransferToContainerTask(row)}
+                            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50"
+                            data-testid="transfer-to-container-action"
+                          >
+                            Transfer to container
+                          </button>
+                          <button
+                            onClick={() => onOpenExtractQuantityTask(row)}
+                            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50"
+                            data-testid="extract-quantity-action"
+                          >
+                            Extract quantity
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <span className="font-mono text-[11px] text-gray-700">
                       {qty} {uom}

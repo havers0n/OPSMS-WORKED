@@ -17,6 +17,7 @@ describe('location storage snapshot contracts', () => {
         containerType: 'pallet',
         containerStatus: 'active',
         placedAt: '2026-01-01T00:00:00.000Z',
+        inventoryUnitId: '7a5d7d7b-20f2-4d61-9a0b-900bcdf5a9de',
         itemRef: 'ITEM-001',
         product: null,
         quantity: 5,
@@ -27,6 +28,7 @@ describe('location storage snapshot contracts', () => {
       })
     ).toMatchObject({
       systemCode: 'CNT-000003',
+      inventoryUnitId: '7a5d7d7b-20f2-4d61-9a0b-900bcdf5a9de',
       itemRef: 'ITEM-001',
       quantity: 5,
       packagingState: 'opened'

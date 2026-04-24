@@ -1,4 +1,4 @@
-import type { InventoryItem } from '@wos/domain';
+import type { CanonicalTransferInventoryResult, InventoryItem } from '@wos/domain';
 import { bffRequest } from '@/shared/api/bff/client';
 
 export type AddInventoryToContainerInput = {
@@ -19,5 +19,20 @@ export async function addInventoryToContainer(input: AddInventoryToContainerInpu
   return bffRequest<AddInventoryToContainerResult>(`/api/containers/${containerId}/inventory`, {
     method: 'POST',
     body: JSON.stringify(body)
+  });
+}
+
+export type TransferInventoryToContainerInput = {
+  inventoryUnitId: string;
+  targetContainerId: string;
+  quantity: number;
+};
+
+export async function transferInventoryToContainer(input: TransferInventoryToContainerInput) {
+  const { inventoryUnitId, targetContainerId, quantity } = input;
+
+  return bffRequest<CanonicalTransferInventoryResult>(`/api/inventory/${inventoryUnitId}/transfer`, {
+    method: 'POST',
+    body: JSON.stringify({ targetContainerId, quantity })
   });
 }

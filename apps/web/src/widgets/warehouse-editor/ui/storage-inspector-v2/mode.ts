@@ -3,6 +3,8 @@ export type PanelMode =
   | { kind: 'rack-overview'; rackId: string }
   | { kind: 'cell-overview'; cellId: string }
   | { kind: 'container-detail'; cellId: string; containerId: string }
+  | { kind: 'task-transfer-to-container'; cellId: string; containerId: string }
+  | { kind: 'task-extract-quantity'; cellId: string; containerId: string }
   | { kind: 'task-add-product-to-container'; cellId: string; containerId: string }
   | { kind: 'task-edit-override'; cellId: string; containerId: string }
   | { kind: 'task-repair-conflict'; cellId: string; containerId: string }
@@ -18,6 +20,8 @@ export type TaskKind =
   | 'place-existing'
   | 'remove-container'
   | 'move-container'
+  | 'transfer-to-container'
+  | 'extract-quantity'
   | 'edit-override'
   | 'repair-conflict'
   | 'add-product-to-container';
@@ -75,6 +79,14 @@ export function resolveActiveMode(
 
   if (base.kind === 'container-detail' && taskKind === 'edit-override') {
     return { kind: 'task-edit-override', cellId: base.cellId, containerId: base.containerId };
+  }
+
+  if (base.kind === 'container-detail' && taskKind === 'transfer-to-container') {
+    return { kind: 'task-transfer-to-container', cellId: base.cellId, containerId: base.containerId };
+  }
+
+  if (base.kind === 'container-detail' && taskKind === 'extract-quantity') {
+    return { kind: 'task-extract-quantity', cellId: base.cellId, containerId: base.containerId };
   }
 
   if (base.kind === 'container-detail' && taskKind === 'repair-conflict') {

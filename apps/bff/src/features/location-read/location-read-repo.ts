@@ -16,6 +16,7 @@ export type LocationOccupancyRowRecord = {
 };
 
 export type LocationStorageSnapshotRowRecord = LocationOccupancyRowRecord & {
+  inventory_unit_id?: string | null;
   item_ref: string | null;
   product_id?: string | null;
   quantity: number | null;
@@ -188,7 +189,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
     async listLocationStorage(locationId) {
       const { data, error } = await supabase
         .from('location_storage_canonical_v')
-        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,inventory_unit_id,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count')
         .eq('location_id', locationId)
         .order('placed_at', { ascending: true });
 
@@ -202,7 +203,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
     async listCellStorage(cellId) {
       const { data, error } = await supabase
         .from('location_storage_canonical_v')
-        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,inventory_unit_id,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count')
         .eq('cell_id', cellId)
         .order('placed_at', { ascending: true });
 
@@ -220,7 +221,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
 
       const { data, error } = await supabase
         .from('location_storage_canonical_v')
-        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,inventory_unit_id,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count')
         .in('cell_id', cellIds)
         .order('placed_at', { ascending: true });
 

@@ -331,6 +331,7 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   external_code: string | null;
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+  inventory_unit_id?: string | null;
   item_ref: string | null;
   product_id?: string | null;
   product?: ProductRow | null;
@@ -347,6 +348,7 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
     externalCode: row.external_code,
     containerType: row.container_type,
     containerStatus: row.container_status,
+    inventoryUnitId: row.inventory_unit_id ?? null,
     itemRef: row.item_ref,
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
@@ -365,6 +367,7 @@ export function mapCellStorageSnapshotRowToDomain(row: {
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   placed_at: string;
+  inventory_unit_id?: string | null;
   item_ref: string | null;
   product_id?: string | null;
   product?: ProductRow | null;
@@ -379,6 +382,7 @@ export function mapCellStorageSnapshotRowToDomain(row: {
     containerType: row.container_type,
     containerStatus: row.container_status,
     placedAt: row.placed_at,
+    inventoryUnitId: row.inventory_unit_id ?? null,
     itemRef: row.item_ref,
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,
@@ -427,6 +431,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
   container_type: string;
   container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   placed_at: string;
+  inventory_unit_id?: string | null;
   item_ref: string | null;
   product_id?: string | null;
   product?: ProductRow | null;
@@ -449,6 +454,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
     containerType: row.container_type,
     containerStatus: row.container_status,
     placedAt: row.placed_at,
+    inventoryUnitId: row.inventory_unit_id ?? null,
     itemRef: row.item_ref,
     product: row.product ? mapProductRowToDomain(row.product) : null,
     quantity: row.quantity,

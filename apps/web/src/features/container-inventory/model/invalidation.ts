@@ -9,6 +9,9 @@ export async function invalidateContainerInventoryQueries(
     floorId: string | null;
     sourceCellId: string | null;
     containerId: string | null;
+    targetContainerId?: string | null;
+    locationId?: string | null;
+    invalidateContainerList?: boolean;
   }
 ) {
   const jobs: Array<Promise<unknown>> = [];
@@ -17,6 +20,40 @@ export async function invalidateContainerInventoryQueries(
     jobs.push(
       queryClient.invalidateQueries({
         queryKey: containerKeys.storage(args.containerId)
+      })
+    );
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.currentLocation(args.containerId)
+      })
+    );
+  }
+
+  if (args.targetContainerId && args.targetContainerId !== args.containerId) {
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.storage(args.targetContainerId)
+      })
+    );
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.currentLocation(args.targetContainerId)
+      })
+    );
+  }
+
+  if (args.invalidateContainerList) {
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.list()
+      })
+    );
+  }
+
+  if (args.locationId) {
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: locationKeys.storage(args.locationId)
       })
     );
   }

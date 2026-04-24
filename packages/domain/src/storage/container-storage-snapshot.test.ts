@@ -11,6 +11,7 @@ describe('container storage snapshot contracts', () => {
         externalCode: 'PALLET-001',
         containerType: 'pallet',
         containerStatus: 'active',
+        inventoryUnitId: '7a5d7d7b-20f2-4d61-9a0b-900bcdf5a9de',
         itemRef: 'ITEM-001',
         product: null,
         quantity: 5,
@@ -20,6 +21,7 @@ describe('container storage snapshot contracts', () => {
         packCount: 1
       })
     ).toMatchObject({
+      inventoryUnitId: '7a5d7d7b-20f2-4d61-9a0b-900bcdf5a9de',
       itemRef: 'ITEM-001',
       quantity: 5,
       packagingState: 'sealed'
@@ -35,6 +37,7 @@ describe('container storage snapshot contracts', () => {
         externalCode: 'PALLET-EMPTY',
         containerType: 'pallet',
         containerStatus: 'active',
+        inventoryUnitId: null,
         itemRef: null,
         product: null,
         quantity: null,
@@ -44,6 +47,7 @@ describe('container storage snapshot contracts', () => {
         packCount: null
       })
     ).toMatchObject({
+      inventoryUnitId: null,
       itemRef: null,
       quantity: null,
       uom: null,

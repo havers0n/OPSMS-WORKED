@@ -17,6 +17,7 @@ export const locationStorageSnapshotRowSchema = z.object({
   containerType: z.string().trim().min(1),
   containerStatus: containerStatusSchema,
   placedAt: z.string(),
+  inventoryUnitId: z.string().uuid().nullable().optional(),
   itemRef: z.string().trim().min(1).nullable(),
   product: productSchema.nullable(),
   quantity: z.number().min(0).nullable(),

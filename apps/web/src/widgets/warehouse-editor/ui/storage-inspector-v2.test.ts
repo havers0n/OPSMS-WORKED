@@ -21,6 +21,7 @@ type MockStorageRow = {
   locationCode?: string | null;
   locationType?: string | null;
   containerId: string;
+  inventoryUnitId?: string | null;
   containerStatus: string;
   systemCode?: string;
   externalCode?: string | null;
@@ -170,6 +171,7 @@ const mockPlaceContainer = vi.fn();
 const mockMoveContainer = vi.fn();
 const mockRemoveContainer = vi.fn();
 const mockAddInventoryItem = vi.fn();
+const mockTransferInventoryToContainer = vi.fn();
 const mockAddInventoryToContainerMutateAsync = vi.fn();
 let mockAddInventoryToContainerIsPending = false;
 const mockCreateProductLocationRoleMutateAsync = vi.fn();
@@ -191,6 +193,10 @@ vi.mock('@/features/placement-actions/api/mutations', () => ({
 
 vi.mock('@/features/inventory-add/api/mutations', () => ({
   addInventoryItem: (...args: unknown[]) => mockAddInventoryItem(...args),
+}));
+
+vi.mock('@/features/container-inventory/api/mutations', () => ({
+  transferInventoryToContainer: (...args: unknown[]) => mockTransferInventoryToContainer(...args),
 }));
 
 vi.mock('@/entities/product-location-role/api/mutations', () => ({
@@ -236,6 +242,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 beforeEach(() => {
   mockStorageContainers = [];
   mockRemoveContainer.mockReset();
+  mockTransferInventoryToContainer.mockReset();
 });
 
 function createWorkspace(): FloorWorkspace {
@@ -423,6 +430,24 @@ describe('resolveActiveMode', () => {
     const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
     expect(resolveActiveMode(base, 'add-product-to-container')).toEqual({
       kind: 'task-add-product-to-container',
+      cellId: 'c1',
+      containerId: 'ct1'
+    });
+  });
+
+  it('overrides container-detail to task-transfer-to-container for transfer task', () => {
+    const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
+    expect(resolveActiveMode(base, 'transfer-to-container')).toEqual({
+      kind: 'task-transfer-to-container',
+      cellId: 'c1',
+      containerId: 'ct1'
+    });
+  });
+
+  it('overrides container-detail to task-extract-quantity for extract task', () => {
+    const base = { kind: 'container-detail' as const, cellId: 'c1', containerId: 'ct1' };
+    expect(resolveActiveMode(base, 'extract-quantity')).toEqual({
+      kind: 'task-extract-quantity',
       cellId: 'c1',
       containerId: 'ct1'
     });
@@ -2462,6 +2487,201 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 
 // ── Move container flow integration tests ─────────────────────────────────────
 
+describe('StorageInspectorV2 contents action flows', () => {
+  function setupContainerWithInventory(inventoryUnitId: string | null = 'iu-1') {
+    resetStorageFocusStore();
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
+    });
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
+    ];
+    mockLocationRef = { locationId: 'loc-1' };
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'source-container',
+        inventoryUnitId,
+        containerStatus: 'active',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: 'product:sku-1',
+        quantity: 5,
+        uom: 'pcs',
+        product: { id: 'product-1', sku: 'SKU-1', name: 'Widget', isActive: true }
+      }
+    ];
+    mockStorageContainers = [
+      {
+        id: 'source-container',
+        tenantId: 'tenant-1',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerTypeId: 'type-1',
+        status: 'active',
+        operationalRole: 'storage',
+        createdAt: '',
+        createdBy: null
+      },
+      {
+        id: 'target-container',
+        tenantId: 'tenant-1',
+        systemCode: 'C-002',
+        externalCode: null,
+        containerTypeId: 'type-1',
+        status: 'active',
+        operationalRole: 'storage',
+        createdAt: '',
+        createdBy: null
+      }
+    ];
+  }
+
+  function openContainerDetail(root: TestRenderer.ReactTestRenderer['root']) {
+    act(() => {
+      root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+    });
+  }
+
+  beforeEach(() => {
+    mockContainerTypes = [
+      { id: 'type-1', code: 'PLT', description: 'Pallet', supportsStorage: true, supportsPicking: false }
+    ];
+    mockTransferInventoryToContainer.mockReset();
+    mockCreateContainer.mockReset();
+    mockPlaceContainer.mockReset();
+    mockInvalidateQueries.mockReset();
+    mockInvalidateQueries.mockResolvedValue(undefined);
+    setupContainerWithInventory();
+  });
+
+  afterEach(() => {
+    resetStorageFocusStore();
+  });
+
+  it('renders contents row actions only when inventoryUnitId is available', () => {
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    expect(renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' })).toBeTruthy();
+    expect(renderer.root.findByProps({ 'data-testid': 'extract-quantity-action' })).toBeTruthy();
+
+    setupContainerWithInventory(null);
+    const rendererWithoutUnit = renderInspector(createWorkspace());
+    openContainerDetail(rendererWithoutUnit.root);
+    expect(rendererWithoutUnit.root.findAllByProps({ 'data-testid': 'transfer-to-container-action' })).toHaveLength(0);
+    expect(rendererWithoutUnit.root.findAllByProps({ 'data-testid': 'extract-quantity-action' })).toHaveLength(0);
+  });
+
+  it('transfers inventory to an existing container and invalidates storage reads', async () => {
+    mockTransferInventoryToContainer.mockResolvedValue({});
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Target container' }).props.onChange({
+        target: { value: 'target-container' }
+      });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'transfer-confirm-button' }).props.onClick();
+    });
+
+    expect(mockTransferInventoryToContainer).toHaveBeenCalledWith({
+      inventoryUnitId: 'iu-1',
+      targetContainerId: 'target-container',
+      quantity: 5
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['container', 'storage', 'source-container'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['container', 'storage', 'target-container'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['location', 'storage', 'loc-1'] });
+  });
+
+  it('keeps transfer panel open and shows backend errors', async () => {
+    mockTransferInventoryToContainer.mockRejectedValue(new Error('Target container was not found.'));
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Target container' }).props.onChange({
+        target: { value: 'target-container' }
+      });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'transfer-confirm-button' }).props.onClick();
+    });
+
+    expect(flattenText(renderer.toJSON())).toContain('Target container was not found.');
+    expect(renderer.root.findByProps({ 'data-testid': 'transfer-confirm-button' })).toBeTruthy();
+  });
+
+  it('extracts into a new container via create, place, transfer, and container-list invalidation', async () => {
+    mockCreateContainer.mockResolvedValue({
+      containerId: 'created-container',
+      systemCode: 'C-NEW',
+      externalCode: null,
+      containerTypeId: 'type-1',
+      status: 'active',
+      operationalRole: 'storage'
+    });
+    mockPlaceContainer.mockResolvedValue({});
+    mockTransferInventoryToContainer.mockResolvedValue({});
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'extract-quantity-action' }).props.onClick();
+    });
+    const radios = renderer.root.findAllByType('input').filter((node) => node.props.type === 'radio');
+    act(() => {
+      radios[1].props.onChange();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Container type' }).props.onChange({
+        target: { value: 'type-1' }
+      });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'extract-confirm-button' }).props.onClick();
+    });
+
+    expect(mockCreateContainer).toHaveBeenCalledWith({
+      containerTypeId: 'type-1',
+      externalCode: undefined
+    });
+    expect(mockPlaceContainer).toHaveBeenCalledWith({ containerId: 'created-container', locationId: 'loc-1' });
+    expect(mockTransferInventoryToContainer).toHaveBeenCalledWith({
+      inventoryUnitId: 'iu-1',
+      targetContainerId: 'created-container',
+      quantity: 5
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['container', 'list'] });
+  });
+
+  it('shows loose extract as unavailable and blocks submit', () => {
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'extract-quantity-action' }).props.onClick();
+    });
+    const radios = renderer.root.findAllByType('input').filter((node) => node.props.type === 'radio');
+    act(() => {
+      radios[2].props.onChange();
+    });
+
+    expect(flattenText(renderer.toJSON())).toContain('Loose extract is not available yet.');
+    expect(renderer.root.findByProps({ 'data-testid': 'extract-confirm-button' }).props.disabled).toBe(true);
+    expect(mockTransferInventoryToContainer).not.toHaveBeenCalled();
+  });
+});
+
 describe('StorageInspectorV2 move container flow', () => {
   const CONTAINER_ROW: MockStorageRow = {
     locationCode: 'LOC-SRC',
@@ -2503,8 +2723,9 @@ describe('StorageInspectorV2 move container flow', () => {
     mockEffectiveRoleLoading = false;
     mockLocationProductAssignments = [];
     mockUseLocationEffectiveRole.mockReset();
-    mockMoveContainer.mockReset();
-    mockInvalidatePlacement.mockReset();
+  mockMoveContainer.mockReset();
+  mockTransferInventoryToContainer.mockReset();
+  mockInvalidatePlacement.mockReset();
     mockInvalidateQueries.mockReset();
     mockRefetchQueries.mockReset();
     mockFetchQuery.mockReset();
