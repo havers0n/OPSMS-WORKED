@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { ProductPackagingLevel } from '@wos/domain';
 import type { PackagingHierarchyEntry } from './packaging-hierarchy';
 import { formatDimensions, formatWeight } from './unit-profile-formatters';
@@ -5,20 +6,46 @@ import { formatDimensions, formatWeight } from './unit-profile-formatters';
 type PackagingLevelCardProps = {
   level: ProductPackagingLevel;
   hierarchyEntry: PackagingHierarchyEntry | null;
+  children?: ReactNode;
 };
 
-function Badge({ children, tone = 'slate' }: { children: string; tone?: 'slate' | 'cyan' | 'emerald' | 'amber' }) {
+function Badge({
+  children,
+  tone = 'slate'
+}: {
+  children: string;
+  tone?: 'slate' | 'cyan' | 'emerald' | 'amber' | 'rose';
+}) {
   const classes = {
     slate: 'bg-slate-100 text-slate-700',
     cyan: 'bg-cyan-100 text-cyan-800',
     emerald: 'bg-emerald-100 text-emerald-800',
-    amber: 'bg-amber-100 text-amber-800'
+    amber: 'bg-amber-100 text-amber-800',
+    rose: 'bg-rose-100 text-rose-800'
   };
 
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${classes[tone]}`}>{children}</span>;
 }
 
-export function PackagingLevelCard({ level, hierarchyEntry }: PackagingLevelCardProps) {
+function formatRelationship(level: ProductPackagingLevel, hierarchyEntry: PackagingHierarchyEntry | null) {
+  if (level.isBase || level.baseUnitQty === 1) {
+    return '1 single unit';
+  }
+
+  if (hierarchyEntry?.nestedCount && hierarchyEntry.nestedChildLabel) {
+    return `Contains: ${hierarchyEntry.nestedCount} ${hierarchyEntry.nestedChildLabel} / ${level.baseUnitQty} EA inferred`;
+  }
+
+  return `Base unit quantity: ${level.baseUnitQty} EA`;
+}
+
+export function PackagingLevelCard({ level, hierarchyEntry, children }: PackagingLevelCardProps) {
+  const warnings = [
+    level.packWidthMm === null || level.packHeightMm === null || level.packDepthMm === null ? 'Missing dimensions' : null,
+    level.packWeightG === null ? 'Missing gross weight' : null,
+    level.barcode === null ? 'Missing barcode' : null
+  ].filter((warning): warning is string => warning !== null);
+
   return (
     <article className="relative rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -31,12 +58,7 @@ export function PackagingLevelCard({ level, hierarchyEntry }: PackagingLevelCard
 
       <div className="mt-3 grid gap-2 text-xs text-slate-600">
         <div>
-          <span className="font-medium text-slate-900">{level.baseUnitQty} EA</span>
-          {hierarchyEntry?.nestedCount && hierarchyEntry.nestedChildLabel ? (
-            <span> | inferred: {hierarchyEntry.nestedCount} x {hierarchyEntry.nestedChildLabel}</span>
-          ) : (
-            <span> | base unit quantity</span>
-          )}
+          <span className="font-medium text-slate-900">{formatRelationship(level, hierarchyEntry)}</span>
         </div>
         <div>Dimensions: {formatDimensions({ widthMm: level.packWidthMm, heightMm: level.packHeightMm, depthMm: level.packDepthMm })}</div>
         <div>Barcode: {level.barcode ?? 'Not defined'}</div>
@@ -52,6 +74,16 @@ export function PackagingLevelCard({ level, hierarchyEntry }: PackagingLevelCard
       </div>
 
       {hierarchyEntry?.hint ? <div className="mt-2 text-xs text-amber-700">{hierarchyEntry.hint}</div> : null}
+
+      {warnings.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {warnings.map((warning) => (
+            <Badge key={warning} tone="amber">{warning}</Badge>
+          ))}
+        </div>
+      ) : null}
+
+      {children ? <div className="mt-3 border-t border-slate-100 pt-3">{children}</div> : null}
     </article>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ProductPackagingLevel } from '@wos/domain';
-import { derivePackagingHierarchy } from './packaging-hierarchy';
+import type { ProductPackagingLevel, StoragePreset } from '@wos/domain';
+import { derivePackagingHierarchy, formatPackCount, groupStoragePresetsByPackagingLevelId } from './packaging-hierarchy';
 
 function makeLevel(overrides: Partial<ProductPackagingLevel>): ProductPackagingLevel {
   return {
@@ -23,6 +23,53 @@ function makeLevel(overrides: Partial<ProductPackagingLevel>): ProductPackagingL
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides
+  };
+}
+
+function makePreset(overrides: Partial<StoragePreset> = {}): StoragePreset {
+  const presetId = overrides.id ?? crypto.randomUUID();
+
+  return {
+    id: presetId,
+    tenantId: crypto.randomUUID(),
+    productId: crypto.randomUUID(),
+    code: overrides.code ?? 'PAL-12',
+    name: overrides.name ?? 'Pallet 12 Master',
+    profileType: 'storage',
+    scopeType: 'tenant',
+    scopeId: crypto.randomUUID(),
+    validFrom: null,
+    validTo: null,
+    priority: 0,
+    isDefault: overrides.isDefault ?? false,
+    status: overrides.status ?? 'active',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    levels:
+      overrides.levels ??
+      [
+        {
+          id: crypto.randomUUID(),
+          profileId: presetId,
+          levelType: 'MASTER',
+          qtyEach: 600,
+          parentLevelType: null,
+          qtyPerParent: null,
+          containerType: 'PALLET',
+          tareWeightG: null,
+          nominalGrossWeightG: null,
+          lengthMm: null,
+          widthMm: null,
+          heightMm: null,
+          casesPerTier: null,
+          tiersPerPallet: null,
+          maxStackHeight: null,
+          maxStackWeight: null,
+          legacyProductPackagingLevelId: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      ]
   };
 }
 
@@ -109,5 +156,93 @@ describe('derivePackagingHierarchy', () => {
     expect(result.entries[0]?.isReferenceRoot).toBe(true);
     expect(result.entries[0]?.isActive).toBe(false);
     expect(result.entries[0]?.hint).toBe('Base reference level is inactive; shown as root reference only.');
+  });
+});
+
+describe('storage hierarchy helpers', () => {
+  it('formats divisible pack counts without fractional values', () => {
+    expect(formatPackCount(600, 50, 'MASTER')).toEqual({
+      countText: 'Count: 12 MASTER',
+      totalText: 'Total: 600 EA',
+      warning: null
+    });
+  });
+
+  it('warns when total each does not divide cleanly by the pack size', () => {
+    expect(formatPackCount(610, 50, 'MASTER')).toEqual({
+      countText: null,
+      totalText: 'Total: 610 EA',
+      warning: 'Does not divide cleanly by MASTER size 50 EA.'
+    });
+  });
+
+  it('groups presets only under active rendered hierarchy levels', () => {
+    const each = makeLevel({ code: 'EA', name: 'Each', isBase: true, baseUnitQty: 1, sortOrder: 0 });
+    const master = makeLevel({ code: 'MASTER', name: 'Master', baseUnitQty: 50, sortOrder: 1 });
+    const hierarchy = derivePackagingHierarchy([each, master]);
+    const presetA = makePreset({
+      id: crypto.randomUUID(),
+      code: 'PAL-A',
+      levels: [{ ...makePreset().levels[0], legacyProductPackagingLevelId: master.id }]
+    });
+    const presetB = makePreset({
+      id: crypto.randomUUID(),
+      code: 'PAL-B',
+      levels: [{ ...makePreset().levels[0], legacyProductPackagingLevelId: master.id, qtyEach: 1200 }]
+    });
+
+    const grouped = groupStoragePresetsByPackagingLevelId([presetA, presetB], hierarchy.entries, [each, master]);
+
+    expect(grouped.byPackagingLevelId.get(master.id)?.map((item) => item.preset.code)).toEqual(['PAL-A', 'PAL-B']);
+    expect(grouped.unlinked).toHaveLength(0);
+  });
+
+  it('keeps missing, inactive, and absent links visible as unlinked storage', () => {
+    const each = makeLevel({ code: 'EA', name: 'Each', isBase: true, baseUnitQty: 1, sortOrder: 0 });
+    const inactiveMaster = makeLevel({
+      code: 'MASTER',
+      name: 'Master',
+      baseUnitQty: 50,
+      sortOrder: 1,
+      isActive: false
+    });
+    const absentLevel = makeLevel({ code: 'ALT', name: 'Alternate', baseUnitQty: 25, sortOrder: 2 });
+    const hierarchy = derivePackagingHierarchy([each, inactiveMaster]);
+    const missingLink = makePreset({ code: 'NO-LINK', levels: [{ ...makePreset().levels[0], legacyProductPackagingLevelId: null }] });
+    const unresolvedLink = makePreset({
+      code: 'MISSING',
+      levels: [{ ...makePreset().levels[0], legacyProductPackagingLevelId: crypto.randomUUID() }]
+    });
+    const inactiveLink = makePreset({
+      code: 'INACTIVE',
+      levels: [{ ...makePreset().levels[0], legacyProductPackagingLevelId: inactiveMaster.id }]
+    });
+    const absentLink = makePreset({
+      code: 'ABSENT',
+      levels: [{ ...makePreset().levels[0], legacyProductPackagingLevelId: absentLevel.id }]
+    });
+    const noLevels = makePreset({ code: 'EMPTY', levels: [] });
+
+    const grouped = groupStoragePresetsByPackagingLevelId(
+      [missingLink, unresolvedLink, inactiveLink, absentLink, noLevels],
+      hierarchy.entries,
+      [each, inactiveMaster, absentLevel]
+    );
+
+    expect([...grouped.byPackagingLevelId.values()].flat()).toHaveLength(0);
+    expect(grouped.unlinked.map((item) => item.preset.code)).toEqual([
+      'NO-LINK',
+      'MISSING',
+      'INACTIVE',
+      'ABSENT',
+      'EMPTY'
+    ]);
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('Missing linked packaging level.');
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('Linked packaging level could not be resolved.');
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('Linked packaging level MASTER is inactive.');
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain(
+      'Linked packaging level ALT is not shown in the active hierarchy.'
+    );
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('No composition levels.');
   });
 });

@@ -172,7 +172,7 @@ describe('UnitProfileBoard', () => {
   it('derives divisible storage preset pack counts safely', () => {
     const text = flattenText(renderBoard().toJSON());
 
-    expect(text).toContain('Count: 12 Master');
+    expect(text).toContain('Count: 12 MASTER');
     expect(text).toContain('Total: 480 EA');
     expect(text).not.toContain('does not divide cleanly');
   });
@@ -185,8 +185,40 @@ describe('UnitProfileBoard', () => {
     );
 
     expect(text).toContain('Total: 485 EA');
-    expect(text).toContain('Does not divide cleanly by Master size 40 EA.');
-    expect(text).not.toContain('Count: 12.125 Master');
+    expect(text).toContain('Does not divide cleanly by MASTER size 40 EA.');
+    expect(text).not.toContain('Count: 12.125 MASTER');
+  });
+
+  it('groups linked storage presets under their packaging card without rendering them as levels', () => {
+    const text = flattenText(renderBoard().toJSON());
+
+    expect(text).toContain('Storage methods for this pack type');
+    expect(text).toContain('Pallet 12 Master');
+    expect(text).toContain('Linked pack type Master (MASTER)');
+    expect(text).not.toContain('PAL-12 Base unit quantity');
+  });
+
+  it('renders unresolved storage presets instead of hiding persisted data', () => {
+    const text = flattenText(
+      renderBoard({
+        storagePresets: [
+          makePreset({
+            code: 'LOST',
+            name: 'Lost link preset',
+            levels: [
+              {
+                ...makePreset().levels[0],
+                legacyProductPackagingLevelId: '99999999-9999-4999-8999-999999999999'
+              }
+            ]
+          })
+        ]
+      }).toJSON()
+    );
+
+    expect(text).toContain('Unlinked storage methods');
+    expect(text).toContain('Lost link preset');
+    expect(text).toContain('Linked packaging level could not be resolved.');
   });
 
   it('shows product warnings for missing facts and empty dependent sections', () => {

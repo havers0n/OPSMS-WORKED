@@ -1,4 +1,4 @@
-import type { ProductPackagingLevel } from '@wos/domain';
+import type { ProductPackagingLevel, StoragePreset } from '@wos/domain';
 
 export type PackagingHierarchyEntry = {
   id: string;
@@ -24,6 +24,28 @@ export type PackagingHierarchy = {
   hasParallelActiveLevels: boolean;
   hasBaseReference: boolean;
   topMessage: string;
+};
+
+export type StoragePresetLevel = StoragePreset['levels'][number];
+
+export type StoragePackCountDisplay = {
+  countText: string | null;
+  totalText: string | null;
+  warning: string | null;
+};
+
+export type GroupedStoragePresetItem = {
+  key: string;
+  preset: StoragePreset;
+  presetLevel: StoragePresetLevel | null;
+  linkedLevel: ProductPackagingLevel | null;
+  packCount: StoragePackCountDisplay | null;
+  warnings: string[];
+};
+
+export type GroupedStoragePresets = {
+  byPackagingLevelId: Map<string, GroupedStoragePresetItem[]>;
+  unlinked: GroupedStoragePresetItem[];
 };
 
 type NormalizedLevel = {
@@ -193,4 +215,121 @@ export function derivePackagingHierarchy(levels: ProductPackagingLevel[]): Packa
     hasBaseReference: baseReference !== null,
     topMessage
   };
+}
+
+export function formatPackCount(
+  qtyEach: number | null | undefined,
+  baseUnitQty: number | null | undefined,
+  levelCode: string
+): StoragePackCountDisplay {
+  if (!Number.isInteger(qtyEach) || qtyEach === null || qtyEach === undefined || qtyEach < 1) {
+    return {
+      countText: null,
+      totalText: null,
+      warning: 'Total each quantity is not defined.'
+    };
+  }
+
+  const totalText = `Total: ${qtyEach} EA`;
+  const normalizedCode = levelCode.trim().toUpperCase() || 'pack type';
+
+  if (!Number.isInteger(baseUnitQty) || baseUnitQty === null || baseUnitQty === undefined || baseUnitQty < 1) {
+    return {
+      countText: null,
+      totalText,
+      warning: `Cannot derive pack count because ${normalizedCode} size is not defined.`
+    };
+  }
+
+  if (qtyEach % baseUnitQty !== 0) {
+    return {
+      countText: null,
+      totalText,
+      warning: `Does not divide cleanly by ${normalizedCode} size ${baseUnitQty} EA.`
+    };
+  }
+
+  return {
+    countText: `Count: ${qtyEach / baseUnitQty} ${normalizedCode}`,
+    totalText,
+    warning: null
+  };
+}
+
+export function deriveStorageDisplayForLevel(
+  presetLevel: StoragePresetLevel | null,
+  packagingLevel: ProductPackagingLevel | null
+): StoragePackCountDisplay | null {
+  if (!presetLevel) return null;
+  return formatPackCount(presetLevel.qtyEach, packagingLevel?.baseUnitQty, packagingLevel?.code ?? presetLevel.levelType);
+}
+
+export function groupStoragePresetsByPackagingLevelId(
+  presets: StoragePreset[],
+  hierarchyEntries: PackagingHierarchyEntry[],
+  levels: ProductPackagingLevel[]
+): GroupedStoragePresets {
+  const levelsById = new Map(levels.map((level) => [level.id, level]));
+  const activeHierarchyLevelIds = new Set(
+    hierarchyEntries
+      .map((entry) => levelsById.get(entry.id))
+      .filter((level): level is ProductPackagingLevel => Boolean(level?.isActive))
+      .map((level) => level.id)
+  );
+  const byPackagingLevelId = new Map<string, GroupedStoragePresetItem[]>();
+  const unlinked: GroupedStoragePresetItem[] = [];
+
+  const addLinked = (levelId: string, item: GroupedStoragePresetItem) => {
+    const current = byPackagingLevelId.get(levelId) ?? [];
+    current.push(item);
+    byPackagingLevelId.set(levelId, current);
+  };
+
+  presets.forEach((preset) => {
+    if (preset.levels.length === 0) {
+      unlinked.push({
+        key: `${preset.id}:no-levels`,
+        preset,
+        presetLevel: null,
+        linkedLevel: null,
+        packCount: null,
+        warnings: ['No composition levels.']
+      });
+      return;
+    }
+
+    preset.levels.forEach((presetLevel) => {
+      const linkedLevelId = presetLevel.legacyProductPackagingLevelId;
+      const linkedLevel = linkedLevelId ? levelsById.get(linkedLevelId) ?? null : null;
+      const packCount = deriveStorageDisplayForLevel(presetLevel, linkedLevel);
+      const warnings = [
+        !linkedLevelId ? 'Missing linked packaging level.' : null,
+        linkedLevelId && !linkedLevel ? 'Linked packaging level could not be resolved.' : null,
+        linkedLevel && !linkedLevel.isActive ? `Linked packaging level ${linkedLevel.code.toUpperCase()} is inactive.` : null,
+        linkedLevel && linkedLevel.isActive && !activeHierarchyLevelIds.has(linkedLevel.id)
+          ? `Linked packaging level ${linkedLevel.code.toUpperCase()} is not shown in the active hierarchy.`
+          : null,
+        !presetLevel.containerType ? 'Missing container type.' : null,
+        packCount?.warning ?? null
+      ].filter((warning): warning is string => warning !== null);
+
+      const item: GroupedStoragePresetItem = {
+        key: `${preset.id}:${presetLevel.id}`,
+        preset,
+        presetLevel,
+        linkedLevel,
+        packCount,
+        warnings
+      };
+
+      if (linkedLevel && linkedLevel.isActive && activeHierarchyLevelIds.has(linkedLevel.id)) {
+        addLinked(linkedLevel.id, item);
+        return;
+      }
+
+      unlinked.push(item);
+    });
+  });
+
+  return { byPackagingLevelId, unlinked };
 }
