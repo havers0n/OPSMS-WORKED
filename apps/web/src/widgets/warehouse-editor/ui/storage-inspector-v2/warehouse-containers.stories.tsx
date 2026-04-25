@@ -23,6 +23,7 @@ function CellOverviewShowcase() {
           inventoryOverflow={2}
           onSelectContainer={() => undefined}
           onOpenCreateTask={() => undefined}
+          onOpenCreateFromPresetTask={() => undefined}
           onOpenCreateWithProductTask={() => undefined}
         />
       </div>
@@ -38,6 +39,7 @@ function CellOverviewShowcase() {
           inventoryOverflow={0}
           onSelectContainer={() => undefined}
           onOpenCreateTask={() => undefined}
+          onOpenCreateFromPresetTask={() => undefined}
           onOpenCreateWithProductTask={() => undefined}
         />
       </div>
@@ -69,6 +71,7 @@ export const Default: Story = {
     inventoryOverflow: 2,
     onSelectContainer: () => undefined,
     onOpenCreateTask: () => undefined,
+    onOpenCreateFromPresetTask: () => undefined,
     onOpenCreateWithProductTask: () => undefined
   }
 };
@@ -85,6 +88,7 @@ export const ContainerDetail: Story = {
     inventoryOverflow: 2,
     onSelectContainer: () => undefined,
     onOpenCreateTask: () => undefined,
+    onOpenCreateFromPresetTask: () => undefined,
     onOpenCreateWithProductTask: () => undefined
   },
   render: () => (
@@ -103,6 +107,9 @@ export const ContainerDetail: Story = {
         hasProductContext={true}
         isConflict={false}
         showNoneExplanation={false}
+        storagePresets={[]}
+        preferredPackagingProfileId={null}
+        preferredPresetPending={false}
         canShowOverrideEntry={true}
         hasExplicitOverride={true}
         canShowRepairConflictEntry={false}
@@ -111,6 +118,7 @@ export const ContainerDetail: Story = {
         onOpenEditOverrideTask={() => undefined}
         onOpenRepairConflictTask={() => undefined}
         onOpenAddProductTask={() => undefined}
+        onPreferredPresetChange={() => undefined}
         onOpenTransferToContainerTask={() => undefined}
         onOpenExtractQuantityTask={() => undefined}
         onOpenRemoveContainerTask={() => undefined}
@@ -133,6 +141,7 @@ export const ConflictRepairPanel: Story = {
     inventoryOverflow: 2,
     onSelectContainer: () => undefined,
     onOpenCreateTask: () => undefined,
+    onOpenCreateFromPresetTask: () => undefined,
     onOpenCreateWithProductTask: () => undefined
   },
   render: () => (
@@ -151,6 +160,9 @@ export const ConflictRepairPanel: Story = {
         hasProductContext={false}
         isConflict={true}
         showNoneExplanation={true}
+        storagePresets={[]}
+        preferredPackagingProfileId={null}
+        preferredPresetPending={false}
         canShowOverrideEntry={false}
         hasExplicitOverride={false}
         canShowRepairConflictEntry={true}
@@ -159,6 +171,7 @@ export const ConflictRepairPanel: Story = {
         onOpenEditOverrideTask={() => undefined}
         onOpenRepairConflictTask={() => undefined}
         onOpenAddProductTask={() => undefined}
+        onPreferredPresetChange={() => undefined}
         onOpenTransferToContainerTask={() => undefined}
         onOpenExtractQuantityTask={() => undefined}
         onOpenRemoveContainerTask={() => undefined}

@@ -288,6 +288,17 @@ export function mapContainerRowToDomain(row: {
   container_type_id: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   operational_role: 'storage' | 'pick';
+  parent_container_id?: string | null;
+  packaging_profile_id?: string | null;
+  is_standard_pack?: boolean | null;
+  gross_weight_g?: number | null;
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  received_at?: string | null;
+  source_document_type?: string | null;
+  source_document_id?: string | null;
+  last_receipt_correlation_key?: string | null;
   created_at: string;
   created_by: string | null;
 }): Container {
@@ -299,6 +310,17 @@ export function mapContainerRowToDomain(row: {
     containerTypeId: row.container_type_id,
     status: row.status,
     operationalRole: row.operational_role,
+    parentContainerId: row.parent_container_id ?? null,
+    packagingProfileId: row.packaging_profile_id ?? null,
+    isStandardPack: row.is_standard_pack ?? null,
+    grossWeightG: row.gross_weight_g ?? null,
+    lengthMm: row.length_mm ?? null,
+    widthMm: row.width_mm ?? null,
+    heightMm: row.height_mm ?? null,
+    receivedAt: row.received_at ?? null,
+    sourceDocumentType: row.source_document_type ?? null,
+    sourceDocumentId: row.source_document_id ?? null,
+    lastReceiptCorrelationKey: row.last_receipt_correlation_key ?? null,
     createdAt: row.created_at,
     createdBy: row.created_by
   });
@@ -340,6 +362,10 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   packaging_state?: 'sealed' | 'opened' | 'loose' | null;
   product_packaging_level_id?: string | null;
   pack_count?: number | null;
+  container_packaging_profile_id?: string | null;
+  container_is_standard_pack?: boolean | null;
+  preferred_packaging_profile_id?: string | null;
+  preset_usage_status?: 'preferred_match' | 'standard_non_preferred' | 'manual' | 'unknown' | null;
 }): ContainerStorageSnapshotRow {
   return containerStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
@@ -355,7 +381,11 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
     uom: row.uom,
     packagingState: row.packaging_state ?? null,
     productPackagingLevelId: row.product_packaging_level_id ?? null,
-    packCount: row.pack_count ?? null
+    packCount: row.pack_count ?? null,
+    containerPackagingProfileId: row.container_packaging_profile_id ?? null,
+    containerIsStandardPack: row.container_is_standard_pack ?? null,
+    preferredPackagingProfileId: row.preferred_packaging_profile_id ?? null,
+    presetUsageStatus: row.preset_usage_status ?? 'unknown'
   });
 }
 
@@ -440,6 +470,10 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
   packaging_state?: 'sealed' | 'opened' | 'loose' | null;
   product_packaging_level_id?: string | null;
   pack_count?: number | null;
+  container_packaging_profile_id?: string | null;
+  container_is_standard_pack?: boolean | null;
+  preferred_packaging_profile_id?: string | null;
+  preset_usage_status?: 'preferred_match' | 'standard_non_preferred' | 'manual' | 'unknown' | null;
 }): LocationStorageSnapshotRow {
   return locationStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
@@ -461,7 +495,11 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
     uom: row.uom,
     packagingState: row.packaging_state ?? null,
     productPackagingLevelId: row.product_packaging_level_id ?? null,
-    packCount: row.pack_count ?? null
+    packCount: row.pack_count ?? null,
+    containerPackagingProfileId: row.container_packaging_profile_id ?? null,
+    containerIsStandardPack: row.container_is_standard_pack ?? null,
+    preferredPackagingProfileId: row.preferred_packaging_profile_id ?? null,
+    presetUsageStatus: row.preset_usage_status ?? 'unknown'
   });
 }
 

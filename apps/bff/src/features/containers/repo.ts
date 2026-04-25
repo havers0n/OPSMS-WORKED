@@ -18,6 +18,17 @@ type ContainerRow = {
   container_type_id: string;
   status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
   operational_role: 'storage' | 'pick';
+  parent_container_id?: string | null;
+  packaging_profile_id?: string | null;
+  is_standard_pack?: boolean | null;
+  gross_weight_g?: number | null;
+  length_mm?: number | null;
+  width_mm?: number | null;
+  height_mm?: number | null;
+  received_at?: string | null;
+  source_document_type?: string | null;
+  source_document_id?: string | null;
+  last_receipt_correlation_key?: string | null;
   created_at: string;
   created_by: string | null;
 };
@@ -44,7 +55,7 @@ export type ContainersRepo = {
 };
 
 const CONTAINER_TYPE_COLUMNS = 'id,code,description,supports_storage,supports_picking';
-const CONTAINER_COLUMNS = 'id,tenant_id,system_code,external_code,container_type_id,status,operational_role,created_at,created_by';
+const CONTAINER_COLUMNS = 'id,tenant_id,system_code,external_code,container_type_id,status,operational_role,parent_container_id,packaging_profile_id,is_standard_pack,gross_weight_g,length_mm,width_mm,height_mm,received_at,source_document_type,source_document_id,last_receipt_correlation_key,created_at,created_by';
 
 export function createContainersRepo(supabase: SupabaseClient): ContainersRepo {
   return {

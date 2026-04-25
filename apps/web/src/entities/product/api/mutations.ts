@@ -1,4 +1,4 @@
-import type { ProductPackagingLevel, ProductUnitProfile } from '@wos/domain';
+import type { ProductPackagingLevel, ProductUnitProfile, StoragePreset } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
 import { productKeys } from './queries';
@@ -30,6 +30,27 @@ export type ReplaceProductPackagingLevelItem = {
   isActive: boolean;
 };
 
+export type StoragePresetLevelInput = {
+  levelType: string;
+  qtyEach: number;
+  parentLevelType?: string | null;
+  qtyPerParent?: number | null;
+  containerType?: string | null;
+  legacyProductPackagingLevelId?: string | null;
+};
+
+export type CreateStoragePresetInput = {
+  productId: string;
+  code: string;
+  name: string;
+  scopeType?: 'tenant' | 'location';
+  scopeId?: string;
+  isDefault?: boolean;
+  priority?: number;
+  status?: 'active' | 'inactive';
+  levels: StoragePresetLevelInput[];
+};
+
 async function upsertProductUnitProfile(args: {
   productId: string;
   body: UpsertProductUnitProfileBody;
@@ -47,6 +68,14 @@ async function replaceProductPackagingLevels(args: {
   return bffRequest<ProductPackagingLevel[]>(`/api/products/${args.productId}/packaging-levels`, {
     method: 'PUT',
     body: JSON.stringify(args.levels)
+  });
+}
+
+async function createProductStoragePreset(args: CreateStoragePresetInput) {
+  const { productId, ...body } = args;
+  return bffRequest<StoragePreset>(`/api/products/${productId}/storage-presets`, {
+    method: 'POST',
+    body: JSON.stringify(body)
   });
 }
 
@@ -71,6 +100,19 @@ export function useReplaceProductPackagingLevels() {
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({
         queryKey: productKeys.packagingLevels(variables.productId)
+      });
+    }
+  });
+}
+
+export function useCreateProductStoragePreset() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createProductStoragePreset,
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: productKeys.storagePresets(variables.productId)
       });
     }
   });

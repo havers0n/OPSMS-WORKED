@@ -1,4 +1,4 @@
-import type { LocationStorageSnapshotRow } from '@wos/domain';
+import type { LocationStorageSnapshotRow, StoragePreset } from '@wos/domain';
 import {
   InspectorFooter,
   inspectorRowCardClassName,
@@ -22,6 +22,9 @@ type ContainerDetailPanelProps = {
   hasProductContext: boolean;
   isConflict: boolean;
   showNoneExplanation: boolean;
+  storagePresets: StoragePreset[];
+  preferredPackagingProfileId: string | null;
+  preferredPresetPending: boolean;
   canShowOverrideEntry: boolean;
   hasExplicitOverride: boolean;
   canShowRepairConflictEntry: boolean;
@@ -30,12 +33,26 @@ type ContainerDetailPanelProps = {
   onOpenEditOverrideTask: () => void;
   onOpenRepairConflictTask: () => void;
   onOpenAddProductTask: () => void;
+  onPreferredPresetChange: (presetId: string | null) => void;
   onOpenTransferToContainerTask: (row: LocationStorageSnapshotRow) => void;
   onOpenExtractQuantityTask: (row: LocationStorageSnapshotRow) => void;
   onStartMoveContainer: () => void;
   onOpenSwapContainerTask: () => void;
   onOpenRemoveContainerTask: () => void;
 };
+
+function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'] | undefined) {
+  switch (status) {
+    case 'preferred_match':
+      return 'Preferred preset';
+    case 'standard_non_preferred':
+      return 'Standard preset';
+    case 'manual':
+      return 'Manual';
+    default:
+      return 'Preset unknown';
+  }
+}
 
 export function ContainerDetailPanel({
   rackDisplayCode,
@@ -51,6 +68,9 @@ export function ContainerDetailPanel({
   hasProductContext,
   isConflict,
   showNoneExplanation,
+  storagePresets,
+  preferredPackagingProfileId,
+  preferredPresetPending,
   canShowOverrideEntry,
   hasExplicitOverride,
   canShowRepairConflictEntry,
@@ -59,6 +79,7 @@ export function ContainerDetailPanel({
   onOpenEditOverrideTask,
   onOpenRepairConflictTask,
   onOpenAddProductTask,
+  onPreferredPresetChange,
   onOpenTransferToContainerTask,
   onOpenExtractQuantityTask,
   onStartMoveContainer,
@@ -94,6 +115,7 @@ export function ContainerDetailPanel({
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
             <span className="capitalize">Type: {firstRow.containerType}</span>
             <span className="capitalize">Status: {firstRow.containerStatus}</span>
+            <span>{presetUsageLabel(firstRow.presetUsageStatus)}</span>
           </div>
         ) : null}
       </div>
@@ -130,6 +152,27 @@ export function ContainerDetailPanel({
           {showNoneExplanation ? (
             <div className="mt-2 text-[11px] leading-5 text-gray-500" data-testid="location-role-none-note">
               No structural default or explicit override applies here.
+            </div>
+          ) : null}
+          {hasProductContext ? (
+            <div className="mt-3 space-y-1">
+              <label className="block text-[11px] font-medium text-gray-600">Preferred storage preset</label>
+              <select
+                value={preferredPackagingProfileId ?? ''}
+                onChange={(event) => onPreferredPresetChange(event.target.value || null)}
+                disabled={preferredPresetPending}
+                className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 disabled:opacity-50"
+                data-testid="preferred-storage-preset-select"
+              >
+                <option value="">No preferred preset</option>
+                {storagePresets
+                  .filter((preset) => preset.status === 'active' && preset.profileType === 'storage')
+                  .map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.code} - {preset.name}
+                    </option>
+                  ))}
+              </select>
             </div>
           ) : null}
         </div>

@@ -52,7 +52,14 @@ import {
   executePickStepResponseSchema,
   nonRackLocationsResponseSchema,
   patchLocationGeometryBodySchema,
-  rackInspectorPayloadSchema
+  rackInspectorPayloadSchema,
+  storagePresetsResponseSchema,
+  storagePresetResponseSchema,
+  createStoragePresetRequestBodySchema,
+  patchStoragePresetRequestBodySchema,
+  createContainerFromStoragePresetRequestBodySchema,
+  createContainerFromStoragePresetResponseSchema,
+  setPreferredStoragePresetRequestBodySchema
 } from './schemas.js';
 import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
@@ -131,6 +138,10 @@ import {
   type ProductLocationRolesService
 } from './features/product-location-roles/service.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
+import {
+  createStoragePresetsService,
+  type StoragePresetsService
+} from './features/storage-presets/service.js';
 
 type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
 type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
@@ -144,6 +155,7 @@ type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsServ
 type ProductsServiceFactory = (context: AuthenticatedRequestContext) => ProductsService;
 type PickingServiceFactory = (context: AuthenticatedRequestContext) => PickingService;
 type ProductLocationRolesServiceFactory = (context: AuthenticatedRequestContext) => ProductLocationRolesService;
+type StoragePresetsServiceFactory = (context: AuthenticatedRequestContext) => StoragePresetsService;
 
 type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -160,6 +172,7 @@ type BuildAppOptions = {
   getFloorsService?: FloorsServiceFactory;
   getProductsService?: ProductsServiceFactory;
   getProductLocationRolesService?: ProductLocationRolesServiceFactory;
+  getStoragePresetsService?: StoragePresetsServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -236,6 +249,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     options.getProductLocationRolesService ??
     ((context: AuthenticatedRequestContext) =>
       createProductLocationRolesService(getUserSupabase(context)));
+  const getStoragePresetsService =
+    options.getStoragePresetsService ??
+    ((context: AuthenticatedRequestContext) => createStoragePresetsService(getUserSupabase(context)));
 
   void app.register(cors, {
     origin: env.corsOrigin,
@@ -313,6 +329,111 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
   registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
+
+  app.get('/api/products/:productId/storage-presets', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace.');
+    }
+
+    const productId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { productId: string }).productId
+    }).id;
+    const presets = await getStoragePresetsService(auth).listByProduct(auth.currentTenant.tenantId, productId);
+    return parseOrThrow(storagePresetsResponseSchema, presets);
+  });
+
+  app.post('/api/products/:productId/storage-presets', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace.');
+    }
+
+    const productId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { productId: string }).productId
+    }).id;
+    const body = parseOrThrow(createStoragePresetRequestBodySchema, request.body);
+    const preset = await getStoragePresetsService(auth).create(auth.currentTenant.tenantId, productId, body);
+    return reply.code(201).send(parseOrThrow(storagePresetResponseSchema, preset));
+  });
+
+  app.patch('/api/products/:productId/storage-presets/:presetId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace.');
+    }
+
+    const productId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { productId: string }).productId
+    }).id;
+    const presetId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { presetId: string }).presetId
+    }).id;
+    const body = parseOrThrow(patchStoragePresetRequestBodySchema, request.body);
+    const preset = await getStoragePresetsService(auth).patch(auth.currentTenant.tenantId, productId, presetId, body);
+    return parseOrThrow(storagePresetResponseSchema, preset);
+  });
+
+  app.put('/api/locations/:locationId/sku-policies/:productId/storage-preset', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace.');
+    }
+
+    const locationId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { locationId: string }).locationId
+    }).id;
+    const productId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { productId: string }).productId
+    }).id;
+    const body = parseOrThrow(setPreferredStoragePresetRequestBodySchema, request.body);
+    const policy = await getStoragePresetsService(auth).setPreferredPolicy(
+      auth.currentTenant.tenantId,
+      locationId,
+      productId,
+      body.preferredPackagingProfileId
+    );
+    return policy;
+  });
+
+  app.post('/api/storage-presets/:presetId/create-container', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const presetId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { presetId: string }).presetId
+    }).id;
+    const body = parseOrThrow(createContainerFromStoragePresetRequestBodySchema, request.body);
+
+    try {
+      const result = await getStoragePresetsService(auth).createContainerFromPreset({
+        presetId,
+        locationId: body.locationId,
+        externalCode: body.externalCode,
+        actorId: auth.user.id
+      });
+      return parseOrThrow(createContainerFromStoragePresetResponseSchema, result);
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('STORAGE_PRESET_NOT_FOUND')) {
+          throw new ApiError(404, 'STORAGE_PRESET_NOT_FOUND', 'Storage preset was not found.');
+        }
+        if (error.message.includes('STORAGE_PRESET_CONTAINER_TYPE_UNRESOLVED')) {
+          throw new ApiError(422, 'STORAGE_PRESET_CONTAINER_TYPE_UNRESOLVED', 'Storage preset must resolve exactly one container type.');
+        }
+        if (error.message.includes('STORAGE_PRESET_CONTAINER_TYPE_INVALID')) {
+          throw new ApiError(422, 'STORAGE_PRESET_CONTAINER_TYPE_INVALID', 'Storage preset does not resolve a valid storage container type.');
+        }
+      }
+      const mapped = mapSupabaseError(error);
+      if (mapped) throw mapped;
+      throw error;
+    }
+  });
 
   app.get('/api/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -680,7 +801,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_canonical_v')
-      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,inventory_unit_id,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count')
+      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,inventory_unit_id,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count,container_packaging_profile_id,container_is_standard_pack,preferred_packaging_profile_id,preset_usage_status')
       .eq('container_id', containerId);
 
     if (error) {
@@ -701,6 +822,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       packaging_state?: 'sealed' | 'opened' | 'loose' | null;
       product_packaging_level_id?: string | null;
       pack_count?: number | null;
+      container_packaging_profile_id?: string | null;
+      container_is_standard_pack?: boolean | null;
+      preferred_packaging_profile_id?: string | null;
+      preset_usage_status?: 'preferred_match' | 'standard_non_preferred' | 'manual' | 'unknown' | null;
     }>);
 
     return parseOrThrow(containerStorageSnapshotResponseSchema, rows.map(mapContainerStorageSnapshotRowToDomain));

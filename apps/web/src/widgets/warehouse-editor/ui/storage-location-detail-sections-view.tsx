@@ -46,6 +46,7 @@ export type CurrentContainerCardViewModel = {
   title: string;
   secondaryText: string;
   status: string;
+  presetUsageText?: string;
   inventoryEntryCount: number;
 };
 
@@ -97,6 +98,9 @@ export function CurrentContainersSectionView({
                       {container.title}
                     </p>
                     <p className="text-[10px] text-[var(--text-muted)]">{container.secondaryText}</p>
+                    {container.presetUsageText ? (
+                      <p className="mt-1 text-[10px] font-medium text-[var(--text-muted)]">{container.presetUsageText}</p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <ContainerStatusBadge status={container.status} />

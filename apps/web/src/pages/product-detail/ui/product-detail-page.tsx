@@ -7,6 +7,7 @@ import {
 } from '../model/use-product-detail-page-model';
 import { ProductMediaSection } from './product-media-section';
 import { ProductPackagingSection } from './product-packaging-section';
+import { ProductStoragePresetsSection } from './product-storage-presets-section';
 import { ProductUnitProfileSection } from './product-unit-profile-section';
 
 export function ProductDetailPage() {
@@ -196,6 +197,13 @@ export function ProductDetailPage() {
             onAddRow={model.addPackagingRow}
             onRemoveRow={model.removePackagingRow}
             onUpdateRow={model.updatePackagingRow}
+          />
+
+          <ProductStoragePresetsSection
+            productId={productId}
+            storagePresetsQuery={model.storagePresetsQuery}
+            packagingLevelsQuery={model.packagingLevelsQuery}
+            createStoragePresetMutation={model.createStoragePresetMutation}
           />
         </div>
       </div>

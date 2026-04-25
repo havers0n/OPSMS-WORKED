@@ -5,6 +5,7 @@ export * from './catalog/product-unit-profile';
 export * from './catalog/product-packaging-level';
 export * from './catalog/packaging-profile';
 export * from './catalog/packaging-profile-level';
+export * from './catalog/storage-preset';
 export * from './layout/rack';
 export * from './layout/wall';
 export * from './layout/zone';

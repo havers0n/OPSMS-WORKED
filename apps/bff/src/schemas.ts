@@ -53,7 +53,13 @@ import {
   locationEffectiveRoleSchema,
   productUnitProfileSchema,
   productPackagingLevelSchema,
-  inventoryPackagingStateSchema
+  inventoryPackagingStateSchema,
+  storagePresetSchema,
+  createStoragePresetBodySchema,
+  patchStoragePresetBodySchema,
+  createContainerFromStoragePresetBodySchema,
+  createContainerFromStoragePresetResultSchema,
+  setPreferredStoragePresetBodySchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -295,6 +301,13 @@ export const upsertUnitProfileBodySchema = z.object({
 
 export const productPackagingLevelResponseSchema = productPackagingLevelSchema;
 export const productPackagingLevelsResponseSchema = z.array(productPackagingLevelSchema);
+export const storagePresetResponseSchema = storagePresetSchema;
+export const storagePresetsResponseSchema = z.array(storagePresetSchema);
+export const createStoragePresetRequestBodySchema = createStoragePresetBodySchema;
+export const patchStoragePresetRequestBodySchema = patchStoragePresetBodySchema;
+export const createContainerFromStoragePresetRequestBodySchema = createContainerFromStoragePresetBodySchema;
+export const createContainerFromStoragePresetResponseSchema = createContainerFromStoragePresetResultSchema;
+export const setPreferredStoragePresetRequestBodySchema = setPreferredStoragePresetBodySchema;
 
 export const createPackagingLevelBodySchema = z.object({
   code: z.string().trim().min(1),

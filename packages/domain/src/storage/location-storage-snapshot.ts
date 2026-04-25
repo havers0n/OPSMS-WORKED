@@ -3,6 +3,7 @@ import { containerStatusSchema } from './container';
 import { locationTypeSchema } from './location';
 import { productSchema } from '../catalog/product';
 import { inventoryPackagingStateSchema } from './inventory-unit';
+import { storagePresetUsageStatusSchema } from '../catalog/storage-preset';
 
 export const locationStorageSnapshotRowSchema = z.object({
   tenantId: z.string().uuid(),
@@ -24,7 +25,11 @@ export const locationStorageSnapshotRowSchema = z.object({
   uom: z.string().trim().min(1).nullable(),
   packagingState: inventoryPackagingStateSchema.nullable().optional(),
   productPackagingLevelId: z.string().uuid().nullable().optional(),
-  packCount: z.number().int().positive().nullable().optional()
+  packCount: z.number().int().positive().nullable().optional(),
+  containerPackagingProfileId: z.string().uuid().nullable().optional(),
+  containerIsStandardPack: z.boolean().nullable().optional(),
+  preferredPackagingProfileId: z.string().uuid().nullable().optional(),
+  presetUsageStatus: storagePresetUsageStatusSchema.optional()
 });
 
 export const locationStorageSnapshotResponseSchema = z.array(locationStorageSnapshotRowSchema);

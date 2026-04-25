@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { containerStatusSchema } from './container';
 import { productSchema } from '../catalog/product';
 import { inventoryPackagingStateSchema } from './inventory-unit';
+import { storagePresetUsageStatusSchema } from '../catalog/storage-preset';
 
 export const containerStorageSnapshotRowSchema = z.object({
   tenantId: z.string().uuid(),
@@ -17,7 +18,11 @@ export const containerStorageSnapshotRowSchema = z.object({
   uom: z.string().trim().min(1).nullable(),
   packagingState: inventoryPackagingStateSchema.nullable().optional(),
   productPackagingLevelId: z.string().uuid().nullable().optional(),
-  packCount: z.number().int().positive().nullable().optional()
+  packCount: z.number().int().positive().nullable().optional(),
+  containerPackagingProfileId: z.string().uuid().nullable().optional(),
+  containerIsStandardPack: z.boolean().nullable().optional(),
+  preferredPackagingProfileId: z.string().uuid().nullable().optional(),
+  presetUsageStatus: storagePresetUsageStatusSchema.optional()
 });
 
 export type ContainerStorageSnapshotRow = z.infer<typeof containerStorageSnapshotRowSchema>;

@@ -1,4 +1,4 @@
-import type { Product, ProductPackagingLevel, ProductUnitProfile } from '@wos/domain';
+import type { Product, ProductPackagingLevel, ProductUnitProfile, StoragePreset } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest, BffRequestError, resolveBffUrl } from '@/shared/api/bff/client';
 import { supabase } from '@/shared/api/supabase/client';
@@ -20,7 +20,9 @@ export const productKeys = {
   detail: (productId: string | null) => [...productKeys.all, 'detail', productId ?? 'none'] as const,
   unitProfile: (productId: string | null) => [...productKeys.all, 'unit-profile', productId ?? 'none'] as const,
   packagingLevels: (productId: string | null) =>
-    [...productKeys.all, 'packaging-levels', productId ?? 'none'] as const
+    [...productKeys.all, 'packaging-levels', productId ?? 'none'] as const,
+  storagePresets: (productId: string | null) =>
+    [...productKeys.all, 'storage-presets', productId ?? 'none'] as const
 };
 
 type BffErrorBody = {
@@ -115,6 +117,14 @@ async function fetchProductPackagingLevels(productId: string) {
   return levels ?? [];
 }
 
+async function fetchProductStoragePresets(productId: string) {
+  const presets =
+    await fetchNullableProductSection<StoragePreset[]>(
+      `/api/products/${productId}/storage-presets`
+    );
+  return presets ?? [];
+}
+
 export function productCatalogQueryOptions(args: {
   query: string | null;
   page: number;
@@ -160,6 +170,14 @@ export function productPackagingLevelsQueryOptions(productId: string | null) {
   return queryOptions({
     queryKey: productKeys.packagingLevels(productId),
     queryFn: () => fetchProductPackagingLevels(productId as string),
+    enabled: Boolean(productId)
+  });
+}
+
+export function productStoragePresetsQueryOptions(productId: string | null) {
+  return queryOptions({
+    queryKey: productKeys.storagePresets(productId),
+    queryFn: () => fetchProductStoragePresets(productId as string),
     enabled: Boolean(productId)
   });
 }

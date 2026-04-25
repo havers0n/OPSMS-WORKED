@@ -6,7 +6,7 @@ export const packagingProfileSchema = z.object({
   productId: z.string().uuid(),
   code: z.string().trim().min(1),
   name: z.string().trim().min(1),
-  profileType: z.enum(['legacy_bridge', 'receiving']),
+  profileType: z.enum(['legacy_bridge', 'receiving', 'storage']),
   scopeType: z.enum(['tenant', 'location']),
   scopeId: z.string().uuid(),
   validFrom: z.string().nullable(),

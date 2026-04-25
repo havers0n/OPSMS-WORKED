@@ -26,6 +26,7 @@ type CellOverviewPanelProps = {
   inventoryOverflow: number;
   onSelectContainer: (containerId: string) => void;
   onOpenCreateTask: () => void;
+  onOpenCreateFromPresetTask: () => void;
   onOpenCreateWithProductTask: () => void;
 };
 
@@ -49,6 +50,7 @@ export function CellOverviewPanel({
   inventoryOverflow,
   onSelectContainer,
   onOpenCreateTask,
+  onOpenCreateFromPresetTask,
   onOpenCreateWithProductTask
 }: CellOverviewPanelProps) {
   return (
@@ -165,6 +167,14 @@ export function CellOverviewPanel({
               aria-label="Create container with product at this location"
             >
               Create container with product
+            </button>
+            <button
+              onClick={onOpenCreateFromPresetTask}
+              className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              aria-label="Create container from storage preset at this location"
+              data-testid="create-from-preset-action"
+            >
+              Create from preset
             </button>
           </div>
         </div>

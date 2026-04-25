@@ -9,6 +9,7 @@ export type PanelMode =
   | { kind: 'task-edit-override'; cellId: string; containerId: string }
   | { kind: 'task-repair-conflict'; cellId: string; containerId: string }
   | { kind: 'task-create-container'; cellId: string }
+  | { kind: 'task-create-container-from-preset'; cellId: string }
   | { kind: 'task-create-container-with-product'; cellId: string }
   | { kind: 'task-place-existing'; cellId: string }
   | { kind: 'task-remove-container'; cellId: string; containerId: string }
@@ -17,6 +18,7 @@ export type PanelMode =
 
 export type TaskKind =
   | 'create-container'
+  | 'create-container-from-preset'
   | 'create-container-with-product'
   | 'place-existing'
   | 'remove-container'
@@ -131,6 +133,10 @@ export function resolveActiveMode(
 
   if (base.kind === 'cell-overview' && taskKind === 'create-container') {
     return { kind: 'task-create-container', cellId: base.cellId };
+  }
+
+  if (base.kind === 'cell-overview' && taskKind === 'create-container-from-preset') {
+    return { kind: 'task-create-container-from-preset', cellId: base.cellId };
   }
 
   if (base.kind === 'cell-overview' && taskKind === 'create-container-with-product') {

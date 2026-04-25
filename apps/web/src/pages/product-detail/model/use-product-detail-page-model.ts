@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ProductUnitProfile } from '@wos/domain';
 import {
+  useCreateProductStoragePreset,
   useReplaceProductPackagingLevels,
   useUpsertProductUnitProfile
 } from '@/entities/product/api/mutations';
 import {
   productPackagingLevelsQueryOptions,
   productQueryOptions,
+  productStoragePresetsQueryOptions,
   productUnitProfileQueryOptions
 } from '@/entities/product/api/queries';
 import { resolveProductDisplayImages } from '@/entities/product/lib/display';
@@ -64,12 +66,18 @@ export function useProductDetailPageModel(productId: string | null) {
     enabled: sectionQueriesEnabled
   });
 
+  const storagePresetsQuery = useQuery({
+    ...productStoragePresetsQueryOptions(productId),
+    enabled: sectionQueriesEnabled
+  });
+
   const productError = productQuery.error;
   const isNotFound = productError instanceof BffRequestError && productError.status === 404;
 
   const defaultPickLevel = packagingLevelsQuery.data?.find((level) => level.isDefaultPickUom) ?? null;
   const upsertUnitProfileMutation = useUpsertProductUnitProfile();
   const replacePackagingLevelsMutation = useReplaceProductPackagingLevels();
+  const createStoragePresetMutation = useCreateProductStoragePreset();
 
   const [isUnitProfileEditing, setIsUnitProfileEditing] = useState(false);
   const [unitProfileDraft, setUnitProfileDraft] = useState<UnitProfileDraft>(() => createUnitProfileDraft(null));
@@ -360,10 +368,12 @@ export function useProductDetailPageModel(productId: string | null) {
     product,
     unitProfileQuery,
     packagingLevelsQuery,
+    storagePresetsQuery,
     isNotFound,
     defaultPickLevel,
     upsertUnitProfileMutation,
     replacePackagingLevelsMutation,
+    createStoragePresetMutation,
     isUnitProfileEditing,
     unitProfileDraft,
     unitProfileFieldErrors,

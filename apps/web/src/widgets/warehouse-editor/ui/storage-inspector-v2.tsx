@@ -9,6 +9,7 @@ import { useLocationByCell } from '@/entities/location/api/use-location-by-cell'
 import { locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
+import { productStoragePresetsQueryOptions } from '@/entities/product/api/queries';
 import { useLocationEffectiveRole } from '@/entities/product-location-role/api/use-location-effective-role';
 import { useLocationProductAssignments } from '@/entities/product-location-role/api/use-location-product-assignments';
 import {
@@ -33,6 +34,10 @@ import {
 import { transferInventoryToContainer } from '@/features/container-inventory/api/mutations';
 import { invalidateContainerInventoryQueries } from '@/features/container-inventory/model/invalidation';
 import { useAddInventoryToContainer } from '@/features/container-inventory/model/use-add-inventory-to-container';
+import {
+  createContainerFromStoragePreset,
+  setPreferredStoragePreset
+} from '@/features/storage-presets/api/mutations';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -59,6 +64,7 @@ import { LoadingErrorState, LoadingState } from './storage-inspector-v2/loading-
 import { RackOverviewPanel } from './storage-inspector-v2/rack-overview-panel';
 import { ContainerDetailPanel } from './storage-inspector-v2/container-detail-panel';
 import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-container-panel';
+import { CreateContainerFromPresetTaskPanel } from './storage-inspector-v2/task-create-container-from-preset-panel';
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
 import { SwapContainerTaskPanel } from './storage-inspector-v2/task-swap-container-panel';
@@ -117,6 +123,7 @@ function buildCurrentContainerCards(containers: GroupedContainer[]): CurrentCont
       title: displayCode,
       secondaryText: `${containerType} / ${status}`,
       status,
+      presetUsageText: presetUsageLabel(first?.presetUsageStatus),
       inventoryEntryCount
     };
   });
@@ -220,6 +227,19 @@ function validateTargetContainer(
   return null;
 }
 
+function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'] | undefined) {
+  switch (status) {
+    case 'preferred_match':
+      return 'Preferred preset';
+    case 'standard_non_preferred':
+      return 'Standard preset';
+    case 'manual':
+      return 'Manual';
+    default:
+      return 'Preset unknown';
+  }
+}
+
 function CellSectionOverviewPanel({
   rackDisplayCode,
   activeLevel,
@@ -234,6 +254,7 @@ function CellSectionOverviewPanel({
   onSelectContainer,
   onOpenPlaceExistingTask,
   onOpenCreateTask,
+  onOpenCreateFromPresetTask,
   onOpenCreateWithProductTask
 }: {
   rackDisplayCode: string;
@@ -249,6 +270,7 @@ function CellSectionOverviewPanel({
   onSelectContainer: (containerId: string) => void;
   onOpenPlaceExistingTask: () => void;
   onOpenCreateTask: () => void;
+  onOpenCreateFromPresetTask: () => void;
   onOpenCreateWithProductTask: () => void;
 }) {
   const hasContainers = containers.length > 0;
@@ -327,6 +349,14 @@ function CellSectionOverviewPanel({
               >
                 Create container with product
               </button>
+              <button
+                onClick={onOpenCreateFromPresetTask}
+                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                aria-label="Create container from storage preset at this location"
+                data-testid="create-from-preset-action"
+              >
+                Create from preset
+              </button>
             </div>
           </div>
           {hasContainers ? (
@@ -373,6 +403,13 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [createWithProductErrorMessage, setCreateWithProductErrorMessage] = useState<string | null>(null);
   const [createWithProductIsSubmitting, setCreateWithProductIsSubmitting] = useState(false);
 
+  const [createFromPresetProductSearch, setCreateFromPresetProductSearch] = useState('');
+  const [createFromPresetSelectedProduct, setCreateFromPresetSelectedProduct] = useState<Product | null>(null);
+  const [createFromPresetPresetId, setCreateFromPresetPresetId] = useState('');
+  const [createFromPresetExternalCode, setCreateFromPresetExternalCode] = useState('');
+  const [createFromPresetErrorMessage, setCreateFromPresetErrorMessage] = useState<string | null>(null);
+  const [createFromPresetIsSubmitting, setCreateFromPresetIsSubmitting] = useState(false);
+
   const [placeExistingContainerId, setPlaceExistingContainerId] = useState('');
   const [placeExistingErrorMessage, setPlaceExistingErrorMessage] = useState<string | null>(null);
   const [placeExistingIsSubmitting, setPlaceExistingIsSubmitting] = useState(false);
@@ -417,7 +454,15 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     isLoading: storageContainersLoading
   } = useQuery(containerListQueryOptions({ operationalRole: 'storage' }));
   const { data: createWithProductSearchResults = [] } = useProductsSearch(createWithProductSearch.trim() || null);
+  const { data: createFromPresetSearchResults = [] } = useProductsSearch(createFromPresetProductSearch.trim() || null);
   const { data: addProductSearchResults = [] } = useProductsSearch(addProductSearch.trim() || null);
+  const {
+    data: createFromPresetPresets = [],
+    isLoading: createFromPresetPresetsLoading
+  } = useQuery({
+    ...productStoragePresetsQueryOptions(createFromPresetSelectedProduct?.id ?? null),
+    enabled: Boolean(createFromPresetSelectedProduct)
+  });
 
   const {
     data: locationRef,
@@ -461,6 +506,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     locationId,
     effectiveRoleProductId
   );
+  const { data: effectiveProductStoragePresets = [] } = useQuery({
+    ...productStoragePresetsQueryOptions(effectiveRoleProductId),
+    enabled: Boolean(effectiveRoleProductId)
+  });
+  const [preferredPresetIsSubmitting, setPreferredPresetIsSubmitting] = useState(false);
 
   const addProductContainerId = mode.kind === 'task-add-product-to-container' ? mode.containerId : null;
   const addProductSourceCellId = mode.kind === 'task-add-product-to-container' ? mode.cellId : null;
@@ -489,6 +539,15 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setCreateWithProductUom('');
     setCreateWithProductErrorMessage(null);
     setCreateWithProductIsSubmitting(false);
+  };
+
+  const resetCreateFromPresetTaskState = () => {
+    setCreateFromPresetProductSearch('');
+    setCreateFromPresetSelectedProduct(null);
+    setCreateFromPresetPresetId('');
+    setCreateFromPresetExternalCode('');
+    setCreateFromPresetErrorMessage(null);
+    setCreateFromPresetIsSubmitting(false);
   };
 
   const resetPlaceExistingTaskState = () => {
@@ -566,6 +625,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setSwapTaskState(null);
     resetCreateTaskState();
     resetCreateWithProductTaskState();
+    resetCreateFromPresetTaskState();
     resetPlaceExistingTaskState();
     resetAddProductTaskState();
     resetRemoveContainerTaskState();
@@ -647,6 +707,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetCreateWithProductTaskState();
   };
 
+  const closeCreateFromPresetTask = () => {
+    setTaskKind(null);
+    resetCreateFromPresetTaskState();
+  };
+
   const closePlaceExistingTask = () => {
     if (placeExistingIsSubmitting) return;
     setTaskKind(null);
@@ -711,6 +776,11 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const openCreateWithProductTask = () => {
     resetCreateWithProductTaskState();
     setTaskKind('create-container-with-product');
+  };
+
+  const openCreateFromPresetTask = () => {
+    resetCreateFromPresetTaskState();
+    setTaskKind('create-container-from-preset');
   };
 
   const openPlaceExistingTask = () => {
@@ -812,6 +882,59 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const handleCreateWithProductSearchChange = (value: string) => {
     setCreateWithProductSearch(value);
     setCreateWithProductSelectedProduct(null);
+  };
+
+  const handleCreateFromPresetSelect = (product: Product) => {
+    setCreateFromPresetSelectedProduct(product);
+    setCreateFromPresetProductSearch(product.name ?? product.sku ?? '');
+    setCreateFromPresetPresetId('');
+  };
+
+  const handleCreateFromPresetSearchChange = (value: string) => {
+    setCreateFromPresetProductSearch(value);
+    setCreateFromPresetSelectedProduct(null);
+    setCreateFromPresetPresetId('');
+  };
+
+  const handleCreateFromPresetConfirm = async () => {
+    if (!locationId || !createFromPresetSelectedProduct || !createFromPresetPresetId || createFromPresetIsSubmitting) {
+      return;
+    }
+
+    setCreateFromPresetIsSubmitting(true);
+    setCreateFromPresetErrorMessage(null);
+
+    try {
+      const result = await createContainerFromStoragePreset({
+        presetId: createFromPresetPresetId,
+        locationId,
+        externalCode: createFromPresetExternalCode.trim() || undefined
+      });
+      await invalidatePlacementQueries(queryClient, { floorId, containerId: result.containerId });
+      await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+      await queryClient.invalidateQueries({ queryKey: containerKeys.list() });
+      setSelectedContainerId(result.containerId);
+      closeCreateFromPresetTask();
+    } catch (error) {
+      setCreateFromPresetErrorMessage(errorMessageFromUnknown(error, 'Failed to create container from preset.'));
+    } finally {
+      setCreateFromPresetIsSubmitting(false);
+    }
+  };
+
+  const handlePreferredPresetChange = async (presetId: string | null) => {
+    if (!locationId || !effectiveRoleProductId) return;
+    setPreferredPresetIsSubmitting(true);
+    try {
+      await setPreferredStoragePreset({
+        locationId,
+        productId: effectiveRoleProductId,
+        preferredPackagingProfileId: presetId
+      });
+      await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+    } finally {
+      setPreferredPresetIsSubmitting(false);
+    }
   };
 
   const handleCreateWithProductConfirm = async () => {
@@ -1332,6 +1455,32 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
+  if (mode.kind === 'task-create-container-from-preset') {
+    return (
+      <CreateContainerFromPresetTaskPanel
+        productSearch={createFromPresetProductSearch}
+        selectedProduct={createFromPresetSelectedProduct}
+        searchResults={createFromPresetSearchResults}
+        presets={createFromPresetPresets}
+        selectedPresetId={createFromPresetPresetId}
+        externalCode={createFromPresetExternalCode}
+        isLoadingPresets={createFromPresetPresetsLoading}
+        isSubmitting={createFromPresetIsSubmitting}
+        locationId={locationId}
+        errorMessage={createFromPresetErrorMessage}
+        rackDisplayCode={rackDisplayCode}
+        locationCode={locationCode}
+        activeLevel={activeLevel}
+        onProductSearchChange={handleCreateFromPresetSearchChange}
+        onProductSelect={handleCreateFromPresetSelect}
+        onPresetChange={setCreateFromPresetPresetId}
+        onExternalCodeChange={setCreateFromPresetExternalCode}
+        onConfirm={() => void handleCreateFromPresetConfirm()}
+        onCancel={closeCreateFromPresetTask}
+      />
+    );
+  }
+
   if (mode.kind === 'task-create-container-with-product') {
     return (
       <CreateContainerWithProductTaskPanel
@@ -1840,6 +1989,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         hasProductContext={hasProductContext}
         isConflict={isConflict}
         showNoneExplanation={showNoneExplanation}
+        storagePresets={effectiveProductStoragePresets}
+        preferredPackagingProfileId={first?.preferredPackagingProfileId ?? null}
+        preferredPresetPending={preferredPresetIsSubmitting}
         canShowOverrideEntry={canShowOverrideEntry}
         hasExplicitOverride={hasExplicitOverride}
         canShowRepairConflictEntry={canShowRepairConflictEntry}
@@ -1848,6 +2000,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onOpenEditOverrideTask={openEditOverrideTask}
         onOpenRepairConflictTask={openRepairConflictTask}
         onOpenAddProductTask={openAddProductTask}
+        onPreferredPresetChange={(presetId) => void handlePreferredPresetChange(presetId)}
         onOpenTransferToContainerTask={openTransferToContainerTask}
         onOpenExtractQuantityTask={openExtractQuantityTask}
         onOpenRemoveContainerTask={openRemoveContainerTask}
@@ -1891,6 +2044,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       onSelectContainer={setSelectedContainerId}
       onOpenPlaceExistingTask={openPlaceExistingTask}
       onOpenCreateTask={openCreateTask}
+      onOpenCreateFromPresetTask={openCreateFromPresetTask}
       onOpenCreateWithProductTask={openCreateWithProductTask}
     />
   );
