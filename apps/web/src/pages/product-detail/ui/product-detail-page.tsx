@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { routes } from '@/shared/config/routes';
@@ -10,6 +11,8 @@ import { ProductPackagingSection } from './product-packaging-section';
 import { ProductStoragePresetsSection } from './product-storage-presets-section';
 import { ProductUnitProfileSection } from './product-unit-profile-section';
 import { UnitProfileBoard } from './unit-profile-board';
+
+type UnitProfileBoardMode = 'read' | 'edit-product-facts' | 'edit-packaging' | 'create-storage-preset';
 
 function getUnitProfileSetupStatus(profile: ReturnType<typeof useProductDetailPageModel>['unitProfileQuery']['data']) {
   if (!profile) return { label: 'Missing', detail: 'No profile data' };
@@ -126,6 +129,7 @@ export function ProductDetailPage() {
       : routes.products;
 
   const model = useProductDetailPageModel(productId ?? null);
+  const [boardMode, setBoardMode] = useState<UnitProfileBoardMode>('read');
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -134,6 +138,44 @@ export function ProductDetailPage() {
     }
 
     navigate(returnTo);
+  }
+
+  function beginProductFactsEdit() {
+    model.beginUnitProfileEdit();
+    setBoardMode('edit-product-facts');
+  }
+
+  function cancelProductFactsEdit() {
+    model.cancelUnitProfileEdit();
+    setBoardMode('read');
+  }
+
+  async function saveProductFacts() {
+    const saved = await model.saveUnitProfile();
+    if (saved) {
+      setBoardMode('read');
+    }
+  }
+
+  function beginPackagingEdit() {
+    model.beginPackagingEdit();
+    setBoardMode('edit-packaging');
+  }
+
+  function cancelPackagingEdit() {
+    model.cancelPackagingEdit();
+    setBoardMode('read');
+  }
+
+  async function savePackaging() {
+    const saved = await model.savePackagingLevels();
+    if (saved) {
+      setBoardMode('read');
+    }
+  }
+
+  function beginStoragePresetCreate() {
+    setBoardMode('create-storage-preset');
   }
 
   if (!productId) {
@@ -277,56 +319,98 @@ export function ProductDetailPage() {
             storagePresets={model.storagePresetsQuery.data}
           />
 
-          <UnitProfileBoard
-            product={model.product}
-            unitProfile={model.unitProfileQuery.data}
-            packagingLevels={model.packagingLevelsQuery.data ?? []}
-            storagePresets={model.storagePresetsQuery.data ?? []}
-            onEditUnitProfile={model.beginUnitProfileEdit}
-            onEditPackaging={model.beginPackagingEdit}
-          />
+          {boardMode === 'read' ? (
+            <UnitProfileBoard
+              product={model.product}
+              unitProfile={model.unitProfileQuery.data}
+              packagingLevels={model.packagingLevelsQuery.data ?? []}
+              storagePresets={model.storagePresetsQuery.data ?? []}
+              onEditProductFacts={beginProductFactsEdit}
+              onEditPackaging={beginPackagingEdit}
+              onCreateStoragePreset={beginStoragePresetCreate}
+            />
+          ) : null}
 
-          <ProductUnitProfileSection
-            unitProfileQuery={model.unitProfileQuery}
-            upsertUnitProfileMutation={model.upsertUnitProfileMutation}
-            isUnitProfileEditing={model.isUnitProfileEditing}
-            unitProfileDraft={model.unitProfileDraft}
-            unitProfileFieldErrors={model.unitProfileFieldErrors}
-            unitProfileSaveError={model.unitProfileSaveError}
-            unitProfileDirty={model.unitProfileDirty}
-            onBeginEdit={model.beginUnitProfileEdit}
-            onCancelEdit={model.cancelUnitProfileEdit}
-            onSave={() => void model.saveUnitProfile()}
-            onNumericFieldChange={model.updateUnitProfileDraftField}
-            onClassFieldChange={model.updateUnitProfileDraftClassField}
-          />
+          {boardMode !== 'read' ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+              <div>
+                <div className="text-xs font-semibold uppercase text-slate-500">Unit Profile Board</div>
+                <div className="text-sm font-medium text-slate-900">
+                  {boardMode === 'edit-product-facts'
+                    ? 'Editing product facts'
+                    : boardMode === 'edit-packaging'
+                      ? 'Configuring packaging levels'
+                      : 'Creating storage preset'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (boardMode === 'edit-product-facts') {
+                    model.cancelUnitProfileEdit();
+                  }
+                  if (boardMode === 'edit-packaging') {
+                    model.cancelPackagingEdit();
+                  }
+                  setBoardMode('read');
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Back to board
+              </button>
+            </div>
+          ) : null}
 
-          <ProductPackagingSection
-            packagingLevelsQuery={model.packagingLevelsQuery}
-            replacePackagingLevelsMutation={model.replacePackagingLevelsMutation}
-            unitProfileQuery={model.unitProfileQuery}
-            isPackagingEditing={model.isPackagingEditing}
-            packagingDraft={model.packagingDraft}
-            packagingRowErrors={model.packagingRowErrors}
-            packagingSectionErrors={model.packagingSectionErrors}
-            packagingSaveError={model.packagingSaveError}
-            packagingDirty={model.packagingDirty}
-            packagingEditorSemantics={model.packagingEditorSemantics}
-            onBeginEdit={model.beginPackagingEdit}
-            onCancelEdit={model.cancelPackagingEdit}
-            onSave={() => void model.savePackagingLevels()}
-            onAddRow={model.addPackagingRow}
-            onRemoveRow={model.removePackagingRow}
-            onUpdateRow={model.updatePackagingRow}
-          />
+          {boardMode === 'edit-product-facts' ? (
+            <ProductUnitProfileSection
+              unitProfileQuery={model.unitProfileQuery}
+              upsertUnitProfileMutation={model.upsertUnitProfileMutation}
+              isUnitProfileEditing={model.isUnitProfileEditing}
+              unitProfileDraft={model.unitProfileDraft}
+              unitProfileFieldErrors={model.unitProfileFieldErrors}
+              unitProfileSaveError={model.unitProfileSaveError}
+              unitProfileDirty={model.unitProfileDirty}
+              onBeginEdit={beginProductFactsEdit}
+              onCancelEdit={cancelProductFactsEdit}
+              onSave={() => void saveProductFacts()}
+              onNumericFieldChange={model.updateUnitProfileDraftField}
+              onClassFieldChange={model.updateUnitProfileDraftClassField}
+            />
+          ) : null}
 
-          <ProductStoragePresetsSection
-            productId={productId}
-            storagePresetsQuery={model.storagePresetsQuery}
-            packagingLevelsQuery={model.packagingLevelsQuery}
-            containerTypesQuery={model.containerTypesQuery}
-            createStoragePresetMutation={model.createStoragePresetMutation}
-          />
+          {boardMode === 'edit-packaging' ? (
+            <ProductPackagingSection
+              packagingLevelsQuery={model.packagingLevelsQuery}
+              replacePackagingLevelsMutation={model.replacePackagingLevelsMutation}
+              unitProfileQuery={model.unitProfileQuery}
+              isPackagingEditing={model.isPackagingEditing}
+              packagingDraft={model.packagingDraft}
+              packagingRowErrors={model.packagingRowErrors}
+              packagingSectionErrors={model.packagingSectionErrors}
+              packagingSaveError={model.packagingSaveError}
+              packagingDirty={model.packagingDirty}
+              packagingEditorSemantics={model.packagingEditorSemantics}
+              onBeginEdit={beginPackagingEdit}
+              onCancelEdit={cancelPackagingEdit}
+              onSave={() => void savePackaging()}
+              onAddRow={model.addPackagingRow}
+              onRemoveRow={model.removePackagingRow}
+              onUpdateRow={model.updatePackagingRow}
+            />
+          ) : null}
+
+          {boardMode === 'create-storage-preset' ? (
+            <ProductStoragePresetsSection
+              productId={productId}
+              storagePresetsQuery={model.storagePresetsQuery}
+              packagingLevelsQuery={model.packagingLevelsQuery}
+              containerTypesQuery={model.containerTypesQuery}
+              createStoragePresetMutation={model.createStoragePresetMutation}
+              defaultCreating
+              onCreateClosed={() => setBoardMode('read')}
+              onCreated={() => setBoardMode('read')}
+            />
+          ) : null}
         </div>
       </div>
     </section>

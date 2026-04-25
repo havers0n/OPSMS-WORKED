@@ -12,7 +12,7 @@ type ProductFactsCardProps = {
   unitProfile: ProductUnitProfile | null | undefined;
   packagingLevels: ProductPackagingLevel[];
   storagePresetCount: number;
-  onEditUnitProfile: () => void;
+  onEditProductFacts: () => void;
 };
 
 function FactRow({ label, value }: { label: string; value: string }) {
@@ -29,7 +29,7 @@ export function ProductFactsCard({
   unitProfile,
   packagingLevels,
   storagePresetCount,
-  onEditUnitProfile
+  onEditProductFacts
 }: ProductFactsCardProps) {
   const baseLevel = packagingLevels.find((level) => level.isBase) ?? null;
   const warnings = getUnitProfileWarnings({ unitProfile, packagingLevels, storagePresetCount });
@@ -46,10 +46,10 @@ export function ProductFactsCard({
         </div>
         <button
           type="button"
-          onClick={onEditUnitProfile}
+          onClick={onEditProductFacts}
           className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
-          Edit
+          Edit facts
         </button>
       </div>
 
@@ -72,8 +72,17 @@ export function ProductFactsCard({
 
       {warnings.length > 0 ? (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-          <div className="text-xs font-semibold text-amber-900">Warnings</div>
-          <div className="mt-1 flex flex-wrap gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold text-amber-900">Warnings</div>
+            <button
+              type="button"
+              onClick={onEditProductFacts}
+              className="rounded-md bg-amber-900 px-2 py-1 text-[11px] font-medium text-white hover:bg-amber-800"
+            >
+              Edit facts
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1">
             {warnings.map((warning) => (
               <span key={warning} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800">
                 {warning}

@@ -10,6 +10,9 @@ type ProductStoragePresetsSectionProps = {
   packagingLevelsQuery: UseQueryResult<ProductPackagingLevel[], Error>;
   containerTypesQuery: UseQueryResult<ContainerType[], Error>;
   createStoragePresetMutation: UseMutationResult<StoragePreset, Error, CreateStoragePresetInput>;
+  defaultCreating?: boolean;
+  onCreateClosed?: () => void;
+  onCreated?: () => void;
 };
 
 function parsePositiveInt(value: string) {
@@ -77,9 +80,12 @@ export function ProductStoragePresetsSection({
   storagePresetsQuery,
   packagingLevelsQuery,
   containerTypesQuery,
-  createStoragePresetMutation
+  createStoragePresetMutation,
+  defaultCreating = false,
+  onCreateClosed,
+  onCreated
 }: ProductStoragePresetsSectionProps) {
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCreating, setIsCreating] = useState(defaultCreating);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [selectedContainerTypeCode, setSelectedContainerTypeCode] = useState('');
@@ -120,6 +126,12 @@ export function ProductStoragePresetsSection({
     packCount
   });
   const packTypeHelper = 'Only active packaging levels marked "Can be stored" appear here.';
+
+  useEffect(() => {
+    if (defaultCreating) {
+      setIsCreating(true);
+    }
+  }, [defaultCreating]);
 
   useEffect(() => {
     if (storableContainerTypes.length === 0) {
@@ -172,6 +184,7 @@ export function ProductStoragePresetsSection({
       setCode('');
       setName('');
       setPackCount('1');
+      onCreated?.();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Failed to create storage preset.');
     }
@@ -189,7 +202,15 @@ export function ProductStoragePresetsSection({
         {!storagePresetsQuery.isLoading && !storagePresetsQuery.isError ? (
           <button
             type="button"
-            onClick={() => setIsCreating((value) => !value)}
+            onClick={() => {
+              if (isCreating) {
+                setIsCreating(false);
+                onCreateClosed?.();
+                return;
+              }
+
+              setIsCreating(true);
+            }}
             className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             {isCreating ? 'Close form' : 'Add preset'}

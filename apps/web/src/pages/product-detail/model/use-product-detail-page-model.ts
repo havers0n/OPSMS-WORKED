@@ -256,12 +256,12 @@ export function useProductDetailPageModel(productId: string | null) {
   }
 
   async function saveUnitProfile() {
-    if (!productId) return;
+    if (!productId) return false;
 
     const validation = validateUnitProfileDraft(unitProfileDraft);
     if (!validation.payload) {
       setUnitProfileFieldErrors(validation.fieldErrors);
-      return;
+      return false;
     }
 
     setUnitProfileFieldErrors({});
@@ -274,8 +274,10 @@ export function useProductDetailPageModel(productId: string | null) {
       });
       await unitProfileQuery.refetch();
       setIsUnitProfileEditing(false);
+      return true;
     } catch (error) {
       setUnitProfileSaveError(error instanceof Error ? error.message : 'Failed to save unit profile.');
+      return false;
     }
   }
 
@@ -344,13 +346,13 @@ export function useProductDetailPageModel(productId: string | null) {
   }
 
   async function savePackagingLevels() {
-    if (!productId) return;
+    if (!productId) return false;
 
     const validation = validatePackagingLevelsDraft(packagingDraft);
     if (!validation.payload) {
       setPackagingRowErrors(validation.rowErrors);
       setPackagingSectionErrors(validation.sectionErrors);
-      return;
+      return false;
     }
 
     setPackagingRowErrors({});
@@ -364,8 +366,10 @@ export function useProductDetailPageModel(productId: string | null) {
       });
       await packagingLevelsQuery.refetch();
       setIsPackagingEditing(false);
+      return true;
     } catch (error) {
       setPackagingSaveError(error instanceof Error ? error.message : 'Failed to save packaging levels.');
+      return false;
     }
   }
 

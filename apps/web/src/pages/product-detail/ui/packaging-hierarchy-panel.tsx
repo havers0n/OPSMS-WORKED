@@ -1,15 +1,17 @@
-import type { ProductPackagingLevel } from '@wos/domain';
+import type { ProductPackagingLevel, ProductUnitProfile } from '@wos/domain';
 import { derivePackagingHierarchy } from './packaging-hierarchy';
 import { PackagingLevelCard } from './packaging-level-card';
 
 type PackagingHierarchyPanelProps = {
-  packagingLevels: ProductPackagingLevel[];
+  levels: ProductPackagingLevel[];
+  unitProfile: ProductUnitProfile | null;
   onEditPackaging: () => void;
 };
 
-export function PackagingHierarchyPanel({ packagingLevels, onEditPackaging }: PackagingHierarchyPanelProps) {
-  const hierarchy = derivePackagingHierarchy(packagingLevels);
-  const levelsById = new Map(packagingLevels.map((level) => [level.id, level]));
+export function PackagingHierarchyPanel({ levels, unitProfile, onEditPackaging }: PackagingHierarchyPanelProps) {
+  const hierarchy = derivePackagingHierarchy(levels);
+  const levelsById = new Map(levels.map((level) => [level.id, level]));
+  const hasUnitProfile = unitProfile !== null;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
@@ -26,13 +28,28 @@ export function PackagingHierarchyPanel({ packagingLevels, onEditPackaging }: Pa
           onClick={onEditPackaging}
           className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
-          Edit
+          Configure packaging
         </button>
       </div>
 
       {hierarchy.entries.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-600">
-          No packaging levels defined yet.
+        <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4">
+          <div className="text-sm font-semibold text-slate-900">No packaging levels defined yet.</div>
+          <p className="mt-1 text-sm text-slate-600">
+            Packaging levels define how this product is picked, packed, and stored.
+          </p>
+          {!hasUnitProfile ? (
+            <p className="mt-1 text-xs text-amber-700">
+              Product facts are still missing, but packaging can be configured with the existing flow.
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={onEditPackaging}
+            className="mt-3 rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500"
+          >
+            Configure packaging
+          </button>
         </div>
       ) : (
         <div className="mt-4 space-y-3">

@@ -8,8 +8,9 @@ type UnitProfileBoardProps = {
   unitProfile: ProductUnitProfile | null | undefined;
   packagingLevels: ProductPackagingLevel[];
   storagePresets: StoragePreset[];
-  onEditUnitProfile: () => void;
+  onEditProductFacts: () => void;
   onEditPackaging: () => void;
+  onCreateStoragePreset: () => void;
 };
 
 export function UnitProfileBoard({
@@ -17,8 +18,9 @@ export function UnitProfileBoard({
   unitProfile,
   packagingLevels,
   storagePresets,
-  onEditUnitProfile,
-  onEditPackaging
+  onEditProductFacts,
+  onEditPackaging,
+  onCreateStoragePreset
 }: UnitProfileBoardProps) {
   return (
     <section className="rounded-xl border border-slate-200 bg-slate-100/70 p-4">
@@ -38,11 +40,19 @@ export function UnitProfileBoard({
           unitProfile={unitProfile}
           packagingLevels={packagingLevels}
           storagePresetCount={storagePresets.length}
-          onEditUnitProfile={onEditUnitProfile}
+          onEditProductFacts={onEditProductFacts}
         />
-        <PackagingHierarchyPanel packagingLevels={packagingLevels} onEditPackaging={onEditPackaging} />
+        <PackagingHierarchyPanel
+          levels={packagingLevels}
+          unitProfile={unitProfile ?? null}
+          onEditPackaging={onEditPackaging}
+        />
         <div className="lg:col-span-2 2xl:col-span-1">
-          <StoragePresetsPanel storagePresets={storagePresets} packagingLevels={packagingLevels} />
+          <StoragePresetsPanel
+            presets={storagePresets}
+            packagingLevels={packagingLevels}
+            onCreateStoragePreset={onCreateStoragePreset}
+          />
         </div>
       </div>
     </section>

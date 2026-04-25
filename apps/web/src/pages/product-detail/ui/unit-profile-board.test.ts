@@ -2,6 +2,9 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import TestRenderer, { act } from 'react-test-renderer';
 import type { Product, ProductPackagingLevel, ProductUnitProfile, StoragePreset } from '@wos/domain';
+import { PackagingHierarchyPanel } from './packaging-hierarchy-panel';
+import { ProductFactsCard } from './product-facts-card';
+import { StoragePresetsPanel } from './storage-presets-panel';
 import { UnitProfileBoard } from './unit-profile-board';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -111,6 +114,9 @@ function renderBoard(args?: {
   unitProfile?: ProductUnitProfile | null;
   packagingLevels?: ProductPackagingLevel[];
   storagePresets?: StoragePreset[];
+  onEditProductFacts?: () => void;
+  onEditPackaging?: () => void;
+  onCreateStoragePreset?: () => void;
 }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -129,8 +135,9 @@ function renderBoard(args?: {
           makeLevel()
         ],
         storagePresets: args?.storagePresets ?? [makePreset()],
-        onEditUnitProfile: vi.fn(),
-        onEditPackaging: vi.fn()
+        onEditProductFacts: args?.onEditProductFacts ?? vi.fn(),
+        onEditPackaging: args?.onEditPackaging ?? vi.fn(),
+        onCreateStoragePreset: args?.onCreateStoragePreset ?? vi.fn()
       })
     );
   });
@@ -187,5 +194,137 @@ describe('UnitProfileBoard', () => {
     expect(text).toContain('Missing dimensions');
     expect(text).toContain('No active packaging levels');
     expect(text).toContain('No storage presets');
+  });
+
+  it('wires board action callbacks', () => {
+    const onEditProductFacts = vi.fn();
+    const onEditPackaging = vi.fn();
+    const onCreateStoragePreset = vi.fn();
+    const renderer = renderBoard({
+      storagePresets: [],
+      onEditProductFacts,
+      onEditPackaging,
+      onCreateStoragePreset
+    });
+
+    act(() => {
+      renderer.root.findAllByType('button').find((button) => button.children.includes('Edit facts'))?.props.onClick();
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Configure packaging'))
+        ?.props.onClick();
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Create storage preset'))
+        ?.props.onClick();
+    });
+
+    expect(onEditProductFacts).toHaveBeenCalled();
+    expect(onEditPackaging).toHaveBeenCalled();
+    expect(onCreateStoragePreset).toHaveBeenCalled();
+  });
+});
+
+describe('ProductFactsCard', () => {
+  it('clicking edit calls onEditProductFacts', () => {
+    const onEditProductFacts = vi.fn();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(ProductFactsCard, {
+          product: makeProduct(),
+          unitProfile: makeProfile(),
+          packagingLevels: [makeLevel()],
+          storagePresetCount: 1,
+          onEditProductFacts
+        })
+      );
+    });
+
+    act(() => {
+      renderer.root.findByProps({ children: 'Edit facts' }).props.onClick();
+    });
+
+    expect(onEditProductFacts).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PackagingHierarchyPanel', () => {
+  it('empty state renders configure button and calls onEditPackaging', () => {
+    const onEditPackaging = vi.fn();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(PackagingHierarchyPanel, {
+          levels: [],
+          unitProfile: makeProfile(),
+          onEditPackaging
+        })
+      );
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('No packaging levels defined yet.');
+    expect(text).toContain('Packaging levels define how this product is picked, packed, and stored.');
+
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Configure packaging'))
+        ?.props.onClick();
+    });
+
+    expect(onEditPackaging).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('StoragePresetsPanel', () => {
+  it('disables create storage preset when no packaging levels exist', () => {
+    const onCreateStoragePreset = vi.fn();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(StoragePresetsPanel, {
+          presets: [],
+          packagingLevels: [],
+          onCreateStoragePreset
+        })
+      );
+    });
+
+    const createButton = renderer.root.findByProps({ children: 'Create storage preset' });
+    expect(createButton.props.disabled).toBe(true);
+    expect(flattenText(renderer.toJSON())).toContain('Define packaging levels before creating storage presets.');
+  });
+
+  it('enables create storage preset when active packaging levels exist and calls callback', () => {
+    const onCreateStoragePreset = vi.fn();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(
+        React.createElement(StoragePresetsPanel, {
+          presets: [],
+          packagingLevels: [makeLevel()],
+          onCreateStoragePreset
+        })
+      );
+    });
+
+    const createButton = renderer.root.findByProps({ children: 'Create storage preset' });
+    expect(createButton.props.disabled).toBe(false);
+
+    act(() => {
+      createButton.props.onClick();
+    });
+
+    expect(onCreateStoragePreset).toHaveBeenCalledTimes(1);
   });
 });
