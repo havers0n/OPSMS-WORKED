@@ -40,7 +40,7 @@ function getStoragePresetEmptyState(args: {
   hasStorageCapableContainerTypes: boolean;
 }) {
   if (!args.hasStorableLevels) {
-    return 'No storage setup yet. First create an active packaging level that can be stored.';
+    return 'No storage presets can be created until a storable pack type is available.';
   }
 
   if (!args.hasStorageCapableContainerTypes) {
@@ -57,13 +57,19 @@ function getStoragePreview(args: {
 }) {
   const count = parsePositiveInt(args.packCount);
   if (!args.selectedContainerType || !args.selectedLevel || count === null) {
-    return 'Choose a pack type and count to preview the storage setup.';
+    return null;
   }
 
   const packName = args.selectedLevel.name.trim() || 'Unnamed level';
   const totalUnits = count * args.selectedLevel.baseUnitQty;
 
-  return `Standard ${args.selectedContainerType.code}: ${count} ${packName} × ${args.selectedLevel.baseUnitQty} units = ${totalUnits} units`;
+  return {
+    count,
+    packName,
+    unitsPerPack: args.selectedLevel.baseUnitQty,
+    containerTypeCode: args.selectedContainerType.code,
+    totalUnits
+  };
 }
 
 export function ProductStoragePresetsSection({
@@ -113,6 +119,10 @@ export function ProductStoragePresetsSection({
     selectedLevel,
     packCount
   });
+  const packTypeHelper =
+    storableLevels.length === 0
+      ? 'Pack type options come from active packaging levels marked "Can be stored".'
+      : 'Only active packaging levels marked "Can be stored" appear here.';
 
   useEffect(() => {
     if (storableContainerTypes.length === 0) {
@@ -174,9 +184,9 @@ export function ProductStoragePresetsSection({
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Storage Presets</h2>
+          <h2 className="text-sm font-semibold text-slate-900">3. Storage Presets</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            How this product is normally stored in containers.
+            Define how storable pack types fit into containers.
           </p>
         </div>
         {!storagePresetsQuery.isLoading && !storagePresetsQuery.isError ? (
@@ -250,6 +260,19 @@ export function ProductStoragePresetsSection({
 
           {isCreating ? (
             <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3">
+              {storableLevels.length === 0 ? (
+                <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <div className="font-semibold">No storable pack types available.</div>
+                  <div className="mt-1">To create a storage preset, first add a packaging level that is:</div>
+                  <ul className="mt-1 space-y-0.5">
+                    <li>{'\u2713'} Active</li>
+                    <li>{'\u2713'} Can be stored</li>
+                  </ul>
+                  <a href="#packaging-levels" className="mt-2 inline-flex text-xs font-semibold text-amber-900 underline">
+                    Go to Packaging Levels
+                  </a>
+                </div>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
                   Code
@@ -287,11 +310,22 @@ export function ProductStoragePresetsSection({
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
                   Pack type
-                  <select value={selectedLevel?.id ?? ''} onChange={(event) => setLevelId(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal">
+                  <select
+                    value={selectedLevel?.id ?? ''}
+                    onChange={(event) => setLevelId(event.target.value)}
+                    disabled={storableLevels.length === 0}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:opacity-50"
+                  >
+                    <option value="">
+                      {storableLevels.length === 0 ? 'No storable pack types' : 'Select pack type'}
+                    </option>
                     {storableLevels.map((level) => (
                       <option key={level.id} value={level.id}>{formatPackagingLevelOption(level)}</option>
                     ))}
                   </select>
+                  <span className={storableLevels.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
+                    {packTypeHelper}
+                  </span>
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
                   Number of packs in container
@@ -307,7 +341,23 @@ export function ProductStoragePresetsSection({
                 </label>
               </div>
               <div className="mt-3 rounded-lg border border-cyan-100 bg-white px-3 py-2 text-sm text-slate-700">
-                {storagePreview}
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Storage formula</div>
+                {storagePreview ? (
+                  <div className="mt-1 space-y-1">
+                    <div className="font-medium text-slate-900">
+                      {storagePreview.count} {'\u00d7'} {storagePreview.packName} / {storagePreview.unitsPerPack}{' '}
+                      {storagePreview.unitsPerPack === 1 ? 'unit' : 'units'} {'\u2192'} Standard{' '}
+                      {storagePreview.containerTypeCode}
+                    </div>
+                    <div className="text-xs font-semibold text-slate-700">
+                      Total: {storagePreview.totalUnits} units per {storagePreview.containerTypeCode}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-slate-600">
+                    Choose a pack type, number of packs, and container type to preview the storage formula.
+                  </div>
+                )}
               </div>
               {error ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
               <button

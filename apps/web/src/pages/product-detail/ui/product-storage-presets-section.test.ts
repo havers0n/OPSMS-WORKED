@@ -136,9 +136,9 @@ describe('ProductStoragePresetsSection', () => {
   it('renders the section subtitle', () => {
     const renderer = renderSection();
 
-    expect(flattenText(renderer.toJSON())).toContain(
-      'How this product is normally stored in containers.'
-    );
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('3. Storage Presets');
+    expect(text).toContain('Define how storable pack types fit into containers.');
   });
 
   it('uses canonical storage-capable container types and defaults to pallet', () => {
@@ -168,7 +168,8 @@ describe('ProductStoragePresetsSection', () => {
     openCreateForm(renderer.root);
 
     const packTypeSelect = renderer.root.findAllByType('select').at(-1)!;
-    expect(packTypeSelect.findByType('option').children.join('')).toBe('Case - 12 units (CASE)');
+    const options = packTypeSelect.findAllByType('option');
+    expect(options.at(-1)!.children.join('')).toBe('Case - 12 units (CASE)');
   });
 
   it('uses unnamed packaging level fallback in the pack type dropdown label', () => {
@@ -178,7 +179,8 @@ describe('ProductStoragePresetsSection', () => {
     openCreateForm(renderer.root);
 
     const packTypeSelect = renderer.root.findAllByType('select').at(-1)!;
-    expect(packTypeSelect.findByType('option').children.join('')).toBe('Unnamed level - 12 units');
+    const options = packTypeSelect.findAllByType('option');
+    expect(options.at(-1)!.children.join('')).toBe('Unnamed level - 12 units');
   });
 
   it('shows helper text for loading, failed, and empty canonical container type states', () => {
@@ -206,7 +208,7 @@ describe('ProductStoragePresetsSection', () => {
       packagingLevels: [makePackagingLevel({ canStore: false })]
     });
     expect(flattenText(noStorableLevels.toJSON())).toContain(
-      'No storage setup yet. First create an active packaging level that can be stored.'
+      'No storage presets can be created until a storable pack type is available.'
     );
 
     const noStorageContainers = renderSection({
@@ -233,7 +235,15 @@ describe('ProductStoragePresetsSection', () => {
       inputs[2].props.onChange({ target: { value: '10' } });
     });
 
-    expect(flattenText(renderer.toJSON())).toContain('Standard pallet: 10 Case × 12 units = 120 units');
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Storage formula');
+    expect(text).toContain('10');
+    expect(text).toContain('Case');
+    expect(text).toContain('12');
+    expect(text).toContain('Standard');
+    expect(text).toContain('pallet');
+    expect(text).toContain('120');
+    expect(text).toContain('units per');
   });
 
   it('renders storage preview fallback when pack type or count is missing', () => {
@@ -241,8 +251,13 @@ describe('ProductStoragePresetsSection', () => {
       packagingLevels: []
     });
     openCreateForm(missingPackType.root);
+    expect(flattenText(missingPackType.toJSON())).toContain('No storable pack types available.');
+    expect(flattenText(missingPackType.toJSON())).toContain('Go to Packaging Levels');
     expect(flattenText(missingPackType.toJSON())).toContain(
-      'Choose a pack type and count to preview the storage setup.'
+      'Pack type options come from active packaging levels marked "Can be stored".'
+    );
+    expect(flattenText(missingPackType.toJSON())).toContain(
+      'Choose a pack type, number of packs, and container type to preview the storage formula.'
     );
 
     const invalidCount = renderSection();
@@ -252,7 +267,7 @@ describe('ProductStoragePresetsSection', () => {
       inputs[2].props.onChange({ target: { value: '0' } });
     });
     expect(flattenText(invalidCount.toJSON())).toContain(
-      'Choose a pack type and count to preview the storage setup.'
+      'Choose a pack type, number of packs, and container type to preview the storage formula.'
     );
   });
 

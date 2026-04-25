@@ -54,8 +54,10 @@ export function ProductUnitProfileSection({
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Unit Profile</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Measurements for one individual unit.</p>
+          <h2 className="text-sm font-semibold text-slate-900">1. Unit Profile</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Measurements for one individual unit. Used by packaging quantities and storage unit totals.
+          </p>
         </div>
         {unitProfileQuery.isLoading || unitProfileQuery.isError ? null : isUnitProfileEditing ? (
           <div className="flex items-center gap-2">

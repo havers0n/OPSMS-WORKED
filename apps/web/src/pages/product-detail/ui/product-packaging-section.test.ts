@@ -146,9 +146,23 @@ describe('ProductPackagingSection', () => {
   it('renders the section subtitle', () => {
     const renderer = renderSection([makePackagingLevel()]);
 
-    expect(flattenText(renderer.toJSON())).toContain(
-      'How individual units are grouped into boxes, cases, or pallets.'
-    );
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('2. Packaging Levels');
+    expect(text).toContain('Define pack types built from the unit.');
+    expect(text).toContain('Can be stored');
+    expect(text).toContain('become Pack type options in Storage Presets.');
+  });
+
+  it('renders storable summary copy', () => {
+    const available = renderSection([
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222221', canStore: true, isActive: true }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222222', canStore: true, isActive: true }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222223', canStore: true, isActive: false })
+    ]);
+    expect(flattenText(available.toJSON())).toContain('2 available as Pack type');
+
+    const unavailable = renderSection([makePackagingLevel({ canStore: false })]);
+    expect(flattenText(unavailable.toJSON())).toContain('No levels available as Pack type yet');
   });
 
   it('renders helpful empty state copy', () => {
@@ -185,6 +199,17 @@ describe('ProductPackagingSection', () => {
     expect(text).toContain('Default pick');
     expect(text).toContain('Active');
     expect(text).toContain('Inactive');
+  });
+
+  it('renders Available as Pack type only for active storable levels', () => {
+    const renderer = renderSection([
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222221', code: 'available', canStore: true, isActive: true }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222222', code: 'inactive', canStore: true, isActive: false }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222223', code: 'pick', canStore: false, isActive: true })
+    ]);
+
+    const text = flattenText(renderer.toJSON());
+    expect((text.match(/Available as Pack type/g) ?? [])).toHaveLength(1);
   });
 
   it('renders human-readable edit checkbox labels', () => {

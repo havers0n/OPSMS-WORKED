@@ -1,4 +1,4 @@
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { routes } from '@/shared/config/routes';
 import {
@@ -9,6 +9,111 @@ import { ProductMediaSection } from './product-media-section';
 import { ProductPackagingSection } from './product-packaging-section';
 import { ProductStoragePresetsSection } from './product-storage-presets-section';
 import { ProductUnitProfileSection } from './product-unit-profile-section';
+
+function getUnitProfileSetupStatus(profile: ReturnType<typeof useProductDetailPageModel>['unitProfileQuery']['data']) {
+  if (!profile) return { label: 'Missing', detail: 'No profile data' };
+
+  const hasExactMeasurements =
+    profile.unitWeightG !== null &&
+    profile.unitWidthMm !== null &&
+    profile.unitHeightMm !== null &&
+    profile.unitDepthMm !== null;
+  const hasAnyProfileData =
+    profile.unitWeightG !== null ||
+    profile.unitWidthMm !== null ||
+    profile.unitHeightMm !== null ||
+    profile.unitDepthMm !== null ||
+    profile.weightClass !== null ||
+    profile.sizeClass !== null;
+
+  if (hasExactMeasurements) return { label: 'Ready', detail: 'Exact measurements set' };
+  if (hasAnyProfileData) return { label: 'Partial', detail: 'Some profile data set' };
+  return { label: 'Missing', detail: 'No profile data' };
+}
+
+function getStatusClasses(label: string) {
+  if (label === 'Ready') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  if (label === 'Blocked' || label === 'Missing' || label === 'No storable levels') {
+    return 'border-amber-200 bg-amber-50 text-amber-800';
+  }
+  return 'border-slate-200 bg-white text-slate-700';
+}
+
+type ProductSetupFlowStripProps = {
+  unitProfile: ReturnType<typeof useProductDetailPageModel>['unitProfileQuery']['data'];
+  packagingLevels: ReturnType<typeof useProductDetailPageModel>['packagingLevelsQuery']['data'];
+  storagePresets: ReturnType<typeof useProductDetailPageModel>['storagePresetsQuery']['data'];
+};
+
+export function ProductSetupFlowStrip({
+  unitProfile,
+  packagingLevels,
+  storagePresets
+}: ProductSetupFlowStripProps) {
+  const levels = packagingLevels ?? [];
+  const storableLevelCount = levels.filter((level) => level.isActive && level.canStore).length;
+  const presetCount = storagePresets?.length ?? 0;
+  const unitStatus = getUnitProfileSetupStatus(unitProfile);
+  const packagingStatus =
+    levels.length === 0
+      ? { label: 'Missing', detail: 'No levels yet' }
+      : storableLevelCount === 0
+        ? { label: 'No storable levels', detail: `${levels.length} ${levels.length === 1 ? 'level' : 'levels'}` }
+        : {
+            label: 'Ready',
+            detail: `${levels.length} ${levels.length === 1 ? 'level' : 'levels'}, ${storableLevelCount} storable`
+          };
+  const storageStatus =
+    storableLevelCount === 0
+      ? { label: 'Blocked', detail: 'Needs storable pack type' }
+      : presetCount === 0
+        ? { label: 'Not set', detail: 'No presets yet' }
+        : { label: 'Ready', detail: `${presetCount} ${presetCount === 1 ? 'preset' : 'presets'}` };
+  const steps = [
+    { number: 1, title: 'Unit Profile', status: unitStatus },
+    { number: 2, title: 'Packaging Levels', status: packagingStatus },
+    { number: 3, title: 'Storage Presets', status: storageStatus }
+  ];
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Product setup flow</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Define the unit, create pack types from it, then use storable pack types in storage presets.
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+        {steps.map((step, index) => (
+          <div key={step.title} className="contents">
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
+                  {step.number}
+                </span>
+                <span className="text-xs font-semibold text-slate-900">{step.title}</span>
+                <span
+                  className={[
+                    'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                    getStatusClasses(step.status.label)
+                  ].join(' ')}
+                >
+                  {step.status.label}
+                </span>
+              </div>
+              <div className="mt-1 text-xs text-slate-500">{step.status.detail}</div>
+            </div>
+            {index < steps.length - 1 ? (
+              <ArrowRight className="hidden h-4 w-4 text-slate-300 lg:block" aria-hidden="true" />
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
@@ -164,6 +269,12 @@ export function ProductDetailPage() {
               />
             </div>
           </header>
+
+          <ProductSetupFlowStrip
+            unitProfile={model.unitProfileQuery.data}
+            packagingLevels={model.packagingLevelsQuery.data}
+            storagePresets={model.storagePresetsQuery.data}
+          />
 
           <ProductUnitProfileSection
             unitProfileQuery={model.unitProfileQuery}

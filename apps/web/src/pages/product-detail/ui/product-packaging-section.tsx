@@ -63,14 +63,27 @@ export function ProductPackagingSection({
   onRemoveRow,
   onUpdateRow
 }: ProductPackagingSectionProps) {
+  const packagingLevels = packagingLevelsQuery.data ?? [];
+  const availableAsPackTypeCount = packagingLevels.filter((level) => level.isActive && level.canStore).length;
+  const availableAsPackTypeSummary =
+    availableAsPackTypeCount > 0
+      ? `${availableAsPackTypeCount} available as Pack type`
+      : 'No levels available as Pack type yet';
+
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <section id="packaging-levels" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Packaging Levels</h2>
+          <h2 className="text-sm font-semibold text-slate-900">2. Packaging Levels</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            How individual units are grouped into boxes, cases, or pallets.
+            Define pack types built from the unit. Active levels marked &ldquo;Can be stored&rdquo; become Pack type
+            options in Storage Presets.
           </p>
+          {!packagingLevelsQuery.isLoading && !packagingLevelsQuery.isError ? (
+            <div className="mt-2 inline-flex rounded-full border border-cyan-100 bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-800">
+              {availableAsPackTypeSummary}
+            </div>
+          ) : null}
         </div>
         {packagingLevelsQuery.isLoading || packagingLevelsQuery.isError ? null : isPackagingEditing ? (
           <div className="flex items-center gap-2">
@@ -445,7 +458,7 @@ export function ProductPackagingSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {packagingLevelsQuery.data.map((level) => (
+              {packagingLevels.map((level) => (
                 <tr key={level.id}>
                   <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
                   <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
@@ -462,6 +475,11 @@ export function ProductPackagingSection({
                           Default pick
                         </span>
                       )}
+                      {level.isActive && level.canStore ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          Available as Pack type
+                        </span>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-4 py-2.5">

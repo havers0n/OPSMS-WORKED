@@ -89,7 +89,11 @@ describe('ProductUnitProfileSection', () => {
   it('renders the section subtitle', () => {
     const renderer = renderSection({ data: null });
 
-    expect(flattenText(renderer.toJSON())).toContain('Measurements for one individual unit.');
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('1. Unit Profile');
+    expect(text).toContain(
+      'Measurements for one individual unit. Used by packaging quantities and storage unit totals.'
+    );
   });
 
   it('renders fallback class copy in read and edit modes', () => {
