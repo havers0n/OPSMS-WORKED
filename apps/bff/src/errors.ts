@@ -30,6 +30,9 @@ export function mapSupabaseError(error: unknown) {
   }
 
   if (error.code === 'P0001') {
+    if (error.message === 'PACKAGING_PROFILE_PRIORITY_OVERLAP') {
+      return new ApiError(409, 'PACKAGING_PROFILE_PRIORITY_OVERLAP', 'Storage preset priority was already allocated. Please retry.');
+    }
     if (typeof error.message === 'string' && error.message.includes('is not an active draft')) {
       return new ApiError(409, 'DRAFT_NOT_ACTIVE', 'Layout draft is no longer active. Please reload.');
     }
@@ -64,6 +67,11 @@ export function mapSupabaseError(error: unknown) {
   switch (error.code) {
     case '23505':
       return new ApiError(409, 'CONFLICT', 'Resource already exists.');
+    case '23P01':
+      if (typeof error.message === 'string' && error.message.includes('packaging_profiles_active_priority_no_overlap')) {
+        return new ApiError(409, 'PACKAGING_PROFILE_PRIORITY_OVERLAP', 'Storage preset priority was already allocated. Please retry.');
+      }
+      return new ApiError(409, 'CONFLICT', 'Resource conflicts with an existing range.');
     case '23503':
       return new ApiError(409, 'CONSTRAINT_VIOLATION', 'Referenced resource does not exist or cannot be changed.');
     case '42501':

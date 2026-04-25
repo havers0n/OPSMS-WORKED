@@ -5,6 +5,7 @@ type ProfileRow = Record<string, unknown> & { id: string; priority: number };
 type LevelRow = Record<string, unknown> & { id: string; profile_id: string };
 
 function createStoragePresetSupabaseStub() {
+  let profileInsertCount = 0;
   const profiles: ProfileRow[] = [
     {
       id: '11111111-1111-4111-8111-111111111111',
@@ -93,9 +94,32 @@ function createStoragePresetSupabaseStub() {
         return {
           select: () => createSelectBuilder(profiles),
           insert: (payload: Partial<ProfileRow>) => {
+            const duplicateActivePriority = profiles.some((profile) =>
+              profile.tenant_id === payload.tenant_id &&
+              profile.product_id === payload.product_id &&
+              profile.scope_type === payload.scope_type &&
+              profile.scope_id === payload.scope_id &&
+              profile.status === 'active' &&
+              payload.status === 'active' &&
+              profile.priority === payload.priority
+            );
+            if (duplicateActivePriority) {
+              return {
+                select: () => ({
+                  single: async () => ({
+                    data: null,
+                    error: {
+                      code: 'P0001',
+                      message: 'PACKAGING_PROFILE_PRIORITY_OVERLAP'
+                    }
+                  })
+                })
+              };
+            }
+            profileInsertCount += 1;
             const row = {
               ...payload,
-              id: payload.id ?? '44444444-4444-4444-8444-444444444444',
+              id: payload.id ?? `44444444-4444-4444-8444-44444444444${profileInsertCount}`,
               valid_from: null,
               valid_to: null,
               created_at: '2026-01-02T00:00:00.000Z',
@@ -222,5 +246,50 @@ describe('storage presets repo', () => {
     );
 
     expect(patched.name).toBe('Updated preset');
+  });
+
+  it('retries auto-priority allocation for parallel creates in the same tenant product scope', async () => {
+    const { supabase, profiles } = createStoragePresetSupabaseStub();
+    const repo = createStoragePresetsRepo(supabase as never);
+    const baseInput = {
+      name: 'Concurrent preset',
+      scopeType: 'tenant' as const,
+      isDefault: false,
+      status: 'active' as const,
+      levels: [
+        {
+          levelType: 'EA',
+          qtyEach: 12,
+          containerType: 'pallet',
+          legacyProductPackagingLevelId: '66666666-6666-4666-8666-666666666666'
+        }
+      ]
+    };
+
+    const [first, second] = await Promise.all([
+      repo.create(
+        '22222222-2222-4222-8222-222222222222',
+        '33333333-3333-4333-8333-333333333333',
+        { ...baseInput, code: 'CONCURRENT-A' }
+      ),
+      repo.create(
+        '22222222-2222-4222-8222-222222222222',
+        '33333333-3333-4333-8333-333333333333',
+        { ...baseInput, code: 'CONCURRENT-B' }
+      )
+    ]);
+
+    const createdPriorities = [first.priority, second.priority].sort((left, right) => left - right);
+    expect(createdPriorities).toEqual([5, 6]);
+    expect(new Set(createdPriorities).size).toBe(2);
+    expect(
+      profiles.filter((profile) =>
+        profile.tenant_id === '22222222-2222-4222-8222-222222222222' &&
+        profile.product_id === '33333333-3333-4333-8333-333333333333' &&
+        profile.scope_type === 'tenant' &&
+        profile.scope_id === '22222222-2222-4222-8222-222222222222' &&
+        profile.status === 'active'
+      ).map((profile) => profile.priority).sort((left, right) => left - right)
+    ).toEqual([4, 5, 6]);
   });
 });

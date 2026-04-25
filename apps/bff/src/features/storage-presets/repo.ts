@@ -102,6 +102,8 @@ type MaterializeStoragePresetContentsResult = {
   };
 };
 
+const autoPriorityCreateAttempts = 3;
+
 const profileColumns =
   'id,tenant_id,product_id,code,name,profile_type,scope_type,scope_id,valid_from,valid_to,priority,is_default,status,created_at,updated_at';
 
@@ -236,6 +238,15 @@ function getStoragePresetMaterializationError(error: unknown) {
   };
 }
 
+function isPackagingProfilePriorityOverlap(error: unknown) {
+  const maybeError = error as { code?: unknown; message?: unknown; details?: unknown } | null;
+  const message = String(maybeError?.message ?? maybeError?.details ?? '');
+  return (
+    message.includes('PACKAGING_PROFILE_PRIORITY_OVERLAP') ||
+    (maybeError?.code === '23P01' && message.includes('packaging_profiles_active_priority_no_overlap'))
+  );
+}
+
 export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePresetsRepo {
   return {
     async listByProduct(tenantId, productId) {
@@ -272,32 +283,47 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
     async create(tenantId, productId, input) {
       const scopeType = input.scopeType ?? 'tenant';
       const scopeId = input.scopeId ?? tenantId;
-      const priority = input.priority ?? await resolveNextPriority(supabase, {
-        tenantId,
-        productId,
-        scopeType,
-        scopeId
-      });
+      const shouldAllocatePriority = input.priority === undefined;
+      let profileId: string | null = null;
+      let lastPriorityOverlap: unknown = null;
 
-      const { data: profile, error } = await supabase
-        .from('packaging_profiles')
-        .insert({
-          tenant_id: tenantId,
-          product_id: productId,
-          code: input.code,
-          name: input.name,
-          profile_type: 'storage',
-          scope_type: scopeType,
-          scope_id: scopeId,
-          priority,
-          is_default: input.isDefault,
-          status: input.status
-        })
-        .select('id')
-        .single();
+      for (let attempt = 1; attempt <= (shouldAllocatePriority ? autoPriorityCreateAttempts : 1); attempt += 1) {
+        const priority = input.priority ?? await resolveNextPriority(supabase, {
+          tenantId,
+          productId,
+          scopeType,
+          scopeId
+        });
 
-      if (error) throw error;
-      const profileId = (profile as { id: string }).id;
+        const { data: profile, error } = await supabase
+          .from('packaging_profiles')
+          .insert({
+            tenant_id: tenantId,
+            product_id: productId,
+            code: input.code,
+            name: input.name,
+            profile_type: 'storage',
+            scope_type: scopeType,
+            scope_id: scopeId,
+            priority,
+            is_default: input.isDefault,
+            status: input.status
+          })
+          .select('id')
+          .single();
+
+        if (!error) {
+          profileId = (profile as { id: string }).id;
+          break;
+        }
+
+        if (!shouldAllocatePriority || !isPackagingProfilePriorityOverlap(error)) throw error;
+        lastPriorityOverlap = error;
+      }
+
+      if (!profileId) {
+        throw lastPriorityOverlap ?? new Error('PACKAGING_PROFILE_PRIORITY_OVERLAP');
+      }
 
       const { error: levelsError } = await supabase.from('packaging_profile_levels').insert(
         input.levels.map((level) => ({
