@@ -8,7 +8,7 @@ type StoragePresetsPanelProps = {
 };
 
 export function StoragePresetsPanel({ presets, packagingLevels, onCreateStoragePreset }: StoragePresetsPanelProps) {
-  const hasActivePackagingLevels = packagingLevels.some((level) => level.isActive);
+  const hasActiveStorablePackagingLevels = packagingLevels.some((level) => level.isActive && level.canStore);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
@@ -24,7 +24,7 @@ export function StoragePresetsPanel({ presets, packagingLevels, onCreateStorageP
           <button
             type="button"
             onClick={onCreateStoragePreset}
-            disabled={!hasActivePackagingLevels}
+            disabled={!hasActiveStorablePackagingLevels}
             className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           >
             Create storage preset
@@ -36,20 +36,20 @@ export function StoragePresetsPanel({ presets, packagingLevels, onCreateStorageP
         <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-4">
           <div className="text-sm font-semibold text-slate-900">No storage presets defined yet.</div>
           <p className="mt-1 text-sm text-slate-600">
-            {hasActivePackagingLevels
+            {hasActiveStorablePackagingLevels
               ? 'Storage presets describe how packaging levels are physically stored.'
-              : 'Define packaging levels before creating storage presets.'}
+              : 'Define active packaging levels first.'}
           </p>
           <button
             type="button"
             onClick={onCreateStoragePreset}
-            disabled={!hasActivePackagingLevels}
+            disabled={!hasActiveStorablePackagingLevels}
             className="mt-3 rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
           >
             Create storage preset
           </button>
-          {!hasActivePackagingLevels ? (
-            <p className="mt-2 text-xs text-amber-700">Define packaging levels first.</p>
+          {!hasActiveStorablePackagingLevels ? (
+            <p className="mt-2 text-xs text-amber-700">Define active packaging levels first.</p>
           ) : null}
         </div>
       ) : (

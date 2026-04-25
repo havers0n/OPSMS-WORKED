@@ -198,7 +198,7 @@ describe('ProductDetailPage board modes', () => {
     expect(text).not.toContain('3. Storage Presets');
   });
 
-  it('clicking edit facts switches to the existing unit profile edit surface', async () => {
+  it('clicking edit facts opens the existing unit profile edit surface inside the workbench', async () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
@@ -216,12 +216,97 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.beginUnitProfileEdit).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Product Facts');
+    expect(text).toContain('Workbench');
     expect(text).toContain('Editing product facts');
     expect(text).toContain('1. Single Unit Profile');
     expect(text).toContain('Save unit profile');
   });
 
-  it('clicking configure packaging switches to the existing packaging edit surface', async () => {
+  it('save success returns product facts editing to the read workspace', async () => {
+    const model = makeModel();
+    mockState.model = model;
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Edit facts'))
+        ?.props.onClick();
+    });
+    await act(async () => {
+      await renderer.root.findByProps({ children: 'Save unit profile' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(model.saveUnitProfile).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('1. Single Unit Profile');
+  });
+
+  it('save failure keeps product facts editing visible in the workbench', async () => {
+    const model = makeModel({
+      saveUnitProfile: vi.fn().mockResolvedValue(false),
+      unitProfileSaveError: 'Failed to save unit profile.'
+    });
+    mockState.model = model;
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Edit facts'))
+        ?.props.onClick();
+    });
+    await act(async () => {
+      await renderer.root.findByProps({ children: 'Save unit profile' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(model.saveUnitProfile).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Workbench');
+    expect(text).toContain('Editing product facts');
+    expect(text).toContain('Failed to save unit profile.');
+  });
+
+  it('cancel from product facts editing returns to the read workspace and resets draft state', async () => {
+    const model = makeModel();
+    mockState.model = model;
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Edit facts'))
+        ?.props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ children: 'Back to workspace' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(model.cancelUnitProfileEdit).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('1. Single Unit Profile');
+  });
+
+  it('clicking configure packaging opens the existing packaging edit surface inside the workbench', async () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
@@ -239,12 +324,97 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.beginPackagingEdit).toHaveBeenCalled();
-    expect(text).toContain('Configuring packaging levels');
+    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Packaging Hierarchy');
+    expect(text).toContain('Workbench');
+    expect(text).toContain('Configuring packaging hierarchy');
     expect(text).toContain('2. Packaging Levels');
     expect(text).toContain('Save packaging');
   });
 
-  it('clicking create storage preset switches to the existing storage create surface', async () => {
+  it('save success returns packaging editing to the read workspace', async () => {
+    const model = makeModel();
+    mockState.model = model;
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Configure packaging'))
+        ?.props.onClick();
+    });
+    await act(async () => {
+      await renderer.root.findByProps({ children: 'Save packaging levels' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(model.savePackagingLevels).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('2. Packaging Levels');
+  });
+
+  it('save failure keeps packaging editing visible in the workbench', async () => {
+    const model = makeModel({
+      savePackagingLevels: vi.fn().mockResolvedValue(false),
+      packagingSaveError: 'Failed to save packaging levels.'
+    });
+    mockState.model = model;
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Configure packaging'))
+        ?.props.onClick();
+    });
+    await act(async () => {
+      await renderer.root.findByProps({ children: 'Save packaging levels' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(model.savePackagingLevels).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Workbench');
+    expect(text).toContain('Configuring packaging hierarchy');
+    expect(text).toContain('Failed to save packaging levels.');
+  });
+
+  it('cancel from packaging editing returns to the read workspace and resets draft state', async () => {
+    const model = makeModel();
+    mockState.model = model;
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Configure packaging'))
+        ?.props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ children: 'Back to workspace' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(model.cancelPackagingEdit).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('2. Packaging Levels');
+  });
+
+  it('clicking create storage preset opens the existing storage create surface inside the workbench', async () => {
     mockState.model = makeModel({ storagePresetsQuery: queryResult([]) });
     const { ProductDetailPage } = await loadPage();
     let renderer!: TestRenderer.ReactTestRenderer;
@@ -257,9 +427,106 @@ describe('ProductDetailPage board modes', () => {
     });
 
     const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Storage Presets');
+    expect(text).toContain('Workbench');
     expect(text).toContain('Creating storage preset');
     expect(text).toContain('3. Storage Presets');
     expect(text).toContain('Code');
     expect(text).toContain('Create storage preset');
+  });
+
+  it('create success returns storage preset creation to the read workspace', async () => {
+    const createMutation = mutationResult();
+    createMutation.mutateAsync.mockResolvedValue({});
+    mockState.model = makeModel({
+      storagePresetsQuery: queryResult([]),
+      createStoragePresetMutation: createMutation
+    });
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
+    });
+
+    const inputs = renderer.root.findAllByType('input');
+    act(() => {
+      inputs[0]?.props.onChange({ target: { value: 'PAL-1' } });
+      inputs[1]?.props.onChange({ target: { value: 'Pallet 1' } });
+    });
+    await act(async () => {
+      const createButtons = renderer.root
+        .findAllByType('button')
+        .filter((button) => button.children.includes('Create storage preset'));
+      await createButtons[createButtons.length - 1]?.props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(createMutation.mutateAsync).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('3. Storage Presets');
+  });
+
+  it('create failure keeps storage preset creation visible in the workbench', async () => {
+    const createMutation = mutationResult();
+    createMutation.mutateAsync.mockRejectedValue(new Error('Failed to create storage preset.'));
+    mockState.model = makeModel({
+      storagePresetsQuery: queryResult([]),
+      createStoragePresetMutation: createMutation
+    });
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
+    });
+
+    const inputs = renderer.root.findAllByType('input');
+    act(() => {
+      inputs[0]?.props.onChange({ target: { value: 'PAL-1' } });
+      inputs[1]?.props.onChange({ target: { value: 'Pallet 1' } });
+    });
+    await act(async () => {
+      const createButtons = renderer.root
+        .findAllByType('button')
+        .filter((button) => button.children.includes('Create storage preset'));
+      await createButtons[createButtons.length - 1]?.props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(createMutation.mutateAsync).toHaveBeenCalled();
+    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Workbench');
+    expect(text).toContain('Creating storage preset');
+    expect(text).toContain('Failed to create storage preset.');
+  });
+
+  it('cancel from storage preset creation returns to the read workspace', async () => {
+    mockState.model = makeModel({ storagePresetsQuery: queryResult([]) });
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+    act(() => {
+      renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ children: 'Back to workspace' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('3. Storage Presets');
   });
 });

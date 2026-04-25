@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { routes } from '@/shared/config/routes';
@@ -12,7 +12,64 @@ import { ProductStoragePresetsSection } from './product-storage-presets-section'
 import { ProductUnitProfileSection } from './product-unit-profile-section';
 import { UnitProfileBoard } from './unit-profile-board';
 
-type UnitProfileBoardMode = 'read' | 'edit-product-facts' | 'edit-packaging' | 'create-storage-preset';
+type UnitProfileWorkspaceMode = 'read' | 'edit-product-facts' | 'edit-packaging' | 'create-storage-preset';
+
+const workbenchCopy: Record<Exclude<UnitProfileWorkspaceMode, 'read'>, { title: string; description: string }> = {
+  'edit-product-facts': {
+    title: 'Editing product facts',
+    description: 'Update base weight, dimensions, and fallback classes.'
+  },
+  'edit-packaging': {
+    title: 'Configuring packaging hierarchy',
+    description: 'Define how this product exists as EA, inner packs, cartons, or master cases.'
+  },
+  'create-storage-preset': {
+    title: 'Creating storage preset',
+    description: 'Define how a selected packaging level can be physically stored.'
+  }
+};
+
+type UnitProfileWorkbenchProps = {
+  mode: Exclude<UnitProfileWorkspaceMode, 'read'>;
+  onBack: () => void;
+  children: ReactNode;
+};
+
+function UnitProfileWorkbench({ mode, onBack, children }: UnitProfileWorkbenchProps) {
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const copy = workbenchCopy[mode];
+
+  useEffect(() => {
+    titleRef.current?.focus();
+    titleRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [mode]);
+
+  return (
+    <section
+      aria-label="Unit profile workbench"
+      className="overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/30 shadow-sm"
+    >
+      <div className="flex flex-col gap-3 border-b border-cyan-100 bg-white px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase text-cyan-700">Workbench</div>
+          <h2 ref={titleRef} tabIndex={-1} className="mt-1 text-base font-semibold text-slate-950 outline-none">
+            {copy.title}
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">{copy.description}</p>
+          <div className="mt-2 text-xs font-medium text-slate-500">Current mode: {mode}</div>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Back to workspace
+        </button>
+      </div>
+      <div className="p-3 md:p-4">{children}</div>
+    </section>
+  );
+}
 
 function getUnitProfileSetupStatus(profile: ReturnType<typeof useProductDetailPageModel>['unitProfileQuery']['data']) {
   if (!profile) return { label: 'Missing', detail: 'No profile data' };
@@ -129,7 +186,7 @@ export function ProductDetailPage() {
       : routes.products;
 
   const model = useProductDetailPageModel(productId ?? null);
-  const [boardMode, setBoardMode] = useState<UnitProfileBoardMode>('read');
+  const [boardMode, setBoardMode] = useState<UnitProfileWorkspaceMode>('read');
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -176,6 +233,16 @@ export function ProductDetailPage() {
 
   function beginStoragePresetCreate() {
     setBoardMode('create-storage-preset');
+  }
+
+  function returnToWorkspace() {
+    if (boardMode === 'edit-product-facts') {
+      model.cancelUnitProfileEdit();
+    }
+    if (boardMode === 'edit-packaging') {
+      model.cancelPackagingEdit();
+    }
+    setBoardMode('read');
   }
 
   if (!productId) {
@@ -319,97 +386,69 @@ export function ProductDetailPage() {
             storagePresets={model.storagePresetsQuery.data}
           />
 
-          {boardMode === 'read' ? (
-            <UnitProfileBoard
-              product={model.product}
-              unitProfile={model.unitProfileQuery.data}
-              packagingLevels={model.packagingLevelsQuery.data ?? []}
-              storagePresets={model.storagePresetsQuery.data ?? []}
-              onEditProductFacts={beginProductFactsEdit}
-              onEditPackaging={beginPackagingEdit}
-              onCreateStoragePreset={beginStoragePresetCreate}
-            />
-          ) : null}
+          <UnitProfileBoard
+            product={model.product}
+            unitProfile={model.unitProfileQuery.data}
+            packagingLevels={model.packagingLevelsQuery.data ?? []}
+            storagePresets={model.storagePresetsQuery.data ?? []}
+            onEditProductFacts={beginProductFactsEdit}
+            onEditPackaging={beginPackagingEdit}
+            onCreateStoragePreset={beginStoragePresetCreate}
+          />
 
           {boardMode !== 'read' ? (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <div>
-                <div className="text-xs font-semibold uppercase text-slate-500">Unit Profile Board</div>
-                <div className="text-sm font-medium text-slate-900">
-                  {boardMode === 'edit-product-facts'
-                    ? 'Editing product facts'
-                    : boardMode === 'edit-packaging'
-                      ? 'Configuring packaging levels'
-                      : 'Creating storage preset'}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (boardMode === 'edit-product-facts') {
-                    model.cancelUnitProfileEdit();
-                  }
-                  if (boardMode === 'edit-packaging') {
-                    model.cancelPackagingEdit();
-                  }
-                  setBoardMode('read');
-                }}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Back to board
-              </button>
-            </div>
-          ) : null}
+            <UnitProfileWorkbench mode={boardMode} onBack={returnToWorkspace}>
+              {boardMode === 'edit-product-facts' ? (
+                <ProductUnitProfileSection
+                  unitProfileQuery={model.unitProfileQuery}
+                  upsertUnitProfileMutation={model.upsertUnitProfileMutation}
+                  isUnitProfileEditing={model.isUnitProfileEditing}
+                  unitProfileDraft={model.unitProfileDraft}
+                  unitProfileFieldErrors={model.unitProfileFieldErrors}
+                  unitProfileSaveError={model.unitProfileSaveError}
+                  unitProfileDirty={model.unitProfileDirty}
+                  onBeginEdit={beginProductFactsEdit}
+                  onCancelEdit={cancelProductFactsEdit}
+                  onSave={() => void saveProductFacts()}
+                  onNumericFieldChange={model.updateUnitProfileDraftField}
+                  onClassFieldChange={model.updateUnitProfileDraftClassField}
+                />
+              ) : null}
 
-          {boardMode === 'edit-product-facts' ? (
-            <ProductUnitProfileSection
-              unitProfileQuery={model.unitProfileQuery}
-              upsertUnitProfileMutation={model.upsertUnitProfileMutation}
-              isUnitProfileEditing={model.isUnitProfileEditing}
-              unitProfileDraft={model.unitProfileDraft}
-              unitProfileFieldErrors={model.unitProfileFieldErrors}
-              unitProfileSaveError={model.unitProfileSaveError}
-              unitProfileDirty={model.unitProfileDirty}
-              onBeginEdit={beginProductFactsEdit}
-              onCancelEdit={cancelProductFactsEdit}
-              onSave={() => void saveProductFacts()}
-              onNumericFieldChange={model.updateUnitProfileDraftField}
-              onClassFieldChange={model.updateUnitProfileDraftClassField}
-            />
-          ) : null}
+              {boardMode === 'edit-packaging' ? (
+                <ProductPackagingSection
+                  packagingLevelsQuery={model.packagingLevelsQuery}
+                  replacePackagingLevelsMutation={model.replacePackagingLevelsMutation}
+                  unitProfileQuery={model.unitProfileQuery}
+                  isPackagingEditing={model.isPackagingEditing}
+                  packagingDraft={model.packagingDraft}
+                  packagingRowErrors={model.packagingRowErrors}
+                  packagingSectionErrors={model.packagingSectionErrors}
+                  packagingSaveError={model.packagingSaveError}
+                  packagingDirty={model.packagingDirty}
+                  packagingEditorSemantics={model.packagingEditorSemantics}
+                  onBeginEdit={beginPackagingEdit}
+                  onCancelEdit={cancelPackagingEdit}
+                  onSave={() => void savePackaging()}
+                  onAddRow={model.addPackagingRow}
+                  onRemoveRow={model.removePackagingRow}
+                  onUpdateRow={model.updatePackagingRow}
+                />
+              ) : null}
 
-          {boardMode === 'edit-packaging' ? (
-            <ProductPackagingSection
-              packagingLevelsQuery={model.packagingLevelsQuery}
-              replacePackagingLevelsMutation={model.replacePackagingLevelsMutation}
-              unitProfileQuery={model.unitProfileQuery}
-              isPackagingEditing={model.isPackagingEditing}
-              packagingDraft={model.packagingDraft}
-              packagingRowErrors={model.packagingRowErrors}
-              packagingSectionErrors={model.packagingSectionErrors}
-              packagingSaveError={model.packagingSaveError}
-              packagingDirty={model.packagingDirty}
-              packagingEditorSemantics={model.packagingEditorSemantics}
-              onBeginEdit={beginPackagingEdit}
-              onCancelEdit={cancelPackagingEdit}
-              onSave={() => void savePackaging()}
-              onAddRow={model.addPackagingRow}
-              onRemoveRow={model.removePackagingRow}
-              onUpdateRow={model.updatePackagingRow}
-            />
-          ) : null}
-
-          {boardMode === 'create-storage-preset' ? (
-            <ProductStoragePresetsSection
-              productId={productId}
-              storagePresetsQuery={model.storagePresetsQuery}
-              packagingLevelsQuery={model.packagingLevelsQuery}
-              containerTypesQuery={model.containerTypesQuery}
-              createStoragePresetMutation={model.createStoragePresetMutation}
-              defaultCreating
-              onCreateClosed={() => setBoardMode('read')}
-              onCreated={() => setBoardMode('read')}
-            />
+              {boardMode === 'create-storage-preset' ? (
+                <ProductStoragePresetsSection
+                  productId={productId}
+                  storagePresetsQuery={model.storagePresetsQuery}
+                  packagingLevelsQuery={model.packagingLevelsQuery}
+                  containerTypesQuery={model.containerTypesQuery}
+                  createStoragePresetMutation={model.createStoragePresetMutation}
+                  defaultCreating
+                  onCreateClosed={() => setBoardMode('read')}
+                  onCreated={() => setBoardMode('read')}
+                />
+              ) : null}
+            </UnitProfileWorkbench>
           ) : null}
         </div>
       </div>

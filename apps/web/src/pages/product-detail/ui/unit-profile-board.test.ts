@@ -301,7 +301,7 @@ describe('StoragePresetsPanel', () => {
 
     const createButton = renderer.root.findByProps({ children: 'Create storage preset' });
     expect(createButton.props.disabled).toBe(true);
-    expect(flattenText(renderer.toJSON())).toContain('Define packaging levels before creating storage presets.');
+    expect(flattenText(renderer.toJSON())).toContain('Define active packaging levels first.');
   });
 
   it('enables create storage preset when active packaging levels exist and calls callback', () => {
