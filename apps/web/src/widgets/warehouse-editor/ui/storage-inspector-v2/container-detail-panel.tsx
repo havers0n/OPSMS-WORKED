@@ -22,6 +22,7 @@ type ContainerDetailPanelProps = {
   hasProductContext: boolean;
   isConflict: boolean;
   showNoneExplanation: boolean;
+  materializationWarning: string | null;
   storagePresets: StoragePreset[];
   preferredPackagingProfileId: string | null;
   preferredPresetPending: boolean;
@@ -81,6 +82,7 @@ export function ContainerDetailPanel({
   hasProductContext,
   isConflict,
   showNoneExplanation,
+  materializationWarning,
   storagePresets,
   preferredPackagingProfileId,
   preferredPresetPending,
@@ -130,6 +132,14 @@ export function ContainerDetailPanel({
             <span className="capitalize">Status: {firstRow.containerStatus}</span>
             <span>{presetUsageLabel(firstRow.presetUsageStatus)}</span>
             <span>{presetMaterializationLabel(firstRow.presetMaterializationStatus)}</span>
+          </div>
+        ) : null}
+        {materializationWarning ? (
+          <div
+            className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800"
+            data-testid="storage-preset-partial-failure-warning"
+          >
+            {materializationWarning}
           </div>
         ) : null}
       </div>

@@ -203,6 +203,7 @@ export function ProductDetailPage() {
             productId={productId}
             storagePresetsQuery={model.storagePresetsQuery}
             packagingLevelsQuery={model.packagingLevelsQuery}
+            containerTypesQuery={model.containerTypesQuery}
             createStoragePresetMutation={model.createStoragePresetMutation}
           />
         </div>

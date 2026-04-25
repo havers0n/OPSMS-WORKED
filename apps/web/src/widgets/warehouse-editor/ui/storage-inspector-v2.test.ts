@@ -137,6 +137,13 @@ let mockStorageContainers: Array<{
   createdAt: string;
   createdBy: string | null;
 }> = [];
+let mockStoragePresets: Array<{
+  id: string;
+  code: string;
+  name: string;
+  profileType: 'storage';
+  status: 'active' | 'inactive';
+}> = [];
 
 vi.mock('@/entities/container/api/use-container-types', () => ({
   useContainerTypes: () => ({ data: mockContainerTypes, isLoading: false }),
@@ -187,6 +194,8 @@ const mockInvalidatePlacement = vi.fn();
 const mockInvalidateQueries = vi.fn();
 const mockRefetchQueries = vi.fn();
 const mockFetchQuery = vi.fn();
+const mockCreateContainerFromStoragePreset = vi.fn();
+const mockSetPreferredStoragePreset = vi.fn();
 
 vi.mock('@/features/container-create/api/mutations', () => ({
   createContainer: (...args: unknown[]) => mockCreateContainer(...args),
@@ -225,6 +234,11 @@ vi.mock('@/features/container-inventory/model/use-add-inventory-to-container', (
   })
 }));
 
+vi.mock('@/features/storage-presets/api/mutations', () => ({
+  createContainerFromStoragePreset: (...args: unknown[]) => mockCreateContainerFromStoragePreset(...args),
+  setPreferredStoragePreset: (...args: unknown[]) => mockSetPreferredStoragePreset(...args)
+}));
+
 vi.mock('@/features/placement-actions/model/invalidation', () => ({
   invalidatePlacementQueries: (...args: unknown[]) => mockInvalidatePlacement(...args),
 }));
@@ -233,10 +247,23 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>();
   return {
     ...actual,
-    useQuery: () => ({
-      data: mockStorageContainers,
-      isLoading: false
-    }),
+    useQuery: (options?: { queryKey?: readonly unknown[] }) => {
+      if (
+        Array.isArray(options?.queryKey) &&
+        options.queryKey[0] === 'product' &&
+        options.queryKey[1] === 'storage-presets'
+      ) {
+        return {
+          data: mockStoragePresets,
+          isLoading: false
+        };
+      }
+
+      return {
+        data: mockStorageContainers,
+        isLoading: false
+      };
+    },
     useQueryClient: () => ({
       invalidateQueries: mockInvalidateQueries,
       refetchQueries: mockRefetchQueries,
@@ -249,9 +276,12 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 
 beforeEach(() => {
   mockStorageContainers = [];
+  mockStoragePresets = [];
   mockRemoveContainer.mockReset();
   mockSwapContainers.mockReset();
   mockTransferInventoryToContainer.mockReset();
+  mockCreateContainerFromStoragePreset.mockReset();
+  mockSetPreferredStoragePreset.mockReset();
 });
 
 function createWorkspace(): FloorWorkspace {
@@ -2517,6 +2547,120 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 });
 
 // ── Move container flow integration tests ─────────────────────────────────────
+
+describe('StorageInspectorV2 create from preset partial materialization', () => {
+  function setupCreateFromPresetFlow() {
+    resetStorageFocusStore();
+    setupCellOverview();
+    mockProductsSearchResults = [
+      {
+        id: 'product-1',
+        sku: 'SKU-1',
+        name: 'Widget',
+        source: 'test',
+        externalProductId: 'external-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '',
+        updatedAt: ''
+      }
+    ];
+    mockStoragePresets = [
+      {
+        id: 'preset-1',
+        code: 'PAL-12',
+        name: 'Pallet 12',
+        profileType: 'storage',
+        status: 'active'
+      }
+    ];
+  }
+
+  async function createFromPreset(renderer: TestRenderer.ReactTestRenderer) {
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'data-testid': 'create-from-preset-action' }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': 'Product search' }).props.onChange({ target: { value: 'Widget' } });
+    });
+    act(() => {
+      root.findByProps({ role: 'option' }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': 'Storage preset' }).props.onChange({ target: { value: 'preset-1' } });
+    });
+    const radios = root.findAllByType('input').filter((node) => node.props.type === 'radio');
+    act(() => {
+      radios[1].props.onChange();
+    });
+    await act(async () => {
+      root.findByProps({ 'data-testid': 'confirm-create-from-preset' }).props.onClick();
+    });
+  }
+
+  it('shows a non-blocking warning while selecting the shell after partial_failed', async () => {
+    setupCreateFromPresetFlow();
+    mockCreateContainerFromStoragePreset.mockResolvedValue({
+      containerId: 'container-partial',
+      systemCode: 'CNT-PARTIAL',
+      externalCode: null,
+      containerTypeId: 'type-1',
+      packagingProfileId: 'preset-1',
+      isStandardPack: true,
+      placedLocationId: 'loc-1',
+      materializationMode: 'shell',
+      materializationStatus: 'partial_failed',
+      materializationErrorCode: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
+      materializationErrorMessage: 'Storage preset must have exactly one materializable level for this phase.',
+      materializedInventoryUnitId: null,
+      materializedContainerLineId: null,
+      materializedQuantity: null
+    });
+
+    const renderer = renderInspector(createWorkspace());
+    await createFromPreset(renderer);
+
+    const text = flattenText(renderer.toJSON());
+    expect(mockCreateContainerFromStoragePreset).toHaveBeenCalledWith({
+      presetId: 'preset-1',
+      locationId: 'loc-1',
+      externalCode: undefined,
+      materializeContents: true
+    });
+    expect(text).toContain('Container shell was created, but contents could not be materialized.');
+    expect(text).toContain('Storage preset must have exactly one materializable level for this phase.');
+    expect(renderer.root.findByProps({ 'data-testid': 'storage-preset-partial-failure-warning' })).toBeTruthy();
+  });
+
+  it('does not show a warning for normal materialized success', async () => {
+    setupCreateFromPresetFlow();
+    mockCreateContainerFromStoragePreset.mockResolvedValue({
+      containerId: 'container-materialized',
+      systemCode: 'CNT-MAT',
+      externalCode: null,
+      containerTypeId: 'type-1',
+      packagingProfileId: 'preset-1',
+      isStandardPack: true,
+      placedLocationId: 'loc-1',
+      materializationMode: 'materialized',
+      materializationStatus: 'materialized',
+      materializationErrorCode: null,
+      materializationErrorMessage: null,
+      materializedInventoryUnitId: 'inventory-1',
+      materializedContainerLineId: 'line-1',
+      materializedQuantity: 12
+    });
+
+    const renderer = renderInspector(createWorkspace());
+    await createFromPreset(renderer);
+
+    expect(flattenText(renderer.toJSON())).not.toContain('contents could not be materialized');
+    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-preset-partial-failure-warning' })).toHaveLength(0);
+  });
+});
 
 describe('StorageInspectorV2 contents action flows', () => {
   function setupContainerWithInventory(inventoryUnitId: string | null = 'iu-1') {

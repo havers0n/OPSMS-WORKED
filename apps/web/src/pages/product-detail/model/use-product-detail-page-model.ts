@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ProductUnitProfile } from '@wos/domain';
+import { containerTypesQueryOptions } from '@/entities/container/api/queries';
 import {
   useCreateProductStoragePreset,
   useReplaceProductPackagingLevels,
@@ -68,6 +69,11 @@ export function useProductDetailPageModel(productId: string | null) {
 
   const storagePresetsQuery = useQuery({
     ...productStoragePresetsQueryOptions(productId),
+    enabled: sectionQueriesEnabled
+  });
+
+  const containerTypesQuery = useQuery({
+    ...containerTypesQueryOptions(),
     enabled: sectionQueriesEnabled
   });
 
@@ -369,6 +375,7 @@ export function useProductDetailPageModel(productId: string | null) {
     unitProfileQuery,
     packagingLevelsQuery,
     storagePresetsQuery,
+    containerTypesQuery,
     isNotFound,
     defaultPickLevel,
     upsertUnitProfileMutation,

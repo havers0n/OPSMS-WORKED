@@ -101,6 +101,14 @@ interface StorageInspectorV2Props {
   workspace: FloorWorkspace | null;
 }
 
+type MaterializationWarning = {
+  containerId: string;
+  message: string;
+};
+
+const partialMaterializationWarningCopy =
+  'Container shell was created, but contents could not be materialized. The shell was selected so you can inspect it or retry later.';
+
 type GroupedContainer = {
   containerId: string;
   rows: LocationStorageSnapshotRow[];
@@ -425,6 +433,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [createFromPresetMaterializeContents, setCreateFromPresetMaterializeContents] = useState(false);
   const [createFromPresetErrorMessage, setCreateFromPresetErrorMessage] = useState<string | null>(null);
   const [createFromPresetIsSubmitting, setCreateFromPresetIsSubmitting] = useState(false);
+  const [materializationWarning, setMaterializationWarning] = useState<MaterializationWarning | null>(null);
 
   const [placeExistingContainerId, setPlaceExistingContainerId] = useState('');
   const [placeExistingErrorMessage, setPlaceExistingErrorMessage] = useState<string | null>(null);
@@ -640,6 +649,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setTaskKind(null);
     setMoveTaskState(null);
     setSwapTaskState(null);
+    setMaterializationWarning(null);
     resetCreateTaskState();
     resetCreateWithProductTaskState();
     resetCreateFromPresetTaskState();
@@ -797,6 +807,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   const openCreateFromPresetTask = () => {
     resetCreateFromPresetTaskState();
+    setMaterializationWarning(null);
     setTaskKind('create-container-from-preset');
   };
 
@@ -931,6 +942,16 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       await invalidatePlacementQueries(queryClient, { floorId, containerId: result.containerId });
       await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
       await queryClient.invalidateQueries({ queryKey: containerKeys.list() });
+      if (result.materializationStatus === 'partial_failed') {
+        setMaterializationWarning({
+          containerId: result.containerId,
+          message: result.materializationErrorMessage
+            ? `${partialMaterializationWarningCopy} Reason: ${result.materializationErrorMessage}`
+            : partialMaterializationWarningCopy
+        });
+      } else {
+        setMaterializationWarning(null);
+      }
       setSelectedContainerId(result.containerId);
       closeCreateFromPresetTask();
     } catch (error) {
@@ -2021,6 +2042,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         hasProductContext={hasProductContext}
         isConflict={isConflict}
         showNoneExplanation={showNoneExplanation}
+        materializationWarning={
+          materializationWarning?.containerId === mode.containerId ? materializationWarning.message : null
+        }
         storagePresets={effectiveProductStoragePresets}
         preferredPackagingProfileId={first?.preferredPackagingProfileId ?? null}
         preferredPresetPending={preferredPresetIsSubmitting}
@@ -2028,7 +2052,10 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         hasExplicitOverride={hasExplicitOverride}
         canShowRepairConflictEntry={canShowRepairConflictEntry}
         isEmptyContainer={isEmptyContainer}
-        onBack={() => setSelectedContainerId(null)}
+        onBack={() => {
+          setSelectedContainerId(null);
+          setMaterializationWarning(null);
+        }}
         onOpenEditOverrideTask={openEditOverrideTask}
         onOpenRepairConflictTask={openRepairConflictTask}
         onOpenAddProductTask={openAddProductTask}
@@ -2073,7 +2100,10 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       policyAssignments={cellOverviewPolicyAssignments}
       policyPending={locationProductAssignmentsLoading}
       sourceCellId={cellId}
-      onSelectContainer={setSelectedContainerId}
+      onSelectContainer={(containerId) => {
+        setSelectedContainerId(containerId);
+        setMaterializationWarning(null);
+      }}
       onOpenPlaceExistingTask={openPlaceExistingTask}
       onOpenCreateTask={openCreateTask}
       onOpenCreateFromPresetTask={openCreateFromPresetTask}

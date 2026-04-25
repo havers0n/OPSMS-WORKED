@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import type { ProductPackagingLevel, StoragePreset } from '@wos/domain';
+import type { ContainerType, ProductPackagingLevel, StoragePreset } from '@wos/domain';
 import type { CreateStoragePresetInput } from '@/entities/product/api/mutations';
 
 type ProductStoragePresetsSectionProps = {
   productId: string;
   storagePresetsQuery: UseQueryResult<StoragePreset[], Error>;
   packagingLevelsQuery: UseQueryResult<ProductPackagingLevel[], Error>;
+  containerTypesQuery: UseQueryResult<ContainerType[], Error>;
   createStoragePresetMutation: UseMutationResult<StoragePreset, Error, CreateStoragePresetInput>;
 };
 
@@ -16,22 +17,60 @@ function parsePositiveInt(value: string) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function getPreferredContainerTypeCode(types: ContainerType[]) {
+  return types.find((type) => type.code.toLowerCase() === 'pallet')?.code ?? types[0]?.code ?? '';
+}
+
 export function ProductStoragePresetsSection({
   productId,
   storagePresetsQuery,
   packagingLevelsQuery,
+  containerTypesQuery,
   createStoragePresetMutation
 }: ProductStoragePresetsSectionProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [containerType, setContainerType] = useState('pallet');
+  const [selectedContainerTypeCode, setSelectedContainerTypeCode] = useState('');
   const [levelId, setLevelId] = useState('');
   const [packCount, setPackCount] = useState('1');
   const [error, setError] = useState<string | null>(null);
 
   const storableLevels = (packagingLevelsQuery.data ?? []).filter((level) => level.isActive && level.canStore);
   const selectedLevel = storableLevels.find((level) => level.id === levelId) ?? storableLevels[0] ?? null;
+  const storableContainerTypes = useMemo(
+    () => (containerTypesQuery.data ?? []).filter((type) => type.supportsStorage),
+    [containerTypesQuery.data]
+  );
+  const selectedContainerType = storableContainerTypes.find(
+    (type) => type.code === selectedContainerTypeCode
+  ) ?? null;
+  const createDisabled =
+    createStoragePresetMutation.isPending ||
+    containerTypesQuery.isLoading ||
+    containerTypesQuery.isError ||
+    storableContainerTypes.length === 0 ||
+    selectedContainerType === null;
+  const containerTypeHelper = containerTypesQuery.isLoading
+    ? 'Loading container types...'
+    : containerTypesQuery.isError
+      ? 'Failed to load container types.'
+      : storableContainerTypes.length === 0
+        ? 'No storage-capable container types available.'
+        : 'Only storage-capable container types are available.';
+
+  useEffect(() => {
+    if (storableContainerTypes.length === 0) {
+      if (selectedContainerTypeCode !== '') {
+        setSelectedContainerTypeCode('');
+      }
+      return;
+    }
+
+    if (!storableContainerTypes.some((type) => type.code === selectedContainerTypeCode)) {
+      setSelectedContainerTypeCode(getPreferredContainerTypeCode(storableContainerTypes));
+    }
+  }, [selectedContainerTypeCode, storableContainerTypes]);
 
   async function handleCreate() {
     if (!selectedLevel) {
@@ -40,10 +79,14 @@ export function ProductStoragePresetsSection({
     }
     const count = parsePositiveInt(packCount);
     if (!count) {
-      setError('Pack count must be a positive integer.');
+      setError('Pack count must be a positive whole number.');
       return;
     }
-    if (!code.trim() || !name.trim() || !containerType.trim()) {
+    if (!selectedContainerType) {
+      setError('Choose a storage-capable container type.');
+      return;
+    }
+    if (!code.trim() || !name.trim()) {
       setError('Code, name, and container type are required.');
       return;
     }
@@ -58,7 +101,7 @@ export function ProductStoragePresetsSection({
           {
             levelType: selectedLevel.code,
             qtyEach: selectedLevel.baseUnitQty * count,
-            containerType: containerType.trim(),
+            containerType: selectedContainerType.code,
             legacyProductPackagingLevelId: selectedLevel.id
           }
         ]
@@ -112,7 +155,6 @@ export function ProductStoragePresetsSection({
           ) : (
             <div className="grid gap-2 md:grid-cols-2">
               {(storagePresetsQuery.data ?? []).map((preset) => {
-                const level = preset.levels[0];
                 return (
                   <div key={preset.id} className="rounded-lg border border-slate-200 p-3">
                     <div className="flex items-center justify-between gap-2">
@@ -124,10 +166,25 @@ export function ProductStoragePresetsSection({
                         {preset.status}
                       </span>
                     </div>
-                    <div className="mt-2 text-xs text-slate-500">
-                      {level ? `${level.qtyEach} each via ${level.levelType}` : 'No composition levels'}
-                      {level?.containerType ? ` / ${level.containerType}` : ''}
-                    </div>
+                    {preset.levels.length === 0 ? (
+                      <div className="mt-2 text-xs text-slate-500">No composition levels</div>
+                    ) : (
+                      <div className="mt-2 space-y-1">
+                        {preset.levels.map((level, index) => (
+                          <div
+                            key={`${preset.id}-${level.levelType}-${level.qtyEach}-${index}`}
+                            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500"
+                          >
+                            <span className="font-mono text-slate-700">{level.levelType}</span>
+                            <span>{level.qtyEach} each</span>
+                            {level.containerType ? <span>{level.containerType}</span> : null}
+                            <span className="rounded-full bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500">
+                              {preset.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -146,8 +203,30 @@ export function ProductStoragePresetsSection({
                   <input value={name} onChange={(event) => setName(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Container type code
-                  <input value={containerType} onChange={(event) => setContainerType(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
+                  Container type
+                  <select
+                    value={selectedContainerTypeCode}
+                    onChange={(event) => setSelectedContainerTypeCode(event.target.value)}
+                    disabled={containerTypesQuery.isLoading || containerTypesQuery.isError || storableContainerTypes.length === 0}
+                    aria-label="Container type"
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:opacity-50"
+                  >
+                    <option value="">
+                      {containerTypesQuery.isLoading
+                        ? 'Loading container types...'
+                        : storableContainerTypes.length === 0
+                          ? 'No storage-capable types'
+                          : 'Select container type'}
+                    </option>
+                    {storableContainerTypes.map((type) => (
+                      <option key={type.id} value={type.code}>
+                        {type.code} - {type.description}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={containerTypesQuery.isError || storableContainerTypes.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
+                    {containerTypeHelper}
+                  </span>
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
                   Packaging level
@@ -159,14 +238,22 @@ export function ProductStoragePresetsSection({
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
                   Pack count
-                  <input value={packCount} onChange={(event) => setPackCount(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    value={packCount}
+                    onChange={(event) => setPackCount(event.target.value)}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                  />
                 </label>
               </div>
               {error ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
               <button
                 type="button"
                 onClick={() => void handleCreate()}
-                disabled={createStoragePresetMutation.isPending}
+                disabled={createDisabled}
                 className="mt-3 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
               >
                 {createStoragePresetMutation.isPending ? 'Creating...' : 'Create storage preset'}
