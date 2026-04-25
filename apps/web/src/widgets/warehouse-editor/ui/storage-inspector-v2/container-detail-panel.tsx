@@ -33,6 +33,7 @@ type ContainerDetailPanelProps = {
   onOpenTransferToContainerTask: (row: LocationStorageSnapshotRow) => void;
   onOpenExtractQuantityTask: (row: LocationStorageSnapshotRow) => void;
   onStartMoveContainer: () => void;
+  onOpenSwapContainerTask: () => void;
   onOpenRemoveContainerTask: () => void;
 };
 
@@ -61,6 +62,7 @@ export function ContainerDetailPanel({
   onOpenTransferToContainerTask,
   onOpenExtractQuantityTask,
   onStartMoveContainer,
+  onOpenSwapContainerTask,
   onOpenRemoveContainerTask
 }: ContainerDetailPanelProps) {
   return (
@@ -175,6 +177,13 @@ export function ContainerDetailPanel({
               data-testid="move-container-action"
             >
               Move container
+            </button>
+            <button
+              onClick={onOpenSwapContainerTask}
+              className="h-8 w-full rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 hover:border-gray-400 hover:bg-gray-50"
+              data-testid="swap-container-action"
+            >
+              Swap container
             </button>
             <button
               onClick={onOpenRemoveContainerTask}

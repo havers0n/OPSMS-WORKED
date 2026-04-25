@@ -60,6 +60,36 @@ export class ExecutionTargetContainerSameAsSourceError extends Error {
   }
 }
 
+export class ExecutionTargetContainerNotPlacedError extends Error {
+  constructor() {
+    super('Target container does not have an active execution location.');
+  }
+}
+
+export class ExecutionSourceLocationNotExactlyOneContainerError extends Error {
+  constructor() {
+    super('Source location must contain exactly one active container for swap.');
+  }
+}
+
+export class ExecutionTargetLocationEmptyError extends Error {
+  constructor() {
+    super('Target location is empty; use move instead of swap.');
+  }
+}
+
+export class ExecutionTargetLocationNotExactlyOneContainerError extends Error {
+  constructor() {
+    super('Target location must contain exactly one active container for swap.');
+  }
+}
+
+export class ExecutionTargetLocationOccupantMismatchError extends Error {
+  constructor() {
+    super('Selected target container no longer matches the target location occupant.');
+  }
+}
+
 export class ExecutionTargetLocationNotFoundError extends Error {
   constructor() {
     super('Target location was not found for canonical execution.');
@@ -272,4 +302,55 @@ export function mapExecutionTransferError(error: unknown): ApiError | null {
   }
 
   return null;
+}
+
+export function mapExecutionSwapError(error: unknown): ApiError | null {
+  if (error instanceof ExecutionContainerNotFoundError) {
+    return new ApiError(404, 'CONTAINER_NOT_FOUND', 'Source container was not found.');
+  }
+
+  if (error instanceof ExecutionTargetContainerNotFoundError) {
+    return new ApiError(404, 'TARGET_CONTAINER_NOT_FOUND', 'Target container was not found.');
+  }
+
+  if (error instanceof ExecutionTargetContainerSameAsSourceError) {
+    return new ApiError(409, 'TARGET_CONTAINER_CONFLICT', 'Target container cannot be the same as the source container.');
+  }
+
+  if (error instanceof ExecutionTargetContainerTenantMismatchError) {
+    return new ApiError(409, 'TARGET_CONTAINER_TENANT_MISMATCH', 'Target container belongs to a different tenant.');
+  }
+
+  if (error instanceof ExecutionContainerNotPlacedError) {
+    return new ApiError(409, 'CONTAINER_LOCATION_UNSET', 'Source container is not currently placed.');
+  }
+
+  if (error instanceof ExecutionTargetContainerNotPlacedError) {
+    return new ApiError(409, 'TARGET_CONTAINER_LOCATION_UNSET', 'Target container is not currently placed.');
+  }
+
+  if (error instanceof ExecutionTargetLocationSameAsSourceError) {
+    return new ApiError(409, 'SAME_LOCATION', 'Source and target containers are already in the same location.');
+  }
+
+  if (error instanceof ExecutionSourceLocationNotExactlyOneContainerError) {
+    return new ApiError(409, 'SOURCE_LOCATION_NOT_EXACTLY_ONE_CONTAINER', 'Source location must contain exactly one active container.');
+  }
+
+  if (error instanceof ExecutionTargetLocationEmptyError) {
+    return new ApiError(409, 'TARGET_LOCATION_EMPTY', 'Target location is empty; use Move instead of Swap.');
+  }
+
+  if (error instanceof ExecutionTargetLocationNotExactlyOneContainerError) {
+    return new ApiError(409, 'TARGET_LOCATION_NOT_EXACTLY_ONE_CONTAINER', 'Target location must contain exactly one active container.');
+  }
+
+  if (error instanceof ExecutionTargetLocationOccupantMismatchError) {
+    return new ApiError(409, 'TARGET_LOCATION_OCCUPANT_MISMATCH', 'Target location contents changed. Select the target again.');
+  }
+
+  return (
+    mapExecutionLocationMoveError(error) ??
+    mapExecutionTransferError(error)
+  );
 }

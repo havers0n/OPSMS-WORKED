@@ -1,4 +1,4 @@
-import type { CanonicalMoveContainerResult, RemoveContainerResult } from '@wos/domain';
+import type { CanonicalMoveContainerResult, CanonicalSwapContainersResult, RemoveContainerResult } from '@wos/domain';
 import { bffRequest } from '@/shared/api/bff/client';
 
 export async function placeContainer(input: { containerId: string; locationId: string }) {
@@ -18,5 +18,12 @@ export async function moveContainer(input: { containerId: string; targetLocation
   return bffRequest<CanonicalMoveContainerResult>(
     `/api/containers/${input.containerId}/move-to-location`,
     { method: 'POST', body: JSON.stringify({ targetLocationId: input.targetLocationId }) }
+  );
+}
+
+export async function swapContainers(input: { sourceContainerId: string; targetContainerId: string }) {
+  return bffRequest<CanonicalSwapContainersResult>(
+    `/api/containers/${input.sourceContainerId}/swap`,
+    { method: 'POST', body: JSON.stringify({ targetContainerId: input.targetContainerId }) }
   );
 }

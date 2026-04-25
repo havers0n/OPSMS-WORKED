@@ -10,6 +10,7 @@ export async function invalidatePlacementQueries(
     sourceCellId?: string | null;
     targetCellId?: string | null;
     containerId?: string | null;
+    targetContainerId?: string | null;
   }
 ) {
   const jobs: Array<Promise<unknown>> = [];
@@ -31,6 +32,19 @@ export async function invalidatePlacementQueries(
     jobs.push(
       queryClient.invalidateQueries({
         queryKey: containerKeys.currentLocation(args.containerId)
+      })
+    );
+  }
+
+  if (args.targetContainerId && args.targetContainerId !== args.containerId) {
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.storage(args.targetContainerId)
+      })
+    );
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: containerKeys.currentLocation(args.targetContainerId)
       })
     );
   }

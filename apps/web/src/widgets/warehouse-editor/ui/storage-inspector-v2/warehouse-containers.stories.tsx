@@ -114,6 +114,7 @@ export const ContainerDetail: Story = {
         onOpenTransferToContainerTask={() => undefined}
         onOpenExtractQuantityTask={() => undefined}
         onOpenRemoveContainerTask={() => undefined}
+        onOpenSwapContainerTask={() => undefined}
         onStartMoveContainer={() => undefined}
       />
     </div>
@@ -161,6 +162,7 @@ export const ConflictRepairPanel: Story = {
         onOpenTransferToContainerTask={() => undefined}
         onOpenExtractQuantityTask={() => undefined}
         onOpenRemoveContainerTask={() => undefined}
+        onOpenSwapContainerTask={() => undefined}
         onStartMoveContainer={() => undefined}
       />
     </div>

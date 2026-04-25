@@ -16,6 +16,8 @@ import {
   containersResponseSchema,
   moveContainerToLocationRequestBodySchema,
   moveContainerToLocationResponseSchema,
+  swapContainersRequestBodySchema,
+  swapContainersResponseSchema,
   transferInventoryUnitRequestBodySchema,
   transferInventoryUnitResponseSchema,
   pickPartialInventoryUnitRequestBodySchema,
@@ -96,6 +98,7 @@ import {
 import { createExecutionService } from './features/execution/service.js';
 import {
   mapExecutionLocationMoveError,
+  mapExecutionSwapError,
   mapExecutionTransferError
 } from './features/execution/errors.js';
 import {
@@ -870,6 +873,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return parseOrThrow(moveContainerToLocationResponseSchema, result);
     } catch (error) {
       throw mapExecutionLocationMoveError(error) ?? error;
+    }
+  });
+
+  app.post('/api/containers/:containerId/swap', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const body = parseOrThrow(swapContainersRequestBodySchema, request.body);
+    const supabase = getUserSupabase(auth);
+    const executionService = createExecutionService(supabase);
+
+    try {
+      const result = await executionService.swapContainersCanonical({
+        sourceContainerId: containerId,
+        targetContainerId: body.targetContainerId,
+        actorId: auth.user.id
+      });
+
+      return parseOrThrow(swapContainersResponseSchema, result);
+    } catch (error) {
+      throw mapExecutionSwapError(error) ?? error;
     }
   });
 

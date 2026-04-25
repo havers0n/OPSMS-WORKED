@@ -11,7 +11,6 @@ select
   c.external_code,
   ct.code                                               as container_type,
   c.status                                              as container_status,
-  iu.id                                                 as inventory_unit_id,
   case
     when iu.product_id is not null
     then 'product:' || iu.product_id::text
@@ -27,7 +26,8 @@ select
   c.system_code,
   iu.packaging_state,
   iu.product_packaging_level_id,
-  iu.pack_count
+  iu.pack_count,
+  iu.id                                                 as inventory_unit_id
 from public.containers c
 join public.container_types ct on ct.id = c.container_type_id
 left join public.inventory_unit iu on iu.container_id = c.id;
@@ -47,7 +47,6 @@ select
   acl.container_type,
   acl.container_status,
   acl.placed_at,
-  iu.id                                                 as inventory_unit_id,
   case
     when iu.product_id is not null
     then 'product:' || iu.product_id::text
@@ -63,7 +62,8 @@ select
   acl.system_code,
   iu.packaging_state,
   iu.product_packaging_level_id,
-  iu.pack_count
+  iu.pack_count,
+  iu.id                                                 as inventory_unit_id
 from public.active_container_locations_v acl
 left join public.inventory_unit iu on iu.container_id = acl.container_id;
 

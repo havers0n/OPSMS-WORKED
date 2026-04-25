@@ -49,6 +49,36 @@ describe('execution repo', () => {
     });
   });
 
+  it('calls canonical swap RPC with source and target container ids', async () => {
+    const rpc = vi.fn(async () => ({
+      data: {
+        sourceContainerId: ids.container,
+        targetContainerId: ids.targetContainer,
+        sourceContainerNewLocationId: ids.targetLocation,
+        targetContainerNewLocationId: ids.sourceLocation,
+        sourceMovementId: ids.movement,
+        targetMovementId: ids.transferMovement,
+        occurredAt: '2026-03-16T09:00:00.000Z'
+      },
+      error: null
+    }));
+    const repo = createExecutionRepo({ rpc } as never);
+
+    await expect(
+      repo.swapContainersCanonical(ids.container, ids.targetContainer, 'actor-uuid')
+    ).resolves.toMatchObject({
+      sourceContainerNewLocationId: ids.targetLocation,
+      targetContainerNewLocationId: ids.sourceLocation
+    });
+
+    expect(rpc).toHaveBeenCalledWith('swap_containers_canonical', {
+      source_container_uuid: ids.container,
+      target_container_uuid: ids.targetContainer,
+      actor_uuid: 'actor-uuid'
+    });
+  });
+
+
   it('maps canonical split and move RPC errors to execution-specific failures', async () => {
     const rpc = vi
       .fn()

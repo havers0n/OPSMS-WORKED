@@ -11,6 +11,15 @@ function createRepoStub(): ExecutionRepo {
       movementId: 'movement-uuid',
       occurredAt: '2026-03-16T08:00:00.000Z'
     })),
+    swapContainersCanonical: vi.fn(async () => ({
+      sourceContainerId: 'source-container-uuid',
+      targetContainerId: 'target-container-uuid',
+      sourceContainerNewLocationId: 'target-location-uuid',
+      targetContainerNewLocationId: 'source-location-uuid',
+      sourceMovementId: 'source-movement-uuid',
+      targetMovementId: 'target-movement-uuid',
+      occurredAt: '2026-03-16T08:02:00.000Z'
+    })),
     splitInventoryUnit: vi.fn(async () => ({
       sourceInventoryUnitId: 'source-unit-uuid',
       targetInventoryUnitId: 'target-unit-uuid',
@@ -82,6 +91,28 @@ describe('execution service', () => {
     expect(repo.moveContainerCanonical).toHaveBeenCalledWith(
       'container-uuid',
       'target-location-uuid',
+      'actor-uuid'
+    );
+  });
+
+  it('delegates canonical container swaps by target container id', async () => {
+    const repo = createRepoStub();
+    const service = createExecutionServiceFromRepo(repo);
+
+    await expect(
+      service.swapContainersCanonical({
+        sourceContainerId: 'source-container-uuid',
+        targetContainerId: 'target-container-uuid',
+        actorId: 'actor-uuid'
+      })
+    ).resolves.toMatchObject({
+      sourceContainerNewLocationId: 'target-location-uuid',
+      targetContainerNewLocationId: 'source-location-uuid'
+    });
+
+    expect(repo.swapContainersCanonical).toHaveBeenCalledWith(
+      'source-container-uuid',
+      'target-container-uuid',
       'actor-uuid'
     );
   });

@@ -9,12 +9,17 @@ import {
   ExecutionSerialSplitNotAllowedError,
   ExecutionSealedSplitRequiresWholePacksError,
   ExecutionTargetContainerNotFoundError,
+  ExecutionTargetContainerNotPlacedError,
   ExecutionTargetContainerSameAsSourceError,
   ExecutionTargetContainerTenantMismatchError,
+  ExecutionSourceLocationNotExactlyOneContainerError,
   ExecutionTargetLocationDimensionOverflowError,
   ExecutionTargetLocationDimensionUnknownError,
+  ExecutionTargetLocationEmptyError,
   ExecutionTargetLocationNotActiveError,
+  ExecutionTargetLocationNotExactlyOneContainerError,
   ExecutionTargetLocationNotFoundError,
+  ExecutionTargetLocationOccupantMismatchError,
   ExecutionTargetLocationOccupiedError,
   ExecutionTargetLocationSameAsSourceError,
   ExecutionTargetLocationTenantMismatchError,
@@ -56,9 +61,20 @@ const canonicalMoveResultSchema = z.object({
   occurredAt: z.string()
 });
 
+const canonicalSwapResultSchema = z.object({
+  sourceContainerId: z.string().uuid(),
+  targetContainerId: z.string().uuid(),
+  sourceContainerNewLocationId: z.string().uuid(),
+  targetContainerNewLocationId: z.string().uuid(),
+  sourceMovementId: z.string().uuid(),
+  targetMovementId: z.string().uuid(),
+  occurredAt: z.string()
+});
+
 export type CanonicalSplitResult = z.infer<typeof canonicalSplitResultSchema>;
 export type CanonicalTransferResult = z.infer<typeof canonicalTransferResultSchema>;
 export type CanonicalMoveResult = z.infer<typeof canonicalMoveResultSchema>;
+export type CanonicalSwapResult = z.infer<typeof canonicalSwapResultSchema>;
 
 function mapExecutionRpcError(error: SupabaseLikeError): Error | null {
   if (error.code !== 'P0001') {
@@ -86,6 +102,16 @@ function mapExecutionRpcError(error: SupabaseLikeError): Error | null {
       return new ExecutionTargetContainerTenantMismatchError();
     case 'TARGET_CONTAINER_SAME_AS_SOURCE_CONTAINER':
       return new ExecutionTargetContainerSameAsSourceError();
+    case 'TARGET_CONTAINER_NOT_PLACED':
+      return new ExecutionTargetContainerNotPlacedError();
+    case 'SOURCE_LOCATION_NOT_EXACTLY_ONE_CONTAINER':
+      return new ExecutionSourceLocationNotExactlyOneContainerError();
+    case 'TARGET_LOCATION_EMPTY':
+      return new ExecutionTargetLocationEmptyError();
+    case 'TARGET_LOCATION_NOT_EXACTLY_ONE_CONTAINER':
+      return new ExecutionTargetLocationNotExactlyOneContainerError();
+    case 'TARGET_LOCATION_OCCUPANT_MISMATCH':
+      return new ExecutionTargetLocationOccupantMismatchError();
     case 'TARGET_LOCATION_NOT_FOUND':
     case 'LOCATION_NOT_FOUND':
       return new ExecutionTargetLocationNotFoundError();
@@ -115,6 +141,7 @@ function mapExecutionRpcError(error: SupabaseLikeError): Error | null {
 
 export type ExecutionRepo = {
   moveContainerCanonical(containerId: string, targetLocationId: string, actorId?: string | null): Promise<CanonicalMoveResult>;
+  swapContainersCanonical(sourceContainerId: string, targetContainerId: string, actorId?: string | null): Promise<CanonicalSwapResult>;
   splitInventoryUnit(
     inventoryUnitId: string,
     quantity: number,
@@ -149,6 +176,20 @@ export function createExecutionRepo(supabase: SupabaseClient): ExecutionRepo {
       }
 
       return canonicalMoveResultSchema.parse(data);
+    },
+
+    async swapContainersCanonical(sourceContainerId, targetContainerId, actorId) {
+      const { data, error } = await supabase.rpc('swap_containers_canonical', {
+        source_container_uuid: sourceContainerId,
+        target_container_uuid: targetContainerId,
+        actor_uuid: actorId ?? null
+      });
+
+      if (error) {
+        throw mapExecutionRpcError(error) ?? error;
+      }
+
+      return canonicalSwapResultSchema.parse(data);
     },
 
     async splitInventoryUnit(inventoryUnitId, quantity, targetContainerId, actorId) {

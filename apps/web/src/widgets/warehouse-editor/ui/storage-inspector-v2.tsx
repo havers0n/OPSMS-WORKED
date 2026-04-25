@@ -21,7 +21,8 @@ import { addInventoryItem } from '@/features/inventory-add/api/mutations';
 import {
   moveContainer as moveContainerApi,
   placeContainer,
-  removeContainer
+  removeContainer,
+  swapContainers as swapContainersApi
 } from '@/features/placement-actions/api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
 import {
@@ -50,15 +51,17 @@ import {
   resolveActiveMode,
   resolvePanelMode,
   type MoveTaskState,
+  type SwapTaskState,
   type TaskKind
 } from './storage-inspector-v2/mode';
 import { EmptyState } from './storage-inspector-v2/empty-state';
-import { LoadingState } from './storage-inspector-v2/loading-state';
+import { LoadingErrorState, LoadingState } from './storage-inspector-v2/loading-state';
 import { RackOverviewPanel } from './storage-inspector-v2/rack-overview-panel';
 import { ContainerDetailPanel } from './storage-inspector-v2/container-detail-panel';
 import { CreateContainerTaskPanel } from './storage-inspector-v2/task-create-container-panel';
 import { CreateContainerWithProductTaskPanel } from './storage-inspector-v2/task-create-container-with-product-panel';
 import { MoveContainerTaskPanel } from './storage-inspector-v2/task-move-container-panel';
+import { SwapContainerTaskPanel } from './storage-inspector-v2/task-swap-container-panel';
 import { PlaceExistingContainerTaskPanel } from './storage-inspector-v2/task-place-existing-panel';
 import { RemoveContainerTaskPanel } from './storage-inspector-v2/task-remove-container-panel';
 import { AddProductToContainerTaskPanel } from './storage-inspector-v2/task-add-product-panel';
@@ -354,6 +357,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [selectedContainerId, setSelectedContainerId] = useState<string | null>(null);
   const [taskKind, setTaskKind] = useState<TaskKind | null>(null);
   const [moveTaskState, setMoveTaskState] = useState<MoveTaskState | null>(null);
+  const [swapTaskState, setSwapTaskState] = useState<SwapTaskState | null>(null);
 
   const [createContainerTypeId, setCreateContainerTypeId] = useState('');
   const [createExternalCode, setCreateExternalCode] = useState('');
@@ -402,6 +406,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   taskKindRef.current = taskKind;
   const moveTaskRef = useRef<MoveTaskState | null>(null);
   moveTaskRef.current = moveTaskState;
+  const swapTaskRef = useRef<SwapTaskState | null>(null);
+  swapTaskRef.current = swapTaskState;
 
   const selectCell = useStorageFocusSelectCell();
 
@@ -413,10 +419,22 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const { data: createWithProductSearchResults = [] } = useProductsSearch(createWithProductSearch.trim() || null);
   const { data: addProductSearchResults = [] } = useProductsSearch(addProductSearch.trim() || null);
 
-  const { data: locationRef, isLoading: locationRefLoading } = useLocationByCell(cellId);
+  const {
+    data: locationRef,
+    isLoading: locationRefLoading,
+    isError: locationRefIsError,
+    error: locationRefError,
+    refetch: refetchLocationRef
+  } = useLocationByCell(cellId);
   const locationId = locationRef?.locationId ?? null;
 
-  const { data: storageRows = [], isLoading: storageLoading } = useLocationStorage(locationId);
+  const {
+    data: storageRows = [],
+    isLoading: storageLoading,
+    isError: storageIsError,
+    error: storageError,
+    refetch: refetchStorageRows
+  } = useLocationStorage(locationId);
   const {
     data: locationProductAssignments = [],
     isLoading: locationProductAssignmentsLoading
@@ -424,7 +442,12 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const createProductLocationRole = useCreateProductLocationRole();
   const deleteProductLocationRole = useDeleteProductLocationRole(locationId);
 
-  const mode = resolveActiveMode(resolvePanelMode(rackId, cellId, selectedContainerId), taskKind, moveTaskState);
+  const mode = resolveActiveMode(
+    resolvePanelMode(rackId, cellId, selectedContainerId),
+    taskKind,
+    moveTaskState,
+    swapTaskState
+  );
   const effectiveRoleContainerRows =
     mode.kind === 'container-detail' ||
     mode.kind === 'task-edit-override' ||
@@ -516,6 +539,10 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setExtractErrorMessage(null);
   };
 
+  const resetSwapTaskState = () => {
+    setSwapTaskState(null);
+  };
+
   useEffect(() => {
     if (taskKindRef.current === 'move-container') {
       const current = moveTaskRef.current;
@@ -525,9 +552,18 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       return;
     }
 
+    if (taskKindRef.current === 'swap-container') {
+      const current = swapTaskRef.current;
+      if (cellId && current && cellId !== current.sourceCellId) {
+        setSwapTaskState((prev) => (prev ? { ...prev, targetCellId: cellId, errorMessage: null } : null));
+      }
+      return;
+    }
+
     setSelectedContainerId(null);
     setTaskKind(null);
     setMoveTaskState(null);
+    setSwapTaskState(null);
     resetCreateTaskState();
     resetCreateWithProductTaskState();
     resetPlaceExistingTaskState();
@@ -652,6 +688,21 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetExtractTaskState();
   };
 
+  const closeSwapTask = () => {
+    if (swapTaskState?.stage === 'swapping') return;
+    const current = swapTaskState;
+    setTaskKind(null);
+    resetSwapTaskState();
+    if (current) {
+      selectCell({
+        cellId: current.sourceCellId,
+        rackId: current.sourceRackId ?? '',
+        level: current.sourceLevel
+      });
+      setSelectedContainerId(current.sourceContainerId);
+    }
+  };
+
   const openCreateTask = () => {
     resetCreateTaskState();
     setTaskKind('create-container');
@@ -675,6 +726,26 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const openRemoveContainerTask = () => {
     resetRemoveContainerTaskState();
     setTaskKind('remove-container');
+  };
+
+  const openSwapContainerTask = () => {
+    if (!cellId || !locationId || !selectedContainerId) return;
+    setSwapTaskState({
+      sourceContainerId: selectedContainerId,
+      sourceCellId: cellId,
+      sourceLocationId: locationId,
+      sourceRackId: rackId,
+      sourceLevel: activeLevel,
+      sourceLocationCode: locationCode,
+      sourceContainerDisplayCode:
+        storageRows.find((row) => row.containerId === selectedContainerId)?.externalCode ??
+        storageRows.find((row) => row.containerId === selectedContainerId)?.systemCode ??
+        selectedContainerId,
+      targetCellId: null,
+      stage: 'selecting-target',
+      errorMessage: null
+    });
+    setTaskKind('swap-container');
   };
 
   const openTransferToContainerTask = (row: LocationStorageSnapshotRow) => {
@@ -909,6 +980,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
     setExtractIsSubmitting(true);
     setExtractErrorMessage(null);
+    let createdContainerId: string | null = null;
+    let createdContainerPlaced = false;
     try {
       if (extractTargetMode === 'existing-container') {
         await submitTransferToExistingContainer(extractSourceRow, extractTargetContainerId, quantity);
@@ -922,7 +995,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           containerTypeId: extractNewContainerTypeId,
           externalCode: extractNewContainerExternalCode.trim() || undefined
         });
+        createdContainerId = result.containerId;
         await placeContainer({ containerId: result.containerId, locationId });
+        createdContainerPlaced = true;
         await transferInventoryToContainer({
           inventoryUnitId: extractSourceRow.inventoryUnitId as string,
           targetContainerId: result.containerId,
@@ -934,7 +1009,22 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       setTaskKind(null);
       resetExtractTaskState();
     } catch (error) {
-      setExtractErrorMessage(errorMessageFromUnknown(error, 'Could not extract inventory.'));
+      if (createdContainerId) {
+        await invalidateContentsActionReadSurface(
+          extractSourceRow.containerId,
+          createdContainerId,
+          true
+        );
+      }
+
+      if (createdContainerPlaced) {
+        const backendMessage = errorMessageFromUnknown(error, 'Transfer failed.');
+        setExtractErrorMessage(
+          `Container was created and placed, but transfer failed. The empty container remains at this location. ${backendMessage}`
+        );
+      } else {
+        setExtractErrorMessage(errorMessageFromUnknown(error, 'Could not extract inventory.'));
+      }
     } finally {
       setExtractIsSubmitting(false);
     }
@@ -984,6 +1074,62 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       rackId: restoreRackId,
       level: source.sourceLevel ?? activeLevel ?? null
     });
+  };
+
+  const handleSwapConfirm = async (targetContainerId: string, targetLocationId: string) => {
+    if (!swapTaskState || !cellId || swapTaskState.stage === 'swapping') return;
+
+    if (targetContainerId === swapTaskState.sourceContainerId) {
+      setSwapTaskState((prev) =>
+        prev
+          ? { ...prev, stage: 'error', errorMessage: 'Target container must be different from source container.' }
+          : null
+      );
+      return;
+    }
+
+    if (targetLocationId === swapTaskState.sourceLocationId) {
+      setSwapTaskState((prev) =>
+        prev
+          ? { ...prev, stage: 'error', errorMessage: 'Target location must be different from source location.' }
+          : null
+      );
+      return;
+    }
+
+    const targetCellId = cellId;
+    const targetRackId = rackId;
+    const targetLevel = activeLevel;
+
+    setSwapTaskState((prev) => (prev ? { ...prev, stage: 'swapping', errorMessage: null } : null));
+
+    try {
+      await swapContainersApi({
+        sourceContainerId: swapTaskState.sourceContainerId,
+        targetContainerId
+      });
+      await invalidatePlacementQueries(queryClient, {
+        floorId,
+        sourceCellId: swapTaskState.sourceCellId,
+        targetCellId,
+        containerId: swapTaskState.sourceContainerId,
+        targetContainerId
+      });
+      setTaskKind(null);
+      resetSwapTaskState();
+      selectCell({ cellId: targetCellId, rackId: targetRackId ?? '', level: targetLevel });
+      setSelectedContainerId(swapTaskState.sourceContainerId);
+    } catch (error) {
+      setSwapTaskState((prev) =>
+        prev
+          ? {
+              ...prev,
+              stage: 'error',
+              errorMessage: errorMessageFromUnknown(error, 'Could not swap containers.')
+            }
+          : null
+      );
+    }
   };
 
   const handleRemoveContainerConfirm = async (containerId: string) => {
@@ -1055,8 +1201,92 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
+  if (mode.kind === 'task-swap-container') {
+    const targetCellSelected = Boolean(swapTaskState?.targetCellId);
+    const targetContainers = targetCellSelected ? groupByContainer(storageRows) : [];
+    const targetContainerCount = targetContainers.length;
+    const targetContainerId = targetContainerCount === 1 ? targetContainers[0].containerId : null;
+    const targetFirstRow = targetContainerId
+      ? storageRows.find((row) => row.containerId === targetContainerId)
+      : null;
+    const targetDisplayCode = targetFirstRow
+      ? (targetFirstRow.externalCode ?? targetFirstRow.systemCode ?? targetContainerId)
+      : null;
+    const isSameTargetContainer =
+      targetContainerId !== null && targetContainerId === swapTaskState?.sourceContainerId;
+    const isSameTargetLocation =
+      locationId !== null && locationId === swapTaskState?.sourceLocationId;
+    const targetLocationLoading = locationRefLoading || (Boolean(locationId) && storageLoading);
+    const targetLoadError = locationRefIsError || storageIsError
+      ? errorMessageFromUnknown(
+          locationRefIsError ? locationRefError : storageError,
+          'Could not load the selected target location.'
+        )
+      : null;
+    const canConfirm =
+      swapTaskState !== null &&
+      swapTaskState.targetCellId !== null &&
+      !targetLocationLoading &&
+      targetLoadError === null &&
+      targetContainerCount === 1 &&
+      targetContainerId !== null &&
+      locationId !== null &&
+      !isSameTargetContainer &&
+      !isSameTargetLocation &&
+      swapTaskState.stage === 'selecting-target';
+
+    return (
+      <SwapContainerTaskPanel
+        swapTaskState={swapTaskState!}
+        rackDisplayCode={rackDisplayCode}
+        targetLocationCode={targetCellSelected ? locationCode : null}
+        targetContainerDisplayCode={targetDisplayCode}
+        targetContainerCount={targetContainerCount}
+        targetLocationLoading={targetLocationLoading}
+        targetLocationId={targetCellSelected ? locationId : null}
+        canConfirm={canConfirm}
+        isSubmitting={swapTaskState?.stage === 'swapping'}
+        errorMessage={
+          swapTaskState?.errorMessage ??
+          targetLoadError ??
+          (isSameTargetContainer
+            ? 'Target container must be different from source container.'
+            : isSameTargetLocation
+              ? 'Target location must be different from source location.'
+              : null)
+        }
+        onConfirm={() => {
+          if (targetContainerId && locationId) {
+            void handleSwapConfirm(targetContainerId, locationId);
+          }
+        }}
+        onCancel={closeSwapTask}
+      />
+    );
+  }
+
   if (locationRefLoading || (locationId && storageLoading)) {
     return <LoadingState />;
+  }
+
+  if (locationRefIsError || storageIsError) {
+    const message = locationRefIsError
+      ? errorMessageFromUnknown(locationRefError, 'Could not load the selected location.')
+      : errorMessageFromUnknown(storageError, 'Could not load storage for this location.');
+    return (
+      <LoadingErrorState
+        title="Location failed to load"
+        message={message}
+        onRetry={() => {
+          if (locationRefIsError) {
+            void refetchLocationRef();
+          }
+          if (storageIsError) {
+            void refetchStorageRows();
+          }
+        }}
+      />
+    );
   }
 
   const isOccupied = storageRows.length > 0;
@@ -1621,6 +1851,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onOpenTransferToContainerTask={openTransferToContainerTask}
         onOpenExtractQuantityTask={openExtractQuantityTask}
         onOpenRemoveContainerTask={openRemoveContainerTask}
+        onOpenSwapContainerTask={openSwapContainerTask}
         onStartMoveContainer={() => {
           if (!cellId || !locationId) return;
           setMoveTaskState({

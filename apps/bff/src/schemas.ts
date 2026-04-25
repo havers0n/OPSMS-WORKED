@@ -10,6 +10,7 @@ import {
   containerStatusSchema,
   containerStorageSnapshotRowSchema,
   canonicalMoveContainerResultSchema,
+  canonicalSwapContainersResultSchema,
   canonicalTransferInventoryResultSchema,
   inventoryItemSchema,
   locationOccupancyResponseSchema,
@@ -22,6 +23,7 @@ import {
   productSchema,
   removeContainerResultSchema,
   transferInventoryUnitBodySchema,
+  swapContainersBodySchema,
   containerTypeSchema,
   floorSchema,
   floorWorkspaceSchema,
@@ -97,6 +99,7 @@ export const createInventoryItemBodySchema = z.object({
 });
 
 export const moveContainerToLocationRequestBodySchema = moveContainerToLocationBodySchema;
+export const swapContainersRequestBodySchema = swapContainersBodySchema;
 export const transferInventoryUnitRequestBodySchema = transferInventoryUnitBodySchema;
 export const pickPartialInventoryUnitRequestBodySchema = pickPartialInventoryUnitBodySchema;
 
@@ -261,6 +264,7 @@ export const productCatalogResponseSchema = z.object({
 });
 export const removeContainerResponseSchema = removeContainerResultSchema;
 export const moveContainerToLocationResponseSchema = canonicalMoveContainerResultSchema;
+export const swapContainersResponseSchema = canonicalSwapContainersResultSchema;
 export const transferInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const pickPartialInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();

@@ -85,6 +85,9 @@ vi.mock('@/entities/location/api/use-location-by-cell', () => ({
   useLocationByCell: () => ({
     data: mockLocationRef,
     isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
   })
 }));
 
@@ -92,6 +95,9 @@ vi.mock('@/entities/location/api/use-location-storage', () => ({
   useLocationStorage: () => ({
     data: mockStorageRows,
     isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
   })
 }));
 
@@ -169,6 +175,7 @@ vi.mock('@/entities/location/api/queries', () => ({
 const mockCreateContainer = vi.fn();
 const mockPlaceContainer = vi.fn();
 const mockMoveContainer = vi.fn();
+const mockSwapContainers = vi.fn();
 const mockRemoveContainer = vi.fn();
 const mockAddInventoryItem = vi.fn();
 const mockTransferInventoryToContainer = vi.fn();
@@ -188,6 +195,7 @@ vi.mock('@/features/container-create/api/mutations', () => ({
 vi.mock('@/features/placement-actions/api/mutations', () => ({
   placeContainer: (...args: unknown[]) => mockPlaceContainer(...args),
   moveContainer: (...args: unknown[]) => mockMoveContainer(...args),
+  swapContainers: (...args: unknown[]) => mockSwapContainers(...args),
   removeContainer: (...args: unknown[]) => mockRemoveContainer(...args),
 }));
 
@@ -242,6 +250,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 beforeEach(() => {
   mockStorageContainers = [];
   mockRemoveContainer.mockReset();
+  mockSwapContainers.mockReset();
   mockTransferInventoryToContainer.mockReset();
 });
 
@@ -450,6 +459,28 @@ describe('resolveActiveMode', () => {
       kind: 'task-extract-quantity',
       cellId: 'c1',
       containerId: 'ct1'
+    });
+  });
+
+  it('overrides active mode to task-swap-container while swap target is selected', () => {
+    const base = { kind: 'cell-overview' as const, cellId: 'target-cell' };
+    expect(
+      resolveActiveMode(base, 'swap-container', null, {
+        sourceContainerId: 'ct1',
+        sourceCellId: 'source-cell',
+        sourceLocationId: 'source-location',
+        sourceRackId: 'rack-1',
+        sourceLevel: 1,
+        sourceLocationCode: 'SRC',
+        sourceContainerDisplayCode: 'CT1',
+        targetCellId: 'target-cell',
+        stage: 'selecting-target',
+        errorMessage: null
+      })
+    ).toEqual({
+      kind: 'task-swap-container',
+      sourceContainerId: 'ct1',
+      sourceCellId: 'source-cell'
     });
   });
 
@@ -2665,6 +2696,43 @@ describe('StorageInspectorV2 contents action flows', () => {
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['container', 'list'] });
   });
 
+  it('keeps extract panel open and refreshes reads when new-container transfer fails after placement', async () => {
+    mockCreateContainer.mockResolvedValue({
+      containerId: 'created-container',
+      systemCode: 'C-NEW',
+      externalCode: null,
+      containerTypeId: 'type-1',
+      status: 'active',
+      operationalRole: 'storage'
+    });
+    mockPlaceContainer.mockResolvedValue({});
+    mockTransferInventoryToContainer.mockRejectedValue(new Error('Transfer constraint failed.'));
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'extract-quantity-action' }).props.onClick();
+    });
+    const radios = renderer.root.findAllByType('input').filter((node) => node.props.type === 'radio');
+    act(() => {
+      radios[1].props.onChange();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': 'Container type' }).props.onChange({
+        target: { value: 'type-1' }
+      });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'extract-confirm-button' }).props.onClick();
+    });
+
+    expect(flattenText(renderer.toJSON())).toContain('Container was created and placed, but transfer failed.');
+    expect(flattenText(renderer.toJSON())).toContain('Transfer constraint failed.');
+    expect(renderer.root.findByProps({ 'data-testid': 'extract-confirm-button' })).toBeTruthy();
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['container', 'storage', 'created-container'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['container', 'list'] });
+  });
+
   it('shows loose extract as unavailable and blocks submit', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
@@ -2679,6 +2747,73 @@ describe('StorageInspectorV2 contents action flows', () => {
     expect(flattenText(renderer.toJSON())).toContain('Loose extract is not available yet.');
     expect(renderer.root.findByProps({ 'data-testid': 'extract-confirm-button' }).props.disabled).toBe(true);
     expect(mockTransferInventoryToContainer).not.toHaveBeenCalled();
+  });
+
+  it('swaps source container with exactly one occupied target cell and returns focus to source container in target cell', async () => {
+    mockSwapContainers.mockResolvedValue({});
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } },
+      { id: 'cell-2', rackId: 'rack-1', address: { raw: '01-A.01.02', parts: { level: 1 } } }
+    ];
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'swap-container-action' }).props.onClick();
+    });
+
+    mockLocationRef = { locationId: 'loc-2' };
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-02',
+        locationType: 'rack_slot',
+        containerId: 'target-container',
+        inventoryUnitId: 'iu-2',
+        containerStatus: 'active',
+        systemCode: 'C-002',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: 'product:sku-2',
+        quantity: 1,
+        uom: 'pcs',
+        product: { id: 'product-2', sku: 'SKU-2', name: 'Target', isActive: true }
+      }
+    ];
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'swap-confirm-button' }).props.onClick();
+    });
+
+    expect(mockSwapContainers).toHaveBeenCalledWith({
+      sourceContainerId: 'source-container',
+      targetContainerId: 'target-container'
+    });
+    expect(mockInvalidatePlacement).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      sourceCellId: 'cell-1',
+      targetCellId: 'cell-2',
+      containerId: 'source-container',
+      targetContainerId: 'target-container'
+    }));
+  });
+
+  it('blocks swap submit for empty target cell', () => {
+    const renderer = renderInspector(createWorkspace());
+    openContainerDetail(renderer.root);
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'swap-container-action' }).props.onClick();
+    });
+
+    mockLocationRef = { locationId: 'loc-2' };
+    mockStorageRows = [];
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+
+    expect(flattenText(renderer.toJSON())).toContain('Target cell is empty. Use Move instead of Swap.');
+    expect(renderer.root.findByProps({ 'data-testid': 'swap-confirm-button' }).props.disabled).toBe(true);
+    expect(mockSwapContainers).not.toHaveBeenCalled();
   });
 });
 

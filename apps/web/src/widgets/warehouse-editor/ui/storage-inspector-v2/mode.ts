@@ -12,7 +12,8 @@ export type PanelMode =
   | { kind: 'task-create-container-with-product'; cellId: string }
   | { kind: 'task-place-existing'; cellId: string }
   | { kind: 'task-remove-container'; cellId: string; containerId: string }
-  | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string };
+  | { kind: 'task-move-container'; sourceContainerId: string; sourceCellId: string }
+  | { kind: 'task-swap-container'; sourceContainerId: string; sourceCellId: string };
 
 export type TaskKind =
   | 'create-container'
@@ -20,6 +21,7 @@ export type TaskKind =
   | 'place-existing'
   | 'remove-container'
   | 'move-container'
+  | 'swap-container'
   | 'transfer-to-container'
   | 'extract-quantity'
   | 'edit-override'
@@ -45,6 +47,19 @@ export type MoveTaskState = {
   errorMessage: string | null;
 };
 
+export type SwapTaskState = {
+  sourceContainerId: string;
+  sourceCellId: string;
+  sourceLocationId: string;
+  sourceRackId: string | null;
+  sourceLevel: number | null;
+  sourceLocationCode: string;
+  sourceContainerDisplayCode: string;
+  targetCellId: string | null;
+  stage: 'selecting-target' | 'swapping' | 'error';
+  errorMessage: string | null;
+};
+
 /**
  * Priority: container-detail > cell-overview > rack-overview > empty
  * containerId only activates when cellId is also set.
@@ -67,13 +82,22 @@ export function resolvePanelMode(
 export function resolveActiveMode(
   base: PanelMode,
   taskKind: TaskKind | null,
-  moveTaskState: MoveTaskState | null = null
+  moveTaskState: MoveTaskState | null = null,
+  swapTaskState: SwapTaskState | null = null
 ): PanelMode {
   if (taskKind === 'move-container' && moveTaskState !== null) {
     return {
       kind: 'task-move-container',
       sourceContainerId: moveTaskState.sourceContainerId,
       sourceCellId: moveTaskState.sourceCellId
+    };
+  }
+
+  if (taskKind === 'swap-container' && swapTaskState !== null) {
+    return {
+      kind: 'task-swap-container',
+      sourceContainerId: swapTaskState.sourceContainerId,
+      sourceCellId: swapTaskState.sourceCellId
     };
   }
 
