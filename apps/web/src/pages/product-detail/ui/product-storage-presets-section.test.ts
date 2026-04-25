@@ -133,6 +133,14 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 }
 
 describe('ProductStoragePresetsSection', () => {
+  it('renders the section subtitle', () => {
+    const renderer = renderSection();
+
+    expect(flattenText(renderer.toJSON())).toContain(
+      'How this product is normally stored in containers.'
+    );
+  });
+
   it('uses canonical storage-capable container types and defaults to pallet', () => {
     const renderer = renderSection();
     openCreateForm(renderer.root);
@@ -144,6 +152,26 @@ describe('ProductStoragePresetsSection', () => {
       'pallet'
     ]);
     expect(renderer.root.findAllByProps({ value: 'random-invalid-container-type' })).toHaveLength(0);
+  });
+
+  it('uses packaging level name, quantity, and code in the pack type dropdown label', () => {
+    const renderer = renderSection({
+      packagingLevels: [makePackagingLevel({ code: 'CASE', name: 'Case', baseUnitQty: 12 })]
+    });
+    openCreateForm(renderer.root);
+
+    const packTypeSelect = renderer.root.findAllByType('select').at(-1)!;
+    expect(packTypeSelect.findByType('option').children.join('')).toBe('Case - 12 units (CASE)');
+  });
+
+  it('uses unnamed packaging level fallback in the pack type dropdown label', () => {
+    const renderer = renderSection({
+      packagingLevels: [makePackagingLevel({ code: '', name: '', baseUnitQty: 12 })]
+    });
+    openCreateForm(renderer.root);
+
+    const packTypeSelect = renderer.root.findAllByType('select').at(-1)!;
+    expect(packTypeSelect.findByType('option').children.join('')).toBe('Unnamed level - 12 units');
   });
 
   it('shows helper text for loading, failed, and empty canonical container type states', () => {
@@ -164,6 +192,61 @@ describe('ProductStoragePresetsSection', () => {
     const empty = renderSection({ containerTypes: [] });
     openCreateForm(empty.root);
     expect(flattenText(empty.toJSON())).toContain('No storage-capable container types available.');
+  });
+
+  it('renders dependency-aware empty state copy', () => {
+    const noStorableLevels = renderSection({
+      packagingLevels: [makePackagingLevel({ canStore: false })]
+    });
+    expect(flattenText(noStorableLevels.toJSON())).toContain(
+      'No storage setup yet. First create an active packaging level that can be stored.'
+    );
+
+    const noStorageContainers = renderSection({
+      containerTypes: []
+    });
+    expect(flattenText(noStorageContainers.toJSON())).toContain(
+      'Storage setup is unavailable because no storage-capable container types are configured.'
+    );
+
+    const ready = renderSection();
+    expect(flattenText(ready.toJSON())).toContain(
+      'No storage presets defined yet. Create one to describe how this product is normally stored.'
+    );
+  });
+
+  it('renders storage preview with computed unit math', () => {
+    const renderer = renderSection({
+      packagingLevels: [makePackagingLevel({ code: 'CASE', name: 'Case', baseUnitQty: 12 })]
+    });
+    openCreateForm(renderer.root);
+
+    const inputs = renderer.root.findAllByType('input');
+    act(() => {
+      inputs[2].props.onChange({ target: { value: '10' } });
+    });
+
+    expect(flattenText(renderer.toJSON())).toContain('Standard pallet: 10 Case × 12 units = 120 units');
+  });
+
+  it('renders storage preview fallback when pack type or count is missing', () => {
+    const missingPackType = renderSection({
+      packagingLevels: []
+    });
+    openCreateForm(missingPackType.root);
+    expect(flattenText(missingPackType.toJSON())).toContain(
+      'Choose a pack type and count to preview the storage setup.'
+    );
+
+    const invalidCount = renderSection();
+    openCreateForm(invalidCount.root);
+    const inputs = invalidCount.root.findAllByType('input');
+    act(() => {
+      inputs[2].props.onChange({ target: { value: '0' } });
+    });
+    expect(flattenText(invalidCount.toJSON())).toContain(
+      'Choose a pack type and count to preview the storage setup.'
+    );
   });
 
   it('creates with the selected canonical container type code and computed qtyEach', async () => {

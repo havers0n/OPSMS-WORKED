@@ -21,6 +21,51 @@ function getPreferredContainerTypeCode(types: ContainerType[]) {
   return types.find((type) => type.code.toLowerCase() === 'pallet')?.code ?? types[0]?.code ?? '';
 }
 
+function formatPackagingLevelOption(level: ProductPackagingLevel) {
+  const name = level.name.trim();
+  const code = level.code.trim();
+  const unitLabel = level.baseUnitQty === 1 ? 'unit' : 'units';
+
+  if (!name) {
+    return `Unnamed level - ${level.baseUnitQty} ${unitLabel}`;
+  }
+
+  return code
+    ? `${name} - ${level.baseUnitQty} ${unitLabel} (${code.toUpperCase()})`
+    : `${name} - ${level.baseUnitQty} ${unitLabel}`;
+}
+
+function getStoragePresetEmptyState(args: {
+  hasStorableLevels: boolean;
+  hasStorageCapableContainerTypes: boolean;
+}) {
+  if (!args.hasStorableLevels) {
+    return 'No storage setup yet. First create an active packaging level that can be stored.';
+  }
+
+  if (!args.hasStorageCapableContainerTypes) {
+    return 'Storage setup is unavailable because no storage-capable container types are configured.';
+  }
+
+  return 'No storage presets defined yet. Create one to describe how this product is normally stored.';
+}
+
+function getStoragePreview(args: {
+  selectedContainerType: ContainerType | null;
+  selectedLevel: ProductPackagingLevel | null;
+  packCount: string;
+}) {
+  const count = parsePositiveInt(args.packCount);
+  if (!args.selectedContainerType || !args.selectedLevel || count === null) {
+    return 'Choose a pack type and count to preview the storage setup.';
+  }
+
+  const packName = args.selectedLevel.name.trim() || 'Unnamed level';
+  const totalUnits = count * args.selectedLevel.baseUnitQty;
+
+  return `Standard ${args.selectedContainerType.code}: ${count} ${packName} × ${args.selectedLevel.baseUnitQty} units = ${totalUnits} units`;
+}
+
 export function ProductStoragePresetsSection({
   productId,
   storagePresetsQuery,
@@ -50,6 +95,7 @@ export function ProductStoragePresetsSection({
     containerTypesQuery.isLoading ||
     containerTypesQuery.isError ||
     storableContainerTypes.length === 0 ||
+    selectedLevel === null ||
     selectedContainerType === null;
   const containerTypeHelper = containerTypesQuery.isLoading
     ? 'Loading container types...'
@@ -58,6 +104,15 @@ export function ProductStoragePresetsSection({
       : storableContainerTypes.length === 0
         ? 'No storage-capable container types available.'
         : 'Only storage-capable container types are available.';
+  const storageEmptyState = getStoragePresetEmptyState({
+    hasStorableLevels: storableLevels.length > 0,
+    hasStorageCapableContainerTypes: storableContainerTypes.length > 0
+  });
+  const storagePreview = getStoragePreview({
+    selectedContainerType,
+    selectedLevel,
+    packCount
+  });
 
   useEffect(() => {
     if (storableContainerTypes.length === 0) {
@@ -120,7 +175,9 @@ export function ProductStoragePresetsSection({
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Storage Presets</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Standard storage forms, separate from pick UOM authoring.</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            How this product is normally stored in containers.
+          </p>
         </div>
         {!storagePresetsQuery.isLoading && !storagePresetsQuery.isError ? (
           <button
@@ -128,7 +185,7 @@ export function ProductStoragePresetsSection({
             onClick={() => setIsCreating((value) => !value)}
             className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
-            {isCreating ? 'Cancel' : 'Add preset'}
+            {isCreating ? 'Close form' : 'Add preset'}
           </button>
         ) : null}
       </div>
@@ -151,7 +208,7 @@ export function ProductStoragePresetsSection({
       ) : (
         <div className="space-y-3 p-4">
           {(storagePresetsQuery.data ?? []).length === 0 ? (
-            <div className="text-sm text-slate-600">No storage presets defined yet.</div>
+            <div className="text-sm text-slate-600">{storageEmptyState}</div>
           ) : (
             <div className="grid gap-2 md:grid-cols-2">
               {(storagePresetsQuery.data ?? []).map((preset) => {
@@ -229,15 +286,15 @@ export function ProductStoragePresetsSection({
                   </span>
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Packaging level
+                  Pack type
                   <select value={selectedLevel?.id ?? ''} onChange={(event) => setLevelId(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal">
                     {storableLevels.map((level) => (
-                      <option key={level.id} value={level.id}>{level.code} - {level.baseUnitQty} each</option>
+                      <option key={level.id} value={level.id}>{formatPackagingLevelOption(level)}</option>
                     ))}
                   </select>
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Pack count
+                  Number of packs in container
                   <input
                     type="number"
                     min={1}
@@ -248,6 +305,9 @@ export function ProductStoragePresetsSection({
                     className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
                   />
                 </label>
+              </div>
+              <div className="mt-3 rounded-lg border border-cyan-100 bg-white px-3 py-2 text-sm text-slate-700">
+                {storagePreview}
               </div>
               {error ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
               <button

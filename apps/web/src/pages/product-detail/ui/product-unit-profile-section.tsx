@@ -53,17 +53,22 @@ export function ProductUnitProfileSection({
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
-        <h2 className="text-sm font-semibold text-slate-900">Unit Profile</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Unit Profile</h2>
+          <p className="mt-0.5 text-xs text-slate-500">Measurements for one individual unit.</p>
+        </div>
         {unitProfileQuery.isLoading || unitProfileQuery.isError ? null : isUnitProfileEditing ? (
           <div className="flex items-center gap-2">
-            {unitProfileDirty ? <span className="text-xs font-medium text-amber-700">Unsaved changes</span> : null}
+            {unitProfileDirty ? (
+              <span className="text-xs font-medium text-amber-700">Unsaved changes in this section</span>
+            ) : null}
             <button
               type="button"
               onClick={onCancelEdit}
               disabled={upsertUnitProfileMutation.isPending}
               className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Cancel
+              Discard unit changes
             </button>
             <button
               type="button"
@@ -71,7 +76,7 @@ export function ProductUnitProfileSection({
               disabled={upsertUnitProfileMutation.isPending}
               className="rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {upsertUnitProfileMutation.isPending ? 'Saving...' : 'Save'}
+              {upsertUnitProfileMutation.isPending ? 'Saving...' : 'Save unit profile'}
             </button>
           </div>
         ) : (

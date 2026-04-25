@@ -15,6 +15,13 @@ function parsePositiveInt(value: string): number | null {
   return numeric;
 }
 
+function formatOperationalUse(level: ProductPackagingLevel) {
+  if (level.canPick && level.canStore) return 'Picking + Storage';
+  if (level.canPick) return 'Picking';
+  if (level.canStore) return 'Storage';
+  return 'Not used operationally';
+}
+
 type ProductPackagingSectionProps = {
   packagingLevelsQuery: UseQueryResult<ProductPackagingLevel[], Error>;
   replacePackagingLevelsMutation: UseMutationResult<
@@ -59,10 +66,17 @@ export function ProductPackagingSection({
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
-        <h2 className="text-sm font-semibold text-slate-900">Packaging Levels</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Packaging Levels</h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            How individual units are grouped into boxes, cases, or pallets.
+          </p>
+        </div>
         {packagingLevelsQuery.isLoading || packagingLevelsQuery.isError ? null : isPackagingEditing ? (
           <div className="flex items-center gap-2">
-            {packagingDirty ? <span className="text-xs font-medium text-amber-700">Unsaved changes</span> : null}
+            {packagingDirty ? (
+              <span className="text-xs font-medium text-amber-700">Unsaved packaging changes</span>
+            ) : null}
             <button
               type="button"
               onClick={onAddRow}
@@ -77,7 +91,7 @@ export function ProductPackagingSection({
               disabled={replacePackagingLevelsMutation.isPending}
               className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Cancel
+              Discard packaging changes
             </button>
             <button
               type="button"
@@ -85,7 +99,7 @@ export function ProductPackagingSection({
               disabled={replacePackagingLevelsMutation.isPending}
               className="rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {replacePackagingLevelsMutation.isPending ? 'Saving...' : 'Save'}
+              {replacePackagingLevelsMutation.isPending ? 'Saving...' : 'Save packaging levels'}
             </button>
           </div>
         ) : (
@@ -195,7 +209,7 @@ export function ProductPackagingSection({
                         </label>
 
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
-                          Contains (single units)
+                          Units inside this pack
                           <input
                             type="number"
                             min={1}
@@ -307,7 +321,7 @@ export function ProductPackagingSection({
 
                     <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50">
                       <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-slate-700">
-                        Advanced
+                        Optional barcode and pack dimensions
                       </summary>
                       <div className="grid gap-3 border-t border-slate-200 p-3 md:grid-cols-2 lg:grid-cols-5">
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
@@ -412,7 +426,9 @@ export function ProductPackagingSection({
           )}
         </div>
       ) : !packagingLevelsQuery.data || packagingLevelsQuery.data.length === 0 ? (
-        <div className="px-4 py-5 text-sm text-slate-600">Packaging levels not defined yet.</div>
+        <div className="px-4 py-5 text-sm text-slate-600">
+          No packaging levels yet. Start with Single unit, then add Box, Case, or Pallet if this product uses them.
+        </div>
       ) : (
         <div className="overflow-auto">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -422,8 +438,7 @@ export function ProductPackagingSection({
                 <th className="px-4 py-2.5">Name</th>
                 <th className="px-4 py-2.5">Base qty</th>
                 <th className="px-4 py-2.5">Markers</th>
-                <th className="px-4 py-2.5">canPick</th>
-                <th className="px-4 py-2.5">canStore</th>
+                <th className="px-4 py-2.5">Used for</th>
                 <th className="px-4 py-2.5">Barcode</th>
                 <th className="px-4 py-2.5">Dimensions / Weight</th>
                 <th className="px-4 py-2.5">State</th>
@@ -449,8 +464,11 @@ export function ProductPackagingSection({
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-700">{level.canPick ? 'Yes' : 'No'}</td>
-                  <td className="px-4 py-2.5 text-slate-700">{level.canStore ? 'Yes' : 'No'}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                      {formatOperationalUse(level)}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5 font-mono text-xs text-slate-600">{level.barcode ?? 'Not defined'}</td>
                   <td className="px-4 py-2.5 text-xs text-slate-600">
                     {level.packWidthMm && level.packHeightMm && level.packDepthMm
