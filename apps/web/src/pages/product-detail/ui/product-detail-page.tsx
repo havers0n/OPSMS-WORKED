@@ -9,6 +9,7 @@ import { ProductMediaSection } from './product-media-section';
 import { ProductPackagingSection } from './product-packaging-section';
 import { ProductStoragePresetsSection } from './product-storage-presets-section';
 import { ProductUnitProfileSection } from './product-unit-profile-section';
+import { UnitProfileBoard } from './unit-profile-board';
 
 function getUnitProfileSetupStatus(profile: ReturnType<typeof useProductDetailPageModel>['unitProfileQuery']['data']) {
   if (!profile) return { label: 'Missing', detail: 'No profile data' };
@@ -274,6 +275,15 @@ export function ProductDetailPage() {
             unitProfile={model.unitProfileQuery.data}
             packagingLevels={model.packagingLevelsQuery.data}
             storagePresets={model.storagePresetsQuery.data}
+          />
+
+          <UnitProfileBoard
+            product={model.product}
+            unitProfile={model.unitProfileQuery.data}
+            packagingLevels={model.packagingLevelsQuery.data ?? []}
+            storagePresets={model.storagePresetsQuery.data ?? []}
+            onEditUnitProfile={model.beginUnitProfileEdit}
+            onEditPackaging={model.beginPackagingEdit}
           />
 
           <ProductUnitProfileSection
