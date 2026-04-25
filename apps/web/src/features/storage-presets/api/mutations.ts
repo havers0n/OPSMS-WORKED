@@ -20,6 +20,9 @@ export type CreateContainerFromStoragePresetResult = {
   isStandardPack: true;
   placedLocationId: string | null;
   materializationMode: 'shell' | 'materialized';
+  materializationStatus: 'shell' | 'materialized' | 'partial_failed';
+  materializationErrorCode: string | null;
+  materializationErrorMessage: string | null;
   materializedInventoryUnitId: string | null;
   materializedContainerLineId: string | null;
   materializedQuantity: number | null;

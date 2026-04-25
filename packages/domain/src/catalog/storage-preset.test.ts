@@ -63,11 +63,35 @@ describe('storage preset schemas', () => {
         isStandardPack: true,
         placedLocationId: null,
         materializationMode: 'shell',
+        materializationStatus: 'shell',
+        materializationErrorCode: null,
+        materializationErrorMessage: null,
         materializedInventoryUnitId: null,
         materializedContainerLineId: null,
         materializedQuantity: null
       }).isStandardPack
     ).toBe(true);
+  });
+
+  it('parses explicit partial success when materialization fails after shell creation', () => {
+    const parsed = createContainerFromStoragePresetResultSchema.parse({
+      containerId: '11111111-1111-4111-8111-111111111111',
+      systemCode: 'CNT-000001',
+      externalCode: null,
+      containerTypeId: '22222222-2222-4222-8222-222222222222',
+      packagingProfileId: '33333333-3333-4333-8333-333333333333',
+      isStandardPack: true,
+      placedLocationId: '44444444-4444-4444-8444-444444444444',
+      materializationMode: 'shell',
+      materializationStatus: 'partial_failed',
+      materializationErrorCode: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
+      materializationErrorMessage: 'Storage preset must have exactly one materializable level for this phase.',
+      materializedInventoryUnitId: null,
+      materializedContainerLineId: null,
+      materializedQuantity: null
+    });
+
+    expect(parsed.materializationStatus).toBe('partial_failed');
   });
 
   it('defaults create-from-preset materialization to shell mode', () => {

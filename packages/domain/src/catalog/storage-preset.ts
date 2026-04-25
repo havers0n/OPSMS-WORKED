@@ -36,7 +36,7 @@ export const createStoragePresetBodySchema = z.object({
   scopeType: z.enum(['tenant', 'location']).default('tenant'),
   scopeId: z.string().uuid().optional(),
   isDefault: z.boolean().optional().default(false),
-  priority: z.number().int().optional().default(0),
+  priority: z.number().int().optional(),
   status: z.enum(['active', 'inactive']).optional().default('active'),
   levels: z.array(createStoragePresetLevelSchema).min(1)
 });
@@ -60,6 +60,9 @@ export const createContainerFromStoragePresetResultSchema = z.object({
   isStandardPack: z.literal(true),
   placedLocationId: z.string().uuid().nullable(),
   materializationMode: z.enum(['shell', 'materialized']),
+  materializationStatus: z.enum(['shell', 'materialized', 'partial_failed']).optional().default('shell'),
+  materializationErrorCode: z.string().trim().min(1).nullable().optional().default(null),
+  materializationErrorMessage: z.string().trim().min(1).nullable().optional().default(null),
   materializedInventoryUnitId: z.string().uuid().nullable(),
   materializedContainerLineId: z.string().uuid().nullable(),
   materializedQuantity: z.number().positive().nullable()

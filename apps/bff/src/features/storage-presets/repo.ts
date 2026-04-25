@@ -188,6 +188,54 @@ async function loadPreset(supabase: SupabaseClient, presetId: string): Promise<S
   return mapPreset(profile as PackagingProfileRow, (levels ?? []) as PackagingProfileLevelRow[]);
 }
 
+async function resolveNextPriority(supabase: SupabaseClient, args: {
+  tenantId: string;
+  productId: string;
+  scopeType: 'tenant' | 'location';
+  scopeId: string;
+}) {
+  const { data, error } = await supabase
+    .from('packaging_profiles')
+    .select('priority')
+    .eq('tenant_id', args.tenantId)
+    .eq('product_id', args.productId)
+    .eq('scope_type', args.scopeType)
+    .eq('scope_id', args.scopeId)
+    .eq('status', 'active')
+    .order('priority', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  const maxPriority = (data?.[0] as { priority?: number } | undefined)?.priority;
+  return typeof maxPriority === 'number' ? maxPriority + 1 : 0;
+}
+
+function getStoragePresetMaterializationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown } | null)?.message ?? error);
+  if (message.includes('STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED')) {
+    return {
+      code: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
+      message: 'Storage preset must have exactly one materializable level for this phase.'
+    };
+  }
+  if (message.includes('STORAGE_PRESET_CONTAINER_NOT_EMPTY')) {
+    return {
+      code: 'STORAGE_PRESET_CONTAINER_NOT_EMPTY',
+      message: 'Storage preset shell already contains inventory.'
+    };
+  }
+  if (message.includes('STORAGE_PRESET_CONTAINER_MISMATCH')) {
+    return {
+      code: 'STORAGE_PRESET_CONTAINER_MISMATCH',
+      message: 'Storage preset shell does not match the selected preset.'
+    };
+  }
+  return {
+    code: 'STORAGE_PRESET_MATERIALIZATION_FAILED',
+    message: 'Preset contents materialization failed.'
+  };
+}
+
 export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePresetsRepo {
   return {
     async listByProduct(tenantId, productId) {
@@ -222,6 +270,15 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
     },
 
     async create(tenantId, productId, input) {
+      const scopeType = input.scopeType ?? 'tenant';
+      const scopeId = input.scopeId ?? tenantId;
+      const priority = input.priority ?? await resolveNextPriority(supabase, {
+        tenantId,
+        productId,
+        scopeType,
+        scopeId
+      });
+
       const { data: profile, error } = await supabase
         .from('packaging_profiles')
         .insert({
@@ -230,9 +287,9 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
           code: input.code,
           name: input.name,
           profile_type: 'storage',
-          scope_type: input.scopeType,
-          scope_id: input.scopeId ?? tenantId,
-          priority: input.priority,
+          scope_type: scopeType,
+          scope_id: scopeId,
+          priority,
           is_default: input.isDefault,
           status: input.status
         })
@@ -269,14 +326,17 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
       if (input.status !== undefined) profileUpdates.status = input.status;
 
       if (Object.keys(profileUpdates).length > 0) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('packaging_profiles')
           .update(profileUpdates)
           .eq('id', presetId)
           .eq('tenant_id', tenantId)
           .eq('product_id', productId)
-          .eq('profile_type', 'storage');
+          .eq('profile_type', 'storage')
+          .select('id')
+          .maybeSingle();
         if (error) throw error;
+        if (!data) throw new Error('STORAGE_PRESET_NOT_FOUND');
       }
 
       if (input.levels !== undefined) {
@@ -350,7 +410,12 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
       if (error) throw error;
       const shellResult = createContainerFromStoragePresetResultSchema.parse(data);
       if (!args.materializeContents) {
-        return shellResult;
+        return createContainerFromStoragePresetResultSchema.parse({
+          ...shellResult,
+          materializationStatus: 'shell',
+          materializationErrorCode: null,
+          materializationErrorMessage: null
+        });
       }
 
       try {
@@ -370,15 +435,25 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
         return createContainerFromStoragePresetResultSchema.parse({
           ...shellResult,
           materializationMode: 'materialized',
+          materializationStatus: 'materialized',
+          materializationErrorCode: null,
+          materializationErrorMessage: null,
           materializedInventoryUnitId: inventoryUnit?.id ?? null,
           materializedContainerLineId: inventoryUnit?.container_line_id ?? null,
           materializedQuantity: inventoryUnit?.quantity ?? null
         });
       } catch (error) {
-        const detail = error instanceof Error ? error.message : 'Unknown materialization failure.';
-        throw new Error(
-          `STORAGE_PRESET_MATERIALIZATION_FAILED: Container was created/placed, but materialization failed. ${detail}`
-        );
+        const materializationError = getStoragePresetMaterializationError(error);
+        return createContainerFromStoragePresetResultSchema.parse({
+          ...shellResult,
+          materializationMode: 'shell',
+          materializationStatus: 'partial_failed',
+          materializationErrorCode: materializationError.code,
+          materializationErrorMessage: materializationError.message,
+          materializedInventoryUnitId: null,
+          materializedContainerLineId: null,
+          materializedQuantity: null
+        });
       }
     }
   };

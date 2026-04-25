@@ -4922,3 +4922,154 @@ describe('GET /api/locations/:locationId/effective-role', () => {
     await app.close();
   });
 });
+
+describe('storage preset endpoints', () => {
+  it('creates a storage preset and returns it from list', async () => {
+    const createdPreset = {
+      id: '11111111-1111-4111-8111-111111111111',
+      tenantId: authContext.currentTenant.tenantId,
+      productId: productRows[0].id,
+      code: 'PAL-12',
+      name: 'Pallet 12 each',
+      profileType: 'storage' as const,
+      scopeType: 'tenant' as const,
+      scopeId: authContext.currentTenant.tenantId,
+      validFrom: null,
+      validTo: null,
+      priority: 1,
+      isDefault: false,
+      status: 'active' as const,
+      createdAt: '2026-01-02T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      levels: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          profileId: '11111111-1111-4111-8111-111111111111',
+          levelType: 'EA',
+          qtyEach: 12,
+          parentLevelType: null,
+          qtyPerParent: null,
+          containerType: 'pallet',
+          tareWeightG: null,
+          nominalGrossWeightG: null,
+          lengthMm: null,
+          widthMm: null,
+          heightMm: null,
+          casesPerTier: null,
+          tiersPerPallet: null,
+          maxStackHeight: null,
+          maxStackWeight: null,
+          legacyProductPackagingLevelId: '33333333-3333-4333-8333-333333333333',
+          createdAt: '2026-01-02T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z'
+        }
+      ]
+    };
+    const stored = [] as typeof createdPreset[];
+    const service = {
+      listByProduct: vi.fn(async () => stored),
+      create: vi.fn(async () => {
+        stored.push(createdPreset);
+        return createdPreset;
+      }),
+      patch: vi.fn(),
+      setPreferredPolicy: vi.fn(),
+      createContainerFromPreset: vi.fn()
+    };
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getStoragePresetsService: vi.fn(() => service as never)
+    });
+
+    const createResponse = await app.inject({
+      method: 'POST',
+      url: `/api/products/${productRows[0].id}/storage-presets`,
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        code: 'PAL-12',
+        name: 'Pallet 12 each',
+        levels: [
+          {
+            levelType: 'EA',
+            qtyEach: 12,
+            containerType: 'pallet',
+            legacyProductPackagingLevelId: '33333333-3333-4333-8333-333333333333'
+          }
+        ]
+      }
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(service.create).toHaveBeenCalledWith(
+      authContext.currentTenant.tenantId,
+      productRows[0].id,
+      expect.objectContaining({
+        code: 'PAL-12',
+        levels: expect.arrayContaining([expect.objectContaining({ qtyEach: 12 })])
+      })
+    );
+    expect((service.create as any).mock.calls[0]?.[2]).not.toHaveProperty('priority');
+
+    const listResponse = await app.inject({
+      method: 'GET',
+      url: `/api/products/${productRows[0].id}/storage-presets`,
+      headers: { authorization: 'Bearer token' }
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    expect(listResponse.json()).toEqual([createdPreset]);
+
+    await app.close();
+  });
+
+  it('returns explicit partial success when preset materialization leaves a shell', async () => {
+    const service = {
+      listByProduct: vi.fn(),
+      create: vi.fn(),
+      patch: vi.fn(),
+      setPreferredPolicy: vi.fn(),
+      createContainerFromPreset: vi.fn(async () => ({
+        containerId: '11111111-1111-4111-8111-111111111111',
+        systemCode: 'CNT-000123',
+        externalCode: 'AUDIT-MAT',
+        containerTypeId: '22222222-2222-4222-8222-222222222222',
+        packagingProfileId: '33333333-3333-4333-8333-333333333333',
+        isStandardPack: true,
+        placedLocationId: '44444444-4444-4444-8444-444444444444',
+        materializationMode: 'shell',
+        materializationStatus: 'partial_failed',
+        materializationErrorCode: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
+        materializationErrorMessage: 'Storage preset must have exactly one materializable level for this phase.',
+        materializedInventoryUnitId: null,
+        materializedContainerLineId: null,
+        materializedQuantity: null
+      })),
+      activeStoragePresetExists: vi.fn()
+    };
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getStoragePresetsService: vi.fn(() => service as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/storage-presets/33333333-3333-4333-8333-333333333333/create-container',
+      headers: { authorization: 'Bearer token' },
+      payload: {
+        locationId: '44444444-4444-4444-8444-444444444444',
+        externalCode: 'AUDIT-MAT',
+        materializeContents: true
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      containerId: '11111111-1111-4111-8111-111111111111',
+      materializationMode: 'shell',
+      materializationStatus: 'partial_failed',
+      materializationErrorCode: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED'
+    });
+
+    await app.close();
+  });
+});
