@@ -9,6 +9,7 @@ export type PackagingEditorRowSemantics = {
   equivalentLine: string;
   containmentLine: string | null;
   fallbackLine: string | null;
+  quantityHelperLine: string | null;
   cueLabel: string;
   cueIndent: number;
 };
@@ -65,6 +66,7 @@ export function derivePackagingEditorSemantics(rows: PackagingLevelDraft[]): Rec
         equivalentLine: 'Contains exactly 1 single unit',
         containmentLine: null,
         fallbackLine: null,
+        quantityHelperLine: 'Base unit is always 1 single unit.',
         cueLabel: 'Base unit level',
         cueIndent: 0
       };
@@ -91,7 +93,8 @@ export function derivePackagingEditorSemantics(rows: PackagingLevelDraft[]): Rec
           : 'Enter a positive integer to define contained single units',
       containmentLine,
       fallbackLine,
-      cueLabel: (hierarchyEntry?.indent ?? 0) > 0 ? 'Nested pack level' : 'Pack level',
+      quantityHelperLine: null,
+      cueLabel: 'Additional pack type',
       cueIndent: hierarchyEntry?.indent ?? 0
     };
 

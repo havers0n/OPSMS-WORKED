@@ -70,7 +70,7 @@ export function ProductSetupFlowStrip({
         ? { label: 'Not set', detail: 'No presets yet' }
         : { label: 'Ready', detail: `${presetCount} ${presetCount === 1 ? 'preset' : 'presets'}` };
   const steps = [
-    { number: 1, title: 'Unit Profile', status: unitStatus },
+    { number: 1, title: 'Single Unit Profile', status: unitStatus },
     { number: 2, title: 'Packaging Levels', status: packagingStatus },
     { number: 3, title: 'Storage Presets', status: storageStatus }
   ];

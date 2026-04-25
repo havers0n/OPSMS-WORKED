@@ -1,9 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import type { UseQueryResult, UseMutationResult } from '@tanstack/react-query';
 import type { ProductPackagingLevel, ProductUnitProfile } from '@wos/domain';
-import type {
-  PackagingEditorRowSemantics
-} from './packaging-editor-semantics';
+import type { PackagingEditorRowSemantics } from './packaging-editor-semantics';
 import type { ReplaceProductPackagingLevelItem } from '@/entities/product/api/mutations';
 import type { PackagingLevelDraft, PackagingRowField } from './section-editing';
 
@@ -20,6 +18,12 @@ function formatOperationalUse(level: ProductPackagingLevel) {
   if (level.canPick) return 'Picking';
   if (level.canStore) return 'Storage';
   return 'Not used operationally';
+}
+
+function formatBaseUnitSummary(level: Pick<ProductPackagingLevel, 'code' | 'name'>) {
+  const code = level.code.trim() || 'Base';
+  const name = level.name.trim() || 'Base unit';
+  return `${code.toUpperCase()} — ${name} — 1 unit`;
 }
 
 type ProductPackagingSectionProps = {
@@ -64,6 +68,8 @@ export function ProductPackagingSection({
   onUpdateRow
 }: ProductPackagingSectionProps) {
   const packagingLevels = packagingLevelsQuery.data ?? [];
+  const baseLevel = packagingLevels.find((level) => level.isBase) ?? null;
+  const additionalLevels = packagingLevels.filter((level) => !level.isBase);
   const availableAsPackTypeCount = packagingLevels.filter((level) => level.isActive && level.canStore).length;
   const availableAsPackTypeSummary =
     availableAsPackTypeCount > 0
@@ -166,7 +172,22 @@ export function ProductPackagingSection({
               No rows in draft yet. Add a row and ensure the final set has exactly one base row.
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <div className="rounded-lg border border-cyan-100 bg-cyan-50/50 px-3 py-2 text-xs text-cyan-900">
+                <div className="font-semibold">Base unit</div>
+                <div className="mt-1">
+                  This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in Single
+                  Unit Profile.
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Additional pack types
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  These pack types contain multiple single units and can be used for picking or storage.
+                </p>
+              </div>
               {packagingDraft.map((row) => {
                 const rowError = packagingRowErrors[row.draftId] ?? {};
                 const rowSemantics = packagingEditorSemantics[row.draftId];
@@ -178,19 +199,37 @@ export function ProductPackagingSection({
                 return (
                   <div
                     key={row.draftId}
-                    className="rounded-lg border border-slate-200 bg-white p-3"
+                    className={[
+                      'rounded-lg border p-3',
+                      row.isBase ? 'border-cyan-200 bg-cyan-50/40' : 'border-slate-200 bg-white'
+                    ].join(' ')}
                     style={{ marginLeft: `${(rowSemantics?.cueIndent ?? 0) * 10}px` }}
                   >
-                    <div className="mb-2 flex items-center gap-2 border-l-2 border-cyan-200 pl-2">
+                    <div
+                      className={[
+                        'mb-2 flex flex-wrap items-center gap-2 border-l-2 pl-2',
+                        row.isBase ? 'border-cyan-500' : 'border-cyan-200'
+                      ].join(' ')}
+                    >
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                        {rowSemantics?.cueLabel ?? 'Pack level'}
+                        {row.isBase ? 'Base unit' : (rowSemantics?.cueLabel ?? 'Additional pack type')}
                       </span>
                       {row.isBase ? (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                          Base unit level
+                          {(row.code.trim() || 'Base').toUpperCase()} — {row.name.trim() || 'Base unit'} — 1 unit
                         </span>
                       ) : null}
                     </div>
+                    {!row.isBase ? (
+                      <p className="mb-2 text-xs text-slate-500">
+                        These pack types contain multiple single units and can be used for picking or storage.
+                      </p>
+                    ) : (
+                      <p className="mb-2 text-xs text-cyan-900">
+                        This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in
+                        Single Unit Profile.
+                      </p>
+                    )}
                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                       <div className="grid gap-3 md:grid-cols-3">
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
@@ -241,6 +280,11 @@ export function ProductPackagingSection({
                           ) : null}
                           {rowSemantics ? (
                             <span className="text-xs font-normal text-slate-700">{rowSemantics.equivalentLine}</span>
+                          ) : null}
+                          {rowSemantics?.quantityHelperLine ? (
+                            <span className="text-xs font-normal text-slate-600">
+                              {rowSemantics.quantityHelperLine}
+                            </span>
                           ) : null}
                           {rowSemantics?.containmentLine ? (
                             <span className="text-xs font-normal text-slate-600">{rowSemantics.containmentLine}</span>
@@ -443,72 +487,116 @@ export function ProductPackagingSection({
           No packaging levels yet. Start with Single unit, then add Box, Case, or Pallet if this product uses them.
         </div>
       ) : (
-        <div className="overflow-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2.5">Code</th>
-                <th className="px-4 py-2.5">Name</th>
-                <th className="px-4 py-2.5">Base qty</th>
-                <th className="px-4 py-2.5">Markers</th>
-                <th className="px-4 py-2.5">Used for</th>
-                <th className="px-4 py-2.5">Barcode</th>
-                <th className="px-4 py-2.5">Dimensions / Weight</th>
-                <th className="px-4 py-2.5">State</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {packagingLevels.map((level) => (
-                <tr key={level.id}>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
-                  <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
-                  <td className="px-4 py-2.5 text-slate-700">{level.baseUnitQty}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      {level.isBase && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                          Base
-                        </span>
-                      )}
-                      {level.isDefaultPickUom && (
-                        <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
-                          Default pick
-                        </span>
-                      )}
-                      {level.isActive && level.canStore ? (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Available as Pack type
-                        </span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                      {formatOperationalUse(level)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600">{level.barcode ?? 'Not defined'}</td>
-                  <td className="px-4 py-2.5 text-xs text-slate-600">
-                    {level.packWidthMm && level.packHeightMm && level.packDepthMm
-                      ? `${level.packWidthMm}x${level.packHeightMm}x${level.packDepthMm} mm`
-                      : 'Dims: not defined'}
-                    <br />
-                    {level.packWeightG ? `Weight: ${level.packWeightG} g` : 'Weight: not defined'}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className={[
-                        'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                        level.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
-                      ].join(' ')}
-                    >
-                      {level.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-4 p-4">
+          {baseLevel ? (
+            <div className="rounded-lg border border-cyan-200 bg-cyan-50/50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-cyan-900">Base unit</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">{formatBaseUnitSummary(baseLevel)}</div>
+              <p className="mt-1 text-xs text-cyan-900">
+                This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in Single Unit
+                Profile.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {baseLevel.isDefaultPickUom ? (
+                  <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                    Default pick
+                  </span>
+                ) : null}
+                {baseLevel.isActive && baseLevel.canStore ? (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                    Available as Pack type
+                  </span>
+                ) : null}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                  {formatOperationalUse(baseLevel)}
+                </span>
+                <span
+                  className={[
+                    'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                    baseLevel.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                  ].join(' ')}
+                >
+                  {baseLevel.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+          ) : null}
+          {additionalLevels.length > 0 ? (
+            <div>
+              <div className="mb-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Additional pack types
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  These pack types contain multiple single units and can be used for picking or storage.
+                </p>
+              </div>
+              <div className="overflow-auto rounded-lg border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5">Code</th>
+                      <th className="px-4 py-2.5">Name</th>
+                      <th className="px-4 py-2.5">Base qty</th>
+                      <th className="px-4 py-2.5">Markers</th>
+                      <th className="px-4 py-2.5">Used for</th>
+                      <th className="px-4 py-2.5">Barcode</th>
+                      <th className="px-4 py-2.5">Dimensions / Weight</th>
+                      <th className="px-4 py-2.5">State</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {additionalLevels.map((level) => (
+                      <tr key={level.id}>
+                        <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
+                        <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{level.baseUnitQty}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex flex-wrap gap-1">
+                            {level.isDefaultPickUom && (
+                              <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                                Default pick
+                              </span>
+                            )}
+                            {level.isActive && level.canStore ? (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                Available as Pack type
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                            {formatOperationalUse(level)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                          {level.barcode ?? 'Not defined'}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-slate-600">
+                          {level.packWidthMm && level.packHeightMm && level.packDepthMm
+                            ? `${level.packWidthMm}x${level.packHeightMm}x${level.packDepthMm} mm`
+                            : 'Dims: not defined'}
+                          <br />
+                          {level.packWeightG ? `Weight: ${level.packWeightG} g` : 'Weight: not defined'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={[
+                              'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                              level.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                            ].join(' ')}
+                          >
+                            {level.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

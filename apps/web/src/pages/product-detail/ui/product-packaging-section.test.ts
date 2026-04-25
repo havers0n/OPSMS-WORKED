@@ -102,6 +102,23 @@ function renderEditingSection() {
         isPackagingEditing: true,
         packagingDraft: [
           {
+            draftId: 'draft-base',
+            id: null,
+            code: 'EA',
+            name: 'Each',
+            baseUnitQty: '1',
+            isBase: true,
+            canPick: true,
+            canStore: true,
+            isDefaultPickUom: true,
+            barcode: '',
+            packWeightG: '',
+            packWidthMm: '',
+            packHeightMm: '',
+            packDepthMm: '',
+            isActive: true
+          },
+          {
             draftId: 'draft-case',
             id: null,
             code: 'case',
@@ -123,7 +140,30 @@ function renderEditingSection() {
         packagingSectionErrors: [],
         packagingSaveError: null,
         packagingDirty: false,
-        packagingEditorSemantics: {},
+        packagingEditorSemantics: {
+          'draft-base': {
+            draftId: 'draft-base',
+            quantityInputValue: '1',
+            quantityInputDisabled: true,
+            equivalentLine: 'Contains exactly 1 single unit',
+            containmentLine: null,
+            fallbackLine: null,
+            quantityHelperLine: 'Base unit is always 1 single unit.',
+            cueLabel: 'Base unit level',
+            cueIndent: 0
+          },
+          'draft-case': {
+            draftId: 'draft-case',
+            quantityInputValue: '12',
+            quantityInputDisabled: false,
+            equivalentLine: 'Equivalent to 12 single units',
+            containmentLine: null,
+            fallbackLine: null,
+            quantityHelperLine: null,
+            cueLabel: 'Additional pack type',
+            cueIndent: 0
+          }
+        },
         onBeginEdit: vi.fn(),
         onCancelEdit: vi.fn(),
         onSave: vi.fn(),
@@ -190,12 +230,33 @@ describe('ProductPackagingSection', () => {
 
   it('renders compact read-view status badges', () => {
     const renderer = renderSection([
-      makePackagingLevel({ isBase: true, isDefaultPickUom: true, isActive: true }),
-      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222223', code: 'old', isActive: false })
+      makePackagingLevel({
+        code: 'EA',
+        name: 'Each',
+        baseUnitQty: 1,
+        isBase: true,
+        isDefaultPickUom: true,
+        isActive: true
+      }),
+      makePackagingLevel({
+        id: '22222222-2222-4222-8222-222222222223',
+        code: 'old',
+        isDefaultPickUom: true,
+        isActive: false
+      }),
+      makePackagingLevel({
+        id: '22222222-2222-4222-8222-222222222224',
+        code: 'active',
+        isActive: true
+      })
     ]);
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Base');
+    expect(text).toContain('Base unit');
+    expect(text).toMatch(/EA\s+—\s+Each\s+—\s+1 unit/);
+    expect(text).toContain(
+      'This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in Single Unit Profile.'
+    );
     expect(text).toContain('Default pick');
     expect(text).toContain('Active');
     expect(text).toContain('Inactive');
@@ -217,6 +278,12 @@ describe('ProductPackagingSection', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('Base unit');
+    expect(text).toMatch(/EA\s+—\s+Each\s+—\s+1 unit/);
+    expect(text).toContain('Base unit is always 1 single unit.');
+    expect(text).toContain('Additional pack type');
+    expect(text).toContain(
+      'These pack types contain multiple single units and can be used for picking or storage.'
+    );
     expect(text).toContain('Default for picking');
     expect(text).toContain('Can be picked');
     expect(text).toContain('Can be stored');

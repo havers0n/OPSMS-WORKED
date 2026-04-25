@@ -22,6 +22,7 @@ describe('derivePackagingEditorSemantics', () => {
     expect(semantics.quantityInputDisabled).toBe(true);
     expect(semantics.quantityInputValue).toBe('1');
     expect(semantics.equivalentLine).toBe('Contains exactly 1 single unit');
+    expect(semantics.quantityHelperLine).toBe('Base unit is always 1 single unit.');
     expect(semantics.cueLabel).toBe('Base unit level');
   });
 
@@ -35,6 +36,7 @@ describe('derivePackagingEditorSemantics', () => {
     expect(result[carton.draftId]?.equivalentLine).toBe('Equivalent to 24 single units');
     expect(result[carton.draftId]?.containmentLine).toBe('Contains 4 x Inner box');
     expect(result[carton.draftId]?.fallbackLine).toBeNull();
+    expect(result[carton.draftId]?.cueLabel).toBe('Additional pack type');
   });
 
   it('shows fallback message when no clean nested relation can be inferred', () => {

@@ -96,6 +96,7 @@ describe('ProductSetupFlowStrip', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('Product setup flow');
+    expect(text).toContain('Single Unit Profile');
     expect(text).toContain(
       'Define the unit, create pack types from it, then use storable pack types in storage presets.'
     );

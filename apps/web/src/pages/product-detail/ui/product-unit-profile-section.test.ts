@@ -90,9 +90,9 @@ describe('ProductUnitProfileSection', () => {
     const renderer = renderSection({ data: null });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('1. Unit Profile');
+    expect(text).toContain('1. Single Unit Profile');
     expect(text).toContain(
-      'Measurements for one individual unit. Used by packaging quantities and storage unit totals.'
+      'Describes one individual unit of this product. Packaging levels are built from this unit.'
     );
   });
 

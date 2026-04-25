@@ -119,10 +119,7 @@ export function ProductStoragePresetsSection({
     selectedLevel,
     packCount
   });
-  const packTypeHelper =
-    storableLevels.length === 0
-      ? 'Pack type options come from active packaging levels marked "Can be stored".'
-      : 'Only active packaging levels marked "Can be stored" appear here.';
+  const packTypeHelper = 'Only active packaging levels marked "Can be stored" appear here.';
 
   useEffect(() => {
     if (storableContainerTypes.length === 0) {
@@ -309,7 +306,7 @@ export function ProductStoragePresetsSection({
                   </span>
                 </label>
                 <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Pack type
+                  Pack type from Packaging Levels
                   <select
                     value={selectedLevel?.id ?? ''}
                     onChange={(event) => setLevelId(event.target.value)}

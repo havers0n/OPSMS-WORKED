@@ -170,6 +170,10 @@ describe('ProductStoragePresetsSection', () => {
     const packTypeSelect = renderer.root.findAllByType('select').at(-1)!;
     const options = packTypeSelect.findAllByType('option');
     expect(options.at(-1)!.children.join('')).toBe('Case - 12 units (CASE)');
+    expect(flattenText(renderer.toJSON())).toContain('Pack type from Packaging Levels');
+    expect(flattenText(renderer.toJSON())).toContain(
+      'Only active packaging levels marked "Can be stored" appear here.'
+    );
   });
 
   it('uses unnamed packaging level fallback in the pack type dropdown label', () => {
@@ -254,7 +258,10 @@ describe('ProductStoragePresetsSection', () => {
     expect(flattenText(missingPackType.toJSON())).toContain('No storable pack types available.');
     expect(flattenText(missingPackType.toJSON())).toContain('Go to Packaging Levels');
     expect(flattenText(missingPackType.toJSON())).toContain(
-      'Pack type options come from active packaging levels marked "Can be stored".'
+      'Pack type from Packaging Levels'
+    );
+    expect(flattenText(missingPackType.toJSON())).toContain(
+      'Only active packaging levels marked "Can be stored" appear here.'
     );
     expect(flattenText(missingPackType.toJSON())).toContain(
       'Choose a pack type, number of packs, and container type to preview the storage formula.'
