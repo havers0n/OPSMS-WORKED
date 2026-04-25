@@ -511,3 +511,391 @@ export async function seedAdditionalFloorDraft(siteId: string, args: { floorCode
 
   return { floor, layoutVersionId };
 }
+
+const storagePresetPartialPrefix = 'E2E_SP_PARTIAL_';
+const storagePresetPartialFixture = {
+  productSource: 'e2e',
+  externalProductId: `${storagePresetPartialPrefix}PRODUCT`,
+  productSku: `${storagePresetPartialPrefix}SKU`,
+  productName: `${storagePresetPartialPrefix}Product`,
+  packagingLevelCode: `${storagePresetPartialPrefix}CASE`,
+  presetCode: `${storagePresetPartialPrefix}PRESET`,
+  presetName: `${storagePresetPartialPrefix}Preset`,
+  presetLevelType: `${storagePresetPartialPrefix}PALLET`,
+  siteCode: `${storagePresetPartialPrefix}SITE`,
+  siteName: `${storagePresetPartialPrefix}Site`,
+  floorCode: `${storagePresetPartialPrefix}FLOOR`,
+  floorName: `${storagePresetPartialPrefix}Floor`,
+  rackDisplayCode: '31',
+  externalContainerCode: `${storagePresetPartialPrefix}SHELL`,
+  expectedErrorCode: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
+  expectedErrorMessage: 'Storage preset must have exactly one materializable level for this phase.'
+} as const;
+
+type StoragePresetPartialPublishedLocation = {
+  cellId: string;
+  cellAddress: string;
+  locationId: string;
+  locationCode: string;
+};
+
+export type StoragePresetPartialFailedSeed = {
+  prefix: typeof storagePresetPartialPrefix;
+  tenantId: string;
+  product: {
+    id: string;
+    sku: string;
+    name: string;
+    externalProductId: string;
+  };
+  packagingLevel: {
+    id: string;
+    code: string;
+    baseUnitQty: number;
+    canStore: boolean;
+    isActive: boolean;
+  };
+  preset: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  presetLevel: {
+    id: string;
+    levelType: string;
+    qtyEach: number;
+    containerType: string;
+    legacyProductPackagingLevelId: string;
+  };
+  site: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  floor: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  layoutVersionId: string;
+  publishedLocation: StoragePresetPartialPublishedLocation;
+  externalContainerCode: string;
+  expectedErrorCode: string;
+  expectedErrorMessage: string;
+};
+
+async function deleteFixtureContainers() {
+  const { data: containers, error } = await adminClient
+    .from('containers')
+    .select('id')
+    .ilike('external_code', `${storagePresetPartialPrefix}%`);
+
+  if (error) {
+    throw error;
+  }
+
+  const containerIds = ((containers ?? []) as Array<{ id: string }>).map((container) => container.id);
+  if (containerIds.length === 0) return;
+
+  await deleteRowsIfTableExists('inventory_unit', 'container_id', containerIds);
+  await deleteRowsIfTableExists('container_lines', 'container_id', containerIds);
+  await deleteRowsIfTableExists('container_placements', 'container_id', containerIds);
+  await deleteRowsIfTableExists('movement_events', 'container_id', containerIds);
+  await deleteRowsIfTableExists('stock_movements', 'source_container_id', containerIds);
+  await deleteRowsIfTableExists('stock_movements', 'target_container_id', containerIds);
+
+  const { error: updateError } = await adminClient
+    .from('containers')
+    .update({ current_location_id: null })
+    .in('id', containerIds);
+
+  if (updateError && !isMissingColumnError(updateError)) {
+    throw updateError;
+  }
+
+  const { error: deleteError } = await adminClient
+    .from('containers')
+    .delete()
+    .in('id', containerIds);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+}
+
+function isMissingTableError(error: { code?: string; message?: string }) {
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    String(error.message ?? '').includes('does not exist') ||
+    String(error.message ?? '').includes('Could not find the table')
+  );
+}
+
+function isMissingColumnError(error: { code?: string; message?: string }) {
+  return error.code === '42703' || String(error.message ?? '').includes('column');
+}
+
+async function deleteRowsIfTableExists(table: string, column: string, values: string[]) {
+  const { error } = await adminClient
+    .from(table)
+    .delete()
+    .in(column, values);
+
+  if (error && !isMissingTableError(error) && !isMissingColumnError(error)) {
+    throw error;
+  }
+}
+
+export async function cleanupStoragePresetPartialFailedFixture() {
+  await deleteFixtureContainers();
+
+  const { error: sitesError } = await adminClient
+    .from('sites')
+    .delete()
+    .like('code', `${storagePresetPartialPrefix}%`);
+
+  if (sitesError) {
+    throw sitesError;
+  }
+
+  const { data: products, error: productLookupError } = await adminClient
+    .from('products')
+    .select('id')
+    .eq('source', storagePresetPartialFixture.productSource)
+    .like('external_product_id', `${storagePresetPartialPrefix}%`);
+
+  if (productLookupError) {
+    throw productLookupError;
+  }
+
+  const productIds = ((products ?? []) as Array<{ id: string }>).map((product) => product.id);
+  if (productIds.length > 0) {
+    const { error: profilesError } = await adminClient
+      .from('packaging_profiles')
+      .delete()
+      .in('product_id', productIds);
+
+    if (profilesError) {
+      throw profilesError;
+    }
+
+    const { error: levelsError } = await adminClient
+      .from('product_packaging_levels')
+      .delete()
+      .in('product_id', productIds);
+
+    if (levelsError) {
+      throw levelsError;
+    }
+
+    const { error: productsError } = await adminClient
+      .from('products')
+      .delete()
+      .in('id', productIds);
+
+    if (productsError) {
+      throw productsError;
+    }
+  }
+}
+
+async function publishLayoutVersion(layoutVersionId: string) {
+  const { data, error } = await adminClient.rpc('publish_layout_version', {
+    layout_version_uuid: layoutVersionId,
+    actor_uuid: null
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function selectFirstPublishedLocation(layoutVersionId: string): Promise<StoragePresetPartialPublishedLocation> {
+  const { data: cells, error: cellsError } = await adminClient
+    .from('cells')
+    .select('id,address,address_sort_key')
+    .eq('layout_version_id', layoutVersionId)
+    .order('address_sort_key', { ascending: true })
+    .order('address', { ascending: true })
+    .limit(1);
+
+  if (cellsError) {
+    throw cellsError;
+  }
+
+  const cell = (cells?.[0] ?? null) as { id: string; address: string } | null;
+  if (!cell) {
+    throw new Error('Storage preset partial fixture did not publish any cells.');
+  }
+
+  const { data: locations, error: locationsError } = await adminClient
+    .from('locations')
+    .select('id,code,geometry_slot_id')
+    .eq('geometry_slot_id', cell.id)
+    .order('code', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(1);
+
+  if (locationsError) {
+    throw locationsError;
+  }
+
+  const location = (locations?.[0] ?? null) as { id: string; code: string } | null;
+  if (!location) {
+    throw new Error(`Storage preset partial fixture did not create a location for cell ${cell.id}.`);
+  }
+
+  return {
+    cellId: cell.id,
+    cellAddress: cell.address,
+    locationId: location.id,
+    locationCode: location.code
+  };
+}
+
+export async function seedStoragePresetPartialFailedScenario(): Promise<StoragePresetPartialFailedSeed> {
+  await cleanupStoragePresetPartialFailedFixture();
+
+  const tenantId = await ensureDefaultTenantId();
+
+  const { data: product, error: productError } = await adminClient
+    .from('products')
+    .insert({
+      source: storagePresetPartialFixture.productSource,
+      external_product_id: storagePresetPartialFixture.externalProductId,
+      sku: storagePresetPartialFixture.productSku,
+      name: storagePresetPartialFixture.productName,
+      is_active: true
+    })
+    .select('id,sku,name,external_product_id')
+    .single();
+
+  if (productError) {
+    throw productError;
+  }
+
+  const { data: packagingLevel, error: packagingLevelError } = await adminClient
+    .from('product_packaging_levels')
+    .insert({
+      product_id: product.id,
+      code: storagePresetPartialFixture.packagingLevelCode,
+      name: `${storagePresetPartialFixture.productName} Case`,
+      base_unit_qty: 12,
+      is_base: false,
+      can_pick: true,
+      can_store: true,
+      is_default_pick_uom: false,
+      sort_order: 10,
+      is_active: true
+    })
+    .select('id,code,base_unit_qty,can_store,is_active')
+    .single();
+
+  if (packagingLevelError) {
+    throw packagingLevelError;
+  }
+
+  const { data: preset, error: presetError } = await adminClient
+    .from('packaging_profiles')
+    .insert({
+      tenant_id: tenantId,
+      product_id: product.id,
+      code: storagePresetPartialFixture.presetCode,
+      name: storagePresetPartialFixture.presetName,
+      profile_type: 'storage',
+      scope_type: 'tenant',
+      scope_id: tenantId,
+      priority: 0,
+      is_default: false,
+      status: 'active'
+    })
+    .select('id,code,name')
+    .single();
+
+  if (presetError) {
+    throw presetError;
+  }
+
+  const { data: presetLevel, error: presetLevelError } = await adminClient
+    .from('packaging_profile_levels')
+    .insert({
+      profile_id: preset.id,
+      level_type: storagePresetPartialFixture.presetLevelType,
+      qty_each: 24,
+      parent_level_type: null,
+      qty_per_parent: null,
+      container_type: 'pallet',
+      legacy_product_packaging_level_id: packagingLevel.id
+    })
+    .select('id,level_type,qty_each,container_type,legacy_product_packaging_level_id')
+    .single();
+
+  if (presetLevelError) {
+    throw presetLevelError;
+  }
+
+  const { site, floor } = await seedDraftScenario({
+    siteCode: storagePresetPartialFixture.siteCode,
+    siteName: storagePresetPartialFixture.siteName,
+    floorCode: storagePresetPartialFixture.floorCode,
+    floorName: storagePresetPartialFixture.floorName,
+    rackDisplayCode: storagePresetPartialFixture.rackDisplayCode
+  });
+
+  const { data: draft, error: draftError } = await adminClient
+    .from('layout_versions')
+    .select('id')
+    .eq('floor_id', floor.id)
+    .eq('state', 'draft')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (draftError) {
+    throw draftError;
+  }
+
+  const layoutVersionId = (draft as { id: string }).id;
+  await publishLayoutVersion(layoutVersionId);
+  const publishedLocation = await selectFirstPublishedLocation(layoutVersionId);
+
+  return {
+    prefix: storagePresetPartialPrefix,
+    tenantId,
+    product: {
+      id: product.id,
+      sku: product.sku,
+      name: product.name,
+      externalProductId: product.external_product_id
+    },
+    packagingLevel: {
+      id: packagingLevel.id,
+      code: packagingLevel.code,
+      baseUnitQty: packagingLevel.base_unit_qty,
+      canStore: packagingLevel.can_store,
+      isActive: packagingLevel.is_active
+    },
+    preset: {
+      id: preset.id,
+      code: preset.code,
+      name: preset.name
+    },
+    presetLevel: {
+      id: presetLevel.id,
+      levelType: presetLevel.level_type,
+      qtyEach: presetLevel.qty_each,
+      containerType: presetLevel.container_type,
+      legacyProductPackagingLevelId: presetLevel.legacy_product_packaging_level_id
+    },
+    site,
+    floor,
+    layoutVersionId,
+    publishedLocation,
+    externalContainerCode: storagePresetPartialFixture.externalContainerCode,
+    expectedErrorCode: storagePresetPartialFixture.expectedErrorCode,
+    expectedErrorMessage: storagePresetPartialFixture.expectedErrorMessage
+  };
+}
