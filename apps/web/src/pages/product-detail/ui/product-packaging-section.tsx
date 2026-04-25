@@ -259,7 +259,7 @@ export function ProductPackagingSection({
                               })
                             }
                           />
-                          Base level
+                          Base unit
                         </label>
                         <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           <input
@@ -271,7 +271,7 @@ export function ProductPackagingSection({
                               })
                             }
                           />
-                          Default pick level
+                          Default for picking
                         </label>
                         <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           <input
@@ -283,7 +283,7 @@ export function ProductPackagingSection({
                               })
                             }
                           />
-                          canPick
+                          Can be picked
                         </label>
                         <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           <input
@@ -295,7 +295,7 @@ export function ProductPackagingSection({
                               })
                             }
                           />
-                          canStore
+                          Can be stored
                         </label>
                         <label className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-700">
                           <input
@@ -484,7 +484,7 @@ export function ProductPackagingSection({
                         level.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
                       ].join(' ')}
                     >
-                      {level.isActive ? 'active' : 'inactive'}
+                      {level.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                 </tr>

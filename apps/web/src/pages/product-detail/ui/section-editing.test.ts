@@ -66,6 +66,48 @@ describe('validatePackagingLevelsDraft', () => {
     expect(result.sectionErrors).toEqual([]);
   });
 
+  it('preserves packaging payload field names and shape', () => {
+    const result = validatePackagingLevelsDraft([
+      { ...createBaseRow(), canPick: true, canStore: false, isDefaultPickUom: true },
+      { ...createCaseRow(), canPick: false, canStore: true, isDefaultPickUom: false }
+    ]);
+
+    expect(result.payload).toEqual([
+      {
+        code: 'EA',
+        name: 'Each',
+        baseUnitQty: 1,
+        isBase: true,
+        canPick: true,
+        canStore: false,
+        isDefaultPickUom: true,
+        barcode: null,
+        packWeightG: null,
+        packWidthMm: null,
+        packHeightMm: null,
+        packDepthMm: null,
+        sortOrder: 0,
+        isActive: true
+      },
+      {
+        code: 'CTN',
+        name: 'Carton',
+        baseUnitQty: 12,
+        isBase: false,
+        canPick: false,
+        canStore: true,
+        isDefaultPickUom: false,
+        barcode: null,
+        packWeightG: null,
+        packWidthMm: null,
+        packHeightMm: null,
+        packDepthMm: null,
+        sortOrder: 1,
+        isActive: true
+      }
+    ]);
+  });
+
   it('requires exactly one base row', () => {
     const noBase = validatePackagingLevelsDraft([{ ...createCaseRow(), draftId: 'row-1' }]);
     expect(noBase.payload).toBeNull();

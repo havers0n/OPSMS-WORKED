@@ -91,6 +91,51 @@ function renderSection(packagingLevels: ProductPackagingLevel[]) {
   return renderer;
 }
 
+function renderEditingSection() {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      React.createElement(ProductPackagingSection, {
+        packagingLevelsQuery: queryResult({ data: [makePackagingLevel()] }),
+        replacePackagingLevelsMutation: mutationResult(),
+        unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: null }),
+        isPackagingEditing: true,
+        packagingDraft: [
+          {
+            draftId: 'draft-case',
+            id: null,
+            code: 'case',
+            name: 'Case',
+            baseUnitQty: '12',
+            isBase: false,
+            canPick: true,
+            canStore: true,
+            isDefaultPickUom: false,
+            barcode: '',
+            packWeightG: '',
+            packWidthMm: '',
+            packHeightMm: '',
+            packDepthMm: '',
+            isActive: true
+          }
+        ],
+        packagingRowErrors: {},
+        packagingSectionErrors: [],
+        packagingSaveError: null,
+        packagingDirty: false,
+        packagingEditorSemantics: {},
+        onBeginEdit: vi.fn(),
+        onCancelEdit: vi.fn(),
+        onSave: vi.fn(),
+        onAddRow: vi.fn(),
+        onRemoveRow: vi.fn(),
+        onUpdateRow: vi.fn()
+      })
+    );
+  });
+  return renderer;
+}
+
 function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {
   if (!node) return '';
   if (Array.isArray(node)) return node.map(flattenText).join(' ');
@@ -112,5 +157,43 @@ describe('ProductPackagingSection', () => {
     expect(flattenText(renderer.toJSON())).toContain(
       'No packaging levels yet. Start with Single unit, then add Box, Case, or Pallet if this product uses them.'
     );
+  });
+
+  it('renders operational usage badges for all pick and store combinations', () => {
+    const renderer = renderSection([
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222221', code: 'both', canPick: true, canStore: true }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222222', code: 'pick', canPick: true, canStore: false }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222223', code: 'store', canPick: false, canStore: true }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222224', code: 'none', canPick: false, canStore: false })
+    ]);
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Picking + Storage');
+    expect(text).toContain('Picking');
+    expect(text).toContain('Storage');
+    expect(text).toContain('Not used operationally');
+  });
+
+  it('renders compact read-view status badges', () => {
+    const renderer = renderSection([
+      makePackagingLevel({ isBase: true, isDefaultPickUom: true, isActive: true }),
+      makePackagingLevel({ id: '22222222-2222-4222-8222-222222222223', code: 'old', isActive: false })
+    ]);
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Base');
+    expect(text).toContain('Default pick');
+    expect(text).toContain('Active');
+    expect(text).toContain('Inactive');
+  });
+
+  it('renders human-readable edit checkbox labels', () => {
+    const renderer = renderEditingSection();
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Base unit');
+    expect(text).toContain('Default for picking');
+    expect(text).toContain('Can be picked');
+    expect(text).toContain('Can be stored');
   });
 });

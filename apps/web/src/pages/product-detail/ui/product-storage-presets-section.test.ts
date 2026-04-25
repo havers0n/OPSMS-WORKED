@@ -154,6 +154,13 @@ describe('ProductStoragePresetsSection', () => {
     expect(renderer.root.findAllByProps({ value: 'random-invalid-container-type' })).toHaveLength(0);
   });
 
+  it('labels the create-mode close control as Close form', () => {
+    const renderer = renderSection();
+    openCreateForm(renderer.root);
+
+    expect(flattenText(renderer.toJSON())).toContain('Close form');
+  });
+
   it('uses packaging level name, quantity, and code in the pack type dropdown label', () => {
     const renderer = renderSection({
       packagingLevels: [makePackagingLevel({ code: 'CASE', name: 'Case', baseUnitQty: 12 })]

@@ -184,7 +184,10 @@ export function ProductUnitProfileSection({
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fallback Classes</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Estimated size / weight class
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">Used only when exact measurements are missing.</p>
               <div className="mt-3 grid gap-2">
                 <label className="grid gap-1 text-sm">
                   <span className="text-slate-500">Weight class</span>
@@ -258,7 +261,10 @@ export function ProductUnitProfileSection({
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fallback Classes</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Estimated size / weight class
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">Used only when exact measurements are missing.</p>
             <dl className="mt-3 grid gap-2 text-sm">
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-slate-500">Weight class</dt>

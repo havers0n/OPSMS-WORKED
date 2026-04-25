@@ -41,35 +41,64 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
   return node.children?.map((child) => (typeof child === 'string' ? child : flattenText(child))).join(' ') ?? '';
 }
 
+function makeProfile(): ProductUnitProfile {
+  return {
+    productId: '11111111-1111-4111-8111-111111111111',
+    unitWeightG: null,
+    unitWidthMm: null,
+    unitHeightMm: null,
+    unitDepthMm: null,
+    weightClass: 'medium',
+    sizeClass: 'small',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z'
+  };
+}
+
+function renderSection(args: { data: ProductUnitProfile | null; isEditing?: boolean }) {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      React.createElement(ProductUnitProfileSection, {
+        unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: args.data }),
+        upsertUnitProfileMutation: mutationResult(),
+        isUnitProfileEditing: args.isEditing ?? false,
+        unitProfileDraft: {
+          unitWeightG: '',
+          unitWidthMm: '',
+          unitHeightMm: '',
+          unitDepthMm: '',
+          weightClass: '',
+          sizeClass: ''
+        },
+        unitProfileFieldErrors: {},
+        unitProfileSaveError: null,
+        unitProfileDirty: false,
+        onBeginEdit: vi.fn(),
+        onCancelEdit: vi.fn(),
+        onSave: vi.fn(),
+        onNumericFieldChange: vi.fn(),
+        onClassFieldChange: vi.fn()
+      })
+    );
+  });
+  return renderer;
+}
+
 describe('ProductUnitProfileSection', () => {
   it('renders the section subtitle', () => {
-    let renderer!: TestRenderer.ReactTestRenderer;
-    act(() => {
-      renderer = TestRenderer.create(
-        React.createElement(ProductUnitProfileSection, {
-          unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: null }),
-          upsertUnitProfileMutation: mutationResult(),
-          isUnitProfileEditing: false,
-          unitProfileDraft: {
-            unitWeightG: '',
-            unitWidthMm: '',
-            unitHeightMm: '',
-            unitDepthMm: '',
-            weightClass: '',
-            sizeClass: ''
-          },
-          unitProfileFieldErrors: {},
-          unitProfileSaveError: null,
-          unitProfileDirty: false,
-          onBeginEdit: vi.fn(),
-          onCancelEdit: vi.fn(),
-          onSave: vi.fn(),
-          onNumericFieldChange: vi.fn(),
-          onClassFieldChange: vi.fn()
-        })
-      );
-    });
+    const renderer = renderSection({ data: null });
 
     expect(flattenText(renderer.toJSON())).toContain('Measurements for one individual unit.');
+  });
+
+  it('renders fallback class copy in read and edit modes', () => {
+    const read = renderSection({ data: makeProfile() });
+    const edit = renderSection({ data: makeProfile(), isEditing: true });
+
+    expect(flattenText(read.toJSON())).toContain('Estimated size / weight class');
+    expect(flattenText(read.toJSON())).toContain('Used only when exact measurements are missing.');
+    expect(flattenText(edit.toJSON())).toContain('Estimated size / weight class');
+    expect(flattenText(edit.toJSON())).toContain('Used only when exact measurements are missing.');
   });
 });
