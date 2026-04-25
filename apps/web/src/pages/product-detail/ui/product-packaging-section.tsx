@@ -26,6 +26,30 @@ function formatBaseUnitSummary(level: Pick<ProductPackagingLevel, 'code' | 'name
   return `${code.toUpperCase()} — ${name} — 1 unit`;
 }
 
+function formatInheritedMeasurementsSummary(profile: ProductUnitProfile | null | undefined) {
+  if (!profile) {
+    return 'Add Single Unit Profile measurements to estimate base unit dimensions.';
+  }
+
+  const hasWeight = profile.unitWeightG !== null;
+  const hasWidth = profile.unitWidthMm !== null;
+  const hasHeight = profile.unitHeightMm !== null;
+  const hasDepth = profile.unitDepthMm !== null;
+  const hasDimensions = hasWidth && hasHeight && hasDepth;
+
+  if (hasWeight && hasDimensions) {
+    return `Inherited from Single Unit Profile: ${profile.unitWeightG} g · ${profile.unitWidthMm} × ${profile.unitHeightMm} × ${profile.unitDepthMm} mm`;
+  }
+
+  if (hasWeight || hasWidth || hasHeight || hasDepth) {
+    return `Inherited from Single Unit Profile: ${hasWeight ? 'weight defined' : 'weight missing'}, ${
+      hasDimensions ? 'dimensions defined' : 'dimensions incomplete'
+    }`;
+  }
+
+  return 'Add Single Unit Profile measurements to estimate base unit dimensions.';
+}
+
 type ProductPackagingSectionProps = {
   packagingLevelsQuery: UseQueryResult<ProductPackagingLevel[], Error>;
   replacePackagingLevelsMutation: UseMutationResult<
@@ -41,6 +65,7 @@ type ProductPackagingSectionProps = {
   packagingSaveError: string | null;
   packagingDirty: boolean;
   packagingEditorSemantics: Record<string, PackagingEditorRowSemantics>;
+  variant?: 'standalone' | 'embedded';
   onBeginEdit: () => void;
   onCancelEdit: () => void;
   onSave: () => void;
@@ -60,6 +85,7 @@ export function ProductPackagingSection({
   packagingSaveError,
   packagingDirty,
   packagingEditorSemantics,
+  variant = 'standalone',
   onBeginEdit,
   onCancelEdit,
   onSave,
@@ -75,12 +101,15 @@ export function ProductPackagingSection({
     availableAsPackTypeCount > 0
       ? `${availableAsPackTypeCount} available as Pack type`
       : 'No levels available as Pack type yet';
+  const inheritedMeasurementsSummary = formatInheritedMeasurementsSummary(unitProfileQuery.data);
 
   return (
     <section id="packaging-levels" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">2. Packaging Levels</h2>
+          <h2 className="text-sm font-semibold text-slate-900">
+            {variant === 'embedded' ? 'Packaging hierarchy' : '2. Packaging Levels'}
+          </h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Define pack types built from the unit. Active levels marked &ldquo;Can be stored&rdquo; become Pack type
             options in Storage Presets.
@@ -179,6 +208,7 @@ export function ProductPackagingSection({
                   This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in Single
                   Unit Profile.
                 </div>
+                <div className="mt-1 font-medium">{inheritedMeasurementsSummary}</div>
               </div>
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -194,7 +224,7 @@ export function ProductPackagingSection({
                 const unitWeightG = unitProfileQuery.data?.unitWeightG ?? null;
                 const parsedBaseQty = parsePositiveInt(rowSemantics?.quantityInputValue ?? row.baseUnitQty);
                 const estimatedContentWeightG =
-                  unitWeightG !== null && parsedBaseQty !== null ? unitWeightG * parsedBaseQty : null;
+                  !row.isBase && unitWeightG !== null && parsedBaseQty !== null ? unitWeightG * parsedBaseQty : null;
 
                 return (
                   <div
@@ -225,10 +255,13 @@ export function ProductPackagingSection({
                         These pack types contain multiple single units and can be used for picking or storage.
                       </p>
                     ) : (
-                      <p className="mb-2 text-xs text-cyan-900">
-                        This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in
-                        Single Unit Profile.
-                      </p>
+                      <div className="mb-2 text-xs text-cyan-900">
+                        <p>
+                          This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in
+                          Single Unit Profile.
+                        </p>
+                        <p className="mt-1 font-medium">{inheritedMeasurementsSummary}</p>
+                      </div>
                     )}
                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                       <div className="grid gap-3 md:grid-cols-3">
@@ -294,10 +327,10 @@ export function ProductPackagingSection({
                           ) : null}
                           {estimatedContentWeightG !== null ? (
                             <span className="text-xs font-normal text-slate-600">
-                              Estimated content weight: {estimatedContentWeightG} g ({unitWeightG} g x {parsedBaseQty})
+                              Estimated content weight: {parsedBaseQty} × {unitWeightG} g = {estimatedContentWeightG} g
                             </span>
                           ) : null}
-                          {unitWeightG === null ? (
+                          {!row.isBase && unitWeightG === null ? (
                             <span className="text-xs font-normal text-slate-500">
                               Unit weight not defined. Content estimate unavailable.
                             </span>
@@ -395,7 +428,7 @@ export function ProductPackagingSection({
                         </label>
 
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
-                          Manual pack weight (g)
+                          Manual override weight (g)
                           <input
                             type="number"
                             min={1}
@@ -411,7 +444,11 @@ export function ProductPackagingSection({
                           {rowError.packWeightG ? (
                             <span className="text-xs text-red-700">{rowError.packWeightG}</span>
                           ) : null}
-                          {estimatedContentWeightG !== null ? (
+                          {row.isBase ? (
+                            <span className="text-xs font-normal text-slate-600">
+                              Leave empty to use Single Unit Profile measurements for the base unit.
+                            </span>
+                          ) : estimatedContentWeightG !== null ? (
                             <span className="text-xs font-normal text-slate-600">
                               Estimated content only: {estimatedContentWeightG} g
                             </span>
@@ -419,7 +456,7 @@ export function ProductPackagingSection({
                         </label>
 
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
-                          Pack width (mm)
+                          Manual override width (mm)
                           <input
                             type="number"
                             min={1}
@@ -435,10 +472,15 @@ export function ProductPackagingSection({
                           {rowError.packWidthMm ? (
                             <span className="text-xs text-red-700">{rowError.packWidthMm}</span>
                           ) : null}
+                          <span className="text-xs font-normal text-slate-600">
+                            {row.isBase
+                              ? 'Leave empty to use Single Unit Profile measurements for the base unit.'
+                              : 'Outer pack dimensions should be entered manually because item arrangement can vary.'}
+                          </span>
                         </label>
 
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
-                          Pack height (mm)
+                          Manual override height (mm)
                           <input
                             type="number"
                             min={1}
@@ -454,10 +496,15 @@ export function ProductPackagingSection({
                           {rowError.packHeightMm ? (
                             <span className="text-xs text-red-700">{rowError.packHeightMm}</span>
                           ) : null}
+                          {row.isBase ? (
+                            <span className="text-xs font-normal text-slate-600">
+                              Leave empty to use Single Unit Profile measurements for the base unit.
+                            </span>
+                          ) : null}
                         </label>
 
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
-                          Pack depth (mm)
+                          Manual override depth (mm)
                           <input
                             type="number"
                             min={1}
@@ -472,6 +519,11 @@ export function ProductPackagingSection({
                           />
                           {rowError.packDepthMm ? (
                             <span className="text-xs text-red-700">{rowError.packDepthMm}</span>
+                          ) : null}
+                          {row.isBase ? (
+                            <span className="text-xs font-normal text-slate-600">
+                              Leave empty to use Single Unit Profile measurements for the base unit.
+                            </span>
                           ) : null}
                         </label>
                       </div>
@@ -496,6 +548,7 @@ export function ProductPackagingSection({
                 This is the base unit used by all pack types. Its quantity is always 1. Edit dimensions in Single Unit
                 Profile.
               </p>
+              <p className="mt-1 text-xs font-medium text-cyan-900">{inheritedMeasurementsSummary}</p>
               <div className="mt-2 flex flex-wrap gap-1">
                 {baseLevel.isDefaultPickUom ? (
                   <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
@@ -546,52 +599,68 @@ export function ProductPackagingSection({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {additionalLevels.map((level) => (
-                      <tr key={level.id}>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
-                        <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
-                        <td className="px-4 py-2.5 text-slate-700">{level.baseUnitQty}</td>
-                        <td className="px-4 py-2.5">
-                          <div className="flex flex-wrap gap-1">
-                            {level.isDefaultPickUom && (
-                              <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
-                                Default pick
-                              </span>
-                            )}
-                            {level.isActive && level.canStore ? (
-                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                                Available as Pack type
-                              </span>
+                    {additionalLevels.map((level) => {
+                      const estimatedContentWeightG =
+                        unitProfileQuery.data?.unitWeightG !== null && unitProfileQuery.data?.unitWeightG !== undefined
+                          ? unitProfileQuery.data.unitWeightG * level.baseUnitQty
+                          : null;
+
+                      return (
+                        <tr key={level.id}>
+                          <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{level.code}</td>
+                          <td className="px-4 py-2.5 font-medium text-slate-900">{level.name}</td>
+                          <td className="px-4 py-2.5 text-slate-700">{level.baseUnitQty}</td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex flex-wrap gap-1">
+                              {level.isDefaultPickUom && (
+                                <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                                  Default pick
+                                </span>
+                              )}
+                              {level.isActive && level.canStore ? (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                  Available as Pack type
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                              {formatOperationalUse(level)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                            {level.barcode ?? 'Not defined'}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-slate-600">
+                            {estimatedContentWeightG !== null ? (
+                              <>
+                                Estimated content weight: {level.baseUnitQty} × {unitProfileQuery.data?.unitWeightG} g ={' '}
+                                {estimatedContentWeightG} g
+                                <br />
+                              </>
                             ) : null}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                            {formatOperationalUse(level)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
-                          {level.barcode ?? 'Not defined'}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-slate-600">
-                          {level.packWidthMm && level.packHeightMm && level.packDepthMm
-                            ? `${level.packWidthMm}x${level.packHeightMm}x${level.packDepthMm} mm`
-                            : 'Dims: not defined'}
-                          <br />
-                          {level.packWeightG ? `Weight: ${level.packWeightG} g` : 'Weight: not defined'}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span
-                            className={[
-                              'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
-                              level.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
-                            ].join(' ')}
-                          >
-                            {level.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                            {level.packWidthMm && level.packHeightMm && level.packDepthMm
+                              ? `${level.packWidthMm} × ${level.packHeightMm} × ${level.packDepthMm} mm`
+                              : 'Dims: not defined'}
+                            <br />
+                            {level.packWeightG ? `Weight: ${level.packWeightG} g` : 'Weight: not defined'}
+                            <br />
+                            Outer pack dimensions should be entered manually because item arrangement can vary.
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span
+                              className={[
+                                'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                                level.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                              ].join(' ')}
+                            >
+                              {level.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

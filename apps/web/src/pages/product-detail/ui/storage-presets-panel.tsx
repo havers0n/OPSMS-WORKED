@@ -4,17 +4,36 @@ import { StoragePresetCard } from './storage-preset-card';
 type StoragePresetsPanelProps = {
   presets: StoragePreset[];
   packagingLevels: ProductPackagingLevel[];
+  isSelected?: boolean;
   onCreateStoragePreset: () => void;
 };
 
-export function StoragePresetsPanel({ presets, packagingLevels, onCreateStoragePreset }: StoragePresetsPanelProps) {
+export function StoragePresetsPanel({
+  presets,
+  packagingLevels,
+  isSelected = false,
+  onCreateStoragePreset
+}: StoragePresetsPanelProps) {
   const hasActiveStorablePackagingLevels = packagingLevels.some((level) => level.isActive && level.canStore);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+    <section
+      aria-current={isSelected ? 'step' : undefined}
+      className={[
+        'rounded-lg border p-4 transition',
+        isSelected ? 'border-cyan-300 bg-cyan-50/50 ring-2 ring-cyan-100' : 'border-slate-200 bg-slate-50/70'
+      ].join(' ')}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase text-slate-500">Storage Presets</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-xs font-semibold uppercase text-slate-500">Storage Presets</div>
+            {isSelected ? (
+              <span className="rounded-full border border-cyan-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
+                Selected
+              </span>
+            ) : null}
+          </div>
           <h2 className="mt-1 text-base font-semibold text-slate-950">Storage cards</h2>
           <p className="mt-1 text-xs text-slate-500">
             Presets stay separate from packaging levels and resolve their linked pack type when possible.

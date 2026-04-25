@@ -58,24 +58,24 @@ function makeProfile(): ProductUnitProfile {
   };
 }
 
-function makeLevel(): ProductPackagingLevel {
+function makeLevel(overrides: Partial<ProductPackagingLevel> = {}): ProductPackagingLevel {
   return {
-    id: '22222222-2222-4222-8222-222222222222',
+    id: overrides.id ?? '22222222-2222-4222-8222-222222222222',
     productId,
-    code: 'CASE',
-    name: 'Case',
-    baseUnitQty: 12,
-    isBase: false,
-    canPick: true,
-    canStore: true,
-    isDefaultPickUom: false,
-    barcode: null,
-    packWeightG: null,
-    packWidthMm: null,
-    packHeightMm: null,
-    packDepthMm: null,
-    sortOrder: 1,
-    isActive: true,
+    code: overrides.code ?? 'CASE',
+    name: overrides.name ?? 'Case',
+    baseUnitQty: overrides.baseUnitQty ?? 12,
+    isBase: overrides.isBase ?? false,
+    canPick: overrides.canPick ?? true,
+    canStore: overrides.canStore ?? true,
+    isDefaultPickUom: overrides.isDefaultPickUom ?? false,
+    barcode: overrides.barcode ?? null,
+    packWeightG: overrides.packWeightG ?? null,
+    packWidthMm: overrides.packWidthMm ?? null,
+    packHeightMm: overrides.packHeightMm ?? null,
+    packDepthMm: overrides.packDepthMm ?? null,
+    sortOrder: overrides.sortOrder ?? 1,
+    isActive: overrides.isActive ?? true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z'
   };
@@ -220,7 +220,11 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Product Facts');
     expect(text).toContain('Workbench');
     expect(text).toContain('Editing product facts');
-    expect(text).toContain('1. Single Unit Profile');
+    expect(text).toContain('Selected area:');
+    expect(text).toContain('Product Facts');
+    expect(text).toContain('Product facts');
+    expect(text).toContain('Selected');
+    expect(text).not.toContain('1. Single Unit Profile');
     expect(text).toContain('Save unit profile');
   });
 
@@ -248,6 +252,7 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Unit Profile Board');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('1. Single Unit Profile');
+    expect(text).not.toContain('Selected area: Product Facts');
   });
 
   it('save failure keeps product facts editing visible in the workbench', async () => {
@@ -277,6 +282,8 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Unit Profile Board');
     expect(text).toContain('Workbench');
     expect(text).toContain('Editing product facts');
+    expect(text).toContain('Selected area:');
+    expect(text).toContain('Product Facts');
     expect(text).toContain('Failed to save unit profile.');
   });
 
@@ -328,7 +335,11 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Packaging Hierarchy');
     expect(text).toContain('Workbench');
     expect(text).toContain('Configuring packaging hierarchy');
-    expect(text).toContain('2. Packaging Levels');
+    expect(text).toContain('Selected area:');
+    expect(text).toContain('Packaging Hierarchy');
+    expect(text).toContain('Packaging hierarchy');
+    expect(text).toContain('Selected');
+    expect(text).not.toContain('2. Packaging Levels');
     expect(text).toContain('Save packaging');
   });
 
@@ -385,6 +396,8 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Unit Profile Board');
     expect(text).toContain('Workbench');
     expect(text).toContain('Configuring packaging hierarchy');
+    expect(text).toContain('Selected area:');
+    expect(text).toContain('Packaging Hierarchy');
     expect(text).toContain('Failed to save packaging levels.');
   });
 
@@ -431,7 +444,11 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Storage Presets');
     expect(text).toContain('Workbench');
     expect(text).toContain('Creating storage preset');
-    expect(text).toContain('3. Storage Presets');
+    expect(text).toContain('Selected area:');
+    expect(text).toContain('Storage Presets');
+    expect(text).toContain('Storage preset');
+    expect(text).toContain('Selected');
+    expect(text).not.toContain('3. Storage Presets');
     expect(text).toContain('Code');
     expect(text).toContain('Create storage preset');
   });
@@ -506,6 +523,8 @@ describe('ProductDetailPage board modes', () => {
     expect(text).toContain('Unit Profile Board');
     expect(text).toContain('Workbench');
     expect(text).toContain('Creating storage preset');
+    expect(text).toContain('Selected area:');
+    expect(text).toContain('Storage Presets');
     expect(text).toContain('Failed to create storage preset.');
   });
 
@@ -522,6 +541,31 @@ describe('ProductDetailPage board modes', () => {
     });
     act(() => {
       renderer.root.findByProps({ children: 'Back to workspace' }).props.onClick();
+    });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Unit Profile Board');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('3. Storage Presets');
+  });
+
+  it('keeps storage create disabled without active storable packaging levels', async () => {
+    mockState.model = makeModel({
+      storagePresetsQuery: queryResult([]),
+      packagingLevelsQuery: queryResult([makeLevel({ canStore: false })])
+    });
+    const { ProductDetailPage } = await loadPage();
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
+    });
+
+    const createButton = renderer.root.findByProps({ children: 'Create storage preset' });
+    expect(createButton.props.disabled).toBe(true);
+
+    act(() => {
+      createButton.props.onClick();
     });
 
     const text = flattenText(renderer.toJSON());

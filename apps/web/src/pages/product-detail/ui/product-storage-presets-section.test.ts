@@ -93,6 +93,7 @@ function renderSection(args?: {
   packagingLevels?: ProductPackagingLevel[];
   containerTypesQuery?: { isLoading?: boolean; isError?: boolean; error?: Error | null };
   mutateAsync?: ReturnType<typeof vi.fn>;
+  variant?: 'standalone' | 'embedded';
 }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -113,7 +114,8 @@ function renderSection(args?: {
           ],
           ...args?.containerTypesQuery
         }),
-        createStoragePresetMutation: mutationResult(args?.mutateAsync)
+        createStoragePresetMutation: mutationResult(args?.mutateAsync),
+        variant: args?.variant
       })
     );
   });
@@ -139,6 +141,14 @@ describe('ProductStoragePresetsSection', () => {
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('3. Storage Presets');
     expect(text).toContain('Define how storable pack types fit into containers.');
+  });
+
+  it('hides the old numbered heading in embedded mode', () => {
+    const renderer = renderSection({ variant: 'embedded' });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Storage preset');
+    expect(text).not.toContain('3. Storage Presets');
   });
 
   it('uses canonical storage-capable container types and defaults to pallet', () => {

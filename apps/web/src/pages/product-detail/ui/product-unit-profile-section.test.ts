@@ -55,7 +55,11 @@ function makeProfile(): ProductUnitProfile {
   };
 }
 
-function renderSection(args: { data: ProductUnitProfile | null; isEditing?: boolean }) {
+function renderSection(args: {
+  data: ProductUnitProfile | null;
+  isEditing?: boolean;
+  variant?: 'standalone' | 'embedded';
+}) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -74,6 +78,7 @@ function renderSection(args: { data: ProductUnitProfile | null; isEditing?: bool
         unitProfileFieldErrors: {},
         unitProfileSaveError: null,
         unitProfileDirty: false,
+        variant: args.variant,
         onBeginEdit: vi.fn(),
         onCancelEdit: vi.fn(),
         onSave: vi.fn(),
@@ -94,6 +99,14 @@ describe('ProductUnitProfileSection', () => {
     expect(text).toContain(
       'Describes one individual unit of this product. Packaging levels are built from this unit.'
     );
+  });
+
+  it('hides the old numbered heading in embedded mode', () => {
+    const renderer = renderSection({ data: null, variant: 'embedded' });
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Product facts');
+    expect(text).not.toContain('1. Single Unit Profile');
   });
 
   it('renders fallback class copy in read and edit modes', () => {

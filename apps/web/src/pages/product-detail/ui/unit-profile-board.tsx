@@ -3,11 +3,14 @@ import { PackagingHierarchyPanel } from './packaging-hierarchy-panel';
 import { ProductFactsCard } from './product-facts-card';
 import { StoragePresetsPanel } from './storage-presets-panel';
 
+export type UnitProfileWorkspaceSelection = 'product-facts' | 'packaging' | 'storage' | null;
+
 type UnitProfileBoardProps = {
   product: Product;
   unitProfile: ProductUnitProfile | null | undefined;
   packagingLevels: ProductPackagingLevel[];
   storagePresets: StoragePreset[];
+  selectedArea?: UnitProfileWorkspaceSelection;
   onEditProductFacts: () => void;
   onEditPackaging: () => void;
   onCreateStoragePreset: () => void;
@@ -18,6 +21,7 @@ export function UnitProfileBoard({
   unitProfile,
   packagingLevels,
   storagePresets,
+  selectedArea = null,
   onEditProductFacts,
   onEditPackaging,
   onCreateStoragePreset
@@ -40,17 +44,20 @@ export function UnitProfileBoard({
           unitProfile={unitProfile}
           packagingLevels={packagingLevels}
           storagePresetCount={storagePresets.length}
+          isSelected={selectedArea === 'product-facts'}
           onEditProductFacts={onEditProductFacts}
         />
         <PackagingHierarchyPanel
           levels={packagingLevels}
           unitProfile={unitProfile ?? null}
+          isSelected={selectedArea === 'packaging'}
           onEditPackaging={onEditPackaging}
         />
         <div className="lg:col-span-2 2xl:col-span-1">
           <StoragePresetsPanel
             presets={storagePresets}
             packagingLevels={packagingLevels}
+            isSelected={selectedArea === 'storage'}
             onCreateStoragePreset={onCreateStoragePreset}
           />
         </div>

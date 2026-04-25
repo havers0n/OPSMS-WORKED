@@ -108,6 +108,32 @@ describe('validatePackagingLevelsDraft', () => {
     ]);
   });
 
+  it('serializes only explicit manual packaging override values', () => {
+    const result = validatePackagingLevelsDraft([
+      createBaseRow(),
+      {
+        ...createCaseRow(),
+        packWeightG: '500',
+        packWidthMm: '300',
+        packHeightMm: '200',
+        packDepthMm: '100'
+      }
+    ]);
+
+    expect(result.payload?.[0]).toMatchObject({
+      packWeightG: null,
+      packWidthMm: null,
+      packHeightMm: null,
+      packDepthMm: null
+    });
+    expect(result.payload?.[1]).toMatchObject({
+      packWeightG: 500,
+      packWidthMm: 300,
+      packHeightMm: 200,
+      packDepthMm: 100
+    });
+  });
+
   it('requires exactly one base row', () => {
     const noBase = validatePackagingLevelsDraft([{ ...createCaseRow(), draftId: 'row-1' }]);
     expect(noBase.payload).toBeNull();

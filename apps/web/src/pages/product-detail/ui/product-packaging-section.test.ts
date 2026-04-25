@@ -52,11 +52,11 @@ function makePackagingLevel(overrides: Partial<ProductPackagingLevel> = {}): Pro
     canPick: overrides.canPick ?? true,
     canStore: overrides.canStore ?? true,
     isDefaultPickUom: overrides.isDefaultPickUom ?? false,
-    barcode: null,
-    packWeightG: null,
-    packWidthMm: null,
-    packHeightMm: null,
-    packDepthMm: null,
+    barcode: overrides.barcode ?? null,
+    packWeightG: overrides.packWeightG ?? null,
+    packWidthMm: overrides.packWidthMm ?? null,
+    packHeightMm: overrides.packHeightMm ?? null,
+    packDepthMm: overrides.packDepthMm ?? null,
     sortOrder: overrides.sortOrder ?? 1,
     isActive: overrides.isActive ?? true,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -64,14 +64,32 @@ function makePackagingLevel(overrides: Partial<ProductPackagingLevel> = {}): Pro
   };
 }
 
-function renderSection(packagingLevels: ProductPackagingLevel[]) {
+function makeUnitProfile(overrides: Partial<ProductUnitProfile> = {}): ProductUnitProfile {
+  return {
+    productId,
+    unitWeightG: Object.hasOwn(overrides, 'unitWeightG') ? (overrides.unitWeightG ?? null) : 100,
+    unitWidthMm: Object.hasOwn(overrides, 'unitWidthMm') ? (overrides.unitWidthMm ?? null) : 100,
+    unitHeightMm: Object.hasOwn(overrides, 'unitHeightMm') ? (overrides.unitHeightMm ?? null) : 100,
+    unitDepthMm: Object.hasOwn(overrides, 'unitDepthMm') ? (overrides.unitDepthMm ?? null) : 100,
+    weightClass: overrides.weightClass ?? null,
+    sizeClass: overrides.sizeClass ?? null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z'
+  };
+}
+
+function renderSection(
+  packagingLevels: ProductPackagingLevel[],
+  unitProfile: ProductUnitProfile | null = null,
+  variant?: 'standalone' | 'embedded'
+) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
       React.createElement(ProductPackagingSection, {
         packagingLevelsQuery: queryResult({ data: packagingLevels }),
         replacePackagingLevelsMutation: mutationResult(),
-        unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: null }),
+        unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: unitProfile }),
         isPackagingEditing: false,
         packagingDraft: [],
         packagingRowErrors: {},
@@ -79,6 +97,7 @@ function renderSection(packagingLevels: ProductPackagingLevel[]) {
         packagingSaveError: null,
         packagingDirty: false,
         packagingEditorSemantics: {},
+        variant,
         onBeginEdit: vi.fn(),
         onCancelEdit: vi.fn(),
         onSave: vi.fn(),
@@ -91,14 +110,17 @@ function renderSection(packagingLevels: ProductPackagingLevel[]) {
   return renderer;
 }
 
-function renderEditingSection() {
+function renderEditingSection(
+  unitProfile: ProductUnitProfile | null = null,
+  variant?: 'standalone' | 'embedded'
+) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
       React.createElement(ProductPackagingSection, {
         packagingLevelsQuery: queryResult({ data: [makePackagingLevel()] }),
         replacePackagingLevelsMutation: mutationResult(),
-        unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: null }),
+        unitProfileQuery: queryResult<ProductUnitProfile | null>({ data: unitProfile }),
         isPackagingEditing: true,
         packagingDraft: [
           {
@@ -164,6 +186,7 @@ function renderEditingSection() {
             cueIndent: 0
           }
         },
+        variant,
         onBeginEdit: vi.fn(),
         onCancelEdit: vi.fn(),
         onSave: vi.fn(),
@@ -191,6 +214,14 @@ describe('ProductPackagingSection', () => {
     expect(text).toContain('Define pack types built from the unit.');
     expect(text).toContain('Can be stored');
     expect(text).toContain('become Pack type options in Storage Presets.');
+  });
+
+  it('hides the old numbered heading in embedded mode', () => {
+    const renderer = renderSection([makePackagingLevel()], null, 'embedded');
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain('Packaging hierarchy');
+    expect(text).not.toContain('2. Packaging Levels');
   });
 
   it('renders storable summary copy', () => {
@@ -262,6 +293,45 @@ describe('ProductPackagingSection', () => {
     expect(text).toContain('Inactive');
   });
 
+  it('shows inherited Single Unit Profile measurements for the base unit in read mode', () => {
+    const renderer = renderSection(
+      [
+        makePackagingLevel({
+          code: 'EA',
+          name: 'Each',
+          baseUnitQty: 1,
+          isBase: true
+        })
+      ],
+      makeUnitProfile()
+    );
+
+    expect(flattenText(renderer.toJSON())).toContain(
+      'Inherited from Single Unit Profile: 100 g · 100 × 100 × 100 mm'
+    );
+  });
+
+  it('shows partial and missing inherited measurement guidance for the base unit', () => {
+    const baseLevel = makePackagingLevel({
+      code: 'EA',
+      name: 'Each',
+      baseUnitQty: 1,
+      isBase: true
+    });
+    const partial = renderSection(
+      [baseLevel],
+      makeUnitProfile({ unitWeightG: 100, unitWidthMm: 100, unitHeightMm: null, unitDepthMm: null })
+    );
+    const missing = renderSection([baseLevel], null);
+
+    expect(flattenText(partial.toJSON())).toContain(
+      'Inherited from Single Unit Profile: weight defined, dimensions incomplete'
+    );
+    expect(flattenText(missing.toJSON())).toContain(
+      'Add Single Unit Profile measurements to estimate base unit dimensions.'
+    );
+  });
+
   it('renders Available as Pack type only for active storable levels', () => {
     const renderer = renderSection([
       makePackagingLevel({ id: '22222222-2222-4222-8222-222222222221', code: 'available', canStore: true, isActive: true }),
@@ -287,5 +357,56 @@ describe('ProductPackagingSection', () => {
     expect(text).toContain('Default for picking');
     expect(text).toContain('Can be picked');
     expect(text).toContain('Can be stored');
+  });
+
+  it('keeps manual override inputs empty when inherited measurements exist', () => {
+    const renderer = renderEditingSection(makeUnitProfile());
+    const numberInputValues = renderer.root
+      .findAllByType('input')
+      .filter((input) => input.props.type === 'number')
+      .map((input) => input.props.value);
+
+    expect(numberInputValues).toEqual(['1', '', '', '', '', '12', '', '', '', '']);
+    expect(flattenText(renderer.toJSON())).toContain(
+      'Leave empty to use Single Unit Profile measurements for the base unit.'
+    );
+    expect(flattenText(renderer.toJSON())).toContain('Manual override weight (g)');
+    expect(flattenText(renderer.toJSON())).toContain('Manual override width (mm)');
+    expect(flattenText(renderer.toJSON())).toContain('Manual override height (mm)');
+    expect(flattenText(renderer.toJSON())).toContain('Manual override depth (mm)');
+  });
+
+  it('shows additional pack content weight and manual dimension guidance', () => {
+    const renderer = renderEditingSection(makeUnitProfile({ unitWeightG: 100 }));
+    const text = flattenText(renderer.toJSON());
+
+    expect(text).toMatch(/Estimated content weight:\s+12\s+×\s+100\s+g\s+=\s+1200\s+g/);
+    expect(text).toContain('Outer pack dimensions should be entered manually because item arrangement can vary.');
+    expect(text).not.toContain('dimensions are auto-derived');
+  });
+
+  it('shows additional pack content weight in read mode without deriving dimensions', () => {
+    const renderer = renderSection(
+      [
+        makePackagingLevel({
+          id: '22222222-2222-4222-8222-222222222221',
+          code: 'EA',
+          name: 'Each',
+          baseUnitQty: 1,
+          isBase: true
+        }),
+        makePackagingLevel({
+          id: '22222222-2222-4222-8222-222222222222',
+          code: 'CASE',
+          name: 'Case',
+          baseUnitQty: 5
+        })
+      ],
+      makeUnitProfile({ unitWeightG: 100 })
+    );
+    const text = flattenText(renderer.toJSON());
+
+    expect(text).toMatch(/Estimated content weight:\s+5\s+×\s+100\s+g\s+=\s+500\s+g/);
+    expect(text).toContain('Outer pack dimensions should be entered manually because item arrangement can vary.');
   });
 });

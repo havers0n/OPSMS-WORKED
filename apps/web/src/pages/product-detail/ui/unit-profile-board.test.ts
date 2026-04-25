@@ -114,6 +114,7 @@ function renderBoard(args?: {
   unitProfile?: ProductUnitProfile | null;
   packagingLevels?: ProductPackagingLevel[];
   storagePresets?: StoragePreset[];
+  selectedArea?: 'product-facts' | 'packaging' | 'storage' | null;
   onEditProductFacts?: () => void;
   onEditPackaging?: () => void;
   onCreateStoragePreset?: () => void;
@@ -135,6 +136,7 @@ function renderBoard(args?: {
           makeLevel()
         ],
         storagePresets: args?.storagePresets ?? [makePreset()],
+        selectedArea: args?.selectedArea,
         onEditProductFacts: args?.onEditProductFacts ?? vi.fn(),
         onEditPackaging: args?.onEditPackaging ?? vi.fn(),
         onCreateStoragePreset: args?.onCreateStoragePreset ?? vi.fn()
@@ -148,6 +150,12 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
   if (!node) return '';
   if (Array.isArray(node)) return node.map(flattenText).join(' ');
   return node.children?.map((child) => (typeof child === 'string' ? child : flattenText(child))).join(' ') ?? '';
+}
+
+function flattenInstanceText(node: TestRenderer.ReactTestInstance): string {
+  return node.children
+    .map((child) => (typeof child === 'string' ? child : flattenInstanceText(child)))
+    .join(' ');
 }
 
 describe('UnitProfileBoard', () => {
@@ -194,6 +202,40 @@ describe('UnitProfileBoard', () => {
     expect(text).toContain('Missing dimensions');
     expect(text).toContain('No active packaging levels');
     expect(text).toContain('No storage presets');
+  });
+
+  it('highlights Product Facts when product facts is selected', () => {
+    const renderer = renderBoard({ selectedArea: 'product-facts' });
+    const selected = renderer.root.findAllByProps({ 'aria-current': 'step' });
+
+    expect(selected).toHaveLength(1);
+    expect(flattenInstanceText(selected[0])).toContain('Product Facts');
+    expect(flattenInstanceText(selected[0])).toContain('Selected');
+  });
+
+  it('highlights Packaging Hierarchy when packaging is selected', () => {
+    const renderer = renderBoard({ selectedArea: 'packaging' });
+    const selected = renderer.root.findAllByProps({ 'aria-current': 'step' });
+
+    expect(selected).toHaveLength(1);
+    expect(flattenInstanceText(selected[0])).toContain('Packaging Hierarchy');
+    expect(flattenInstanceText(selected[0])).toContain('Selected');
+  });
+
+  it('highlights Storage Presets when storage is selected', () => {
+    const renderer = renderBoard({ selectedArea: 'storage' });
+    const selected = renderer.root.findAllByProps({ 'aria-current': 'step' });
+
+    expect(selected).toHaveLength(1);
+    expect(flattenInstanceText(selected[0])).toContain('Storage Presets');
+    expect(flattenInstanceText(selected[0])).toContain('Selected');
+  });
+
+  it('does not show selected editor state in read mode', () => {
+    const renderer = renderBoard({ selectedArea: null });
+
+    expect(renderer.root.findAllByProps({ 'aria-current': 'step' })).toHaveLength(0);
+    expect(flattenText(renderer.toJSON())).not.toContain('Selected');
   });
 
   it('wires board action callbacks', () => {

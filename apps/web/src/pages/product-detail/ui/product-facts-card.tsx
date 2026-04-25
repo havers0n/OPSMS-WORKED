@@ -12,6 +12,7 @@ type ProductFactsCardProps = {
   unitProfile: ProductUnitProfile | null | undefined;
   packagingLevels: ProductPackagingLevel[];
   storagePresetCount: number;
+  isSelected?: boolean;
   onEditProductFacts: () => void;
 };
 
@@ -29,16 +30,30 @@ export function ProductFactsCard({
   unitProfile,
   packagingLevels,
   storagePresetCount,
+  isSelected = false,
   onEditProductFacts
 }: ProductFactsCardProps) {
   const baseLevel = packagingLevels.find((level) => level.isBase) ?? null;
   const warnings = getUnitProfileWarnings({ unitProfile, packagingLevels, storagePresetCount });
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4">
+    <article
+      aria-current={isSelected ? 'step' : undefined}
+      className={[
+        'rounded-lg border bg-white p-4 transition',
+        isSelected ? 'border-cyan-300 bg-cyan-50/40 ring-2 ring-cyan-100' : 'border-slate-200'
+      ].join(' ')}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase text-slate-500">Product Facts</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-xs font-semibold uppercase text-slate-500">Product Facts</div>
+            {isSelected ? (
+              <span className="rounded-full border border-cyan-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
+                Selected
+              </span>
+            ) : null}
+          </div>
           <h2 className="mt-1 truncate text-base font-semibold text-slate-950">{product.name}</h2>
           <div className="mt-1 text-xs text-slate-500">
             {product.sku ?? 'SKU not defined'} | {product.externalProductId}

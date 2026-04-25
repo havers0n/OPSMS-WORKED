@@ -26,6 +26,7 @@ type ProductUnitProfileSectionProps = {
   unitProfileFieldErrors: Partial<Record<UnitProfileNumericField, string>>;
   unitProfileSaveError: string | null;
   unitProfileDirty: boolean;
+  variant?: 'standalone' | 'embedded';
   onBeginEdit: () => void;
   onCancelEdit: () => void;
   onSave: () => void;
@@ -44,6 +45,7 @@ export function ProductUnitProfileSection({
   unitProfileFieldErrors,
   unitProfileSaveError,
   unitProfileDirty,
+  variant = 'standalone',
   onBeginEdit,
   onCancelEdit,
   onSave,
@@ -54,7 +56,9 @@ export function ProductUnitProfileSection({
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">1. Single Unit Profile</h2>
+          <h2 className="text-sm font-semibold text-slate-900">
+            {variant === 'embedded' ? 'Product facts' : '1. Single Unit Profile'}
+          </h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Describes one individual unit of this product. Packaging levels are built from this unit.
           </p>

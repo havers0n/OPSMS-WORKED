@@ -11,6 +11,7 @@ type ProductStoragePresetsSectionProps = {
   containerTypesQuery: UseQueryResult<ContainerType[], Error>;
   createStoragePresetMutation: UseMutationResult<StoragePreset, Error, CreateStoragePresetInput>;
   defaultCreating?: boolean;
+  variant?: 'standalone' | 'embedded';
   onCreateClosed?: () => void;
   onCreated?: () => void;
 };
@@ -82,6 +83,7 @@ export function ProductStoragePresetsSection({
   containerTypesQuery,
   createStoragePresetMutation,
   defaultCreating = false,
+  variant = 'standalone',
   onCreateClosed,
   onCreated
 }: ProductStoragePresetsSectionProps) {
@@ -194,7 +196,9 @@ export function ProductStoragePresetsSection({
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">3. Storage Presets</h2>
+          <h2 className="text-sm font-semibold text-slate-900">
+            {variant === 'embedded' ? 'Storage preset' : '3. Storage Presets'}
+          </h2>
           <p className="mt-0.5 text-xs text-slate-500">
             Define how storable pack types fit into containers.
           </p>

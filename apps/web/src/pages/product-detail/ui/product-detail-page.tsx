@@ -10,44 +10,54 @@ import { ProductMediaSection } from './product-media-section';
 import { ProductPackagingSection } from './product-packaging-section';
 import { ProductStoragePresetsSection } from './product-storage-presets-section';
 import { ProductUnitProfileSection } from './product-unit-profile-section';
-import { UnitProfileBoard } from './unit-profile-board';
+import { UnitProfileBoard, type UnitProfileWorkspaceSelection } from './unit-profile-board';
 
 type UnitProfileWorkspaceMode = 'read' | 'edit-product-facts' | 'edit-packaging' | 'create-storage-preset';
 
-const workbenchCopy: Record<Exclude<UnitProfileWorkspaceMode, 'read'>, { title: string; description: string }> = {
+const workbenchCopy: Record<
+  Exclude<UnitProfileWorkspaceMode, 'read'>,
+  { title: string; description: string; selectedAreaLabel: string }
+> = {
   'edit-product-facts': {
     title: 'Editing product facts',
-    description: 'Update base weight, dimensions, and fallback classes.'
+    description: 'Update base weight, dimensions, and fallback classes.',
+    selectedAreaLabel: 'Product Facts'
   },
   'edit-packaging': {
     title: 'Configuring packaging hierarchy',
-    description: 'Define how this product exists as EA, inner packs, cartons, or master cases.'
+    description: 'Define how this product exists as EA, inner packs, cartons, or master cases.',
+    selectedAreaLabel: 'Packaging Hierarchy'
   },
   'create-storage-preset': {
     title: 'Creating storage preset',
-    description: 'Define how a selected packaging level can be physically stored.'
+    description: 'Define how a selected packaging level can be physically stored.',
+    selectedAreaLabel: 'Storage Presets'
   }
 };
 
 type UnitProfileWorkbenchProps = {
   mode: Exclude<UnitProfileWorkspaceMode, 'read'>;
+  productName: string;
+  productSku: string | null;
   onBack: () => void;
   children: ReactNode;
 };
 
-function UnitProfileWorkbench({ mode, onBack, children }: UnitProfileWorkbenchProps) {
+function UnitProfileWorkbench({ mode, productName, productSku, onBack, children }: UnitProfileWorkbenchProps) {
+  const sectionRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const copy = workbenchCopy[mode];
 
   useEffect(() => {
-    titleRef.current?.focus();
-    titleRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    titleRef.current?.focus({ preventScroll: true });
+    sectionRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [mode]);
 
   return (
     <section
+      ref={sectionRef}
       aria-label="Unit profile workbench"
-      className="overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/30 shadow-sm"
+      className="scroll-mt-4 overflow-hidden rounded-xl border border-cyan-200 bg-cyan-50/30 shadow-sm"
     >
       <div className="flex flex-col gap-3 border-b border-cyan-100 bg-white px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -56,7 +66,15 @@ function UnitProfileWorkbench({ mode, onBack, children }: UnitProfileWorkbenchPr
             {copy.title}
           </h2>
           <p className="mt-1 text-sm text-slate-600">{copy.description}</p>
-          <div className="mt-2 text-xs font-medium text-slate-500">Current mode: {mode}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs font-medium text-slate-600">
+            <span className="rounded-full border border-cyan-100 bg-cyan-50 px-2 py-0.5 text-cyan-800">
+              Selected area: {copy.selectedAreaLabel}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">
+              {productName}
+              {productSku ? ` | ${productSku}` : ''}
+            </span>
+          </div>
         </div>
         <button
           type="button"
@@ -187,6 +205,14 @@ export function ProductDetailPage() {
 
   const model = useProductDetailPageModel(productId ?? null);
   const [boardMode, setBoardMode] = useState<UnitProfileWorkspaceMode>('read');
+  const selectedArea: UnitProfileWorkspaceSelection =
+    boardMode === 'edit-product-facts'
+      ? 'product-facts'
+      : boardMode === 'edit-packaging'
+        ? 'packaging'
+        : boardMode === 'create-storage-preset'
+          ? 'storage'
+          : null;
 
   function handleBack() {
     if (window.history.length > 1) {
@@ -232,6 +258,11 @@ export function ProductDetailPage() {
   }
 
   function beginStoragePresetCreate() {
+    const hasActiveStorablePackagingLevels = (model.packagingLevelsQuery.data ?? []).some(
+      (level) => level.isActive && level.canStore
+    );
+    if (!hasActiveStorablePackagingLevels) return;
+
     setBoardMode('create-storage-preset');
   }
 
@@ -391,13 +422,19 @@ export function ProductDetailPage() {
             unitProfile={model.unitProfileQuery.data}
             packagingLevels={model.packagingLevelsQuery.data ?? []}
             storagePresets={model.storagePresetsQuery.data ?? []}
+            selectedArea={selectedArea}
             onEditProductFacts={beginProductFactsEdit}
             onEditPackaging={beginPackagingEdit}
             onCreateStoragePreset={beginStoragePresetCreate}
           />
 
           {boardMode !== 'read' ? (
-            <UnitProfileWorkbench mode={boardMode} onBack={returnToWorkspace}>
+            <UnitProfileWorkbench
+              mode={boardMode}
+              productName={model.product.name}
+              productSku={model.product.sku}
+              onBack={returnToWorkspace}
+            >
               {boardMode === 'edit-product-facts' ? (
                 <ProductUnitProfileSection
                   unitProfileQuery={model.unitProfileQuery}
@@ -407,6 +444,7 @@ export function ProductDetailPage() {
                   unitProfileFieldErrors={model.unitProfileFieldErrors}
                   unitProfileSaveError={model.unitProfileSaveError}
                   unitProfileDirty={model.unitProfileDirty}
+                  variant="embedded"
                   onBeginEdit={beginProductFactsEdit}
                   onCancelEdit={cancelProductFactsEdit}
                   onSave={() => void saveProductFacts()}
@@ -427,6 +465,7 @@ export function ProductDetailPage() {
                   packagingSaveError={model.packagingSaveError}
                   packagingDirty={model.packagingDirty}
                   packagingEditorSemantics={model.packagingEditorSemantics}
+                  variant="embedded"
                   onBeginEdit={beginPackagingEdit}
                   onCancelEdit={cancelPackagingEdit}
                   onSave={() => void savePackaging()}
@@ -444,6 +483,7 @@ export function ProductDetailPage() {
                   containerTypesQuery={model.containerTypesQuery}
                   createStoragePresetMutation={model.createStoragePresetMutation}
                   defaultCreating
+                  variant="embedded"
                   onCreateClosed={() => setBoardMode('read')}
                   onCreated={() => setBoardMode('read')}
                 />
