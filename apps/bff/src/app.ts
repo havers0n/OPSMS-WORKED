@@ -414,6 +414,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         presetId,
         locationId: body.locationId,
         externalCode: body.externalCode,
+        materializeContents: body.materializeContents,
         actorId: auth.user.id
       });
       return parseOrThrow(createContainerFromStoragePresetResponseSchema, result);
@@ -427,6 +428,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         }
         if (error.message.includes('STORAGE_PRESET_CONTAINER_TYPE_INVALID')) {
           throw new ApiError(422, 'STORAGE_PRESET_CONTAINER_TYPE_INVALID', 'Storage preset does not resolve a valid storage container type.');
+        }
+        if (error.message.includes('STORAGE_PRESET_MATERIALIZATION_FAILED')) {
+          throw new ApiError(
+            422,
+            'STORAGE_PRESET_MATERIALIZATION_FAILED',
+            'Container was created/placed, but preset contents materialization failed.'
+          );
+        }
+        if (error.message.includes('STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED')) {
+          throw new ApiError(
+            422,
+            'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
+            'Storage preset must have exactly one materializable level for this phase.'
+          );
         }
       }
       const mapped = mapSupabaseError(error);
@@ -801,7 +816,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const supabase = getUserSupabase(auth);
     const { data, error } = await supabase
       .from('container_storage_canonical_v')
-      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,inventory_unit_id,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count,container_packaging_profile_id,container_is_standard_pack,preferred_packaging_profile_id,preset_usage_status')
+      .select('tenant_id,container_id,system_code,external_code,container_type,container_status,inventory_unit_id,item_ref,product_id,quantity,uom,packaging_state,product_packaging_level_id,pack_count,container_packaging_profile_id,container_is_standard_pack,preferred_packaging_profile_id,preset_usage_status,preset_materialization_status')
       .eq('container_id', containerId);
 
     if (error) {
@@ -826,6 +841,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       container_is_standard_pack?: boolean | null;
       preferred_packaging_profile_id?: string | null;
       preset_usage_status?: 'preferred_match' | 'standard_non_preferred' | 'manual' | 'unknown' | null;
+      preset_materialization_status?: 'shell' | 'materialized' | 'manual' | 'unknown' | null;
     }>);
 
     return parseOrThrow(containerStorageSnapshotResponseSchema, rows.map(mapContainerStorageSnapshotRowToDomain));

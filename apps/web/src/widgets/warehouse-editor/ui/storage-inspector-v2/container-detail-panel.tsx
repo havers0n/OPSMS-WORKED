@@ -54,6 +54,19 @@ function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'
   }
 }
 
+function presetMaterializationLabel(status: LocationStorageSnapshotRow['presetMaterializationStatus'] | undefined) {
+  switch (status) {
+    case 'shell':
+      return 'Preset shell';
+    case 'materialized':
+      return 'Materialized preset';
+    case 'manual':
+      return 'Manual contents';
+    default:
+      return 'Materialization unknown';
+  }
+}
+
 export function ContainerDetailPanel({
   rackDisplayCode,
   activeLevel,
@@ -116,6 +129,7 @@ export function ContainerDetailPanel({
             <span className="capitalize">Type: {firstRow.containerType}</span>
             <span className="capitalize">Status: {firstRow.containerStatus}</span>
             <span>{presetUsageLabel(firstRow.presetUsageStatus)}</span>
+            <span>{presetMaterializationLabel(firstRow.presetMaterializationStatus)}</span>
           </div>
         ) : null}
       </div>

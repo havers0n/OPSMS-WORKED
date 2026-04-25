@@ -9,6 +9,13 @@ export const storagePresetUsageStatusSchema = z.enum([
   'unknown'
 ]);
 
+export const storagePresetMaterializationStatusSchema = z.enum([
+  'shell',
+  'materialized',
+  'manual',
+  'unknown'
+]);
+
 export const storagePresetSchema = packagingProfileSchema.extend({
   profileType: z.literal('storage'),
   levels: z.array(packagingProfileLevelSchema)
@@ -40,7 +47,8 @@ export const patchStoragePresetBodySchema = createStoragePresetBodySchema.partia
 
 export const createContainerFromStoragePresetBodySchema = z.object({
   locationId: z.string().uuid().optional(),
-  externalCode: z.string().trim().min(1).optional()
+  externalCode: z.string().trim().min(1).optional(),
+  materializeContents: z.boolean().optional().default(false)
 });
 
 export const createContainerFromStoragePresetResultSchema = z.object({
@@ -50,7 +58,11 @@ export const createContainerFromStoragePresetResultSchema = z.object({
   containerTypeId: z.string().uuid(),
   packagingProfileId: z.string().uuid(),
   isStandardPack: z.literal(true),
-  placedLocationId: z.string().uuid().nullable()
+  placedLocationId: z.string().uuid().nullable(),
+  materializationMode: z.enum(['shell', 'materialized']),
+  materializedInventoryUnitId: z.string().uuid().nullable(),
+  materializedContainerLineId: z.string().uuid().nullable(),
+  materializedQuantity: z.number().positive().nullable()
 });
 
 export const setPreferredStoragePresetBodySchema = z.object({
@@ -58,6 +70,7 @@ export const setPreferredStoragePresetBodySchema = z.object({
 });
 
 export type StoragePresetUsageStatus = z.infer<typeof storagePresetUsageStatusSchema>;
+export type StoragePresetMaterializationStatus = z.infer<typeof storagePresetMaterializationStatusSchema>;
 export type StoragePreset = z.infer<typeof storagePresetSchema>;
 export type CreateStoragePresetBody = z.infer<typeof createStoragePresetBodySchema>;
 export type PatchStoragePresetBody = z.infer<typeof patchStoragePresetBodySchema>;

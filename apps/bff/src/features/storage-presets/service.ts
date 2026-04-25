@@ -26,6 +26,7 @@ export type StoragePresetsService = {
     presetId: string;
     locationId?: string;
     externalCode?: string;
+    materializeContents?: boolean;
     actorId: string;
   }): Promise<CreateContainerFromStoragePresetResult>;
 };

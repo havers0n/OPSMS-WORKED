@@ -148,11 +148,13 @@ describe('mapLocationStorageSnapshotRowToDomain', () => {
       uom: null,
       packaging_state: null,
       product_packaging_level_id: null,
-      pack_count: null
+      pack_count: null,
+      preset_materialization_status: 'shell'
     });
 
     expect(result.systemCode).toBe('CNT-000556');
     expect(result.externalCode).toBeNull();
     expect(result.packagingState).toBeNull();
+    expect(result.presetMaterializationStatus).toBe('shell');
   });
 });

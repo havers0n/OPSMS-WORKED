@@ -89,8 +89,17 @@ export type StoragePresetsRepo = {
     presetId: string;
     locationId?: string;
     externalCode?: string;
+    materializeContents?: boolean;
     actorId: string;
   }): Promise<CreateContainerFromStoragePresetResult>;
+};
+
+type MaterializeStoragePresetContentsResult = {
+  inventoryUnit?: {
+    id?: string;
+    quantity?: number;
+    container_line_id?: string | null;
+  };
 };
 
 const profileColumns =
@@ -334,11 +343,43 @@ export function createStoragePresetsRepo(supabase: SupabaseClient): StoragePrese
         packaging_profile_uuid: args.presetId,
         location_uuid: args.locationId ?? null,
         external_code_input: args.externalCode ?? null,
-        actor_uuid: args.actorId
+        actor_uuid: args.actorId,
+        materialize_contents_input: false
       });
 
       if (error) throw error;
-      return createContainerFromStoragePresetResultSchema.parse(data);
+      const shellResult = createContainerFromStoragePresetResultSchema.parse(data);
+      if (!args.materializeContents) {
+        return shellResult;
+      }
+
+      try {
+        const { data: materialized, error: materializeError } = await supabase.rpc(
+          'materialize_storage_preset_container_contents',
+          {
+            packaging_profile_uuid: args.presetId,
+            container_uuid: shellResult.containerId,
+            actor_uuid: args.actorId
+          }
+        );
+
+        if (materializeError) throw materializeError;
+        const materializedResult = materialized as MaterializeStoragePresetContentsResult;
+        const inventoryUnit = materializedResult.inventoryUnit;
+
+        return createContainerFromStoragePresetResultSchema.parse({
+          ...shellResult,
+          materializationMode: 'materialized',
+          materializedInventoryUnitId: inventoryUnit?.id ?? null,
+          materializedContainerLineId: inventoryUnit?.container_line_id ?? null,
+          materializedQuantity: inventoryUnit?.quantity ?? null
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'Unknown materialization failure.';
+        throw new Error(
+          `STORAGE_PRESET_MATERIALIZATION_FAILED: Container was created/placed, but materialization failed. ${detail}`
+        );
+      }
     }
   };
 }

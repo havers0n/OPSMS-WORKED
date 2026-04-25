@@ -8,6 +8,7 @@ export type CreateContainerFromStoragePresetInput = {
   presetId: string;
   locationId?: string;
   externalCode?: string;
+  materializeContents?: boolean;
 };
 
 export type CreateContainerFromStoragePresetResult = {
@@ -18,6 +19,10 @@ export type CreateContainerFromStoragePresetResult = {
   packagingProfileId: string;
   isStandardPack: true;
   placedLocationId: string | null;
+  materializationMode: 'shell' | 'materialized';
+  materializedInventoryUnitId: string | null;
+  materializedContainerLineId: string | null;
+  materializedQuantity: number | null;
 };
 
 export type SetPreferredStoragePresetInput = {
@@ -35,7 +40,8 @@ export async function createContainerFromStoragePreset(
       method: 'POST',
       body: JSON.stringify({
         locationId: input.locationId,
-        externalCode: input.externalCode
+        externalCode: input.externalCode,
+        materializeContents: input.materializeContents ?? false
       })
     }
   );

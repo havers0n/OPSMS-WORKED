@@ -123,7 +123,9 @@ function buildCurrentContainerCards(containers: GroupedContainer[]): CurrentCont
       title: displayCode,
       secondaryText: `${containerType} / ${status}`,
       status,
-      presetUsageText: presetUsageLabel(first?.presetUsageStatus),
+      presetUsageText: `${presetUsageLabel(first?.presetUsageStatus)} / ${presetMaterializationLabel(
+        first?.presetMaterializationStatus
+      )}`,
       inventoryEntryCount
     };
   });
@@ -237,6 +239,19 @@ function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'
       return 'Manual';
     default:
       return 'Preset unknown';
+  }
+}
+
+function presetMaterializationLabel(status: LocationStorageSnapshotRow['presetMaterializationStatus'] | undefined) {
+  switch (status) {
+    case 'shell':
+      return 'Preset shell';
+    case 'materialized':
+      return 'Materialized preset';
+    case 'manual':
+      return 'Manual contents';
+    default:
+      return 'Materialization unknown';
   }
 }
 
@@ -407,6 +422,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [createFromPresetSelectedProduct, setCreateFromPresetSelectedProduct] = useState<Product | null>(null);
   const [createFromPresetPresetId, setCreateFromPresetPresetId] = useState('');
   const [createFromPresetExternalCode, setCreateFromPresetExternalCode] = useState('');
+  const [createFromPresetMaterializeContents, setCreateFromPresetMaterializeContents] = useState(false);
   const [createFromPresetErrorMessage, setCreateFromPresetErrorMessage] = useState<string | null>(null);
   const [createFromPresetIsSubmitting, setCreateFromPresetIsSubmitting] = useState(false);
 
@@ -546,6 +562,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setCreateFromPresetSelectedProduct(null);
     setCreateFromPresetPresetId('');
     setCreateFromPresetExternalCode('');
+    setCreateFromPresetMaterializeContents(false);
     setCreateFromPresetErrorMessage(null);
     setCreateFromPresetIsSubmitting(false);
   };
@@ -908,7 +925,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       const result = await createContainerFromStoragePreset({
         presetId: createFromPresetPresetId,
         locationId,
-        externalCode: createFromPresetExternalCode.trim() || undefined
+        externalCode: createFromPresetExternalCode.trim() || undefined,
+        materializeContents: createFromPresetMaterializeContents
       });
       await invalidatePlacementQueries(queryClient, { floorId, containerId: result.containerId });
       await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
@@ -916,7 +934,19 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       setSelectedContainerId(result.containerId);
       closeCreateFromPresetTask();
     } catch (error) {
-      setCreateFromPresetErrorMessage(errorMessageFromUnknown(error, 'Failed to create container from preset.'));
+      if (createFromPresetMaterializeContents) {
+        await invalidatePlacementQueries(queryClient, { floorId });
+        await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
+        await queryClient.invalidateQueries({ queryKey: containerKeys.list() });
+      }
+      setCreateFromPresetErrorMessage(
+        errorMessageFromUnknown(
+          error,
+          createFromPresetMaterializeContents
+            ? 'Container may have been created/placed, but preset contents materialization failed.'
+            : 'Failed to create container from preset.'
+        )
+      );
     } finally {
       setCreateFromPresetIsSubmitting(false);
     }
@@ -1464,6 +1494,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         presets={createFromPresetPresets}
         selectedPresetId={createFromPresetPresetId}
         externalCode={createFromPresetExternalCode}
+        materializeContents={createFromPresetMaterializeContents}
         isLoadingPresets={createFromPresetPresetsLoading}
         isSubmitting={createFromPresetIsSubmitting}
         locationId={locationId}
@@ -1475,6 +1506,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onProductSelect={handleCreateFromPresetSelect}
         onPresetChange={setCreateFromPresetPresetId}
         onExternalCodeChange={setCreateFromPresetExternalCode}
+        onMaterializeContentsChange={setCreateFromPresetMaterializeContents}
         onConfirm={() => void handleCreateFromPresetConfirm()}
         onCancel={closeCreateFromPresetTask}
       />

@@ -366,6 +366,7 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
   container_is_standard_pack?: boolean | null;
   preferred_packaging_profile_id?: string | null;
   preset_usage_status?: 'preferred_match' | 'standard_non_preferred' | 'manual' | 'unknown' | null;
+  preset_materialization_status?: 'shell' | 'materialized' | 'manual' | 'unknown' | null;
 }): ContainerStorageSnapshotRow {
   return containerStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
@@ -385,7 +386,8 @@ export function mapContainerStorageSnapshotRowToDomain(row: {
     containerPackagingProfileId: row.container_packaging_profile_id ?? null,
     containerIsStandardPack: row.container_is_standard_pack ?? null,
     preferredPackagingProfileId: row.preferred_packaging_profile_id ?? null,
-    presetUsageStatus: row.preset_usage_status ?? 'unknown'
+    presetUsageStatus: row.preset_usage_status ?? 'unknown',
+    presetMaterializationStatus: row.preset_materialization_status ?? 'unknown'
   });
 }
 
@@ -474,6 +476,7 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
   container_is_standard_pack?: boolean | null;
   preferred_packaging_profile_id?: string | null;
   preset_usage_status?: 'preferred_match' | 'standard_non_preferred' | 'manual' | 'unknown' | null;
+  preset_materialization_status?: 'shell' | 'materialized' | 'manual' | 'unknown' | null;
 }): LocationStorageSnapshotRow {
   return locationStorageSnapshotRowSchema.parse({
     tenantId: row.tenant_id,
@@ -499,7 +502,8 @@ export function mapLocationStorageSnapshotRowToDomain(row: {
     containerPackagingProfileId: row.container_packaging_profile_id ?? null,
     containerIsStandardPack: row.container_is_standard_pack ?? null,
     preferredPackagingProfileId: row.preferred_packaging_profile_id ?? null,
-    presetUsageStatus: row.preset_usage_status ?? 'unknown'
+    presetUsageStatus: row.preset_usage_status ?? 'unknown',
+    presetMaterializationStatus: row.preset_materialization_status ?? 'unknown'
   });
 }
 

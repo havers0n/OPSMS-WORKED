@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createContainerFromStoragePresetBodySchema,
   createContainerFromStoragePresetResultSchema,
   storagePresetSchema
 } from './storage-preset';
@@ -60,8 +61,16 @@ describe('storage preset schemas', () => {
         containerTypeId: '22222222-2222-4222-8222-222222222222',
         packagingProfileId: '33333333-3333-4333-8333-333333333333',
         isStandardPack: true,
-        placedLocationId: null
+        placedLocationId: null,
+        materializationMode: 'shell',
+        materializedInventoryUnitId: null,
+        materializedContainerLineId: null,
+        materializedQuantity: null
       }).isStandardPack
     ).toBe(true);
+  });
+
+  it('defaults create-from-preset materialization to shell mode', () => {
+    expect(createContainerFromStoragePresetBodySchema.parse({}).materializeContents).toBe(false);
   });
 });

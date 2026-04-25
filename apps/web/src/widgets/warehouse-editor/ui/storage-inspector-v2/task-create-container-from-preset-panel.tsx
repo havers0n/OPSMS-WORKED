@@ -13,6 +13,7 @@ type CreateContainerFromPresetTaskPanelProps = {
   presets: StoragePreset[];
   selectedPresetId: string;
   externalCode: string;
+  materializeContents: boolean;
   isLoadingPresets: boolean;
   isSubmitting: boolean;
   locationId: string | null;
@@ -24,6 +25,7 @@ type CreateContainerFromPresetTaskPanelProps = {
   onProductSelect: (product: Product) => void;
   onPresetChange: (presetId: string) => void;
   onExternalCodeChange: (value: string) => void;
+  onMaterializeContentsChange: (value: boolean) => void;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -35,6 +37,7 @@ export function CreateContainerFromPresetTaskPanel({
   presets,
   selectedPresetId,
   externalCode,
+  materializeContents,
   isLoadingPresets,
   isSubmitting,
   locationId,
@@ -46,6 +49,7 @@ export function CreateContainerFromPresetTaskPanel({
   onProductSelect,
   onPresetChange,
   onExternalCodeChange,
+  onMaterializeContentsChange,
   onConfirm,
   onCancel
 }: CreateContainerFromPresetTaskPanelProps) {
@@ -139,6 +143,38 @@ export function CreateContainerFromPresetTaskPanel({
             aria-label="External code"
           />
         </div>
+
+        <fieldset className="space-y-2 rounded border border-gray-200 px-3 py-2">
+          <legend className="px-1 text-xs font-medium text-gray-700">Preset mode</legend>
+          <label className="flex items-start gap-2 text-xs text-gray-700">
+            <input
+              type="radio"
+              name="create-from-preset-mode"
+              checked={!materializeContents}
+              onChange={() => onMaterializeContentsChange(false)}
+              disabled={isSubmitting}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block font-medium">Create empty preset shell</span>
+              <span className="text-gray-500">Creates a standard container with the preset reference only.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs text-gray-700">
+            <input
+              type="radio"
+              name="create-from-preset-mode"
+              checked={materializeContents}
+              onChange={() => onMaterializeContentsChange(true)}
+              disabled={isSubmitting}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block font-medium">Create and fill standard contents</span>
+              <span className="text-gray-500">Initial contents are created only by backend receipt logic.</span>
+            </span>
+          </label>
+        </fieldset>
 
         {!locationId ? <p className="text-xs text-gray-400">Resolving location...</p> : null}
         {errorMessage ? (
