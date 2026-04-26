@@ -31,6 +31,7 @@ export const pickStepSchema = z.object({
   qtyRequired: z.number().int().positive(),
   qtyPicked: z.number().int().min(0),
   status: pickStepStatusSchema,
+  sourceLocationId: z.string().uuid().nullable().optional(),
   sourceCellId: z.string().uuid().nullable(),
   sourceContainerId: z.string().uuid().nullable(),
   inventoryUnitId: z.string().uuid().nullable(),
@@ -57,6 +58,7 @@ export type PickTask = z.infer<typeof pickTaskSchema>;
 
 /** Step enriched with human-readable source location / container / product image */
 export const pickStepDetailSchema = pickStepSchema.extend({
+  sourceLocationCode: z.string().nullable().optional(),
   sourceCellAddress: z.string().nullable(),
   sourceContainerCode: z.string().nullable(),
   sourceFloorId: z.string().uuid().nullable(),
