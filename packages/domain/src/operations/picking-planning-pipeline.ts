@@ -4,6 +4,7 @@ import type {
   PickingStrategy,
   StorageLocationProjection
 } from './picking-planning';
+import { dedupePlanningWarnings, warningMessages, type PlanningWarning } from './planning-warning';
 import { getDefaultPickingStrategy } from './picking-strategies';
 import {
   sequenceWorkPackageRoute,
@@ -57,6 +58,7 @@ export type PickingPlanningResult = {
   split: WorkSplitResult;
   packages: PlannedRoutePackage[];
   warnings: string[];
+  warningDetails: PlanningWarning[];
   metadata: {
     packageCount: number;
     routeStepCount: number;
@@ -98,6 +100,24 @@ export function collectPlanningWarnings(
   return dedupeWarnings(combinedWarnings);
 }
 
+export function collectPlanningWarningDetails(
+  rootPackage: WorkPackageDraft,
+  split: WorkSplitResult,
+  packages: PlannedRoutePackage[]
+): PlanningWarning[] {
+  const combinedWarnings: PlanningWarning[] = [];
+
+  combinedWarnings.push(...rootPackage.warningDetails);
+  combinedWarnings.push(...split.warningDetails);
+
+  for (const plannedPackage of packages) {
+    combinedWarnings.push(...plannedPackage.package.warningDetails);
+    combinedWarnings.push(...plannedPackage.route.warningDetails);
+  }
+
+  return dedupePlanningWarnings(combinedWarnings);
+}
+
 export function planPickingWork(input: PickingPlanningInput): PickingPlanningResult {
   const strategy =
     input.strategy ??
@@ -128,7 +148,8 @@ export function planPickingWork(input: PickingPlanningInput): PickingPlanningRes
     })
   }));
 
-  const warnings = collectPlanningWarnings(rootPackage, split, packages);
+  const warningDetails = collectPlanningWarningDetails(rootPackage, split, packages);
+  const warnings = warningMessages(warningDetails);
 
   return {
     strategy,
@@ -136,6 +157,7 @@ export function planPickingWork(input: PickingPlanningInput): PickingPlanningRes
     split,
     packages,
     warnings,
+    warningDetails,
     metadata: {
       packageCount: packages.length,
       routeStepCount: packages.reduce((sum, plannedPackage) => sum + plannedPackage.route.steps.length, 0),

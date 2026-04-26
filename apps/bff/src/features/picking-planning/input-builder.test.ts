@@ -74,6 +74,9 @@ describe('buildPlanningInputFromOrders', () => {
       { orderIds: ['o1'] }
     );
     expect(unresolvedNoLocation.unresolved[0]?.reason).toBe('no_primary_pick_location');
+    expect(unresolvedNoLocation.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'NO_PRIMARY_PICK_LOCATION', severity: 'error' })
+    );
 
     const unresolvedNoInventory = await buildPlanningInputFromOrders(
       makeRepo({
@@ -85,6 +88,9 @@ describe('buildPlanningInputFromOrders', () => {
       { orderIds: ['o1'] }
     );
     expect(unresolvedNoInventory.unresolved.some((line) => line.reason === 'no_available_inventory')).toBe(true);
+    expect(unresolvedNoInventory.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'NO_AVAILABLE_INVENTORY', severity: 'error' })
+    );
   });
 
   it('does not block candidate when dimensions are missing', async () => {
@@ -117,5 +123,8 @@ describe('buildPlanningInputFromOrders', () => {
     expect(result.tasks[0]?.weightKg).toBeUndefined();
     expect(result.tasks[0]?.volumeLiters).toBeUndefined();
     expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.warningDetails.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining(['UNKNOWN_WEIGHT', 'UNKNOWN_VOLUME'])
+    );
   });
 });

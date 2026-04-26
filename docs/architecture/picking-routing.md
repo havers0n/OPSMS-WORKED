@@ -568,3 +568,64 @@ centralized and updated there.
 
 No release, allocation, execution, UI, or planning persistence behavior changes
 are introduced in PR 15.
+
+### PR 16 — Structured planning warning codes
+
+PR 16 keeps plain string planning warnings for readability and backward
+compatibility, and adds `warningDetails` for machine-readable handling.
+
+`warnings: string[]` remains the human-readable compatibility field. New UI and
+future acceptance-flow logic should use `warningDetails[].code` and
+`warningDetails[].severity` for icons, filtering, grouping, and decision rules
+instead of matching message text.
+
+Structured warning fields:
+- `code`: stable warning code such as `DISTANCE_MODE_FALLBACK`;
+- `severity`: `info`, `warning`, or `error`;
+- `message`: human-readable text, matching the compatibility warning where
+  applicable;
+- `source`: optional producer hint such as `complexity`, `split`, `route`,
+  `builder`, or `wave`;
+- `details`: optional structured context.
+
+Example:
+
+```json
+{
+  "warnings": [
+    "Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing."
+  ],
+  "warningDetails": [
+    {
+      "code": "DISTANCE_MODE_FALLBACK",
+      "severity": "info",
+      "message": "Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.",
+      "source": "route"
+    }
+  ]
+}
+```
+
+Initial code mapping:
+- workload thresholds: `WORKLOAD_EXCEEDS_PICK_LINES`,
+  `WORKLOAD_EXCEEDS_WEIGHT`, `WORKLOAD_EXCEEDS_VOLUME`,
+  `WORKLOAD_EXCEEDS_LOCATIONS`, `WORKLOAD_EXCEEDS_ZONES`;
+- missing or unknown planning data: `UNKNOWN_WEIGHT`, `UNKNOWN_VOLUME`,
+  `UNKNOWN_SOURCE_LOCATION`;
+- package strategy warnings: `EMPTY_WORKLOAD`, `POST_SORT_REQUIRED`,
+  `ORDER_SEPARATION_NOT_PRESERVED`, `CART_REQUIRED_FOR_CLUSTER`;
+- split reasons: `WORK_PACKAGE_SPLIT_BY_ZONE`,
+  `WORK_PACKAGE_SPLIT_BY_AISLE_OR_LOCATION`,
+  `WORK_PACKAGE_SPLIT_BY_WEIGHT`, `WORK_PACKAGE_SPLIT_BY_VOLUME`,
+  `WORK_PACKAGE_SPLIT_BY_PICK_LINES`;
+- route warnings: `DISTANCE_MODE_FALLBACK`, `HAZMAT_PRESENT`,
+  `UNKNOWN_SOURCE_LOCATION`, `CART_REQUIRED_FOR_CLUSTER`;
+- order/wave input warnings: `UNRESOLVED_PLANNING_LINES_PRESENT`,
+  `EMPTY_WAVE`, `NO_AVAILABLE_INVENTORY`, `NO_PRIMARY_PICK_LOCATION`,
+  `MISSING_PRODUCT`, `MISSING_SOURCE_LOCATION`, `UNSUPPORTED_UOM`,
+  `MISSING_ORDER_LINE`.
+
+PR 16 does not change planning behavior, does not accept or block plans, and
+does not persist planning output. It also does not add UI, release/allocation
+changes, picking execution changes, graph routing, cart-slot assignment,
+reserve fallback, or multi-source allocation.

@@ -1,4 +1,4 @@
-import type { PickingPlanningResult, RouteStep, WorkPackageDraft } from '@wos/domain';
+import { dedupePlanningWarnings, type PickingPlanningResult, type PlanningWarning, type RouteStep, type WorkPackageDraft } from '@wos/domain';
 import type { PlanningCoverage, UnresolvedPlanningLineSummary } from './diagnostics.js';
 import type { UnresolvedPlanningLine } from './input-builder.js';
 
@@ -70,6 +70,14 @@ export type PlanningUnresolvedLineDto = {
   message: string;
 };
 
+export type PlanningWarningDto = {
+  code: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  source?: string;
+  details?: Record<string, unknown>;
+};
+
 export type PickingPlanningPreviewResponse = {
   kind: PickingPlanningPreviewKind;
   input: {
@@ -109,10 +117,21 @@ export type PickingPlanningPreviewResponse = {
   packages: PlanningPackageRouteDto[];
   unresolved?: PlanningUnresolvedLineDto[];
   warnings: string[];
+  warningDetails: PlanningWarningDto[];
 };
 
 function dedupeWarnings(warnings: string[]): string[] {
   return Array.from(new Set(warnings));
+}
+
+function mapWarningToDto(warning: PlanningWarning): PlanningWarningDto {
+  return {
+    code: warning.code,
+    severity: warning.severity,
+    message: warning.message,
+    source: warning.source,
+    details: warning.details ? { ...warning.details } : undefined
+  };
 }
 
 export function mapWorkPackageToDto(pkg: WorkPackageDraft): PlanningWorkPackageDto {
@@ -169,8 +188,13 @@ export function mapPlanningPreviewToResponse(args: {
   unresolvedSummary?: UnresolvedPlanningLineSummary;
   coverage?: PlanningCoverage;
   extraWarnings?: string[];
+  extraWarningDetails?: PlanningWarning[];
 }): PickingPlanningPreviewResponse {
   const warnings = dedupeWarnings([...(args.planning.warnings ?? []), ...(args.extraWarnings ?? [])]);
+  const warningDetails = dedupePlanningWarnings([
+    ...(args.planning.warningDetails ?? []),
+    ...(args.extraWarningDetails ?? [])
+  ]);
 
   return {
     kind: args.kind,
@@ -222,6 +246,7 @@ export function mapPlanningPreviewToResponse(args: {
       }
     })),
     unresolved: args.unresolved?.map((line) => ({ ...line })),
-    warnings
+    warnings,
+    warningDetails: warningDetails.map(mapWarningToDto)
   };
 }

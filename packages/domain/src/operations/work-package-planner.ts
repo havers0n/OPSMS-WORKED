@@ -1,4 +1,5 @@
 import type { PickTaskCandidate, PickingMethod, PickingStrategy, WorkPackage } from './picking-planning';
+import { createPlanningWarning, warningMessages, type PlanningWarning } from './planning-warning';
 import { getDefaultPickingStrategy } from './picking-strategies';
 import {
   estimateWorkloadComplexity,
@@ -23,6 +24,7 @@ export type WorkPackageDraft = WorkPackage & {
   strategy: PickingStrategy;
   complexity: WorkloadComplexityScore;
   warnings: string[];
+  warningDetails: PlanningWarning[];
   metadata: {
     generatedAt?: string;
     source: 'domain_planner';
@@ -75,23 +77,24 @@ export function planWorkPackage(input: WorkPackagePlanningInput): WorkPackageDra
   });
 
   const orderCount = countOrdersInTasks(input.tasks);
-  const warnings = [...complexity.warnings];
+  const warningDetails = [...complexity.warningDetails];
 
   if (input.tasks.length === 0) {
-    warnings.push('WorkPackage has no tasks.');
+    warningDetails.push(createPlanningWarning('EMPTY_WORKLOAD', 'WorkPackage has no tasks.', { source: 'domain' }));
   }
 
   if (strategy.requiresCartSlots && !input.assignedCartId) {
-    warnings.push('Strategy requires cart slots but no assigned cart is provided.');
+    warningDetails.push(createPlanningWarning('CART_REQUIRED_FOR_CLUSTER', 'Strategy requires cart slots but no assigned cart is provided.', { source: 'domain' }));
   }
 
   if (strategy.requiresPostSort) {
-    warnings.push('Strategy requires post-sort.');
+    warningDetails.push(createPlanningWarning('POST_SORT_REQUIRED', 'Strategy requires post-sort.', { severity: 'info', source: 'domain' }));
   }
 
   if (!strategy.preserveOrderSeparation && orderCount > 1) {
-    warnings.push('Strategy may mix multiple orders in one WorkPackage.');
+    warningDetails.push(createPlanningWarning('ORDER_SEPARATION_NOT_PRESERVED', 'Strategy may mix multiple orders in one WorkPackage.', { source: 'domain' }));
   }
+  const warnings = warningMessages(warningDetails);
 
   return {
     id: input.id ?? createWorkPackageId(strategy, complexity),
@@ -109,6 +112,7 @@ export function planWorkPackage(input: WorkPackagePlanningInput): WorkPackageDra
     complexityScore: complexity.score,
     complexity,
     warnings,
+    warningDetails,
     metadata: {
       source: 'domain_planner',
       taskCount: complexity.pickLines,

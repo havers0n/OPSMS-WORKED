@@ -1,5 +1,6 @@
 import type { PickTaskCandidate, PickingStrategy } from './picking-planning';
 import { getDefaultPickingStrategy } from './picking-strategies';
+import { createPlanningWarning, warningMessages, type PlanningWarning, type PlanningWarningCode } from './planning-warning';
 import { planWorkPackage, type WorkPackageDraft } from './work-package-planner';
 import {
   estimateWorkloadComplexity,
@@ -27,6 +28,7 @@ export type WorkSplitResult = {
   reason: WorkSplitReason;
   packages: WorkPackageDraft[];
   warnings: string[];
+  warningDetails: PlanningWarning[];
 };
 
 function resolveStrategy(workPackage: WorkPackageDraft): PickingStrategy {
@@ -208,17 +210,29 @@ function buildChildrenFromGroups(
     max_volume: 'volume',
     max_pick_lines: 'pick lines'
   };
+  const reasonCode: Record<Exclude<WorkSplitReason, 'none'>, PlanningWarningCode> = {
+    max_zones: 'WORK_PACKAGE_SPLIT_BY_ZONE',
+    max_unique_locations: 'WORK_PACKAGE_SPLIT_BY_AISLE_OR_LOCATION',
+    max_weight: 'WORK_PACKAGE_SPLIT_BY_WEIGHT',
+    max_volume: 'WORK_PACKAGE_SPLIT_BY_VOLUME',
+    max_pick_lines: 'WORK_PACKAGE_SPLIT_BY_PICK_LINES'
+  };
 
-  const warnings = [`Work package split by ${reasonText[splitReason as Exclude<WorkSplitReason, 'none'>]}.`];
+  const splitMessage = `Work package split by ${reasonText[splitReason as Exclude<WorkSplitReason, 'none'>]}.`;
+  const warningDetails = [
+    createPlanningWarning(reasonCode[splitReason as Exclude<WorkSplitReason, 'none'>], splitMessage, { source: 'split' })
+  ];
   for (const child of childPackages) {
-    warnings.push(...child.warnings);
+    warningDetails.push(...child.warningDetails);
   }
+  const warnings = warningMessages(warningDetails);
 
   return {
     wasSplit: true,
     reason: splitReason,
     packages: childPackages,
-    warnings
+    warnings,
+    warningDetails
   };
 }
 
@@ -228,7 +242,10 @@ export function splitWorkPackage(input: WorkSplitInput): WorkSplitResult {
       wasSplit: false,
       reason: 'none',
       packages: [input.package],
-      warnings: ['Work package is empty and was not split.']
+      warnings: ['Work package is empty and was not split.'],
+      warningDetails: [
+        createPlanningWarning('EMPTY_WORKLOAD', 'Work package is empty and was not split.', { source: 'split' })
+      ]
     };
   }
 
@@ -240,7 +257,8 @@ export function splitWorkPackage(input: WorkSplitInput): WorkSplitResult {
       wasSplit: false,
       reason,
       packages: [input.package],
-      warnings: []
+      warnings: [],
+      warningDetails: []
     };
   }
 

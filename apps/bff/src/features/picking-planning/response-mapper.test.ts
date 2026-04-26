@@ -67,9 +67,11 @@ function createPlanningResult(): PickingPlanningResult {
           maxUniqueLocations: false,
           maxZones: false
         },
-        warnings: []
+        warnings: [],
+        warningDetails: []
       },
       warnings: ['pkg-warning'],
+      warningDetails: [],
       metadata: {
         source: 'domain_planner',
         taskCount: 1,
@@ -84,7 +86,8 @@ function createPlanningResult(): PickingPlanningResult {
       wasSplit: false,
       reason: 'none',
       packages: [],
-      warnings: ['split-warning']
+      warnings: ['split-warning'],
+      warningDetails: []
     },
     packages: [
       {
@@ -139,9 +142,11 @@ function createPlanningResult(): PickingPlanningResult {
               maxUniqueLocations: false,
               maxZones: false
             },
-            warnings: []
+            warnings: [],
+            warningDetails: []
           },
           warnings: ['pkg-warning'],
+          warningDetails: [],
           metadata: {
             source: 'domain_planner',
             taskCount: 1,
@@ -164,6 +169,7 @@ function createPlanningResult(): PickingPlanningResult {
             }
           ],
           warnings: ['route-warning'],
+          warningDetails: [],
           metadata: {
             mode: 'hybrid',
             taskCount: 1,
@@ -174,6 +180,20 @@ function createPlanningResult(): PickingPlanningResult {
       }
     ],
     warnings: ['planning-warning', 'shared-warning'],
+    warningDetails: [
+      {
+        code: 'POST_SORT_REQUIRED',
+        severity: 'info',
+        message: 'planning-warning',
+        source: 'domain'
+      },
+      {
+        code: 'DISTANCE_MODE_FALLBACK',
+        severity: 'info',
+        message: 'shared-warning',
+        source: 'route'
+      }
+    ],
     metadata: {
       packageCount: 1,
       routeStepCount: 1,
@@ -199,6 +219,11 @@ describe('response mapper', () => {
     expect((result.packages[0] as any).package).toBeUndefined();
     expect(result.summary).toMatchObject({ taskCount: 1, packageCount: 1, routeStepCount: 1, splitReason: 'none' });
     expect(result.packages[0].route.steps.map((step) => step.sequence)).toEqual([1]);
+    expect(result.warnings).toEqual(['planning-warning', 'shared-warning']);
+    expect(result.warningDetails).toEqual([
+      expect.objectContaining({ code: 'POST_SORT_REQUIRED', severity: 'info', message: 'planning-warning' }),
+      expect.objectContaining({ code: 'DISTANCE_MODE_FALLBACK', severity: 'info', message: 'shared-warning' })
+    ]);
   });
 
   it('maps orders result with unresolved summary and coverage', () => {
@@ -260,6 +285,7 @@ describe('response mapper', () => {
     expect(result.input.waveId).toBe('wave-1');
     expect(result.input.orderIds).toEqual(['order-1']);
     expect(result.warnings).toEqual(['planning-warning', 'shared-warning', 'wave-warning']);
+    expect(result.warningDetails.map((warning) => warning.message)).toEqual(['planning-warning', 'shared-warning']);
     expect(planning.warnings).toEqual(originalWarnings);
   });
 });

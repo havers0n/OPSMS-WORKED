@@ -1,4 +1,5 @@
 import type { PickTaskCandidate, RoutePriorityMode, RouteStep, StorageLocationProjection } from './picking-planning';
+import { createPlanningWarning, warningMessages, type PlanningWarning } from './planning-warning';
 import type { WorkPackageDraft } from './work-package-planner';
 
 export type RouteSequenceMode = RoutePriorityMode;
@@ -32,6 +33,7 @@ export type RouteSequencerInput = {
 export type RouteSequencerResult = {
   steps: RouteStep[];
   warnings: string[];
+  warningDetails: PlanningWarning[];
   metadata: {
     mode: RouteSequenceMode;
     taskCount: number;
@@ -188,17 +190,17 @@ function comparator(mode: RouteSequenceMode): (left: SequencingCandidate, right:
 export function sequenceWorkPackageRoute(input: RouteSequencerInput): RouteSequencerResult {
   const workPackage = input.package;
   const locationsById = input.locationsById ?? {};
-  const warnings: string[] = [];
+  const warningDetails: PlanningWarning[] = [];
 
   const requestedMode = input.mode ?? workPackage.strategy.routePriorityMode ?? 'hybrid';
   const mode = requestedMode === 'distance' ? 'hybrid' : requestedMode;
 
   if (requestedMode === 'distance') {
-    warnings.push('Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.');
+    warningDetails.push(createPlanningWarning('DISTANCE_MODE_FALLBACK', 'Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.', { severity: 'info', source: 'route' }));
   }
 
   if (workPackage.tasks.length === 0) {
-    warnings.push('Work package has no tasks.');
+    warningDetails.push(createPlanningWarning('EMPTY_WORKLOAD', 'Work package has no tasks.', { source: 'route' }));
   }
 
   const candidates: SequencingCandidate[] = workPackage.tasks.map((task, stableIndex) => {
@@ -216,11 +218,11 @@ export function sequenceWorkPackageRoute(input: RouteSequencerInput): RouteSeque
 
   const unknownLocationCount = candidates.filter((candidate) => candidate.unknownLocation).length;
   if (unknownLocationCount > 0) {
-    warnings.push(`Some tasks have unknown source locations (${unknownLocationCount}). Unknown locations are sequenced last.`);
+    warningDetails.push(createPlanningWarning('UNKNOWN_SOURCE_LOCATION', `Some tasks have unknown source locations (${unknownLocationCount}). Unknown locations are sequenced last.`, { source: 'route', details: { count: unknownLocationCount } }));
   }
 
   if (candidates.some((candidate) => candidate.task.handlingClass === 'hazmat')) {
-    warnings.push('Hazmat tasks are present. Follow special handling procedure and local safety policy.');
+    warningDetails.push(createPlanningWarning('HAZMAT_PRESENT', 'Hazmat tasks are present. Follow special handling procedure and local safety policy.', { source: 'route' }));
   }
 
   const sequenced = [...candidates].sort(comparator(mode));
@@ -240,12 +242,14 @@ export function sequenceWorkPackageRoute(input: RouteSequencerInput): RouteSeque
   }));
 
   if (workPackage.strategy.requiresCartSlots && !steps.some((step) => step.allocations.some((allocation) => allocation.cartSlotId))) {
-    warnings.push('Cluster strategy requires cart slots but no cart slot allocations exist yet.');
+    warningDetails.push(createPlanningWarning('CART_REQUIRED_FOR_CLUSTER', 'Cluster strategy requires cart slots but no cart slot allocations exist yet.', { source: 'route' }));
   }
+  const warnings = warningMessages(warningDetails);
 
   return {
     steps,
     warnings,
+    warningDetails,
     metadata: {
       mode,
       taskCount: workPackage.tasks.length,

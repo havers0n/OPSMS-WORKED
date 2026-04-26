@@ -165,6 +165,14 @@ describe('sequenceWorkPackageRoute', () => {
     expect(result.warnings).toContain(
       'Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.'
     );
+    expect(result.warningDetails).toContainEqual(
+      expect.objectContaining({
+        code: 'DISTANCE_MODE_FALLBACK',
+        severity: 'info',
+        message: 'Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.',
+        source: 'route'
+      })
+    );
   });
 
   it('unknown locations are sorted last and warned', () => {

@@ -1,4 +1,11 @@
-import { planPickingWork, type PickingPlanningInput, type PickingPlanningResult } from '@wos/domain';
+import {
+  createPlanningWarning,
+  dedupePlanningWarnings,
+  planPickingWork,
+  type PickingPlanningInput,
+  type PickingPlanningResult,
+  type PlanningWarning
+} from '@wos/domain';
 import type {
   PickingPlanningPreviewOrdersRequest,
   PickingPlanningPreviewRequest,
@@ -29,6 +36,7 @@ export type PickingPlanningPreviewFromWaveResult = PickingPlanningPreviewFromOrd
   orderIds: string[];
   unresolvedSummary: UnresolvedPlanningLineSummary;
   coverage: PlanningCoverage;
+  warningDetails: PlanningWarning[];
 };
 
 export type PickingPlanningPreviewService = {
@@ -99,14 +107,25 @@ export function createPickingPlanningPreviewService(
       const fromOrders = await previewPickingPlanFromOrders({ ...input, orderIds });
 
       const warnings = new Set<string>(fromOrders.warnings);
+      const warningDetails: PlanningWarning[] = [
+        ...(fromOrders.warningDetails ?? []),
+        ...(fromOrders.planning.warningDetails ?? [])
+      ];
       for (const warning of fromOrders.planning.warnings) {
         warnings.add(warning);
       }
       if (orderIds.length === 0) {
-        warnings.add('Wave contains no orders.');
+        const message = 'Wave contains no orders.';
+        warnings.add(message);
+        warningDetails.push(createPlanningWarning('EMPTY_WAVE', message, { source: 'wave' }));
       }
       if (fromOrders.unresolved.length > 0) {
-        warnings.add('Unresolved planning lines are present in wave preview.');
+        const message = 'Unresolved planning lines are present in wave preview.';
+        warnings.add(message);
+        warningDetails.push(createPlanningWarning('UNRESOLVED_PLANNING_LINES_PRESENT', message, {
+          source: 'wave',
+          details: { count: fromOrders.unresolved.length }
+        }));
       }
 
       return {
@@ -118,7 +137,8 @@ export function createPickingPlanningPreviewService(
         unresolved: fromOrders.unresolved,
         unresolvedSummary: fromOrders.unresolvedSummary,
         coverage: fromOrders.coverage,
-        warnings: Array.from(warnings)
+        warnings: Array.from(warnings),
+        warningDetails: dedupePlanningWarnings(warningDetails)
       };
     }
   };

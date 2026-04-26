@@ -140,6 +140,12 @@ describe('picking planning preview service', () => {
       ])
     );
     expect(new Set(result.warnings).size).toBe(result.warnings.length);
+    expect(result.warningDetails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'NO_PRIMARY_PICK_LOCATION', severity: 'error' }),
+        expect.objectContaining({ code: 'UNRESOLVED_PLANNING_LINES_PRESENT', severity: 'warning' })
+      ])
+    );
   });
 
   it('returns warning and zeroed diagnostics for empty wave', async () => {
@@ -174,5 +180,8 @@ describe('picking planning preview service', () => {
       planningCoveragePct: 100
     });
     expect(result.warnings).toContain('Wave contains no orders.');
+    expect(result.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'EMPTY_WAVE', severity: 'warning', message: 'Wave contains no orders.' })
+    );
   });
 });

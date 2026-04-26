@@ -1,4 +1,5 @@
 import type { PickTaskCandidate, PickingStrategy } from './picking-planning';
+import { createPlanningWarning, warningMessages, type PlanningWarning } from './planning-warning';
 import { getDefaultPickingStrategy } from './picking-strategies';
 
 export type ComplexityLevel = 'low' | 'medium' | 'high' | 'critical';
@@ -45,6 +46,7 @@ export type WorkloadComplexityScore = {
     maxZones: boolean;
   };
   warnings: string[];
+  warningDetails: PlanningWarning[];
 };
 
 function getZoneId(location?: WorkloadComplexityLocationRef): string | undefined {
@@ -180,31 +182,32 @@ export function estimateWorkloadComplexity(input: WorkloadComplexityInput): Work
     unknownLocationCount * 5 +
     exceededThresholdCount * 15;
 
-  const warnings: string[] = [];
+  const warningDetails: PlanningWarning[] = [];
   if (exceeds.maxPickLines) {
-    warnings.push('Workload exceeds max pick lines.');
+    warningDetails.push(createPlanningWarning('WORKLOAD_EXCEEDS_PICK_LINES', 'Workload exceeds max pick lines.', { source: 'complexity' }));
   }
   if (exceeds.maxWeightKg) {
-    warnings.push('Workload exceeds max weight.');
+    warningDetails.push(createPlanningWarning('WORKLOAD_EXCEEDS_WEIGHT', 'Workload exceeds max weight.', { source: 'complexity' }));
   }
   if (exceeds.maxVolumeLiters) {
-    warnings.push('Workload exceeds max volume.');
+    warningDetails.push(createPlanningWarning('WORKLOAD_EXCEEDS_VOLUME', 'Workload exceeds max volume.', { source: 'complexity' }));
   }
   if (exceeds.maxUniqueLocations) {
-    warnings.push('Workload touches too many unique locations.');
+    warningDetails.push(createPlanningWarning('WORKLOAD_EXCEEDS_LOCATIONS', 'Workload touches too many unique locations.', { source: 'complexity' }));
   }
   if (exceeds.maxZones) {
-    warnings.push('Workload touches too many zones.');
+    warningDetails.push(createPlanningWarning('WORKLOAD_EXCEEDS_ZONES', 'Workload touches too many zones.', { source: 'complexity' }));
   }
   if (unknownWeightCount > 0) {
-    warnings.push('Some tasks are missing weight.');
+    warningDetails.push(createPlanningWarning('UNKNOWN_WEIGHT', 'Some tasks are missing weight.', { source: 'complexity', details: { count: unknownWeightCount } }));
   }
   if (unknownVolumeCount > 0) {
-    warnings.push('Some tasks are missing volume.');
+    warningDetails.push(createPlanningWarning('UNKNOWN_VOLUME', 'Some tasks are missing volume.', { source: 'complexity', details: { count: unknownVolumeCount } }));
   }
   if (unknownLocationCount > 0) {
-    warnings.push('Some tasks have unknown source locations.');
+    warningDetails.push(createPlanningWarning('UNKNOWN_SOURCE_LOCATION', 'Some tasks have unknown source locations.', { source: 'complexity', details: { count: unknownLocationCount } }));
   }
+  const warnings = warningMessages(warningDetails);
 
   return {
     level: toComplexityLevel(score),
@@ -225,6 +228,7 @@ export function estimateWorkloadComplexity(input: WorkloadComplexityInput): Work
     unknownVolumeCount,
     unknownLocationCount,
     exceeds,
-    warnings
+    warnings,
+    warningDetails
   };
 }

@@ -90,6 +90,9 @@ describe('splitWorkPackage', () => {
 
     expect(result.wasSplit).toBe(true);
     expect(collectTaskIds(result.packages).sort()).toEqual(['task-1', 'task-2']);
+    expect(result.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'WORK_PACKAGE_SPLIT_BY_ZONE', severity: 'warning', source: 'split' })
+    );
   });
 
   it('splits by aisle for maxUniqueLocations when accessAisleId exists', () => {

@@ -1,4 +1,4 @@
-import type { PickTaskCandidate, StorageLocationProjection } from '@wos/domain';
+import { createPlanningWarning, type PickTaskCandidate, type PlanningWarning, type PlanningWarningCode, type StorageLocationProjection } from '@wos/domain';
 import { mapStorageLocationProjection, type StorageLocationProjectionRow } from '../location-read/storage-location-projection.js';
 
 const SUPPORTED_UNIT_UOMS = new Set(['ea', 'each', 'unit', 'pcs', 'piece']);
@@ -84,6 +84,7 @@ export type BuildPlanningInputFromOrdersResult = {
   locationsById: Record<string, StorageLocationProjection>;
   unresolved: UnresolvedPlanningLine[];
   warnings: string[];
+  warningDetails: PlanningWarning[];
 };
 
 export type PickingPlanningOrderInputReadRepo = {
@@ -126,17 +127,55 @@ function resolveHandlingClass(profile: ProductUnitProfilePlanningRow | undefined
   return undefined;
 }
 
+function unresolvedReasonToWarningCode(reason: UnresolvedPlanningLine['reason']): PlanningWarningCode | undefined {
+  switch (reason) {
+    case 'missing_order_line':
+      return 'MISSING_ORDER_LINE';
+    case 'missing_product':
+      return 'MISSING_PRODUCT';
+    case 'no_primary_pick_location':
+      return 'NO_PRIMARY_PICK_LOCATION';
+    case 'no_available_inventory':
+      return 'NO_AVAILABLE_INVENTORY';
+    case 'missing_source_location':
+      return 'MISSING_SOURCE_LOCATION';
+    case 'unsupported_uom':
+      return 'UNSUPPORTED_UOM';
+    default:
+      return undefined;
+  }
+}
+
+function createUnresolvedPlanningWarning(line: UnresolvedPlanningLine): PlanningWarning | undefined {
+  const code = unresolvedReasonToWarningCode(line.reason);
+  if (!code) return undefined;
+
+  return createPlanningWarning(code, line.message, {
+    severity: 'error',
+    source: 'builder',
+    details: {
+      orderId: line.orderId,
+      orderLineId: line.orderLineId,
+      productId: line.productId,
+      skuId: line.skuId,
+      qty: line.qty,
+      reason: line.reason
+    }
+  });
+}
+
 export async function buildPlanningInputFromOrders(
   repo: PickingPlanningOrderInputReadRepo,
   request: BuildPlanningInputFromOrdersRequest
 ): Promise<BuildPlanningInputFromOrdersResult> {
   const orderIds = toUnique(request.orderIds);
   const warnings: string[] = [];
+  const warningDetails: PlanningWarning[] = [];
   const unresolved: UnresolvedPlanningLine[] = [];
   const tasks: PickTaskCandidate[] = [];
 
   if (orderIds.length === 0) {
-    return { tasks, unresolved, warnings, locationsById: {} };
+    return { tasks, unresolved, warnings, warningDetails, locationsById: {} };
   }
 
   const lines = await repo.listOrderLines(orderIds);
@@ -146,13 +185,16 @@ export async function buildPlanningInputFromOrders(
 
   for (const [orderId, lineCount] of linesByOrder.entries()) {
     if (lineCount === 0) {
-      unresolved.push({
+      const line = {
         orderId,
         orderLineId: 'missing',
         qty: 0,
         reason: 'missing_order_line',
         message: `Order ${orderId} has no order lines to plan.`
-      });
+      } satisfies UnresolvedPlanningLine;
+      unresolved.push(line);
+      const warning = createUnresolvedPlanningWarning(line);
+      if (warning) warningDetails.push(warning);
     }
   }
 
@@ -220,20 +262,23 @@ export async function buildPlanningInputFromOrders(
     }
 
     if (!line.product_id) {
-      unresolved.push({
+      const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
         skuId: line.sku,
         qty: qtyToPlan,
         reason: 'missing_product',
         message: `Order line ${line.id} has no product_id.`
-      });
+      } satisfies UnresolvedPlanningLine;
+      unresolved.push(unresolvedLine);
+      const warning = createUnresolvedPlanningWarning(unresolvedLine);
+      if (warning) warningDetails.push(warning);
       continue;
     }
 
     const product = productById.get(line.product_id);
     if (!product) {
-      unresolved.push({
+      const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
         skuId: line.sku,
@@ -241,13 +286,16 @@ export async function buildPlanningInputFromOrders(
         qty: qtyToPlan,
         reason: 'missing_product',
         message: `Product ${line.product_id} was not found.`
-      });
+      } satisfies UnresolvedPlanningLine;
+      unresolved.push(unresolvedLine);
+      const warning = createUnresolvedPlanningWarning(unresolvedLine);
+      if (warning) warningDetails.push(warning);
       continue;
     }
 
     const primaryPickLocationIds = primaryLocationsByProduct.get(line.product_id) ?? [];
     if (primaryPickLocationIds.length === 0) {
-      unresolved.push({
+      const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
         skuId: product.sku ?? line.sku,
@@ -255,7 +303,10 @@ export async function buildPlanningInputFromOrders(
         qty: qtyToPlan,
         reason: 'no_primary_pick_location',
         message: `No published primary_pick location is configured for product ${line.product_id}.`
-      });
+      } satisfies UnresolvedPlanningLine;
+      unresolved.push(unresolvedLine);
+      const warning = createUnresolvedPlanningWarning(unresolvedLine);
+      if (warning) warningDetails.push(warning);
       continue;
     }
 
@@ -277,7 +328,7 @@ export async function buildPlanningInputFromOrders(
       }
 
       if (eligible.length > 0 && withSupportedUom.length === 0) {
-        unresolved.push({
+        const unresolvedLine = {
           orderId: line.order_id,
           orderLineId: line.id,
           skuId: product.sku ?? line.sku,
@@ -285,12 +336,15 @@ export async function buildPlanningInputFromOrders(
           qty: qtyToPlan,
           reason: 'unsupported_uom',
           message: `Inventory at location ${locationId} for product ${line.product_id} has unsupported UOMs.`
-        });
+        } satisfies UnresolvedPlanningLine;
+        unresolved.push(unresolvedLine);
+        const warning = createUnresolvedPlanningWarning(unresolvedLine);
+        if (warning) warningDetails.push(warning);
       }
     }
 
     if (!selectedLocationId || !selectedInventory) {
-      unresolved.push({
+      const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
         skuId: product.sku ?? line.sku,
@@ -298,13 +352,16 @@ export async function buildPlanningInputFromOrders(
         qty: qtyToPlan,
         reason: 'no_available_inventory',
         message: `No available inventory in primary_pick locations can satisfy qty ${qtyToPlan}.`
-      });
+      } satisfies UnresolvedPlanningLine;
+      unresolved.push(unresolvedLine);
+      const warning = createUnresolvedPlanningWarning(unresolvedLine);
+      if (warning) warningDetails.push(warning);
       continue;
     }
 
     const location = locationById.get(selectedLocationId);
     if (!location) {
-      unresolved.push({
+      const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
         skuId: product.sku ?? line.sku,
@@ -312,7 +369,10 @@ export async function buildPlanningInputFromOrders(
         qty: qtyToPlan,
         reason: 'missing_source_location',
         message: `Source location ${selectedLocationId} could not be resolved.`
-      });
+      } satisfies UnresolvedPlanningLine;
+      unresolved.push(unresolvedLine);
+      const warning = createUnresolvedPlanningWarning(unresolvedLine);
+      if (warning) warningDetails.push(warning);
       continue;
     }
 
@@ -322,11 +382,15 @@ export async function buildPlanningInputFromOrders(
     const unitVolumeMm3 = toUnitVolumeMm3(profile, packLevel);
 
     if (unitWeightG == null) {
-      warnings.push(`Weight is missing for product ${line.product_id}; task ${line.id} weightKg left undefined.`);
+      const message = `Weight is missing for product ${line.product_id}; task ${line.id} weightKg left undefined.`;
+      warnings.push(message);
+      warningDetails.push(createPlanningWarning('UNKNOWN_WEIGHT', message, { source: 'builder', details: { productId: line.product_id, orderLineId: line.id } }));
     }
 
     if (unitVolumeMm3 == null) {
-      warnings.push(`Volume is missing for product ${line.product_id}; task ${line.id} volumeLiters left undefined.`);
+      const message = `Volume is missing for product ${line.product_id}; task ${line.id} volumeLiters left undefined.`;
+      warnings.push(message);
+      warningDetails.push(createPlanningWarning('UNKNOWN_VOLUME', message, { source: 'builder', details: { productId: line.product_id, orderLineId: line.id } }));
     }
 
     const skuId = product.sku ?? line.sku;
@@ -349,5 +413,5 @@ export async function buildPlanningInputFromOrders(
     locationsById[task.fromLocationId] = mapStorageLocationProjection(location);
   }
 
-  return { tasks, locationsById, unresolved, warnings };
+  return { tasks, locationsById, unresolved, warnings, warningDetails };
 }

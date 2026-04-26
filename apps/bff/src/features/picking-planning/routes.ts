@@ -64,7 +64,9 @@ export function registerPickingPlanningPreviewRoutes(
       },
       unresolved: preview.unresolved,
       unresolvedSummary: preview.unresolvedSummary,
-      coverage: preview.coverage
+      coverage: preview.coverage,
+      extraWarnings: preview.warnings,
+      extraWarningDetails: preview.warningDetails
     });
   });
 
@@ -87,7 +89,8 @@ export function registerPickingPlanningPreviewRoutes(
       unresolved: preview.unresolved,
       unresolvedSummary: preview.unresolvedSummary,
       coverage: preview.coverage,
-      extraWarnings: preview.warnings
+      extraWarnings: preview.warnings,
+      extraWarningDetails: preview.warningDetails
     });
   });
 }

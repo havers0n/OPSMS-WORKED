@@ -53,6 +53,12 @@ const baseRequest = {
 
 function makePlanning(input: any) {
   const tasks = input.tasks ?? [];
+  const routeWarningDetails = input.routeMode === 'distance'
+    ? [{ code: 'DISTANCE_MODE_FALLBACK', severity: 'info', message: 'Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.', source: 'route' }]
+    : [];
+  const packageWarningDetails = input.strategyMethod === 'batch'
+    ? [{ code: 'POST_SORT_REQUIRED', severity: 'info', message: 'Strategy requires post-sort.', source: 'domain' }]
+    : [];
   return {
     strategy: {
       id: 'strategy-1',
@@ -108,9 +114,11 @@ function makePlanning(input: any) {
           maxUniqueLocations: false,
           maxZones: false
         },
-        warnings: []
+        warnings: [],
+        warningDetails: []
       },
       warnings: input.strategyMethod === 'batch' ? ['Strategy requires post-sort.'] : [],
+      warningDetails: packageWarningDetails,
       metadata: {
         source: 'domain_planner',
         taskCount: tasks.length,
@@ -125,7 +133,8 @@ function makePlanning(input: any) {
       wasSplit: tasks.length > 2,
       reason: tasks.length > 2 ? 'max_zones' : 'none',
       packages: [{ id: 'wp-1' }],
-      warnings: []
+      warnings: [],
+      warningDetails: []
     },
     packages: [
       {
@@ -171,9 +180,11 @@ function makePlanning(input: any) {
               maxUniqueLocations: false,
               maxZones: false
             },
-            warnings: []
+            warnings: [],
+            warningDetails: []
           },
           warnings: [],
+          warningDetails: [],
           metadata: {
             source: 'domain_planner',
             taskCount: tasks.length,
@@ -184,7 +195,7 @@ function makePlanning(input: any) {
             uniqueAisleCount: 1
           }
         },
-        route: { steps: tasks.map((task: any, index: number) => ({ sequence: index + 1, taskId: task.id, fromLocationId: task.fromLocationId, skuId: task.skuId, qtyToPick: task.qty, allocations: task.orderRefs })), warnings: input.routeMode === 'distance' ? ['Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.'] : [], metadata: { mode: input.routeMode === 'distance' ? 'hybrid' : (input.routeMode ?? 'hybrid'), taskCount: tasks.length, sequencedCount: tasks.length, unknownLocationCount: 0 } }
+        route: { steps: tasks.map((task: any, index: number) => ({ sequence: index + 1, taskId: task.id, fromLocationId: task.fromLocationId, skuId: task.skuId, qtyToPick: task.qty, allocations: task.orderRefs })), warnings: input.routeMode === 'distance' ? ['Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.'] : [], warningDetails: routeWarningDetails, metadata: { mode: input.routeMode === 'distance' ? 'hybrid' : (input.routeMode ?? 'hybrid'), taskCount: tasks.length, sequencedCount: tasks.length, unknownLocationCount: 0 } }
       }
     ],
     warnings: [
@@ -193,6 +204,7 @@ function makePlanning(input: any) {
         : []),
       ...(input.strategyMethod === 'batch' ? ['Strategy requires post-sort.'] : [])
     ],
+    warningDetails: [...routeWarningDetails, ...packageWarningDetails],
     metadata: { taskCount: tasks.length, packageCount: 1, routeStepCount: tasks.length, wasSplit: tasks.length > 2, splitReason: tasks.length > 2 ? 'max_zones' : 'none' }
   };
 }
@@ -218,7 +230,8 @@ describe('POST /api/picking-planning/preview', () => {
           unresolvedQty: 0,
           planningCoveragePct: 100
         },
-        warnings: []
+        warnings: [],
+        warningDetails: []
       }),
       previewPickingPlanFromWave: async (input: any) => ({
         waveId: input.waveId,
@@ -237,7 +250,8 @@ describe('POST /api/picking-planning/preview', () => {
           unresolvedQty: 0,
           planningCoveragePct: 100
         },
-        warnings: input.waveId === 'wave-empty' ? ['Wave contains no orders.'] : []
+        warnings: input.waveId === 'wave-empty' ? ['Wave contains no orders.'] : [],
+        warningDetails: input.waveId === 'wave-empty' ? [{ code: 'EMPTY_WAVE', severity: 'warning', message: 'Wave contains no orders.', source: 'wave' }] : []
       })
     })) as never
   });
@@ -270,14 +284,22 @@ describe('POST /api/picking-planning/preview', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().warnings).toContain('Strategy requires post-sort.');
+    const payload = response.json();
+    expect(payload.warnings).toContain('Strategy requires post-sort.');
+    expect(payload.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'POST_SORT_REQUIRED', severity: 'info', message: 'Strategy requires post-sort.' })
+    );
   });
 
   it('propagates distance-mode fallback warning', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: { ...baseRequest, routeMode: 'distance' } });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().warnings).toContain('Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.');
+    const payload = response.json();
+    expect(payload.warnings).toContain('Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.');
+    expect(payload.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'DISTANCE_MODE_FALLBACK', severity: 'info' })
+    );
   });
 
   it('returns kind=orders response with coverage and unresolvedSummary', async () => {
@@ -289,6 +311,7 @@ describe('POST /api/picking-planning/preview', () => {
     expect(payload.input.orderIds).toEqual(['order-1', 'order-2']);
     expect(payload.unresolvedSummary).toEqual({ total: 0, byReason: {} });
     expect(payload.coverage).toMatchObject({ orderCount: 2, planningCoveragePct: 100 });
+    expect(payload.warningDetails).toEqual([]);
   });
 
   it('returns kind=wave response with waveId, orderIds, coverage and unresolvedSummary', async () => {

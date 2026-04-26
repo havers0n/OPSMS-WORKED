@@ -131,6 +131,12 @@ describe('estimateWorkloadComplexity', () => {
     expect(score.unknownVolumeCount).toBe(2);
     expect(score.warnings).toContain('Some tasks are missing weight.');
     expect(score.warnings).toContain('Some tasks are missing volume.');
+    expect(score.warningDetails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'UNKNOWN_WEIGHT', severity: 'warning', message: 'Some tasks are missing weight.' }),
+        expect.objectContaining({ code: 'UNKNOWN_VOLUME', severity: 'warning', message: 'Some tasks are missing volume.' })
+      ])
+    );
   });
 
   it('counts unknown source location when location metadata is missing', () => {
@@ -206,6 +212,15 @@ describe('estimateWorkloadComplexity', () => {
     expect(score.warnings).toContain('Workload exceeds max volume.');
     expect(score.warnings).toContain('Workload touches too many unique locations.');
     expect(score.warnings).toContain('Workload touches too many zones.');
+    expect(score.warningDetails.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining([
+        'WORKLOAD_EXCEEDS_PICK_LINES',
+        'WORKLOAD_EXCEEDS_WEIGHT',
+        'WORKLOAD_EXCEEDS_VOLUME',
+        'WORKLOAD_EXCEEDS_LOCATIONS',
+        'WORKLOAD_EXCEEDS_ZONES'
+      ])
+    );
   });
 
   it('uses default strategy when none is provided', () => {

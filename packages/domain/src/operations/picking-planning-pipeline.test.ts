@@ -159,6 +159,10 @@ describe('planPickingWork', () => {
 
     expect(result.warnings).toContain('Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.');
     expect(duplicateWarnings).toHaveLength(1);
+    expect(result.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'DISTANCE_MODE_FALLBACK', severity: 'info', source: 'route' })
+    );
+    expect(result.warningDetails.filter((warning) => warning.code === 'CART_REQUIRED_FOR_CLUSTER')).toHaveLength(2);
   });
 
   it('metadata contains packageCount, routeStepCount, taskCount, wasSplit, splitReason', () => {
