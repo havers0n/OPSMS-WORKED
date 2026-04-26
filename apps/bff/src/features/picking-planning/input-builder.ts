@@ -1,0 +1,353 @@
+import type { PickTaskCandidate, StorageLocationProjection } from '@wos/domain';
+import { mapStorageLocationProjection, type StorageLocationProjectionRow } from '../location-read/storage-location-projection.js';
+
+const SUPPORTED_UNIT_UOMS = new Set(['ea', 'each', 'unit', 'pcs', 'piece']);
+
+type OrderLinePlanningRow = {
+  order_id: string;
+  id: string;
+  product_id: string | null;
+  sku: string;
+  qty_required: number;
+  qty_picked: number;
+};
+
+type ProductPlanningRow = {
+  id: string;
+  sku: string | null;
+};
+
+type ProductUnitProfilePlanningRow = {
+  product_id: string;
+  unit_weight_g: number | null;
+  unit_width_mm: number | null;
+  unit_height_mm: number | null;
+  unit_depth_mm: number | null;
+  weight_class: 'light' | 'medium' | 'heavy' | 'very_heavy' | null;
+  size_class: 'small' | 'medium' | 'large' | 'oversized' | null;
+};
+
+type ProductPackagingLevelPlanningRow = {
+  product_id: string;
+  base_unit_qty: number;
+  is_default_pick_uom: boolean;
+  is_base: boolean;
+  can_pick: boolean;
+  is_active: boolean;
+  pack_weight_g: number | null;
+  pack_width_mm: number | null;
+  pack_height_mm: number | null;
+  pack_depth_mm: number | null;
+};
+
+type ProductPrimaryPickLocationRow = {
+  product_id: string;
+  location_id: string;
+};
+
+type InventoryUnitPlanningRow = {
+  product_id: string;
+  container_id: string;
+  quantity: number;
+  uom: string;
+  created_at: string;
+};
+
+type ContainerLocationRow = {
+  id: string;
+  current_location_id: string | null;
+};
+
+export type BuildPlanningInputFromOrdersRequest = {
+  orderIds: string[];
+};
+
+export type UnresolvedPlanningLine = {
+  orderId: string;
+  orderLineId: string;
+  skuId?: string;
+  productId?: string;
+  qty: number;
+  reason:
+    | 'missing_order_line'
+    | 'missing_product'
+    | 'no_primary_pick_location'
+    | 'no_available_inventory'
+    | 'missing_source_location'
+    | 'missing_quantity'
+    | 'unsupported_uom';
+  message: string;
+};
+
+export type BuildPlanningInputFromOrdersResult = {
+  tasks: PickTaskCandidate[];
+  locationsById: Record<string, StorageLocationProjection>;
+  unresolved: UnresolvedPlanningLine[];
+  warnings: string[];
+};
+
+export type PickingPlanningOrderInputReadRepo = {
+  listOrderLines(orderIds: string[]): Promise<OrderLinePlanningRow[]>;
+  listProducts(productIds: string[]): Promise<ProductPlanningRow[]>;
+  listUnitProfiles(productIds: string[]): Promise<ProductUnitProfilePlanningRow[]>;
+  listPackagingLevels(productIds: string[]): Promise<ProductPackagingLevelPlanningRow[]>;
+  listPrimaryPickLocations(productIds: string[]): Promise<ProductPrimaryPickLocationRow[]>;
+  listInventoryUnits(productIds: string[]): Promise<InventoryUnitPlanningRow[]>;
+  listContainerLocations(containerIds: string[]): Promise<ContainerLocationRow[]>;
+  listLocations(locationIds: string[]): Promise<StorageLocationProjectionRow[]>;
+};
+
+function toUnique(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function toUnitWeightG(profile: ProductUnitProfilePlanningRow | undefined, packLevel: ProductPackagingLevelPlanningRow | undefined): number | undefined {
+  if (profile?.unit_weight_g != null) return profile.unit_weight_g;
+  if (!packLevel?.pack_weight_g) return undefined;
+  return packLevel.pack_weight_g / packLevel.base_unit_qty;
+}
+
+function toUnitVolumeMm3(profile: ProductUnitProfilePlanningRow | undefined, packLevel: ProductPackagingLevelPlanningRow | undefined): number | undefined {
+  if (profile?.unit_width_mm && profile.unit_height_mm && profile.unit_depth_mm) {
+    return profile.unit_width_mm * profile.unit_height_mm * profile.unit_depth_mm;
+  }
+
+  if (!(packLevel?.pack_width_mm && packLevel.pack_height_mm && packLevel.pack_depth_mm)) {
+    return undefined;
+  }
+
+  return (packLevel.pack_width_mm * packLevel.pack_height_mm * packLevel.pack_depth_mm) / packLevel.base_unit_qty;
+}
+
+function resolveHandlingClass(profile: ProductUnitProfilePlanningRow | undefined): PickTaskCandidate['handlingClass'] {
+  if (!profile) return undefined;
+  if (profile.size_class === 'large' || profile.size_class === 'oversized') return 'bulky';
+  if (profile.weight_class === 'heavy' || profile.weight_class === 'very_heavy') return 'heavy';
+  return undefined;
+}
+
+export async function buildPlanningInputFromOrders(
+  repo: PickingPlanningOrderInputReadRepo,
+  request: BuildPlanningInputFromOrdersRequest
+): Promise<BuildPlanningInputFromOrdersResult> {
+  const orderIds = toUnique(request.orderIds);
+  const warnings: string[] = [];
+  const unresolved: UnresolvedPlanningLine[] = [];
+  const tasks: PickTaskCandidate[] = [];
+
+  if (orderIds.length === 0) {
+    return { tasks, unresolved, warnings, locationsById: {} };
+  }
+
+  const lines = await repo.listOrderLines(orderIds);
+  const linesByOrder = new Map<string, number>();
+  for (const orderId of orderIds) linesByOrder.set(orderId, 0);
+  for (const line of lines) linesByOrder.set(line.order_id, (linesByOrder.get(line.order_id) ?? 0) + 1);
+
+  for (const [orderId, lineCount] of linesByOrder.entries()) {
+    if (lineCount === 0) {
+      unresolved.push({
+        orderId,
+        orderLineId: 'missing',
+        qty: 0,
+        reason: 'missing_order_line',
+        message: `Order ${orderId} has no order lines to plan.`
+      });
+    }
+  }
+
+  const productIds = toUnique(lines.map((line) => line.product_id).filter((id): id is string => typeof id === 'string'));
+  const [products, profiles, packagingLevels, primaryLocations, inventoryUnits] = await Promise.all([
+    repo.listProducts(productIds),
+    repo.listUnitProfiles(productIds),
+    repo.listPackagingLevels(productIds),
+    repo.listPrimaryPickLocations(productIds),
+    repo.listInventoryUnits(productIds)
+  ]);
+
+  const productById = new Map(products.map((row) => [row.id, row]));
+  const profileByProductId = new Map(profiles.map((row) => [row.product_id, row]));
+  const pickPackLevelByProductId = new Map<string, ProductPackagingLevelPlanningRow>();
+  for (const level of packagingLevels) {
+    if (!level.is_active || !level.can_pick) continue;
+    if (level.is_default_pick_uom) {
+      pickPackLevelByProductId.set(level.product_id, level);
+      continue;
+    }
+
+    if (!pickPackLevelByProductId.has(level.product_id) && level.is_base) {
+      pickPackLevelByProductId.set(level.product_id, level);
+    }
+  }
+
+  const primaryLocationsByProduct = new Map<string, string[]>();
+  for (const row of primaryLocations) {
+    const list = primaryLocationsByProduct.get(row.product_id);
+    if (list) {
+      list.push(row.location_id);
+    } else {
+      primaryLocationsByProduct.set(row.product_id, [row.location_id]);
+    }
+  }
+
+  const containerIds = toUnique(inventoryUnits.map((row) => row.container_id));
+  const containers = await repo.listContainerLocations(containerIds);
+  const containerLocationById = new Map(containers.map((row) => [row.id, row.current_location_id]));
+
+  const locationIdsFromPrimary = toUnique(primaryLocations.map((row) => row.location_id));
+  const locations = await repo.listLocations(locationIdsFromPrimary);
+  const locationById = new Map(locations.map((row) => [row.id, row]));
+
+  const eligibleInventoryByProductAndLocation = new Map<string, InventoryUnitPlanningRow[]>();
+  for (const unit of inventoryUnits) {
+    const locationId = containerLocationById.get(unit.container_id);
+    if (!locationId) continue;
+    if (!locationById.has(locationId)) continue;
+    const key = `${unit.product_id}:${locationId}`;
+    const list = eligibleInventoryByProductAndLocation.get(key);
+    if (list) {
+      list.push(unit);
+    } else {
+      eligibleInventoryByProductAndLocation.set(key, [unit]);
+    }
+  }
+
+  for (const line of lines) {
+    const qtyToPlan = line.qty_required - line.qty_picked;
+    if (qtyToPlan <= 0) {
+      warnings.push(`Skipped order line ${line.id} because qty_required - qty_picked <= 0.`);
+      continue;
+    }
+
+    if (!line.product_id) {
+      unresolved.push({
+        orderId: line.order_id,
+        orderLineId: line.id,
+        skuId: line.sku,
+        qty: qtyToPlan,
+        reason: 'missing_product',
+        message: `Order line ${line.id} has no product_id.`
+      });
+      continue;
+    }
+
+    const product = productById.get(line.product_id);
+    if (!product) {
+      unresolved.push({
+        orderId: line.order_id,
+        orderLineId: line.id,
+        skuId: line.sku,
+        productId: line.product_id,
+        qty: qtyToPlan,
+        reason: 'missing_product',
+        message: `Product ${line.product_id} was not found.`
+      });
+      continue;
+    }
+
+    const primaryPickLocationIds = primaryLocationsByProduct.get(line.product_id) ?? [];
+    if (primaryPickLocationIds.length === 0) {
+      unresolved.push({
+        orderId: line.order_id,
+        orderLineId: line.id,
+        skuId: product.sku ?? line.sku,
+        productId: line.product_id,
+        qty: qtyToPlan,
+        reason: 'no_primary_pick_location',
+        message: `No published primary_pick location is configured for product ${line.product_id}.`
+      });
+      continue;
+    }
+
+    let selectedLocationId: string | null = null;
+    let selectedInventory: InventoryUnitPlanningRow | null = null;
+
+    for (const locationId of primaryPickLocationIds) {
+      const key = `${line.product_id}:${locationId}`;
+      const eligible = (eligibleInventoryByProductAndLocation.get(key) ?? []).slice().sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      );
+
+      const withSupportedUom = eligible.filter((row) => SUPPORTED_UNIT_UOMS.has(row.uom.trim().toLowerCase()));
+      const inventory = withSupportedUom.find((row) => row.quantity >= qtyToPlan);
+      if (inventory) {
+        selectedInventory = inventory;
+        selectedLocationId = locationId;
+        break;
+      }
+
+      if (eligible.length > 0 && withSupportedUom.length === 0) {
+        unresolved.push({
+          orderId: line.order_id,
+          orderLineId: line.id,
+          skuId: product.sku ?? line.sku,
+          productId: line.product_id,
+          qty: qtyToPlan,
+          reason: 'unsupported_uom',
+          message: `Inventory at location ${locationId} for product ${line.product_id} has unsupported UOMs.`
+        });
+      }
+    }
+
+    if (!selectedLocationId || !selectedInventory) {
+      unresolved.push({
+        orderId: line.order_id,
+        orderLineId: line.id,
+        skuId: product.sku ?? line.sku,
+        productId: line.product_id,
+        qty: qtyToPlan,
+        reason: 'no_available_inventory',
+        message: `No available inventory in primary_pick locations can satisfy qty ${qtyToPlan}.`
+      });
+      continue;
+    }
+
+    const location = locationById.get(selectedLocationId);
+    if (!location) {
+      unresolved.push({
+        orderId: line.order_id,
+        orderLineId: line.id,
+        skuId: product.sku ?? line.sku,
+        productId: line.product_id,
+        qty: qtyToPlan,
+        reason: 'missing_source_location',
+        message: `Source location ${selectedLocationId} could not be resolved.`
+      });
+      continue;
+    }
+
+    const profile = profileByProductId.get(line.product_id);
+    const packLevel = pickPackLevelByProductId.get(line.product_id);
+    const unitWeightG = toUnitWeightG(profile, packLevel);
+    const unitVolumeMm3 = toUnitVolumeMm3(profile, packLevel);
+
+    if (unitWeightG == null) {
+      warnings.push(`Weight is missing for product ${line.product_id}; task ${line.id} weightKg left undefined.`);
+    }
+
+    if (unitVolumeMm3 == null) {
+      warnings.push(`Volume is missing for product ${line.product_id}; task ${line.id} volumeLiters left undefined.`);
+    }
+
+    const skuId = product.sku ?? line.sku;
+    tasks.push({
+      id: `candidate-${line.order_id}-${line.id}`,
+      skuId,
+      fromLocationId: selectedLocationId,
+      qty: qtyToPlan,
+      orderRefs: [{ orderId: line.order_id, orderLineId: line.id, qty: qtyToPlan }],
+      weightKg: unitWeightG != null ? (unitWeightG * qtyToPlan) / 1_000 : undefined,
+      volumeLiters: unitVolumeMm3 != null ? (unitVolumeMm3 * qtyToPlan) / 1_000_000 : undefined,
+      handlingClass: resolveHandlingClass(profile)
+    });
+  }
+
+  const locationsById: Record<string, StorageLocationProjection> = {};
+  for (const task of tasks) {
+    const location = locationById.get(task.fromLocationId);
+    if (!location) continue;
+    locationsById[task.fromLocationId] = mapStorageLocationProjection(location);
+  }
+
+  return { tasks, locationsById, unresolved, warnings };
+}

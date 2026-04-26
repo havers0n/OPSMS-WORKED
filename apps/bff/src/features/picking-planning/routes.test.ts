@@ -53,7 +53,38 @@ const baseRequest = {
 
 describe('POST /api/picking-planning/preview', () => {
   const app = buildApp({
-    getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => authContext
+    getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => authContext,
+    getPickingPlanningPreviewService: (() => ({
+      previewPickingPlan: (input: any) => {
+        const result = {
+        strategy: { method: input.strategyMethod ?? 'single_order' },
+        rootPackage: { id: 'wp-1', strategyId: 'strategy-1', method: input.strategyMethod ?? 'single_order', tasks: input.tasks },
+        split: { wasSplit: input.tasks.length > 2, reason: input.tasks.length > 2 ? 'max_zones' : 'none' },
+          packages: [{ id: 'wp-1', strategyId: 'strategy-1', method: input.strategyMethod ?? 'single_order', tasks: input.tasks, route: { steps: input.tasks.map((task: any, index: number) => ({ sequence: index + 1, taskId: task.id })) } }],
+        warnings: input.routeMode === 'distance'
+          ? ['Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.']
+          : input.strategyMethod === 'batch'
+            ? ['Strategy requires post-sort.']
+            : [],
+        metadata: { taskCount: input.tasks.length, packageCount: 1, routeStepCount: input.tasks.length, wasSplit: input.tasks.length > 2, splitReason: input.tasks.length > 2 ? 'max_zones' : 'none' }
+        };
+        return result as never;
+      },
+      previewPickingPlanFromOrders: async (input: any) => ({
+        planning: {
+          strategy: { method: 'single_order' },
+          rootPackage: { id: 'wp-1', strategyId: 'strategy-1', method: 'single_order', tasks: [] },
+          split: { wasSplit: false, reason: 'none' },
+          packages: [],
+          warnings: [],
+          metadata: { taskCount: input.orderIds.length, packageCount: 1, routeStepCount: input.orderIds.length, wasSplit: false, splitReason: 'none' }
+        },
+        tasks: [],
+        locationsById: {},
+        unresolved: [],
+        warnings: []
+      })
+    })) as never
   });
 
   beforeAll(async () => {
@@ -175,6 +206,31 @@ describe('POST /api/picking-planning/preview', () => {
         ...baseRequest,
         tasks: [{ ...baseRequest.tasks[0], handlingClass: 'radioactive' }]
       }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('VALIDATION_ERROR');
+  });
+
+
+
+  it('returns read-only orders-based preview payload', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: ['order-1', 'order-2'] }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().planning.metadata.taskCount).toBe(2);
+    expect(Array.isArray(response.json().unresolved)).toBe(true);
+  });
+
+  it('returns 400 for invalid orderIds payload', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: [] }
     });
 
     expect(response.statusCode).toBe(400);
