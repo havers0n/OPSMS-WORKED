@@ -66,6 +66,16 @@ import {
   MAJOR_GRID_SIZE,
   MINOR_GRID_ZOOM_THRESHOLD
 } from '@/entities/layout-version/lib/canvas-geometry';
+import { usePickingPlanningOverlayStore } from '@/entities/picking-planning/model/overlay-store';
+import {
+  deriveDisplayedRouteSteps,
+  findPackageById
+} from '@/entities/picking-planning/model/route-steps';
+import {
+  indexRouteAnchorStatus,
+  resolveRouteStepAnchors
+} from '@/features/picking-planning-canvas/model/route-step-geometry';
+import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
@@ -106,6 +116,16 @@ export function EditorCanvas({
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
   const viewStage = useViewStage();
+  const pickingPlanningPreview = usePickingPlanningOverlayStore(
+    (state) => state.preview
+  );
+  const pickingPlanningActivePackageId = usePickingPlanningOverlayStore(
+    (state) => state.activePackageId
+  );
+  const pickingPlanningReorderedStepIdsByPackageId =
+    usePickingPlanningOverlayStore(
+      (state) => state.reorderedStepIdsByPackageId
+    );
   const isStorageV2Active = isStorageV2 && viewMode === 'storage';
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
@@ -438,6 +458,46 @@ export function EditorCanvas({
       ),
     [canvasOffset, forcedVisibleRackIds, racks, viewport, zoom]
   );
+  const pickingPlanningActivePackage = useMemo(
+    () =>
+      findPackageById(
+        pickingPlanningPreview?.packages ?? [],
+        pickingPlanningActivePackageId
+      ),
+    [pickingPlanningActivePackageId, pickingPlanningPreview?.packages]
+  );
+  const pickingPlanningRouteSteps = useMemo(
+    () =>
+      pickingPlanningActivePackage
+        ? deriveDisplayedRouteSteps(
+            pickingPlanningActivePackage.route.steps,
+            pickingPlanningReorderedStepIdsByPackageId[
+              pickingPlanningActivePackage.workPackage.id
+            ]
+          )
+        : [],
+    [pickingPlanningActivePackage, pickingPlanningReorderedStepIdsByPackageId]
+  );
+  const pickingPlanningRouteAnchors = useMemo(
+    () =>
+      resolveRouteStepAnchors({
+        steps: pickingPlanningRouteSteps,
+        locationsById: pickingPlanningPreview?.locationsById,
+        layout: placementLayout ?? layoutDraft,
+        publishedCellsById
+      }),
+    [
+      layoutDraft,
+      pickingPlanningPreview?.locationsById,
+      pickingPlanningRouteSteps,
+      placementLayout,
+      publishedCellsById
+    ]
+  );
+  const pickingPlanningStepGeometryById = useMemo(
+    () => indexRouteAnchorStatus(pickingPlanningRouteAnchors),
+    [pickingPlanningRouteAnchors]
+  );
 
   recordCanvasComponentRender({
     component: 'EditorCanvas',
@@ -680,7 +740,11 @@ export function EditorCanvas({
             onZoomIn={() => handleZoom(0.1)}
           />
 
-          {shouldShowPickingPlanningOverlay && <PickingPlanningOverlay />}
+          {shouldShowPickingPlanningOverlay && (
+            <PickingPlanningOverlay
+              stepGeometryById={pickingPlanningStepGeometryById}
+            />
+          )}
 
           {viewport.width > 0 && viewport.height > 0 && (
             <Stage
@@ -880,6 +944,12 @@ export function EditorCanvas({
                 onV2StorageCellSelect={onV2StorageCellSelect}
                 onV2StorageRackSelect={onV2StorageRackSelect}
               />
+
+              {shouldShowPickingPlanningOverlay && (
+                <PickingRouteOverlayLayer
+                  anchors={pickingPlanningRouteAnchors}
+                />
+              )}
 
               {/* ── Marquee selection overlay (topmost, non-interactive) ── */}
               <Layer listening={false}>

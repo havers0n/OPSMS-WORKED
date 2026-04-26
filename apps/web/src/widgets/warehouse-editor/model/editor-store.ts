@@ -269,6 +269,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const prevSelection = useInteractionStore.getState().selection;
     // Coordinate: update mode-store, clear interaction, clear workflow
     useModeStore.getState().setViewMode(nextViewMode);
+    if (nextViewMode !== 'view') {
+      useModeStore.getState().setViewStage('map');
+    }
     useModeStore.getState().setEditorMode('select');
     // clearForModeSwitch: clears selection and highlightedCellIds
     useInteractionStore.getState().clearForModeSwitch();

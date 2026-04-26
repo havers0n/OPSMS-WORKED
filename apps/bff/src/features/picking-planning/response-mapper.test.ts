@@ -209,7 +209,17 @@ describe('response mapper', () => {
     const result = mapPlanningPreviewToResponse({
       kind: 'explicit',
       planning: createPlanningResult(),
-      input: { strategyMethod: 'single_order', routeMode: 'hybrid' }
+      input: { strategyMethod: 'single_order', routeMode: 'hybrid' },
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01',
+          cellId: 'cell-1',
+          x: 1,
+          y: 2
+        }
+      }
     });
 
     expect(result.kind).toBe('explicit');
@@ -219,6 +229,12 @@ describe('response mapper', () => {
     expect((result.packages[0] as any).package).toBeUndefined();
     expect(result.summary).toMatchObject({ taskCount: 1, packageCount: 1, routeStepCount: 1, splitReason: 'none' });
     expect(result.packages[0].route.steps.map((step) => step.sequence)).toEqual([1]);
+    expect(result.locationsById['loc-1']).toMatchObject({
+      id: 'loc-1',
+      cellId: 'cell-1',
+      x: 1,
+      y: 2
+    });
     expect(result.warnings).toEqual(['planning-warning', 'shared-warning']);
     expect(result.warningDetails).toEqual([
       expect.objectContaining({ code: 'POST_SORT_REQUIRED', severity: 'info', message: 'planning-warning' }),
@@ -249,6 +265,13 @@ describe('response mapper', () => {
         plannedQty: 2,
         unresolvedQty: 1,
         planningCoveragePct: 50
+      },
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01'
+        }
       }
     });
 
@@ -256,6 +279,7 @@ describe('response mapper', () => {
     expect(result.input.orderIds).toEqual(['order-1']);
     expect(result.unresolvedSummary).toEqual({ total: 1, byReason: { no_primary_pick_location: 1 } });
     expect(result.coverage?.planningCoveragePct).toBe(50);
+    expect(result.locationsById['loc-1']?.addressLabel).toBe('A-01');
     expect(result.unresolved).toHaveLength(1);
   });
 
@@ -278,6 +302,14 @@ describe('response mapper', () => {
         unresolvedQty: 0,
         planningCoveragePct: 100
       },
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01',
+          cellId: 'cell-1'
+        }
+      },
       extraWarnings: ['shared-warning', 'wave-warning']
     });
 
@@ -285,6 +317,7 @@ describe('response mapper', () => {
     expect(result.input.waveId).toBe('wave-1');
     expect(result.input.orderIds).toEqual(['order-1']);
     expect(result.warnings).toEqual(['planning-warning', 'shared-warning', 'wave-warning']);
+    expect(result.locationsById['loc-1']?.cellId).toBe('cell-1');
     expect(result.warningDetails.map((warning) => warning.message)).toEqual(['planning-warning', 'shared-warning']);
     expect(planning.warnings).toEqual(originalWarnings);
   });

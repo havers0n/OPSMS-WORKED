@@ -81,4 +81,30 @@ describe('ViewModeSwitcher view stages', () => {
     expect(useModeStore.getState().viewMode).toBe('view');
     expect(useModeStore.getState().viewStage).toBe('picking-plan');
   });
+
+  it('resets View stage to map when switching away from View mode', () => {
+    act(() => {
+      useModeStore.setState({
+        viewMode: 'view',
+        viewStage: 'picking-plan',
+        editorMode: 'select'
+      });
+    });
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(ViewModeSwitcher));
+    });
+
+    const storageButton = renderer!.root.find(
+      (instance) =>
+        instance.type === 'button' && instance.children.includes('Storage')
+    );
+
+    act(() => {
+      storageButton.props.onClick();
+    });
+
+    expect(useModeStore.getState().viewMode).toBe('storage');
+    expect(useModeStore.getState().viewStage).toBe('map');
+  });
 });

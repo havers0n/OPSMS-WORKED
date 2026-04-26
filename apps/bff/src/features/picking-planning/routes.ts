@@ -43,7 +43,8 @@ export function registerPickingPlanningPreviewRoutes(
       input: {
         strategyMethod: body.strategyMethod,
         routeMode: body.routeMode
-      }
+      },
+      locationsById: body.locationsById
     });
   });
 
@@ -65,6 +66,7 @@ export function registerPickingPlanningPreviewRoutes(
       unresolved: preview.unresolved,
       unresolvedSummary: preview.unresolvedSummary,
       coverage: preview.coverage,
+      locationsById: preview.locationsById,
       extraWarnings: preview.warnings,
       extraWarningDetails: preview.warningDetails
     });
@@ -89,6 +91,7 @@ export function registerPickingPlanningPreviewRoutes(
       unresolved: preview.unresolved,
       unresolvedSummary: preview.unresolvedSummary,
       coverage: preview.coverage,
+      locationsById: preview.locationsById,
       extraWarnings: preview.warnings,
       extraWarningDetails: preview.warningDetails
     });
