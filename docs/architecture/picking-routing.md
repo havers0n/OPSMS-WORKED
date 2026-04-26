@@ -305,3 +305,53 @@ Assignment behavior in PR 8 (conservative):
 - `assignedCartId` is intentionally not propagated to avoid unsafe duplication in cluster/cart-slot flows.
 
 PR 9 is planned to introduce RouteSequencer MVP.
+
+### PR 9 — RouteSequencer MVP
+
+PR 9 introduces a pure domain-level `RouteSequencer` that takes an already planned/split `WorkPackageDraft` and returns ordered `RouteStep[]`.
+
+It **does**:
+- sequence existing pick tasks deterministically;
+- consume strategy `routePriorityMode` (or explicit mode override);
+- preserve task `orderRefs` as step allocations;
+- add simple handling instructions per handling class;
+- return non-blocking warnings.
+
+It **does not**:
+- create work;
+- split work;
+- allocate inventory;
+- execute picking;
+- persist data;
+- calculate true shortest path yet.
+
+MVP route modes:
+- `location_sequence`: `zone -> aisle -> routeSequence -> positionAlongAisle -> sideOfAisle -> address`;
+- `address_sequence`: address-label-first ordering;
+- `handling`: `hazmat/heavy/bulky -> normal/cold/frozen -> fragile`;
+- `hybrid`: physical grouping first (`zone/aisle/position/route`), handling rank secondary;
+- `distance`: fallback to `hybrid` until graph routing exists.
+
+Handling instructions (MVP):
+- `heavy`: `Heavy item. Place low / at the bottom.`
+- `bulky`: `Bulky item. Confirm equipment or cart capacity.`
+- `fragile`: `Fragile item. Keep above heavy items.`
+- `cold`: `Cold item. Follow temperature handling flow.`
+- `frozen`: `Frozen item. Minimize time outside temperature zone.`
+- `hazmat`: `Hazmat item. Follow special handling procedure.`
+
+Example (illustrative):
+
+Input `WorkPackageDraft`:
+- tasks in Zone A / AISLE-06-07;
+- tasks in Zone B / AISLE-07-08;
+- one fragile item;
+- one heavy item.
+
+Output:
+- `RouteStep 1`: Zone A / AISLE-06-07 / position 1;
+- `RouteStep 2`: Zone A / AISLE-06-07 / position 2;
+- `RouteStep 3`: Zone B / AISLE-07-08 / position 1.
+
+Warnings:
+- `Fragile item should remain above heavy items.`
