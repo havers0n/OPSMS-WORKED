@@ -21,6 +21,8 @@ const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 
 export const useViewMode = () => useModeStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
+export const useViewStage = () => useModeStore((state) => state.viewStage);
+export const useSetViewStage = () => useModeStore((state) => state.setViewStage);
 export const useEditorMode = () => useModeStore((state) => state.editorMode);
 export const useSetEditorMode = () => useEditorStore((state) => state.setEditorMode);
 export const useObjectWorkContext = (): ObjectWorkContext =>

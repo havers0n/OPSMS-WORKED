@@ -1,6 +1,7 @@
 import { useSetViewMode, useViewMode } from '@/widgets/warehouse-editor/model/editor-selectors';
 import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { Button } from '@/shared/ui/button';
+import { ViewStageSwitcher } from './view-stage-switcher';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'view', label: 'View' },
@@ -13,7 +14,7 @@ export function ViewModeSwitcher() {
   const setViewMode = useSetViewMode();
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4">
+    <div className="flex flex-1 items-center justify-center gap-2 px-4">
       <div
         className="flex items-center gap-0.5 rounded-lg p-0.5"
         style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
@@ -44,6 +45,7 @@ export function ViewModeSwitcher() {
           );
         })}
       </div>
+      {viewMode === 'view' && <ViewStageSwitcher />}
     </div>
   );
 }

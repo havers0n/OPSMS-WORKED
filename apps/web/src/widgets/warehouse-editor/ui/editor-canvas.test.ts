@@ -80,7 +80,8 @@ vi.mock('@/widgets/warehouse-editor/model/editor-selectors', () => ({
   useUpdateWallGeometry: () => () => undefined,
   useUpdateZoneRect: () => () => undefined,
   useMinRackDistance: () => 0,
-  useViewMode: () => mockViewMode
+  useViewMode: () => mockViewMode,
+  useViewStage: () => 'map' as const
 }));
 
 vi.mock('@/widgets/warehouse-editor/model/editor-store', () => ({
