@@ -93,11 +93,39 @@ This lets routing understand that opposite faces may still be serviced from the 
 - backfill from `source_cell_id`;
 - update allocation/read models.
 
-### PR 3 — StorageLocation projection and route fields
-- `addressLabel`;
-- `routeSequence`;
-- `zoneId`;
-- `accessAisleId`.
+### PR 3 — StorageLocation projection + route/access foundation
+
+`StorageLocationProjection` is the route-planning-facing view over executable
+storage locations (`locations.id`).
+
+Scope:
+- add deterministic ordering primitive `routeSequence`;
+- keep separate optional `pickSequence` for later picking preference logic;
+- expose optional zone/access metadata:
+  - `zoneId`, `pickZoneId`, `taskZoneId`, `allocationZoneId`;
+  - `accessAisleId`, `sideOfAisle`, `positionAlongAisle`, `travelNodeId`;
+- keep canvas coordinates (`x`, `y`) as optional hints only.
+
+Important modeling rules:
+- `zoneId` is not automatically equivalent to visual `layout_zones`;
+- face names (`A`, `B`) are labels, not topology;
+- opposite faces must be modeled explicitly via aisle/access relationships.
+
+Example:
+
+```text
+Rack 6 / Face B / Section 03
+→ StorageLocationProjection:
+  accessAisleId: "AISLE-06-07"
+  sideOfAisle: "left"
+  positionAlongAisle: 3
+
+Rack 7 / Face A / Section 03
+→ StorageLocationProjection:
+  accessAisleId: "AISLE-06-07"
+  sideOfAisle: "right"
+  positionAlongAisle: 3
+```
 
 ### PR 4 — PickingStrategy config
 
@@ -111,6 +139,7 @@ This lets routing understand that opposite faces may still be serviced from the 
 
 ## Notes for current execution model
 
-Current pick execution still uses `pick_steps.source_cell_id`. That migration to `source_location_id` is intentionally deferred to PR 2.
+PR 2 introduced `pick_steps.source_location_id` and location-first read/allocation
+paths while preserving compatibility fallbacks.
 
 The routing model should not depend on visual-canvas-only coordinates. Coordinates can support geometry, but executable planning identity remains `locations.id`.

@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const locationTypeSchema = z.enum(['rack_slot', 'floor', 'staging', 'dock', 'buffer']);
 export const capacityModeSchema = z.enum(['single_container', 'multi_container']);
 export const locationStatusSchema = z.enum(['active', 'disabled', 'draft']);
+export const sideOfAisleSchema = z.enum(['left', 'right']);
 
 /**
  * A location is the executable storage entity.
@@ -22,6 +23,18 @@ export const locationSchema = z.object({
   depthMm: z.number().int().nullable(),
   maxWeightG: z.number().int().nullable(),
   sortOrder: z.number().int().nullable(),
+  routeSequence: z.number().int().nullable().optional(),
+  pickSequence: z.number().int().nullable().optional(),
+  zoneId: z.string().uuid().nullable().optional(),
+  pickZoneId: z.string().uuid().nullable().optional(),
+  taskZoneId: z.string().uuid().nullable().optional(),
+  allocationZoneId: z.string().uuid().nullable().optional(),
+  accessAisleId: z.string().uuid().nullable().optional(),
+  sideOfAisle: sideOfAisleSchema.nullable().optional(),
+  positionAlongAisle: z.number().nullable().optional(),
+  travelNodeId: z.string().uuid().nullable().optional(),
+  floorX: z.number().nullable().optional(),
+  floorY: z.number().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -29,6 +42,7 @@ export const locationSchema = z.object({
 export type LocationType = z.infer<typeof locationTypeSchema>;
 export type CapacityMode = z.infer<typeof capacityModeSchema>;
 export type LocationStatus = z.infer<typeof locationStatusSchema>;
+export type SideOfAisle = z.infer<typeof sideOfAisleSchema>;
 export type Location = z.infer<typeof locationSchema>;
 
 /**
