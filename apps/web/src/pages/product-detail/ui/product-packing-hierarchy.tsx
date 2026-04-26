@@ -1,4 +1,5 @@
 import type { ProductPackagingLevel, StoragePreset } from '@wos/domain';
+import { Boxes, Settings2, Warehouse } from 'lucide-react';
 import {
   derivePackagingHierarchy,
   groupStoragePresetsByPackagingLevelId,
@@ -101,27 +102,24 @@ function PackingLevelStorageMethods({
   canCreateStoragePreset: boolean;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold text-slate-900">Storage methods for this pack type</div>
-          <p className="mt-0.5 text-xs text-slate-500">Storage presets stay separate from packaging levels.</p>
-        </div>
+    <section className="rounded-md border border-slate-200 bg-slate-50/70 p-2.5">
+      <div className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+        <Warehouse className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+        Storage methods for this pack type
       </div>
 
       {methods.length > 0 ? (
-        <div className="mt-3 grid gap-2">
+        <div className="mt-2 grid gap-2">
           {methods.map((item) => (
             <StorageMethodItem key={item.key} item={item} />
           ))}
         </div>
       ) : (
-        <div className="mt-3 rounded-md border border-dashed border-slate-300 bg-white px-3 py-3">
-          <div className="text-sm font-semibold text-slate-900">No storage methods for this pack type yet.</div>
-          <p className="mt-1 text-xs text-slate-600">
+        <div className="mt-2 flex flex-col gap-1 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs font-semibold text-slate-900">No storage methods for this pack type yet.</div>
+          <p className="text-xs text-slate-600">
             {canCreateStoragePreset ? 'Create a storage preset to describe how this level can be stored.' : 'Define active packaging levels first.'}
           </p>
-          {!canCreateStoragePreset ? <p className="mt-1 text-xs text-amber-700">Define active packaging levels first.</p> : null}
         </div>
       )}
     </section>
@@ -158,6 +156,10 @@ export function ProductPackingHierarchy({
   const levelsById = new Map(levels.map((level) => [level.id, level]));
   const groupedStorage = groupStoragePresetsByPackagingLevelId(storagePresets, hierarchy.entries, levels);
   const hasActiveStorablePackagingLevels = levels.some((level) => level.isActive && level.canStore);
+  const linkedStorageCount = [...groupedStorage.byPackagingLevelId.values()].reduce(
+    (count, items) => count + items.length,
+    0
+  );
 
   return (
     <section
@@ -170,7 +172,10 @@ export function ProductPackingHierarchy({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-xs font-semibold uppercase text-slate-500">Packaging Hierarchy</div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500">
+              <Boxes className="h-3.5 w-3.5" aria-hidden="true" />
+              Packaging Hierarchy
+            </div>
             {isPackagingSelected ? <Pill tone="cyan">Selected</Pill> : null}
           </div>
           <h2 className="mt-1 text-base font-semibold text-slate-950">Pack types and storage methods</h2>
@@ -181,8 +186,9 @@ export function ProductPackingHierarchy({
         <button
           type="button"
           onClick={onEditPackaging}
-          className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
+          <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
           Configure packaging
         </button>
       </div>
@@ -190,15 +196,20 @@ export function ProductPackingHierarchy({
       <section
         aria-current={isStorageSelected ? 'step' : undefined}
         className={[
-          'mt-4 rounded-lg border px-3 py-2 transition',
+          'mt-3 rounded-lg border px-3 py-2 transition',
           isStorageSelected ? 'border-cyan-300 bg-cyan-50/60 ring-2 ring-cyan-100' : 'border-slate-200 bg-white/80'
         ].join(' ')}
       >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-xs font-semibold uppercase text-slate-500">Storage Presets</div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-500">
+                <Warehouse className="h-3.5 w-3.5" aria-hidden="true" />
+                Storage Presets
+              </div>
               {isStorageSelected ? <Pill tone="cyan">Selected</Pill> : null}
+              <Pill tone={linkedStorageCount > 0 ? 'emerald' : 'slate'}>{`${linkedStorageCount} linked`}</Pill>
+              {groupedStorage.unlinked.length > 0 ? <Pill tone="amber">{`${groupedStorage.unlinked.length} unlinked`}</Pill> : null}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">Storage appears under the pack type it belongs to when the link is active and resolved.</p>
           </div>
@@ -229,7 +240,7 @@ export function ProductPackingHierarchy({
           </button>
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-2.5">
           {hierarchy.entries.map((entry, index) => {
             const level = levelsById.get(entry.id);
             if (!level) return null;
@@ -238,10 +249,17 @@ export function ProductPackingHierarchy({
 
             return (
               <div key={entry.id} className="relative">
-                {index > 0 ? <div className="absolute -top-3 left-5 h-3 border-l border-slate-300" aria-hidden="true" /> : null}
-                <div className="flex gap-3">
-                  <div className="flex w-10 shrink-0 justify-center pt-5">
-                    <div className="h-full min-h-10 border-l border-slate-300" aria-hidden="true" />
+                {index > 0 ? <div className="absolute -top-2.5 left-3.5 h-2.5 border-l border-slate-300" aria-hidden="true" /> : null}
+                <div className="flex gap-2">
+                  <div className="flex w-7 shrink-0 justify-center pt-4">
+                    <div className="relative h-full min-h-8 border-l border-slate-300" aria-hidden="true">
+                      <div
+                        className={[
+                          'absolute -left-[7px] top-0 flex h-3.5 w-3.5 items-center justify-center rounded-full border bg-white',
+                          level.isActive ? 'border-cyan-300' : 'border-slate-300'
+                        ].join(' ')}
+                      />
+                    </div>
                   </div>
                   <div className="min-w-0 flex-1" style={{ marginLeft: `${Math.min(entry.indent, 3) * 12}px` }}>
                     <PackagingLevelCard level={level} hierarchyEntry={entry}>
