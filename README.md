@@ -32,14 +32,22 @@ The repository already contains a frontend app, a BFF layer, and a local Supabas
 ```text
 apps/
   web/        frontend application
-  bff/        Fastify BFF for auth, sites/floors, and layout lifecycle
+  bff/        Fastify BFF for auth, sites/floors, layout, products, orders, waves
   supabase/   migrations, seed, SQL tests, local Supabase config
 packages/
   domain/     Zod schemas and pure domain logic
   ui/         shared UI primitives placeholder
   config/     shared config placeholder
 docs/
-  architecture/
+  ARCHITECTURE.md
+  DOMAIN_MODEL.md
+  API.md
+  DATABASE.md
+  TESTING.md
+  TROUBLESHOOTING.md
+  CODE_REVIEW.md
+  PLANS.md
+  decisions/
 ```
 
 ## Current scope in code
@@ -70,7 +78,7 @@ docs/
 `apps/supabase`:
 
 - local Supabase config
-- migrations `0001` to `0015`
+- migrations up to `0107`
 - `seed.sql`
 - SQL tests for layout lifecycle
 
@@ -170,23 +178,20 @@ npm run gen:types
 
 Workspace-specific examples:
 
-- `npm run test --workspace @wos/supabase`
 - `npm run test --workspace @wos/domain`
 
 ## Architecture docs
-
-- [architecture-baseline.md](./docs/architecture/architecture-baseline.md)
-- [core-wms-data-model-v1.md](./docs/architecture/core-wms-data-model-v1.md)
-- [frontend-folder-file-plan.md](./docs/architecture/frontend-folder-file-plan.md)
-- [supabase-schema-module-map.md](./docs/architecture/supabase-schema-module-map.md)
-
-These documents define the main rules for:
-
-- canvas vs inspector boundaries
-- draft/publish lifecycle
-- storage truth model and the target execution core
-- frontend layering
-- Supabase type boundaries vs domain types
+- [AGENTS.md](./AGENTS.md) — root instructions for all agents
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — component boundaries and data flow
+- [docs/DOMAIN_MODEL.md](./docs/DOMAIN_MODEL.md) — product, packaging, preset, execution rules
+- [docs/API.md](./docs/API.md) — endpoint inventory and behavior
+- [docs/DATABASE.md](./docs/DATABASE.md) — schema, views, migrations, RPCs
+- [docs/TESTING.md](./docs/TESTING.md) — how to verify changes
+- [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) — common failure patterns
+- [docs/CODE_REVIEW.md](./docs/CODE_REVIEW.md) — review checklist
+- [docs/PLANS.md](./docs/PLANS.md) — structured approach for large work
+- [docs/decisions/ADR-0001-packaging-hierarchy.md](./docs/decisions/ADR-0001-packaging-hierarchy.md)
+- [docs/decisions/ADR-0002-storage-presets.md](./docs/decisions/ADR-0002-storage-presets.md)
 
 ## Current editor and storage-core status
 
