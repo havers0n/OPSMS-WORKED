@@ -88,6 +88,9 @@ describe('picking planning preview service', () => {
       qty: 2
     });
     expect(result.locationsById['loc-1']).toBeDefined();
+    expect(result.orderIds).toEqual(['o1']);
+    expect(result.unresolvedSummary).toEqual({ total: 0, byReason: {} });
+    expect(result.coverage).toMatchObject({ orderCount: 1, orderLineCount: 1, plannedLineCount: 1, unresolvedLineCount: 0 });
     expect(planner).toHaveBeenCalledTimes(1);
   });
 

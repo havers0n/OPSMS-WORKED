@@ -499,3 +499,40 @@ Forward path:
 - a future PR can persist accepted plans;
 - a future PR can release from accepted plans;
 - a future PR can add partial/multi-source planning.
+
+### PR 14A — Planning preview API response contract
+
+PR 14A stabilizes the BFF response contract for planning preview endpoints before UI implementation.
+
+Scope:
+- keeps domain `PickingPlanningResult` internal to BFF composition;
+- introduces stable UI-oriented DTO response mapping;
+- keeps the preview flow read-only (no persistence, no execution changes).
+
+Stable response DTO includes:
+- `kind` + `input`;
+- `strategy`;
+- `summary`;
+- `rootWorkPackage`;
+- `split`;
+- `packages[].workPackage` + route steps/metadata;
+- optional `unresolved`, `unresolvedSummary`, `coverage`;
+- `warnings`.
+
+Response consistency:
+- `POST /api/picking-planning/preview` → `kind: "explicit"`;
+- `POST /api/picking-planning/preview/orders` → `kind: "orders"`;
+- `POST /api/picking-planning/preview/wave` → `kind: "wave"`.
+
+All three endpoints now return the same base DTO shape, differing only by `kind` and availability of diagnostics (`coverage`, `unresolvedSummary`, `unresolved`).
+
+Out of scope in PR 14A:
+- no plan acceptance/persistence;
+- no `release_order()` / `release_wave()` behavior changes;
+- no allocation mutation;
+- no picking execution changes;
+- no graph routing/cart-slot assignment changes.
+
+Follow-up direction:
+- PR 14B/15 can consume this stable DTO in UI preview;
+- later PRs can add accepted-plan persistence and controlled release based on accepted plans.
