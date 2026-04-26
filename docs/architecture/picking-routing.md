@@ -412,3 +412,25 @@ Output:
 Forward path:
 - PR 11 can add a BFF planning preview endpoint that consumes this orchestrator.
 - PR 12 can add UI preview over the same domain planning result.
+
+### PR 11 — BFF planning preview endpoint
+
+PR 11 adds a **read-only BFF endpoint** for planning preview/testing/integration:
+
+- `POST /api/picking-planning/preview`
+
+It **does**:
+- validate request DTO (explicit `PickTaskCandidate[]` + optional `locationsById`);
+- call domain `planPickingWork()` as the single planning engine;
+- return planning preview output (`strategy`, `rootPackage`, `split`, `packages`, `warnings`, `metadata`).
+
+It **does not**:
+- query orders/waves to generate task candidates;
+- persist any planning state;
+- create pick tasks / pick steps / route records;
+- mutate release/allocation/execution state.
+
+This endpoint is a bridge for future UI preview and integration:
+- PR 12 can add UI planning preview;
+- a future integration PR can add order/wave → `PickTaskCandidate[]` conversion;
+- a future acceptance PR can persist an approved plan after preview.
