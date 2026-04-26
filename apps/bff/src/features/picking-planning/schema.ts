@@ -59,5 +59,10 @@ export const pickingPlanningPreviewOrdersRequestSchema = pickingPlanningPreviewB
   orderIds: z.array(z.string().trim().min(1)).min(1)
 });
 
+export const pickingPlanningPreviewWaveRequestSchema = pickingPlanningPreviewBaseSchema.extend({
+  waveId: z.string().trim().min(1)
+});
+
 export type PickingPlanningPreviewRequest = z.infer<typeof pickingPlanningPreviewRequestSchema>;
 export type PickingPlanningPreviewOrdersRequest = z.infer<typeof pickingPlanningPreviewOrdersRequestSchema>;
+export type PickingPlanningPreviewWaveRequest = z.infer<typeof pickingPlanningPreviewWaveRequestSchema>;

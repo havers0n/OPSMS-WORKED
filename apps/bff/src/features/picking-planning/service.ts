@@ -1,22 +1,70 @@
 import { planPickingWork, type PickingPlanningInput, type PickingPlanningResult } from '@wos/domain';
-import type { PickingPlanningPreviewRequest, PickingPlanningPreviewOrdersRequest } from './schema.js';
+import type {
+  PickingPlanningPreviewOrdersRequest,
+  PickingPlanningPreviewRequest,
+  PickingPlanningPreviewWaveRequest
+} from './schema.js';
 import {
   buildPlanningInputFromOrders,
   type BuildPlanningInputFromOrdersResult,
   type PickingPlanningOrderInputReadRepo
 } from './input-builder.js';
+import {
+  calculatePlanningCoverage,
+  summarizeUnresolvedPlanningLines,
+  type PlanningCoverage,
+  type UnresolvedPlanningLineSummary
+} from './diagnostics.js';
+import type { PickingPlanningWaveReadRepo } from './repo.js';
+
+export type PickingPlanningPreviewFromOrdersResult = {
+  planning: PickingPlanningResult;
+} & BuildPlanningInputFromOrdersResult;
+
+export type PickingPlanningPreviewFromWaveResult = PickingPlanningPreviewFromOrdersResult & {
+  waveId: string;
+  orderIds: string[];
+  unresolvedSummary: UnresolvedPlanningLineSummary;
+  coverage: PlanningCoverage;
+};
 
 export type PickingPlanningPreviewService = {
   previewPickingPlan(input: PickingPlanningPreviewRequest): PickingPlanningResult;
-  previewPickingPlanFromOrders(
-    input: PickingPlanningPreviewOrdersRequest
-  ): Promise<{ planning: PickingPlanningResult } & BuildPlanningInputFromOrdersResult>;
+  previewPickingPlanFromOrders(input: PickingPlanningPreviewOrdersRequest): Promise<PickingPlanningPreviewFromOrdersResult>;
+  previewPickingPlanFromWave(input: PickingPlanningPreviewWaveRequest): Promise<PickingPlanningPreviewFromWaveResult>;
 };
 
 export function createPickingPlanningPreviewService(
   planner: (input: PickingPlanningInput) => PickingPlanningResult = planPickingWork,
-  inputReadRepo?: PickingPlanningOrderInputReadRepo
+  inputReadRepo?: PickingPlanningOrderInputReadRepo,
+  waveReadRepo?: PickingPlanningWaveReadRepo
 ): PickingPlanningPreviewService {
+  const previewPickingPlanFromOrders = async (
+    input: PickingPlanningPreviewOrdersRequest
+  ): Promise<PickingPlanningPreviewFromOrdersResult> => {
+    if (!inputReadRepo) {
+      throw new Error('Picking planning order input repo is not configured.');
+    }
+
+    const built = await buildPlanningInputFromOrders(inputReadRepo, { orderIds: input.orderIds });
+    const planning = planner({
+      tasks: built.tasks,
+      locationsById: built.locationsById,
+      strategyMethod: input.strategyMethod,
+      routeMode: input.routeMode,
+      assignedPickerId: input.assignedPickerId,
+      assignedZoneId: input.assignedZoneId,
+      assignedCartId: input.assignedCartId,
+      id: input.id,
+      code: input.code
+    });
+
+    return {
+      planning,
+      ...built
+    };
+  };
+
   return {
     previewPickingPlan: (input) =>
       planner({
@@ -31,27 +79,40 @@ export function createPickingPlanningPreviewService(
         code: input.code
       }),
 
-    previewPickingPlanFromOrders: async (input) => {
-      if (!inputReadRepo) {
-        throw new Error('Picking planning order input repo is not configured.');
+    previewPickingPlanFromOrders,
+
+    previewPickingPlanFromWave: async (input) => {
+      if (!waveReadRepo) {
+        throw new Error('Picking planning wave repo is not configured.');
       }
 
-      const built = await buildPlanningInputFromOrders(inputReadRepo, { orderIds: input.orderIds });
-      const planning = planner({
-        tasks: built.tasks,
-        locationsById: built.locationsById,
-        strategyMethod: input.strategyMethod,
-        routeMode: input.routeMode,
-        assignedPickerId: input.assignedPickerId,
-        assignedZoneId: input.assignedZoneId,
-        assignedCartId: input.assignedCartId,
-        id: input.id,
-        code: input.code
-      });
+      const orderIds = await waveReadRepo.listOrderIdsForWave(input.waveId);
+      const fromOrders = await previewPickingPlanFromOrders({ ...input, orderIds });
+
+      const unresolvedSummary = summarizeUnresolvedPlanningLines(fromOrders.unresolved);
+      const coverage = calculatePlanningCoverage({ orderIds, tasks: fromOrders.tasks, unresolved: fromOrders.unresolved });
+
+      const warnings = new Set<string>(fromOrders.warnings);
+      for (const warning of fromOrders.planning.warnings) {
+        warnings.add(warning);
+      }
+      if (orderIds.length === 0) {
+        warnings.add('Wave contains no orders.');
+      }
+      if (fromOrders.unresolved.length > 0) {
+        warnings.add('Unresolved planning lines are present in wave preview.');
+      }
 
       return {
-        planning,
-        ...built
+        waveId: input.waveId,
+        orderIds,
+        planning: fromOrders.planning,
+        tasks: fromOrders.tasks,
+        locationsById: fromOrders.locationsById,
+        unresolved: fromOrders.unresolved,
+        unresolvedSummary,
+        coverage,
+        warnings: Array.from(warnings)
       };
     }
   };

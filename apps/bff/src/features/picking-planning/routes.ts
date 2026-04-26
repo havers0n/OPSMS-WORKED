@@ -3,7 +3,8 @@ import type { AuthenticatedRequestContext } from '../../auth.js';
 import { type PickingPlanningPreviewService } from './service.js';
 import {
   pickingPlanningPreviewOrdersRequestSchema,
-  pickingPlanningPreviewRequestSchema
+  pickingPlanningPreviewRequestSchema,
+  pickingPlanningPreviewWaveRequestSchema
 } from './schema.js';
 
 type GetAuthContext = (
@@ -42,5 +43,13 @@ export function registerPickingPlanningPreviewRoutes(
 
     const body = parseOrThrow(pickingPlanningPreviewOrdersRequestSchema, request.body);
     return getPickingPlanningPreviewService(auth).previewPickingPlanFromOrders(body);
+  });
+
+  app.post('/api/picking-planning/preview/wave', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(pickingPlanningPreviewWaveRequestSchema, request.body);
+    return getPickingPlanningPreviewService(auth).previewPickingPlanFromWave(body);
   });
 }
