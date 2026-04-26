@@ -127,15 +127,40 @@ Rack 7 / Face A / Section 03
   positionAlongAisle: 3
 ```
 
-### PR 4 — PickingStrategy config
+### PR 5 — PickingStrategy config foundation
 
-### PR 5 — Workload complexity score
+`PickingStrategy` in PR 5 is planning configuration only.
 
-### PR 6 — WorkPackage planner
+It **defines how future work should be shaped**, but does not execute anything:
+- no route is built in PR 5;
+- no `WorkPackage` is created in PR 5;
+- no release/allocation behavior is changed in PR 5.
 
-### PR 7 — WorkSplitPolicy
+Default strategy intent:
+- `single_order`: one order at a time;
+- `batch`: collect multiple orders together, sort later;
+- `wave_bulk`: wave-level aggregated collection, then sort/consolidate;
+- `cluster`: collect multiple orders with explicit cart/tote slot guidance;
+- `zone`: split work by zones, consolidate later;
+- `pick_and_pack`: pick directly into the final order container with handling-aware sequencing;
+- `two_step`: step 1 bulk collection, step 2 sort/allocate to orders.
 
-### PR 8 — RouteSequencer MVP
+Future pipeline consumption:
+
+```text
+PickTaskGenerator
+→ WorkPackageBuilder
+→ WorkSplitService
+→ RouteSequencer
+```
+
+### PR 6 — Workload complexity score
+
+### PR 7 — WorkPackage planner
+
+### PR 8 — WorkSplitPolicy
+
+### PR 9 — RouteSequencer MVP
 
 ## Notes for current execution model
 
