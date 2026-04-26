@@ -3,21 +3,14 @@ import type { PickingMethod } from './picking-planning';
 import {
   DEFAULT_PICKING_STRATEGIES,
   DEFAULT_PICKING_STRATEGY_METHOD,
+  PICKING_METHODS,
   getDefaultPickingStrategy,
   isPickingMethod,
   isPostSortRequired,
   requiresCartSlots
 } from './picking-strategies';
 
-const METHODS: PickingMethod[] = [
-  'single_order',
-  'batch',
-  'wave_bulk',
-  'cluster',
-  'zone',
-  'pick_and_pack',
-  'two_step'
-];
+const METHODS: PickingMethod[] = [...PICKING_METHODS];
 
 describe('picking strategy defaults', () => {
   it('has a default strategy for every known method', () => {

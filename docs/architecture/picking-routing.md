@@ -165,7 +165,52 @@ PickTaskGenerator
 → RouteSequencer
 ```
 
-### PR 6 — Workload complexity score
+### PR 6 — Workload complexity score foundation
+
+PR 6 introduces a **domain-level workload complexity score** to estimate how hard a potential picking workload is before any split/build/route behavior exists.
+
+Scope and non-goals:
+- computed before `WorkPackage` planning and splitting;
+- does not change picking execution;
+- does not create routes;
+- does not modify release/allocation behavior;
+- does not persist new planning state.
+
+Current complexity dimensions (MVP heuristics):
+- pick lines;
+- unique locations;
+- zones;
+- aisles;
+- total weight;
+- total volume;
+- handling classes (`heavy`, `bulky`, `fragile`, `cold`/`frozen`, `hazmat`);
+- unknown/missing data (dimensions, locations).
+
+The score is intentionally deterministic and explainable. It is a conservative MVP heuristic and **not final warehouse optimization science**.
+
+Example workload snapshot (Line #77):
+- 9 orders;
+- 42 pick lines;
+- 31 SKU;
+- 28 locations;
+- 5 zones;
+- 4 aisles;
+- 120 kg;
+- 430 L;
+- 8 heavy tasks;
+- 4 bulky tasks;
+- 6 unknown dimensions.
+
+Complexity result: `HIGH` / `CRITICAL` (threshold-dependent).
+
+Typical warnings:
+- Workload exceeds max weight.
+- Workload touches too many zones.
+- Some tasks are missing dimensions.
+
+Future usage:
+- PR 7 can consume this score when building `WorkPackage` plans;
+- PR 8 can use strategy `WorkSplitPolicy` thresholds for split decisions.
 
 ### PR 7 — WorkPackage planner
 
