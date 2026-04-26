@@ -83,6 +83,32 @@ describe('POST /api/picking-planning/preview', () => {
         locationsById: {},
         unresolved: [],
         warnings: []
+      }),
+      previewPickingPlanFromWave: async (input: any) => ({
+        waveId: input.waveId,
+        orderIds: input.waveId === 'wave-empty' ? [] : ['order-1', 'order-2'],
+        planning: {
+          strategy: { method: input.strategyMethod ?? 'single_order' },
+          rootPackage: { id: 'wp-wave-1', strategyId: 'strategy-1', method: input.strategyMethod ?? 'single_order', tasks: [] },
+          split: { wasSplit: false, reason: 'none' },
+          packages: [],
+          warnings: [],
+          metadata: { taskCount: input.waveId === 'wave-empty' ? 0 : 2, packageCount: 1, routeStepCount: 0, wasSplit: false, splitReason: 'none' }
+        },
+        tasks: [],
+        locationsById: {},
+        unresolved: [],
+        unresolvedSummary: { total: 0, byReason: {} },
+        coverage: {
+          orderCount: input.waveId === 'wave-empty' ? 0 : 2,
+          orderLineCount: 0,
+          plannedLineCount: 0,
+          unresolvedLineCount: 0,
+          plannedQty: 0,
+          unresolvedQty: 0,
+          planningCoveragePct: 100
+        },
+        warnings: input.waveId === 'wave-empty' ? ['Wave contains no orders.'] : []
       })
     })) as never
   });
@@ -236,6 +262,41 @@ describe('POST /api/picking-planning/preview', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json().code).toBe('VALIDATION_ERROR');
   });
+
+  it('returns read-only wave-based preview payload', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/wave',
+      payload: { waveId: 'wave-1' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json();
+    expect(payload.waveId).toBe('wave-1');
+    expect(payload.orderIds).toEqual(['order-1', 'order-2']);
+    expect(payload.planning.metadata.taskCount).toBe(2);
+    expect(payload.unresolvedSummary).toEqual({ total: 0, byReason: {} });
+    expect(payload.coverage).toMatchObject({ orderCount: 2, planningCoveragePct: 100 });
+  });
+
+  it('returns wave-level validation errors', async () => {
+    const invalidWave = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/wave',
+      payload: {}
+    });
+    expect(invalidWave.statusCode).toBe(400);
+    expect(invalidWave.json().code).toBe('VALIDATION_ERROR');
+
+    const invalidRoute = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/wave',
+      payload: { waveId: 'wave-1', routeMode: 'nearest' }
+    });
+    expect(invalidRoute.statusCode).toBe(400);
+    expect(invalidRoute.json().code).toBe('VALIDATION_ERROR');
+  });
+
 
   it('returns route steps with 1-based sequence numbers', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: baseRequest });

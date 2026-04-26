@@ -135,7 +135,10 @@ import {
   createPickingPlanningPreviewService,
   type PickingPlanningPreviewService
 } from './features/picking-planning/service.js';
-import { createPickingPlanningOrderInputReadRepo } from './features/picking-planning/repo.js';
+import {
+  createPickingPlanningOrderInputReadRepo,
+  createPickingPlanningWaveReadRepo
+} from './features/picking-planning/repo.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
@@ -260,7 +263,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ((context: AuthenticatedRequestContext) =>
       createPickingPlanningPreviewService(
         undefined,
-        createPickingPlanningOrderInputReadRepo(getUserSupabase(context))
+        createPickingPlanningOrderInputReadRepo(getUserSupabase(context)),
+        createPickingPlanningWaveReadRepo(getUserSupabase(context))
       ));
   const getProductLocationRolesService =
     options.getProductLocationRolesService ??

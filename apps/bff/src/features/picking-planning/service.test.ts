@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPickingPlanningPreviewService } from './service.js';
 import type { PickingPlanningInput } from '@wos/domain';
 import type { PickingPlanningOrderInputReadRepo } from './input-builder.js';
+import type { PickingPlanningWaveReadRepo } from './repo.js';
 
 describe('picking planning preview service', () => {
   it('delegates to domain planner without additional dependencies', () => {
@@ -40,7 +41,7 @@ describe('picking planning preview service', () => {
   });
 
   it('builds candidates from orders and previews with same planner', async () => {
-    const planner = vi.fn().mockReturnValue({ metadata: { taskCount: 1 } });
+    const planner = vi.fn().mockReturnValue({ metadata: { taskCount: 1 }, warnings: [] });
     const repo: PickingPlanningOrderInputReadRepo = {
       listOrderLines: vi.fn().mockResolvedValue([
         { order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'fallback-sku', qty_required: 3, qty_picked: 1 }
@@ -88,5 +89,87 @@ describe('picking planning preview service', () => {
     });
     expect(result.locationsById['loc-1']).toBeDefined();
     expect(planner).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves wave orders and returns diagnostics with deduplicated warnings', async () => {
+    const planner = vi.fn().mockReturnValue({ metadata: { taskCount: 1 }, warnings: ['shared-warning', 'planning-only'] });
+    const orderRepo: PickingPlanningOrderInputReadRepo = {
+      listOrderLines: vi.fn().mockResolvedValue([
+        { order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 2, qty_picked: 0 },
+        { order_id: 'o2', id: 'l2', product_id: 'p2', sku: 'sku-2', qty_required: 1, qty_picked: 0 }
+      ]),
+      listProducts: vi.fn().mockResolvedValue([{ id: 'p1', sku: 'sku-1' }, { id: 'p2', sku: 'sku-2' }]),
+      listUnitProfiles: vi.fn().mockResolvedValue([]),
+      listPackagingLevels: vi.fn().mockResolvedValue([]),
+      listPrimaryPickLocations: vi.fn().mockResolvedValue([{ product_id: 'p1', location_id: 'loc-1' }]),
+      listInventoryUnits: vi.fn().mockResolvedValue([
+        { product_id: 'p1', container_id: 'c-1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+      ]),
+      listContainerLocations: vi.fn().mockResolvedValue([{ id: 'c-1', current_location_id: 'loc-1' }]),
+      listLocations: vi.fn().mockResolvedValue([{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }])
+    };
+    const waveRepo: PickingPlanningWaveReadRepo = {
+      listOrderIdsForWave: vi.fn().mockResolvedValue(['o1', 'o2'])
+    };
+
+    const service = createPickingPlanningPreviewService(planner, orderRepo, waveRepo);
+    const result = await service.previewPickingPlanFromWave({ waveId: 'wave-1' });
+
+    expect(waveRepo.listOrderIdsForWave).toHaveBeenCalledWith('wave-1');
+    expect(result.waveId).toBe('wave-1');
+    expect(result.orderIds).toEqual(['o1', 'o2']);
+    expect(result.unresolvedSummary.total).toBe(1);
+    expect(result.unresolvedSummary.byReason).toEqual({ no_primary_pick_location: 1 });
+    expect(result.coverage).toMatchObject({
+      orderCount: 2,
+      plannedLineCount: 1,
+      unresolvedLineCount: 1,
+      orderLineCount: 2,
+      plannedQty: 2,
+      unresolvedQty: 1,
+      planningCoveragePct: 50
+    });
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        'shared-warning',
+        'planning-only',
+        'Unresolved planning lines are present in wave preview.'
+      ])
+    );
+    expect(new Set(result.warnings).size).toBe(result.warnings.length);
+  });
+
+  it('returns warning and zeroed diagnostics for empty wave', async () => {
+    const planner = vi.fn().mockReturnValue({ metadata: { taskCount: 0 }, warnings: [] });
+    const orderRepo: PickingPlanningOrderInputReadRepo = {
+      listOrderLines: vi.fn().mockResolvedValue([]),
+      listProducts: vi.fn().mockResolvedValue([]),
+      listUnitProfiles: vi.fn().mockResolvedValue([]),
+      listPackagingLevels: vi.fn().mockResolvedValue([]),
+      listPrimaryPickLocations: vi.fn().mockResolvedValue([]),
+      listInventoryUnits: vi.fn().mockResolvedValue([]),
+      listContainerLocations: vi.fn().mockResolvedValue([]),
+      listLocations: vi.fn().mockResolvedValue([])
+    };
+    const waveRepo: PickingPlanningWaveReadRepo = {
+      listOrderIdsForWave: vi.fn().mockResolvedValue([])
+    };
+
+    const service = createPickingPlanningPreviewService(planner, orderRepo, waveRepo);
+    const result = await service.previewPickingPlanFromWave({ waveId: 'wave-empty' });
+
+    expect(result.orderIds).toEqual([]);
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolvedSummary).toEqual({ total: 0, byReason: {} });
+    expect(result.coverage).toEqual({
+      orderCount: 0,
+      orderLineCount: 0,
+      plannedLineCount: 0,
+      unresolvedLineCount: 0,
+      plannedQty: 0,
+      unresolvedQty: 0,
+      planningCoveragePct: 100
+    });
+    expect(result.warnings).toContain('Wave contains no orders.');
   });
 });

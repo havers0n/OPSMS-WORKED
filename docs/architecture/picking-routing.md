@@ -453,3 +453,49 @@ Forward path:
 - PR 13 can add wave/order-group builders reusing the same order input builder;
 - PR 14 can add UI preview over real order/wave data;
 - a future acceptance PR can persist approved plans after preview.
+
+
+### PR 13 — Read-only wave planning preview input builder
+
+PR 13 extends the preview-only BFF integration with wave-level input resolution:
+
+- adds `POST /api/picking-planning/preview/wave`;
+- resolves `waveId -> orderIds[]` with read-only order queries (`orders.wave_id`);
+- reuses PR 12 order builder via `buildPlanningInputFromOrders()` + existing planning orchestration;
+- returns planning output plus wave diagnostics (`unresolvedSummary`, `coverage`, aggregated warnings).
+
+Wave preview flow:
+
+```text
+waveId
+→ orderIds
+→ buildPlanningInputFromOrders()
+→ planPickingWork()
+→ wave planning preview response
+```
+
+Diagnostics introduced in PR 13:
+- `unresolvedSummary`:
+  - `total` unresolved lines;
+  - `byReason` counts by unresolved reason.
+- `coverage` (line-level + qty-level preview diagnostics):
+  - `orderCount`;
+  - `orderLineCount`;
+  - `plannedLineCount`;
+  - `unresolvedLineCount`;
+  - `plannedQty`;
+  - `unresolvedQty`;
+  - `planningCoveragePct` (100 when denominator is zero).
+
+Preview-only boundaries remain unchanged:
+- no `release_wave` / `release_order` calls;
+- no inventory allocation;
+- no `pick_tasks` / `pick_steps` creation;
+- no planning persistence;
+- no UI scope in this PR.
+
+Forward path:
+- PR 14 can add controlled real-data UI preview;
+- a future PR can persist accepted plans;
+- a future PR can release from accepted plans;
+- a future PR can add partial/multi-source planning.

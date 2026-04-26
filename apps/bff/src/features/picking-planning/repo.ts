@@ -1,6 +1,26 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PickingPlanningOrderInputReadRepo } from './input-builder.js';
 
+export type PickingPlanningWaveReadRepo = {
+  listOrderIdsForWave(waveId: string): Promise<string[]>;
+};
+
+export function createPickingPlanningWaveReadRepo(supabase: SupabaseClient): PickingPlanningWaveReadRepo {
+  return {
+    async listOrderIdsForWave(waveId) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('wave_id', waveId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []).map((row) => row.id as string);
+    }
+  };
+}
+
 export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient): PickingPlanningOrderInputReadRepo {
   return {
     async listOrderLines(orderIds) {
