@@ -542,3 +542,29 @@ Out of scope in PR 14A:
 Follow-up direction:
 - PR 14B/15 can consume this stable DTO in UI preview;
 - later PRs can add accepted-plan persistence and controlled release based on accepted plans.
+
+### PR 15 — Tenant-bound read safety + wave membership contract
+
+Planning preview remains read-only, but read-only planning input still must be
+tenant-bound. The BFF planning preview repos explicitly filter by `tenant_id`
+where the schema supports it, including `order_lines`, `waves`, `orders`,
+`product_location_roles`, `inventory_unit`, `containers`, and `locations`.
+
+RLS and authenticated Supabase clients remain defense-in-depth, not the only
+intended boundary when explicit tenant filters are available. Product catalog
+metadata (`products`, `product_unit_profiles`, and `product_packaging_levels`)
+does not carry `tenant_id` in the current schema, so preview reads only those
+product IDs derived from tenant-visible order lines.
+
+Current wave membership contract:
+
+```text
+orders.wave_id -> waves.id
+```
+
+Wave preview resolves membership through `orders.wave_id`. If a future
+join-table membership model is introduced, wave resolution should be
+centralized and updated there.
+
+No release, allocation, execution, UI, or planning persistence behavior changes
+are introduced in PR 15.

@@ -260,12 +260,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     ((context: AuthenticatedRequestContext) => createPickingService(getUserSupabase(context)));
   const getPickingPlanningPreviewService =
     options.getPickingPlanningPreviewService ??
-    ((context: AuthenticatedRequestContext) =>
-      createPickingPlanningPreviewService(
+    ((context: AuthenticatedRequestContext) => {
+      if (!context.currentTenant) {
+        throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for planning preview.');
+      }
+
+      return createPickingPlanningPreviewService(
         undefined,
-        createPickingPlanningOrderInputReadRepo(getUserSupabase(context)),
-        createPickingPlanningWaveReadRepo(getUserSupabase(context))
-      ));
+        createPickingPlanningOrderInputReadRepo(getUserSupabase(context), context.currentTenant.tenantId),
+        createPickingPlanningWaveReadRepo(getUserSupabase(context), context.currentTenant.tenantId)
+      );
+    });
   const getProductLocationRolesService =
     options.getProductLocationRolesService ??
     ((context: AuthenticatedRequestContext) =>
