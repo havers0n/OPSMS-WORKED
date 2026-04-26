@@ -5,8 +5,8 @@ type PickAisleStatus = 'active' | 'inactive';
 
 export type PickAisleRow = {
   id: string;
-  tenant_id?: string | null;
-  floor_id?: string | null;
+  tenant_id: string;
+  floor_id: string;
   code: string;
   name?: string | null;
   start_x?: number | null;
@@ -33,8 +33,8 @@ export type FaceAccessRow = {
 export function mapPickAisleRow(row: PickAisleRow): PickAisle {
   return {
     id: row.id,
-    tenantId: row.tenant_id ?? undefined,
-    floorId: row.floor_id ?? undefined,
+    tenantId: row.tenant_id,
+    floorId: row.floor_id,
     code: row.code,
     name: row.name ?? undefined,
     startX: row.start_x ?? undefined,

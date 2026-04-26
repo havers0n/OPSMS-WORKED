@@ -7,8 +7,8 @@
 
 create table if not exists public.pick_aisles (
   id uuid primary key default gen_random_uuid(),
-  tenant_id uuid null references public.tenants(id) on delete cascade,
-  floor_id uuid null references public.floors(id) on delete cascade,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  floor_id uuid not null references public.floors(id) on delete cascade,
   code text not null,
   name text null,
   start_x numeric null,
@@ -53,10 +53,12 @@ create index if not exists idx_face_access_aisle_id
 create index if not exists idx_face_access_rack_face
   on public.face_access(rack_id, face_id);
 
+drop trigger if exists set_pick_aisles_updated_at on public.pick_aisles;
 create trigger set_pick_aisles_updated_at
 before update on public.pick_aisles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_face_access_updated_at on public.face_access;
 create trigger set_face_access_updated_at
 before update on public.face_access
 for each row execute function public.set_updated_at();

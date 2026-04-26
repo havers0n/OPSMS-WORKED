@@ -138,6 +138,12 @@ PR 4 introduced explicit aisle/access topology primitives:
 
 This removed implicit topology inference from face labels (`A`/`B`) and established explicit walking-path semantics for future route planning.
 
+PR 14B hardens the topology invariant: a `PickAisle` is always floor-bound.
+`pick_aisles.tenant_id`, `pick_aisles.floor_id`, and `pick_aisles.code` are
+required, and aisle codes are unique within `(tenant_id, floor_id)`. Aisle
+topology remains explicit through `FaceAccess`; face labels (`A`/`B`) are still
+not topology inference.
+
 ### PR 5 — PickingStrategy config foundation
 
 `PickingStrategy` in PR 5 is planning configuration only.

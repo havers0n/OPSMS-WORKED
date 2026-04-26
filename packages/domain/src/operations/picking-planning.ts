@@ -154,8 +154,8 @@ export type PickAisle = {
   id: string;
   code: string;
   name?: string;
-  tenantId?: string;
-  floorId?: string;
+  tenantId: string;
+  floorId: string;
   startX?: number;
   startY?: number;
   endX?: number;
