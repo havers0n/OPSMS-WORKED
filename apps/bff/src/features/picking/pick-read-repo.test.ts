@@ -37,6 +37,7 @@ const stepRow = {
   qty_required: 5,
   qty_picked: 0,
   status: 'pending',
+  source_location_id: '12121212-1212-4121-8121-121212121212',
   source_cell_id: ids.cell,
   source_container_id: ids.container,
   inventory_unit_id: null,
@@ -94,6 +95,22 @@ function makeSupabaseStub(overrides: {
         return {
           select: vi.fn(() => ({
             in: vi.fn(async () => ({ data: containerData, error: null }))
+          }))
+        };
+      }
+
+      if (table === 'locations') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(async () => ({
+              data: [{
+                id: '12121212-1212-4121-8121-121212121212',
+                code: 'A-01-01',
+                geometry_slot_id: ids.cell,
+                floor_id: '99999999-9999-4999-8999-999999999999'
+              }],
+              error: null
+            }))
           }))
         };
       }
@@ -172,6 +189,8 @@ describe('pick-read-repo — findPickTaskDetail', () => {
     const result = await repo.findPickTaskDetail(ids.task);
     const step = result!.steps[0];
 
+    expect(step.sourceLocationId).toBe('12121212-1212-4121-8121-121212121212');
+    expect(step.sourceLocationCode).toBe('A-01-01');
     expect(step.sourceCellAddress).toBe('03-A.01.01.01');
     expect(step.sourceContainerCode).toBe('CNT-000111');
     expect(step.imageUrl).toBe('https://cdn.example.com/widget-a.jpg');
@@ -212,9 +231,27 @@ describe('pick-read-repo — findPickTaskDetail', () => {
     expect(result!.completedSteps).toBe(2);
   });
 
+  it('falls back to source_cell_id enrichment when source_location_id is null', async () => {
+    const legacyStep = {
+      ...stepRow,
+      source_location_id: null,
+      source_cell_id: ids.cell
+    };
+    const supabase = makeSupabaseStub({ stepData: [legacyStep] });
+    const repo = createPickReadRepo(supabase as never);
+
+    const result = await repo.findPickTaskDetail(ids.task);
+    const step = result!.steps[0];
+
+    expect(step.sourceLocationId).toBeNull();
+    expect(step.sourceCellAddress).toBe('03-A.01.01.01');
+    expect(step.sourceFloorId).toBe('99999999-9999-4999-8999-999999999999');
+  });
+
   it('returns null enrichment fields when source_cell_id / source_container_id are null', async () => {
     const unallocatedStep = {
       ...stepRow,
+      source_location_id: null,
       source_cell_id: null,
       source_container_id: null,
       order_line_id: null

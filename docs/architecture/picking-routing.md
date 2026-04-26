@@ -1,0 +1,538 @@
+# Picking / Routing Architecture (Future Model)
+
+## Purpose
+
+This document defines **domain vocabulary and architecture boundaries** for future picking strategy and routing work.
+
+This is intentionally **rails, not train**:
+- no behavior changes;
+- no picking execution flow changes;
+- no database migration in this PR.
+
+## Core principle
+
+- `locations` are executable warehouse/storage points.
+- `cells` are layout/geometry entities.
+- Future picking/routing/work planning must use executable `locations.id`.
+- `cells.id` may be used only as a geometry/display bridge.
+
+This avoids introducing a second executable warehouse model.
+
+## Planning pipeline
+
+```text
+Order / Wave / Line
+→ PickingStrategy
+→ PickTaskCandidate
+→ WorkPackage
+→ WorkSplitPolicy
+→ RouteSequencer
+→ RouteStep
+→ Picker Execution UI
+```
+
+Reference service layering:
+
+```text
+PickingStrategy
+→ PickTaskGenerator
+→ WorkPackageBuilder
+→ WorkSplitService
+→ WorkAssignmentService
+→ RouteSequencer
+→ PickingExecutionMapper
+```
+
+## Picking methods
+
+- `single_order`: one order at a time.
+- `batch`: multiple orders collected together, then typically sorted.
+- `wave_bulk`: wave-level aggregated picking, then sorted/consolidated.
+- `cluster`: multiple orders collected together with cart/tote slots.
+- `zone`: work split by warehouse zones.
+- `pick_and_pack`: picker picks directly into final order container.
+- `two_step`: first bulk collect, then allocate/sort to orders.
+
+## RouteSequencer / RouteBuilder responsibility
+
+RouteSequencer (RouteBuilder) **should**:
+- sequence an already-created `WorkPackage`;
+- use `routeSequence`, zone order, address fallback, and handling hints;
+- return deterministic `RouteStep[]`.
+
+RouteSequencer (RouteBuilder) **must NOT**:
+- select orders;
+- choose picking method;
+- aggregate order lines;
+- split oversized work;
+- assign picker/cart/zone;
+- resolve inventory availability;
+- mutate execution state.
+
+## Aisle / face access concept
+
+`Rack 6 / Face B` and `Rack 7 / Face A` can be opposite sides of the same aisle.
+
+Do not infer this from face names (A/B). Model it explicitly through:
+- `PickAisle`
+- `FaceAccess`
+- `accessAisleId`
+- `sideOfAisle`
+- `positionAlongAisle`
+
+Example:
+- `Rack 6 / Face B → Aisle 6-7 / left side`
+- `Rack 7 / Face A → Aisle 6-7 / right side`
+
+This lets routing understand that opposite faces may still be serviced from the same walking path.
+
+## PR boundaries
+
+### PR 2 — Location-first pick execution
+- add `pick_steps.source_location_id`;
+- backfill from `source_cell_id`;
+- update allocation/read models.
+
+### PR 3 — StorageLocation projection + route/access foundation
+
+`StorageLocationProjection` is the route-planning-facing view over executable
+storage locations (`locations.id`).
+
+Scope:
+- add deterministic ordering primitive `routeSequence`;
+- keep separate optional `pickSequence` for later picking preference logic;
+- expose optional zone/access metadata:
+  - `zoneId`, `pickZoneId`, `taskZoneId`, `allocationZoneId`;
+  - `accessAisleId`, `sideOfAisle`, `positionAlongAisle`, `travelNodeId`;
+- keep canvas coordinates (`x`, `y`) as optional hints only.
+
+Important modeling rules:
+- `zoneId` is not automatically equivalent to visual `layout_zones`;
+- face names (`A`, `B`) are labels, not topology;
+- opposite faces must be modeled explicitly via aisle/access relationships.
+
+Example:
+
+```text
+Rack 6 / Face B / Section 03
+→ StorageLocationProjection:
+  accessAisleId: "AISLE-06-07"
+  sideOfAisle: "left"
+  positionAlongAisle: 3
+
+Rack 7 / Face A / Section 03
+→ StorageLocationProjection:
+  accessAisleId: "AISLE-06-07"
+  sideOfAisle: "right"
+  positionAlongAisle: 3
+```
+
+### PR 4 — Aisle/face topology foundation
+
+PR 4 introduced explicit aisle/access topology primitives:
+- `PickAisle`;
+- `FaceAccess`;
+- `StorageLocationProjection.accessAisleId`;
+- `StorageLocationProjection.sideOfAisle`;
+- `StorageLocationProjection.positionAlongAisle`.
+
+This removed implicit topology inference from face labels (`A`/`B`) and established explicit walking-path semantics for future route planning.
+
+### PR 5 — PickingStrategy config foundation
+
+`PickingStrategy` in PR 5 is planning configuration only.
+
+It **defines how future work should be shaped**, but does not execute anything:
+- no route is built in PR 5;
+- no `WorkPackage` is created in PR 5;
+- no release/allocation behavior is changed in PR 5.
+
+Default strategy intent:
+- `single_order`: one order at a time;
+- `batch`: collect multiple orders together, sort later;
+- `wave_bulk`: wave-level aggregated collection, then sort/consolidate;
+- `cluster`: collect multiple orders with explicit cart/tote slot guidance;
+- `zone`: split work by zones, consolidate later;
+- `pick_and_pack`: pick directly into the final order container with handling-aware sequencing;
+- `two_step`: step 1 bulk collection, step 2 sort/allocate to orders.
+
+Future pipeline consumption:
+
+```text
+PickTaskGenerator
+→ WorkPackageBuilder
+→ WorkSplitService
+→ RouteSequencer
+```
+
+### PR 6 — Workload complexity score foundation
+
+PR 6 introduces a **domain-level workload complexity score** to estimate how hard a potential picking workload is before any split/build/route behavior exists.
+
+Scope and non-goals:
+- computed before `WorkPackage` planning and splitting;
+- does not change picking execution;
+- does not create routes;
+- does not modify release/allocation behavior;
+- does not persist new planning state.
+
+Current complexity dimensions (MVP heuristics):
+- pick lines;
+- unique locations;
+- zones;
+- aisles;
+- total weight;
+- total volume;
+- handling classes (`heavy`, `bulky`, `fragile`, `cold`/`frozen`, `hazmat`);
+- unknown/missing data (dimensions, locations).
+
+The score is intentionally deterministic and explainable. It is a conservative MVP heuristic and **not final warehouse optimization science**.
+
+Example workload snapshot (Line #77):
+- 9 orders;
+- 42 pick lines;
+- 31 SKU;
+- 28 locations;
+- 5 zones;
+- 4 aisles;
+- 120 kg;
+- 430 L;
+- 8 heavy tasks;
+- 4 bulky tasks;
+- 6 unknown dimensions.
+
+Complexity result: `HIGH` / `CRITICAL` (threshold-dependent).
+
+Typical warnings:
+- Workload exceeds max weight.
+- Workload touches too many zones.
+- Some tasks are missing dimensions.
+
+Future usage:
+- PR 7 can consume this score when building `WorkPackage` plans;
+- PR 8 can use strategy `WorkSplitPolicy` thresholds for split decisions.
+
+### PR 7 — WorkPackage planner foundation
+
+PR 7 introduces a pure domain-level planner that converts task candidates into a planning container (`WorkPackageDraft`).
+
+It consumes:
+- `PickTaskCandidate[]`;
+- `PickingStrategy` (explicit or default);
+- `StorageLocationProjection`-compatible location refs;
+- `WorkloadComplexityScore` from `estimateWorkloadComplexity()`.
+
+It intentionally does **not**:
+- split work into multiple packages;
+- sequence walking/picking routes;
+- allocate inventory;
+- persist planning records.
+
+PR 7 planning pipeline:
+
+```text
+PickTaskCandidate[]
++ PickingStrategy
++ StorageLocationProjection refs
+→ WorkloadComplexityScore
+→ WorkPackageDraft
+```
+
+Example:
+
+Input:
+- 42 task candidates;
+- strategy: `batch`;
+- 9 orders;
+- 28 locations;
+- 5 zones.
+
+Output `WorkPackageDraft` (illustrative):
+- method: `batch`;
+- tasks: 42;
+- totalWeightKg: 120;
+- totalVolumeLiters: 430;
+- complexity: `high`;
+- warnings:
+  - strategy requires post-sort;
+  - workload touches too many zones;
+  - workload exceeds max weight.
+
+## Notes for current execution model
+
+PR 2 introduced `pick_steps.source_location_id` and location-first read/allocation
+paths while preserving compatibility fallbacks.
+
+The routing model should not depend on visual-canvas-only coordinates. Coordinates can support geometry, but executable planning identity remains `locations.id`.
+
+### PR 8 — WorkSplitService foundation
+
+PR 8 introduces a pure domain-level `WorkSplitService` that takes a planned `WorkPackageDraft` and returns one or more planned `WorkPackageDraft` children.
+
+It uses:
+- strategy `WorkSplitPolicy` thresholds;
+- `WorkloadComplexityScore` (via `estimateWorkloadComplexity()`).
+
+It does **not**:
+- create routes;
+- allocate stock;
+- persist data;
+- modify picking execution.
+
+MVP deterministic split priority:
+1. split by zone;
+2. split by aisle/location;
+3. split by weight;
+4. split by volume;
+5. split by pick lines.
+
+Example (illustrative):
+
+Input (Line #77 / WorkPackageDraft):
+- 42 pick lines;
+- 120kg;
+- 5 zones;
+- 28 locations.
+
+Output:
+- Package P1 — Zone A/B;
+- Package P2 — Zone C;
+- Package P3 — Unknown / overflow.
+
+Assignment behavior in PR 8 (conservative):
+- `assignedPickerId` is preserved into child packages;
+- `assignedZoneId` is set only when split reason is zone and child zone is known;
+- `assignedCartId` is intentionally not propagated to avoid unsafe duplication in cluster/cart-slot flows.
+
+PR 9 is planned to introduce RouteSequencer MVP.
+
+### PR 9 — RouteSequencer MVP
+
+PR 9 introduces a pure domain-level `RouteSequencer` that takes an already planned/split `WorkPackageDraft` and returns ordered `RouteStep[]`.
+
+It **does**:
+- sequence existing pick tasks deterministically;
+- consume strategy `routePriorityMode` (or explicit mode override);
+- preserve task `orderRefs` as step allocations;
+- add simple handling instructions per handling class;
+- return non-blocking warnings.
+
+It **does not**:
+- create work;
+- split work;
+- allocate inventory;
+- execute picking;
+- persist data;
+- calculate true shortest path yet.
+
+MVP route modes:
+- `location_sequence`: `zone -> aisle -> routeSequence -> positionAlongAisle -> sideOfAisle -> address`;
+- `address_sequence`: address-label-first ordering;
+- `handling`: `hazmat/heavy/bulky -> normal/cold/frozen -> fragile`;
+- `hybrid`: physical grouping first (`zone/aisle/position/route`), handling rank secondary;
+- `distance`: fallback to `hybrid` until graph routing exists.
+
+Handling instructions (MVP):
+- `heavy`: `Heavy item. Place low / at the bottom.`
+- `bulky`: `Bulky item. Confirm equipment or cart capacity.`
+- `fragile`: `Fragile item. Keep above heavy items.`
+- `cold`: `Cold item. Follow temperature handling flow.`
+- `frozen`: `Frozen item. Minimize time outside temperature zone.`
+- `hazmat`: `Hazmat item. Follow special handling procedure.`
+
+Example (illustrative):
+
+Input `WorkPackageDraft`:
+- tasks in Zone A / AISLE-06-07;
+- tasks in Zone B / AISLE-07-08;
+- one fragile item;
+- one heavy item.
+
+Output:
+- `RouteStep 1`: Zone A / AISLE-06-07 / position 1;
+- `RouteStep 2`: Zone A / AISLE-06-07 / position 2;
+- `RouteStep 3`: Zone B / AISLE-07-08 / position 1.
+
+Warnings:
+- `Fragile item should remain above heavy items.`
+
+### PR 10 — PickingPlanningPipeline / Planner Orchestrator foundation
+
+PR 10 introduces a pure domain-level planner orchestrator that composes existing planning services into one deterministic pipeline.
+
+It **does**:
+- compose `planWorkPackage()`;
+- compose `splitWorkPackage()`;
+- compose `sequenceWorkPackageRoute()` per resulting package;
+- aggregate non-blocking warnings into one planning result;
+- return planning metadata for preview/read-model consumers.
+
+It **does not**:
+- add new optimization math;
+- persist planning state;
+- change picking execution behavior;
+- allocate inventory;
+- add BFF/UI/runtime wiring.
+
+Pipeline in PR 10:
+
+```text
+PickTaskCandidate[]
++ PickingStrategy / PickingMethod
++ StorageLocationProjection refs
+→ planWorkPackage()
+→ splitWorkPackage()
+→ sequenceWorkPackageRoute()
+→ PickingPlanningResult
+```
+
+Illustrative example:
+
+Input:
+- strategy: `batch`;
+- 42 task candidates;
+- 5 zones;
+- route mode: `hybrid`.
+
+Output:
+- `rootPackage`:
+  - complexity: `high`;
+- `split`:
+  - `wasSplit: true`;
+  - `reason: max_zones`;
+- `packages`:
+  - Package P1: `RouteStep[] = 14`;
+  - Package P2: `RouteStep[] = 16`;
+  - Package P3: `RouteStep[] = 12`;
+- `warnings`:
+  - Work package split by zone.;
+  - Requires post-sort.;
+  - Workload exceeds max weight.
+
+Forward path:
+- PR 11 can add a BFF planning preview endpoint that consumes this orchestrator.
+- PR 12 can add read-only production input conversion from orders into task candidates.
+- PR 14 can add UI preview over the same domain planning result.
+
+### PR 11 — BFF planning preview endpoint
+
+PR 11 adds a **read-only BFF endpoint** for planning preview/testing/integration:
+
+- `POST /api/picking-planning/preview`
+
+It **does**:
+- validate request DTO (explicit `PickTaskCandidate[]` + optional `locationsById`);
+- call domain `planPickingWork()` as the single planning engine;
+- return planning preview output (`strategy`, `rootPackage`, `split`, `packages`, `warnings`, `metadata`).
+
+It **does not**:
+- query orders/waves to generate task candidates;
+- persist any planning state;
+- create pick tasks / pick steps / route records;
+- mutate release/allocation/execution state.
+
+### PR 12 — Read-only production PickTaskCandidate builder from orders
+
+PR 12 adds a **read-only BFF/domain integration layer** that converts real order data into planning input:
+
+- uses real `orders`/`order_lines` + `products` + `product_unit_profiles`/`product_packaging_levels`;
+- resolves source from published `product_location_roles` (`primary_pick`) + available `inventory_unit` in containers at active locations;
+- returns `PickTaskCandidate[]`, `locationsById` (mapped via `mapStorageLocationProjection`), unresolved planning lines, and builder warnings;
+- adds `POST /api/picking-planning/preview/orders` for preview-only planning from `{ orderIds[] }`.
+
+Boundaries (explicitly out of scope):
+- does **not** allocate inventory;
+- does **not** call release/unreserve workflows;
+- does **not** create `pick_tasks`/`pick_steps`;
+- does **not** persist planning output;
+- does **not** implement multi-source allocation, reserve fallback, routing graph, cart-slot assignment, or execution changes.
+
+This unlocks production-safe preview without hand-authored JSON.
+
+Forward path:
+- PR 13 can add wave/order-group builders reusing the same order input builder;
+- PR 14 can add UI preview over real order/wave data;
+- a future acceptance PR can persist approved plans after preview.
+
+
+### PR 13 — Read-only wave planning preview input builder
+
+PR 13 extends the preview-only BFF integration with wave-level input resolution:
+
+- adds `POST /api/picking-planning/preview/wave`;
+- resolves `waveId -> orderIds[]` with read-only order queries (`orders.wave_id`);
+- reuses PR 12 order builder via `buildPlanningInputFromOrders()` + existing planning orchestration;
+- returns planning output plus wave diagnostics (`unresolvedSummary`, `coverage`, aggregated warnings).
+
+Wave preview flow:
+
+```text
+waveId
+→ orderIds
+→ buildPlanningInputFromOrders()
+→ planPickingWork()
+→ wave planning preview response
+```
+
+Diagnostics introduced in PR 13:
+- `unresolvedSummary`:
+  - `total` unresolved lines;
+  - `byReason` counts by unresolved reason.
+- `coverage` (line-level + qty-level preview diagnostics):
+  - `orderCount`;
+  - `orderLineCount`;
+  - `plannedLineCount`;
+  - `unresolvedLineCount`;
+  - `plannedQty`;
+  - `unresolvedQty`;
+  - `planningCoveragePct` (100 when denominator is zero).
+
+Preview-only boundaries remain unchanged:
+- no `release_wave` / `release_order` calls;
+- no inventory allocation;
+- no `pick_tasks` / `pick_steps` creation;
+- no planning persistence;
+- no UI scope in this PR.
+
+Forward path:
+- PR 14 can add controlled real-data UI preview;
+- a future PR can persist accepted plans;
+- a future PR can release from accepted plans;
+- a future PR can add partial/multi-source planning.
+
+### PR 14A — Planning preview API response contract
+
+PR 14A stabilizes the BFF response contract for planning preview endpoints before UI implementation.
+
+Scope:
+- keeps domain `PickingPlanningResult` internal to BFF composition;
+- introduces stable UI-oriented DTO response mapping;
+- keeps the preview flow read-only (no persistence, no execution changes).
+
+Stable response DTO includes:
+- `kind` + `input`;
+- `strategy`;
+- `summary`;
+- `rootWorkPackage`;
+- `split`;
+- `packages[].workPackage` + route steps/metadata;
+- optional `unresolved`, `unresolvedSummary`, `coverage`;
+- `warnings`.
+
+Response consistency:
+- `POST /api/picking-planning/preview` → `kind: "explicit"`;
+- `POST /api/picking-planning/preview/orders` → `kind: "orders"`;
+- `POST /api/picking-planning/preview/wave` → `kind: "wave"`.
+
+All three endpoints now return the same base DTO shape, differing only by `kind` and availability of diagnostics (`coverage`, `unresolvedSummary`, `unresolved`).
+
+Out of scope in PR 14A:
+- no plan acceptance/persistence;
+- no `release_order()` / `release_wave()` behavior changes;
+- no allocation mutation;
+- no picking execution changes;
+- no graph routing/cart-slot assignment changes.
+
+Follow-up direction:
+- PR 14B/15 can consume this stable DTO in UI preview;
+- later PRs can add accepted-plan persistence and controlled release based on accepted plans.

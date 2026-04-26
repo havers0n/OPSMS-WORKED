@@ -10,7 +10,7 @@ const pickTaskColumns =
 const pickStepColumns = [
   'id', 'task_id', 'tenant_id', 'order_id', 'order_line_id',
   'sequence_no', 'sku', 'item_name', 'qty_required', 'qty_picked',
-  'status', 'source_cell_id', 'source_container_id',
+  'status', 'source_location_id', 'source_cell_id', 'source_container_id',
   'inventory_unit_id', 'pick_container_id', 'executed_at', 'executed_by'
 ].join(',');
 
@@ -41,6 +41,7 @@ type PickStepRow = {
   qty_required: number;
   qty_picked: number;
   status: string;
+  source_location_id: string | null;
   source_cell_id: string | null;
   source_container_id: string | null;
   inventory_unit_id: string | null;
@@ -90,6 +91,9 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
       const containerIds = [...new Set(
         steps.map((s) => s.source_container_id).filter((id): id is string => id !== null)
       )];
+      const locationIds = [...new Set(
+        steps.map((s) => s.source_location_id).filter((id): id is string => id !== null)
+      )];
       const cellIds = [...new Set(
         steps.map((s) => s.source_cell_id).filter((id): id is string => id !== null)
       )];
@@ -98,9 +102,12 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
       )];
 
       // 4. Batch-fetch enrichment data in parallel
-      const [containerResult, cellResult, orderLineResult] = await Promise.all([
+      const [containerResult, locationResult, cellResult, orderLineResult] = await Promise.all([
         containerIds.length > 0
           ? supabase.from('containers').select('id,system_code,external_code').in('id', containerIds)
+          : Promise.resolve({ data: [], error: null }),
+        locationIds.length > 0
+          ? supabase.from('locations').select('id,code,geometry_slot_id,floor_id').in('id', locationIds)
           : Promise.resolve({ data: [], error: null }),
         cellIds.length > 0
           ? supabase.from('cells').select('id,address,layout_version_id').in('id', cellIds)
@@ -111,6 +118,7 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
       ]);
 
       if (containerResult.error) throw containerResult.error;
+      if (locationResult.error) throw locationResult.error;
       if (cellResult.error) throw cellResult.error;
       if (orderLineResult.error) throw orderLineResult.error;
 
@@ -132,6 +140,15 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
         ((containerResult.data ?? []) as { id: string; system_code: string; external_code: string | null }[])
           .map((c) => [c.id, c.system_code])
       );
+
+      const locationRows = (locationResult.data ?? []) as {
+        id: string;
+        code: string;
+        geometry_slot_id: string | null;
+        floor_id: string;
+      }[];
+
+      const locationById = new Map(locationRows.map((l) => [l.id, l]));
 
       const cellRows = (cellResult.data ?? []) as {
         id: string;
@@ -192,21 +209,31 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
           qtyRequired: row.qty_required,
           qtyPicked: row.qty_picked,
           status: row.status as PickStepDetail['status'],
+          sourceLocationId: row.source_location_id,
           sourceCellId: row.source_cell_id,
           sourceContainerId: row.source_container_id,
           inventoryUnitId: row.inventory_unit_id,
           pickContainerId: row.pick_container_id,
           executedAt: row.executed_at,
           executedBy: row.executed_by,
-          sourceCellAddress: row.source_cell_id
-            ? (cellAddressById.get(row.source_cell_id) ?? null)
+          sourceLocationCode: row.source_location_id
+            ? (locationById.get(row.source_location_id)?.code ?? null)
             : null,
+          sourceCellAddress: (() => {
+            const resolvedCellId = row.source_location_id
+              ? (locationById.get(row.source_location_id)?.geometry_slot_id ?? row.source_cell_id)
+              : row.source_cell_id;
+            return resolvedCellId ? (cellAddressById.get(resolvedCellId) ?? null) : null;
+          })(),
           sourceContainerCode: row.source_container_id
             ? (containerCodeById.get(row.source_container_id) ?? null)
             : null,
-          sourceFloorId: row.source_cell_id
-            ? (floorIdByCellId.get(row.source_cell_id) ?? null)
-            : null,
+          sourceFloorId: (() => {
+            if (row.source_location_id) {
+              return locationById.get(row.source_location_id)?.floor_id ?? null;
+            }
+            return row.source_cell_id ? (floorIdByCellId.get(row.source_cell_id) ?? null) : null;
+          })(),
           imageUrl: productId ? (imageUrlByProductId.get(productId) ?? null) : null
         };
       });

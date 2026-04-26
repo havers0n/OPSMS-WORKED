@@ -131,6 +131,15 @@ import {
   createPickingService,
   type PickingService
 } from './features/picking/service.js';
+import {
+  createPickingPlanningPreviewService,
+  type PickingPlanningPreviewService
+} from './features/picking-planning/service.js';
+import {
+  createPickingPlanningOrderInputReadRepo,
+  createPickingPlanningWaveReadRepo
+} from './features/picking-planning/repo.js';
+import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
 import {
@@ -154,6 +163,9 @@ type ContainersServiceFactory = (context: AuthenticatedRequestContext) => Contai
 type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsService;
 type ProductsServiceFactory = (context: AuthenticatedRequestContext) => ProductsService;
 type PickingServiceFactory = (context: AuthenticatedRequestContext) => PickingService;
+type PickingPlanningPreviewServiceFactory = (
+  context: AuthenticatedRequestContext
+) => PickingPlanningPreviewService;
 type ProductLocationRolesServiceFactory = (context: AuthenticatedRequestContext) => ProductLocationRolesService;
 type StoragePresetsServiceFactory = (context: AuthenticatedRequestContext) => StoragePresetsService;
 
@@ -173,6 +185,7 @@ type BuildAppOptions = {
   getProductsService?: ProductsServiceFactory;
   getProductLocationRolesService?: ProductLocationRolesServiceFactory;
   getStoragePresetsService?: StoragePresetsServiceFactory;
+  getPickingPlanningPreviewService?: PickingPlanningPreviewServiceFactory;
 };
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -245,6 +258,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const getPickingService =
     options.getPickingService ??
     ((context: AuthenticatedRequestContext) => createPickingService(getUserSupabase(context)));
+  const getPickingPlanningPreviewService =
+    options.getPickingPlanningPreviewService ??
+    ((context: AuthenticatedRequestContext) =>
+      createPickingPlanningPreviewService(
+        undefined,
+        createPickingPlanningOrderInputReadRepo(getUserSupabase(context)),
+        createPickingPlanningWaveReadRepo(getUserSupabase(context))
+      ));
   const getProductLocationRolesService =
     options.getProductLocationRolesService ??
     ((context: AuthenticatedRequestContext) =>
@@ -1218,6 +1239,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   // ── Orders ───────────────────────────────────────────────────────────────────
 
   registerOrdersRoutes(app, { getAuthContext, getUserSupabase, getOrdersService });
+  registerPickingPlanningPreviewRoutes(app, { getAuthContext, getPickingPlanningPreviewService });
 
   app.get('/api/orders/:orderId/execution', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
