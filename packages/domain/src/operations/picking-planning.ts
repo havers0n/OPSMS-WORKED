@@ -153,19 +153,26 @@ export type StorageLocationProjection = {
 export type PickAisle = {
   id: string;
   code: string;
+  name?: string;
+  tenantId?: string;
+  floorId?: string;
   startX?: number;
   startY?: number;
   endX?: number;
   endY?: number;
   widthMm?: number;
   routeSequence?: number;
+  status?: 'active' | 'inactive';
 };
 
 export type FaceAccess = {
+  id?: string;
+  tenantId?: string;
   rackId: string;
   faceId: string;
   aisleId: string;
   sideOfAisle?: 'left' | 'right';
+  positionAlongAisle?: number;
   normalX?: number;
   normalY?: number;
 };

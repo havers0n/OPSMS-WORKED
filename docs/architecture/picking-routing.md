@@ -127,15 +127,60 @@ Rack 7 / Face A / Section 03
   positionAlongAisle: 3
 ```
 
-### PR 4 — PickingStrategy config
+### PR 4 — PickAisle + FaceAccess topology
 
-### PR 5 — Workload complexity score
+PR 4 introduces explicit topology entities that bridge layout geometry and
+future route sequencing:
 
-### PR 6 — WorkPackage planner
+- `PickAisle` represents a walkable aisle/access lane.
+- `FaceAccess` records that a rack face is serviced from a specific aisle.
+- `locations.id` remains the executable point; topology is access metadata.
 
-### PR 7 — WorkSplitPolicy
+Topology must be explicit. Face labels (`A` / `B`) are naming conventions,
+not routing truth. Two faces are considered opposite only when they are mapped
+to the same aisle.
 
-### PR 8 — RouteSequencer MVP
+Example topology mapping:
+
+```text
+Aisle AISLE-06-07
+left side:
+  Rack 6 / Face B
+right side:
+  Rack 7 / Face A
+```
+
+Example location-level access metadata:
+
+```text
+Rack 6 Face B Section 03
+→ accessAisleId: AISLE-06-07
+→ sideOfAisle: left
+→ positionAlongAisle: 3
+
+Rack 7 Face A Section 03
+→ accessAisleId: AISLE-06-07
+→ sideOfAisle: right
+→ positionAlongAisle: 3
+```
+
+Non-goals for PR 4:
+- does not implement `RouteSequencer`;
+- does not auto-infer topology from face names;
+- does not change current pick execution flow.
+
+Future sequencing can group by `accessAisleId` and order by
+`positionAlongAisle` (with additional policy later).
+
+### PR 5 — PickingStrategy config
+
+### PR 6 — Workload complexity score
+
+### PR 7 — WorkPackage planner
+
+### PR 8 — WorkSplitPolicy
+
+### PR 9 — RouteSequencer MVP
 
 ## Notes for current execution model
 
