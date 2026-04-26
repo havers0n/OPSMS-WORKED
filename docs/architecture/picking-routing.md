@@ -411,7 +411,8 @@ Output:
 
 Forward path:
 - PR 11 can add a BFF planning preview endpoint that consumes this orchestrator.
-- PR 12 can add UI preview over the same domain planning result.
+- PR 12 can add read-only production input conversion from orders into task candidates.
+- PR 14 can add UI preview over the same domain planning result.
 
 ### PR 11 — BFF planning preview endpoint
 
@@ -430,7 +431,25 @@ It **does not**:
 - create pick tasks / pick steps / route records;
 - mutate release/allocation/execution state.
 
-This endpoint is a bridge for future UI preview and integration:
-- PR 12 can add UI planning preview;
-- a future integration PR can add order/wave → `PickTaskCandidate[]` conversion;
-- a future acceptance PR can persist an approved plan after preview.
+### PR 12 — Read-only production PickTaskCandidate builder from orders
+
+PR 12 adds a **read-only BFF/domain integration layer** that converts real order data into planning input:
+
+- uses real `orders`/`order_lines` + `products` + `product_unit_profiles`/`product_packaging_levels`;
+- resolves source from published `product_location_roles` (`primary_pick`) + available `inventory_unit` in containers at active locations;
+- returns `PickTaskCandidate[]`, `locationsById` (mapped via `mapStorageLocationProjection`), unresolved planning lines, and builder warnings;
+- adds `POST /api/picking-planning/preview/orders` for preview-only planning from `{ orderIds[] }`.
+
+Boundaries (explicitly out of scope):
+- does **not** allocate inventory;
+- does **not** call release/unreserve workflows;
+- does **not** create `pick_tasks`/`pick_steps`;
+- does **not** persist planning output;
+- does **not** implement multi-source allocation, reserve fallback, routing graph, cart-slot assignment, or execution changes.
+
+This unlocks production-safe preview without hand-authored JSON.
+
+Forward path:
+- PR 13 can add wave/order-group builders reusing the same order input builder;
+- PR 14 can add UI preview over real order/wave data;
+- a future acceptance PR can persist approved plans after preview.

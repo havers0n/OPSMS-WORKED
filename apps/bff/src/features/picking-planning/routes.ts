@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import { type PickingPlanningPreviewService } from './service.js';
-import { pickingPlanningPreviewRequestSchema } from './schema.js';
+import {
+  pickingPlanningPreviewOrdersRequestSchema,
+  pickingPlanningPreviewRequestSchema
+} from './schema.js';
 
 type GetAuthContext = (
   request: FastifyRequest,
@@ -31,5 +34,13 @@ export function registerPickingPlanningPreviewRoutes(
 
     const body = parseOrThrow(pickingPlanningPreviewRequestSchema, request.body);
     return getPickingPlanningPreviewService(auth).previewPickingPlan(body);
+  });
+
+  app.post('/api/picking-planning/preview/orders', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(pickingPlanningPreviewOrdersRequestSchema, request.body);
+    return getPickingPlanningPreviewService(auth).previewPickingPlanFromOrders(body);
   });
 }

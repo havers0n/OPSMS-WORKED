@@ -38,7 +38,7 @@ const locationRefSchema = z.object({
   y: finiteNumber.optional()
 });
 
-export const pickingPlanningPreviewRequestSchema = z.object({
+const pickingPlanningPreviewBaseSchema = z.object({
   strategyMethod: z.enum(PICKING_METHODS as [typeof PICKING_METHODS[number], ...typeof PICKING_METHODS[number][]]).optional(),
   routeMode: z.enum(['location_sequence', 'address_sequence', 'distance', 'handling', 'hybrid']).optional(),
   assignedPickerId: z.string().trim().min(1).optional(),
@@ -46,8 +46,18 @@ export const pickingPlanningPreviewRequestSchema = z.object({
   assignedCartId: z.string().trim().min(1).optional(),
   id: z.string().trim().min(1).optional(),
   code: z.string().trim().min(1).optional(),
+});
+
+
+
+export const pickingPlanningPreviewRequestSchema = pickingPlanningPreviewBaseSchema.extend({
   tasks: z.array(taskSchema),
   locationsById: z.record(z.string().trim().min(1), locationRefSchema).optional()
 });
 
+export const pickingPlanningPreviewOrdersRequestSchema = pickingPlanningPreviewBaseSchema.extend({
+  orderIds: z.array(z.string().trim().min(1)).min(1)
+});
+
 export type PickingPlanningPreviewRequest = z.infer<typeof pickingPlanningPreviewRequestSchema>;
+export type PickingPlanningPreviewOrdersRequest = z.infer<typeof pickingPlanningPreviewOrdersRequestSchema>;
