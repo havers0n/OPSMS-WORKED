@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { PackagePlus, RefreshCw, Route, Warehouse } from 'lucide-react';
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import type { ContainerType, ProductPackagingLevel, StoragePreset } from '@wos/domain';
 import type { CreateStoragePresetInput } from '@/entities/product/api/mutations';
@@ -196,9 +196,12 @@ export function ProductStoragePresetsSection({
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">
-            {variant === 'embedded' ? 'Storage preset' : '3. Storage Presets'}
-          </h2>
+          <div className="flex items-center gap-2">
+            <Warehouse className="h-4 w-4 text-slate-500" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-slate-900">
+              {variant === 'embedded' ? 'Storage preset' : '3. Storage Presets'}
+            </h2>
+          </div>
           <p className="mt-0.5 text-xs text-slate-500">
             Define how storable pack types fit into containers.
           </p>
@@ -215,8 +218,9 @@ export function ProductStoragePresetsSection({
 
               setIsCreating(true);
             }}
-            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
+            {isCreating ? null : <PackagePlus className="h-3.5 w-3.5" aria-hidden="true" />}
             {isCreating ? 'Close form' : 'Add preset'}
           </button>
         ) : null}
@@ -281,7 +285,7 @@ export function ProductStoragePresetsSection({
           )}
 
           {isCreating ? (
-            <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3">
+            <div className="rounded-lg border border-cyan-100 bg-cyan-50/30 p-3">
               {storableLevels.length === 0 ? (
                 <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   <div className="font-semibold">No storable pack types available.</div>
@@ -295,91 +299,96 @@ export function ProductStoragePresetsSection({
                   </a>
                 </div>
               ) : null}
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Code
-                  <input value={code} onChange={(event) => setCode(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
-                </label>
-                <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Name
-                  <input value={name} onChange={(event) => setName(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
-                </label>
-                <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Container type
-                  <select
-                    value={selectedContainerTypeCode}
-                    onChange={(event) => setSelectedContainerTypeCode(event.target.value)}
-                    disabled={containerTypesQuery.isLoading || containerTypesQuery.isError || storableContainerTypes.length === 0}
-                    aria-label="Container type"
-                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:opacity-50"
-                  >
-                    <option value="">
-                      {containerTypesQuery.isLoading
-                        ? 'Loading container types...'
-                        : storableContainerTypes.length === 0
-                          ? 'No storage-capable types'
-                          : 'Select container type'}
-                    </option>
-                    {storableContainerTypes.map((type) => (
-                      <option key={type.id} value={type.code}>
-                        {type.code} - {type.description}
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-medium text-slate-700">
+                    Code
+                    <input value={code} onChange={(event) => setCode(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-700">
+                    Name
+                    <input value={name} onChange={(event) => setName(event.target.value)} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-700">
+                    Container type
+                    <select
+                      value={selectedContainerTypeCode}
+                      onChange={(event) => setSelectedContainerTypeCode(event.target.value)}
+                      disabled={containerTypesQuery.isLoading || containerTypesQuery.isError || storableContainerTypes.length === 0}
+                      aria-label="Container type"
+                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:opacity-50"
+                    >
+                      <option value="">
+                        {containerTypesQuery.isLoading
+                          ? 'Loading container types...'
+                          : storableContainerTypes.length === 0
+                            ? 'No storage-capable types'
+                            : 'Select container type'}
                       </option>
-                    ))}
-                  </select>
-                  <span className={containerTypesQuery.isError || storableContainerTypes.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
-                    {containerTypeHelper}
-                  </span>
-                </label>
-                <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Pack type from Packaging Levels
-                  <select
-                    value={selectedLevel?.id ?? ''}
-                    onChange={(event) => setLevelId(event.target.value)}
-                    disabled={storableLevels.length === 0}
-                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:opacity-50"
-                  >
-                    <option value="">
-                      {storableLevels.length === 0 ? 'No storable pack types' : 'Select pack type'}
-                    </option>
-                    {storableLevels.map((level) => (
-                      <option key={level.id} value={level.id}>{formatPackagingLevelOption(level)}</option>
-                    ))}
-                  </select>
-                  <span className={storableLevels.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
-                    {packTypeHelper}
-                  </span>
-                </label>
-                <label className="grid gap-1 text-xs font-medium text-slate-700">
-                  Number of packs in container
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    inputMode="numeric"
-                    value={packCount}
-                    onChange={(event) => setPackCount(event.target.value)}
-                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
-                  />
-                </label>
-              </div>
-              <div className="mt-3 rounded-lg border border-cyan-100 bg-white px-3 py-2 text-sm text-slate-700">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Storage formula</div>
-                {storagePreview ? (
-                  <div className="mt-1 space-y-1">
-                    <div className="font-medium text-slate-900">
-                      {storagePreview.count} {'\u00d7'} {storagePreview.packName} / {storagePreview.unitsPerPack}{' '}
-                      {storagePreview.unitsPerPack === 1 ? 'unit' : 'units'} {'\u2192'} Standard{' '}
-                      {storagePreview.containerTypeCode}
-                    </div>
-                    <div className="text-xs font-semibold text-slate-700">
-                      Total: {storagePreview.totalUnits} units per {storagePreview.containerTypeCode}
-                    </div>
+                      {storableContainerTypes.map((type) => (
+                        <option key={type.id} value={type.code}>
+                          {type.code} - {type.description}
+                        </option>
+                      ))}
+                    </select>
+                    <span className={containerTypesQuery.isError || storableContainerTypes.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
+                      {containerTypeHelper}
+                    </span>
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-700">
+                    Number of packs in container
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      value={packCount}
+                      onChange={(event) => setPackCount(event.target.value)}
+                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-slate-700 md:col-span-2">
+                    Pack type from Packaging Levels
+                    <select
+                      value={selectedLevel?.id ?? ''}
+                      onChange={(event) => setLevelId(event.target.value)}
+                      disabled={storableLevels.length === 0}
+                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:opacity-50"
+                    >
+                      <option value="">
+                        {storableLevels.length === 0 ? 'No storable pack types' : 'Select pack type'}
+                      </option>
+                      {storableLevels.map((level) => (
+                        <option key={level.id} value={level.id}>{formatPackagingLevelOption(level)}</option>
+                      ))}
+                    </select>
+                    <span className={storableLevels.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
+                      {packTypeHelper}
+                    </span>
+                  </label>
+                </div>
+                <aside className="rounded-lg border border-cyan-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Route className="h-3.5 w-3.5" aria-hidden="true" />
+                    Storage formula
                   </div>
-                ) : (
-                  <div className="mt-1 text-slate-600">
-                    Choose a pack type, number of packs, and container type to preview the storage formula.
-                  </div>
-                )}
+                  {storagePreview ? (
+                    <div className="mt-2 space-y-2">
+                      <div className="rounded-md bg-cyan-50 px-2 py-1.5 font-medium text-cyan-950">
+                        {storagePreview.count} {'\u00d7'} {storagePreview.packName} / {storagePreview.unitsPerPack}{' '}
+                        {storagePreview.unitsPerPack === 1 ? 'unit' : 'units'} {'\u2192'} Standard{' '}
+                        {storagePreview.containerTypeCode}
+                      </div>
+                      <div className="text-xs font-semibold text-slate-700">
+                        Total: {storagePreview.totalUnits} units per {storagePreview.containerTypeCode}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-slate-600">
+                      Choose a pack type, number of packs, and container type to preview the storage formula.
+                    </div>
+                  )}
+                </aside>
               </div>
               {error ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
               <button
