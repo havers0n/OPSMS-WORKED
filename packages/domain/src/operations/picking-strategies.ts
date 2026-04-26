@@ -4,7 +4,7 @@ import type {
   WorkSplitPolicy
 } from './picking-planning';
 
-const PICKING_METHODS: readonly PickingMethod[] = [
+export const PICKING_METHODS: readonly PickingMethod[] = [
   'single_order',
   'batch',
   'wave_bulk',
