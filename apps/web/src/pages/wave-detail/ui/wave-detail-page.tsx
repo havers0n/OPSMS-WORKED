@@ -10,6 +10,7 @@ import { useAttachOrderToWave, useDetachOrderFromWave, useTransitionWaveStatus }
 import { waveKeys, waveQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
 import { deriveWaveBlockers, getBlockerReasonLabel } from '@/entities/wave/lib/wave-blockers';
+import { useOpenPickingPlan } from '@/features/picking-planning-navigation/model/use-open-picking-plan';
 import { routes } from '@/shared/config/routes';
 import { OrderPreview } from '@/features/order-detail/ui/order-preview';
 
@@ -263,6 +264,7 @@ export function WaveDetailPage() {
     setSearchParams((prev) => { const next = new URLSearchParams(prev); next.delete('order'); return next; });
   }
   const waveTransition = useTransitionWaveStatus();
+  const { openForWave } = useOpenPickingPlan();
 
   if (isLoading || !wave) {
     return (
@@ -274,6 +276,7 @@ export function WaveDetailPage() {
 
   const action = getWavePrimaryAction(wave);
   const blockers = deriveWaveBlockers({ orders: wave.orders });
+  const canPlanWave = wave.orders.length > 0;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-slate-50">
@@ -301,6 +304,15 @@ export function WaveDetailPage() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={!canPlanWave}
+              title={!canPlanWave ? 'Add orders to this wave before planning picking.' : undefined}
+              onClick={() => openForWave(wave.id)}
+              className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Plan wave
+            </button>
             <button
               type="button"
               onClick={() => void refetch()}
