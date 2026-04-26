@@ -19,6 +19,7 @@ import {
 import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { useSites } from '@/entities/site/api/use-sites';
 import { routes } from '@/shared/config/routes';
+import { ViewStageSwitcher } from '@/widgets/app-shell/ui/view-stage-switcher';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'view', label: 'View' },
@@ -174,6 +175,7 @@ export function ViewTopBar({
             );
           })}
         </div>
+        {activeViewMode === 'view' && <ViewStageSwitcher />}
         <form
           className="flex items-center gap-2"
           onSubmit={(event) => {

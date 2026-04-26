@@ -105,6 +105,7 @@ vi.mock('@/features/layout-validate/model/use-layout-validation', () => ({
 function resetStores() {
   useModeStore.setState({
     viewMode: 'layout',
+    viewStage: 'map',
     editorMode: 'select'
   });
   useInteractionStore.setState({

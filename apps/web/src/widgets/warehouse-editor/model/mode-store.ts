@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EditorMode, ViewMode } from './editor-types';
+import type { EditorMode, ViewMode, ViewStage } from './editor-types';
 
 /**
  * Mode Store — independent single source of truth for viewMode and editorMode.
@@ -22,17 +22,24 @@ import type { EditorMode, ViewMode } from './editor-types';
 
 type ModeStore = {
   viewMode: ViewMode;
+  viewStage: ViewStage;
   editorMode: EditorMode;
   setViewMode: (nextViewMode: ViewMode) => void;
+  setViewStage: (nextViewStage: ViewStage) => void;
   setEditorMode: (nextEditorMode: EditorMode) => void;
 };
 
 export const useModeStore = create<ModeStore>((set) => ({
   viewMode: 'layout',
+  viewStage: 'map',
   editorMode: 'select',
   setViewMode: (nextViewMode) =>
     set({
       viewMode: nextViewMode
+    }),
+  setViewStage: (nextViewStage) =>
+    set({
+      viewStage: nextViewStage
     }),
   setEditorMode: (nextEditorMode) =>
     set({

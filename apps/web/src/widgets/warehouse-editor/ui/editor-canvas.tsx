@@ -38,7 +38,8 @@ import {
   useUpdateWallGeometry,
   useUpdateZoneRect,
   useMinRackDistance,
-  useViewMode
+  useViewMode,
+  useViewStage
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import type {
   EditorSelection,
@@ -67,6 +68,7 @@ import {
 } from '@/entities/layout-version/lib/canvas-geometry';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
+import { PickingPlanningOverlay } from './picking-planning-overlay';
 import { RackLayer } from './rack-layer';
 import { SnapGuides } from './shapes/snap-guides';
 import { useCanvasSceneModel } from './use-canvas-scene-model';
@@ -103,6 +105,7 @@ export function EditorCanvas({
 }) {
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
+  const viewStage = useViewStage();
   const isStorageV2Active = isStorageV2 && viewMode === 'storage';
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
@@ -186,6 +189,8 @@ export function EditorCanvas({
     useStorageFocusHandleEmptyCanvasClick();
 
   const isViewMode = viewMode === 'view';
+  const shouldShowPickingPlanningOverlay =
+    isViewMode && viewStage === 'picking-plan';
   // In View and Storage mode the published rack tree must be
   // used as the source for RackCells so that rackId/faceId/sectionId/levelId
   // in the lookup key match the keys in publishedCellsByStructure.
@@ -674,6 +679,8 @@ export function EditorCanvas({
             onZoomReset={() => setCanvasZoom(1)}
             onZoomIn={() => handleZoom(0.1)}
           />
+
+          {shouldShowPickingPlanningOverlay && <PickingPlanningOverlay />}
 
           {viewport.width > 0 && viewport.height > 0 && (
             <Stage
