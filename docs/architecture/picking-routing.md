@@ -127,52 +127,43 @@ Rack 7 / Face A / Section 03
   positionAlongAisle: 3
 ```
 
-### PR 4 — PickAisle + FaceAccess topology
+### PR 4 — Aisle/face topology foundation
 
-PR 4 introduces explicit topology entities that bridge layout geometry and
-future route sequencing:
+PR 4 introduced explicit aisle/access topology primitives:
+- `PickAisle`;
+- `FaceAccess`;
+- `StorageLocationProjection.accessAisleId`;
+- `StorageLocationProjection.sideOfAisle`;
+- `StorageLocationProjection.positionAlongAisle`.
 
-- `PickAisle` represents a walkable aisle/access lane.
-- `FaceAccess` records that a rack face is serviced from a specific aisle.
-- `locations.id` remains the executable point; topology is access metadata.
+This removed implicit topology inference from face labels (`A`/`B`) and established explicit walking-path semantics for future route planning.
 
-Topology must be explicit. Face labels (`A` / `B`) are naming conventions,
-not routing truth. Two faces are considered opposite only when they are mapped
-to the same aisle.
+### PR 5 — PickingStrategy config foundation
 
-Example topology mapping:
+`PickingStrategy` in PR 5 is planning configuration only.
+
+It **defines how future work should be shaped**, but does not execute anything:
+- no route is built in PR 5;
+- no `WorkPackage` is created in PR 5;
+- no release/allocation behavior is changed in PR 5.
+
+Default strategy intent:
+- `single_order`: one order at a time;
+- `batch`: collect multiple orders together, sort later;
+- `wave_bulk`: wave-level aggregated collection, then sort/consolidate;
+- `cluster`: collect multiple orders with explicit cart/tote slot guidance;
+- `zone`: split work by zones, consolidate later;
+- `pick_and_pack`: pick directly into the final order container with handling-aware sequencing;
+- `two_step`: step 1 bulk collection, step 2 sort/allocate to orders.
+
+Future pipeline consumption:
 
 ```text
-Aisle AISLE-06-07
-left side:
-  Rack 6 / Face B
-right side:
-  Rack 7 / Face A
+PickTaskGenerator
+→ WorkPackageBuilder
+→ WorkSplitService
+→ RouteSequencer
 ```
-
-Example location-level access metadata:
-
-```text
-Rack 6 Face B Section 03
-→ accessAisleId: AISLE-06-07
-→ sideOfAisle: left
-→ positionAlongAisle: 3
-
-Rack 7 Face A Section 03
-→ accessAisleId: AISLE-06-07
-→ sideOfAisle: right
-→ positionAlongAisle: 3
-```
-
-Non-goals for PR 4:
-- does not implement `RouteSequencer`;
-- does not auto-infer topology from face names;
-- does not change current pick execution flow.
-
-Future sequencing can group by `accessAisleId` and order by
-`positionAlongAisle` (with additional policy later).
-
-### PR 5 — PickingStrategy config
 
 ### PR 6 — Workload complexity score
 
