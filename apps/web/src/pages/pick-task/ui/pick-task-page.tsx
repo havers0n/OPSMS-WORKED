@@ -266,7 +266,7 @@ function StepCard({
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
               <div className="mb-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                 <MapPin className="h-3 w-3" />
-                Cell
+                Source
               </div>
               <div className="text-sm font-medium text-slate-900">
                 {step.sourceCellAddress && step.sourceCellId && step.sourceFloorId ? (
@@ -282,7 +282,7 @@ function StepCard({
                     {step.sourceCellAddress}
                   </Link>
                 ) : (
-                  step.sourceCellAddress ?? <span className="italic text-slate-400">Not allocated</span>
+                  step.sourceCellAddress ?? step.sourceLocationCode ?? <span className="italic text-slate-400">Not allocated</span>
                 )}
               </div>
             </div>
@@ -503,7 +503,7 @@ export function PickTaskPage() {
   // Show "Allocate steps" when any pending step has no source location yet
   const hasUnallocatedSteps =
     !isTerminalTask &&
-    task.steps.some((s) => s.status === 'pending' && s.sourceCellId === null);
+    task.steps.some((s) => s.status === 'pending' && s.sourceLocationId === null && s.sourceCellId === null);
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
