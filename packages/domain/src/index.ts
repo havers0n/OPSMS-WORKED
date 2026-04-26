@@ -48,5 +48,6 @@ export * from './operations/pick-task';
 export * from './operations/picking-planning';
 export * from './operations/picking-strategies';
 export * from './operations/workload-complexity';
+export * from './operations/work-package-planner';
 export * from './operations/product-location-role';
 export * from './operations/wave';
