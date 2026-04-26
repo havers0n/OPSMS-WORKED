@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import { type PickingPlanningPreviewService } from './service.js';
+import { mapPlanningPreviewToResponse } from './response-mapper.js';
 import {
   pickingPlanningPreviewOrdersRequestSchema,
   pickingPlanningPreviewRequestSchema,
@@ -34,7 +35,16 @@ export function registerPickingPlanningPreviewRoutes(
     if (!auth) return;
 
     const body = parseOrThrow(pickingPlanningPreviewRequestSchema, request.body);
-    return getPickingPlanningPreviewService(auth).previewPickingPlan(body);
+    const planning = getPickingPlanningPreviewService(auth).previewPickingPlan(body);
+
+    return mapPlanningPreviewToResponse({
+      kind: 'explicit',
+      planning,
+      input: {
+        strategyMethod: body.strategyMethod,
+        routeMode: body.routeMode
+      }
+    });
   });
 
   app.post('/api/picking-planning/preview/orders', async (request, reply) => {
@@ -42,7 +52,20 @@ export function registerPickingPlanningPreviewRoutes(
     if (!auth) return;
 
     const body = parseOrThrow(pickingPlanningPreviewOrdersRequestSchema, request.body);
-    return getPickingPlanningPreviewService(auth).previewPickingPlanFromOrders(body);
+    const preview = await getPickingPlanningPreviewService(auth).previewPickingPlanFromOrders(body);
+
+    return mapPlanningPreviewToResponse({
+      kind: 'orders',
+      planning: preview.planning,
+      input: {
+        orderIds: body.orderIds,
+        strategyMethod: body.strategyMethod,
+        routeMode: body.routeMode
+      },
+      unresolved: preview.unresolved,
+      unresolvedSummary: preview.unresolvedSummary,
+      coverage: preview.coverage
+    });
   });
 
   app.post('/api/picking-planning/preview/wave', async (request, reply) => {
@@ -50,6 +73,21 @@ export function registerPickingPlanningPreviewRoutes(
     if (!auth) return;
 
     const body = parseOrThrow(pickingPlanningPreviewWaveRequestSchema, request.body);
-    return getPickingPlanningPreviewService(auth).previewPickingPlanFromWave(body);
+    const preview = await getPickingPlanningPreviewService(auth).previewPickingPlanFromWave(body);
+
+    return mapPlanningPreviewToResponse({
+      kind: 'wave',
+      planning: preview.planning,
+      input: {
+        waveId: preview.waveId,
+        orderIds: preview.orderIds,
+        strategyMethod: body.strategyMethod,
+        routeMode: body.routeMode
+      },
+      unresolved: preview.unresolved,
+      unresolvedSummary: preview.unresolvedSummary,
+      coverage: preview.coverage,
+      extraWarnings: preview.warnings
+    });
   });
 }

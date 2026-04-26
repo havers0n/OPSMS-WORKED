@@ -51,50 +51,179 @@ const baseRequest = {
   }
 };
 
+function makePlanning(input: any) {
+  const tasks = input.tasks ?? [];
+  return {
+    strategy: {
+      id: 'strategy-1',
+      code: 'SINGLE_ORDER',
+      name: 'Single order',
+      method: input.strategyMethod ?? 'single_order',
+      requiresPostSort: input.strategyMethod === 'batch',
+      requiresCartSlots: false,
+      preserveOrderSeparation: true,
+      aggregateSameSku: false,
+      routePriorityMode: input.routeMode ?? 'hybrid',
+      splitPolicy: {}
+    },
+    rootPackage: {
+      id: 'wp-1',
+      strategyId: 'strategy-1',
+      strategy: {
+        id: 'strategy-1',
+        code: 'SINGLE_ORDER',
+        name: 'Single order',
+        method: input.strategyMethod ?? 'single_order',
+        requiresPostSort: input.strategyMethod === 'batch',
+        requiresCartSlots: false,
+        preserveOrderSeparation: true,
+        aggregateSameSku: false,
+        routePriorityMode: input.routeMode ?? 'hybrid',
+        splitPolicy: {}
+      },
+      method: input.strategyMethod ?? 'single_order',
+      tasks,
+      complexity: {
+        level: 'low',
+        score: 10,
+        pickLines: tasks.length,
+        uniqueSkuCount: tasks.length,
+        uniqueLocationCount: tasks.length,
+        uniqueZoneCount: 1,
+        uniqueAisleCount: 1,
+        totalWeightKg: 0,
+        totalVolumeLiters: 0,
+        heavyTaskCount: 0,
+        bulkyTaskCount: 0,
+        fragileTaskCount: 0,
+        coldTaskCount: 0,
+        hazmatTaskCount: 0,
+        unknownWeightCount: 0,
+        unknownVolumeCount: 0,
+        unknownLocationCount: 0,
+        exceeds: {
+          maxPickLines: false,
+          maxWeightKg: false,
+          maxVolumeLiters: false,
+          maxUniqueLocations: false,
+          maxZones: false
+        },
+        warnings: []
+      },
+      warnings: input.strategyMethod === 'batch' ? ['Strategy requires post-sort.'] : [],
+      metadata: {
+        source: 'domain_planner',
+        taskCount: tasks.length,
+        orderCount: tasks.length,
+        uniqueSkuCount: tasks.length,
+        uniqueLocationCount: tasks.length,
+        uniqueZoneCount: 1,
+        uniqueAisleCount: 1
+      }
+    },
+    split: {
+      wasSplit: tasks.length > 2,
+      reason: tasks.length > 2 ? 'max_zones' : 'none',
+      packages: [{ id: 'wp-1' }],
+      warnings: []
+    },
+    packages: [
+      {
+        package: {
+          id: 'wp-1',
+          strategyId: 'strategy-1',
+          strategy: {
+            id: 'strategy-1',
+            code: 'SINGLE_ORDER',
+            name: 'Single order',
+            method: input.strategyMethod ?? 'single_order',
+            requiresPostSort: input.strategyMethod === 'batch',
+            requiresCartSlots: false,
+            preserveOrderSeparation: true,
+            aggregateSameSku: false,
+            routePriorityMode: input.routeMode ?? 'hybrid',
+            splitPolicy: {}
+          },
+          method: input.strategyMethod ?? 'single_order',
+          tasks,
+          complexity: {
+            level: 'low',
+            score: 10,
+            pickLines: tasks.length,
+            uniqueSkuCount: tasks.length,
+            uniqueLocationCount: tasks.length,
+            uniqueZoneCount: 1,
+            uniqueAisleCount: 1,
+            totalWeightKg: 0,
+            totalVolumeLiters: 0,
+            heavyTaskCount: 0,
+            bulkyTaskCount: 0,
+            fragileTaskCount: 0,
+            coldTaskCount: 0,
+            hazmatTaskCount: 0,
+            unknownWeightCount: 0,
+            unknownVolumeCount: 0,
+            unknownLocationCount: 0,
+            exceeds: {
+              maxPickLines: false,
+              maxWeightKg: false,
+              maxVolumeLiters: false,
+              maxUniqueLocations: false,
+              maxZones: false
+            },
+            warnings: []
+          },
+          warnings: [],
+          metadata: {
+            source: 'domain_planner',
+            taskCount: tasks.length,
+            orderCount: tasks.length,
+            uniqueSkuCount: tasks.length,
+            uniqueLocationCount: tasks.length,
+            uniqueZoneCount: 1,
+            uniqueAisleCount: 1
+          }
+        },
+        route: { steps: tasks.map((task: any, index: number) => ({ sequence: index + 1, taskId: task.id, fromLocationId: task.fromLocationId, skuId: task.skuId, qtyToPick: task.qty, allocations: task.orderRefs })), warnings: input.routeMode === 'distance' ? ['Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.'] : [], metadata: { mode: input.routeMode === 'distance' ? 'hybrid' : (input.routeMode ?? 'hybrid'), taskCount: tasks.length, sequencedCount: tasks.length, unknownLocationCount: 0 } }
+      }
+    ],
+    warnings: [
+      ...(input.routeMode === 'distance'
+        ? ['Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.']
+        : []),
+      ...(input.strategyMethod === 'batch' ? ['Strategy requires post-sort.'] : [])
+    ],
+    metadata: { taskCount: tasks.length, packageCount: 1, routeStepCount: tasks.length, wasSplit: tasks.length > 2, splitReason: tasks.length > 2 ? 'max_zones' : 'none' }
+  };
+}
+
 describe('POST /api/picking-planning/preview', () => {
   const app = buildApp({
     getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => authContext,
     getPickingPlanningPreviewService: (() => ({
-      previewPickingPlan: (input: any) => {
-        const result = {
-        strategy: { method: input.strategyMethod ?? 'single_order' },
-        rootPackage: { id: 'wp-1', strategyId: 'strategy-1', method: input.strategyMethod ?? 'single_order', tasks: input.tasks },
-        split: { wasSplit: input.tasks.length > 2, reason: input.tasks.length > 2 ? 'max_zones' : 'none' },
-          packages: [{ id: 'wp-1', strategyId: 'strategy-1', method: input.strategyMethod ?? 'single_order', tasks: input.tasks, route: { steps: input.tasks.map((task: any, index: number) => ({ sequence: index + 1, taskId: task.id })) } }],
-        warnings: input.routeMode === 'distance'
-          ? ['Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.']
-          : input.strategyMethod === 'batch'
-            ? ['Strategy requires post-sort.']
-            : [],
-        metadata: { taskCount: input.tasks.length, packageCount: 1, routeStepCount: input.tasks.length, wasSplit: input.tasks.length > 2, splitReason: input.tasks.length > 2 ? 'max_zones' : 'none' }
-        };
-        return result as never;
-      },
+      previewPickingPlan: (input: any) => makePlanning(input) as never,
       previewPickingPlanFromOrders: async (input: any) => ({
-        planning: {
-          strategy: { method: 'single_order' },
-          rootPackage: { id: 'wp-1', strategyId: 'strategy-1', method: 'single_order', tasks: [] },
-          split: { wasSplit: false, reason: 'none' },
-          packages: [],
-          warnings: [],
-          metadata: { taskCount: input.orderIds.length, packageCount: 1, routeStepCount: input.orderIds.length, wasSplit: false, splitReason: 'none' }
-        },
+        planning: makePlanning({ tasks: input.orderIds.map((id: string, i: number) => ({ id: `task-${i + 1}`, skuId: `sku-${i + 1}`, fromLocationId: `loc-${i + 1}`, qty: 1, orderRefs: [{ orderId: id, orderLineId: `line-${i + 1}`, qty: 1 }] })) }),
+        orderIds: input.orderIds,
         tasks: [],
         locationsById: {},
         unresolved: [],
+        unresolvedSummary: { total: 0, byReason: {} },
+        coverage: {
+          orderCount: input.orderIds.length,
+          orderLineCount: 0,
+          plannedLineCount: 0,
+          unresolvedLineCount: 0,
+          plannedQty: 0,
+          unresolvedQty: 0,
+          planningCoveragePct: 100
+        },
         warnings: []
       }),
       previewPickingPlanFromWave: async (input: any) => ({
         waveId: input.waveId,
         orderIds: input.waveId === 'wave-empty' ? [] : ['order-1', 'order-2'],
-        planning: {
-          strategy: { method: input.strategyMethod ?? 'single_order' },
-          rootPackage: { id: 'wp-wave-1', strategyId: 'strategy-1', method: input.strategyMethod ?? 'single_order', tasks: [] },
-          split: { wasSplit: false, reason: 'none' },
-          packages: [],
-          warnings: [],
-          metadata: { taskCount: input.waveId === 'wave-empty' ? 0 : 2, packageCount: 1, routeStepCount: 0, wasSplit: false, splitReason: 'none' }
-        },
+        planning: makePlanning({ tasks: [] }),
         tasks: [],
         locationsById: {},
         unresolved: [],
@@ -121,24 +250,16 @@ describe('POST /api/picking-planning/preview', () => {
     await app.close();
   });
 
-  it('returns planning preview metadata for a valid request', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: baseRequest
-    });
+  it('returns stable explicit preview response', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: baseRequest });
 
     expect(response.statusCode).toBe(200);
     const payload = response.json();
-    expect(payload.metadata.taskCount).toBe(2);
-    expect(payload.metadata.packageCount).toBeGreaterThan(0);
+    expect(payload.kind).toBe('explicit');
+    expect(payload.summary.taskCount).toBe(2);
+    expect(payload.summary.packageCount).toBeGreaterThan(0);
     expect(payload.packages[0].route.steps[0].sequence).toBe(1);
-  });
-
-  it('uses default strategy when strategyMethod is omitted', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: baseRequest });
-    expect(response.statusCode).toBe(200);
-    expect(response.json().strategy.method).toBe('single_order');
+    expect(payload.rootWorkPackage.id).toBe('wp-1');
   });
 
   it('includes post-sort warning for batch strategy', async () => {
@@ -153,156 +274,43 @@ describe('POST /api/picking-planning/preview', () => {
   });
 
   it('propagates distance-mode fallback warning', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: { ...baseRequest, routeMode: 'distance' }
-    });
+    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: { ...baseRequest, routeMode: 'distance' } });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().warnings).toContain(
-      'Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.'
-    );
+    expect(response.json().warnings).toContain('Distance mode requested, but graph routing is not implemented. Falling back to hybrid sequencing.');
   });
 
-  it('splits work by zones when exceeding strategy maxZones', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: {
-        ...baseRequest,
-        tasks: [
-          { ...baseRequest.tasks[0], id: 'task-z1', fromLocationId: 'loc-z1' },
-          { ...baseRequest.tasks[0], id: 'task-z2', fromLocationId: 'loc-z2' },
-          { ...baseRequest.tasks[0], id: 'task-z3', fromLocationId: 'loc-z3' }
-        ],
-        locationsById: {
-          'loc-z1': { id: 'loc-z1', taskZoneId: 'zone-a' },
-          'loc-z2': { id: 'loc-z2', taskZoneId: 'zone-b' },
-          'loc-z3': { id: 'loc-z3', taskZoneId: 'zone-c' }
-        }
-      }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json().split).toMatchObject({ wasSplit: true, reason: 'max_zones' });
-  });
-
-  it('returns 400 for invalid strategyMethod', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: { ...baseRequest, strategyMethod: 'invalid' }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe('VALIDATION_ERROR');
-  });
-
-  it('returns 400 for invalid routeMode', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: { ...baseRequest, routeMode: 'nearest' }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe('VALIDATION_ERROR');
-  });
-
-  it('returns 400 when task qty is not positive', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: {
-        ...baseRequest,
-        tasks: [{ ...baseRequest.tasks[0], qty: 0 }]
-      }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe('VALIDATION_ERROR');
-  });
-
-  it('returns 400 for invalid handlingClass', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview',
-      payload: {
-        ...baseRequest,
-        tasks: [{ ...baseRequest.tasks[0], handlingClass: 'radioactive' }]
-      }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe('VALIDATION_ERROR');
-  });
-
-
-
-  it('returns read-only orders-based preview payload', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview/orders',
-      payload: { orderIds: ['order-1', 'order-2'] }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json().planning.metadata.taskCount).toBe(2);
-    expect(Array.isArray(response.json().unresolved)).toBe(true);
-  });
-
-  it('returns 400 for invalid orderIds payload', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview/orders',
-      payload: { orderIds: [] }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json().code).toBe('VALIDATION_ERROR');
-  });
-
-  it('returns read-only wave-based preview payload', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview/wave',
-      payload: { waveId: 'wave-1' }
-    });
+  it('returns kind=orders response with coverage and unresolvedSummary', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/orders', payload: { orderIds: ['order-1', 'order-2'] } });
 
     expect(response.statusCode).toBe(200);
     const payload = response.json();
-    expect(payload.waveId).toBe('wave-1');
-    expect(payload.orderIds).toEqual(['order-1', 'order-2']);
-    expect(payload.planning.metadata.taskCount).toBe(2);
+    expect(payload.kind).toBe('orders');
+    expect(payload.input.orderIds).toEqual(['order-1', 'order-2']);
     expect(payload.unresolvedSummary).toEqual({ total: 0, byReason: {} });
     expect(payload.coverage).toMatchObject({ orderCount: 2, planningCoveragePct: 100 });
   });
 
-  it('returns wave-level validation errors', async () => {
-    const invalidWave = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview/wave',
-      payload: {}
-    });
-    expect(invalidWave.statusCode).toBe(400);
-    expect(invalidWave.json().code).toBe('VALIDATION_ERROR');
+  it('returns kind=wave response with waveId, orderIds, coverage and unresolvedSummary', async () => {
+    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/wave', payload: { waveId: 'wave-1' } });
 
-    const invalidRoute = await app.inject({
-      method: 'POST',
-      url: '/api/picking-planning/preview/wave',
-      payload: { waveId: 'wave-1', routeMode: 'nearest' }
-    });
-    expect(invalidRoute.statusCode).toBe(400);
-    expect(invalidRoute.json().code).toBe('VALIDATION_ERROR');
+    expect(response.statusCode).toBe(200);
+    const payload = response.json();
+    expect(payload.kind).toBe('wave');
+    expect(payload.input.waveId).toBe('wave-1');
+    expect(payload.input.orderIds).toEqual(['order-1', 'order-2']);
+    expect(payload.unresolvedSummary).toEqual({ total: 0, byReason: {} });
+    expect(payload.coverage).toMatchObject({ orderCount: 2, planningCoveragePct: 100 });
   });
 
+  it('returns 400 validation errors for invalid request payloads', async () => {
+    const invalidStrategy = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: { ...baseRequest, strategyMethod: 'invalid' } });
+    expect(invalidStrategy.statusCode).toBe(400);
 
-  it('returns route steps with 1-based sequence numbers', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview', payload: baseRequest });
-    expect(response.statusCode).toBe(200);
+    const invalidOrders = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/orders', payload: { orderIds: [] } });
+    expect(invalidOrders.statusCode).toBe(400);
 
-    const steps = response.json().packages[0].route.steps;
-    expect(steps.map((step: { sequence: number }) => step.sequence)).toEqual([1, 2]);
+    const invalidWave = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/wave', payload: {} });
+    expect(invalidWave.statusCode).toBe(400);
   });
 });

@@ -19,6 +19,9 @@ import type { PickingPlanningWaveReadRepo } from './repo.js';
 
 export type PickingPlanningPreviewFromOrdersResult = {
   planning: PickingPlanningResult;
+  orderIds: string[];
+  unresolvedSummary: UnresolvedPlanningLineSummary;
+  coverage: PlanningCoverage;
 } & BuildPlanningInputFromOrdersResult;
 
 export type PickingPlanningPreviewFromWaveResult = PickingPlanningPreviewFromOrdersResult & {
@@ -59,8 +62,14 @@ export function createPickingPlanningPreviewService(
       code: input.code
     });
 
+    const unresolvedSummary = summarizeUnresolvedPlanningLines(built.unresolved);
+    const coverage = calculatePlanningCoverage({ orderIds: input.orderIds, tasks: built.tasks, unresolved: built.unresolved });
+
     return {
       planning,
+      orderIds: [...input.orderIds],
+      unresolvedSummary,
+      coverage,
       ...built
     };
   };
@@ -89,9 +98,6 @@ export function createPickingPlanningPreviewService(
       const orderIds = await waveReadRepo.listOrderIdsForWave(input.waveId);
       const fromOrders = await previewPickingPlanFromOrders({ ...input, orderIds });
 
-      const unresolvedSummary = summarizeUnresolvedPlanningLines(fromOrders.unresolved);
-      const coverage = calculatePlanningCoverage({ orderIds, tasks: fromOrders.tasks, unresolved: fromOrders.unresolved });
-
       const warnings = new Set<string>(fromOrders.warnings);
       for (const warning of fromOrders.planning.warnings) {
         warnings.add(warning);
@@ -110,8 +116,8 @@ export function createPickingPlanningPreviewService(
         tasks: fromOrders.tasks,
         locationsById: fromOrders.locationsById,
         unresolved: fromOrders.unresolved,
-        unresolvedSummary,
-        coverage,
+        unresolvedSummary: fromOrders.unresolvedSummary,
+        coverage: fromOrders.coverage,
         warnings: Array.from(warnings)
       };
     }
