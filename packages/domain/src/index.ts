@@ -51,5 +51,6 @@ export * from './operations/workload-complexity';
 export * from './operations/work-package-planner';
 export * from './operations/work-split-service';
 export * from './operations/route-sequencer';
+export * from './operations/picking-planning-pipeline';
 export * from './operations/product-location-role';
 export * from './operations/wave';
