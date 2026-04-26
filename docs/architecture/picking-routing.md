@@ -212,9 +212,55 @@ Future usage:
 - PR 7 can consume this score when building `WorkPackage` plans;
 - PR 8 can use strategy `WorkSplitPolicy` thresholds for split decisions.
 
-### PR 7 — WorkPackage planner
+### PR 7 — WorkPackage planner foundation
 
-### PR 8 — WorkSplitPolicy
+PR 7 introduces a pure domain-level planner that converts task candidates into a planning container (`WorkPackageDraft`).
+
+It consumes:
+- `PickTaskCandidate[]`;
+- `PickingStrategy` (explicit or default);
+- `StorageLocationProjection`-compatible location refs;
+- `WorkloadComplexityScore` from `estimateWorkloadComplexity()`.
+
+It intentionally does **not**:
+- split work into multiple packages;
+- sequence walking/picking routes;
+- allocate inventory;
+- persist planning records.
+
+PR 7 planning pipeline:
+
+```text
+PickTaskCandidate[]
++ PickingStrategy
++ StorageLocationProjection refs
+→ WorkloadComplexityScore
+→ WorkPackageDraft
+```
+
+Example:
+
+Input:
+- 42 task candidates;
+- strategy: `batch`;
+- 9 orders;
+- 28 locations;
+- 5 zones.
+
+Output `WorkPackageDraft` (illustrative):
+- method: `batch`;
+- tasks: 42;
+- totalWeightKg: 120;
+- totalVolumeLiters: 430;
+- complexity: `high`;
+- warnings:
+  - strategy requires post-sort;
+  - workload touches too many zones;
+  - workload exceeds max weight.
+
+### PR 8 — WorkSplitService foundation
+
+PR 8 will introduce `WorkSplitService` to split oversized work packages according to strategy split policy and complexity thresholds.
 
 ### PR 9 — RouteSequencer MVP
 
