@@ -355,3 +355,60 @@ Output:
 
 Warnings:
 - `Fragile item should remain above heavy items.`
+
+### PR 10 — PickingPlanningPipeline / Planner Orchestrator foundation
+
+PR 10 introduces a pure domain-level planner orchestrator that composes existing planning services into one deterministic pipeline.
+
+It **does**:
+- compose `planWorkPackage()`;
+- compose `splitWorkPackage()`;
+- compose `sequenceWorkPackageRoute()` per resulting package;
+- aggregate non-blocking warnings into one planning result;
+- return planning metadata for preview/read-model consumers.
+
+It **does not**:
+- add new optimization math;
+- persist planning state;
+- change picking execution behavior;
+- allocate inventory;
+- add BFF/UI/runtime wiring.
+
+Pipeline in PR 10:
+
+```text
+PickTaskCandidate[]
++ PickingStrategy / PickingMethod
++ StorageLocationProjection refs
+→ planWorkPackage()
+→ splitWorkPackage()
+→ sequenceWorkPackageRoute()
+→ PickingPlanningResult
+```
+
+Illustrative example:
+
+Input:
+- strategy: `batch`;
+- 42 task candidates;
+- 5 zones;
+- route mode: `hybrid`.
+
+Output:
+- `rootPackage`:
+  - complexity: `high`;
+- `split`:
+  - `wasSplit: true`;
+  - `reason: max_zones`;
+- `packages`:
+  - Package P1: `RouteStep[] = 14`;
+  - Package P2: `RouteStep[] = 16`;
+  - Package P3: `RouteStep[] = 12`;
+- `warnings`:
+  - Work package split by zone.;
+  - Requires post-sort.;
+  - Workload exceeds max weight.
+
+Forward path:
+- PR 11 can add a BFF planning preview endpoint that consumes this orchestrator.
+- PR 12 can add UI preview over the same domain planning result.
