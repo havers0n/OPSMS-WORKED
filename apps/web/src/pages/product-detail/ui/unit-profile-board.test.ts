@@ -218,6 +218,14 @@ describe('UnitProfileBoard', () => {
     expect(text).not.toContain('PAL-12 Base unit quantity');
   });
 
+  it('does not render empty storage method sections for pack types without presets', () => {
+    const text = flattenText(renderBoard({ storagePresets: [] }).toJSON());
+
+    expect(text).not.toContain('Storage methods for this pack type');
+    expect(text).not.toContain('No storage methods for this pack type yet.');
+    expect(text).not.toContain('Create a storage preset to describe how this level can be stored.');
+  });
+
   it('renders unresolved storage presets instead of hiding persisted data', () => {
     const text = flattenText(
       renderBoard({

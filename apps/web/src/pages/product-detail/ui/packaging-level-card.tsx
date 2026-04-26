@@ -74,8 +74,8 @@ export function PackagingLevelCard({ level, hierarchyEntry, children }: Packagin
 
   return (
     <article className="relative rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-2">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <div
             className={[
               'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
@@ -88,16 +88,19 @@ export function PackagingLevelCard({ level, hierarchyEntry, children }: Packagin
               <Layers3 className="h-4 w-4" aria-hidden="true" />
             )}
           </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-mono text-[11px] font-semibold uppercase text-slate-500">{level.code}</span>
-              <Badge tone={level.isActive ? 'emerald' : 'slate'}>{level.isActive ? 'Active' : 'Inactive'}</Badge>
-              {level.isBase ? <Badge tone="cyan">Base</Badge> : null}
-            </div>
-            <h3 className="mt-0.5 truncate text-sm font-semibold text-slate-950">{level.name}</h3>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 font-mono text-[11px] font-semibold uppercase text-slate-500">{level.code}</span>
+            <span className="shrink-0 text-xs text-slate-300" aria-hidden="true">
+              |
+            </span>
+            <h3 className="min-w-0 truncate text-sm font-semibold text-slate-950" dir="auto">
+              {level.name}
+            </h3>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1 lg:justify-end">
+        <div className="flex shrink-0 flex-wrap gap-1 lg:justify-end">
+          <Badge tone={level.isActive ? 'emerald' : 'slate'}>{level.isActive ? 'Active' : 'Inactive'}</Badge>
+          {level.isBase ? <Badge tone="cyan">Base</Badge> : null}
           {level.isDefaultPickUom ? <Badge tone="cyan">Default Pick</Badge> : null}
           {level.canPick ? <Badge>Can Pick</Badge> : null}
           {level.canStore ? <Badge>Can Store</Badge> : null}

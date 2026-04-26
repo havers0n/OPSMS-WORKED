@@ -99,13 +99,9 @@ function StorageMethodItem({ item, unresolved = false }: { item: GroupedStorageP
   );
 }
 
-function PackingLevelStorageMethods({
-  methods,
-  canCreateStoragePreset
-}: {
-  methods: GroupedStoragePresetItem[];
-  canCreateStoragePreset: boolean;
-}) {
+function PackingLevelStorageMethods({ methods }: { methods: GroupedStoragePresetItem[] }) {
+  if (methods.length === 0) return null;
+
   return (
     <section className="rounded-md border border-slate-200 bg-slate-50/70 p-2.5">
       <div className="flex items-center gap-2 text-xs font-semibold text-slate-900">
@@ -113,20 +109,11 @@ function PackingLevelStorageMethods({
         Storage methods for this pack type
       </div>
 
-      {methods.length > 0 ? (
-        <div className="mt-2 grid gap-2">
-          {methods.map((item) => (
-            <StorageMethodItem key={item.key} item={item} />
-          ))}
-        </div>
-      ) : (
-        <div className="mt-2 flex flex-col gap-1 rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs font-semibold text-slate-900">No storage methods for this pack type yet.</div>
-          <p className="text-xs text-slate-600">
-            {canCreateStoragePreset ? 'Create a storage preset to describe how this level can be stored.' : 'Define active packaging levels first.'}
-          </p>
-        </div>
-      )}
+      <div className="mt-2 grid gap-2">
+        {methods.map((item) => (
+          <StorageMethodItem key={item.key} item={item} />
+        ))}
+      </div>
     </section>
   );
 }
@@ -266,17 +253,7 @@ export function ProductPackingHierarchy({
                   </div>
                   <div className="min-w-0 flex-1" style={{ marginLeft: `${Math.min(entry.indent, 3) * 12}px` }}>
                     <PackagingLevelCard level={level} hierarchyEntry={entry}>
-                      {level.isActive && level.canStore ? (
-                        <PackingLevelStorageMethods
-                          methods={storageMethods}
-                          canCreateStoragePreset={hasActiveStorablePackagingLevels}
-                        />
-                      ) : storageMethods.length > 0 ? (
-                        <PackingLevelStorageMethods
-                          methods={storageMethods}
-                          canCreateStoragePreset={hasActiveStorablePackagingLevels}
-                        />
-                      ) : null}
+                      {storageMethods.length > 0 ? <PackingLevelStorageMethods methods={storageMethods} /> : null}
                     </PackagingLevelCard>
                   </div>
                 </div>
