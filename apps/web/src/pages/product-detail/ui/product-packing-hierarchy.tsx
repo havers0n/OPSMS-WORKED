@@ -176,7 +176,6 @@ export function ProductPackingHierarchy({
               <Boxes className="h-3.5 w-3.5" aria-hidden="true" />
               Packaging Hierarchy
             </div>
-            {isPackagingSelected ? <Pill tone="cyan">Selected</Pill> : null}
           </div>
           <h2 className="mt-1 text-base font-semibold text-slate-950">Pack types and storage methods</h2>
           <p className="mt-1 text-xs text-slate-500">
@@ -207,7 +206,6 @@ export function ProductPackingHierarchy({
                 <Warehouse className="h-3.5 w-3.5" aria-hidden="true" />
                 Storage Presets
               </div>
-              {isStorageSelected ? <Pill tone="cyan">Selected</Pill> : null}
               <Pill tone={linkedStorageCount > 0 ? 'emerald' : 'slate'}>{`${linkedStorageCount} linked`}</Pill>
               {groupedStorage.unlinked.length > 0 ? <Pill tone="amber">{`${groupedStorage.unlinked.length} unlinked`}</Pill> : null}
             </div>

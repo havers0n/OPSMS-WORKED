@@ -91,15 +91,13 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 }
 
 describe('ProductSetupFlowStrip', () => {
-  it('renders the strip title and helper', () => {
+  it('renders the compact strip title and steps', () => {
     const renderer = renderStrip();
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Product setup flow');
+    expect(text).toContain('Setup status');
     expect(text).toContain('Single Unit Profile');
-    expect(text).toContain(
-      'Define the unit, create pack types from it, then use storable pack types in storage presets.'
-    );
+    expect(text).not.toContain('Define the unit, create pack types from it');
   });
 
   it('shows Packaging Missing when no levels exist', () => {

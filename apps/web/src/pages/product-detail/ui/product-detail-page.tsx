@@ -2,27 +2,19 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { routes } from '@/shared/config/routes';
-import {
-  getProfileCompleteness,
-  useProductDetailPageModel
-} from '../model/use-product-detail-page-model';
+import { useProductDetailPageModel } from '../model/use-product-detail-page-model';
 import { ProductMediaSection } from './product-media-section';
 import { ProductPackagingSection } from './product-packaging-section';
 import { ProductStoragePresetsSection } from './product-storage-presets-section';
-import { ProductUnitProfileSection } from './product-unit-profile-section';
 import { UnitProfileBoard, type UnitProfileWorkspaceSelection } from './unit-profile-board';
 
 type UnitProfileWorkspaceMode = 'read' | 'edit-product-facts' | 'edit-packaging' | 'create-storage-preset';
+type UnitProfileWorkbenchMode = Exclude<UnitProfileWorkspaceMode, 'read' | 'edit-product-facts'>;
 
 const workbenchCopy: Record<
-  Exclude<UnitProfileWorkspaceMode, 'read'>,
+  UnitProfileWorkbenchMode,
   { title: string; description: string; selectedAreaLabel: string }
 > = {
-  'edit-product-facts': {
-    title: 'Editing product facts',
-    description: 'Update base weight, dimensions, and fallback classes.',
-    selectedAreaLabel: 'Product Facts'
-  },
   'edit-packaging': {
     title: 'Configuring packaging hierarchy',
     description: 'Define how this product exists as EA, inner packs, cartons, or master cases.',
@@ -36,7 +28,7 @@ const workbenchCopy: Record<
 };
 
 type UnitProfileWorkbenchProps = {
-  mode: Exclude<UnitProfileWorkspaceMode, 'read'>;
+  mode: UnitProfileWorkbenchMode;
   productName: string;
   productSku: string | null;
   onBack: () => void;
@@ -155,19 +147,12 @@ export function ProductSetupFlowStrip({
   ];
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">Product setup flow</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Define the unit, create pack types from it, then use storable pack types in storage presets.
-          </p>
-        </div>
-      </div>
-      <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+    <section className="rounded-xl border border-slate-200 bg-white p-3">
+      <h2 className="text-sm font-semibold text-slate-900">Setup status</h2>
+      <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
         {steps.map((step, index) => (
           <div key={step.title} className="contents">
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white">
                   {step.number}
@@ -384,12 +369,6 @@ export function ProductDetailPage() {
                     Status: {model.product.isActive ? 'active' : 'inactive'}
                   </span>
                   <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-                    Profile: {getProfileCompleteness(model.unitProfileQuery.data)}
-                  </span>
-                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
-                    Packaging levels: {model.packagingLevelsQuery.data?.length ?? '-'}
-                  </span>
-                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
                     Default pick UOM: {model.defaultPickLevel?.code ?? 'Not set'}
                   </span>
                 </div>
@@ -423,36 +402,28 @@ export function ProductDetailPage() {
             packagingLevels={model.packagingLevelsQuery.data ?? []}
             storagePresets={model.storagePresetsQuery.data ?? []}
             selectedArea={selectedArea}
+            isProductFactsEditing={boardMode === 'edit-product-facts'}
+            unitProfileDraft={model.unitProfileDraft}
+            unitProfileFieldErrors={model.unitProfileFieldErrors}
+            unitProfileSaveError={model.unitProfileSaveError}
+            unitProfileDirty={model.unitProfileDirty}
+            isSavingProductFacts={model.upsertUnitProfileMutation.isPending}
             onEditProductFacts={beginProductFactsEdit}
+            onCancelProductFactsEdit={cancelProductFactsEdit}
+            onSaveProductFacts={() => void saveProductFacts()}
+            onProductFactsNumericFieldChange={model.updateUnitProfileDraftField}
+            onProductFactsClassFieldChange={model.updateUnitProfileDraftClassField}
             onEditPackaging={beginPackagingEdit}
             onCreateStoragePreset={beginStoragePresetCreate}
           />
 
-          {boardMode !== 'read' ? (
+          {boardMode !== 'read' && boardMode !== 'edit-product-facts' ? (
             <UnitProfileWorkbench
               mode={boardMode}
               productName={model.product.name}
               productSku={model.product.sku}
               onBack={returnToWorkspace}
             >
-              {boardMode === 'edit-product-facts' ? (
-                <ProductUnitProfileSection
-                  unitProfileQuery={model.unitProfileQuery}
-                  upsertUnitProfileMutation={model.upsertUnitProfileMutation}
-                  isUnitProfileEditing={model.isUnitProfileEditing}
-                  unitProfileDraft={model.unitProfileDraft}
-                  unitProfileFieldErrors={model.unitProfileFieldErrors}
-                  unitProfileSaveError={model.unitProfileSaveError}
-                  unitProfileDirty={model.unitProfileDirty}
-                  variant="embedded"
-                  onBeginEdit={beginProductFactsEdit}
-                  onCancelEdit={cancelProductFactsEdit}
-                  onSave={() => void saveProductFacts()}
-                  onNumericFieldChange={model.updateUnitProfileDraftField}
-                  onClassFieldChange={model.updateUnitProfileDraftClassField}
-                />
-              ) : null}
-
               {boardMode === 'edit-packaging' ? (
                 <ProductPackagingSection
                   packagingLevelsQuery={model.packagingLevelsQuery}

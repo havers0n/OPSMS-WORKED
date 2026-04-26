@@ -285,7 +285,7 @@ export function ProductStoragePresetsSection({
           )}
 
           {isCreating ? (
-            <div className="rounded-lg border border-cyan-100 bg-cyan-50/30 p-3">
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
               {storableLevels.length === 0 ? (
                 <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   <div className="font-semibold">No storable pack types available.</div>
@@ -331,9 +331,9 @@ export function ProductStoragePresetsSection({
                         </option>
                       ))}
                     </select>
-                    <span className={containerTypesQuery.isError || storableContainerTypes.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
-                      {containerTypeHelper}
-                    </span>
+                    {containerTypesQuery.isError || storableContainerTypes.length === 0 ? (
+                      <span className="text-xs font-normal text-amber-700">{containerTypeHelper}</span>
+                    ) : null}
                   </label>
                   <label className="grid gap-1 text-xs font-medium text-slate-700">
                     Number of packs in container
@@ -362,12 +362,12 @@ export function ProductStoragePresetsSection({
                         <option key={level.id} value={level.id}>{formatPackagingLevelOption(level)}</option>
                       ))}
                     </select>
-                    <span className={storableLevels.length === 0 ? 'text-xs font-normal text-amber-700' : 'text-xs font-normal text-slate-500'}>
-                      {packTypeHelper}
-                    </span>
+                    {storableLevels.length === 0 ? (
+                      <span className="text-xs font-normal text-amber-700">{packTypeHelper}</span>
+                    ) : null}
                   </label>
                 </div>
-                <aside className="rounded-lg border border-cyan-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                <aside className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <Route className="h-3.5 w-3.5" aria-hidden="true" />
                     Storage formula
@@ -385,20 +385,22 @@ export function ProductStoragePresetsSection({
                     </div>
                   ) : (
                     <div className="mt-2 text-slate-600">
-                      Choose a pack type, number of packs, and container type to preview the storage formula.
+                      Complete the required fields to preview the storage formula.
                     </div>
                   )}
                 </aside>
               </div>
               {error ? <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-              <button
-                type="button"
-                onClick={() => void handleCreate()}
-                disabled={createDisabled}
-                className="mt-3 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
-              >
-                {createStoragePresetMutation.isPending ? 'Creating...' : 'Create storage preset'}
-              </button>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => void handleCreate()}
+                  disabled={createDisabled}
+                  className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
+                >
+                  {createStoragePresetMutation.isPending ? 'Creating...' : 'Create storage preset'}
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

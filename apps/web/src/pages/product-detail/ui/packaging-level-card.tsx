@@ -31,21 +31,14 @@ function Badge({
 function Metric({
   icon: Icon,
   label,
-  value,
-  missing = false
+  value
 }: {
   icon: typeof Ruler;
   label: string;
   value: string;
-  missing?: boolean;
 }) {
   return (
-    <div
-      className={[
-        'inline-flex min-w-0 items-center gap-1.5 rounded-md border px-2 py-1',
-        missing ? 'border-amber-100 bg-amber-50 text-amber-800' : 'border-slate-200 bg-slate-50 text-slate-700'
-      ].join(' ')}
-    >
+    <div className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span className="text-[11px] font-medium text-slate-500">{label}</span>
       <span className="min-w-0 truncate text-xs font-semibold">{value}</span>
@@ -73,6 +66,11 @@ export function PackagingLevelCard({ level, hierarchyEntry, children }: Packagin
     level.packWeightG === null ? 'Missing gross weight' : null,
     level.barcode === null ? 'Missing barcode' : null
   ].filter((warning): warning is string => warning !== null);
+  const availableMetrics = [
+    dimensions !== 'Not defined' ? { icon: Ruler, label: 'Dims', value: dimensions } : null,
+    weight !== 'Not defined' ? { icon: Scale3D, label: 'Weight', value: weight } : null,
+    level.barcode !== null ? { icon: Barcode, label: 'Barcode', value: level.barcode } : null
+  ].filter((metric): metric is { icon: typeof Ruler; label: string; value: string } => metric !== null);
 
   return (
     <article className="relative rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
@@ -113,22 +111,29 @@ export function PackagingLevelCard({ level, hierarchyEntry, children }: Packagin
           </span>
           <span className="min-w-0 truncate font-semibold">{formatRelationship(level, hierarchyEntry)}</span>
         </div>
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          <Metric icon={Ruler} label="Dims" value={dimensions} missing={dimensions === 'Not defined'} />
-          <Metric icon={Scale3D} label="Weight" value={weight} missing={weight === 'Not defined'} />
-          <Metric icon={Barcode} label="Barcode" value={level.barcode ?? 'Not defined'} missing={level.barcode === null} />
-        </div>
+        {availableMetrics.length > 0 ? (
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            {availableMetrics.map((metric) => (
+              <Metric key={metric.label} icon={metric.icon} label={metric.label} value={metric.value} />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {hierarchyEntry?.hint ? <div className="mt-2 text-xs text-amber-700">{hierarchyEntry.hint}</div> : null}
 
       {warnings.length > 0 ? (
-        <div className="mt-2 flex flex-wrap items-center gap-1">
-          <CircleAlert className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
-          {warnings.map((warning) => (
-            <Badge key={warning} tone="amber">{warning}</Badge>
-          ))}
-        </div>
+        <details className="mt-2 rounded-md border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 font-semibold">
+            <CircleAlert className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+            {warnings.length} {warnings.length === 1 ? 'missing field' : 'missing fields'}
+          </summary>
+          <ul className="mt-2 grid gap-1 pl-5">
+            {warnings.map((warning) => (
+              <li key={warning} className="list-disc">{warning}</li>
+            ))}
+          </ul>
+        </details>
       ) : null}
 
       {children ? <div className="mt-3 border-t border-slate-100 pt-3">{children}</div> : null}

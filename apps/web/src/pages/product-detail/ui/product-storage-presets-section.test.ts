@@ -181,7 +181,7 @@ describe('ProductStoragePresetsSection', () => {
     const options = packTypeSelect.findAllByType('option');
     expect(options.at(-1)!.children.join('')).toBe('Case - 12 units (CASE)');
     expect(flattenText(renderer.toJSON())).toContain('Pack type from Packaging Levels');
-    expect(flattenText(renderer.toJSON())).toContain(
+    expect(flattenText(renderer.toJSON())).not.toContain(
       'Only active packaging levels marked "Can be stored" appear here.'
     );
   });
@@ -274,7 +274,7 @@ describe('ProductStoragePresetsSection', () => {
       'Only active packaging levels marked "Can be stored" appear here.'
     );
     expect(flattenText(missingPackType.toJSON())).toContain(
-      'Choose a pack type, number of packs, and container type to preview the storage formula.'
+      'Complete the required fields to preview the storage formula.'
     );
 
     const invalidCount = renderSection();
@@ -284,7 +284,7 @@ describe('ProductStoragePresetsSection', () => {
       inputs[2].props.onChange({ target: { value: '0' } });
     });
     expect(flattenText(invalidCount.toJSON())).toContain(
-      'Choose a pack type, number of packs, and container type to preview the storage formula.'
+      'Complete the required fields to preview the storage formula.'
     );
   });
 

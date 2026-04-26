@@ -115,7 +115,10 @@ function renderBoard(args?: {
   packagingLevels?: ProductPackagingLevel[];
   storagePresets?: StoragePreset[];
   selectedArea?: 'product-facts' | 'packaging' | 'storage' | null;
+  isProductFactsEditing?: boolean;
   onEditProductFacts?: () => void;
+  onCancelProductFactsEdit?: () => void;
+  onSaveProductFacts?: () => void;
   onEditPackaging?: () => void;
   onCreateStoragePreset?: () => void;
 }) {
@@ -137,7 +140,24 @@ function renderBoard(args?: {
         ],
         storagePresets: args?.storagePresets ?? [makePreset()],
         selectedArea: args?.selectedArea,
+        isProductFactsEditing: args?.isProductFactsEditing ?? false,
+        unitProfileDraft: {
+          unitWeightG: '100',
+          unitWidthMm: '10',
+          unitHeightMm: '20',
+          unitDepthMm: '30',
+          weightClass: 'light',
+          sizeClass: 'small'
+        },
+        unitProfileFieldErrors: {},
+        unitProfileSaveError: null,
+        unitProfileDirty: false,
+        isSavingProductFacts: false,
         onEditProductFacts: args?.onEditProductFacts ?? vi.fn(),
+        onCancelProductFactsEdit: args?.onCancelProductFactsEdit ?? vi.fn(),
+        onSaveProductFacts: args?.onSaveProductFacts ?? vi.fn(),
+        onProductFactsNumericFieldChange: vi.fn(),
+        onProductFactsClassFieldChange: vi.fn(),
         onEditPackaging: args?.onEditPackaging ?? vi.fn(),
         onCreateStoragePreset: args?.onCreateStoragePreset ?? vi.fn()
       })
@@ -242,7 +262,6 @@ describe('UnitProfileBoard', () => {
 
     expect(selected).toHaveLength(1);
     expect(flattenInstanceText(selected[0])).toContain('Product Facts');
-    expect(flattenInstanceText(selected[0])).toContain('Selected');
   });
 
   it('highlights Packaging Hierarchy when packaging is selected', () => {
@@ -251,7 +270,6 @@ describe('UnitProfileBoard', () => {
 
     expect(selected).toHaveLength(1);
     expect(flattenInstanceText(selected[0])).toContain('Packaging Hierarchy');
-    expect(flattenInstanceText(selected[0])).toContain('Selected');
   });
 
   it('highlights Storage Presets when storage is selected', () => {
@@ -260,7 +278,6 @@ describe('UnitProfileBoard', () => {
 
     expect(selected).toHaveLength(1);
     expect(flattenInstanceText(selected[0])).toContain('Storage Presets');
-    expect(flattenInstanceText(selected[0])).toContain('Selected');
   });
 
   it('does not show selected editor state in read mode', () => {
@@ -315,7 +332,24 @@ describe('ProductFactsCard', () => {
           unitProfile: makeProfile(),
           packagingLevels: [makeLevel()],
           storagePresetCount: 1,
-          onEditProductFacts
+          isEditing: false,
+          unitProfileDraft: {
+            unitWeightG: '100',
+            unitWidthMm: '10',
+            unitHeightMm: '20',
+            unitDepthMm: '30',
+            weightClass: 'light',
+            sizeClass: 'small'
+          },
+          unitProfileFieldErrors: {},
+          unitProfileSaveError: null,
+          unitProfileDirty: false,
+          isSaving: false,
+          onEditProductFacts,
+          onCancelEdit: vi.fn(),
+          onSaveEdit: vi.fn(),
+          onNumericFieldChange: vi.fn(),
+          onClassFieldChange: vi.fn()
         })
       );
     });

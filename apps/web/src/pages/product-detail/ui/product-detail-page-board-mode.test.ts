@@ -192,13 +192,13 @@ describe('ProductDetailPage board modes', () => {
     });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('1. Single Unit Profile');
     expect(text).not.toContain('2. Packaging Levels');
     expect(text).not.toContain('3. Storage Presets');
   });
 
-  it('clicking edit facts opens the existing unit profile edit surface inside the workbench', async () => {
+  it('clicking edit facts opens the product facts editor inline in the board', async () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
@@ -216,16 +216,15 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.beginUnitProfileEdit).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).toContain('Product Facts');
-    expect(text).toContain('Workbench');
-    expect(text).toContain('Editing product facts');
-    expect(text).toContain('Selected area:');
-    expect(text).toContain('Product Facts');
-    expect(text).toContain('Product facts');
-    expect(text).toContain('Selected');
+    expect(text).toContain('Weight (g)');
+    expect(text).toContain('Width (mm)');
+    expect(text).toContain('Cancel');
+    expect(text).toContain('Save');
+    expect(text).not.toContain('Workbench');
+    expect(text).not.toContain('Editing product facts');
     expect(text).not.toContain('1. Single Unit Profile');
-    expect(text).toContain('Save unit profile');
   });
 
   it('save success returns product facts editing to the read workspace', async () => {
@@ -244,18 +243,21 @@ describe('ProductDetailPage board modes', () => {
         ?.props.onClick();
     });
     await act(async () => {
-      await renderer.root.findByProps({ children: 'Save unit profile' }).props.onClick();
+      await renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Save'))
+        ?.props.onClick();
     });
 
     const text = flattenText(renderer.toJSON());
     expect(model.saveUnitProfile).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('1. Single Unit Profile');
     expect(text).not.toContain('Selected area: Product Facts');
   });
 
-  it('save failure keeps product facts editing visible in the workbench', async () => {
+  it('save failure keeps product facts editing visible inline', async () => {
     const model = makeModel({
       saveUnitProfile: vi.fn().mockResolvedValue(false),
       unitProfileSaveError: 'Failed to save unit profile.'
@@ -274,17 +276,19 @@ describe('ProductDetailPage board modes', () => {
         ?.props.onClick();
     });
     await act(async () => {
-      await renderer.root.findByProps({ children: 'Save unit profile' }).props.onClick();
+      await renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Save'))
+        ?.props.onClick();
     });
 
     const text = flattenText(renderer.toJSON());
     expect(model.saveUnitProfile).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
-    expect(text).toContain('Workbench');
-    expect(text).toContain('Editing product facts');
-    expect(text).toContain('Selected area:');
+    expect(text).toContain('Unit Profile');
     expect(text).toContain('Product Facts');
+    expect(text).toContain('Weight (g)');
     expect(text).toContain('Failed to save unit profile.');
+    expect(text).not.toContain('Workbench');
   });
 
   it('cancel from product facts editing returns to the read workspace and resets draft state', async () => {
@@ -303,12 +307,15 @@ describe('ProductDetailPage board modes', () => {
         ?.props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ children: 'Back to workspace' }).props.onClick();
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.includes('Cancel'))
+        ?.props.onClick();
     });
 
     const text = flattenText(renderer.toJSON());
     expect(model.cancelUnitProfileEdit).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('1. Single Unit Profile');
   });
@@ -331,7 +338,7 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.beginPackagingEdit).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).toContain('Packaging Hierarchy');
     expect(text).toContain('Workbench');
     expect(text).toContain('Configuring packaging hierarchy');
@@ -364,7 +371,7 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.savePackagingLevels).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('2. Packaging Levels');
   });
@@ -393,7 +400,7 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.savePackagingLevels).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).toContain('Workbench');
     expect(text).toContain('Configuring packaging hierarchy');
     expect(text).toContain('Selected area:');
@@ -422,7 +429,7 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(model.cancelPackagingEdit).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('2. Packaging Levels');
   });
@@ -440,7 +447,7 @@ describe('ProductDetailPage board modes', () => {
     });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).toContain('Storage Presets');
     expect(text).toContain('Workbench');
     expect(text).toContain('Creating storage preset');
@@ -484,7 +491,7 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(createMutation.mutateAsync).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('3. Storage Presets');
   });
@@ -520,7 +527,7 @@ describe('ProductDetailPage board modes', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(createMutation.mutateAsync).toHaveBeenCalled();
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).toContain('Workbench');
     expect(text).toContain('Creating storage preset');
     expect(text).toContain('Selected area:');
@@ -544,7 +551,7 @@ describe('ProductDetailPage board modes', () => {
     });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('3. Storage Presets');
   });
@@ -569,7 +576,7 @@ describe('ProductDetailPage board modes', () => {
     });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Unit Profile Board');
+    expect(text).toContain('Unit Profile');
     expect(text).not.toContain('Workbench');
     expect(text).not.toContain('3. Storage Presets');
   });
