@@ -127,6 +127,17 @@ Rack 7 / Face A / Section 03
   positionAlongAisle: 3
 ```
 
+### PR 4 — Aisle/face topology foundation
+
+PR 4 introduced explicit aisle/access topology primitives:
+- `PickAisle`;
+- `FaceAccess`;
+- `StorageLocationProjection.accessAisleId`;
+- `StorageLocationProjection.sideOfAisle`;
+- `StorageLocationProjection.positionAlongAisle`.
+
+This removed implicit topology inference from face labels (`A`/`B`) and established explicit walking-path semantics for future route planning.
+
 ### PR 5 — PickingStrategy config foundation
 
 `PickingStrategy` in PR 5 is planning configuration only.
