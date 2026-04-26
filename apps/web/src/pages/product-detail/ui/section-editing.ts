@@ -3,6 +3,7 @@ import type {
   ReplaceProductPackagingLevelItem,
   UpsertProductUnitProfileBody
 } from '@/entities/product/api/mutations';
+import { derivePackagingHierarchy } from './packaging-hierarchy';
 
 export type UnitProfileNumericField =
   | 'unitWeightG'
@@ -30,6 +31,7 @@ export type PackagingLevelDraft = {
   code: string;
   name: string;
   baseUnitQty: string;
+  containedLevelDraftId: string | null;
   isBase: boolean;
   canPick: boolean;
   canStore: boolean;
@@ -57,6 +59,14 @@ export type PackagingValidationResult = {
   sectionErrors: string[];
 };
 
+export type PackagingDraftResolvedQuantity = {
+  localQty: number | null;
+  canonicalBaseUnitQty: number | null;
+  containedLevelDraftId: string | null;
+  containedLevelLabel: string | null;
+  error: string | null;
+};
+
 export function createUnitProfileDraft(profile: ProductUnitProfile | null | undefined): UnitProfileDraft {
   return {
     unitWeightG: profile?.unitWeightG?.toString() ?? '',
@@ -78,6 +88,7 @@ export function createPackagingLevelDraft(
     code: level.code,
     name: level.name,
     baseUnitQty: level.isBase ? '1' : String(level.baseUnitQty),
+    containedLevelDraftId: null,
     isBase: level.isBase,
     canPick: level.canPick,
     canStore: level.canStore,
@@ -91,6 +102,33 @@ export function createPackagingLevelDraft(
   };
 }
 
+export function createPackagingLevelDrafts(levels: ProductPackagingLevel[]): PackagingLevelDraft[] {
+  const drafts = levels.map((level, index) => createPackagingLevelDraft(level, index));
+  const draftByLevelId = new Map(drafts.map((draft) => [draft.id, draft]));
+  const hierarchy = derivePackagingHierarchy(levels);
+
+  return drafts.map((draft) => {
+    if (draft.isBase || !draft.id) return draft;
+
+    const entry = hierarchy.entries.find((candidate) => candidate.id === draft.id);
+    const childDraft = entry?.nestedChildId ? draftByLevelId.get(entry.nestedChildId) : null;
+
+    if (!entry?.nestedCount || !childDraft) {
+      const baseDraft = drafts.find((candidate) => candidate.isBase) ?? null;
+      return {
+        ...draft,
+        containedLevelDraftId: baseDraft?.draftId ?? null
+      };
+    }
+
+    return {
+      ...draft,
+      baseUnitQty: String(entry.nestedCount),
+      containedLevelDraftId: childDraft.draftId
+    };
+  });
+}
+
 export function createEmptyPackagingLevelDraft(draftId: string): PackagingLevelDraft {
   return {
     draftId,
@@ -98,6 +136,7 @@ export function createEmptyPackagingLevelDraft(draftId: string): PackagingLevelD
     code: '',
     name: '',
     baseUnitQty: '1',
+    containedLevelDraftId: null,
     isBase: false,
     canPick: true,
     canStore: true,
@@ -109,6 +148,15 @@ export function createEmptyPackagingLevelDraft(draftId: string): PackagingLevelD
     packDepthMm: '',
     isActive: true
   };
+}
+
+function formatDraftLevelLabel(row: PackagingLevelDraft) {
+  const code = row.code.trim();
+  const name = row.name.trim();
+  if (code && name) return `${name} (${code.toUpperCase()})`;
+  if (name) return name;
+  if (code) return code.toUpperCase();
+  return 'Unnamed level';
 }
 
 function parsePositiveIntOrNull(value: string) {
@@ -139,6 +187,115 @@ function parseRequiredPositiveInt(value: string) {
     return { value: null, error: 'Required.' };
   }
   return parsed;
+}
+
+export function resolvePackagingDraftQuantities(rows: PackagingLevelDraft[]): Record<string, PackagingDraftResolvedQuantity> {
+  const byId = new Map(rows.map((row) => [row.draftId, row]));
+  const result: Record<string, PackagingDraftResolvedQuantity> = {};
+  const visiting = new Set<string>();
+
+  function resolve(row: PackagingLevelDraft): PackagingDraftResolvedQuantity {
+    const cached = result[row.draftId];
+    if (cached) return cached;
+
+    const parsed = parseRequiredPositiveInt(row.baseUnitQty);
+    const localQty = row.isBase ? 1 : parsed.value;
+    const containedLevelDraftId = row.isBase ? null : row.containedLevelDraftId;
+
+    if (parsed.error) {
+      result[row.draftId] = {
+        localQty,
+        canonicalBaseUnitQty: null,
+        containedLevelDraftId,
+        containedLevelLabel: null,
+        error: parsed.error
+      };
+      return result[row.draftId];
+    }
+
+    if (row.isBase) {
+      result[row.draftId] = {
+        localQty: 1,
+        canonicalBaseUnitQty: 1,
+        containedLevelDraftId: null,
+        containedLevelLabel: null,
+        error: null
+      };
+      return result[row.draftId];
+    }
+
+    if (!containedLevelDraftId) {
+      result[row.draftId] = {
+        localQty,
+        canonicalBaseUnitQty: localQty,
+        containedLevelDraftId: null,
+        containedLevelLabel: null,
+        error: null
+      };
+      return result[row.draftId];
+    }
+
+    const contained = byId.get(containedLevelDraftId);
+    if (!contained) {
+      result[row.draftId] = {
+        localQty,
+        canonicalBaseUnitQty: null,
+        containedLevelDraftId,
+        containedLevelLabel: null,
+        error: 'Selected contained pack type is missing.'
+      };
+      return result[row.draftId];
+    }
+
+    if (contained.draftId === row.draftId) {
+      result[row.draftId] = {
+        localQty,
+        canonicalBaseUnitQty: null,
+        containedLevelDraftId,
+        containedLevelLabel: formatDraftLevelLabel(contained),
+        error: 'A pack type cannot contain itself.'
+      };
+      return result[row.draftId];
+    }
+
+    if (visiting.has(row.draftId)) {
+      result[row.draftId] = {
+        localQty,
+        canonicalBaseUnitQty: null,
+        containedLevelDraftId,
+        containedLevelLabel: formatDraftLevelLabel(contained),
+        error: 'Packaging containment cannot be circular.'
+      };
+      return result[row.draftId];
+    }
+
+    visiting.add(row.draftId);
+    const containedQuantity = resolve(contained);
+    visiting.delete(row.draftId);
+
+    if (containedQuantity.error || containedQuantity.canonicalBaseUnitQty === null || localQty === null) {
+      result[row.draftId] = {
+        localQty,
+        canonicalBaseUnitQty: null,
+        containedLevelDraftId,
+        containedLevelLabel: formatDraftLevelLabel(contained),
+        error: containedQuantity.error ?? 'Contained pack type quantity is invalid.'
+      };
+      return result[row.draftId];
+    }
+
+    result[row.draftId] = {
+      localQty,
+      canonicalBaseUnitQty: localQty * containedQuantity.canonicalBaseUnitQty,
+      containedLevelDraftId,
+      containedLevelLabel: formatDraftLevelLabel(contained),
+      error: null
+    };
+    return result[row.draftId];
+  }
+
+  rows.forEach(resolve);
+  return result;
 }
 
 export function validateUnitProfileDraft(draft: UnitProfileDraft): UnitProfileValidationResult {
@@ -181,6 +338,7 @@ export function validatePackagingLevelsDraft(
   const normalizedCodes = new Map<string, string>();
   let baseCount = 0;
   let defaultPickCount = 0;
+  const resolvedQuantities = resolvePackagingDraftQuantities(draftRows);
 
   draftRows.forEach((row, index) => {
     const errors: Partial<Record<PackagingRowField, string>> = {};
@@ -205,6 +363,10 @@ export function validatePackagingLevelsDraft(
     const baseUnitQty = parseRequiredPositiveInt(row.baseUnitQty);
     if (baseUnitQty.error) {
       errors.baseUnitQty = baseUnitQty.error;
+    }
+    const resolvedQuantity = resolvedQuantities[row.draftId];
+    if (resolvedQuantity?.error) {
+      errors.baseUnitQty = resolvedQuantity.error;
     }
 
     const packWeightG = parsePositiveIntOrNull(row.packWeightG);
@@ -247,7 +409,7 @@ export function validatePackagingLevelsDraft(
       ...(row.id ? { id: row.id } : {}),
       code,
       name,
-      baseUnitQty: baseUnitQty.value as number,
+      baseUnitQty: resolvedQuantity?.canonicalBaseUnitQty ?? (baseUnitQty.value as number),
       isBase: row.isBase,
       canPick: row.canPick,
       canStore: row.canStore,
@@ -299,6 +461,7 @@ export function buildPackagingLevelsComparable(rows: PackagingLevelDraft[]) {
     code: row.code.trim(),
     name: row.name.trim(),
     baseUnitQty: row.baseUnitQty.trim(),
+    containedLevelDraftId: row.containedLevelDraftId,
     isBase: row.isBase,
     canPick: row.canPick,
     canStore: row.canStore,

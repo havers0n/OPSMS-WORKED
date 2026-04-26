@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   createPackagingLevelDraft,
+  createPackagingLevelDrafts,
   createEmptyPackagingLevelDraft,
   createUnitProfileDraft,
+  resolvePackagingDraftQuantities,
   validatePackagingLevelsDraft,
   validateUnitProfileDraft
 } from './section-editing';
@@ -56,6 +58,16 @@ describe('validatePackagingLevelsDraft', () => {
       code: 'CTN',
       name: 'Carton',
       baseUnitQty: '12'
+    };
+  }
+
+  function createMasterRow() {
+    return {
+      ...createEmptyPackagingLevelDraft('master'),
+      code: 'MST',
+      name: 'Master',
+      baseUnitQty: '5',
+      containedLevelDraftId: 'case'
     };
   }
 
@@ -134,6 +146,33 @@ describe('validatePackagingLevelsDraft', () => {
     });
   });
 
+  it('serializes nested quantities as cumulative base units', () => {
+    const result = validatePackagingLevelsDraft([
+      createBaseRow(),
+      { ...createCaseRow(), baseUnitQty: '10', containedLevelDraftId: 'base' },
+      createMasterRow()
+    ]);
+
+    expect(result.payload?.map((row) => ({ code: row.code, baseUnitQty: row.baseUnitQty }))).toEqual([
+      { code: 'EA', baseUnitQty: 1 },
+      { code: 'CTN', baseUnitQty: 10 },
+      { code: 'MST', baseUnitQty: 50 }
+    ]);
+  });
+
+  it('rejects circular nested quantities', () => {
+    const result = validatePackagingLevelsDraft([
+      createBaseRow(),
+      { ...createCaseRow(), containedLevelDraftId: 'master' },
+      { ...createMasterRow(), containedLevelDraftId: 'case' }
+    ]);
+
+    expect(result.payload).toBeNull();
+    expect(Object.values(result.rowErrors).flatMap((errors) => Object.values(errors))).toContain(
+      'Packaging containment cannot be circular.'
+    );
+  });
+
   it('requires exactly one base row', () => {
     const noBase = validatePackagingLevelsDraft([{ ...createCaseRow(), draftId: 'row-1' }]);
     expect(noBase.payload).toBeNull();
@@ -192,5 +231,22 @@ describe('createPackagingLevelDraft', () => {
 
     const draft = createPackagingLevelDraft(dirtyBase, 0);
     expect(draft.baseUnitQty).toBe('1');
+  });
+
+  it('derives editable nested counts from persisted cumulative base quantities', () => {
+    const productId = crypto.randomUUID();
+    const base = makeLevel({ id: crypto.randomUUID(), productId, code: 'EA', name: 'Each', isBase: true, baseUnitQty: 1 });
+    const medium = makeLevel({ id: crypto.randomUUID(), productId, code: 'MED', name: 'Medium', baseUnitQty: 10 });
+    const big = makeLevel({ id: crypto.randomUUID(), productId, code: 'BIG', name: 'Big', baseUnitQty: 50 });
+
+    const drafts = createPackagingLevelDrafts([base, medium, big]);
+    const mediumDraft = drafts.find((draft) => draft.id === medium.id);
+    const bigDraft = drafts.find((draft) => draft.id === big.id);
+
+    expect(mediumDraft?.baseUnitQty).toBe('10');
+    expect(mediumDraft?.containedLevelDraftId).toBe(drafts.find((draft) => draft.id === base.id)?.draftId);
+    expect(bigDraft?.baseUnitQty).toBe('5');
+    expect(bigDraft?.containedLevelDraftId).toBe(mediumDraft?.draftId);
+    expect(resolvePackagingDraftQuantities(drafts)[bigDraft!.draftId]?.canonicalBaseUnitQty).toBe(50);
   });
 });

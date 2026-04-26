@@ -24,7 +24,7 @@ import {
   buildPackagingLevelsComparable,
   buildUnitProfileComparable,
   createEmptyPackagingLevelDraft,
-  createPackagingLevelDraft,
+  createPackagingLevelDrafts,
   createUnitProfileDraft,
   type PackagingLevelDraft,
   type PackagingRowField,
@@ -104,7 +104,7 @@ export function useProductDetailPageModel(productId: string | null) {
   const [brokenImageUrls, setBrokenImageUrls] = useState<Record<string, true>>({});
 
   const sourcePackagingDraft = useMemo(
-    () => (packagingLevelsQuery.data ?? []).map((level, index) => createPackagingLevelDraft(level, index)),
+    () => createPackagingLevelDrafts(packagingLevelsQuery.data ?? []),
     [packagingLevelsQuery.data]
   );
   const packagingEditorSemantics = useMemo(
@@ -302,7 +302,8 @@ export function useProductDetailPageModel(productId: string | null) {
       patch.isBase === true
         ? {
             ...patch,
-            baseUnitQty: '1'
+            baseUnitQty: '1',
+            containedLevelDraftId: null
           }
         : patch;
 
@@ -328,13 +329,30 @@ export function useProductDetailPageModel(productId: string | null) {
 
   function addPackagingRow() {
     const draftId = `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    setPackagingDraft((rows) => [...rows, createEmptyPackagingLevelDraft(draftId)]);
+    setPackagingDraft((rows) => [
+      ...rows,
+      {
+        ...createEmptyPackagingLevelDraft(draftId),
+        containedLevelDraftId: rows.at(-1)?.draftId ?? null
+      }
+    ]);
     setPackagingSectionErrors([]);
     setPackagingSaveError(null);
   }
 
   function removePackagingRow(draftId: string) {
-    setPackagingDraft((rows) => rows.filter((row) => row.draftId !== draftId));
+    setPackagingDraft((rows) =>
+      rows
+        .filter((row) => row.draftId !== draftId)
+        .map((row) =>
+          row.containedLevelDraftId === draftId
+            ? {
+                ...row,
+                containedLevelDraftId: null
+              }
+            : row
+        )
+    );
     setPackagingRowErrors((current) => {
       if (!current[draftId]) return current;
       const next = { ...current };

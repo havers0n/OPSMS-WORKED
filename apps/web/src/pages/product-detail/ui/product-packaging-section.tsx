@@ -26,6 +26,15 @@ function formatBaseUnitSummary(level: Pick<ProductPackagingLevel, 'code' | 'name
   return `${code.toUpperCase()} — ${name} — 1 unit`;
 }
 
+function formatDraftPackTypeOption(row: PackagingLevelDraft) {
+  const code = row.code.trim();
+  const name = row.name.trim();
+  if (code && name) return `${name} (${code.toUpperCase()})`;
+  if (name) return name;
+  if (code) return code.toUpperCase();
+  return 'Unnamed pack type';
+}
+
 function formatInheritedMeasurementsSummary(profile: ProductUnitProfile | null | undefined) {
   if (!profile) {
     return 'Add Single Unit Profile measurements to estimate base unit dimensions.';
@@ -215,16 +224,20 @@ export function ProductPackagingSection({
                   Additional pack types
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  These pack types contain multiple single units and can be used for picking or storage.
+                  Select what each pack contains. The saved base quantity is calculated from that chain.
                 </p>
               </div>
               {packagingDraft.map((row) => {
                 const rowError = packagingRowErrors[row.draftId] ?? {};
                 const rowSemantics = packagingEditorSemantics[row.draftId];
                 const unitWeightG = unitProfileQuery.data?.unitWeightG ?? null;
-                const parsedBaseQty = parsePositiveInt(rowSemantics?.quantityInputValue ?? row.baseUnitQty);
+                const parsedBaseQty =
+                  rowSemantics?.canonicalBaseUnitQty ?? parsePositiveInt(rowSemantics?.quantityInputValue ?? row.baseUnitQty);
                 const estimatedContentWeightG =
                   !row.isBase && unitWeightG !== null && parsedBaseQty !== null ? unitWeightG * parsedBaseQty : null;
+                const containedLevelOptions = row.isBase
+                  ? []
+                  : packagingDraft.filter((option) => option.draftId !== row.draftId);
 
                 return (
                   <div
@@ -252,7 +265,7 @@ export function ProductPackagingSection({
                     </div>
                     {!row.isBase ? (
                       <p className="mb-2 text-xs text-slate-500">
-                        These pack types contain multiple single units and can be used for picking or storage.
+                        These pack types contain other pack types or single units and can be used for picking or storage.
                       </p>
                     ) : (
                       <div className="mb-2 text-xs text-cyan-900">
@@ -264,7 +277,7 @@ export function ProductPackagingSection({
                       </div>
                     )}
                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-                      <div className="grid gap-3 md:grid-cols-3">
+                      <div className="grid gap-3 md:grid-cols-4">
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
                           Code
                           <input
@@ -294,7 +307,31 @@ export function ProductPackagingSection({
                         </label>
 
                         <label className="grid gap-1 text-xs font-medium text-slate-700">
-                          Units inside this pack
+                          Contains pack type
+                          <select
+                            value={row.containedLevelDraftId ?? ''}
+                            disabled={row.isBase || containedLevelOptions.length === 0}
+                            onChange={(event) =>
+                              onUpdateRow(row.draftId, {
+                                containedLevelDraftId: event.target.value || null
+                              })
+                            }
+                            className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-normal disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
+                          >
+                            <option value="">Single units</option>
+                            {containedLevelOptions.map((option) => (
+                              <option key={option.draftId} value={option.draftId}>
+                                {formatDraftPackTypeOption(option)}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-xs font-normal text-slate-600">
+                            Choose the immediate level inside this pack.
+                          </span>
+                        </label>
+
+                        <label className="grid gap-1 text-xs font-medium text-slate-700">
+                          Quantity inside this pack
                           <input
                             type="number"
                             min={1}

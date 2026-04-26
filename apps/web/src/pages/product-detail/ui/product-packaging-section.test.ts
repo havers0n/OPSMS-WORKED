@@ -129,6 +129,7 @@ function renderEditingSection(
             code: 'EA',
             name: 'Each',
             baseUnitQty: '1',
+            containedLevelDraftId: null,
             isBase: true,
             canPick: true,
             canStore: true,
@@ -146,6 +147,7 @@ function renderEditingSection(
             code: 'case',
             name: 'Case',
             baseUnitQty: '12',
+            containedLevelDraftId: 'draft-base',
             isBase: false,
             canPick: true,
             canStore: true,
@@ -172,18 +174,20 @@ function renderEditingSection(
             fallbackLine: null,
             quantityHelperLine: 'Base unit is always 1 single unit.',
             cueLabel: 'Base unit level',
-            cueIndent: 0
+            cueIndent: 0,
+            canonicalBaseUnitQty: 1
           },
           'draft-case': {
             draftId: 'draft-case',
             quantityInputValue: '12',
             quantityInputDisabled: false,
             equivalentLine: 'Equivalent to 12 single units',
-            containmentLine: null,
+            containmentLine: 'Contains 12 x Each (EA)',
             fallbackLine: null,
-            quantityHelperLine: null,
+            quantityHelperLine: 'Quantity is counted in Each (EA).',
             cueLabel: 'Additional pack type',
-            cueIndent: 0
+            cueIndent: 1,
+            canonicalBaseUnitQty: 12
           }
         },
         variant,
@@ -351,9 +355,9 @@ describe('ProductPackagingSection', () => {
     expect(text).toMatch(/EA\s+—\s+Each\s+—\s+1 unit/);
     expect(text).toContain('Base unit is always 1 single unit.');
     expect(text).toContain('Additional pack type');
-    expect(text).toContain(
-      'These pack types contain multiple single units and can be used for picking or storage.'
-    );
+    expect(text).toContain('These pack types contain other pack types or single units and can be used for picking or storage.');
+    expect(text).toContain('Contains pack type');
+    expect(text).toContain('Quantity inside this pack');
     expect(text).toContain('Default for picking');
     expect(text).toContain('Can be picked');
     expect(text).toContain('Can be stored');
