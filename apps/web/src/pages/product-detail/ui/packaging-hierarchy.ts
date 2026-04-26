@@ -226,7 +226,7 @@ export function formatPackCount(
     return {
       countText: null,
       totalText: null,
-      warning: 'Total each quantity is not defined.'
+      warning: 'Preset quantity is missing: set Total each for this storage preset.'
     };
   }
 
@@ -237,7 +237,7 @@ export function formatPackCount(
     return {
       countText: null,
       totalText,
-      warning: `Cannot derive pack count because ${normalizedCode} size is not defined.`
+      warning: `Cannot derive pack count because the linked packaging level for ${normalizedCode} has no Base unit quantity.`
     };
   }
 
@@ -303,13 +303,19 @@ export function groupStoragePresetsByPackagingLevelId(
       const linkedLevel = linkedLevelId ? levelsById.get(linkedLevelId) ?? null : null;
       const packCount = deriveStorageDisplayForLevel(presetLevel, linkedLevel);
       const warnings = [
-        !linkedLevelId ? 'Missing linked packaging level.' : null,
-        linkedLevelId && !linkedLevel ? 'Linked packaging level could not be resolved.' : null,
-        linkedLevel && !linkedLevel.isActive ? `Linked packaging level ${linkedLevel.code.toUpperCase()} is inactive.` : null,
-        linkedLevel && linkedLevel.isActive && !activeHierarchyLevelIds.has(linkedLevel.id)
-          ? `Linked packaging level ${linkedLevel.code.toUpperCase()} is not shown in the active hierarchy.`
+        !linkedLevelId
+          ? 'This storage preset is missing a packaging-level link. Recreate or update it after selecting an active storable pack type.'
           : null,
-        !presetLevel.containerType ? 'Missing container type.' : null,
+        linkedLevelId && !linkedLevel
+          ? 'The saved packaging-level link points to a level that no longer exists. Recreate or update this storage preset.'
+          : null,
+        linkedLevel && !linkedLevel.isActive
+          ? `Linked packaging level ${linkedLevel.code.toUpperCase()} is inactive. Activate it or link this preset to an active level.`
+          : null,
+        linkedLevel && linkedLevel.isActive && !activeHierarchyLevelIds.has(linkedLevel.id)
+          ? `Linked packaging level ${linkedLevel.code.toUpperCase()} is not shown in the active hierarchy. Check its quantity relation or hierarchy settings.`
+          : null,
+        !presetLevel.containerType ? 'Container type is missing for this storage preset level.' : null,
         packCount?.warning ?? null
       ].filter((warning): warning is string => warning !== null);
 

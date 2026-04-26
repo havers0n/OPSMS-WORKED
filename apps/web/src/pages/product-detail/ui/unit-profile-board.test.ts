@@ -238,7 +238,10 @@ describe('UnitProfileBoard', () => {
 
     expect(text).toContain('Unlinked storage methods');
     expect(text).toContain('Lost link preset');
-    expect(text).toContain('Linked packaging level could not be resolved.');
+    expect(text).toContain('Saved pack type MASTER (not linked to packaging)');
+    expect(text).toContain(
+      'The saved packaging-level link points to a level that no longer exists. Recreate or update this storage preset.'
+    );
   });
 
   it('shows product warnings for missing facts and empty dependent sections', () => {

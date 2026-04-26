@@ -237,11 +237,17 @@ describe('storage hierarchy helpers', () => {
       'ABSENT',
       'EMPTY'
     ]);
-    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('Missing linked packaging level.');
-    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('Linked packaging level could not be resolved.');
-    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('Linked packaging level MASTER is inactive.');
     expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain(
-      'Linked packaging level ALT is not shown in the active hierarchy.'
+      'This storage preset is missing a packaging-level link. Recreate or update it after selecting an active storable pack type.'
+    );
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain(
+      'The saved packaging-level link points to a level that no longer exists. Recreate or update this storage preset.'
+    );
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain(
+      'Linked packaging level MASTER is inactive. Activate it or link this preset to an active level.'
+    );
+    expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain(
+      'Linked packaging level ALT is not shown in the active hierarchy. Check its quantity relation or hierarchy settings.'
     );
     expect(grouped.unlinked.flatMap((item) => item.warnings)).toContain('No composition levels.');
   });

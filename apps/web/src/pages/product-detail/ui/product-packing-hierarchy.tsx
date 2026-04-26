@@ -36,6 +36,13 @@ function Pill({
 
 function StorageMethodItem({ item, unresolved = false }: { item: GroupedStoragePresetItem; unresolved?: boolean }) {
   const { preset, presetLevel, linkedLevel, packCount, warnings } = item;
+  const savedPackType = presetLevel?.levelType?.trim() || null;
+  const packTypeLabel = linkedLevel ? 'Linked pack type' : 'Saved pack type';
+  const packTypeValue = linkedLevel
+    ? formatLevelName(linkedLevel)
+    : savedPackType
+      ? `${savedPackType} (not linked to packaging)`
+      : 'Not selected';
 
   return (
     <article className="rounded-md border border-slate-200 bg-white px-3 py-2">
@@ -59,10 +66,8 @@ function StorageMethodItem({ item, unresolved = false }: { item: GroupedStorageP
           <dd className="font-semibold text-slate-900">{presetLevel?.containerType ?? 'Not defined'}</dd>
         </div>
         <div>
-          <dt className="font-medium text-slate-500">Linked pack type</dt>
-          <dd className="font-semibold text-slate-900">
-            {linkedLevel ? formatLevelName(linkedLevel) : presetLevel?.levelType ?? 'Not resolved'}
-          </dd>
+          <dt className="font-medium text-slate-500">{packTypeLabel}</dt>
+          <dd className="font-semibold text-slate-900">{packTypeValue}</dd>
         </div>
         {packCount?.countText ? (
           <div>
@@ -133,7 +138,7 @@ function UnlinkedStorageMethodsSection({ items }: { items: GroupedStoragePresetI
     <section className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
       <div className="text-sm font-semibold text-amber-950">Unlinked storage methods</div>
       <p className="mt-1 text-xs text-amber-800">
-        These persisted presets are not linked to an active packaging level in the current hierarchy.
+        These saved presets cannot be matched to an active storable pack type. Check the warnings, then update the storage preset link or the packaging level.
       </p>
       <div className="mt-3 grid gap-2">
         {items.map((item) => (
