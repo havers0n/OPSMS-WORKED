@@ -258,15 +258,50 @@ Output `WorkPackageDraft` (illustrative):
   - workload touches too many zones;
   - workload exceeds max weight.
 
-### PR 8 — WorkSplitService foundation
-
-PR 8 will introduce `WorkSplitService` to split oversized work packages according to strategy split policy and complexity thresholds.
-
-### PR 9 — RouteSequencer MVP
-
 ## Notes for current execution model
 
 PR 2 introduced `pick_steps.source_location_id` and location-first read/allocation
 paths while preserving compatibility fallbacks.
 
 The routing model should not depend on visual-canvas-only coordinates. Coordinates can support geometry, but executable planning identity remains `locations.id`.
+
+### PR 8 — WorkSplitService foundation
+
+PR 8 introduces a pure domain-level `WorkSplitService` that takes a planned `WorkPackageDraft` and returns one or more planned `WorkPackageDraft` children.
+
+It uses:
+- strategy `WorkSplitPolicy` thresholds;
+- `WorkloadComplexityScore` (via `estimateWorkloadComplexity()`).
+
+It does **not**:
+- create routes;
+- allocate stock;
+- persist data;
+- modify picking execution.
+
+MVP deterministic split priority:
+1. split by zone;
+2. split by aisle/location;
+3. split by weight;
+4. split by volume;
+5. split by pick lines.
+
+Example (illustrative):
+
+Input (Line #77 / WorkPackageDraft):
+- 42 pick lines;
+- 120kg;
+- 5 zones;
+- 28 locations.
+
+Output:
+- Package P1 — Zone A/B;
+- Package P2 — Zone C;
+- Package P3 — Unknown / overflow.
+
+Assignment behavior in PR 8 (conservative):
+- `assignedPickerId` is preserved into child packages;
+- `assignedZoneId` is set only when split reason is zone and child zone is known;
+- `assignedCartId` is intentionally not propagated to avoid unsafe duplication in cluster/cart-slot flows.
+
+PR 9 is planned to introduce RouteSequencer MVP.

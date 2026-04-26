@@ -20,6 +20,7 @@ export type WorkPackagePlanningInput = {
 
 export type WorkPackageDraft = WorkPackage & {
   code?: string;
+  strategy: PickingStrategy;
   complexity: WorkloadComplexityScore;
   warnings: string[];
   metadata: {
@@ -96,6 +97,7 @@ export function planWorkPackage(input: WorkPackagePlanningInput): WorkPackageDra
     id: input.id ?? createWorkPackageId(strategy, complexity),
     code: input.code ?? createWorkPackageCode(strategy.method, input.tasks.length),
     strategyId: strategy.id,
+    strategy,
     method: strategy.method,
     tasks: input.tasks,
     assignedPickerId: input.assignedPickerId,
