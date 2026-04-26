@@ -1,4 +1,4 @@
-import { dedupePlanningWarnings, type PickingPlanningResult, type PlanningWarning, type RouteStep, type WorkPackageDraft } from '@wos/domain';
+import { dedupePlanningWarnings, type PickingPlanningResult, type PlanningWarning, type RouteStep, type StorageLocationProjection, type WorkPackageDraft } from '@wos/domain';
 import type { PlanningCoverage, UnresolvedPlanningLineSummary } from './diagnostics.js';
 import type { UnresolvedPlanningLine } from './input-builder.js';
 
@@ -78,6 +78,10 @@ export type PlanningWarningDto = {
   details?: Record<string, unknown>;
 };
 
+type ResponseLocationProjectionInput = Partial<StorageLocationProjection> & {
+  id: string;
+};
+
 export type PickingPlanningPreviewResponse = {
   kind: PickingPlanningPreviewKind;
   input: {
@@ -115,6 +119,7 @@ export type PickingPlanningPreviewResponse = {
     packageIds: string[];
   };
   packages: PlanningPackageRouteDto[];
+  locationsById: Record<string, StorageLocationProjection>;
   unresolved?: PlanningUnresolvedLineDto[];
   warnings: string[];
   warningDetails: PlanningWarningDto[];
@@ -132,6 +137,24 @@ function mapWarningToDto(warning: PlanningWarning): PlanningWarningDto {
     source: warning.source,
     details: warning.details ? { ...warning.details } : undefined
   };
+}
+
+function mapLocationsByIdToDto(
+  locationsById: Record<string, ResponseLocationProjectionInput> | undefined
+): Record<string, StorageLocationProjection> {
+  if (!locationsById) return {};
+
+  return Object.fromEntries(
+    Object.entries(locationsById).map(([locationId, location]) => [
+      locationId,
+      {
+        ...location,
+        id: location.id,
+        warehouseId: location.warehouseId ?? '',
+        addressLabel: location.addressLabel ?? location.id
+      }
+    ])
+  );
 }
 
 export function mapWorkPackageToDto(pkg: WorkPackageDraft): PlanningWorkPackageDto {
@@ -187,6 +210,7 @@ export function mapPlanningPreviewToResponse(args: {
   unresolved?: UnresolvedPlanningLine[];
   unresolvedSummary?: UnresolvedPlanningLineSummary;
   coverage?: PlanningCoverage;
+  locationsById?: Record<string, ResponseLocationProjectionInput>;
   extraWarnings?: string[];
   extraWarningDetails?: PlanningWarning[];
 }): PickingPlanningPreviewResponse {
@@ -245,6 +269,7 @@ export function mapPlanningPreviewToResponse(args: {
         }
       }
     })),
+    locationsById: mapLocationsByIdToDto(args.locationsById),
     unresolved: args.unresolved?.map((line) => ({ ...line })),
     warnings,
     warningDetails: warningDetails.map(mapWarningToDto)
