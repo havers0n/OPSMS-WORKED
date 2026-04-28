@@ -4,11 +4,13 @@ import { Button } from '@/shared/ui/button';
 type IconButtonVariant = 'solid' | 'ghost';
 
 type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
+  children?: ReactNode;
   icon: ReactNode;
   variant?: IconButtonVariant;
 };
 
 export function IconButton({
+  children,
   icon,
   variant = 'ghost',
   className,
@@ -18,6 +20,7 @@ export function IconButton({
   return (
     <Button type={type} size="icon" variant={variant} className={className} {...props}>
       {icon}
+      {children}
     </Button>
   );
 }

@@ -367,7 +367,7 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
             width={editorWidth}
             height={editorHeight}
           >
-            <div className="h-full w-full rounded-md border border-slate-300 bg-white/95 p-1 shadow" xmlns="http://www.w3.org/1999/xhtml">
+            <div className="h-full w-full rounded-md border border-slate-300 bg-white/95 p-1 shadow">
               <input
                 data-testid="geometry-blueprint-inline-input"
                 autoFocus

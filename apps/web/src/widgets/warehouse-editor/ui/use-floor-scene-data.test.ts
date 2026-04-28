@@ -30,11 +30,9 @@ type SceneDataResult = ReturnType<typeof useFloorSceneData>;
 
 function createWorkspace(): FloorWorkspace {
   return {
-    id: 'workspace-1',
     floorId: 'floor-1',
-    name: 'Floor 1',
-    draftLayoutVersionId: null,
-    publishedLayoutVersionId: null
+    activeDraft: null,
+    latestPublished: null
   };
 }
 

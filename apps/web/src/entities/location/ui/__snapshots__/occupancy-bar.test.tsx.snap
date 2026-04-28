@@ -1,0 +1,89 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`OccupancyBar > renders at 0% 1`] = `
+<div>
+  <div
+    class="flex items-center gap-2"
+  >
+    <div
+      class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+    >
+      <div
+        class="h-full bg-blue-500 rounded-full"
+        style="width: 0%;"
+      />
+    </div>
+    <span
+      class="text-xs text-gray-500 tabular-nums w-8 text-right"
+    >
+      0%
+    </span>
+  </div>
+</div>
+`;
+
+exports[`OccupancyBar > renders at 50% 1`] = `
+<div>
+  <div
+    class="flex items-center gap-2"
+  >
+    <div
+      class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+    >
+      <div
+        class="h-full bg-blue-500 rounded-full"
+        style="width: 50%;"
+      />
+    </div>
+    <span
+      class="text-xs text-gray-500 tabular-nums w-8 text-right"
+    >
+      50%
+    </span>
+  </div>
+</div>
+`;
+
+exports[`OccupancyBar > renders at 100% 1`] = `
+<div>
+  <div
+    class="flex items-center gap-2"
+  >
+    <div
+      class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+    >
+      <div
+        class="h-full bg-blue-500 rounded-full"
+        style="width: 100%;"
+      />
+    </div>
+    <span
+      class="text-xs text-gray-500 tabular-nums w-8 text-right"
+    >
+      100%
+    </span>
+  </div>
+</div>
+`;
+
+exports[`OccupancyBar > renders with custom label 1`] = `
+<div>
+  <div
+    class="flex items-center gap-2"
+  >
+    <div
+      class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+    >
+      <div
+        class="h-full bg-blue-500 rounded-full"
+        style="width: 75%;"
+      />
+    </div>
+    <span
+      class="text-xs text-gray-500 tabular-nums w-8 text-right"
+    >
+      3/4
+    </span>
+  </div>
+</div>
+`;

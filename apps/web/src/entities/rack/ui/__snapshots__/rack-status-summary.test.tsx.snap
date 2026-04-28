@@ -1,0 +1,585 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`RackStatusSummary > renders with different rack kind 1`] = `
+<div>
+  <div
+    aria-label="Rack overview: 01-A"
+    role="complementary"
+  >
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="font-mono text-sm font-semibold text-gray-900"
+        >
+          01-A
+        </span>
+        <span
+          class="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500"
+        >
+          Rack
+        </span>
+      </div>
+      <div
+        class="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-500"
+      >
+        <span
+          class="capitalize"
+        >
+          paired
+        </span>
+        <span
+          class="text-gray-300"
+        >
+          /
+        </span>
+        <span>
+          NS
+        </span>
+      </div>
+    </div>
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <h3
+        class="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Occupancy
+      </h3>
+      <div
+        class="flex items-center gap-2"
+      >
+        <div
+          class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+        >
+          <div
+            class="h-full bg-blue-500 rounded-full"
+            style="width: 45%;"
+          />
+        </div>
+        <span
+          class="text-xs text-gray-500 tabular-nums w-8 text-right"
+        >
+          45%
+        </span>
+      </div>
+      <div
+        class="mt-1.5 text-xs text-gray-500"
+      >
+        45
+         / 
+        100
+         cells occupied
+      </div>
+    </div>
+    <div
+      class="px-4 py-3"
+    >
+      <h3
+        class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Levels
+      </h3>
+      <div
+        class="space-y-1"
+      >
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            1
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            10
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            2
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            15
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            3
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            20
+            /
+            25
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`RackStatusSummary > renders with empty rack 1`] = `
+<div>
+  <div
+    aria-label="Rack overview: 01-A"
+    role="complementary"
+  >
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="font-mono text-sm font-semibold text-gray-900"
+        >
+          01-A
+        </span>
+        <span
+          class="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500"
+        >
+          Rack
+        </span>
+      </div>
+      <div
+        class="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-500"
+      >
+        <span
+          class="capitalize"
+        >
+          single
+        </span>
+        <span
+          class="text-gray-300"
+        >
+          /
+        </span>
+        <span>
+          NS
+        </span>
+      </div>
+    </div>
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <h3
+        class="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Occupancy
+      </h3>
+      <div
+        class="flex items-center gap-2"
+      >
+        <div
+          class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+        >
+          <div
+            class="h-full bg-blue-500 rounded-full"
+            style="width: 0%;"
+          />
+        </div>
+        <span
+          class="text-xs text-gray-500 tabular-nums w-8 text-right"
+        >
+          0%
+        </span>
+      </div>
+      <div
+        class="mt-1.5 text-xs text-gray-500"
+      >
+        0
+         / 
+        100
+         cells occupied
+      </div>
+    </div>
+    <div
+      class="px-4 py-3"
+    >
+      <h3
+        class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Levels
+      </h3>
+      <div
+        class="space-y-1"
+      >
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            1
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            10
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            2
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            15
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            3
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            20
+            /
+            25
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`RackStatusSummary > renders with full occupancy 1`] = `
+<div>
+  <div
+    aria-label="Rack overview: 01-A"
+    role="complementary"
+  >
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="font-mono text-sm font-semibold text-gray-900"
+        >
+          01-A
+        </span>
+        <span
+          class="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500"
+        >
+          Rack
+        </span>
+      </div>
+      <div
+        class="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-500"
+      >
+        <span
+          class="capitalize"
+        >
+          single
+        </span>
+        <span
+          class="text-gray-300"
+        >
+          /
+        </span>
+        <span>
+          NS
+        </span>
+      </div>
+    </div>
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <h3
+        class="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Occupancy
+      </h3>
+      <div
+        class="flex items-center gap-2"
+      >
+        <div
+          class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+        >
+          <div
+            class="h-full bg-blue-500 rounded-full"
+            style="width: 100%;"
+          />
+        </div>
+        <span
+          class="text-xs text-gray-500 tabular-nums w-8 text-right"
+        >
+          100%
+        </span>
+      </div>
+      <div
+        class="mt-1.5 text-xs text-gray-500"
+      >
+        100
+         / 
+        100
+         cells occupied
+      </div>
+    </div>
+    <div
+      class="px-4 py-3"
+    >
+      <h3
+        class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Levels
+      </h3>
+      <div
+        class="space-y-1"
+      >
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            1
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            10
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            2
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            15
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            3
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            20
+            /
+            25
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`RackStatusSummary > renders with partial occupancy 1`] = `
+<div>
+  <div
+    aria-label="Rack overview: 01-A"
+    role="complementary"
+  >
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="font-mono text-sm font-semibold text-gray-900"
+        >
+          01-A
+        </span>
+        <span
+          class="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500"
+        >
+          Rack
+        </span>
+      </div>
+      <div
+        class="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-500"
+      >
+        <span
+          class="capitalize"
+        >
+          single
+        </span>
+        <span
+          class="text-gray-300"
+        >
+          /
+        </span>
+        <span>
+          NS
+        </span>
+      </div>
+    </div>
+    <div
+      class="border-b border-gray-200 px-4 py-3"
+    >
+      <h3
+        class="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Occupancy
+      </h3>
+      <div
+        class="flex items-center gap-2"
+      >
+        <div
+          class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"
+        >
+          <div
+            class="h-full bg-blue-500 rounded-full"
+            style="width: 45%;"
+          />
+        </div>
+        <span
+          class="text-xs text-gray-500 tabular-nums w-8 text-right"
+        >
+          45%
+        </span>
+      </div>
+      <div
+        class="mt-1.5 text-xs text-gray-500"
+      >
+        45
+         / 
+        100
+         cells occupied
+      </div>
+    </div>
+    <div
+      class="px-4 py-3"
+    >
+      <h3
+        class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500"
+      >
+        Levels
+      </h3>
+      <div
+        class="space-y-1"
+      >
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            1
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            10
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            2
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            15
+            /
+            25
+          </span>
+        </div>
+        <div
+          class="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+        >
+          <span
+            class="font-medium"
+          >
+            L
+            3
+            :
+          </span>
+          <span
+            class="font-mono text-[11px] text-gray-500"
+          >
+            20
+            /
+            25
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;

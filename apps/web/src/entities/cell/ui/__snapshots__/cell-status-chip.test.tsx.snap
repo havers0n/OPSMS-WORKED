@@ -1,0 +1,27 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CellStatusChip > renders empty state 1`] = `
+<div>
+  <span
+    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-medium bg-green-50 text-green-700 border-green-200"
+  >
+    <span
+      class="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-green-500"
+    />
+    Empty
+  </span>
+</div>
+`;
+
+exports[`CellStatusChip > renders occupied state 1`] = `
+<div>
+  <span
+    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-medium bg-red-50 text-red-700 border-red-200"
+  >
+    <span
+      class="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-500"
+    />
+    Occupied
+  </span>
+</div>
+`;

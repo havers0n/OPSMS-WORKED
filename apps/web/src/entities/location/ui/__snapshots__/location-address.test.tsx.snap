@@ -1,0 +1,63 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`LocationAddress > renders different rack display codes and levels 1`] = `
+<div>
+  <div
+    class="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed"
+  >
+    <span>
+      10-C
+    </span>
+    <span
+      class="text-gray-300"
+    >
+      /
+    </span>
+    <span>
+      Level 
+      3
+    </span>
+    <span
+      class="text-gray-300"
+    >
+      /
+    </span>
+    <span
+      class="font-mono text-gray-900 font-medium"
+    >
+      04.01.02
+    </span>
+  </div>
+</div>
+`;
+
+exports[`LocationAddress > renders standard location address 1`] = `
+<div>
+  <div
+    class="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed"
+  >
+    <span>
+      01-A
+    </span>
+    <span
+      class="text-gray-300"
+    >
+      /
+    </span>
+    <span>
+      Level 
+      2
+    </span>
+    <span
+      class="text-gray-300"
+    >
+      /
+    </span>
+    <span
+      class="font-mono text-gray-900 font-medium"
+    >
+      02.03.01
+    </span>
+  </div>
+</div>
+`;
