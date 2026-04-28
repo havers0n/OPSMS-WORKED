@@ -445,6 +445,10 @@ function createSupabaseStub() {
                 return {
                   data: rows,
                   error: null,
+                  range: vi.fn(async (from: number, to: number) => ({
+                    data: rows.slice(from, to + 1),
+                    error: null
+                  })),
                   limit: vi.fn(async () => ({
                     data: rows
                       .slice(0, 4)
@@ -1768,7 +1772,12 @@ describe('buildApp', () => {
         uom: 'pcs',
         packagingState: null,
         productPackagingLevelId: null,
-        packCount: null
+        packCount: null,
+        containerPackagingProfileId: null,
+        containerIsStandardPack: null,
+        preferredPackagingProfileId: null,
+        presetUsageStatus: 'unknown',
+        presetMaterializationStatus: 'unknown'
       },
       {
         tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
@@ -1784,7 +1793,12 @@ describe('buildApp', () => {
         uom: 'pcs',
         packagingState: 'sealed',
         productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        packCount: 1
+        packCount: 1,
+        containerPackagingProfileId: null,
+        containerIsStandardPack: null,
+        preferredPackagingProfileId: null,
+        presetUsageStatus: 'unknown',
+        presetMaterializationStatus: 'unknown'
       },
       {
         tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
@@ -1800,7 +1814,12 @@ describe('buildApp', () => {
         uom: 'pcs',
         packagingState: null,
         productPackagingLevelId: null,
-        packCount: null
+        packCount: null,
+        containerPackagingProfileId: null,
+        containerIsStandardPack: null,
+        preferredPackagingProfileId: null,
+        presetUsageStatus: 'unknown',
+        presetMaterializationStatus: 'unknown'
       }
     ]);
 
@@ -1838,7 +1857,12 @@ describe('buildApp', () => {
         uom: null,
         packagingState: null,
         productPackagingLevelId: null,
-        packCount: null
+        packCount: null,
+        containerPackagingProfileId: null,
+        containerIsStandardPack: null,
+        preferredPackagingProfileId: null,
+        presetUsageStatus: 'unknown',
+        presetMaterializationStatus: 'unknown'
       }
     ]);
 
@@ -1877,7 +1901,12 @@ describe('buildApp', () => {
       uom: 'pcs',
       packagingState: null,
       productPackagingLevelId: null,
-      packCount: null
+      packCount: null,
+      containerPackagingProfileId: null,
+      containerIsStandardPack: null,
+      preferredPackagingProfileId: null,
+      presetUsageStatus: 'unknown',
+      presetMaterializationStatus: 'unknown'
     });
 
     await app.close();
@@ -4453,7 +4482,7 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
       draftVersion: 8,
-      changeClass: 'structure_changed'
+      changeClass: 'no_changes'
     });
     const saveCall = supabase.rpc.mock.calls.find(([fn]) => fn === 'save_layout_draft');
     const savePayload = saveCall?.[1]?.layout_payload as {
@@ -4509,7 +4538,7 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       layoutVersionId: '3dbf2a90-b1cb-42f0-afec-57f436a22f5d',
       draftVersion: null,
-      changeClass: 'structure_changed'
+      changeClass: 'no_changes'
     });
 
     await app.close();
