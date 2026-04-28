@@ -22,7 +22,6 @@ import {
   getPickTaskStatusColor,
   getPickTaskStatusLabel
 } from '@/entities/pick-task/lib/pick-task-actions';
-import { useOpenPickingPlan } from '@/features/picking-planning-navigation/model/use-open-picking-plan';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 
 /**
@@ -243,7 +242,6 @@ export function OrderDetailPage() {
   const { data: execution = [] } = useQuery(orderExecutionQueryOptions(orderId ?? null));
   const transition = useTransitionOrderStatus();
   const removeLine = useRemoveOrderLine(orderId ?? '');
-  const { openForOrder } = useOpenPickingPlan();
 
   // ── Guards ──────────────────────────────────────────────────────────────
 
@@ -288,7 +286,6 @@ export function OrderDetailPage() {
   const action = getPrimaryOrderAction(order);
   const editable = canEditLines(order.status);
   const transitionError = getTransitionErrorMessage(transition.error);
-  const canPlanPicking = order.lines.length > 0;
 
   const hasWarnings =
     Boolean(order.waveId) ||
@@ -342,18 +339,6 @@ export function OrderDetailPage() {
 
           {/* Lifecycle actions — clear visual hierarchy */}
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              disabled={!canPlanPicking}
-              title={!canPlanPicking ? 'Add order lines before planning picking.' : undefined}
-              onClick={() => openForOrder(order.id)}
-              className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-700 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Plan picking
-            </button>
-
-            <div className="mx-1 h-4 w-px bg-slate-200" />
-
             {/* Secondary: rollback (outline, only when ready) */}
             {order.status === 'ready' ? (
               <button

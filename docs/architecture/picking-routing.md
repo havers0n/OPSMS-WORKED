@@ -9,6 +9,13 @@ This is intentionally **rails, not train**:
 - no picking execution flow changes;
 - no database migration in this PR.
 
+## Current Canvas migration note
+
+The current UI entrypoint for picking-plan preview and route review is the
+warehouse Canvas `Picking plan` stage. Order and wave detail pages no longer
+launch direct `useOpenPickingPlan` flows. See
+`docs/architecture/canvas-picking-planning-migration.md`.
+
 ## Core principle
 
 - `locations` are executable warehouse/storage points.

@@ -43,3 +43,11 @@ User action -> React UI -> BFF API client -> Fastify routes -> Domain services -
   - `apps/web`: order/warehouse operations pages
   - `apps/bff`: orders, waves, picking, placement, movement
   - DB: `orders`, `waves`, `pick_tasks`, `pick_steps`, `inventory_unit`, canonical movement views/RPC
+
+## Picking planning entrypoint
+
+Picking planning is Canvas-oriented. Operators use the warehouse workspace
+Canvas and switch to the `Picking plan` stage for preview and route review.
+Order and wave detail pages are no longer direct planning launch surfaces.
+
+Migration note: [canvas-picking-planning-migration.md](./architecture/canvas-picking-planning-migration.md)

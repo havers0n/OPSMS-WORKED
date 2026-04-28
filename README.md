@@ -47,6 +47,7 @@ docs/
   TROUBLESHOOTING.md
   CODE_REVIEW.md
   PLANS.md
+  architecture/
   decisions/
 ```
 
@@ -59,6 +60,7 @@ docs/
 - bootstrap flow for site/floor creation
 - warehouse editor backed by a draft layout
 - validate/publish workflow
+- Canvas-based picking-plan preview and route review
 
 `apps/bff`:
 
@@ -190,6 +192,7 @@ Workspace-specific examples:
 - [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) — common failure patterns
 - [docs/CODE_REVIEW.md](./docs/CODE_REVIEW.md) — review checklist
 - [docs/PLANS.md](./docs/PLANS.md) — structured approach for large work
+- [docs/architecture/canvas-picking-planning-migration.md](./docs/architecture/canvas-picking-planning-migration.md) - Canvas picking/planning entrypoint
 - [docs/decisions/ADR-0001-packaging-hierarchy.md](./docs/decisions/ADR-0001-packaging-hierarchy.md)
 - [docs/decisions/ADR-0002-storage-presets.md](./docs/decisions/ADR-0002-storage-presets.md)
 
