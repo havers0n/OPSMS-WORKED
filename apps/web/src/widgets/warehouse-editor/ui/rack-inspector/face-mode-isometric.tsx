@@ -4,7 +4,7 @@ import { resolveRackFaceRelationshipMode } from '@wos/domain';
 export type TopologyChoice = 'single' | 'mirrored' | 'independent';
 
 export function FaceModeIsometric({
-  rack,
+  rack: _rack,
   faceB,
   readOnly,
   onSelectTopology

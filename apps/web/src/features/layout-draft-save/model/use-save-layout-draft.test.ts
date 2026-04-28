@@ -422,7 +422,7 @@ describe('use-save-layout-draft coordinator', () => {
       draftLayoutVersionId: draft.layoutVersionId
     });
 
-    let retryOutcome: 'succeeded' | 'blocked' = 'blocked';
+    let retryOutcome: 'succeeded' | 'blocked';
     try {
       await flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
       retryOutcome = 'succeeded';

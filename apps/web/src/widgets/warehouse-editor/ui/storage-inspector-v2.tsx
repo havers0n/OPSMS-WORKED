@@ -660,7 +660,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     resetRepairConflictTaskState();
     resetTransferTaskState();
     resetExtractTaskState();
-  }, [cellId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cellId]);
 
   useEffect(() => {
     if (taskKind !== 'edit-override') return;
@@ -685,7 +685,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     storageRows,
     locationId,
     effectiveRoleContext?.effectiveRoleSource
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
 
   useEffect(() => {
     if (taskKind !== 'repair-conflict') return;
@@ -719,7 +719,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     locationId,
     effectiveRoleLoading,
     effectiveRoleContext?.effectiveRoleSource
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
 
   const selectedCellAddress = publishedCells.find((cell) => cell.id === cellId)?.address.raw ?? null;
   const locationCode = storageRows[0]?.locationCode ?? selectedCellAddress ?? cellId;

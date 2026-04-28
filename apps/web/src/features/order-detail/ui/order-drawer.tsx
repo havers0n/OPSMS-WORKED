@@ -154,7 +154,7 @@ function ProductLineEditor({ order }: { order: Order }) {
   );
 }
 
-export function OrderDrawer({ orderId, onClose, mode = 'full' }: { orderId: string; onClose: () => void; mode?: 'full' | 'preview' }) {
+export function OrderDrawer({ orderId, onClose, mode: _mode = 'full' }: { orderId: string; onClose: () => void; mode?: 'full' | 'preview' }) {
   const { data: order, isLoading } = useQuery(orderQueryOptions(orderId));
   const { data: execution = [] } = useQuery(orderExecutionQueryOptions(orderId));
   const transition = useTransitionOrderStatus();

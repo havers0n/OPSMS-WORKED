@@ -29,7 +29,6 @@ export function usePublishLayout(floorId: string | null) {
       let draftVersion = currentDraft.draftVersion ?? null;
 
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'publishLayout:mutationFn:before',
@@ -61,7 +60,6 @@ export function usePublishLayout(floorId: string | null) {
 
       const draftId = await createLayoutDraft(floorId);
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', {
           t: Date.now(),
           op: 'publishLayout:mutationFn:after-createDraft',
@@ -76,7 +74,6 @@ export function usePublishLayout(floorId: string | null) {
     },
     onSuccess: () => {
       if (TRACE) {
-        // eslint-disable-next-line no-console
         console.debug('[WOS TRACE]', { t: Date.now(), op: 'publishLayout:onSuccess', floorId });
       }
       void queryClient.invalidateQueries({ queryKey: layoutVersionKeys.activeDraft(floorId) });

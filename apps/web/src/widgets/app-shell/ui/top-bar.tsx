@@ -28,7 +28,7 @@ type LocateFeedback = {
 };
 
 function normalizeLocateToken(value: string): string {
-  return value.trim().toUpperCase().replace(/[\s\-_.\/:]+/g, '');
+  return value.trim().toUpperCase().replace(/[\s\-_./:]+/g, '');
 }
 
 function WarehouseViewLocateInline() {

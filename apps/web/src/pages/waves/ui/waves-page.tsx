@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, PackagePlus, RefreshCw, Waves as WavesIcon, X } from 'lucide-react';
-import type { OrderStatus, Wave, WaveStatus, WaveSummary } from '@wos/domain';
+import { AlertCircle, RefreshCw, Waves as WavesIcon, X } from 'lucide-react';
+import type { Wave, WaveStatus } from '@wos/domain';
 import { useCreateOrder } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
 import { getOrderStatusColor, getOrderStatusLabel } from '@/entities/order/lib/order-actions';

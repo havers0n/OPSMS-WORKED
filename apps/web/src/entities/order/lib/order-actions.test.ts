@@ -12,8 +12,21 @@ import {
   getPrimaryActionLabel,
   getTransitionErrorMessage
 } from './order-actions';
-import type { Order, OrderStatus } from '@wos/domain';
+import type { Order } from '@wos/domain';
 import { BffRequestError } from '@/shared/api/bff/client';
+
+const orderLine: Order['lines'][number] = {
+  id: 'line-1',
+  orderId: 'order-1',
+  tenantId: 'tenant-1',
+  productId: null,
+  sku: 'SKU-1',
+  name: 'Widget',
+  qtyRequired: 5,
+  qtyPicked: 0,
+  reservedQty: 0,
+  status: 'pending'
+};
 
 describe('Order Workflow Actions', () => {
   describe('canEditLines', () => {
@@ -116,7 +129,7 @@ describe('Order Workflow Actions', () => {
   describe('getPrimaryOrderAction - Standalone Draft Order', () => {
     const draftOrder: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveName'> = {
       status: 'draft',
-      lines: [{ id: '1', qtyRequired: 5 }] as any,
+      lines: [orderLine],
       waveId: null,
       waveName: null
     };
@@ -137,7 +150,7 @@ describe('Order Workflow Actions', () => {
   describe('getPrimaryOrderAction - Standalone Ready Order', () => {
     const readyOrder: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveName'> = {
       status: 'ready',
-      lines: [{ id: '1', qtyRequired: 5 }] as any,
+      lines: [orderLine],
       waveId: null,
       waveName: null
     };
@@ -152,7 +165,7 @@ describe('Order Workflow Actions', () => {
   describe('getPrimaryOrderAction - Wave-Attached Order', () => {
     const waveAttachedReady: Pick<Order, 'status' | 'lines' | 'waveId' | 'waveName'> = {
       status: 'ready',
-      lines: [{ id: '1', qtyRequired: 5 }] as any,
+      lines: [orderLine],
       waveId: 'wave-123',
       waveName: 'Morning Run'
     };
@@ -179,21 +192,21 @@ describe('Order Workflow Actions', () => {
         lines: [],
         waveId: null,
         waveName: null
-      } as any).target).toBe(null);
+      }).target).toBe(null);
 
       expect(getPrimaryOrderAction({
         status: 'picking',
         lines: [],
         waveId: null,
         waveName: null
-      } as any).target).toBe(null);
+      }).target).toBe(null);
 
       expect(getPrimaryOrderAction({
         status: 'closed',
         lines: [],
         waveId: null,
         waveName: null
-      } as any).target).toBe(null);
+      }).target).toBe(null);
     });
   });
 

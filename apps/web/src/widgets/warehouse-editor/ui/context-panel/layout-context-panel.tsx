@@ -9,7 +9,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { ViewMode, RackSideFocus } from '@/widgets/warehouse-editor/model/editor-types';
+import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import {
   useCreateWallFromRackSide,
   useDeleteWall,

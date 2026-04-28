@@ -14,7 +14,6 @@ import type {
 } from './editor-types';
 import {
   getRackCanvasRect,
-  GRID_SIZE,
   WORLD_SCALE
 } from '../../../entities/layout-version/lib/canvas-geometry';
 

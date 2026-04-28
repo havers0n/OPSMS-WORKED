@@ -1,8 +1,9 @@
 import type { Wave, WaveStatus } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
-import { orderKeys } from '@/entities/order/api/queries';
 import { waveKeys } from './queries';
+
+const orderQueryKey = ['order'] as const;
 
 type CreateWaveInput = {
   name: string;
@@ -64,7 +65,7 @@ export function useTransitionWaveStatus() {
     mutationFn: transitionWaveStatus,
     onSuccess: (wave) => {
       void queryClient.invalidateQueries({ queryKey: waveKeys.all });
-      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      void queryClient.invalidateQueries({ queryKey: orderQueryKey });
       queryClient.setQueryData(waveKeys.detail(wave.id), wave);
     }
   });
@@ -77,7 +78,7 @@ export function useAttachOrderToWave() {
     mutationFn: attachOrderToWave,
     onSuccess: (wave) => {
       void queryClient.invalidateQueries({ queryKey: waveKeys.all });
-      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      void queryClient.invalidateQueries({ queryKey: orderQueryKey });
       queryClient.setQueryData(waveKeys.detail(wave.id), wave);
     }
   });
@@ -90,7 +91,7 @@ export function useDetachOrderFromWave() {
     mutationFn: detachOrderFromWave,
     onSuccess: (wave) => {
       void queryClient.invalidateQueries({ queryKey: waveKeys.all });
-      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      void queryClient.invalidateQueries({ queryKey: orderQueryKey });
       queryClient.setQueryData(waveKeys.detail(wave.id), wave);
     }
   });

@@ -97,7 +97,7 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   const labelHalfH = labelHeight / 2;
 
   const placeLabel = (rawX: number, rawY: number) => {
-    let x = clamp(rawX, PADDING + labelHalfW + 2, WIDTH - PADDING - labelHalfW - 2);
+    const x = clamp(rawX, PADDING + labelHalfW + 2, WIDTH - PADDING - labelHalfW - 2);
     let y = clamp(rawY, PADDING + labelHalfH + 2, HEIGHT - PADDING - labelHalfH - 2);
 
     const overlapsRotationChip =

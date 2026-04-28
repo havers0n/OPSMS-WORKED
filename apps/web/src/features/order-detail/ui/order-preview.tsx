@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { OrderSummary } from '@wos/domain';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
 import { getOrderStatusColor, getOrderStatusLabel } from '@/entities/order/lib/order-actions';
 import { orderDetailPath } from '@/shared/config/routes';

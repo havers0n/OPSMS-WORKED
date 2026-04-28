@@ -35,7 +35,7 @@ export function PickingRouteOverlayLayer({
           />
         );
       })}
-      {anchors.map((anchor, index) => {
+      {anchors.map((anchor) => {
         if (anchor.status !== 'resolved') return null;
         return (
           <Circle

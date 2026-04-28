@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, AlertCircle, ChevronRight, Package, PackagePlus, RefreshCw, Waves as WavesIcon } from 'lucide-react';
+import { AlertCircle, ChevronRight, Package, RefreshCw, Waves as WavesIcon } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import type { OrderStatus, WaveStatus, WaveSummary } from '@wos/domain';
+import type { OrderStatus, WaveStatus } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
 import { getOrderStatusColor, getOrderStatusLabel, getProgressLabel, getPrimaryTransitionTarget } from '@/entities/order/lib/order-actions';

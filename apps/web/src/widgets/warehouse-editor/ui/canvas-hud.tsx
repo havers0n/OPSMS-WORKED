@@ -216,7 +216,7 @@ export function CanvasHud({
   isPlacing,
   isDrawingZone,
   isPlacementMoveMode,
-  shouldShowLayoutRackGeometryBar,
+  shouldShowLayoutRackGeometryBar: _shouldShowLayoutRackGeometryBar,
   shouldShowLayoutRackSideHandles,
   shouldShowLayoutZoneBar,
   shouldShowLayoutWallBar,

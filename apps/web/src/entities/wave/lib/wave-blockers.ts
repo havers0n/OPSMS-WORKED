@@ -1,4 +1,4 @@
-import type { OrderStatus, OrderSummary, Wave } from '@wos/domain';
+import type { OrderStatus, Wave } from '@wos/domain';
 
 /**
  * Reason categories for wave release blockers
@@ -100,7 +100,7 @@ export function getBlockerReasonLabel(reason: BlockerReasonCode): string {
 /**
  * Get Tailwind color classes for blocker reason severity
  */
-export function getBlockerReasonColor(reason: BlockerReasonCode): string {
+export function getBlockerReasonColor(_reason: BlockerReasonCode): string {
   // All blockers are amber/warning level
   return 'bg-amber-50 text-amber-700 border-amber-200';
 }

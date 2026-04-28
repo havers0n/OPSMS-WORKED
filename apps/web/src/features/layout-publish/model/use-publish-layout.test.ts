@@ -333,7 +333,7 @@ describe('usePublishLayout', () => {
     await expect(publishHook.mutateAsync()).rejects.toMatchObject({ code: 'DRAFT_CONFLICT' });
     expectSurfaceConsistentForActiveDraft(draft.layoutVersionId);
 
-    let retryOutcome: 'succeeded' | 'blocked' = 'blocked';
+    let retryOutcome: 'succeeded' | 'blocked';
     try {
       await publishHook.mutateAsync();
       retryOutcome = 'succeeded';

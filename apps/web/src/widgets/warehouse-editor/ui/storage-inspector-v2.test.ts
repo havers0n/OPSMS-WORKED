@@ -1,4 +1,4 @@
-import React, { createElement } from 'react';
+import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
@@ -1380,8 +1380,6 @@ describe('StorageInspectorV2 task flows', () => {
     mockCreateContainer.mockResolvedValue({ containerId: 'new-container-3' });
     mockPlaceContainer.mockResolvedValue({ ok: true });
     mockAddInventoryItem.mockRejectedValue(new Error('inventory error'));
-
-    const mockProduct = { id: 'prod-1', sku: 'SKU-001', name: 'Widget', source: 's', externalProductId: 'e', permalink: null, imageUrls: [], imageFiles: [], isActive: true, createdAt: '', updatedAt: '' };
 
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {

@@ -6,7 +6,6 @@ import type { InteractionScope } from '@/widgets/warehouse-editor/model/editor-t
 import {
   type CanvasRect,
   getRackGeometry,
-  GRID_SIZE,
   WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
 import { MIN_ZONE_SIZE } from './zone-layer';

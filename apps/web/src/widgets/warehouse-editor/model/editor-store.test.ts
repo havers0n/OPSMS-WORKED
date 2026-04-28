@@ -1174,7 +1174,7 @@ describe('editor-store', () => {
       .getState()
       .updateLevelStructuralDefaultRole(rackId, 'A', 1, 'primary_pick');
 
-    const updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    const updatedRack = useEditorStore.getState().draft!.racks[rackId];
     const updatedFaceA = updatedRack.faces.find((f) => f.side === 'A')!;
 
     // Both sections should have Level 1 updated
@@ -1210,7 +1210,7 @@ describe('editor-store', () => {
       .getState()
       .updateRackLevelStructuralDefaultRole(rackId, 1, 'reserve');
 
-    const updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    const updatedRack = useEditorStore.getState().draft!.racks[rackId];
     const faceA = updatedRack.faces.find((face) => face.side === 'A')!;
     const faceB = updatedRack.faces.find((face) => face.side === 'B')!;
     expect(faceA.sections[0].levels[0].structuralDefaultRole).toBe('reserve');
@@ -1239,7 +1239,7 @@ describe('editor-store', () => {
       .getState()
       .updateLevelStructuralDefaultRole(rackId, 'B', 1, 'reserve');
 
-    let updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    let updatedRack = useEditorStore.getState().draft!.racks[rackId];
     expect(updatedRack.faces.find((face) => face.side === 'A')?.sections[0].levels[0].structuralDefaultRole).toBe('primary_pick');
     expect(updatedRack.faces.find((face) => face.side === 'B')?.sections[0].levels[0].structuralDefaultRole).toBe('reserve');
 
@@ -1247,7 +1247,7 @@ describe('editor-store', () => {
       .getState()
       .updateRackLevelStructuralDefaultRole(rackId, 1, 'none');
 
-    updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    updatedRack = useEditorStore.getState().draft!.racks[rackId];
     expect(updatedRack.faces.find((face) => face.side === 'A')?.sections[0].levels[0].structuralDefaultRole).toBe('none');
     expect(updatedRack.faces.find((face) => face.side === 'B')?.sections[0].levels[0].structuralDefaultRole).toBe('none');
   });
@@ -1268,7 +1268,7 @@ describe('editor-store', () => {
       .getState()
       .updateRackLevelStructuralDefaultRole(rackId, 1, 'reserve');
 
-    const updatedRack = useEditorStore.getState().draft?.racks[rackId]!;
+    const updatedRack = useEditorStore.getState().draft!.racks[rackId];
     const faceA = updatedRack.faces.find((face) => face.side === 'A')!;
     const faceB = updatedRack.faces.find((face) => face.side === 'B')!;
     expect(faceA.sections[0].levels[0].structuralDefaultRole).toBe('reserve');

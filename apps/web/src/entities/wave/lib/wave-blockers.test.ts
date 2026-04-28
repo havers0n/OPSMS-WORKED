@@ -32,7 +32,7 @@ describe('Wave Blockers', () => {
             unitCount: 10,
             pickedUnitCount: 0
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(true);
@@ -59,7 +59,7 @@ describe('Wave Blockers', () => {
             unitCount: 0,
             pickedUnitCount: 0
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(true);
@@ -85,7 +85,7 @@ describe('Wave Blockers', () => {
             unitCount: 10,
             pickedUnitCount: 3
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(true);
@@ -111,7 +111,7 @@ describe('Wave Blockers', () => {
             unitCount: 10,
             pickedUnitCount: 0
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(false);
@@ -136,7 +136,7 @@ describe('Wave Blockers', () => {
             unitCount: 10,
             pickedUnitCount: 0
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(false);
@@ -160,7 +160,7 @@ describe('Wave Blockers', () => {
             unitCount: 10,
             pickedUnitCount: 10
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(false);
@@ -214,7 +214,7 @@ describe('Wave Blockers', () => {
             unitCount: 0,
             pickedUnitCount: 0
           }
-        ] as any
+        ]
       };
       const result = deriveWaveBlockers(wave);
       expect(result.blocked).toBe(true);

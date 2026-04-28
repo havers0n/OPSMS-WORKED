@@ -13,9 +13,6 @@ import {
 import {
   useTaskStore,
   type TaskStore,
-  type StorageTask,
-  type TaskContext,
-  type TaskStatus,
 } from './task-store'
 
 // ============================================================================

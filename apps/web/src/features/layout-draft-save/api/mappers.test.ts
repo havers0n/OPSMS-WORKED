@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapLayoutDraftBundleToDomain } from '../../../entities/layout-version/api/mappers';
 import type { LayoutDraftRowBundle } from '../../../entities/layout-version/api/types';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { mapLayoutDraftToSavePayload } from './mappers';
 
 describe('mapLayoutDraftToSavePayload', () => {
@@ -104,11 +103,9 @@ describe('mapLayoutDraftToSavePayload', () => {
       ]
     } satisfies LayoutDraftRowBundle);
 
-    useEditorStore.getState().initializeDraft(draft);
+    const payload = mapLayoutDraftToSavePayload(draft);
 
-    const payload = mapLayoutDraftToSavePayload(useEditorStore.getState().draft ?? draft);
-
-    expect(useEditorStore.getState().draft?.state).toBe('draft');
+    expect(draft.state).toBe('draft');
     expect(payload.racks[0]?.faces[0]).toEqual(
       expect.objectContaining({
         slotNumberingDirection: 'ltr',

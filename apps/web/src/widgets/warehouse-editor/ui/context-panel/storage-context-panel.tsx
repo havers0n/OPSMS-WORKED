@@ -1,5 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
-import { MoveRight, Package, RotateCcw } from 'lucide-react';
+import { MoveRight, RotateCcw } from 'lucide-react';
 import type { ViewMode, ContextPanelMode } from '@/widgets/warehouse-editor/model/editor-types';
 import {
   useStorageSelection,
