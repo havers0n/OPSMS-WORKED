@@ -126,7 +126,27 @@ async function ensureManagerClient() {
 }
 
 export async function resetWarehouseData() {
-  const tableOrder = ['locations', 'cells', 'rack_levels', 'rack_sections', 'rack_faces', 'racks', 'layout_versions', 'floors', 'sites'] as const;
+  const { error: containerLocationError } = await adminClient
+    .from('containers')
+    .update({ current_location_id: null })
+    .not('current_location_id', 'is', null);
+
+  if (containerLocationError) {
+    throw containerLocationError;
+  }
+
+  const tableOrder = [
+    'stock_movements',
+    'locations',
+    'cells',
+    'rack_levels',
+    'rack_sections',
+    'rack_faces',
+    'racks',
+    'layout_versions',
+    'floors',
+    'sites'
+  ] as const;
 
   for (const table of tableOrder) {
     const { error } = await adminClient.from(table).delete().not('id', 'is', null);
