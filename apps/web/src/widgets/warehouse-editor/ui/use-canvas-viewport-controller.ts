@@ -205,6 +205,8 @@ export function useCanvasViewportController({
     createTransformOnlyPanState({ x: offsetX, y: offsetY })
   );
   const panFrameRef = useRef<number | null>(null);
+  const touchPanActiveRef = useRef(false);
+  const pinchStartDistRef = useRef<number | null>(null);
 
   // Track previous viewMode so we can detect the transition TO placement.
   const prevViewModeRef = useRef(viewMode);
@@ -269,6 +271,20 @@ export function useCanvasViewportController({
   }, [viewMode]);
   // Intentionally reads viewport/autoFitRacks/zoom via closure at transition time —
   // re-running on their changes would fight the user's manual zoom adjustments.
+
+  const handleZoom = useCallback((delta: number, cursor?: CanvasPoint) => {
+    const nextZoom = clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)));
+
+    if (!cursor) {
+      setCanvasZoomRef.current(nextZoom);
+      return;
+    }
+
+    const camera = useCameraStore.getState();
+    const nextCamera = getZoomToCursorCamera(camera, cursor, nextZoom);
+    camera.setCamera(nextCamera.zoom, nextCamera.offsetX, nextCamera.offsetY);
+    recordCanvasCameraStoreUpdate('camera');
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -336,31 +352,114 @@ export function useCanvasViewportController({
       setIsPanning(false);
     };
 
+    const onTouchStart = (event: TouchEvent) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      if (event.touches.length === 2) {
+        // Cancel any in-progress 1-finger pan
+        if (isPanningRef.current) {
+          isPanningRef.current = false;
+          touchPanActiveRef.current = false;
+          setIsPanning(false);
+        }
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        pinchStartDistRef.current = Math.hypot(dx, dy);
+        event.preventDefault();
+        return;
+      }
+
+      if (event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      const box = stage.container().getBoundingClientRect();
+      // Only pan when touching the canvas background (not a shape)
+      const hit = stage.getIntersection({ x: touch.clientX - box.left, y: touch.clientY - box.top });
+      if (hit) return;
+
+      touchPanActiveRef.current = true;
+      isPanningRef.current = true;
+      const { offsetX: ox, offsetY: oy } = useCameraStore.getState();
+      startTransformOnlyPan({
+        committedOffset: { x: ox, y: oy },
+        pointer: { x: touch.clientX, y: touch.clientY },
+        stage,
+        state: panStateRef.current
+      });
+      setIsPanning(true);
+      event.preventDefault();
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      if (event.touches.length === 2 && pinchStartDistRef.current !== null) {
+        if (isPanningRef.current) {
+          isPanningRef.current = false;
+          touchPanActiveRef.current = false;
+          setIsPanning(false);
+        }
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        const newDist = Math.hypot(dx, dy);
+        const delta = (newDist - pinchStartDistRef.current) * 0.005;
+        const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+        const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+        const box = stage.container().getBoundingClientRect();
+        handleZoom(delta, { x: midX - box.left, y: midY - box.top });
+        pinchStartDistRef.current = newDist;
+        event.preventDefault();
+        return;
+      }
+
+      if (!touchPanActiveRef.current || !isPanningRef.current) return;
+      if (event.touches.length !== 1) return;
+      moveTransformOnlyPan({
+        pointer: { x: event.touches[0].clientX, y: event.touches[0].clientY },
+        scheduleDraw: schedulePanDraw,
+        stage,
+        state: panStateRef.current
+      });
+      event.preventDefault();
+    };
+
+    const onTouchEnd = () => {
+      pinchStartDistRef.current = null;
+      if (!touchPanActiveRef.current) return;
+      touchPanActiveRef.current = false;
+      if (!isPanningRef.current) return;
+      isPanningRef.current = false;
+      finishTransformOnlyPan({
+        cancelDraw: cancelScheduledPanDraw,
+        commitOffset: (offset) => {
+          useCameraStore.getState().setOffset(offset.x, offset.y);
+        },
+        recordOffsetCommit: () => recordCanvasCameraStoreUpdate('offset'),
+        stage: stageRef.current,
+        state: panStateRef.current
+      });
+      setIsPanning(false);
+    };
+
     container.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
 
     return () => {
       cancelScheduledPanDraw();
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      container.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [stageRef]);
-
-  const handleZoom = useCallback((delta: number, cursor?: CanvasPoint) => {
-    const nextZoom = clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)));
-
-    if (!cursor) {
-      setCanvasZoomRef.current(nextZoom);
-      return;
-    }
-
-    const camera = useCameraStore.getState();
-    const nextCamera = getZoomToCursorCamera(camera, cursor, nextZoom);
-    camera.setCamera(nextCamera.zoom, nextCamera.offsetX, nextCamera.offsetY);
-    recordCanvasCameraStoreUpdate('camera');
-  }, []);
+  }, [stageRef, handleZoom]);
 
   return {
     containerRef,

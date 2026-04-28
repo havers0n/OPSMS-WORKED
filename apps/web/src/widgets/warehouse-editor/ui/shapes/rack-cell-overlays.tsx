@@ -323,6 +323,11 @@ export function CellInteractionOverlay({
         event.cancelBubble = true;
         onCellClick({ x: event.evt.clientX, y: event.evt.clientY });
       } : undefined}
+      onTap={isClickable && onCellClick ? (event) => {
+        event.cancelBubble = true;
+        const touch = event.evt.changedTouches[0];
+        onCellClick({ x: touch.clientX, y: touch.clientY });
+      } : undefined}
     />
   );
 }

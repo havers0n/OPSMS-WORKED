@@ -678,6 +678,7 @@ export function EditorCanvas({
       ref={containerRef}
       className="relative h-full overflow-hidden"
       style={{
+        touchAction: 'none',
         cursor: isPanning
           ? 'grabbing'
           : isLayoutDrawToolActive
