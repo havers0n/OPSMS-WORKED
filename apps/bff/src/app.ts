@@ -50,7 +50,7 @@ import { registerInventoryMovementRoutes } from './routes/inventory-movement.rou
 import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js';
 import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
 import { registerRackInspectorRoutes } from './routes/rack-inspector.routes.js';
-import { registerOperationsRoutes } from './routes/operations.routes.js';
+import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -137,7 +137,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerPickingExecutionRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
   registerRackInspectorRoutes(app, { getAuthContext, getUserSupabase });
-  registerOperationsRoutes(app, { getAuthContext, getUserSupabase });
+  registerOperationsCellsRoutes(app, { getAuthContext, getUserSupabase });
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
 
   app.setErrorHandler((error, request, reply) => {
