@@ -1,9 +1,10 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError, z } from 'zod';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
+import type { BuildAppOptions } from './app-options.js';
+import { createRouteDeps } from './route-deps.js';
 import {
   addInventoryToContainerBodySchema,
   cellsResponseSchema,
@@ -61,7 +62,6 @@ import {
   createContainerFromStoragePresetResponseSchema,
   setPreferredStoragePresetRequestBodySchema
 } from './schemas.js';
-import { getUserClient, requireAuth, type AuthenticatedRequestContext } from './auth.js';
 import {
   mapLocationOccupancyRowToDomain,
   mapLocationStorageSnapshotRowToDomain,
@@ -69,39 +69,20 @@ import {
   mapInventoryUnitRowToLegacyInventoryItemDomain,
   mapPersistedDraftValidationResult
 } from './mappers.js';
-import { createAnonClient } from './supabase.js';
 import {
   mapPlacementError
 } from './features/placement/errors.js';
-import {
-  createPlacementCommandService,
-  type PlacementCommandService
-} from './features/placement/service.js';
-import {
-  createOrdersService,
-  type OrdersService
-} from './features/orders/service.js';
-import {
-  createWavesService,
-  type WavesService
-} from './features/waves/service.js';
+import { type PlacementCommandService } from './features/placement/service.js';
+import { type OrdersService } from './features/orders/service.js';
+import { type WavesService } from './features/waves/service.js';
 import { createOrdersRepo } from './features/orders/repo.js';
 import { registerOrdersRoutes } from './features/orders/routes.js';
 import { registerWavesRoutes } from './features/waves/routes.js';
-import {
-  createProductsService,
-  type ProductsService
-} from './features/products/service.js';
+import { type ProductsService } from './features/products/service.js';
 import { registerProductsRoutes } from './features/products/routes.js';
 import { createLayoutRepo } from './features/layout/repo.js';
-import {
-  createLayoutService,
-  type LayoutService
-} from './features/layout/service.js';
-import {
-  createContainersService,
-  type ContainersService
-} from './features/containers/service.js';
+import { type LayoutService } from './features/layout/service.js';
+import { type ContainersService } from './features/containers/service.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
   mapExecutionLocationMoveError,
@@ -109,84 +90,18 @@ import {
   mapExecutionTransferError
 } from './features/execution/errors.js';
 import {
-  createInventoryService,
-  type InventoryService
-} from './features/inventory/service.js';
-import {
-  createSitesService,
-  type SitesService
-} from './features/sites/service.js';
-import {
-  createFloorsService,
-  type FloorsService
-} from './features/floors/service.js';
-import {
   attachProductsToRows,
   type ProductAwareRow,
   type ProductRow
 } from './inventory-product-resolution.js';
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
 import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
-import {
-  createPickingService,
-  type PickingService
-} from './features/picking/service.js';
-import {
-  createPickingPlanningPreviewService,
-  type PickingPlanningPreviewService
-} from './features/picking-planning/service.js';
-import {
-  createPickingPlanningOrderInputReadRepo,
-  createPickingPlanningWaveReadRepo
-} from './features/picking-planning/repo.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
-import {
-  createProductLocationRolesService,
-  type ProductLocationRolesService
-} from './features/product-location-roles/service.js';
+import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
-import {
-  createStoragePresetsService,
-  type StoragePresetsService
-} from './features/storage-presets/service.js';
-
-type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
-type PlacementServiceFactory = (context: AuthenticatedRequestContext) => PlacementCommandService;
-type OrdersServiceFactory = (context: AuthenticatedRequestContext) => OrdersService;
-type WavesServiceFactory = (context: AuthenticatedRequestContext) => WavesService;
-type InventoryServiceFactory = (context: AuthenticatedRequestContext) => InventoryService;
-type LayoutServiceFactory = (context: AuthenticatedRequestContext) => LayoutService;
-type SitesServiceFactory = (context: AuthenticatedRequestContext) => SitesService;
-type ContainersServiceFactory = (context: AuthenticatedRequestContext) => ContainersService;
-type FloorsServiceFactory = (context: AuthenticatedRequestContext) => FloorsService;
-type ProductsServiceFactory = (context: AuthenticatedRequestContext) => ProductsService;
-type PickingServiceFactory = (context: AuthenticatedRequestContext) => PickingService;
-type PickingPlanningPreviewServiceFactory = (
-  context: AuthenticatedRequestContext
-) => PickingPlanningPreviewService;
-type ProductLocationRolesServiceFactory = (context: AuthenticatedRequestContext) => ProductLocationRolesService;
-type StoragePresetsServiceFactory = (context: AuthenticatedRequestContext) => StoragePresetsService;
-
-type BuildAppOptions = {
-  getAuthContext?: typeof requireAuth;
-  getUserSupabase?: UserClientFactory;
-  getHealthSupabase?: () => SupabaseClient;
-  getPlacementService?: PlacementServiceFactory;
-  getPickingService?: PickingServiceFactory;
-  getOrdersService?: OrdersServiceFactory;
-  getWavesService?: WavesServiceFactory;
-  getInventoryService?: InventoryServiceFactory;
-  getLayoutService?: LayoutServiceFactory;
-  getSitesService?: SitesServiceFactory;
-  getContainersService?: ContainersServiceFactory;
-  getFloorsService?: FloorsServiceFactory;
-  getProductsService?: ProductsServiceFactory;
-  getProductLocationRolesService?: ProductLocationRolesServiceFactory;
-  getStoragePresetsService?: StoragePresetsServiceFactory;
-  getPickingPlanningPreviewService?: PickingPlanningPreviewServiceFactory;
-};
+import { type StoragePresetsService } from './features/storage-presets/service.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -225,59 +140,25 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
   });
 
-  const getAuthContext = options.getAuthContext ?? requireAuth;
-  const getUserSupabase = options.getUserSupabase ?? getUserClient;
-  const getHealthSupabase = options.getHealthSupabase ?? createAnonClient;
-  const getPlacementService =
-    options.getPlacementService ??
-    ((context: AuthenticatedRequestContext) => createPlacementCommandService(getUserSupabase(context)));
-  const getOrdersService =
-    options.getOrdersService ??
-    ((context: AuthenticatedRequestContext) => createOrdersService(getUserSupabase(context)));
-  const getWavesService =
-    options.getWavesService ??
-    ((context: AuthenticatedRequestContext) => createWavesService(getUserSupabase(context)));
-  const getInventoryService =
-    options.getInventoryService ??
-    ((context: AuthenticatedRequestContext) => createInventoryService(getUserSupabase(context)));
-  const getLayoutService =
-    options.getLayoutService ??
-    ((context: AuthenticatedRequestContext) => createLayoutService(getUserSupabase(context)));
-  const getSitesService =
-    options.getSitesService ??
-    ((context: AuthenticatedRequestContext) => createSitesService(getUserSupabase(context)));
-  const getContainersService =
-    options.getContainersService ??
-    ((context: AuthenticatedRequestContext) => createContainersService(getUserSupabase(context)));
-  const getFloorsService =
-    options.getFloorsService ??
-    ((context: AuthenticatedRequestContext) => createFloorsService(getUserSupabase(context)));
-  const getProductsService =
-    options.getProductsService ??
-    ((context: AuthenticatedRequestContext) => createProductsService(getUserSupabase(context)));
-  const getPickingService =
-    options.getPickingService ??
-    ((context: AuthenticatedRequestContext) => createPickingService(getUserSupabase(context)));
-  const getPickingPlanningPreviewService =
-    options.getPickingPlanningPreviewService ??
-    ((context: AuthenticatedRequestContext) => {
-      if (!context.currentTenant) {
-        throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for planning preview.');
-      }
-
-      return createPickingPlanningPreviewService(
-        undefined,
-        createPickingPlanningOrderInputReadRepo(getUserSupabase(context), context.currentTenant.tenantId),
-        createPickingPlanningWaveReadRepo(getUserSupabase(context), context.currentTenant.tenantId)
-      );
-    });
-  const getProductLocationRolesService =
-    options.getProductLocationRolesService ??
-    ((context: AuthenticatedRequestContext) =>
-      createProductLocationRolesService(getUserSupabase(context)));
-  const getStoragePresetsService =
-    options.getStoragePresetsService ??
-    ((context: AuthenticatedRequestContext) => createStoragePresetsService(getUserSupabase(context)));
+  const deps = createRouteDeps(options);
+  const {
+    getAuthContext,
+    getUserSupabase,
+    getHealthSupabase,
+    getPlacementService,
+    getPickingService,
+    getOrdersService,
+    getWavesService,
+    getInventoryService,
+    getLayoutService,
+    getSitesService,
+    getContainersService,
+    getFloorsService,
+    getProductsService,
+    getProductLocationRolesService,
+    getStoragePresetsService,
+    getPickingPlanningPreviewService
+  } = deps;
 
   void app.register(cors, {
     origin: env.corsOrigin,
