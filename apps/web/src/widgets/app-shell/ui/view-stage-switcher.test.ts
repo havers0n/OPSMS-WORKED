@@ -42,18 +42,24 @@ describe('ViewModeSwitcher view stages', () => {
     });
   });
 
-  it('renders picking plan as a View-only substage', () => {
+  it('renders picking plan as a View-only substage without old direct planning actions', () => {
     act(() => {
       renderer = TestRenderer.create(createElement(ViewModeSwitcher));
     });
 
-    expect(collectText(renderer!.toJSON())).not.toContain('Picking plan');
+    let text = collectText(renderer!.toJSON());
+    expect(text).not.toContain('Picking plan');
+    expect(text).not.toContain('Plan picking');
+    expect(text).not.toContain('Plan wave');
 
     act(() => {
       useModeStore.getState().setViewMode('view');
     });
 
-    expect(collectText(renderer!.toJSON())).toContain('Picking plan');
+    text = collectText(renderer!.toJSON());
+    expect(text).toContain('Picking plan');
+    expect(text).not.toContain('Plan picking');
+    expect(text).not.toContain('Plan wave');
   });
 
   it('updates the active View stage without changing the top-level mode', () => {

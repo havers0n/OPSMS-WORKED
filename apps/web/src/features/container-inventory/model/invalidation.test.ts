@@ -14,9 +14,16 @@ describe('invalidateContainerInventoryQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['container', 'storage', '188ed1eb-c44d-47f8-a8b1-94c7e20db85f']
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: [
+        'container',
+        'current-location',
+        '188ed1eb-c44d-47f8-a8b1-94c7e20db85f'
+      ]
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'storage']
