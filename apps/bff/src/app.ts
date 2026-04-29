@@ -6,7 +6,6 @@ import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import type { BuildAppOptions } from './app-options.js';
 import { createRouteDeps } from './route-deps.js';
 import {
-  addInventoryToContainerBodySchema,
   containerCurrentLocationResponseSchema,
   locationReferenceResponseSchema,
   locationOccupancyRowsResponseSchema,
@@ -22,15 +21,11 @@ import {
   transferInventoryUnitResponseSchema,
   pickPartialInventoryUnitRequestBodySchema,
   pickPartialInventoryUnitResponseSchema,
-  createContainerResponseSchema,
   containerTypesResponseSchema,
-  createContainerBodySchema,
   listContainersQuerySchema,
   placementPlaceAtLocationBodySchema,
   currentWorkspaceResponseSchema,
   idResponseSchema,
-  inventoryItemResponseSchema,
-  removeContainerResponseSchema,
   pickTasksResponseSchema,
   pickTaskDetailResponseSchema,
   operationsCellsRuntimeResponseSchema,
@@ -52,7 +47,6 @@ import {
   mapLocationOccupancyRowToDomain,
   mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
-  mapInventoryUnitRowToLegacyInventoryItemDomain,
 } from './mappers.js';
 import {
   mapPlacementError
@@ -77,7 +71,6 @@ import {
 import {
   attachProductsToRows,
   type ProductAwareRow,
-  type ProductRow
 } from './inventory-product-resolution.js';
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
 import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
@@ -94,6 +87,7 @@ import { registerFloorsRoutes } from './routes/floors.routes.js';
 import { registerLayoutReadRoutes } from './routes/layout-read.routes.js';
 import { registerLayoutMutationsRoutes } from './routes/layout-mutations.routes.js';
 import { registerContainerReadRoutes } from './routes/container-read.routes.js';
+import { registerContainerMutationsRoutes } from './routes/container-mutations.routes.js';
 import { registerLocationReadRoutes } from './routes/location-read.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
@@ -177,6 +171,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerLayoutReadRoutes(app, { getAuthContext, getUserSupabase });
   registerLayoutMutationsRoutes(app, { getAuthContext, getLayoutService });
   registerContainerReadRoutes(app, { getAuthContext, getContainersService, getUserSupabase });
+  registerContainerMutationsRoutes(app, { getAuthContext, getContainersService, getInventoryService });
   registerLocationReadRoutes(app, { getAuthContext, getUserSupabase });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
@@ -504,44 +499,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerMeRoutes(app, { getAuthContext });
 
-  app.post('/api/containers', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const body = parseOrThrow(createContainerBodySchema, request.body);
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for container creation.');
-    }
-
-    const container = await getContainersService(auth).createContainer({
-      tenantId: auth.currentTenant.tenantId,
-      containerTypeId: body.containerTypeId,
-      externalCode: body.externalCode,
-      operationalRole: body.operationalRole,
-      createdBy: auth.user.id
-    });
-
-    return parseOrThrow(createContainerResponseSchema, {
-      containerId: container.id,
-      systemCode: container.systemCode,
-      externalCode: container.externalCode,
-      containerTypeId: container.containerTypeId,
-      status: container.status,
-      operationalRole: container.operationalRole
-    });
-  });
-
-
-
-  app.post('/api/containers/:containerId/remove', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const data = await getContainersService(auth).removeContainer(containerId, auth.user.id);
-    return parseOrThrow(removeContainerResponseSchema, data);
-  });
-
   app.post('/api/placement/place-at-location', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -614,38 +571,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     } catch (error) {
       throw mapExecutionSwapError(error) ?? error;
     }
-  });
-
-  app.post('/api/containers/:containerId/inventory', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const body = parseOrThrow(addInventoryToContainerBodySchema, request.body);
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
-    }
-
-    const inventoryService = getInventoryService(auth);
-    const rpcResult = await inventoryService.receiveInventoryUnit({
-      tenantId: auth.currentTenant.tenantId,
-      containerId,
-      productId: body.productId,
-      quantity: body.quantity,
-      uom: body.uom,
-      actorId: auth.user.id,
-      packagingState: body.packagingState,
-      productPackagingLevelId: body.productPackagingLevelId ?? null,
-      packCount: body.packCount ?? null
-    });
-
-    return parseOrThrow(
-      inventoryItemResponseSchema,
-      mapInventoryUnitRowToLegacyInventoryItemDomain({
-        ...rpcResult.inventoryUnit,
-        product: rpcResult.product as ProductRow
-      })
-    );
   });
 
   app.post('/api/inventory/:inventoryUnitId/transfer', async (request, reply) => {
