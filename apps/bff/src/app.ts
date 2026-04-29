@@ -20,7 +20,6 @@ import {
   operationsCellsRuntimeResponseSchema,
   nonRackLocationsResponseSchema,
   patchLocationGeometryBodySchema,
-  rackInspectorPayloadSchema
 } from './schemas.js';
 import {
   mapLocationOccupancyRowToDomain,
@@ -42,7 +41,6 @@ import {
   type ProductAwareRow,
 } from './inventory-product-resolution.js';
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
-import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
 import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
@@ -59,6 +57,7 @@ import { registerContainerMovementRoutes } from './routes/container-movement.rou
 import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
 import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js';
 import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
+import { registerRackInspectorRoutes } from './routes/rack-inspector.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -358,25 +357,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerPickingPlanningPreviewRoutes(app, { getAuthContext, getPickingPlanningPreviewService });
 
   registerPickingExecutionRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
-
-  // ── Rack Inspector ──────────────────────────────────────────────────────────
-
-  app.get('/api/racks/:rackId/inspector', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const rackId = parseOrThrow(idResponseSchema, { id: (request.params as { rackId: string }).rackId }).id;
-    const supabase = getUserSupabase(auth);
-    const rackInspectorRepo = createRackInspectorRepo(supabase);
-    const payload = await rackInspectorRepo.getRackInspector(rackId);
-
-    if (!payload) {
-      throw new ApiError(404, 'RACK_NOT_FOUND', `Rack ${rackId} not found.`);
-    }
-
-    return parseOrThrow(rackInspectorPayloadSchema, payload);
-  });
-
+  registerRackInspectorRoutes(app, { getAuthContext, getUserSupabase });
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
 
   app.setErrorHandler((error, request, reply) => {
