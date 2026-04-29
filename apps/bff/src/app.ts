@@ -27,12 +27,9 @@ import {
   containerTypesResponseSchema,
   createContainerBodySchema,
   listContainersQuerySchema,
-  createFloorBodySchema,
   createLayoutDraftBodySchema,
   placementPlaceAtLocationBodySchema,
   currentWorkspaceResponseSchema,
-  floorWorkspaceResponseSchema,
-  floorsResponseSchema,
   idResponseSchema,
   inventoryItemResponseSchema,
   layoutDraftResponseSchema,
@@ -103,6 +100,7 @@ import { type StoragePresetsService } from './features/storage-presets/service.j
 import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
 import { registerSitesRoutes } from './routes/sites.routes.js';
+import { registerFloorsRoutes } from './routes/floors.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -181,6 +179,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerHealthRoutes(app, { getHealthSupabase });
 
   registerSitesRoutes(app, { getAuthContext, getSitesService });
+  registerFloorsRoutes(app, { getAuthContext, getSitesService, getFloorsService, getUserSupabase });
 
   app.get('/api/container-types', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -739,14 +738,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     });
   });
 
-  app.get('/api/sites/:siteId/floors', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const siteId = parseOrThrow(idResponseSchema, { id: (request.params as { siteId: string }).siteId }).id;
-    const floors = await getSitesService(auth).listFloors(siteId);
-    return parseOrThrow(floorsResponseSchema, floors);
-  });
 
   app.get('/api/containers/:containerId', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -949,14 +940,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
   });
 
-  app.post('/api/floors', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const body = parseOrThrow(createFloorBodySchema, request.body);
-    const id = await getFloorsService(auth).createFloor(body);
-    return parseOrThrow(idResponseSchema, { id });
-  });
 
   app.get('/api/floors/:floorId/layout-draft', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -969,24 +952,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(layoutDraftResponseSchema, draft);
   });
 
-  app.get('/api/floors/:floorId/workspace', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
-    const supabase = getUserSupabase(auth);
-    const layoutRepo = createLayoutRepo(supabase);
-    const [activeDraft, latestPublished] = await Promise.all([
-      layoutRepo.findActiveDraft(floorId),
-      layoutRepo.findLatestPublished(floorId)
-    ]);
-
-    return parseOrThrow(floorWorkspaceResponseSchema, {
-      floorId,
-      activeDraft,
-      latestPublished
-    });
-  });
 
   app.get('/api/floors/:floorId/published-layout', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
