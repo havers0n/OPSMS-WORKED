@@ -15,8 +15,7 @@ import {
   locationOccupancyRowsResponseSchema,
   locationReferenceResponseSchema,
   locationStorageSnapshotRowsResponseSchema,
-  nonRackLocationsResponseSchema,
-  patchLocationGeometryBodySchema
+  nonRackLocationsResponseSchema
 } from '../schemas.js';
 
 type LocationReadRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
@@ -135,29 +134,4 @@ export function registerLocationReadRoutes(app: FastifyInstance, deps: LocationR
     );
   });
 
-  app.patch('/api/locations/:locationId/geometry', async (request, reply) => {
-    const auth = await deps.getAuthContext(request, reply);
-    if (!auth) return;
-
-    const locationId = parseOrThrow(idResponseSchema, {
-      id: (request.params as { locationId: string }).locationId
-    }).id;
-    const body = parseOrThrow(patchLocationGeometryBodySchema, request.body);
-    const supabase = deps.getUserSupabase(auth);
-    const locationReadRepo = createLocationReadRepo(supabase);
-    const row = await locationReadRepo.updateLocationGeometry(locationId, body.floorX, body.floorY);
-
-    if (!row) {
-      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Location not found or is a rack slot' });
-    }
-
-    return {
-      id: row.id,
-      code: row.code,
-      locationType: row.location_type,
-      floorX: row.floor_x,
-      floorY: row.floor_y,
-      status: row.status
-    };
-  });
 }
