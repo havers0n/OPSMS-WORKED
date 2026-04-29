@@ -13,17 +13,12 @@ import {
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
-  moveContainerToLocationRequestBodySchema,
-  moveContainerToLocationResponseSchema,
-  swapContainersRequestBodySchema,
-  swapContainersResponseSchema,
   transferInventoryUnitRequestBodySchema,
   transferInventoryUnitResponseSchema,
   pickPartialInventoryUnitRequestBodySchema,
   pickPartialInventoryUnitResponseSchema,
   containerTypesResponseSchema,
   listContainersQuerySchema,
-  placementPlaceAtLocationBodySchema,
   currentWorkspaceResponseSchema,
   idResponseSchema,
   pickTasksResponseSchema,
@@ -48,9 +43,6 @@ import {
   mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
 } from './mappers.js';
-import {
-  mapPlacementError
-} from './features/placement/errors.js';
 import { type PlacementCommandService } from './features/placement/service.js';
 import { type OrdersService } from './features/orders/service.js';
 import { type WavesService } from './features/waves/service.js';
@@ -64,17 +56,15 @@ import { type LayoutService } from './features/layout/service.js';
 import { type ContainersService } from './features/containers/service.js';
 import { createExecutionService } from './features/execution/service.js';
 import {
-  mapExecutionLocationMoveError,
-  mapExecutionSwapError,
-  mapExecutionTransferError
-} from './features/execution/errors.js';
-import {
   attachProductsToRows,
   type ProductAwareRow,
 } from './inventory-product-resolution.js';
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
 import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
+import {
+  mapExecutionTransferError
+} from './features/execution/errors.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
 import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
@@ -89,6 +79,7 @@ import { registerLayoutMutationsRoutes } from './routes/layout-mutations.routes.
 import { registerContainerReadRoutes } from './routes/container-read.routes.js';
 import { registerContainerMutationsRoutes } from './routes/container-mutations.routes.js';
 import { registerLocationReadRoutes } from './routes/location-read.routes.js';
+import { registerContainerMovementRoutes } from './routes/container-movement.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -173,6 +164,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerContainerReadRoutes(app, { getAuthContext, getContainersService, getUserSupabase });
   registerContainerMutationsRoutes(app, { getAuthContext, getContainersService, getInventoryService });
   registerLocationReadRoutes(app, { getAuthContext, getUserSupabase });
+  registerContainerMovementRoutes(app, { getAuthContext, getPlacementService, getUserSupabase });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
   registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
@@ -498,80 +490,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
 
   registerMeRoutes(app, { getAuthContext });
-
-  app.post('/api/placement/place-at-location', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for placement writes.');
-    }
-
-    const body = parseOrThrow(placementPlaceAtLocationBodySchema, request.body);
-    const service = getPlacementService(auth);
-
-    try {
-      const result = await service.placeContainerAtLocation({
-        tenantId: auth.currentTenant.tenantId,
-        containerId: body.containerId,
-        locationId: body.locationId,
-        actorId: auth.user.id
-      });
-
-      return result;
-    } catch (error) {
-      const apiError = mapPlacementError(error);
-      if (apiError) {
-        throw apiError;
-      }
-
-      throw error;
-    }
-  });
-
-  app.post('/api/containers/:containerId/move-to-location', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const body = parseOrThrow(moveContainerToLocationRequestBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const executionService = createExecutionService(supabase);
-
-    try {
-      const result = await executionService.moveContainerCanonical({
-        containerId,
-        targetLocationId: body.targetLocationId,
-        actorId: auth.user.id
-      });
-
-      return parseOrThrow(moveContainerToLocationResponseSchema, result);
-    } catch (error) {
-      throw mapExecutionLocationMoveError(error) ?? error;
-    }
-  });
-
-  app.post('/api/containers/:containerId/swap', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
-    const body = parseOrThrow(swapContainersRequestBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const executionService = createExecutionService(supabase);
-
-    try {
-      const result = await executionService.swapContainersCanonical({
-        sourceContainerId: containerId,
-        targetContainerId: body.targetContainerId,
-        actorId: auth.user.id
-      });
-
-      return parseOrThrow(swapContainersResponseSchema, result);
-    } catch (error) {
-      throw mapExecutionSwapError(error) ?? error;
-    }
-  });
 
   app.post('/api/inventory/:inventoryUnitId/transfer', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
