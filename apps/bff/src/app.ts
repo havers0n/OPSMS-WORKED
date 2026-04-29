@@ -13,10 +13,6 @@ import {
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containersResponseSchema,
-  transferInventoryUnitRequestBodySchema,
-  transferInventoryUnitResponseSchema,
-  pickPartialInventoryUnitRequestBodySchema,
-  pickPartialInventoryUnitResponseSchema,
   containerTypesResponseSchema,
   listContainersQuerySchema,
   currentWorkspaceResponseSchema,
@@ -54,7 +50,6 @@ import { registerProductsRoutes } from './features/products/routes.js';
 import { createLayoutRepo } from './features/layout/repo.js';
 import { type LayoutService } from './features/layout/service.js';
 import { type ContainersService } from './features/containers/service.js';
-import { createExecutionService } from './features/execution/service.js';
 import {
   attachProductsToRows,
   type ProductAwareRow,
@@ -62,9 +57,6 @@ import {
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
 import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
-import {
-  mapExecutionTransferError
-} from './features/execution/errors.js';
 import { mapPickingError } from './features/picking/errors.js';
 import { createPickReadRepo } from './features/picking/pick-read-repo.js';
 import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
@@ -80,6 +72,7 @@ import { registerContainerReadRoutes } from './routes/container-read.routes.js';
 import { registerContainerMutationsRoutes } from './routes/container-mutations.routes.js';
 import { registerLocationReadRoutes } from './routes/location-read.routes.js';
 import { registerContainerMovementRoutes } from './routes/container-movement.routes.js';
+import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -490,53 +483,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
 
   registerMeRoutes(app, { getAuthContext });
-
-  app.post('/api/inventory/:inventoryUnitId/transfer', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const inventoryUnitId = parseOrThrow(idResponseSchema, { id: (request.params as { inventoryUnitId: string }).inventoryUnitId }).id;
-    const body = parseOrThrow(transferInventoryUnitRequestBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const executionService = createExecutionService(supabase);
-
-    try {
-      const result = await executionService.transferStock({
-        inventoryUnitId,
-        quantity: body.quantity,
-        targetContainerId: body.targetContainerId,
-        actorId: auth.user.id
-      });
-
-      return parseOrThrow(transferInventoryUnitResponseSchema, result);
-    } catch (error) {
-      throw mapExecutionTransferError(error) ?? error;
-    }
-  });
-
-  app.post('/api/inventory/:inventoryUnitId/pick-partial', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const inventoryUnitId = parseOrThrow(idResponseSchema, { id: (request.params as { inventoryUnitId: string }).inventoryUnitId }).id;
-    const body = parseOrThrow(pickPartialInventoryUnitRequestBodySchema, request.body);
-    const supabase = getUserSupabase(auth);
-    const executionService = createExecutionService(supabase);
-
-    try {
-      const result = await executionService.pickPartial({
-        inventoryUnitId,
-        quantity: body.quantity,
-        pickContainerId: body.pickContainerId,
-        actorId: auth.user.id
-      });
-
-      return parseOrThrow(pickPartialInventoryUnitResponseSchema, result);
-    } catch (error) {
-      throw mapExecutionTransferError(error) ?? error;
-    }
-  });
-
+  registerInventoryMovementRoutes(app, { getAuthContext, getUserSupabase });
 
 
   // ── Orders ───────────────────────────────────────────────────────────────────
