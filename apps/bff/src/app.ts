@@ -7,7 +7,6 @@ import type { BuildAppOptions } from './app-options.js';
 import { createRouteDeps } from './route-deps.js';
 import {
   addInventoryToContainerBodySchema,
-  cellsResponseSchema,
   containerCurrentLocationResponseSchema,
   locationReferenceResponseSchema,
   locationOccupancyRowsResponseSchema,
@@ -32,10 +31,8 @@ import {
   currentWorkspaceResponseSchema,
   idResponseSchema,
   inventoryItemResponseSchema,
-  layoutDraftResponseSchema,
   publishResponseSchema,
   publishLayoutDraftBodySchema,
-  publishedLayoutSummaryResponseSchema,
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
   saveLayoutDraftResponseSchema,
@@ -101,6 +98,7 @@ import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
 import { registerSitesRoutes } from './routes/sites.routes.js';
 import { registerFloorsRoutes } from './routes/floors.routes.js';
+import { registerLayoutReadRoutes } from './routes/layout-read.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -180,6 +178,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerSitesRoutes(app, { getAuthContext, getSitesService });
   registerFloorsRoutes(app, { getAuthContext, getSitesService, getFloorsService, getUserSupabase });
+  registerLayoutReadRoutes(app, { getAuthContext, getUserSupabase });
 
   app.get('/api/container-types', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -458,19 +457,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     };
   });
 
-  app.get('/api/floors/:floorId/published-cells', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const floorId = parseOrThrow(idResponseSchema, {
-      id: (request.params as { floorId: string }).floorId
-    }).id;
-    const supabase = getUserSupabase(auth);
-    const layoutRepo = createLayoutRepo(supabase);
-    const cells = await layoutRepo.listPublishedCells(floorId);
-
-    return parseOrThrow(cellsResponseSchema, cells);
-  });
 
   app.get('/api/floors/:floorId/operations-cells', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -940,29 +926,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
   });
 
-
-  app.get('/api/floors/:floorId/layout-draft', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
-    const supabase = getUserSupabase(auth);
-    const layoutRepo = createLayoutRepo(supabase);
-    const draft = await layoutRepo.findActiveDraft(floorId);
-    return parseOrThrow(layoutDraftResponseSchema, draft);
-  });
-
-
-  app.get('/api/floors/:floorId/published-layout', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const floorId = parseOrThrow(idResponseSchema, { id: (request.params as { floorId: string }).floorId }).id;
-    const supabase = getUserSupabase(auth);
-    const layoutRepo = createLayoutRepo(supabase);
-    const summary = await layoutRepo.findPublishedLayoutSummary(floorId);
-    return parseOrThrow(publishedLayoutSummaryResponseSchema, summary);
-  });
 
   app.post('/api/layout-drafts', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
