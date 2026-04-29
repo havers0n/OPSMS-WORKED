@@ -30,7 +30,6 @@ import {
   createFloorBodySchema,
   createLayoutDraftBodySchema,
   placementPlaceAtLocationBodySchema,
-  createSiteBodySchema,
   currentWorkspaceResponseSchema,
   floorWorkspaceResponseSchema,
   floorsResponseSchema,
@@ -43,7 +42,6 @@ import {
   removeContainerResponseSchema,
   saveLayoutDraftBodySchema,
   saveLayoutDraftResponseSchema,
-  sitesResponseSchema,
   persistedDraftValidationResponseSchema,
   pickTasksResponseSchema,
   pickTaskDetailResponseSchema,
@@ -104,6 +102,7 @@ import { registerProductLocationRolesRoutes } from './features/product-location-
 import { type StoragePresetsService } from './features/storage-presets/service.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
+import { registerSitesRoutes } from './routes/sites.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -181,13 +180,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerHealthRoutes(app, { getHealthSupabase });
 
-  app.get('/api/sites', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const sites = await getSitesService(auth).listSites();
-    return parseOrThrow(sitesResponseSchema, sites);
-  });
+  registerSitesRoutes(app, { getAuthContext, getSitesService });
 
   app.get('/api/container-types', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -718,24 +711,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   registerMeRoutes(app, { getAuthContext });
-
-  app.post('/api/sites', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const body = parseOrThrow(createSiteBodySchema, request.body);
-    if (!auth.currentTenant) {
-      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for site creation.');
-    }
-
-    const id = await getSitesService(auth).createSite({
-      tenantId: auth.currentTenant.tenantId,
-      code: body.code,
-      name: body.name,
-      timezone: body.timezone
-    });
-    return parseOrThrow(idResponseSchema, { id });
-  });
 
   app.post('/api/containers', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
