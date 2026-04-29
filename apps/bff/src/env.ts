@@ -1,12 +1,29 @@
+function requiredEnv(name: 'SUPABASE_URL' | 'SUPABASE_ANON_KEY'): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+function parsePort(value: string | undefined, fallback: number): number {
+  const resolved = value ?? String(fallback);
+  const parsed = Number(resolved);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid BFF_PORT: "${resolved}". Expected a positive integer.`);
+  }
+
+  return parsed;
+}
+
 export const env = {
   serviceName: process.env.BFF_SERVICE_NAME ?? '@wos/bff',
   logLevel: process.env.BFF_LOG_LEVEL ?? 'info',
-  port: Number(process.env.BFF_PORT ?? '8787'),
+  port: parsePort(process.env.BFF_PORT, 8787),
   host: process.env.BFF_HOST ?? '127.0.0.1',
-  supabaseUrl: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:54421',
-  supabaseAnonKey:
-    process.env.SUPABASE_ANON_KEY ??
-    process.env.VITE_SUPABASE_ANON_KEY ??
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+  supabaseUrl: requiredEnv('SUPABASE_URL'),
+  supabaseAnonKey: requiredEnv('SUPABASE_ANON_KEY'),
   corsOrigin: process.env.BFF_CORS_ORIGIN ?? /http:\/\/127\.0\.0\.1:(4173|5173)$/
 };
