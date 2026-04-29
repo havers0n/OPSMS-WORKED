@@ -313,9 +313,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   app.get('/ready', async (_request, reply) => {
     const supabase = getHealthSupabase();
-    const { error } = await supabase.from('sites').select('id').limit(1);
+    const { data, error } = await supabase.rpc('healthcheck');
 
-    if (error) {
+    if (error || data !== 'ok') {
       throw new ApiError(503, 'BFF_NOT_READY', 'Supabase connectivity check failed.');
     }
 
