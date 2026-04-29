@@ -102,6 +102,8 @@ import { createPickReadRepo } from './features/picking/pick-read-repo.js';
 import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 import { type StoragePresetsService } from './features/storage-presets/service.js';
+import { registerHealthRoutes } from './routes/health.routes.js';
+import { registerMeRoutes } from './routes/me.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -177,46 +179,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     );
   });
 
-  app.get('/health', async () =>
-    parseOrThrow(
-      z.object({
-        status: z.literal('ok'),
-        service: z.string(),
-        time: z.string()
-      }),
-      {
-        status: 'ok',
-        service: env.serviceName,
-        time: new Date().toISOString()
-      }
-    )
-  );
-
-  app.get('/ready', async (_request, reply) => {
-    const supabase = getHealthSupabase();
-    const { data, error } = await supabase.rpc('healthcheck');
-
-    if (error || data !== 'ok') {
-      throw new ApiError(503, 'BFF_NOT_READY', 'Supabase connectivity check failed.');
-    }
-
-    return parseOrThrow(
-      z.object({
-        status: z.literal('ready'),
-        service: z.string(),
-        checks: z.object({
-          supabase: z.literal('ok')
-        })
-      }),
-      {
-        status: 'ready',
-        service: env.serviceName,
-        checks: {
-          supabase: 'ok'
-        }
-      }
-    );
-  });
+  registerHealthRoutes(app, { getHealthSupabase });
 
   app.get('/api/sites', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -754,20 +717,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return parseOrThrow(containerStorageSnapshotResponseSchema, rows.map(mapContainerStorageSnapshotRowToDomain));
   });
 
-  app.get('/api/me', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    return parseOrThrow(currentWorkspaceResponseSchema, {
-      user: {
-        id: auth.user.id,
-        email: auth.user.email ?? 'unknown@local.invalid',
-        displayName: auth.displayName
-      },
-      currentTenantId: auth.currentTenant?.tenantId ?? null,
-      memberships: auth.memberships
-    });
-  });
+  registerMeRoutes(app, { getAuthContext });
 
   app.post('/api/sites', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
