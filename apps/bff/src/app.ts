@@ -26,17 +26,11 @@ import {
   containerTypesResponseSchema,
   createContainerBodySchema,
   listContainersQuerySchema,
-  createLayoutDraftBodySchema,
   placementPlaceAtLocationBodySchema,
   currentWorkspaceResponseSchema,
   idResponseSchema,
   inventoryItemResponseSchema,
-  publishResponseSchema,
-  publishLayoutDraftBodySchema,
   removeContainerResponseSchema,
-  saveLayoutDraftBodySchema,
-  saveLayoutDraftResponseSchema,
-  persistedDraftValidationResponseSchema,
   pickTasksResponseSchema,
   pickTaskDetailResponseSchema,
   operationsCellsRuntimeResponseSchema,
@@ -59,7 +53,6 @@ import {
   mapLocationStorageSnapshotRowToDomain,
   mapContainerStorageSnapshotRowToDomain,
   mapInventoryUnitRowToLegacyInventoryItemDomain,
-  mapPersistedDraftValidationResult
 } from './mappers.js';
 import {
   mapPlacementError
@@ -99,6 +92,7 @@ import { registerMeRoutes } from './routes/me.routes.js';
 import { registerSitesRoutes } from './routes/sites.routes.js';
 import { registerFloorsRoutes } from './routes/floors.routes.js';
 import { registerLayoutReadRoutes } from './routes/layout-read.routes.js';
+import { registerLayoutMutationsRoutes } from './routes/layout-mutations.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -179,6 +173,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerSitesRoutes(app, { getAuthContext, getSitesService });
   registerFloorsRoutes(app, { getAuthContext, getSitesService, getFloorsService, getUserSupabase });
   registerLayoutReadRoutes(app, { getAuthContext, getUserSupabase });
+  registerLayoutMutationsRoutes(app, { getAuthContext, getLayoutService });
 
   app.get('/api/container-types', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -927,53 +922,6 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
 
-  app.post('/api/layout-drafts', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const body = parseOrThrow(createLayoutDraftBodySchema, request.body);
-    const layoutService = getLayoutService(auth);
-    const id = await layoutService.createDraft(body.floorId, auth.user.id);
-
-    return parseOrThrow(idResponseSchema, { id });
-  });
-
-  app.post('/api/layout-drafts/save', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const body = parseOrThrow(saveLayoutDraftBodySchema, request.body);
-    const layoutService = getLayoutService(auth);
-    const result = await layoutService.saveDraft(body.layoutDraft, auth.user.id);
-
-    return parseOrThrow(saveLayoutDraftResponseSchema, result);
-  });
-
-  app.post('/api/layout-drafts/:layoutVersionId/validate', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
-    const layoutService = getLayoutService(auth);
-    const result = await layoutService.validateVersion(layoutVersionId);
-
-    return parseOrThrow(
-      persistedDraftValidationResponseSchema,
-      mapPersistedDraftValidationResult(result)
-    );
-  });
-
-  app.post('/api/layout-drafts/:layoutVersionId/publish', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
-    const body = parseOrThrow(publishLayoutDraftBodySchema, request.body);
-    const layoutService = getLayoutService(auth);
-    const result = await layoutService.publishDraft(layoutVersionId, body.expectedDraftVersion, auth.user.id);
-
-    return parseOrThrow(publishResponseSchema, result);
-  });
 
   // ── Orders ───────────────────────────────────────────────────────────────────
 
