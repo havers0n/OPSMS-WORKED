@@ -17,12 +17,7 @@ import {
   listContainersQuerySchema,
   currentWorkspaceResponseSchema,
   idResponseSchema,
-  pickTasksResponseSchema,
-  pickTaskDetailResponseSchema,
   operationsCellsRuntimeResponseSchema,
-  allocatePickStepsResponseSchema,
-  executePickStepBodySchema,
-  executePickStepResponseSchema,
   nonRackLocationsResponseSchema,
   patchLocationGeometryBodySchema,
   rackInspectorPayloadSchema
@@ -35,7 +30,6 @@ import {
 import { type PlacementCommandService } from './features/placement/service.js';
 import { type OrdersService } from './features/orders/service.js';
 import { type WavesService } from './features/waves/service.js';
-import { createOrdersRepo } from './features/orders/repo.js';
 import { registerOrdersRoutes } from './features/orders/routes.js';
 import { registerWavesRoutes } from './features/waves/routes.js';
 import { type ProductsService } from './features/products/service.js';
@@ -50,8 +44,6 @@ import {
 import { createLocationReadRepo } from './features/location-read/location-read-repo.js';
 import { createRackInspectorRepo } from './features/rack-inspector/rack-inspector-repo.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
-import { mapPickingError } from './features/picking/errors.js';
-import { createPickReadRepo } from './features/picking/pick-read-repo.js';
 import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
@@ -66,6 +58,7 @@ import { registerLocationReadRoutes } from './routes/location-read.routes.js';
 import { registerContainerMovementRoutes } from './routes/container-movement.routes.js';
 import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
 import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js';
+import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
 
 function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
   return schema.parse(payload);
@@ -364,78 +357,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerOrdersRoutes(app, { getAuthContext, getUserSupabase, getOrdersService });
   registerPickingPlanningPreviewRoutes(app, { getAuthContext, getPickingPlanningPreviewService });
 
-  app.get('/api/orders/:orderId/execution', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const orderId = parseOrThrow(idResponseSchema, { id: (request.params as { orderId: string }).orderId }).id;
-    const supabase = getUserSupabase(auth);
-    const ordersRepo = createOrdersRepo(supabase);
-    const execution = await ordersRepo.listOrderExecutionPickTasks(orderId);
-
-    return parseOrThrow(pickTasksResponseSchema, execution);
-  });
-
-  app.get('/api/pick-tasks/:taskId', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const taskId = parseOrThrow(
-      idResponseSchema,
-      { id: (request.params as { taskId: string }).taskId }
-    ).id;
-    const supabase = getUserSupabase(auth);
-    const pickReadRepo = createPickReadRepo(supabase);
-    const detail = await pickReadRepo.findPickTaskDetail(taskId);
-
-    if (!detail) {
-      throw new ApiError(404, 'PICK_TASK_NOT_FOUND', `Pick task ${taskId} not found.`);
-    }
-
-    return parseOrThrow(pickTaskDetailResponseSchema, detail);
-  });
-
-  app.post('/api/pick-tasks/:taskId/allocate', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const taskId = parseOrThrow(
-      idResponseSchema,
-      { id: (request.params as { taskId: string }).taskId }
-    ).id;
-    const pickingService = getPickingService(auth);
-
-    try {
-      const result = await pickingService.allocatePickSteps({ taskId });
-      return parseOrThrow(allocatePickStepsResponseSchema, result);
-    } catch (error) {
-      throw mapPickingError(error) ?? error;
-    }
-  });
-
-  app.post('/api/pick-steps/:stepId/execute', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-
-    const stepId = parseOrThrow(
-      idResponseSchema,
-      { id: (request.params as { stepId: string }).stepId }
-    ).id;
-    const body = parseOrThrow(executePickStepBodySchema, request.body);
-    const pickingService = getPickingService(auth);
-
-    try {
-      const result = await pickingService.executePickStep({
-        stepId,
-        qtyActual: body.qtyActual,
-        pickContainerId: body.pickContainerId,
-        actorId: auth.user.id
-      });
-      return parseOrThrow(executePickStepResponseSchema, result);
-    } catch (error) {
-      throw mapPickingError(error) ?? error;
-    }
-  });
+  registerPickingExecutionRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
 
   // ── Rack Inspector ──────────────────────────────────────────────────────────
 
