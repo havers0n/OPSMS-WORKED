@@ -2654,6 +2654,7 @@ describe('buildApp', () => {
 
   it('exposes readiness when the db probe succeeds', async () => {
     const healthSupabase = createSupabaseStub();
+    healthSupabase.rpc.mockResolvedValue({ data: 'ok', error: null });
     const app = buildApp({
       getHealthSupabase: vi.fn(() => healthSupabase as never)
     });
@@ -3501,6 +3502,30 @@ describe('buildApp', () => {
     });
     expect(response.json().requestId).toBeTruthy();
     expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('returns not-ready when the healthcheck rpc fails', async () => {
+    const healthSupabase = createSupabaseStub();
+    healthSupabase.rpc.mockResolvedValue({
+      data: null,
+      error: { message: 'connection failed' }
+    });
+    const app = buildApp({
+      getHealthSupabase: vi.fn(() => healthSupabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/ready'
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      code: 'BFF_NOT_READY',
+      message: 'Supabase connectivity check failed.'
+    });
 
     await app.close();
   });
