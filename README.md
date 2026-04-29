@@ -109,27 +109,22 @@ npm install
 Base template: [`.env.example`](./.env.example)
 
 ```env
-VITE_SUPABASE_URL=
+BFF_PORT=8787
+BFF_HOST=127.0.0.1
+BFF_LOG_LEVEL=info
+BFF_CORS_ORIGIN=http://127.0.0.1:5173
+SUPABASE_URL=http://127.0.0.1:54421
+SUPABASE_ANON_KEY=
+
+VITE_SUPABASE_URL=http://127.0.0.1:54421
 VITE_SUPABASE_ANON_KEY=
-VITE_BFF_URL=/api
+VITE_BFF_URL=http://127.0.0.1:8787/api
 VITE_ENABLE_DEV_AUTO_LOGIN=false
 VITE_DEV_AUTH_EMAIL=admin@wos.local
 VITE_DEV_AUTH_PASSWORD=warehouse123
 ```
 
-For local frontend development, these values are enough:
-
-- `VITE_SUPABASE_URL=http://127.0.0.1:55821`
-- `VITE_BFF_URL=http://127.0.0.1:8787/api`
-
-`apps/bff` can read:
-
-- `BFF_PORT`, default `8787`
-- `BFF_HOST`, default `127.0.0.1`
-- `SUPABASE_URL` or `VITE_SUPABASE_URL`
-- `SUPABASE_ANON_KEY` or `VITE_SUPABASE_ANON_KEY`
-
-If BFF variables are not set, the service falls back to local defaults aligned with `apps/supabase/config.toml`.
+Backend (`apps/bff`) requires `SUPABASE_URL` and `SUPABASE_ANON_KEY` and reads only backend-prefixed variables for service settings.
 
 ## Local development
 
@@ -142,9 +137,9 @@ supabase start
 
 Current local ports from `apps/supabase/config.toml`:
 
-- API: `http://127.0.0.1:55821`
-- Studio: `http://127.0.0.1:55823`
-- DB: `127.0.0.1:55822`
+- API: `http://127.0.0.1:54421`
+- Studio: `http://127.0.0.1:54423`
+- DB: `127.0.0.1:54422`
 
 2. Create `.env` in the repo root based on `.env.example`.
 
