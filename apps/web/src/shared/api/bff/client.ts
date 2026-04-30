@@ -25,7 +25,7 @@ export class BffRequestError extends Error {
 async function buildHeaders(init?: RequestInit) {
   const headers = new Headers(init?.headers);
 
-  if (init?.body !== undefined) {
+  if (init?.body !== undefined && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -38,6 +38,24 @@ async function buildHeaders(init?: RequestInit) {
   }
 
   return headers;
+}
+
+function isJsonResponse(response: Response): boolean {
+  const contentType = response.headers.get('content-type');
+  return contentType ? /\bapplication\/json\b|\+json\b/i.test(contentType) : false;
+}
+
+async function readJsonBody<T>(response: Response): Promise<T | undefined> {
+  if (response.status === 204 || !isJsonResponse(response)) {
+    return undefined;
+  }
+
+  const body = await response.text();
+  if (!body.trim()) {
+    return undefined;
+  }
+
+  return JSON.parse(body) as T;
 }
 
 export function resolveBffUrl(baseUrl: string, path: string): string {
@@ -63,7 +81,7 @@ export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T
   });
 
   if (!response.ok) {
-    const errorBody = (await response.json().catch(() => null)) as BffErrorBody | null;
+    const errorBody = (await readJsonBody<BffErrorBody>(response).catch(() => null)) ?? null;
     const requestId = errorBody?.requestId ?? response.headers.get('x-request-id');
     const errorId = errorBody?.errorId ?? null;
     const message =
@@ -73,5 +91,5 @@ export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T
     throw new BffRequestError(response.status, errorBody?.code ?? null, message, requestId, errorId, errorBody?.details ?? null);
   }
 
-  return (await response.json()) as T;
+  return (await readJsonBody<T>(response)) as T;
 }
