@@ -7,6 +7,7 @@ import {
   pickingPlanningPreviewRequestSchema,
   pickingPlanningPreviewWaveRequestSchema
 } from './schema.js';
+import { parseOrThrow } from '../../validation.js';
 
 type GetAuthContext = (
   request: FastifyRequest,
@@ -16,10 +17,6 @@ type GetAuthContext = (
 type GetPickingPlanningPreviewService = (
   context: AuthenticatedRequestContext
 ) => PickingPlanningPreviewService;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerPickingPlanningPreviewRoutes(
   app: FastifyInstance,

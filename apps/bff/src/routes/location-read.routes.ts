@@ -17,12 +17,9 @@ import {
   locationStorageSnapshotRowsResponseSchema,
   nonRackLocationsResponseSchema
 } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type LocationReadRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerLocationReadRoutes(app: FastifyInstance, deps: LocationReadRouteDeps): void {
   app.get('/api/locations/:locationId/containers', async (request, reply) => {

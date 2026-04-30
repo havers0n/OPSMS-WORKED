@@ -12,12 +12,9 @@ import {
 import { createOrdersRepo } from '../features/orders/repo.js';
 import { mapPickingError } from '../features/picking/errors.js';
 import { createPickReadRepo } from '../features/picking/pick-read-repo.js';
+import { parseOrThrow } from '../validation.js';
 
 type PickingExecutionRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase' | 'getPickingService'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerPickingExecutionRoutes(app: FastifyInstance, deps: PickingExecutionRouteDeps): void {
   app.get('/api/orders/:orderId/execution', async (request, reply) => {

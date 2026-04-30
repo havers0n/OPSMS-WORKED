@@ -1,12 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { currentWorkspaceResponseSchema } from '../schemas.js';
 import type { RouteDeps } from '../route-deps.js';
+import { parseOrThrow } from '../validation.js';
 
 type MeRouteDeps = Pick<RouteDeps, 'getAuthContext'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerMeRoutes(app: FastifyInstance, deps: MeRouteDeps): void {
   app.get('/api/me', async (request, reply) => {

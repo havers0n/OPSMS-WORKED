@@ -4,12 +4,9 @@ import { env } from '../env.js';
 import { ApiError } from '../errors.js';
 
 import type { RouteDeps } from '../route-deps.js';
+import { parseOrThrow } from '../validation.js';
 
 type HealthRouteDeps = Pick<RouteDeps, 'getHealthSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerHealthRoutes(app: FastifyInstance, deps: HealthRouteDeps): void {
   app.get('/health', async () =>

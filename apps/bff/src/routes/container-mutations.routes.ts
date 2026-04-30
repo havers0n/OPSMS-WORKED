@@ -13,12 +13,9 @@ import {
   removeContainerResponseSchema,
 } from '../schemas.js';
 import { type ProductRow } from '../inventory-product-resolution.js';
+import { parseOrThrow } from '../validation.js';
 
 type ContainerMutationsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getContainersService' | 'getInventoryService'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerContainerMutationsRoutes(app: FastifyInstance, deps: ContainerMutationsRouteDeps): void {
   app.post('/api/containers', async (request, reply) => {

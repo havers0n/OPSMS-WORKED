@@ -13,6 +13,7 @@ import {
 import { waveNotFound } from './errors.js';
 import { createWavesRepo } from './repo.js';
 import type { WavesService } from './service.js';
+import { parseOrThrow } from '../../validation.js';
 
 type GetAuthContext = (
   request: FastifyRequest,
@@ -21,10 +22,6 @@ type GetAuthContext = (
 
 type GetUserSupabase = (context: AuthenticatedRequestContext) => SupabaseClient;
 type GetWavesService = (context: AuthenticatedRequestContext) => WavesService;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerWavesRoutes(
   app: FastifyInstance,

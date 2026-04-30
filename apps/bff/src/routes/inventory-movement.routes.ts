@@ -9,12 +9,9 @@ import {
 } from '../schemas.js';
 import { createExecutionService } from '../features/execution/service.js';
 import { mapExecutionTransferError } from '../features/execution/errors.js';
+import { parseOrThrow } from '../validation.js';
 
 type InventoryMovementRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerInventoryMovementRoutes(app: FastifyInstance, deps: InventoryMovementRouteDeps): void {
   app.post('/api/inventory/:inventoryUnitId/transfer', async (request, reply) => {

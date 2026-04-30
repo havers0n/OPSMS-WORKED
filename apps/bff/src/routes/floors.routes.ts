@@ -2,12 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { createLayoutRepo } from '../features/layout/repo.js';
 import { createFloorBodySchema, floorWorkspaceResponseSchema, floorsResponseSchema, idResponseSchema } from '../schemas.js';
 import type { RouteDeps } from '../route-deps.js';
+import { parseOrThrow } from '../validation.js';
 
 type FloorsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getFloorsService' | 'getSitesService' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerFloorsRoutes(app: FastifyInstance, deps: FloorsRouteDeps): void {
   app.get('/api/sites/:siteId/floors', async (request, reply) => {

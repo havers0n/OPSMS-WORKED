@@ -18,12 +18,9 @@ import {
   idResponseSchema,
   listContainersQuerySchema
 } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type ContainerReadRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getContainersService' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerContainerReadRoutes(app: FastifyInstance, deps: ContainerReadRouteDeps): void {
   app.get('/api/container-types', async (request, reply) => {
