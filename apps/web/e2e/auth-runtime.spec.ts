@@ -1,0 +1,100 @@
+import { expect, test, type Page } from '@playwright/test';
+import { signInToWarehouse } from './support/auth';
+import { adminClient, resetWarehouseData } from './support/local-supabase';
+
+const credentials = {
+  email: 'admin@wos.local',
+  password: 'warehouse123'
+};
+
+async function ensureAuthUser() {
+  const existingUsers = await adminClient.auth.admin.listUsers();
+  if (existingUsers.error) {
+    throw existingUsers.error;
+  }
+
+  const existingUser = existingUsers.data.users.find((user) => user.email === credentials.email);
+  if (existingUser) {
+    return;
+  }
+
+  const createdUser = await adminClient.auth.admin.createUser({
+    email: credentials.email,
+    password: credentials.password,
+    email_confirm: true
+  });
+
+  if (createdUser.error) {
+    throw createdUser.error;
+  }
+}
+
+async function fillCredentials(page: Page) {
+  await page.getByLabel('Email').fill(credentials.email);
+  await page.getByLabel('Password').fill(credentials.password);
+}
+
+test.describe('auth runtime smoke', () => {
+  test('anonymous protected navigation resolves to login without an auth loading loop', async ({ page }) => {
+    await page.goto('/operations');
+
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Sign in to the active warehouse workspace.' })).toBeVisible();
+    await expect(page.getByText('Signing in to the warehouse workspace...')).toHaveCount(0);
+  });
+
+  test('login, workspace session, refresh, and sign out keep the protected app shell coherent', async ({ page }) => {
+    await resetWarehouseData();
+
+    const meStatuses: number[] = [];
+    await page.route('**/api/me', async (route) => {
+      const response = await route.fetch();
+      meStatuses.push(response.status());
+      await route.fulfill({ response });
+    });
+
+    await signInToWarehouse(page);
+
+    expect(meStatuses).toContain(200);
+    await expect(page.getByText('Bootstrap Warehouse Setup')).toBeVisible();
+
+    await page.goto('/operations');
+    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.reload();
+    await expect(page).toHaveURL(/\/operations$/);
+    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Sign Out' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Sign in to the active warehouse workspace.' })).toBeVisible();
+  });
+
+  test('workspace-unavailable session shows access screen and still signs out', async ({ page }) => {
+    await ensureAuthUser();
+
+    await page.route('**/api/me', async (route) => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 'WORKSPACE_UNAVAILABLE',
+          message: 'No workspace assigned'
+        })
+      });
+    });
+
+    await page.goto('/operations');
+    await expect(page).toHaveURL(/\/login$/);
+
+    await fillCredentials(page);
+    await page.locator('section').filter({ has: page.getByLabel('Email') }).getByRole('button').last().click();
+
+    await expect(page.getByText('Workspace Access')).toBeVisible();
+    await expect(page.getByText('No workspace assigned')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Sign in to the active warehouse workspace.' })).toBeVisible();
+  });
+});
