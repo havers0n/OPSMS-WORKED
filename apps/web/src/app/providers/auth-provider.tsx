@@ -5,28 +5,10 @@ import { resetEditorStore } from '@/widgets/warehouse-editor/model/editor-store'
 import { resetNavigationStore } from '@/widgets/warehouse-editor/model/v2/navigation-store';
 import { resetSelectionStore } from '@/widgets/warehouse-editor/model/v2/selection-store';
 import { resetTaskStore } from '@/widgets/warehouse-editor/model/v2/task-store';
-import { bffRequest } from '@/shared/api/bff/client';
 import { queryClient } from '@/shared/api/supabase/query-client';
 import { resolveAuthenticatedUser, signInWithPassword, signOutSession, signUpWithPassword } from '@/shared/api/supabase/auth';
 import { useSupabaseAuthState } from '@/shared/api/supabase/use-supabase-auth-state';
-import { BffRequestError } from '@/shared/api/bff/client';
-
-type TenantMembership = {
-  tenantId: string;
-  tenantCode: string;
-  tenantName: string;
-  role: 'platform_admin' | 'tenant_admin' | 'operator';
-};
-
-type WorkspaceSession = {
-  user: {
-    id: string;
-    email: string;
-    displayName: string;
-  };
-  currentTenantId: string | null;
-  memberships: TenantMembership[];
-};
+import { resolveWorkspaceSession, useWorkspaceSession, type TenantMembership } from '@/shared/api/bff/use-workspace-session';
 
 type AuthContextValue = {
   isReady: boolean;
@@ -50,10 +32,6 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: async () => undefined
 });
 
-async function resolveWorkspaceSession(): Promise<WorkspaceSession> {
-  return bffRequest<WorkspaceSession>('/me');
-}
-
 function resetLocalWorkspaceState() {
   queryClient.clear();
   resetUiStore();
@@ -65,6 +43,7 @@ function resetLocalWorkspaceState() {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const supabaseAuth = useSupabaseAuthState();
+  const workspaceSession = useWorkspaceSession(supabaseAuth.user);
   const [state, setState] = useState<AuthContextValue>({
     isReady: false,
     user: null,
@@ -78,10 +57,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!supabaseAuth.isReady) {
+      return;
+    }
 
-    async function applyAnonymousState() {
-      if (!isMounted) return;
+    setError(null);
+
+    if (!supabaseAuth.user) {
       resetLocalWorkspaceState();
       setState((current) => ({
         ...current,
@@ -91,58 +73,27 @@ export function AuthProvider({ children }: PropsWithChildren) {
         memberships: [],
         workspaceError: null
       }));
+      return;
     }
 
-    async function applyWorkspaceForUser(user: User) {
-      try {
-        const workspaceSession = await resolveWorkspaceSession();
-        if (!isMounted) return;
-        setState((current) => ({
-          ...current,
-          isReady: true,
-          user,
-          currentTenantId: workspaceSession.currentTenantId,
-          memberships: workspaceSession.memberships,
-          workspaceError: null
-        }));
-      } catch (authError) {
-        if (!isMounted) return;
-        if (authError instanceof BffRequestError && authError.code === 'WORKSPACE_UNAVAILABLE') {
-          setState((current) => ({
-            ...current,
-            isReady: true,
-            user,
-            currentTenantId: null,
-            memberships: [],
-            workspaceError: authError.message
-          }));
-          return;
-        }
-        throw authError;
-      }
+    if (workspaceSession.error) {
+      setError(workspaceSession.error);
+      return;
     }
 
-    if (!supabaseAuth.isReady) {
-      return () => {
-        isMounted = false;
-      };
+    if (!workspaceSession.isReady) {
+      return;
     }
 
-    setError(null);
-
-    if (!supabaseAuth.user) {
-      void applyAnonymousState();
-    } else {
-      void applyWorkspaceForUser(supabaseAuth.user).catch((authError) => {
-        if (!isMounted) return;
-        setError(authError instanceof Error ? authError.message : 'Failed to initialize authentication');
-      });
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [supabaseAuth.isReady, supabaseAuth.user]);
+    setState((current) => ({
+      ...current,
+      isReady: true,
+      user: supabaseAuth.user,
+      currentTenantId: workspaceSession.currentTenantId,
+      memberships: workspaceSession.memberships,
+      workspaceError: workspaceSession.workspaceError
+    }));
+  }, [supabaseAuth.isReady, supabaseAuth.user, workspaceSession]);
 
   const startupError = supabaseAuth.error ?? error;
 
