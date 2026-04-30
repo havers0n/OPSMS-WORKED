@@ -123,6 +123,20 @@ export async function getCurrentSessionUser() {
   return user;
 }
 
+export async function resolveAuthenticatedUser(retries = 10, delayMs = 150): Promise<User | null> {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    const user = await getCurrentSessionUser();
+
+    if (user) {
+      return user;
+    }
+
+    await sleep(delayMs);
+  }
+
+  return null;
+}
+
 export function subscribeToAuthChanges(callback: (user: User | null) => void) {
   const subscription = supabase.auth.onAuthStateChange((_event, session) => {
     callback(session?.user ?? null);

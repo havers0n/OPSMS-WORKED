@@ -7,10 +7,9 @@ import { resetSelectionStore } from '@/widgets/warehouse-editor/model/v2/selecti
 import { resetTaskStore } from '@/widgets/warehouse-editor/model/v2/task-store';
 import { bffRequest } from '@/shared/api/bff/client';
 import { queryClient } from '@/shared/api/supabase/query-client';
-import { ensureDevSession, getCurrentSessionUser, signInWithPassword, signOutSession, signUpWithPassword, subscribeToAuthChanges } from '@/shared/api/supabase/auth';
-import { supabase } from '@/shared/api/supabase/client';
+import { resolveAuthenticatedUser, signInWithPassword, signOutSession, signUpWithPassword } from '@/shared/api/supabase/auth';
+import { useSupabaseAuthState } from '@/shared/api/supabase/use-supabase-auth-state';
 import { BffRequestError } from '@/shared/api/bff/client';
-import { env } from '@/shared/config/env';
 
 type TenantMembership = {
   tenantId: string;
@@ -51,22 +50,6 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: async () => undefined
 });
 
-async function resolveAuthenticatedUser(retries = 10, delayMs = 150): Promise<User | null> {
-  for (let attempt = 0; attempt < retries; attempt += 1) {
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      return user;
-    }
-
-    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
-  }
-
-  return null;
-}
-
 async function resolveWorkspaceSession(): Promise<WorkspaceSession> {
   return bffRequest<WorkspaceSession>('/me');
 }
@@ -81,6 +64,7 @@ function resetLocalWorkspaceState() {
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const supabaseAuth = useSupabaseAuthState();
   const [state, setState] = useState<AuthContextValue>({
     isReady: false,
     user: null,
@@ -138,53 +122,37 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     }
 
-    async function bootstrap() {
-      if (env.enableDevAutoLogin) {
-        await ensureDevSession();
-      }
-
-      const user = await getCurrentSessionUser();
-      if (!user) {
-        await applyAnonymousState();
-        return;
-      }
-
-      await applyWorkspaceForUser(user);
+    if (!supabaseAuth.isReady) {
+      return () => {
+        isMounted = false;
+      };
     }
 
-    void bootstrap().catch((authError) => {
-      if (!isMounted) return;
-      setError(authError instanceof Error ? authError.message : 'Failed to initialize authentication');
-    });
+    setError(null);
 
-    const unsubscribe = subscribeToAuthChanges((user) => {
-      if (!isMounted) return;
-      setError(null);
-
-      if (!user) {
-        void applyAnonymousState();
-        return;
-      }
-
-      void applyWorkspaceForUser(user).catch((authError) => {
+    if (!supabaseAuth.user) {
+      void applyAnonymousState();
+    } else {
+      void applyWorkspaceForUser(supabaseAuth.user).catch((authError) => {
         if (!isMounted) return;
         setError(authError instanceof Error ? authError.message : 'Failed to initialize authentication');
       });
-    });
+    }
 
     return () => {
       isMounted = false;
-      unsubscribe();
     };
-  }, []);
+  }, [supabaseAuth.isReady, supabaseAuth.user]);
 
-  if (error) {
+  const startupError = supabaseAuth.error ?? error;
+
+  if (startupError) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6">
         <div className="w-full max-w-lg rounded-[22px] border border-red-200 bg-white p-8 text-center shadow-[var(--shadow-soft)]">
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Authentication</div>
           <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">Failed to start authenticated workspace.</div>
-          <div className="mt-2 text-sm text-[var(--text-muted)]">{error}</div>
+          <div className="mt-2 text-sm text-[var(--text-muted)]">{startupError}</div>
         </div>
       </div>
     );
@@ -204,6 +172,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function handleSignIn(email: string, password: string) {
     setError(null);
+    supabaseAuth.clearError();
     resetLocalWorkspaceState();
     const result = await signInWithPassword(email, password);
     if (result.error) {
@@ -220,6 +189,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function handleSignUp(email: string, password: string) {
     setError(null);
+    supabaseAuth.clearError();
     resetLocalWorkspaceState();
     const result = await signUpWithPassword(email, password, email.split('@')[0]);
     if (result.error) {
@@ -236,6 +206,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function handleSignOut() {
     setError(null);
+    supabaseAuth.clearError();
     resetLocalWorkspaceState();
     await signOutSession();
     setState((current) => ({
