@@ -11,12 +11,9 @@ import {
   createContainerFromStoragePresetResponseSchema,
   setPreferredStoragePresetRequestBodySchema
 } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type StoragePresetsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getStoragePresetsService'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerStoragePresetsRoutes(app: FastifyInstance, deps: StoragePresetsRouteDeps): void {
   app.get('/api/products/:productId/storage-presets', async (request, reply) => {

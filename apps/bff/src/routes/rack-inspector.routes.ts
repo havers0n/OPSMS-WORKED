@@ -3,12 +3,9 @@ import { ApiError } from '../errors.js';
 import { createRackInspectorRepo } from '../features/rack-inspector/rack-inspector-repo.js';
 import type { RouteDeps } from '../route-deps.js';
 import { idResponseSchema, rackInspectorPayloadSchema } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type RackInspectorRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerRackInspectorRoutes(app: FastifyInstance, deps: RackInspectorRouteDeps): void {
   app.get('/api/racks/:rackId/inspector', async (request, reply) => {

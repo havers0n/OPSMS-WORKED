@@ -10,12 +10,9 @@ import {
   saveLayoutDraftBodySchema,
   saveLayoutDraftResponseSchema
 } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type LayoutMutationsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getLayoutService'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerLayoutMutationsRoutes(app: FastifyInstance, deps: LayoutMutationsRouteDeps): void {
   app.post('/api/layout-drafts', async (request, reply) => {

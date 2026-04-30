@@ -17,6 +17,7 @@ import {
 } from '../../schemas.js';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ProductsService } from './service.js';
+import { parseOrThrow } from '../../validation.js';
 
 type GetAuthContext = (
   request: FastifyRequest,
@@ -24,10 +25,6 @@ type GetAuthContext = (
 ) => Promise<AuthenticatedRequestContext | null>;
 
 type GetProductsService = (context: AuthenticatedRequestContext) => ProductsService;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 function parseProductId(request: FastifyRequest): string {
   return parseOrThrow(idResponseSchema, {

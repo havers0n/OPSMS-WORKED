@@ -2,12 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { createLayoutRepo } from '../features/layout/repo.js';
 import type { RouteDeps } from '../route-deps.js';
 import { cellsResponseSchema, idResponseSchema, layoutDraftResponseSchema, publishedLayoutSummaryResponseSchema } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type LayoutReadRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerLayoutReadRoutes(app: FastifyInstance, deps: LayoutReadRouteDeps): void {
   app.get('/api/floors/:floorId/published-cells', async (request, reply) => {

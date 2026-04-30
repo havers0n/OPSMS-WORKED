@@ -14,6 +14,7 @@ import {
 import { orderNotFound } from './errors.js';
 import { createOrdersRepo } from './repo.js';
 import type { OrdersService } from './service.js';
+import { parseOrThrow } from '../../validation.js';
 
 type GetAuthContext = (
   request: FastifyRequest,
@@ -22,10 +23,6 @@ type GetAuthContext = (
 
 type GetUserSupabase = (context: AuthenticatedRequestContext) => SupabaseClient;
 type GetOrdersService = (context: AuthenticatedRequestContext) => OrdersService;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerOrdersRoutes(
   app: FastifyInstance,

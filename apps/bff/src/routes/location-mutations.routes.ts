@@ -2,12 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { createLocationReadRepo } from '../features/location-read/location-read-repo.js';
 import type { RouteDeps } from '../route-deps.js';
 import { idResponseSchema, patchLocationGeometryBodySchema } from '../schemas.js';
+import { parseOrThrow } from '../validation.js';
 
 type LocationMutationsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerLocationMutationsRoutes(app: FastifyInstance, deps: LocationMutationsRouteDeps): void {
   app.patch('/api/locations/:locationId/geometry', async (request, reply) => {

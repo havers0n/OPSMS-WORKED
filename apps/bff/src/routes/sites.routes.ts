@@ -2,12 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { ApiError } from '../errors.js';
 import { createSiteBodySchema, idResponseSchema, sitesResponseSchema } from '../schemas.js';
 import type { RouteDeps } from '../route-deps.js';
+import { parseOrThrow } from '../validation.js';
 
 type SitesRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getSitesService'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerSitesRoutes(app: FastifyInstance, deps: SitesRouteDeps): void {
   app.get('/api/sites', async (request, reply) => {

@@ -15,12 +15,9 @@ import {
   mapExecutionLocationMoveError,
   mapExecutionSwapError
 } from '../features/execution/errors.js';
+import { parseOrThrow } from '../validation.js';
 
 type ContainerMovementRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getPlacementService' | 'getUserSupabase'>;
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
 
 export function registerContainerMovementRoutes(app: FastifyInstance, deps: ContainerMovementRouteDeps): void {
   app.post('/api/placement/place-at-location', async (request, reply) => {
