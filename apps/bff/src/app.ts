@@ -1,40 +1,14 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
-import { ZodError, z } from 'zod';
+import { ZodError } from 'zod';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
 import type { BuildAppOptions } from './app-options.js';
 import { createRouteDeps } from './route-deps.js';
-import {
-  containerCurrentLocationResponseSchema,
-  locationReferenceResponseSchema,
-  locationOccupancyRowsResponseSchema,
-  locationStorageSnapshotRowsResponseSchema,
-  containerResponseSchema,
-  containerStorageSnapshotResponseSchema,
-  containersResponseSchema,
-  containerTypesResponseSchema,
-  listContainersQuerySchema,
-  currentWorkspaceResponseSchema,
-  nonRackLocationsResponseSchema,
-  patchLocationGeometryBodySchema,
-} from './schemas.js';
-import {
-  mapLocationOccupancyRowToDomain,
-  mapLocationStorageSnapshotRowToDomain,
-  mapContainerStorageSnapshotRowToDomain,
-} from './mappers.js';
-import { type PlacementCommandService } from './features/placement/service.js';
-import { type OrdersService } from './features/orders/service.js';
-import { type WavesService } from './features/waves/service.js';
 import { registerOrdersRoutes } from './features/orders/routes.js';
 import { registerWavesRoutes } from './features/waves/routes.js';
-import { type ProductsService } from './features/products/service.js';
 import { registerProductsRoutes } from './features/products/routes.js';
-import { type LayoutService } from './features/layout/service.js';
-import { type ContainersService } from './features/containers/service.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
-import { type ProductLocationRolesService } from './features/product-location-roles/service.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
@@ -52,12 +26,6 @@ import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js
 import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
 import { registerRackInspectorRoutes } from './routes/rack-inspector.routes.js';
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
-
-function parseOrThrow<T>(schema: { parse: (input: unknown) => T }, payload: unknown): T {
-  return schema.parse(payload);
-}
-
-
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
@@ -125,12 +93,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerProductsRoutes(app, { getAuthContext, getProductsService });
   registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
 
-
-
-
   registerMeRoutes(app, { getAuthContext });
   registerInventoryMovementRoutes(app, { getAuthContext, getUserSupabase });
-
 
   // ── Orders ───────────────────────────────────────────────────────────────────
 
