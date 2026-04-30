@@ -1,11 +1,6 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { resetUiStore } from '@/app/store/ui-store';
-import { resetEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import { resetNavigationStore } from '@/widgets/warehouse-editor/model/v2/navigation-store';
-import { resetSelectionStore } from '@/widgets/warehouse-editor/model/v2/selection-store';
-import { resetTaskStore } from '@/widgets/warehouse-editor/model/v2/task-store';
-import { queryClient } from '@/shared/api/supabase/query-client';
+import { resetLocalWorkspaceState } from '@/app/session/reset-local-workspace-state';
 import { resolveAuthenticatedUser, signInWithPassword, signOutSession, signUpWithPassword } from '@/shared/api/supabase/auth';
 import { useSupabaseAuthState } from '@/shared/api/supabase/use-supabase-auth-state';
 import { resolveWorkspaceSession, useWorkspaceSession, type TenantMembership } from '@/shared/api/bff/use-workspace-session';
@@ -31,15 +26,6 @@ const AuthContext = createContext<AuthContextValue>({
   signUp: async () => undefined,
   signOut: async () => undefined
 });
-
-function resetLocalWorkspaceState() {
-  queryClient.clear();
-  resetUiStore();
-  resetEditorStore();
-  resetNavigationStore();
-  resetSelectionStore();
-  resetTaskStore();
-}
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const supabaseAuth = useSupabaseAuthState();
