@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { ApiError, mapSupabaseError } from '../errors.js';
+import { mapStoragePresetError } from '../features/storage-presets/errors.js';
 import type { RouteDeps } from '../route-deps.js';
 import {
   idResponseSchema,
@@ -105,32 +106,7 @@ export function registerStoragePresetsRoutes(app: FastifyInstance, deps: Storage
       });
       return parseOrThrow(createContainerFromStoragePresetResponseSchema, result);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('STORAGE_PRESET_NOT_FOUND')) {
-          throw new ApiError(404, 'STORAGE_PRESET_NOT_FOUND', 'Storage preset was not found.');
-        }
-        if (error.message.includes('STORAGE_PRESET_CONTAINER_TYPE_UNRESOLVED')) {
-          throw new ApiError(422, 'STORAGE_PRESET_CONTAINER_TYPE_UNRESOLVED', 'Storage preset must resolve exactly one container type.');
-        }
-        if (error.message.includes('STORAGE_PRESET_CONTAINER_TYPE_INVALID')) {
-          throw new ApiError(422, 'STORAGE_PRESET_CONTAINER_TYPE_INVALID', 'Storage preset does not resolve a valid storage container type.');
-        }
-        if (error.message.includes('STORAGE_PRESET_MATERIALIZATION_FAILED')) {
-          throw new ApiError(
-            422,
-            'STORAGE_PRESET_MATERIALIZATION_FAILED',
-            'Container was created/placed, but preset contents materialization failed.'
-          );
-        }
-        if (error.message.includes('STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED')) {
-          throw new ApiError(
-            422,
-            'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
-            'Storage preset must have exactly one materializable level for this phase.'
-          );
-        }
-      }
-      const mapped = mapSupabaseError(error);
+      const mapped = mapStoragePresetError(error) ?? mapSupabaseError(error);
       if (mapped) throw mapped;
       throw error;
     }
