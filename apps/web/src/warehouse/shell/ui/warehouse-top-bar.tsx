@@ -18,9 +18,9 @@ import {
 import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
 import { AccountControls } from '@/widgets/app-shell/ui/account-controls';
 import { ViewModeSwitcher } from './view-mode-switcher';
-import { WorkspaceActions } from './warehouse-actions';
-import { WorkspaceNav } from './warehouse-nav';
-import { WorkspaceStatus } from './warehouse-status';
+import { WorkspaceActions } from './workspace-actions';
+import { WorkspaceNav } from './workspace-nav';
+import { WorkspaceStatus } from './workspace-status';
 
 type LocateFeedback = {
   kind: 'idle' | 'found' | 'not-found' | 'invalid' | 'error';

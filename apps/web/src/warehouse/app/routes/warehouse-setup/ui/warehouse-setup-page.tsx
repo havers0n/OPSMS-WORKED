@@ -4,7 +4,7 @@ import { useActiveFloorId, useActiveSiteId, useSetActiveSiteId } from '@/app/sto
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useSites } from '@/entities/site/api/use-sites';
-import { WarehouseTopBar } from '@/widgets/warehouse-shell/ui/warehouse-top-bar';
+import { WarehouseTopBar } from '@/warehouse/shell/ui/warehouse-top-bar';
 import { BootstrapWizard } from '@/widgets/warehouse-bootstrap/ui/bootstrap-wizard';
 import { SiteFloorSetupState } from '@/widgets/warehouse-bootstrap/ui/site-floor-setup-state';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';

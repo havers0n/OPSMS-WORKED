@@ -19,7 +19,7 @@ import {
 import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
 import { useSites } from '@/entities/site/api/use-sites';
 import { routes } from '@/shared/config/routes';
-import { ViewStageSwitcher } from '@/widgets/warehouse-shell/ui/view-stage-switcher';
+import { ViewStageSwitcher } from '@/warehouse/shell/ui/view-stage-switcher';
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: 'view', label: 'View' },
