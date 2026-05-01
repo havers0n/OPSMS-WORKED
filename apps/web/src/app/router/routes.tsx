@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/app/layouts/app-shell';
 import { ProtectedRoute } from '@/app/router/protected-route';
@@ -8,9 +9,9 @@ import { ProductDetailPage } from '@/pages/product-detail/ui/product-detail-page
 import { PickTaskPage } from '@/pages/pick-task/ui/pick-task-page';
 import { ProductsPage } from '@/pages/products/ui/products-page';
 import { WaveDetailPage } from '@/pages/wave-detail/ui/wave-detail-page';
-import { WarehouseSetupPage } from '@/pages/warehouse-setup/ui/warehouse-setup-page';
-import { WarehouseViewPage } from '@/pages/warehouse-view/ui/warehouse-view-page';
 import { routes } from '@/shared/config/routes';
+
+const WarehouseApp = lazy(() => import('@/warehouse/app/warehouse-app'));
 
 export function AppRouter() {
   return (
@@ -24,8 +25,14 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         >
-          <Route path={routes.warehouseView} element={<WarehouseViewPage />} />
-          <Route path={routes.warehouse} element={<WarehouseSetupPage />} />
+          <Route
+            path={`${routes.warehouse}/*`}
+            element={
+              <Suspense fallback={null}>
+                <WarehouseApp />
+              </Suspense>
+            }
+          />
           <Route path={routes.products} element={<ProductsPage />} />
           <Route path={routes.productDetail} element={<ProductDetailPage />} />
           <Route path={routes.operations} element={<OperationsPage />} />
