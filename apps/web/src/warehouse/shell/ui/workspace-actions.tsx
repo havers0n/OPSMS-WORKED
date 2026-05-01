@@ -11,12 +11,12 @@ import { Divider } from '@/shared/ui/divider';
 import { IconButton } from '@/shared/ui/icon-button';
 import { ToolRail } from '@/shared/ui/tool-rail';
 import {
-  useDraftDirtyState,
-  useDraftPersistenceStatus,
-  useLayoutDraftState,
-  useViewMode
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+  getWarehouseDraftSnapshot,
+  useIsWarehouseDraftDirty,
+  useWarehouseDraftStatus,
+  useWarehouseLayoutDraft
+} from '@/warehouse/state/layout-draft';
+import { useWarehouseViewMode } from '@/warehouse/state/view-mode';
 import { getLayoutActionState } from '../lib/layout-context';
 
 type WorkspaceActionsProps = {
@@ -25,10 +25,10 @@ type WorkspaceActionsProps = {
 
 export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProps) {
   const activeFloorId = useActiveFloorId();
-  const viewMode = useViewMode();
-  const layoutDraft = useLayoutDraftState();
-  const isDraftDirty = useDraftDirtyState();
-  const persistenceStatus = useDraftPersistenceStatus();
+  const viewMode = useWarehouseViewMode();
+  const layoutDraft = useWarehouseLayoutDraft();
+  const isDraftDirty = useIsWarehouseDraftDirty();
+  const persistenceStatus = useWarehouseDraftStatus();
 
   const workspaceQuery = useFloorWorkspace(activeFloorId);
   const workspace = workspaceQuery.data;
@@ -69,7 +69,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
   };
 
   const handleSaveDraft = async () => {
-    const latestDraft = useEditorStore.getState().draft;
+    const latestDraft = getWarehouseDraftSnapshot();
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
       await saveDraft.flushSave(latestDraft);
@@ -80,7 +80,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
   };
 
   const handleValidate = async () => {
-    const latestDraft = useEditorStore.getState().draft;
+    const latestDraft = getWarehouseDraftSnapshot();
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await validateLayout.mutateAsync(latestDraft.layoutVersionId);
@@ -91,7 +91,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
   };
 
   const handlePublish = async () => {
-    const latestDraft = useEditorStore.getState().draft;
+    const latestDraft = getWarehouseDraftSnapshot();
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync();

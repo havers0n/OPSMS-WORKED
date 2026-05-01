@@ -14,12 +14,14 @@ import { useFloors } from '@/entities/floor/api/use-floors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import {
-  useSetHighlightedCellIds,
-  useSetSelectedCellId,
-  useSetViewMode,
-  useViewMode
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
+  useSetWarehouseHighlightedCells,
+  useSetWarehouseSelectedCellId
+} from '@/warehouse/state/interaction';
+import {
+  useSetWarehouseViewMode,
+  useWarehouseViewMode
+} from '@/warehouse/state/view-mode';
+import { warehouseStorageFocusActions } from '@/warehouse/state/storage-focus';
 import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
@@ -46,10 +48,10 @@ export function WarehouseViewPage() {
   const sitesQuery = useSites();
   const floorsQuery = useFloors(activeSiteId);
   const workspaceQuery = useFloorWorkspace(activeFloorId);
-  const viewMode = useViewMode();
-  const setSelectedCellId = useSetSelectedCellId();
-  const setViewMode = useSetViewMode();
-  const setHighlightedCellIds = useSetHighlightedCellIds();
+  const viewMode = useWarehouseViewMode();
+  const setSelectedCellId = useSetWarehouseSelectedCellId();
+  const setViewMode = useSetWarehouseViewMode();
+  const setHighlightedCellIds = useSetWarehouseHighlightedCells();
   const [locateFeedback, setLocateFeedback] = useState<LocateFeedback>({
     kind: 'idle',
     message: null
@@ -231,7 +233,7 @@ export function WarehouseViewPage() {
     setSelectedCellId(matchedCellId);
     setHighlightedCellIds([matchedCellId]);
     if (viewMode === 'storage' && matchedCell) {
-      useStorageFocusStore.getState().selectCell({
+      warehouseStorageFocusActions.selectCell({
         cellId: matchedCell.id,
         rackId: matchedCell.rackId,
         level: matchedCell.address.parts.level

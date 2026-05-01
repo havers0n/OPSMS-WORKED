@@ -8,13 +8,13 @@ import { RotateCcw } from 'lucide-react';
 import {
   useApplyFacePreset,
   useClearActiveTask,
+  useDeleteRack,
   useRotateRack,
   useSetFaceBRelationship,
   useSetFaceLength,
-  useDeleteRack,
   useSetSelectedRackId,
   useUpdateRackGeneral
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+} from '@/warehouse/state/rack-layout-actions';
 import { formatRackAxis } from '@/shared/lib/rack-face-labels';
 
 // ─── types ────────────────────────────────────────────────────────────────────

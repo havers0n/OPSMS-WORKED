@@ -2,9 +2,11 @@ import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
-import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import {
+  warehouseLayoutDraftActions
+} from '@/warehouse/state/layout-draft';
+import { warehouseInteractionActions } from '@/warehouse/state/interaction';
+import { warehouseViewModeActions } from '@/warehouse/state/view-mode';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { WarehouseTopBar } from './warehouse-top-bar';
 
@@ -103,28 +105,9 @@ vi.mock('@/features/layout-validate/model/use-layout-validation', () => ({
 }));
 
 function resetStores() {
-  useModeStore.setState({
-    viewMode: 'layout',
-    viewStage: 'map',
-    editorMode: 'select'
-  });
-  useInteractionStore.setState({
-    selection: { type: 'none' },
-    hoveredRackId: null,
-    highlightedCellIds: [],
-    contextPanelMode: 'compact'
-  });
-  useEditorStore.setState({
-    activeTask: null,
-    activeStorageWorkflow: null,
-    minRackDistance: 0,
-    draft: null,
-    draftSourceVersionId: null,
-    isDraftDirty: false,
-    persistenceStatus: 'idle',
-    lastSaveErrorMessage: null,
-    lastChangeClass: null
-  });
+  warehouseViewModeActions.reset();
+  warehouseInteractionActions.resetAll();
+  warehouseLayoutDraftActions.resetDraft();
 }
 
 function collectText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {
@@ -151,8 +134,8 @@ describe('TopBar lifecycle wording', () => {
 
   it('shows Draft changed instead of cached validation verdict for dirty drafts', async () => {
     const draft = createLayoutDraftFixture();
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 180, 300);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 180, 300);
     mockValidationState.cachedResult = {
       isValid: true,
       issues: []
@@ -171,7 +154,7 @@ describe('TopBar lifecycle wording', () => {
 
   it('clears stale validate success copy after a new edit makes the draft dirty', async () => {
     const draft = createLayoutDraftFixture();
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
     mockValidationState.cachedResult = {
       isValid: true,
       issues: []
@@ -197,7 +180,7 @@ describe('TopBar lifecycle wording', () => {
     expect(collectText(renderer.toJSON())).toContain('Valid');
 
     await act(async () => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 220, 340);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 220, 340);
     });
 
     const textAfterEdit = collectText(renderer.toJSON());
@@ -209,7 +192,7 @@ describe('TopBar lifecycle wording', () => {
 
   it('shows persisted validation follow-up after publish gate failure instead of a generic save error', async () => {
     const draft = createLayoutDraftFixture();
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
     mockPublishMutateAsync.mockRejectedValue(
       new BffRequestError(
         409,

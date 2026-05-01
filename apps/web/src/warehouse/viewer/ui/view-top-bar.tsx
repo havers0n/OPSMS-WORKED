@@ -12,16 +12,18 @@ import {
 } from '@/app/store/ui-selectors';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import {
-  useResetDraft,
-  useSetViewMode,
-  useViewMode
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
+  useResetWarehouseDraft
+} from '@/warehouse/state/layout-draft';
+import {
+  useSetWarehouseViewMode,
+  useWarehouseViewMode,
+  type WarehouseViewMode
+} from '@/warehouse/state/view-mode';
 import { useSites } from '@/entities/site/api/use-sites';
 import { routes } from '@/shared/config/routes';
 import { ViewStageSwitcher } from '@/warehouse/shell/ui/view-stage-switcher';
 
-const VIEW_MODES: { id: ViewMode; label: string }[] = [
+const VIEW_MODES: { id: WarehouseViewMode; label: string }[] = [
   { id: 'view', label: 'View' },
   { id: 'storage', label: 'Storage' }
 ];
@@ -52,9 +54,9 @@ export function ViewTopBar({
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
   const setActiveFloorId = useSetActiveFloorId();
-  const resetDraft = useResetDraft();
-  const viewMode = useViewMode();
-  const setViewMode = useSetViewMode();
+  const resetDraft = useResetWarehouseDraft();
+  const viewMode = useWarehouseViewMode();
+  const setViewMode = useSetWarehouseViewMode();
   const { data: sites = [] } = useSites();
   const { data: floors = [] } = useFloors(activeSiteId);
 

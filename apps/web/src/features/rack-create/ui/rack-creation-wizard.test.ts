@@ -2,37 +2,27 @@ import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
-import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import {
+  getWarehouseDraftSnapshot,
+  warehouseLayoutDraftActions
+} from '@/warehouse/state/layout-draft';
+import {
+  getWarehouseSelectionSnapshot,
+  warehouseInteractionActions
+} from '@/warehouse/state/interaction';
+import {
+  getWarehouseActiveLayoutTaskSnapshot,
+  warehouseRackLayoutActions
+} from '@/warehouse/state/rack-layout-actions';
+import { warehouseViewModeActions } from '@/warehouse/state/view-mode';
 import { RackCreationWizard } from './rack-creation-wizard';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function resetStores() {
-  useModeStore.setState({
-    viewMode: 'layout',
-    editorMode: 'select'
-  });
-
-  useInteractionStore.setState({
-    selection: { type: 'none' },
-    hoveredRackId: null,
-    highlightedCellIds: [],
-    contextPanelMode: 'compact'
-  });
-
-  useEditorStore.setState({
-    activeTask: null,
-    activeStorageWorkflow: null,
-    minRackDistance: 0,
-    draft: null,
-    draftSourceVersionId: null,
-    isDraftDirty: false,
-    persistenceStatus: 'idle',
-    lastSaveErrorMessage: null,
-    lastChangeClass: null
-  });
+  warehouseViewModeActions.reset();
+  warehouseInteractionActions.resetAll();
+  warehouseLayoutDraftActions.resetDraft();
 }
 
 function findButtonByText(root: TestRenderer.ReactTestInstance, text: string) {
@@ -50,15 +40,14 @@ afterEach(() => {
 describe('RackCreationWizard', () => {
   it('finish clears the active rack_creation task and keeps the rack selected', () => {
     const draft = createLayoutDraftFixture();
-    const rackId = draft.rackIds[0];
-    const rack = draft.racks[rackId];
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseRackLayoutActions.createRack(80, 120);
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.setState({
-      ...useEditorStore.getState(),
-      activeTask: { type: 'rack_creation', rackId }
-    });
-    useInteractionStore.getState().setSelectedRackId(rackId);
+    const activeTask = getWarehouseActiveLayoutTaskSnapshot();
+    expect(activeTask?.type).toBe('rack_creation');
+    const rackId = activeTask?.type === 'rack_creation' ? activeTask.rackId : '';
+    const rack = getWarehouseDraftSnapshot()!.racks[rackId];
+    if (!rack) throw new Error('Expected created rack in draft.');
 
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -75,8 +64,8 @@ describe('RackCreationWizard', () => {
       findButtonByText(renderer.root, 'Open in inspector').props.onClick();
     });
 
-    expect(useEditorStore.getState().activeTask).toBeNull();
-    expect(useInteractionStore.getState().selection).toEqual({
+    expect(getWarehouseActiveLayoutTaskSnapshot()).toBeNull();
+    expect(getWarehouseSelectionSnapshot()).toEqual({
       type: 'rack',
       rackIds: [rackId],
       focus: { type: 'body' }
@@ -85,15 +74,14 @@ describe('RackCreationWizard', () => {
 
   it('cancel clears the active rack_creation task and removes the rack', () => {
     const draft = createLayoutDraftFixture();
-    const rackId = draft.rackIds[0];
-    const rack = draft.racks[rackId];
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseRackLayoutActions.createRack(80, 120);
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.setState({
-      ...useEditorStore.getState(),
-      activeTask: { type: 'rack_creation', rackId }
-    });
-    useInteractionStore.getState().setSelectedRackId(rackId);
+    const activeTask = getWarehouseActiveLayoutTaskSnapshot();
+    expect(activeTask?.type).toBe('rack_creation');
+    const rackId = activeTask?.type === 'rack_creation' ? activeTask.rackId : '';
+    const rack = getWarehouseDraftSnapshot()!.racks[rackId];
+    if (!rack) throw new Error('Expected created rack in draft.');
 
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -104,9 +92,9 @@ describe('RackCreationWizard', () => {
       findButtonByText(renderer.root, 'Cancel').props.onClick();
     });
 
-    expect(useEditorStore.getState().activeTask).toBeNull();
-    expect(useEditorStore.getState().draft?.racks[rackId]).toBeUndefined();
-    expect(useEditorStore.getState().draft?.rackIds).not.toContain(rackId);
-    expect(useInteractionStore.getState().selection).toEqual({ type: 'none' });
+    expect(getWarehouseActiveLayoutTaskSnapshot()).toBeNull();
+    expect(getWarehouseDraftSnapshot()?.racks[rackId]).toBeUndefined();
+    expect(getWarehouseDraftSnapshot()?.rackIds).not.toContain(rackId);
+    expect(getWarehouseSelectionSnapshot()).toEqual({ type: 'none' });
   });
 });

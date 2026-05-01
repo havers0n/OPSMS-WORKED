@@ -6,7 +6,7 @@ import {
   useUpdateLevelCount,
   useUpdateSectionLength,
   useUpdateSectionSlots
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+} from '@/warehouse/state/rack-layout-actions';
 
 export function FaceTab({ title, rackId, face, readOnly = false }: { title: string; rackId: string; face: RackFace; readOnly?: boolean }) {
   const updateSectionLength = useUpdateSectionLength();

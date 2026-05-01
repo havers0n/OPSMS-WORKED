@@ -10,7 +10,11 @@ import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useSites } from '@/entities/site/api/use-sites';
 import { Divider } from '@/shared/ui/divider';
-import { useDraftDirtyState, useLayoutDraftState, useResetDraft } from '@/widgets/warehouse-editor/model/editor-selectors';
+import {
+  useIsWarehouseDraftDirty,
+  useResetWarehouseDraft,
+  useWarehouseLayoutDraft
+} from '@/warehouse/state/layout-draft';
 import { shouldProceedWithContextSwitch } from '../lib/layout-context';
 
 type WorkspaceNavProps = {
@@ -23,9 +27,9 @@ export function WorkspaceNav({ statusBadge, onContextSwitched }: WorkspaceNavPro
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
   const setActiveFloorId = useSetActiveFloorId();
-  const resetDraft = useResetDraft();
-  const isDraftDirty = useDraftDirtyState();
-  const layoutDraft = useLayoutDraftState();
+  const resetDraft = useResetWarehouseDraft();
+  const isDraftDirty = useIsWarehouseDraftDirty();
+  const layoutDraft = useWarehouseLayoutDraft();
 
   const { data: sites = [] } = useSites();
   const { data: floors = [] } = useFloors(activeSiteId);

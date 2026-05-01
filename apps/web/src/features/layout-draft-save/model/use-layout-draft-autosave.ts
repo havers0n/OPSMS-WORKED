@@ -6,18 +6,18 @@ import {
   scheduleLayoutDraftAutosave
 } from './use-save-layout-draft';
 import {
-  useDraftDirtyState,
-  useDraftPersistenceStatus,
-  useLayoutDraftState
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+  useIsWarehouseDraftDirty,
+  useWarehouseDraftStatus,
+  useWarehouseLayoutDraft
+} from '@/warehouse/state/layout-draft';
 
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 
 export function useLayoutDraftAutosave(floorId: string | null) {
   const queryClient = useQueryClient();
-  const draft = useLayoutDraftState();
-  const isDraftDirty = useDraftDirtyState();
-  const persistenceStatus = useDraftPersistenceStatus();
+  const draft = useWarehouseLayoutDraft();
+  const isDraftDirty = useIsWarehouseDraftDirty();
+  const persistenceStatus = useWarehouseDraftStatus();
 
   useEffect(() => {
     const shouldAutosave =

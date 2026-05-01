@@ -1,17 +1,20 @@
-import { useSetViewMode, useViewMode } from '@/widgets/warehouse-editor/model/editor-selectors';
-import type { ViewMode } from '@/widgets/warehouse-editor/model/editor-types';
+import {
+  useSetWarehouseViewMode,
+  useWarehouseViewMode,
+  type WarehouseViewMode
+} from '@/warehouse/state/view-mode';
 import { Button } from '@/shared/ui/button';
 import { ViewStageSwitcher } from './view-stage-switcher';
 
-const VIEW_MODES: { id: ViewMode; label: string }[] = [
+const VIEW_MODES: { id: WarehouseViewMode; label: string }[] = [
   { id: 'view', label: 'View' },
   { id: 'storage', label: 'Storage' },
   { id: 'layout', label: 'Layout' },
 ];
 
 export function ViewModeSwitcher() {
-  const viewMode = useViewMode();
-  const setViewMode = useSetViewMode();
+  const viewMode = useWarehouseViewMode();
+  const setViewMode = useSetWarehouseViewMode();
 
   return (
     <div className="flex flex-1 items-center justify-center gap-2 px-4">

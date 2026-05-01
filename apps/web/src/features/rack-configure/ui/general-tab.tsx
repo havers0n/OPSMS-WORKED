@@ -4,7 +4,7 @@ import {
   useRotateRack,
   useUpdateRackGeneral,
   useUpdateRackPosition
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+} from '@/warehouse/state/rack-layout-actions';
 
 export function GeneralTab({ rack, readOnly = false }: { rack: Rack; readOnly?: boolean }) {
   const updateRackGeneral = useUpdateRackGeneral();

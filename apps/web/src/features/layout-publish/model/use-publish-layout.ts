@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import {
+  getWarehouseDraftPersistenceSnapshot,
+  getWarehouseDraftSnapshot
+} from '@/warehouse/state/layout-draft';
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   cancelScheduledLayoutDraftSave,
@@ -18,8 +21,7 @@ export function usePublishLayout(floorId: string | null) {
 
   return useMutation({
     mutationFn: async () => {
-      const currentDraft = useEditorStore.getState().draft;
-      const isDraftDirty = useEditorStore.getState().isDraftDirty;
+      const { draft: currentDraft, isDraftDirty } = getWarehouseDraftPersistenceSnapshot();
 
       if (!currentDraft || currentDraft.state !== 'draft' || !floorId) {
         throw new Error('Layout draft is unavailable.');
@@ -46,7 +48,7 @@ export function usePublishLayout(floorId: string | null) {
           layoutVersionId = saved.layoutVersionId;
           draftVersion = saved.draftVersion;
         } else {
-          const latestDraft = useEditorStore.getState().draft;
+          const latestDraft = getWarehouseDraftSnapshot();
           layoutVersionId = latestDraft?.layoutVersionId ?? layoutVersionId;
           draftVersion = latestDraft?.draftVersion ?? draftVersion;
         }

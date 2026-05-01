@@ -5,9 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
 import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
-import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import {
+  getWarehouseDraftPersistenceSnapshot,
+  getWarehouseDraftSnapshot,
+  warehouseLayoutDraftActions
+} from '@/warehouse/state/layout-draft';
+import { warehouseInteractionActions } from '@/warehouse/state/interaction';
+import { warehouseViewModeActions } from '@/warehouse/state/view-mode';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { createLayoutDraft } from '@/features/layout-draft-save/api/mutations';
 import { saveLayoutDraft } from '@/features/layout-draft-save/api/mutations';
@@ -44,27 +48,9 @@ vi.mock('../api/mutations', () => ({
 type PublishHookResult = ReturnType<typeof usePublishLayout>;
 
 function resetStores() {
-  useModeStore.setState({
-    viewMode: 'layout',
-    editorMode: 'select'
-  });
-  useInteractionStore.setState({
-    selection: { type: 'none' },
-    hoveredRackId: null,
-    highlightedCellIds: [],
-    contextPanelMode: 'compact'
-  });
-  useEditorStore.setState({
-    activeTask: null,
-    activeStorageWorkflow: null,
-    minRackDistance: 0,
-    draft: null,
-    draftSourceVersionId: null,
-    isDraftDirty: false,
-    persistenceStatus: 'idle',
-    lastSaveErrorMessage: null,
-    lastChangeClass: null
-  });
+  warehouseViewModeActions.reset();
+  warehouseInteractionActions.resetAll();
+  warehouseLayoutDraftActions.resetDraft();
 }
 
 function deferred<T>() {
@@ -78,7 +64,7 @@ function deferred<T>() {
 }
 
 function capturePersistenceSurface() {
-  const state = useEditorStore.getState();
+  const state = getWarehouseDraftPersistenceSnapshot();
   return {
     isDraftDirty: state.isDraftDirty,
     persistenceStatus: state.persistenceStatus,
@@ -129,8 +115,8 @@ describe('usePublishLayout', () => {
     const draft = createLayoutDraftFixture();
     let publishHook!: PublishHookResult;
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 180, 320);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 180, 320);
 
     vi.mocked(saveLayoutDraft).mockImplementation(async (currentDraft) => ({
       layoutVersionId: currentDraft.layoutVersionId,
@@ -191,8 +177,8 @@ describe('usePublishLayout', () => {
     const pendingSave = deferred<Awaited<ReturnType<typeof saveLayoutDraft>>>();
     let publishHook!: PublishHookResult;
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 210, 360);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 210, 360);
 
     vi.mocked(saveLayoutDraft).mockReturnValue(pendingSave.promise);
     vi.mocked(publishLayoutVersion).mockResolvedValue({
@@ -216,7 +202,7 @@ describe('usePublishLayout', () => {
       );
     });
 
-    const inFlightSave = flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
+    const inFlightSave = flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!);
 
     let publishPromise!: Promise<unknown>;
     await act(async () => {
@@ -231,7 +217,7 @@ describe('usePublishLayout', () => {
       draftVersion: 2,
       changeClass: 'geometry_only',
       savedDraft: {
-        ...useEditorStore.getState().draft!,
+        ...getWarehouseDraftSnapshot()!,
         draftVersion: 2
       }
     });
@@ -253,7 +239,7 @@ describe('usePublishLayout', () => {
     const draft = createLayoutDraftFixture();
     let publishHook!: PublishHookResult;
 
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
 
     vi.mocked(publishLayoutVersion).mockResolvedValue({
       layoutVersionId: draft.layoutVersionId,
@@ -293,8 +279,8 @@ describe('usePublishLayout', () => {
     const draft = createLayoutDraftFixture();
     let publishHook!: PublishHookResult;
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 220, 360);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 220, 360);
 
     vi.mocked(saveLayoutDraft)
       .mockRejectedValueOnce(
@@ -305,7 +291,7 @@ describe('usePublishLayout', () => {
         draftVersion: 2,
         changeClass: 'geometry_only',
         savedDraft: {
-          ...useEditorStore.getState().draft!,
+          ...getWarehouseDraftSnapshot()!,
           draftVersion: 2
         }
       });

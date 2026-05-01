@@ -4,9 +4,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TestRenderer, { act } from 'react-test-renderer';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
-import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import {
+  getWarehouseDraftPersistenceSnapshot,
+  getWarehouseDraftSnapshot,
+  warehouseLayoutDraftActions
+} from '@/warehouse/state/layout-draft';
+import { warehouseInteractionActions } from '@/warehouse/state/interaction';
+import { warehouseViewModeActions } from '@/warehouse/state/view-mode';
 import { useLayoutDraftAutosave } from './use-layout-draft-autosave';
 import {
   flushLayoutDraftSave,
@@ -25,27 +29,9 @@ vi.mock('../api/mutations', () => ({
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 function resetStores() {
-  useModeStore.setState({
-    viewMode: 'layout',
-    editorMode: 'select'
-  });
-  useInteractionStore.setState({
-    selection: { type: 'none' },
-    hoveredRackId: null,
-    highlightedCellIds: [],
-    contextPanelMode: 'compact'
-  });
-  useEditorStore.setState({
-    activeTask: null,
-    activeStorageWorkflow: null,
-    minRackDistance: 0,
-    draft: null,
-    draftSourceVersionId: null,
-    isDraftDirty: false,
-    persistenceStatus: 'idle',
-    lastSaveErrorMessage: null,
-    lastChangeClass: null
-  });
+  warehouseViewModeActions.reset();
+  warehouseInteractionActions.resetAll();
+  warehouseLayoutDraftActions.resetDraft();
 }
 
 function deferred<T>() {
@@ -59,7 +45,7 @@ function deferred<T>() {
 }
 
 function capturePersistenceSurface() {
-  const state = useEditorStore.getState();
+  const state = getWarehouseDraftPersistenceSnapshot();
   return {
     isDraftDirty: state.isDraftDirty,
     persistenceStatus: state.persistenceStatus,
@@ -102,12 +88,12 @@ describe('use-save-layout-draft coordinator', () => {
     const draft = createLayoutDraftFixture();
     const pending = deferred<Awaited<ReturnType<typeof saveLayoutDraft>>>();
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 120, 240);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 120, 240);
     vi.mocked(saveLayoutDraft).mockReturnValue(pending.promise);
 
-    const firstPromise = flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
-    const secondPromise = flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
+    const firstPromise = flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!);
+    const secondPromise = flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!);
 
     expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
 
@@ -116,7 +102,7 @@ describe('use-save-layout-draft coordinator', () => {
       draftVersion: 2,
       changeClass: 'geometry_only',
       savedDraft: {
-        ...useEditorStore.getState().draft!,
+        ...getWarehouseDraftSnapshot()!,
         draftVersion: 2
       }
     });
@@ -130,17 +116,17 @@ describe('use-save-layout-draft coordinator', () => {
     const draft = createLayoutDraftFixture();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 130, 250);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 130, 250);
     vi.mocked(saveLayoutDraft).mockRejectedValue(
       new BffRequestError(409, 'DRAFT_CONFLICT', 'Layout draft was changed by another session. Please reload.', null, null)
     );
 
     await expect(
-      flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!)
+      flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!)
     ).rejects.toMatchObject({ code: 'DRAFT_CONFLICT' });
 
-    expect(useEditorStore.getState().persistenceStatus).toBe('conflict');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('conflict');
     expect(invalidateSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -148,8 +134,8 @@ describe('use-save-layout-draft coordinator', () => {
     const queryClient = new QueryClient();
     const draft = createLayoutDraftFixture();
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 140, 260);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 140, 260);
     vi.mocked(saveLayoutDraft)
       .mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValueOnce({
@@ -157,20 +143,20 @@ describe('use-save-layout-draft coordinator', () => {
         draftVersion: 2,
         changeClass: 'geometry_only',
         savedDraft: {
-          ...useEditorStore.getState().draft!,
+          ...getWarehouseDraftSnapshot()!,
           draftVersion: 2
         }
       });
 
     await expect(
-      flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!)
+      flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!)
     ).rejects.toThrow('network down');
-    expect(useEditorStore.getState().persistenceStatus).toBe('error');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('error');
 
     await expect(
-      flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!)
+      flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!)
     ).resolves.toMatchObject({ draftVersion: 2 });
-    expect(useEditorStore.getState().persistenceStatus).toBe('saved');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('saved');
   });
 
   it('autosaves dirty drafts with one debounce timer across repeated edits', async () => {
@@ -188,7 +174,7 @@ describe('use-save-layout-draft coordinator', () => {
       }
     }));
 
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
 
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -202,13 +188,13 @@ describe('use-save-layout-draft coordinator', () => {
     });
 
     act(() => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 150, 270);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 150, 270);
     });
     act(() => {
       vi.advanceTimersByTime(1500);
     });
     act(() => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 160, 280);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 160, 280);
     });
     await act(async () => {
       vi.advanceTimersByTime(1999);
@@ -223,7 +209,7 @@ describe('use-save-layout-draft coordinator', () => {
     });
 
     expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
-    expect(useEditorStore.getState().persistenceStatus).toBe('saved');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('saved');
 
     await act(async () => {
       renderer!.unmount();
@@ -236,7 +222,7 @@ describe('use-save-layout-draft coordinator', () => {
     const draft = createLayoutDraftFixture();
     const pending = deferred<Awaited<ReturnType<typeof saveLayoutDraft>>>();
 
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
 
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -252,23 +238,23 @@ describe('use-save-layout-draft coordinator', () => {
     vi.mocked(saveLayoutDraft).mockReturnValue(pending.promise);
 
     act(() => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 190, 310);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 190, 310);
     });
-    expect(useEditorStore.getState().persistenceStatus).toBe('dirty');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('dirty');
 
     await act(async () => {
       vi.advanceTimersByTime(2000);
       await Promise.resolve();
     });
     expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
-    expect(useEditorStore.getState().persistenceStatus).toBe('saving');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('saving');
 
     pending.resolve({
       layoutVersionId: draft.layoutVersionId,
       draftVersion: 2,
       changeClass: 'geometry_only',
       savedDraft: {
-        ...useEditorStore.getState().draft!,
+        ...getWarehouseDraftSnapshot()!,
         draftVersion: 2
       }
     });
@@ -277,7 +263,7 @@ describe('use-save-layout-draft coordinator', () => {
       await Promise.resolve();
     });
 
-    expect(useEditorStore.getState().persistenceStatus).toBe('saved');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('saved');
 
     await act(async () => {
       renderer!.unmount();
@@ -289,7 +275,7 @@ describe('use-save-layout-draft coordinator', () => {
     const queryClient = new QueryClient();
     const draft = createLayoutDraftFixture();
 
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
 
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -313,10 +299,10 @@ describe('use-save-layout-draft coordinator', () => {
     }));
 
     act(() => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 175, 295);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 175, 295);
     });
 
-    const manualSavePromise = flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
+    const manualSavePromise = flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!);
     await expect(manualSavePromise).resolves.toMatchObject({ draftVersion: 2 });
 
     await act(async () => {
@@ -343,7 +329,7 @@ describe('use-save-layout-draft coordinator', () => {
     const draft = createLayoutDraftFixture();
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
-    useEditorStore.getState().initializeDraft(draft);
+    warehouseLayoutDraftActions.initializeDraft(draft);
 
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -361,7 +347,7 @@ describe('use-save-layout-draft coordinator', () => {
     );
 
     act(() => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 200, 320);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 200, 320);
     });
 
     await act(async () => {
@@ -370,11 +356,11 @@ describe('use-save-layout-draft coordinator', () => {
     });
 
     expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
-    expect(useEditorStore.getState().persistenceStatus).toBe('conflict');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('conflict');
     expect(invalidateSpy).toHaveBeenCalledTimes(2);
 
     act(() => {
-      useEditorStore.getState().updateRackPosition(draft.rackIds[0], 210, 330);
+      warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 210, 330);
     });
 
     await act(async () => {
@@ -382,7 +368,7 @@ describe('use-save-layout-draft coordinator', () => {
       await Promise.resolve();
     });
 
-    expect(useEditorStore.getState().persistenceStatus).toBe('conflict');
+    expect(getWarehouseDraftPersistenceSnapshot().persistenceStatus).toBe('conflict');
     expect(saveLayoutDraft).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -394,8 +380,8 @@ describe('use-save-layout-draft coordinator', () => {
     const queryClient = new QueryClient();
     const draft = createLayoutDraftFixture();
 
-    useEditorStore.getState().initializeDraft(draft);
-    useEditorStore.getState().updateRackPosition(draft.rackIds[0], 205, 325);
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 205, 325);
 
     vi.mocked(saveLayoutDraft)
       .mockRejectedValueOnce(
@@ -406,13 +392,13 @@ describe('use-save-layout-draft coordinator', () => {
         draftVersion: 2,
         changeClass: 'geometry_only',
         savedDraft: {
-          ...useEditorStore.getState().draft!,
+          ...getWarehouseDraftSnapshot()!,
           draftVersion: 2
         }
       });
 
     await expect(
-      flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!)
+      flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!)
     ).rejects.toMatchObject({ code: 'DRAFT_CONFLICT' });
 
     expect(capturePersistenceSurface()).toEqual({
@@ -424,7 +410,7 @@ describe('use-save-layout-draft coordinator', () => {
 
     let retryOutcome: 'succeeded' | 'blocked';
     try {
-      await flushLayoutDraftSave(queryClient, draft.floorId, useEditorStore.getState().draft!);
+      await flushLayoutDraftSave(queryClient, draft.floorId, getWarehouseDraftSnapshot()!);
       retryOutcome = 'succeeded';
     } catch {
       retryOutcome = 'blocked';

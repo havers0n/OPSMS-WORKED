@@ -1,7 +1,10 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+import {
+  getWarehouseViewModeSnapshot,
+  warehouseViewModeActions
+} from '@/warehouse/state/view-mode';
 import { ViewModeSwitcher } from './view-mode-switcher';
 
 (
@@ -27,11 +30,7 @@ function collectText(
 
 describe('ViewModeSwitcher view stages', () => {
   beforeEach(() => {
-    useModeStore.setState({
-      viewMode: 'layout',
-      viewStage: 'map',
-      editorMode: 'select'
-    });
+    warehouseViewModeActions.reset();
   });
 
   afterEach(() => {
@@ -53,7 +52,7 @@ describe('ViewModeSwitcher view stages', () => {
     expect(text).not.toContain('Plan wave');
 
     act(() => {
-      useModeStore.getState().setViewMode('view');
+      warehouseViewModeActions.setViewMode('view');
     });
 
     text = collectText(renderer!.toJSON());
@@ -64,11 +63,8 @@ describe('ViewModeSwitcher view stages', () => {
 
   it('updates the active View stage without changing the top-level mode', () => {
     act(() => {
-      useModeStore.setState({
-        viewMode: 'view',
-        viewStage: 'map',
-        editorMode: 'select'
-      });
+      warehouseViewModeActions.reset();
+      warehouseViewModeActions.setViewMode('view');
     });
 
     act(() => {
@@ -84,17 +80,15 @@ describe('ViewModeSwitcher view stages', () => {
       pickingPlanButton.props.onClick();
     });
 
-    expect(useModeStore.getState().viewMode).toBe('view');
-    expect(useModeStore.getState().viewStage).toBe('picking-plan');
+    expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
+    expect(getWarehouseViewModeSnapshot().viewStage).toBe('picking-plan');
   });
 
   it('resets View stage to map when switching away from View mode', () => {
     act(() => {
-      useModeStore.setState({
-        viewMode: 'view',
-        viewStage: 'picking-plan',
-        editorMode: 'select'
-      });
+      warehouseViewModeActions.reset();
+      warehouseViewModeActions.setViewMode('view');
+      warehouseViewModeActions.setViewStage('picking-plan');
     });
 
     act(() => {
@@ -110,7 +104,7 @@ describe('ViewModeSwitcher view stages', () => {
       storageButton.props.onClick();
     });
 
-    expect(useModeStore.getState().viewMode).toBe('storage');
-    expect(useModeStore.getState().viewStage).toBe('map');
+    expect(getWarehouseViewModeSnapshot().viewMode).toBe('storage');
+    expect(getWarehouseViewModeSnapshot().viewStage).toBe('map');
   });
 });

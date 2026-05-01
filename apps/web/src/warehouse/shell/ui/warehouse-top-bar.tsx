@@ -8,14 +8,16 @@ import { routes } from '@/shared/config/routes';
 import { IconButton } from '@/shared/ui/icon-button';
 import { TopBarShell } from '@/shared/ui/top-bar-shell';
 import {
-  useDraftDirtyState,
-  useDraftPersistenceStatus,
-  useLayoutDraftState,
-  useSetHighlightedCellIds,
-  useSetSelectedCellId,
-  useViewMode
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
+  useSetWarehouseHighlightedCells,
+  useSetWarehouseSelectedCellId
+} from '@/warehouse/state/interaction';
+import {
+  useIsWarehouseDraftDirty,
+  useWarehouseDraftStatus,
+  useWarehouseLayoutDraft
+} from '@/warehouse/state/layout-draft';
+import { warehouseStorageFocusActions } from '@/warehouse/state/storage-focus';
+import { useWarehouseViewMode } from '@/warehouse/state/view-mode';
 import { AccountControls } from '@/widgets/app-shell/ui/account-controls';
 import { ViewModeSwitcher } from './view-mode-switcher';
 import { WorkspaceActions } from './workspace-actions';
@@ -38,9 +40,9 @@ function WarehouseViewLocateInline() {
     message: null
   });
   const activeFloorId = useActiveFloorId();
-  const viewMode = useViewMode();
-  const setSelectedCellId = useSetSelectedCellId();
-  const setHighlightedCellIds = useSetHighlightedCellIds();
+  const viewMode = useWarehouseViewMode();
+  const setSelectedCellId = useSetWarehouseSelectedCellId();
+  const setHighlightedCellIds = useSetWarehouseHighlightedCells();
   const publishedCellsQuery = usePublishedCells(activeFloorId);
   const publishedCells = publishedCellsQuery.data ?? [];
   const feedbackColor =
@@ -131,7 +133,7 @@ function WarehouseViewLocateInline() {
     setSelectedCellId(matchedCellId);
     setHighlightedCellIds([matchedCellId]);
     if (viewMode === 'storage' && matchedCell) {
-      useStorageFocusStore.getState().selectCell({
+      warehouseStorageFocusActions.selectCell({
         cellId: matchedCell.id,
         rackId: matchedCell.rackId,
         level: matchedCell.address.parts.level
@@ -185,13 +187,13 @@ export function WarehouseTopBar() {
   const isWarehouseViewRoute = pathname.includes(routes.warehouseView);
 
   const activeFloorId = useActiveFloorId();
-  const viewMode = useViewMode();
+  const viewMode = useWarehouseViewMode();
   const shouldShowLocateInline =
     isWarehouseViewRoute ||
     (pathname.startsWith(routes.warehouse) && viewMode !== 'layout');
-  const layoutDraft = useLayoutDraftState();
-  const isDraftDirty = useDraftDirtyState();
-  const persistenceStatus = useDraftPersistenceStatus();
+  const layoutDraft = useWarehouseLayoutDraft();
+  const isDraftDirty = useIsWarehouseDraftDirty();
+  const persistenceStatus = useWarehouseDraftStatus();
   const workspaceQuery = useFloorWorkspace(activeFloorId);
   const latestPublished = workspaceQuery.data?.latestPublished ?? null;
   const persistedDraftValidation = useLayoutValidation(layoutDraft?.layoutVersionId ?? null).cachedResult;

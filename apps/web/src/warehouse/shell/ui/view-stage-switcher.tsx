@@ -1,12 +1,12 @@
 import { Map, Route } from 'lucide-react';
 import {
-  useSetViewStage,
-  useViewStage
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import type { ViewStage } from '@/widgets/warehouse-editor/model/editor-types';
+  useSetWarehouseViewStage,
+  useWarehouseViewStage,
+  type WarehouseViewStage
+} from '@/warehouse/state/view-mode';
 
 const VIEW_STAGES: Array<{
-  id: ViewStage;
+  id: WarehouseViewStage;
   label: string;
   icon: typeof Map;
 }> = [
@@ -15,8 +15,8 @@ const VIEW_STAGES: Array<{
 ];
 
 export function ViewStageSwitcher() {
-  const viewStage = useViewStage();
-  const setViewStage = useSetViewStage();
+  const viewStage = useWarehouseViewStage();
+  const setViewStage = useSetWarehouseViewStage();
 
   return (
     <div

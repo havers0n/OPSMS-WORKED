@@ -1,8 +1,13 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { LayoutDraft } from '@wos/domain';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
-import { useDraftPersistenceStatus, useLayoutDraftState } from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+import {
+  getWarehouseDraftPersistenceSnapshot,
+  getWarehouseDraftSnapshot,
+  useWarehouseDraftStatus,
+  useWarehouseLayoutDraft,
+  warehouseLayoutDraftActions
+} from '@/warehouse/state/layout-draft';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { saveLayoutDraft } from '../api/mutations';
 
@@ -40,13 +45,13 @@ async function runSaveLayoutDraft(queryClient: QueryClient, floorId: string | nu
     return inFlightSavePromise;
   }
 
-  useEditorStore.getState().markDraftSaving({ layoutVersionId: draftSnapshot.layoutVersionId });
+  warehouseLayoutDraftActions.markDraftSaving({ layoutVersionId: draftSnapshot.layoutVersionId });
 
   const promise = saveLayoutDraft(draftSnapshot)
     .then(async (result) => {
-      const keepDirty = useEditorStore.getState().draft !== draftSnapshot;
+      const keepDirty = getWarehouseDraftSnapshot() !== draftSnapshot;
 
-      useEditorStore.getState().markDraftSaved({
+      warehouseLayoutDraftActions.markDraftSaved({
         layoutVersionId: result.layoutVersionId,
         draftVersion: result.draftVersion,
         changeClass: result.changeClass,
@@ -57,10 +62,10 @@ async function runSaveLayoutDraft(queryClient: QueryClient, floorId: string | nu
       return result;
     })
     .catch(async (error) => {
-      const keepDirty = useEditorStore.getState().draft !== draftSnapshot;
+      const keepDirty = getWarehouseDraftSnapshot() !== draftSnapshot;
 
       if (error instanceof BffRequestError && (error.code === 'DRAFT_NOT_ACTIVE' || error.code === 'DRAFT_CONFLICT')) {
-        useEditorStore.getState().markDraftSaveConflict({
+        warehouseLayoutDraftActions.markDraftSaveConflict({
           layoutVersionId: draftSnapshot.layoutVersionId,
           message: error.message
         });
@@ -68,7 +73,7 @@ async function runSaveLayoutDraft(queryClient: QueryClient, floorId: string | nu
         throw error;
       }
 
-      useEditorStore.getState().markDraftSaveError({
+      warehouseLayoutDraftActions.markDraftSaveError({
         layoutVersionId: draftSnapshot.layoutVersionId,
         message: error instanceof Error ? error.message : 'Save failed',
         keepDirty
@@ -105,14 +110,13 @@ export function scheduleLayoutDraftAutosave(
   clearScheduledAutosaveTimer();
   scheduledAutosaveTimer = setTimeout(() => {
     scheduledAutosaveTimer = null;
-    const draft = useEditorStore.getState().draft;
-    const persistenceStatus = useEditorStore.getState().persistenceStatus;
+    const { draft, isDraftDirty, persistenceStatus } = getWarehouseDraftPersistenceSnapshot();
 
     if (!draft || draft.state !== 'draft') {
       return;
     }
 
-    if (!useEditorStore.getState().isDraftDirty || persistenceStatus !== 'dirty') {
+    if (!isDraftDirty || persistenceStatus !== 'dirty') {
       return;
     }
 
@@ -131,13 +135,13 @@ export async function flushLayoutDraftSave(queryClient: QueryClient, floorId: st
     return inFlightSavePromise;
   }
 
-  const currentDraft = draft ?? useEditorStore.getState().draft;
+  const currentDraft = draft ?? getWarehouseDraftSnapshot();
 
   if (!currentDraft || currentDraft.state !== 'draft' || !floorId) {
     throw new Error('Layout draft is unavailable.');
   }
 
-  if (!useEditorStore.getState().isDraftDirty) {
+  if (!getWarehouseDraftPersistenceSnapshot().isDraftDirty) {
     return null;
   }
 
@@ -151,8 +155,8 @@ export function resetLayoutDraftSaveCoordinator() {
 
 export function useSaveLayoutDraft(floorId: string | null) {
   const queryClient = useQueryClient();
-  const draft = useLayoutDraftState();
-  const persistenceStatus = useDraftPersistenceStatus();
+  const draft = useWarehouseLayoutDraft();
+  const persistenceStatus = useWarehouseDraftStatus();
 
   return {
     isPending: persistenceStatus === 'saving',
