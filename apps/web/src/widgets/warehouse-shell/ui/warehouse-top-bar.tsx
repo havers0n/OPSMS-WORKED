@@ -16,11 +16,11 @@ import {
   useViewMode
 } from '@/widgets/warehouse-editor/model/editor-selectors';
 import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
-import { AccountControls } from './account-controls';
+import { AccountControls } from '@/widgets/app-shell/ui/account-controls';
 import { ViewModeSwitcher } from './view-mode-switcher';
-import { WorkspaceActions } from './workspace-actions';
-import { WorkspaceNav } from './workspace-nav';
-import { WorkspaceStatus } from './workspace-status';
+import { WorkspaceActions } from './warehouse-actions';
+import { WorkspaceNav } from './warehouse-nav';
+import { WorkspaceStatus } from './warehouse-status';
 
 type LocateFeedback = {
   kind: 'idle' | 'found' | 'not-found' | 'invalid' | 'error';
@@ -177,7 +177,7 @@ function WarehouseViewLocateInline() {
   );
 }
 
-export function TopBar() {
+export function WarehouseTopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const toggle = useToggleDrawer();
   const isCollapsed = useIsDrawerCollapsed();

@@ -6,7 +6,7 @@ import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
 import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
 import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
 import { BffRequestError } from '@/shared/api/bff/client';
-import { TopBar } from './top-bar';
+import { WarehouseTopBar } from './warehouse-top-bar';
 
 (
   globalThis as typeof globalThis & {
@@ -160,7 +160,7 @@ describe('TopBar lifecycle wording', () => {
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      renderer = TestRenderer.create(createElement(TopBar));
+      renderer = TestRenderer.create(createElement(WarehouseTopBar));
     });
     const text = collectText(renderer.toJSON());
 
@@ -183,7 +183,7 @@ describe('TopBar lifecycle wording', () => {
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      renderer = TestRenderer.create(createElement(TopBar));
+      renderer = TestRenderer.create(createElement(WarehouseTopBar));
     });
 
     const validateButton = renderer.root.find(
@@ -231,7 +231,7 @@ describe('TopBar lifecycle wording', () => {
 
     let renderer!: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      renderer = TestRenderer.create(createElement(TopBar));
+      renderer = TestRenderer.create(createElement(WarehouseTopBar));
     });
 
     const publishButton = renderer.root.find(

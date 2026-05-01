@@ -4,7 +4,7 @@ import { useActiveFloorId, useActiveSiteId, useSetActiveSiteId } from '@/app/sto
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useSites } from '@/entities/site/api/use-sites';
-import { TopBar } from '@/widgets/app-shell/ui/top-bar';
+import { WarehouseTopBar } from '@/widgets/warehouse-shell/ui/warehouse-top-bar';
 import { BootstrapWizard } from '@/widgets/warehouse-bootstrap/ui/bootstrap-wizard';
 import { SiteFloorSetupState } from '@/widgets/warehouse-bootstrap/ui/site-floor-setup-state';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
@@ -115,7 +115,7 @@ export function WarehouseSetupPage() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <TopBar />
+      <WarehouseTopBar />
       <div className="flex-1 overflow-hidden">
         <WarehouseContent
           setupState={setupState}
