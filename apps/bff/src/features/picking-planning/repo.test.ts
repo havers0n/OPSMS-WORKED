@@ -82,7 +82,7 @@ describe('picking planning read repos', () => {
     const { supabase, tables } = makeSupabaseMock({
       order_lines: [{ order_id: 'order-1', id: 'line-1', product_id: 'product-1', sku: 'sku-1', qty_required: 1, qty_picked: 0 }],
       product_location_roles: [{ product_id: 'product-1', location_id: 'location-1' }],
-      inventory_unit: [{ product_id: 'product-1', container_id: 'container-1', quantity: 1, uom: 'ea', created_at: '2026-01-01T00:00:00Z' }],
+      inventory_unit: [{ id: 'iu-1', product_id: 'product-1', container_id: 'container-1', quantity: 1, uom: 'ea', created_at: '2026-01-01T00:00:00Z' }],
       containers: [{ id: 'container-1', current_location_id: 'location-1' }],
       locations: [{ id: 'location-1', tenant_id: tenantId, floor_id: 'floor-1', code: 'A-01' }]
     });
@@ -100,6 +100,10 @@ describe('picking planning read repos', () => {
     expectEq(findTable(tables, 'order_lines'), 'tenant_id', tenantId);
     expectEq(findTable(tables, 'product_location_roles'), 'tenant_id', tenantId);
     expectEq(findTable(tables, 'inventory_unit'), 'tenant_id', tenantId);
+    expect(findTable(tables, 'inventory_unit').calls).toContainEqual({
+      op: 'select',
+      args: ['id,product_id,container_id,quantity,uom,created_at']
+    });
     expectEq(findTable(tables, 'containers'), 'tenant_id', tenantId);
     expectEq(findTable(tables, 'locations'), 'tenant_id', tenantId);
 

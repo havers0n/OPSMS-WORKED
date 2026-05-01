@@ -46,6 +46,7 @@ type ProductPrimaryPickLocationRow = {
 };
 
 type InventoryUnitPlanningRow = {
+  id: string;
   product_id: string;
   container_id: string;
   quantity: number;
@@ -56,6 +57,17 @@ type InventoryUnitPlanningRow = {
 type ContainerLocationRow = {
   id: string;
   current_location_id: string | null;
+};
+
+type InventoryAllocationLedger = {
+  remainingByInventoryUnitId: Map<string, number>;
+  allocatedByInventoryUnitId: Map<string, number>;
+};
+
+type StagedInventoryAllocation = {
+  inventoryUnitId: string;
+  locationId: string;
+  qty: number;
 };
 
 export type BuildPlanningInputFromOrdersRequest = {
@@ -164,6 +176,12 @@ function createUnresolvedPlanningWarning(line: UnresolvedPlanningLine): Planning
   });
 }
 
+function compareInventoryUnits(left: InventoryUnitPlanningRow, right: InventoryUnitPlanningRow): number {
+  const createdAtOrder = left.created_at.localeCompare(right.created_at);
+  if (createdAtOrder !== 0) return createdAtOrder;
+  return left.id.localeCompare(right.id);
+}
+
 export async function buildPlanningInputFromOrders(
   repo: PickingPlanningOrderInputReadRepo,
   request: BuildPlanningInputFromOrdersRequest
@@ -241,6 +259,11 @@ export async function buildPlanningInputFromOrders(
   const locationById = new Map(locations.map((row) => [row.id, row]));
 
   const eligibleInventoryByProductAndLocation = new Map<string, InventoryUnitPlanningRow[]>();
+  const allocationLedger: InventoryAllocationLedger = {
+    remainingByInventoryUnitId: new Map(inventoryUnits.map((row) => [row.id, row.quantity])),
+    allocatedByInventoryUnitId: new Map()
+  };
+
   for (const unit of inventoryUnits) {
     const locationId = containerLocationById.get(unit.container_id);
     if (!locationId) continue;
@@ -310,22 +333,27 @@ export async function buildPlanningInputFromOrders(
       continue;
     }
 
-    let selectedLocationId: string | null = null;
-    let selectedInventory: InventoryUnitPlanningRow | null = null;
+    const stagedAllocations: StagedInventoryAllocation[] = [];
+    let remainingQtyToStage = qtyToPlan;
 
     for (const locationId of primaryPickLocationIds) {
       const key = `${line.product_id}:${locationId}`;
-      const eligible = (eligibleInventoryByProductAndLocation.get(key) ?? []).slice().sort((a, b) =>
-        a.created_at.localeCompare(b.created_at)
-      );
+      const eligible = (eligibleInventoryByProductAndLocation.get(key) ?? []).slice().sort(compareInventoryUnits);
 
       const withSupportedUom = eligible.filter((row) => SUPPORTED_UNIT_UOMS.has(row.uom.trim().toLowerCase()));
-      const inventory = withSupportedUom.find((row) => row.quantity >= qtyToPlan);
-      if (inventory) {
-        selectedInventory = inventory;
-        selectedLocationId = locationId;
-        break;
+
+      for (const inventory of withSupportedUom) {
+        const remainingInventoryQty = allocationLedger.remainingByInventoryUnitId.get(inventory.id) ?? 0;
+        if (remainingInventoryQty <= 0) continue;
+
+        const qty = Math.min(remainingQtyToStage, remainingInventoryQty);
+        stagedAllocations.push({ inventoryUnitId: inventory.id, locationId, qty });
+        remainingQtyToStage -= qty;
+
+        if (remainingQtyToStage === 0) break;
       }
+
+      if (remainingQtyToStage === 0) break;
 
       if (eligible.length > 0 && withSupportedUom.length === 0) {
         const unresolvedLine = {
@@ -343,7 +371,7 @@ export async function buildPlanningInputFromOrders(
       }
     }
 
-    if (!selectedLocationId || !selectedInventory) {
+    if (remainingQtyToStage > 0) {
       const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
@@ -359,8 +387,8 @@ export async function buildPlanningInputFromOrders(
       continue;
     }
 
-    const location = locationById.get(selectedLocationId);
-    if (!location) {
+    const missingSourceLocationId = stagedAllocations.find((allocation) => !locationById.has(allocation.locationId))?.locationId;
+    if (missingSourceLocationId) {
       const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
@@ -368,7 +396,7 @@ export async function buildPlanningInputFromOrders(
         productId: line.product_id,
         qty: qtyToPlan,
         reason: 'missing_source_location',
-        message: `Source location ${selectedLocationId} could not be resolved.`
+        message: `Source location ${missingSourceLocationId} could not be resolved.`
       } satisfies UnresolvedPlanningLine;
       unresolved.push(unresolvedLine);
       const warning = createUnresolvedPlanningWarning(unresolvedLine);
@@ -394,16 +422,33 @@ export async function buildPlanningInputFromOrders(
     }
 
     const skuId = product.sku ?? line.sku;
-    tasks.push({
-      id: `candidate-${line.order_id}-${line.id}`,
-      skuId,
-      fromLocationId: selectedLocationId,
-      qty: qtyToPlan,
-      orderRefs: [{ orderId: line.order_id, orderLineId: line.id, qty: qtyToPlan }],
-      weightKg: unitWeightG != null ? (unitWeightG * qtyToPlan) / 1_000 : undefined,
-      volumeLiters: unitVolumeMm3 != null ? (unitVolumeMm3 * qtyToPlan) / 1_000_000 : undefined,
-      handlingClass: resolveHandlingClass(profile)
-    });
+    for (const allocation of stagedAllocations) {
+      const remainingInventoryQty = allocationLedger.remainingByInventoryUnitId.get(allocation.inventoryUnitId) ?? 0;
+      allocationLedger.remainingByInventoryUnitId.set(allocation.inventoryUnitId, remainingInventoryQty - allocation.qty);
+      allocationLedger.allocatedByInventoryUnitId.set(
+        allocation.inventoryUnitId,
+        (allocationLedger.allocatedByInventoryUnitId.get(allocation.inventoryUnitId) ?? 0) + allocation.qty
+      );
+    }
+
+    const qtyByLocationId = new Map<string, number>();
+    for (const allocation of stagedAllocations) {
+      qtyByLocationId.set(allocation.locationId, (qtyByLocationId.get(allocation.locationId) ?? 0) + allocation.qty);
+    }
+
+    const locationAllocations = Array.from(qtyByLocationId.entries());
+    for (const [index, [locationId, qty]] of locationAllocations.entries()) {
+      tasks.push({
+        id: locationAllocations.length === 1 ? `candidate-${line.order_id}-${line.id}` : `candidate-${line.order_id}-${line.id}-${index + 1}`,
+        skuId,
+        fromLocationId: locationId,
+        qty,
+        orderRefs: [{ orderId: line.order_id, orderLineId: line.id, qty }],
+        weightKg: unitWeightG != null ? (unitWeightG * qty) / 1_000 : undefined,
+        volumeLiters: unitVolumeMm3 != null ? (unitVolumeMm3 * qty) / 1_000_000 : undefined,
+        handlingClass: resolveHandlingClass(profile)
+      });
+    }
   }
 
   const locationsById: Record<string, StorageLocationProjection> = {};

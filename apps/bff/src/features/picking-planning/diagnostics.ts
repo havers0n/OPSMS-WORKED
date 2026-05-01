@@ -36,7 +36,14 @@ export function calculatePlanningCoverage(input: {
   tasks: PickTaskCandidate[];
   unresolved: UnresolvedPlanningLine[];
 }): PlanningCoverage {
-  const plannedLineCount = input.tasks.length;
+  const plannedLineIds = new Set<string>();
+  for (const task of input.tasks) {
+    for (const orderRef of task.orderRefs) {
+      plannedLineIds.add(`${orderRef.orderId}:${orderRef.orderLineId}`);
+    }
+  }
+
+  const plannedLineCount = plannedLineIds.size;
   const unresolvedLineCount = input.unresolved.length;
   const orderLineCount = plannedLineCount + unresolvedLineCount;
 

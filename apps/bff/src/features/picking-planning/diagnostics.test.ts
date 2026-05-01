@@ -85,4 +85,37 @@ describe('picking planning diagnostics', () => {
       planningCoveragePct: 50
     });
   });
+
+  it('counts split tasks for the same order line once in line coverage', () => {
+    const coverage = calculatePlanningCoverage({
+      orderIds: ['o1'],
+      tasks: [
+        {
+          id: 't1',
+          skuId: 'sku-1',
+          fromLocationId: 'loc-a',
+          qty: 6,
+          orderRefs: [{ orderId: 'o1', orderLineId: 'l1', qty: 6 }]
+        },
+        {
+          id: 't2',
+          skuId: 'sku-1',
+          fromLocationId: 'loc-b',
+          qty: 4,
+          orderRefs: [{ orderId: 'o1', orderLineId: 'l1', qty: 4 }]
+        }
+      ],
+      unresolved: []
+    });
+
+    expect(coverage).toEqual({
+      orderCount: 1,
+      orderLineCount: 1,
+      plannedLineCount: 1,
+      unresolvedLineCount: 0,
+      plannedQty: 10,
+      unresolvedQty: 0,
+      planningCoveragePct: 100
+    });
+  });
 });

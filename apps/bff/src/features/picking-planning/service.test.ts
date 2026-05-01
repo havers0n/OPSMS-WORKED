@@ -61,7 +61,7 @@ describe('picking planning preview service', () => {
       listPackagingLevels: vi.fn().mockResolvedValue([]),
       listPrimaryPickLocations: vi.fn().mockResolvedValue([{ product_id: 'p1', location_id: 'loc-1' }]),
       listInventoryUnits: vi.fn().mockResolvedValue([
-        { product_id: 'p1', container_id: 'c-1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        { id: 'iu-1', product_id: 'p1', container_id: 'c-1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
       ]),
       listContainerLocations: vi.fn().mockResolvedValue([{ id: 'c-1', current_location_id: 'loc-1' }]),
       listLocations: vi.fn().mockResolvedValue([
@@ -106,7 +106,7 @@ describe('picking planning preview service', () => {
       listPackagingLevels: vi.fn().mockResolvedValue([]),
       listPrimaryPickLocations: vi.fn().mockResolvedValue([{ product_id: 'p1', location_id: 'loc-1' }]),
       listInventoryUnits: vi.fn().mockResolvedValue([
-        { product_id: 'p1', container_id: 'c-1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        { id: 'iu-1', product_id: 'p1', container_id: 'c-1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
       ]),
       listContainerLocations: vi.fn().mockResolvedValue([{ id: 'c-1', current_location_id: 'loc-1' }]),
       listLocations: vi.fn().mockResolvedValue([{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }])

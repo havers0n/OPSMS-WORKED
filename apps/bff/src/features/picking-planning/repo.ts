@@ -91,7 +91,7 @@ export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient
       if (productIds.length === 0) return [];
       const { data, error } = await supabase
         .from('inventory_unit')
-        .select('product_id,container_id,quantity,uom,created_at')
+        .select('id,product_id,container_id,quantity,uom,created_at')
         .in('product_id', productIds)
         .eq('tenant_id', tenantId)
         .eq('status', 'available')
