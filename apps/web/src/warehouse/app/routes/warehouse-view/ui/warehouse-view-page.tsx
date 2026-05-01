@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Floor } from '@wos/domain';
+import { useQueries } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import {
@@ -7,6 +9,7 @@ import {
   useSetActiveFloorId,
   useSetActiveSiteId
 } from '@/app/store/ui-selectors';
+import { floorsQueryOptions } from '@/entities/floor/api/queries';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
@@ -21,6 +24,10 @@ import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
 import { ViewTopBar } from '@/warehouse/viewer/ui/view-top-bar';
+import {
+  getFloorDeepLinkAction,
+  resolveFloorDeepLink
+} from './floor-deep-link-resolution';
 
 type LocateFeedback = {
   kind: 'idle' | 'found' | 'not-found' | 'invalid' | 'error';
@@ -56,13 +63,61 @@ export function WarehouseViewPage() {
   const returnTaskId = searchParams.get('returnTaskId')?.trim() ?? '';
   const returnTaskNumber = searchParams.get('returnTaskNumber')?.trim() ?? '';
   const shouldShowReturnTaskBar = returnTaskId.length > 0 && returnTaskNumber.length > 0;
+  const sites = sitesQuery.data ?? [];
+  const allSiteFloorQueries = useQueries({
+    queries: targetFloorId && sitesQuery.data ? sites.map((site) => floorsQueryOptions(site.id)) : []
+  });
+  const floorDeepLinkResolution = useMemo(() => {
+    const floorListsBySiteId = new Map<string, Floor[]>();
+    const pendingSiteFloorQueries = new Set<string>();
+
+    allSiteFloorQueries.forEach((query, index) => {
+      const siteId = sites[index]?.id;
+      if (!siteId) return;
+
+      if (query.data) {
+        floorListsBySiteId.set(siteId, query.data);
+      }
+      if (query.isFetching) {
+        pendingSiteFloorQueries.add(siteId);
+      }
+    });
+
+    return resolveFloorDeepLink({
+      targetFloorId,
+      sites,
+      floorListsBySiteId,
+      isSitesLoading: sitesQuery.isLoading,
+      pendingSiteFloorQueries
+    });
+  }, [allSiteFloorQueries, sites, sitesQuery.isLoading, targetFloorId]);
+  const floorDeepLinkAction = useMemo(
+    () =>
+      getFloorDeepLinkAction({
+        resolution: floorDeepLinkResolution,
+        activeSiteId,
+        activeFloorId
+      }),
+    [activeFloorId, activeSiteId, floorDeepLinkResolution]
+  );
+  const floorDeepLinkActionSiteId =
+    floorDeepLinkAction.type === 'select-site' ? floorDeepLinkAction.siteId : null;
+  const floorDeepLinkActionFloorId =
+    floorDeepLinkAction.type === 'select-floor' ? floorDeepLinkAction.floorId : null;
 
   // Auto-select first site if none selected
   useEffect(() => {
+    if (targetFloorId && floorDeepLinkResolution.status !== 'not-found') return;
     if (!activeSiteId && sitesQuery.data && sitesQuery.data.length > 0) {
       setActiveSiteId(sitesQuery.data[0].id);
     }
-  }, [activeSiteId, setActiveSiteId, sitesQuery.data]);
+  }, [
+    activeSiteId,
+    floorDeepLinkResolution.status,
+    setActiveSiteId,
+    sitesQuery.data,
+    targetFloorId
+  ]);
 
   // Layout authoring is an editor-only mode — switch to safe View on this page.
   useEffect(() => {
@@ -71,19 +126,22 @@ export function WarehouseViewPage() {
     }
   }, [viewMode, setViewMode]);
 
-  // URL hydration: select target floor when site is ready and floor exists on it.
-  // Runs after site auto-select so setActiveSiteId won't clobber it.
+  // URL hydration: resolve the target floor across all sites, then switch site before floor.
   useEffect(() => {
-    if (!targetFloorId) return;
-    if (!activeSiteId) return;
-    if (!floorsQuery.data) return;
-    if (activeFloorId === targetFloorId) return;
-    const floorExists = floorsQuery.data.some((f) => f.id === targetFloorId);
-    if (floorExists) {
-      setActiveFloorId(targetFloorId);
+    if (floorDeepLinkActionSiteId) {
+      setActiveSiteId(floorDeepLinkActionSiteId);
+      return;
     }
-    // floor not found on this site → silently fall through to existing behavior
-  }, [targetFloorId, activeSiteId, activeFloorId, floorsQuery.data, setActiveFloorId]);
+
+    if (floorDeepLinkActionFloorId) {
+      setActiveFloorId(floorDeepLinkActionFloorId);
+    }
+  }, [
+    floorDeepLinkActionFloorId,
+    floorDeepLinkActionSiteId,
+    setActiveFloorId,
+    setActiveSiteId
+  ]);
 
   // URL hydration: select and highlight target cell in View.
   // Guarded on viewMode === 'view' because setViewMode clears selections/highlights.
@@ -194,6 +252,8 @@ export function WarehouseViewPage() {
 
   const isLoading =
     sitesQuery.isLoading ||
+    floorDeepLinkResolution.status === 'resolving' ||
+    floorDeepLinkAction.type !== 'none' ||
     (activeSiteId ? floorsQuery.isLoading : false) ||
     (activeFloorId ? workspaceQuery.isLoading : false);
 
