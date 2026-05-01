@@ -36,6 +36,12 @@ export function mapPackagingRpcError(error: SupabaseLikeError | null): ApiError 
       return new ApiError(422, 'BASE_UNIT_QTY_BELOW_ONE', 'base_unit_qty must be >= 1 for every row.');
     case 'NON_POSITIVE_DIMENSION':
       return new ApiError(422, 'NON_POSITIVE_DIMENSION', 'Pack dimensions must be positive when provided.');
+    case 'PACKAGING_LEVEL_REFERENCED':
+      return new ApiError(409, 'PACKAGING_LEVEL_REFERENCED', 'Cannot remove a packaging level that is still referenced.');
+    case 'PACKAGING_LEVEL_ID_NOT_FOUND':
+      return new ApiError(422, 'PACKAGING_LEVEL_ID_NOT_FOUND', 'One or more packaging level IDs do not belong to this product.');
+    case 'DUPLICATE_ID':
+      return new ApiError(422, 'DUPLICATE_ID', 'Two or more rows in the supplied set share the same ID.');
     default:
       return null;
   }

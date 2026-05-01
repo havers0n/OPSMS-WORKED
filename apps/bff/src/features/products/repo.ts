@@ -293,9 +293,10 @@ export function createProductsRepo(supabase: SupabaseClient): ProductsRepo {
     },
 
     async replaceAllPackagingLevels(productId, levels) {
-      // Single SQL RPC: validates + deletes + inserts all inside one transaction.
-      // If validation fails or any insert fails, the DB rolls back and prior rows survive.
+      // Single SQL RPC: validates + reconciles all rows inside one transaction.
+      // If validation fails or any write fails, the DB rolls back and prior rows survive.
       const levelsJson = levels.map((l) => ({
+        id: l.id ?? null,
         code: l.code,
         name: l.name,
         base_unit_qty: l.baseUnitQty,

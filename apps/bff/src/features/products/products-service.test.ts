@@ -269,7 +269,10 @@ describe('mapPackagingRpcError', () => {
       ['INACTIVE_DEFAULT_PICK',    422, 'INACTIVE_DEFAULT_PICK'],
       ['DUPLICATE_CODE',           409, 'DUPLICATE_CODE'],
       ['BASE_UNIT_QTY_BELOW_ONE',  422, 'BASE_UNIT_QTY_BELOW_ONE'],
-      ['NON_POSITIVE_DIMENSION',   422, 'NON_POSITIVE_DIMENSION']
+      ['NON_POSITIVE_DIMENSION',   422, 'NON_POSITIVE_DIMENSION'],
+      ['PACKAGING_LEVEL_REFERENCED', 409, 'PACKAGING_LEVEL_REFERENCED'],
+      ['PACKAGING_LEVEL_ID_NOT_FOUND', 422, 'PACKAGING_LEVEL_ID_NOT_FOUND'],
+      ['DUPLICATE_ID',             422, 'DUPLICATE_ID']
     ];
 
     for (const [msg, expectedStatus, expectedCode] of cases) {
