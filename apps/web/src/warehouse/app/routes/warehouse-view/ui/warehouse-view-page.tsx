@@ -20,7 +20,7 @@ import { useStorageFocusStore } from '@/widgets/warehouse-editor/model/v2/storag
 import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
-import { ViewTopBar } from '@/widgets/warehouse-viewer/ui/view-top-bar';
+import { ViewTopBar } from '@/warehouse/viewer/ui/view-top-bar';
 
 type LocateFeedback = {
   kind: 'idle' | 'found' | 'not-found' | 'invalid' | 'error';
