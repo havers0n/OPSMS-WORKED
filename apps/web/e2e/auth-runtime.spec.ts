@@ -1,38 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
-import { signInToWarehouse } from './support/auth';
-import { adminClient, resetWarehouseData } from './support/local-supabase';
-
-const credentials = {
-  email: 'admin@wos.local',
-  password: 'warehouse123'
-};
-
-async function ensureAuthUser() {
-  const existingUsers = await adminClient.auth.admin.listUsers();
-  if (existingUsers.error) {
-    throw existingUsers.error;
-  }
-
-  const existingUser = existingUsers.data.users.find((user) => user.email === credentials.email);
-  if (existingUser) {
-    return;
-  }
-
-  const createdUser = await adminClient.auth.admin.createUser({
-    email: credentials.email,
-    password: credentials.password,
-    email_confirm: true
-  });
-
-  if (createdUser.error) {
-    throw createdUser.error;
-  }
-}
-
-async function fillCredentials(page: Page) {
-  await page.getByLabel('Email').fill(credentials.email);
-  await page.getByLabel('Password').fill(credentials.password);
-}
+import { expect, test } from '@playwright/test';
+import { fillCredentials, installSupabaseAuthRoutes, signInToWarehouse } from './support/auth';
+import { resetWarehouseData } from './support/local-supabase';
 
 test.describe('auth runtime smoke', () => {
   test('anonymous protected navigation resolves to login without an auth loading loop', async ({ page }) => {
@@ -71,7 +39,7 @@ test.describe('auth runtime smoke', () => {
   });
 
   test('workspace-unavailable session shows access screen and still signs out', async ({ page }) => {
-    await ensureAuthUser();
+    await installSupabaseAuthRoutes(page);
 
     await page.route('**/api/me', async (route) => {
       await route.fulfill({
@@ -88,10 +56,11 @@ test.describe('auth runtime smoke', () => {
     await expect(page).toHaveURL(/\/login$/);
 
     await fillCredentials(page);
-    await page.locator('section').filter({ has: page.getByLabel('Email') }).getByRole('button').last().click();
+    await page.locator('form').filter({ has: page.getByLabel('Email') }).getByRole('button', { name: 'Sign In' }).click();
 
-    await expect(page.getByText('Workspace Access')).toBeVisible();
-    await expect(page.getByText('No workspace assigned')).toBeVisible();
+    await expect(page.getByText('Workspace Access', { exact: true })).toBeVisible();
+    await expect(page.getByText('Your account is authenticated, but no warehouse workspace is assigned yet.')).toBeVisible();
+    await expect(page.getByText('No workspace assigned', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/login$/);

@@ -23,6 +23,10 @@ export const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 let managerClientPromise: Promise<ReturnType<typeof createClient>> | null = null;
 
+export type LocalAuthSession = NonNullable<
+  Awaited<ReturnType<ReturnType<typeof createClient>['auth']['signInWithPassword']>>['data']['session']
+>;
+
 async function ensureDefaultTenantId() {
   const { data: existingTenant, error: existingTenantError } = await adminClient
     .from('tenants')
@@ -69,55 +73,70 @@ async function ensureTenantAdminMembership(profileId: string) {
   }
 }
 
+export async function ensureLocalAuthSession(): Promise<LocalAuthSession> {
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+
+  let signInResult = await client.auth.signInWithPassword({
+    email: DEV_AUTH_EMAIL,
+    password: DEV_AUTH_PASSWORD
+  });
+
+  if (signInResult.error) {
+    const existingUsers = await adminClient.auth.admin.listUsers();
+    if (existingUsers.error) {
+      throw existingUsers.error;
+    }
+
+    const existingUser = existingUsers.data.users.find((user) => user.email === DEV_AUTH_EMAIL) ?? null;
+    const createUserResult = existingUser
+      ? await adminClient.auth.admin.updateUserById(existingUser.id, {
+        password: DEV_AUTH_PASSWORD,
+        email_confirm: true
+      })
+      : await adminClient.auth.admin.createUser({
+        email: DEV_AUTH_EMAIL,
+        password: DEV_AUTH_PASSWORD,
+        email_confirm: true
+      });
+
+    if (createUserResult.error) {
+      throw createUserResult.error;
+    }
+
+    signInResult = await client.auth.signInWithPassword({
+      email: DEV_AUTH_EMAIL,
+      password: DEV_AUTH_PASSWORD
+    });
+  }
+
+  if (signInResult.error) {
+    throw signInResult.error;
+  }
+
+  const session = signInResult.data.session;
+  const userId = signInResult.data.user?.id;
+  if (!session || !userId) {
+    throw new Error('Failed to resolve the local auth session for e2e tests.');
+  }
+
+  await ensureTenantAdminMembership(userId);
+
+  return session;
+}
+
 async function ensureManagerClient() {
   if (!managerClientPromise) {
     managerClientPromise = (async () => {
+      const session = await ensureLocalAuthSession();
       const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: { persistSession: false, autoRefreshToken: false }
       });
-
-      let signInResult = await client.auth.signInWithPassword({
-        email: DEV_AUTH_EMAIL,
-        password: DEV_AUTH_PASSWORD
+      await client.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token
       });
-
-      if (signInResult.error) {
-        const existingUsers = await adminClient.auth.admin.listUsers();
-        if (existingUsers.error) {
-          throw existingUsers.error;
-        }
-
-        const existingUser = existingUsers.data.users.find((user) => user.email === DEV_AUTH_EMAIL) ?? null;
-        const createUserResult = existingUser
-          ? { data: { user: existingUser }, error: null }
-          : await adminClient.auth.admin.createUser({
-            email: DEV_AUTH_EMAIL,
-            password: DEV_AUTH_PASSWORD,
-            email_confirm: true
-          });
-
-        if (createUserResult.error) {
-          throw createUserResult.error;
-        }
-
-        const createdUserId = createUserResult.data.user?.id;
-        if (!createdUserId) {
-          throw new Error('Failed to resolve the local admin user for draft save tests.');
-        }
-
-        await ensureTenantAdminMembership(createdUserId);
-        signInResult = await client.auth.signInWithPassword({
-          email: DEV_AUTH_EMAIL,
-          password: DEV_AUTH_PASSWORD
-        });
-      } else if (signInResult.data.user?.id) {
-        await ensureTenantAdminMembership(signInResult.data.user.id);
-      }
-
-      if (signInResult.error) {
-        throw signInResult.error;
-      }
-
       return client;
     })();
   }
