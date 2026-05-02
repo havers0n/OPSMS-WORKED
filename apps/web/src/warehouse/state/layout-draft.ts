@@ -10,8 +10,8 @@ import {
   useMarkDraftSaved,
   useMarkDraftSaving,
   useResetDraft
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
+} from '@/warehouse/editor/model/editor-selectors';
+import { useEditorStore } from '@/warehouse/editor/model/editor-store';
 
 export const useWarehouseLayoutDraft = useLayoutDraftState;
 export const useWarehouseDraftStatus = useDraftPersistenceStatus;

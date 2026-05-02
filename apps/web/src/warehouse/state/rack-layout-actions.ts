@@ -21,9 +21,9 @@ import {
   useUpdateRackPosition,
   useUpdateSectionLength,
   useUpdateSectionSlots
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import type { RackSideFocus } from '@/widgets/warehouse-editor/model/editor-types';
+} from '@/warehouse/editor/model/editor-selectors';
+import { useEditorStore } from '@/warehouse/editor/model/editor-store';
+import type { RackSideFocus } from '@/warehouse/editor/model/editor-types';
 
 export type WarehouseRackSideFocus = RackSideFocus;
 

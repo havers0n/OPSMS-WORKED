@@ -5,10 +5,10 @@ import {
   useSelectedCellId,
   useSetHighlightedCellIds,
   useSetSelectedCellId
-} from '@/widgets/warehouse-editor/model/editor-selectors';
-import { useEditorStore } from '@/widgets/warehouse-editor/model/editor-store';
-import { useInteractionStore } from '@/widgets/warehouse-editor/model/interaction-store';
-import type { EditorSelection } from '@/widgets/warehouse-editor/model/editor-types';
+} from '@/warehouse/editor/model/editor-selectors';
+import { useEditorStore } from '@/warehouse/editor/model/editor-store';
+import { useInteractionStore } from '@/warehouse/editor/model/interaction-store';
+import type { EditorSelection } from '@/warehouse/editor/model/editor-types';
 
 export type WarehouseSelection = EditorSelection;
 

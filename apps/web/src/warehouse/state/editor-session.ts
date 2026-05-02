@@ -1,7 +1,7 @@
 import {
   ensureWarehouseEditorSessionCleanupRegistered,
   resetWarehouseEditorSessionState
-} from '@/widgets/warehouse-editor/model/session-cleanup';
+} from '@/warehouse/editor/model/session-cleanup';
 
 export { ensureWarehouseEditorSessionCleanupRegistered };
 

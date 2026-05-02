@@ -1,7 +1,7 @@
 import {
   useStorageFocusStore,
   type StorageFocusStore
-} from '@/widgets/warehouse-editor/model/v2/storage-focus-store';
+} from '@/warehouse/editor/model/v2/storage-focus-store';
 
 export type WarehouseStorageFocus = Pick<
   StorageFocusStore,

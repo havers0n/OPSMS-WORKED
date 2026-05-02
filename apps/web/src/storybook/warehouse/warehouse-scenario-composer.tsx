@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import type { Cell } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
-import { RackBody } from '@/widgets/warehouse-editor/ui/shapes/rack-body';
-import { RackCells } from '@/widgets/warehouse-editor/ui/shapes/rack-cells';
-import { RackSections } from '@/widgets/warehouse-editor/ui/shapes/rack-sections';
+import { RackBody } from '@/warehouse/editor/ui/shapes/rack-body';
+import { RackCells } from '@/warehouse/editor/ui/shapes/rack-cells';
+import { RackSections } from '@/warehouse/editor/ui/shapes/rack-sections';
 import { WarehouseScene } from './warehouse-scene';
 import {
   faceAStory,

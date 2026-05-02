@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TestRenderer, { act } from 'react-test-renderer';
 import { BffRequestError } from '@/shared/api/bff/client';
-import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
+import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import {
   getWarehouseDraftPersistenceSnapshot,
   getWarehouseDraftSnapshot,

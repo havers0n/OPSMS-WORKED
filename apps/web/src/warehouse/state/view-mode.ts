@@ -4,13 +4,13 @@ import {
   useSetViewStage,
   useViewMode,
   useViewStage
-} from '@/widgets/warehouse-editor/model/editor-selectors';
+} from '@/warehouse/editor/model/editor-selectors';
 import type {
   EditorMode,
   ViewMode,
   ViewStage
-} from '@/widgets/warehouse-editor/model/editor-types';
-import { useModeStore } from '@/widgets/warehouse-editor/model/mode-store';
+} from '@/warehouse/editor/model/editor-types';
+import { useModeStore } from '@/warehouse/editor/model/mode-store';
 
 export type WarehouseViewMode = ViewMode;
 export type WarehouseViewStage = ViewStage;

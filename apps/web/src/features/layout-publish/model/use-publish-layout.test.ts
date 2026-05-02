@@ -4,7 +4,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
-import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
+import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import {
   getWarehouseDraftPersistenceSnapshot,
   getWarehouseDraftSnapshot,

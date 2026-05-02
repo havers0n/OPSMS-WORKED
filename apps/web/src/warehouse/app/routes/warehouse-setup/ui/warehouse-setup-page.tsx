@@ -7,8 +7,8 @@ import { useSites } from '@/entities/site/api/use-sites';
 import { BootstrapWizard } from '@/warehouse/bootstrap/ui/bootstrap-wizard';
 import { SiteFloorSetupState } from '@/warehouse/bootstrap/ui/site-floor-setup-state';
 import { WarehouseTopBar } from '@/warehouse/shell/ui/warehouse-top-bar';
-import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
-import { WarehouseEditor } from '@/widgets/warehouse-editor/ui/warehouse-editor';
+import { PublishedViewer } from '@/warehouse/editor/ui/published-viewer';
+import { WarehouseEditor } from '@/warehouse/editor/ui/warehouse-editor';
 
 function WarehouseContent({
   setupState,

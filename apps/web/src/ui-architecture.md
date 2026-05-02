@@ -9,13 +9,13 @@ It is a documentation baseline for current structure, not a redesign.
 1. `shared/ui`
 2. `entities/*/ui`
 3. `widgets/app-shell/ui`
-4. `widgets/warehouse-editor/ui`
-5. `widgets/warehouse-editor/ui/shapes`
+4. `warehouse/editor/ui`
+5. `warehouse/editor/ui/shapes`
 
 ### Warehouse Editor Split
 
-- `widgets/warehouse-editor/ui` = editor/workspace surfaces and compositions, excluding `shapes`.
-- `widgets/warehouse-editor/ui/shapes` = scene rendering layer.
+- `warehouse/editor/ui` = editor/workspace surfaces and compositions, excluding `shapes`.
+- `warehouse/editor/ui/shapes` = scene rendering layer.
 
 ## Import Rules
 
@@ -31,7 +31,7 @@ It is a documentation baseline for current structure, not a redesign.
 
 ## Scene Rendering Boundary
 
-Rack/section/cell rendering in `widgets/warehouse-editor/ui/shapes` is scene rendering and not shared UI.
+Rack/section/cell rendering in `warehouse/editor/ui/shapes` is scene rendering and not shared UI.
 
 ## PR-1 Scope Guard
 

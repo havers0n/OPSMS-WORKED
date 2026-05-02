@@ -24,7 +24,7 @@ import {
 import { warehouseStorageFocusActions } from '@/warehouse/state/storage-focus';
 import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
-import { PublishedViewer } from '@/widgets/warehouse-editor/ui/published-viewer';
+import { PublishedViewer } from '@/warehouse/editor/ui/published-viewer';
 import { ViewTopBar } from '@/warehouse/viewer/ui/view-top-bar';
 import {
   getFloorDeepLinkAction,

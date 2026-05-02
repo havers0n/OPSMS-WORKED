@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Cell } from '@wos/domain';
-import { createLayoutDraftFixture } from '@/widgets/warehouse-editor/model/__fixtures__/layout-draft.fixture';
+import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import { resolveRouteStepAnchors } from './route-step-geometry';
 
 const step = {
