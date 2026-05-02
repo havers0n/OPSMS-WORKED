@@ -82,7 +82,9 @@ export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient
         .in('product_id', productIds)
         .eq('tenant_id', tenantId)
         .eq('role', 'primary_pick')
-        .eq('state', 'published');
+        .eq('state', 'published')
+        .order('product_id', { ascending: true })
+        .order('location_id', { ascending: true });
       if (error) throw error;
       return data ?? [];
     },

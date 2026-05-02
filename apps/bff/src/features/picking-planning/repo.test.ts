@@ -131,6 +131,24 @@ describe('picking planning read repos', () => {
     expectEq(orders, 'tenant_id', tenantId);
   });
 
+  it('orders primary pick locations deterministically by product then location', async () => {
+    const { supabase, tables } = makeSupabaseMock({
+      product_location_roles: [
+        { product_id: 'product-1', location_id: 'location-b' },
+        { product_id: 'product-1', location_id: 'location-a' }
+      ]
+    });
+    const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
+
+    await repo.listPrimaryPickLocations(['product-1']);
+
+    const productLocationRoles = findTable(tables, 'product_location_roles');
+    expect(productLocationRoles.calls.filter((call) => call.op === 'order')).toEqual([
+      { op: 'order', args: ['product_id', { ascending: true }] },
+      { op: 'order', args: ['location_id', { ascending: true }] }
+    ]);
+  });
+
   it('returns no wave order IDs when the wave is not visible in the tenant', async () => {
     const { supabase, tables } = makeSupabaseMock({ waves: [] });
     const repo = createPickingPlanningWaveReadRepo(supabase as never, tenantId);
