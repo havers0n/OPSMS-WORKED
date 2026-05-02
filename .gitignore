@@ -12,6 +12,8 @@ apps/web/dist/
 .claire/
 apps/supabase/.branches/
 apps/supabase/.temp/
+apps/supabase/supabase/.branches/
+apps/supabase/supabase/.temp/
 apps/*/.turbo/
 packages/*/.turbo/
 apps/web/test-results/
@@ -23,6 +25,8 @@ docs/commit-history/
 
 # Test session artifacts
 .playwright-mcp/
+.playwright-cli/
+output/
 [0-9][0-9]-*.png
 console-errors.log
 todo.md
