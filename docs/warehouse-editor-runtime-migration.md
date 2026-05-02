@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the migration contract for the warehouse-editor runtime relocation series.
+This document defines the migration contract for the warehouse editor runtime relocation series.
 
 PR1 removes fake ownership and import indirection for `canvas-geometry` and `rack-spacing`.
 PR1 does **not** establish the final semantic owner of geometry utilities.
@@ -10,8 +10,8 @@ PR1 only establishes the current honest source of truth.
 
 ## Canonical Import Policy
 
-- Runtime modules canonical path: `@/widgets/warehouse-editor/model/<submodule>`.
-- Facade canonical path: `@/widgets/warehouse-editor/model/editor-selectors`.
+- Runtime modules canonical path: `@/warehouse/editor/model/<submodule>`.
+- Facade canonical path: `@/warehouse/editor/model/editor-selectors`.
 - Compatibility re-exports are temporary bridges only.
 - Compatibility re-exports are not a permanent public API.
 - After relocation starts, no new imports may be introduced through old runtime paths.
@@ -20,13 +20,13 @@ PR1 only establishes the current honest source of truth.
 
 ### PR1
 
-- No imports from `widgets/warehouse-editor/lib/canvas-geometry`.
-- No imports from `widgets/warehouse-editor/lib/rack-spacing`.
+- No imports from `warehouse/editor/lib/canvas-geometry`.
+- No imports from `warehouse/editor/lib/rack-spacing`.
 
 Checks:
 
-- `rg -n "widgets/warehouse-editor/lib/canvas-geometry" apps/web/src` must return no matches.
-- `rg -n "widgets/warehouse-editor/lib/rack-spacing" apps/web/src` must return no matches.
+- `rg -n "warehouse/editor/lib/canvas-geometry" apps/web/src` must return no matches.
+- `rg -n "warehouse/editor/lib/rack-spacing" apps/web/src` must return no matches.
 - `typecheck` must pass.
 - `build` must pass.
 - Targeted test subset must pass.
@@ -34,7 +34,7 @@ Checks:
 ### PR2-PR4
 
 - Old runtime paths may exist only as temporary compatibility re-export files.
-- Physical owner must be `widgets/warehouse-editor/model/*`.
+- Physical owner must be `warehouse/editor/model/*`.
 
 Checks:
 

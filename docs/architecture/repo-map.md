@@ -150,7 +150,7 @@ Route-level composition. Страницы собирают крупные вид
 - top bar;
 - layout-context для shell-поведения.
 
-#### `warehouse-bootstrap/`
+#### `warehouse/bootstrap/`
 
 Онбординг/инициализация пустого инстанса:
 
@@ -160,7 +160,7 @@ Route-level composition. Страницы собирают крупные вид
 
 Это не "настройки", а обязательный bootstrap перед входом в редактор.
 
-#### `warehouse-editor/`
+#### `warehouse/editor/`
 
 Главный рабочий модуль V1.
 
@@ -174,15 +174,15 @@ Route-level composition. Страницы собирают крупные вид
 
 Семантически это оболочка редактора, а не source of truth. Источник бизнес-правил — `@wos/domain`, источник persisted truth — BFF/Supabase.
 
-##### `warehouse-editor/model/`
+##### `warehouse/editor/model/`
 
 Локальные editor-facing модели и фикстуры, связанные с canvas/rendering. Основное состояние редактора фактически вынесено в `entities/layout-version/model`.
 
-##### `warehouse-editor/lib/`
+##### `warehouse/editor/lib/`
 
 Чистые утилиты для геометрии, spacing и расчетов отрисовки.
 
-##### `warehouse-editor/ui/`
+##### `warehouse/editor/ui/`
 
 Компоненты редактора: canvas, inspector, tool rail, shape-визуализация.
 

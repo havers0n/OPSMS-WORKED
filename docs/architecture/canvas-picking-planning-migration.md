@@ -18,7 +18,7 @@ Operators open the warehouse workspace and switch the Canvas stage to
 Relevant frontend surfaces:
 
 - `apps/web/src/widgets/app-shell/ui/view-stage-switcher.tsx`
-- `apps/web/src/widgets/warehouse-editor/ui/picking-planning-overlay.tsx`
+- `apps/web/src/warehouse/editor/ui/picking-planning-overlay.tsx`
 - `apps/web/src/features/picking-planning-canvas`
 - `apps/web/src/entities/picking-planning`
 

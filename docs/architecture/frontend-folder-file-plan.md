@@ -268,7 +268,7 @@ src/widgets/
       left-drawer.tsx
       top-bar.tsx
       module-header.tsx
-  warehouse-editor/
+  warehouse/editor/
     model/
       editor-store.ts
       editor-selectors.ts
@@ -327,7 +327,7 @@ src/widgets/
 - top bar
 - shared page framing
 
-#### `warehouse-editor`
+#### `warehouse/editor`
 
 - React Konva integration
 - canvas viewport and interactions
@@ -733,15 +733,15 @@ Do not put here:
 This is the first major frontend module and should be implemented first.
 
 ```text
-src/pages/warehouse-setup/ui/warehouse-setup-page.tsx
+src/warehouse/app/routes/warehouse-setup/ui/warehouse-setup-page.tsx
 
-src/widgets/warehouse-editor/ui/warehouse-editor.tsx
-src/widgets/warehouse-editor/ui/editor-toolbar.tsx
-src/widgets/warehouse-editor/ui/editor-canvas.tsx
-src/widgets/warehouse-editor/ui/rack-node.tsx
-src/widgets/warehouse-editor/model/editor-store.ts
-src/widgets/warehouse-editor/model/editor-selectors.ts
-src/widgets/warehouse-editor/lib/canvas-mappers.ts
+src/warehouse/editor/ui/warehouse-editor.tsx
+src/warehouse/editor/ui/editor-toolbar.tsx
+src/warehouse/editor/ui/editor-canvas.tsx
+src/warehouse/editor/ui/rack-node.tsx
+src/warehouse/editor/model/editor-store.ts
+src/warehouse/editor/model/editor-selectors.ts
+src/warehouse/editor/lib/canvas-mappers.ts
 
 src/widgets/rack-inspector/ui/rack-inspector.tsx
 src/widgets/rack-inspector/ui/inspector-summary.tsx
@@ -889,7 +889,7 @@ The warehouse editor is the highest-risk rendering area.
 Recommended files:
 
 ```text
-src/widgets/warehouse-editor/model/
+src/warehouse/editor/model/
   editor-store.ts
   editor-selectors.ts
   editor-types.ts
@@ -923,7 +923,7 @@ Recommended stories:
 
 ```text
 src/widgets/rack-inspector/ui/rack-inspector.stories.tsx
-src/widgets/warehouse-editor/ui/editor-canvas.stories.tsx
+src/warehouse/editor/ui/editor-canvas.stories.tsx
 src/widgets/imports-console/ui/imports-console.stories.tsx
 src/widgets/picker-session/ui/picker-session.stories.tsx
 src/features/face-b-configure-mode/ui/face-b-empty-state.stories.tsx
@@ -984,7 +984,7 @@ Recommended order of creation:
 2. `shared/`
 3. `entities/layout-version`, `entities/rack`, `entities/cell`
 4. `widgets/app-shell`
-5. `widgets/warehouse-editor`
+5. `warehouse/editor`
 6. `widgets/rack-inspector`
 7. `features/rack-configure`, `layout-save`, `layout-validate`, `layout-publish`
 8. `entities/product`, `product-location-role`, `import-job`
@@ -1008,15 +1008,15 @@ apps/web/src/shared/api/supabase/client.ts
 apps/web/src/shared/api/supabase/types.ts
 apps/web/src/shared/api/supabase/query-client.ts
 
-apps/web/src/pages/warehouse-setup/ui/warehouse-setup-page.tsx
+apps/web/src/warehouse/app/routes/warehouse-setup/ui/warehouse-setup-page.tsx
 
 apps/web/src/widgets/app-shell/ui/left-drawer.tsx
 apps/web/src/widgets/app-shell/ui/top-bar.tsx
 
-apps/web/src/widgets/warehouse-editor/model/editor-store.ts
-apps/web/src/widgets/warehouse-editor/model/editor-selectors.ts
-apps/web/src/widgets/warehouse-editor/ui/warehouse-editor.tsx
-apps/web/src/widgets/warehouse-editor/ui/editor-canvas.tsx
+apps/web/src/warehouse/editor/model/editor-store.ts
+apps/web/src/warehouse/editor/model/editor-selectors.ts
+apps/web/src/warehouse/editor/ui/warehouse-editor.tsx
+apps/web/src/warehouse/editor/ui/editor-canvas.tsx
 
 apps/web/src/widgets/rack-inspector/ui/rack-inspector.tsx
 apps/web/src/widgets/rack-inspector/ui/inspector-summary.tsx

@@ -182,11 +182,11 @@ If any of these overwrite the storage fill, the user loses the answer to the que
 
 ### Current owner files
 
-- Cell visual resolution: [apps/web/src/widgets/warehouse-editor/ui/shapes/rack-cells-visual-state.ts](C:\Projects\abctestsforWOS\apps\web\src\widgets\warehouse-editor\ui\shapes\rack-cells-visual-state.ts:1)
-- Palette tokens: [apps/web/src/widgets/warehouse-editor/ui/shapes/warehouse-semantic-canvas-palette.ts](C:\Projects\abctestsforWOS\apps\web\src\widgets\warehouse-editor\ui\shapes\warehouse-semantic-canvas-palette.ts:1)
-- Cell rendering: [apps/web/src/widgets/warehouse-editor/ui/shapes/rack-cells.tsx](C:\Projects\abctestsforWOS\apps\web\src\widgets\warehouse-editor\ui\shapes\rack-cells.tsx:1)
-- Floor scene data loading: [apps/web/src/widgets/warehouse-editor/ui/use-floor-scene-data.ts](C:\Projects\abctestsforWOS\apps\web\src\widgets\warehouse-editor\ui\use-floor-scene-data.ts:1)
-- Mode capability gates: [apps/web/src/widgets/warehouse-editor/ui/use-canvas-capabilities.ts](C:\Projects\abctestsforWOS\apps\web\src\widgets\warehouse-editor\ui\use-canvas-capabilities.ts:1)
+- Cell visual resolution: [apps/web/src/warehouse/editor/ui/shapes/rack-cells-visual-state.ts](C:\Projects\abctestsforWOS\apps\web\src\warehouse\editor\ui\shapes\rack-cells-visual-state.ts:1)
+- Palette tokens: [apps/web/src/warehouse/editor/ui/shapes/warehouse-semantic-canvas-palette.ts](C:\Projects\abctestsforWOS\apps\web\src\warehouse\editor\ui\shapes\warehouse-semantic-canvas-palette.ts:1)
+- Cell rendering: [apps/web/src/warehouse/editor/ui/shapes/rack-cells.tsx](C:\Projects\abctestsforWOS\apps\web\src\warehouse\editor\ui\shapes\rack-cells.tsx:1)
+- Floor scene data loading: [apps/web/src/warehouse/editor/ui/use-floor-scene-data.ts](C:\Projects\abctestsforWOS\apps\web\src\warehouse\editor\ui\use-floor-scene-data.ts:1)
+- Mode capability gates: [apps/web/src/warehouse/editor/ui/use-canvas-capabilities.ts](C:\Projects\abctestsforWOS\apps\web\src\warehouse\editor\ui\use-canvas-capabilities.ts:1)
 
 ### Current mismatch
 

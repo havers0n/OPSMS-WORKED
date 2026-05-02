@@ -60,7 +60,7 @@
 
 ### Page
 
-- `pages/warehouse-setup/ui/warehouse-setup-page.tsx`
+- `warehouse/app/routes/warehouse-setup/ui/warehouse-setup-page.tsx`
   - главный оркестратор route
   - читает:
     - `useActiveSiteId`, `useActiveFloorId` из `app/store/ui-store`
@@ -74,9 +74,9 @@
 ### Widgets
 
 - `widgets/app-shell/ui/top-bar.tsx`
-- `widgets/warehouse-bootstrap/ui/bootstrap-wizard.tsx`
-- `widgets/warehouse-bootstrap/ui/site-floor-setup-state.tsx`
-- `widgets/warehouse-editor/ui/warehouse-editor.tsx`
+- `warehouse/bootstrap/ui/bootstrap-wizard.tsx`
+- `warehouse/bootstrap/ui/site-floor-setup-state.tsx`
+- `warehouse/editor/ui/warehouse-editor.tsx`
 
 ### Feature slices, реально задействованные маршрутом
 
@@ -145,11 +145,11 @@
 
 ---
 
-## Inside `warehouse-editor`
+## Inside `warehouse/editor`
 
 ### Widget shell
 
-- `widgets/warehouse-editor/ui/warehouse-editor.tsx`
+- `warehouse/editor/ui/warehouse-editor.tsx`
   - stateful orchestrator
   - владеет:
     - `inspectorOpen`
@@ -496,12 +496,12 @@
 ### `widgets`
 
 - `app-shell/top-bar`
-- `warehouse-bootstrap/bootstrap-wizard`
-- `warehouse-bootstrap/site-floor-setup-state`
-- `warehouse-editor/warehouse-editor`
-- `warehouse-editor/editor-canvas`
-- `warehouse-editor/rack-inspector`
-- `warehouse-editor/tool-rail`
+- `warehouse/bootstrap/bootstrap-wizard`
+- `warehouse/bootstrap/site-floor-setup-state`
+- `warehouse/editor/warehouse-editor`
+- `warehouse/editor/editor-canvas`
+- `warehouse/editor/rack-inspector`
+- `warehouse/editor/tool-rail`
 
 ### `features`
 

@@ -62,7 +62,7 @@ Failure points:
 ## Workspace Bootstrap Flow
 
 - Trigger: `WarehouseSetupPage` reaches `bootstrap_required` state and the user clicks `Create Site, Floor, and First Draft`.
-- Frontend entrypoint: `widgets/warehouse-bootstrap/ui/bootstrap-wizard.tsx`
+- Frontend entrypoint: `warehouse/bootstrap/ui/bootstrap-wizard.tsx`
 - Feature hook / action:
   - `useCreateSite()`
   - `useCreateFloor()`
@@ -115,8 +115,8 @@ Failure points:
 
 - Trigger: user opens `/warehouse`, selects a floor in the top bar, or query invalidation refreshes the active draft.
 - Frontend entrypoint:
-  - `pages/warehouse-setup/ui/warehouse-setup-page.tsx`
-  - `widgets/warehouse-editor/ui/warehouse-editor.tsx`
+  - `warehouse/app/routes/warehouse-setup/ui/warehouse-setup-page.tsx`
+  - `warehouse/editor/ui/warehouse-editor.tsx`
 - Feature hook / action:
   - `useActiveLayoutDraft(activeFloorId)`
   - `initializeDraft(layoutDraft)` in editor store
@@ -161,8 +161,8 @@ Failure points:
 
 - Trigger: user drags a rack on the canvas, rotates it, changes general properties, edits face sections/levels, or configures Face B mode.
 - Frontend entrypoint:
-  - `widgets/warehouse-editor/ui/editor-canvas.tsx`
-  - `widgets/warehouse-editor/ui/rack-inspector.tsx`
+  - `warehouse/editor/ui/editor-canvas.tsx`
+  - `warehouse/editor/ui/rack-inspector.tsx`
   - `features/rack-configure/ui/general-tab.tsx`
   - `features/rack-configure/ui/face-tab.tsx`
   - `features/rack-create/ui/rack-creation-wizard.tsx`

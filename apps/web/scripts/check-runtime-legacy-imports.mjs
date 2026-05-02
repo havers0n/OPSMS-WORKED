@@ -25,7 +25,7 @@ function getViolationReason(specifier) {
   }
 
   if (specifier.startsWith('@/widgets/warehouse-editor/lib/')) {
-    return 'legacy alias import from @/widgets/warehouse-editor/lib/*';
+    return 'legacy alias import from the previous warehouse editor lib path';
   }
 
   if (isRelativeSpecifier(specifier)) {
@@ -36,7 +36,7 @@ function getViolationReason(specifier) {
     }
 
     if (normalized.includes('widgets/warehouse-editor/lib/')) {
-      return 'legacy relative import into widgets/warehouse-editor/lib/*';
+      return 'legacy relative import into the previous warehouse editor lib path';
     }
   }
 
@@ -143,8 +143,8 @@ for (const violation of violations) {
 
 console.error('');
 console.error('forbidden legacy runtime import detected');
-console.error('use @/widgets/warehouse-editor/model/... or current canonical owner');
+console.error('use @/warehouse/editor/model/... or current canonical owner');
 console.error('remove imports from @/entities/layout-version/model/*');
-console.error('remove imports from @/widgets/warehouse-editor/lib/*');
+console.error('remove legacy warehouse editor lib imports');
 
 process.exit(1);

@@ -76,7 +76,7 @@ These are the main repo areas touched by the convergence:
 - `apps/web/src/features/container-inventory/`
 - `apps/web/src/features/inventory-add/`
 - `apps/web/src/features/placement-actions/`
-- `apps/web/src/widgets/warehouse-editor/ui/mode-panels/`
+- `apps/web/src/warehouse/editor/ui/mode-panels/`
 
 ### Docs that must stay aligned
 
