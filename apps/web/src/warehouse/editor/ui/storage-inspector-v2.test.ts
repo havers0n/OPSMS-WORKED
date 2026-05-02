@@ -342,6 +342,7 @@ function renderInspector(workspace: FloorWorkspace) {
   act(() => {
     renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace }));
   });
+  mountedRenderers.add(renderer);
   return renderer;
 }
 
@@ -353,6 +354,30 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
     .join('');
   return own;
 }
+
+const mountedRenderers = new Set<TestRenderer.ReactTestRenderer>();
+const originalCreateRenderer = TestRenderer.create.bind(TestRenderer);
+
+vi.spyOn(TestRenderer, 'create').mockImplementation((element, options) => {
+  const renderer = originalCreateRenderer(element, options);
+  mountedRenderers.add(renderer);
+  return renderer;
+});
+
+function resetStorageFocusForTest() {
+  act(() => {
+    resetStorageFocusStore();
+  });
+}
+
+afterEach(() => {
+  act(() => {
+    mountedRenderers.forEach((renderer) => {
+      renderer.unmount();
+    });
+    mountedRenderers.clear();
+  });
+});
 
 function setupCellOverview() {
   act(() => {
@@ -571,7 +596,7 @@ describe('resolveActiveMode', () => {
 
 describe('StorageInspectorV2 breadcrumb fallbacks', () => {
   beforeEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     mockProductsSearchResults = [];
     mockEffectiveRoleResponse = null;
     mockEffectiveRoleLoading = false;
@@ -609,7 +634,7 @@ describe('StorageInspectorV2 breadcrumb fallbacks', () => {
   });
 
   afterEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
   });
 
   it('uses locationCode when available', () => {
@@ -679,7 +704,7 @@ describe('StorageInspectorV2 breadcrumb fallbacks', () => {
 
 describe('StorageInspectorV2 panel modes', () => {
   beforeEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     mockPublishedCells = [];
     mockLocationRef = null;
     mockStorageRows = [];
@@ -733,7 +758,7 @@ describe('StorageInspectorV2 panel modes', () => {
   });
 
   afterEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     mockRackInspectorData = null;
     mockRackInspectorLoading = false;
   });
@@ -1039,7 +1064,7 @@ describe('StorageInspectorV2 panel modes', () => {
 
 describe('StorageInspectorV2 task flows', () => {
   beforeEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     mockProductsSearchResults = [];
     mockEffectiveRoleResponse = null;
     mockEffectiveRoleLoading = false;
@@ -1079,7 +1104,7 @@ describe('StorageInspectorV2 task flows', () => {
   });
 
   afterEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
   });
 
   it('cell-overview shows both create action entry points', () => {
@@ -1945,7 +1970,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
   }
 
   beforeEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     mockProductsSearchResults = [];
     mockEffectiveRoleResponse = {
       locationId: 'loc-1',
@@ -1985,7 +2010,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
   });
 
   afterEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
   });
 
   it('renders structural-default-only state', () => {
@@ -2548,7 +2573,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 
 describe('StorageInspectorV2 create from preset partial materialization', () => {
   function setupCreateFromPresetFlow() {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     setupCellOverview();
     mockProductsSearchResults = [
       {
@@ -2662,7 +2687,7 @@ describe('StorageInspectorV2 create from preset partial materialization', () => 
 
 describe('StorageInspectorV2 contents action flows', () => {
   function setupContainerWithInventory(inventoryUnitId: string | null = 'iu-1') {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     act(() => {
       useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
     });
@@ -2731,7 +2756,7 @@ describe('StorageInspectorV2 contents action flows', () => {
   });
 
   afterEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
   });
 
   it('renders contents row actions only when inventoryUnitId is available', () => {
@@ -2994,7 +3019,7 @@ describe('StorageInspectorV2 move container flow', () => {
   }
 
   beforeEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
     mockProductsSearchResults = [];
     mockEffectiveRoleResponse = null;
     mockEffectiveRoleLoading = false;
@@ -3014,7 +3039,7 @@ describe('StorageInspectorV2 move container flow', () => {
   });
 
   afterEach(() => {
-    resetStorageFocusStore();
+    resetStorageFocusForTest();
   });
 
   it('"Move container" action is visible in container-detail', () => {
