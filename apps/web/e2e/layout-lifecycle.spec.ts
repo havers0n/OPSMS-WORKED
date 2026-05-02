@@ -1,6 +1,51 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 import { signInToWarehouse } from './support/auth';
 import { resetWarehouseData, seedAdditionalFloorDraft, seedDraftScenario } from './support/local-supabase';
+
+function isLayoutDraftSaveResponse(response: Response) {
+  const url = new URL(response.url());
+  return url.pathname === '/api/layout-drafts/save' && response.request().method() === 'POST';
+}
+
+function waitForLayoutDraftSave(page: Page) {
+  return page.waitForResponse(isLayoutDraftSaveResponse);
+}
+
+async function selectFirstRack(page: Page) {
+  const canvas = page.locator('.konvajs-content canvas').first();
+  await expect(canvas).toBeVisible();
+  await page.waitForFunction(() => {
+    const stage = (window as Window & { __WOS_CANVAS_STAGE__?: any }).__WOS_CANVAS_STAGE__;
+    const rackLayer = stage?.findOne?.('.rack-layer');
+    return Boolean(rackLayer?.getChildren?.().length);
+  });
+
+  const point = await page.evaluate(() => {
+    const stage = (window as Window & { __WOS_CANVAS_STAGE__?: any }).__WOS_CANVAS_STAGE__;
+    const rackLayer = stage.findOne('.rack-layer');
+    const rackGroup = rackLayer.getChildren()[0];
+    const rect = rackGroup.getClientRect({ relativeTo: stage });
+    const containerRect = stage.container().getBoundingClientRect();
+    const scale = stage.scaleX();
+
+    return {
+      x: containerRect.left + stage.x() + (rect.x + rect.width / 2) * scale,
+      y: containerRect.top + stage.y() + (rect.y + rect.height / 2) * scale
+    };
+  });
+
+  await page.mouse.click(point.x, point.y);
+  await expect(page.getByTestId('inspector-surface')).toBeVisible();
+}
+
+async function openFirstRackGeometry(page: Page) {
+  await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
+  await selectFirstRack(page);
+  await page.getByTestId('geometry-advanced-toggle').click();
+  const totalLengthInput = page.getByLabel('Total Length');
+  await expect(totalLengthInput).toBeVisible();
+  return totalLengthInput;
+}
 
 test.describe('live draft lifecycle', () => {
   test.beforeEach(async () => {
@@ -20,15 +65,15 @@ test.describe('live draft lifecycle', () => {
 
     await signInToWarehouse(page);
     await page.getByLabel('Floor').selectOption(floor.id);
-    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
+    const totalLengthInput = await openFirstRackGeometry(page);
 
-    const displayCodeInput = page.getByLabel('Display Code');
-    await displayCodeInput.fill('07');
-    await displayCodeInput.fill('08');
+    const saveResponse = waitForLayoutDraftSave(page);
+    await totalLengthInput.fill('5.7');
+    await totalLengthInput.fill('5.8');
     await expect(page.getByText('Unsaved')).toBeVisible();
-    await expect(page.getByText('Saving...')).toBeVisible();
+    await saveResponse;
     await expect(page.getByText('Saved')).toBeVisible();
-    await expect(displayCodeInput).toHaveValue('08');
+    await expect(totalLengthInput).toHaveValue('5.8');
     expect(saveRequestCount).toBe(1);
 
     await page.getByRole('button', { name: /Validate/i }).click();
@@ -44,9 +89,9 @@ test.describe('live draft lifecycle', () => {
 
     await signInToWarehouse(page);
     await page.getByLabel('Floor').selectOption(first.floor.id);
-    await expect(page.getByText('Rack 03').first()).toBeVisible();
+    const firstFloorTotalLengthInput = await openFirstRackGeometry(page);
 
-    await page.getByLabel('Display Code').fill('11');
+    await firstFloorTotalLengthInput.fill('6.1');
     await expect(page.getByText('Unsaved')).toBeVisible();
 
     page.once('dialog', async (dialog) => {
@@ -54,8 +99,8 @@ test.describe('live draft lifecycle', () => {
     });
     await page.getByLabel('Floor').selectOption(second.floor.id);
 
-    await expect(page.getByText('Rack 11').first()).toBeVisible();
     await expect(page.getByLabel('Floor')).toHaveValue(first.floor.id);
+    await expect(firstFloorTotalLengthInput).toHaveValue('6.1');
 
     page.once('dialog', async (dialog) => {
       await dialog.accept();
@@ -63,7 +108,8 @@ test.describe('live draft lifecycle', () => {
     await page.getByLabel('Floor').selectOption(second.floor.id);
 
     await expect(page.getByLabel('Floor')).toHaveValue(second.floor.id);
-    await expect(page.getByText('Rack 09').first()).toBeVisible();
+    const secondFloorTotalLengthInput = await openFirstRackGeometry(page);
+    await expect(secondFloorTotalLengthInput).toHaveValue('5');
   });
 
   test('conflict hard-stop shows Conflict status and blocks further autosave', async ({ page }) => {
@@ -84,16 +130,19 @@ test.describe('live draft lifecycle', () => {
 
     await signInToWarehouse(page);
     await page.getByLabel('Floor').selectOption(floor.id);
-    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
+    const totalLengthInput = await openFirstRackGeometry(page);
 
-    const displayCodeInput = page.getByLabel('Display Code');
-    await displayCodeInput.fill('07');
-    // Wait for the autosave debounce (2s) to fire and the conflict response to land.
+    const conflictResponse = waitForLayoutDraftSave(page);
+    await totalLengthInput.fill('5.7');
+    await conflictResponse;
     await expect(page.getByText('Conflict')).toBeVisible();
 
-    // A second edit must not trigger another save — conflict is a terminal hard-stop.
-    await displayCodeInput.fill('08');
-    await page.waitForTimeout(3000); // longer than the 2s debounce
+    const secondSaveAttempt = page
+      .waitForResponse(isLayoutDraftSaveResponse, { timeout: 2500 })
+      .then(() => true)
+      .catch(() => false);
+    await totalLengthInput.fill('5.9');
+    await expect(secondSaveAttempt).resolves.toBe(false);
     expect(saveRequestCount).toBe(1);
   });
 
@@ -125,7 +174,6 @@ test.describe('live draft lifecycle', () => {
     await signInToWarehouse(page);
     await page.getByLabel('Floor').selectOption(floor.id);
     await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
-    // Wait for the draft to finish loading before attempting to publish.
     await expect(page.getByText('Saved')).toBeVisible();
 
     await page.getByRole('button', { name: /Publish/i }).click();

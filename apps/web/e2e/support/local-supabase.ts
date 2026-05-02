@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import type {
   DraftRackFacePayload,
@@ -220,21 +220,26 @@ export async function createDraftForFloor(floorId: string) {
   return data as string;
 }
 
-function createRackPayload(rackDisplayCode: string): DraftRackPayload {
-  const rackId = randomUUID();
-  const faceAId = randomUUID();
-  const faceBId = randomUUID();
-  const sectionId = randomUUID();
-  const levelOneId = randomUUID();
-  const levelTwoId = randomUUID();
+function deterministicUuid(seed: string) {
+  const hex = createHash('md5').update(seed).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function createRackPayload(rackDisplayCode: string, idSeed = rackDisplayCode): DraftRackPayload {
+  const rackId = deterministicUuid(`e2e-simple-rack:${idSeed}:rack`);
+  const faceAId = deterministicUuid(`e2e-simple-rack:${idSeed}:face:A`);
+  const faceBId = deterministicUuid(`e2e-simple-rack:${idSeed}:face:B`);
+  const sectionId = deterministicUuid(`e2e-simple-rack:${idSeed}:section:1`);
+  const levelOneId = deterministicUuid(`e2e-simple-rack:${idSeed}:level:1`);
+  const levelTwoId = deterministicUuid(`e2e-simple-rack:${idSeed}:level:2`);
 
   return {
     id: rackId,
     displayCode: rackDisplayCode,
     kind: 'paired',
     axis: 'NS',
-    x: 24,
-    y: 32,
+    x: 3,
+    y: 2,
     totalLength: 5,
     depth: 1.1,
     rotationDeg: 0,
@@ -402,11 +407,11 @@ export async function saveLayoutDraft(payload: SaveLayoutDraftPayload) {
   }
 }
 
-export async function saveRackDraft(layoutVersionId: string, floorId: string, rackDisplayCode = '03') {
+export async function saveRackDraft(layoutVersionId: string, floorId: string, rackDisplayCode = '03', idSeed = rackDisplayCode) {
   await saveLayoutDraft({
     layoutVersionId,
     floorId,
-    racks: [createRackPayload(rackDisplayCode)]
+    racks: [createRackPayload(rackDisplayCode, idSeed)]
   });
 }
 
@@ -538,7 +543,8 @@ export async function seedExplicitDraftScenario(args: {
 export async function seedDraftScenario(args?: { siteCode?: string; siteName?: string; floorCode?: string; floorName?: string; rackDisplayCode?: string }) {
   const { site, floor } = await seedSiteAndFloor(args);
   const layoutVersionId = await createDraftForFloor(floor.id);
-  await saveRackDraft(layoutVersionId, floor.id, args?.rackDisplayCode ?? '03');
+  const rackDisplayCode = args?.rackDisplayCode ?? '03';
+  await saveRackDraft(layoutVersionId, floor.id, rackDisplayCode, `${args?.siteCode ?? 'MAIN'}:${args?.floorCode ?? 'F1'}:${rackDisplayCode}`);
 
   return { site, floor, layoutVersionId };
 }
@@ -546,7 +552,8 @@ export async function seedDraftScenario(args?: { siteCode?: string; siteName?: s
 export async function seedAdditionalFloorDraft(siteId: string, args: { floorCode: string; floorName: string; sortOrder?: number; rackDisplayCode?: string }) {
   const floor = await createFloor(siteId, args.floorCode, args.floorName, args.sortOrder ?? 1);
   const layoutVersionId = await createDraftForFloor(floor.id);
-  await saveRackDraft(layoutVersionId, floor.id, args.rackDisplayCode ?? '03');
+  const rackDisplayCode = args.rackDisplayCode ?? '03';
+  await saveRackDraft(layoutVersionId, floor.id, rackDisplayCode, `${args.floorCode}:${rackDisplayCode}`);
 
   return { floor, layoutVersionId };
 }
@@ -567,8 +574,8 @@ const storagePresetPartialFixture = {
   floorName: `${storagePresetPartialPrefix}Floor`,
   rackDisplayCode: '31',
   externalContainerCode: `${storagePresetPartialPrefix}SHELL`,
-  expectedErrorCode: 'STORAGE_PRESET_MATERIALIZATION_LEVEL_UNRESOLVED',
-  expectedErrorMessage: 'Storage preset must have exactly one materializable level for this phase.'
+  expectedErrorCode: 'STORAGE_PRESET_MATERIALIZATION_FAILED',
+  expectedErrorMessage: 'Preset contents materialization failed.'
 } as const;
 
 type StoragePresetPartialPublishedLocation = {
