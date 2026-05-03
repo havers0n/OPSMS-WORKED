@@ -8,7 +8,7 @@ export const GRID_SIZE = WORLD_SCALE; // minor grid step = 1 m = 40 px
 export const MAJOR_GRID_SIZE = WORLD_SCALE * 5; // major grid step = 5 m = 200 px
 export const MINOR_GRID_ZOOM_THRESHOLD = 1.2; // zoom level at which 1 m minor grid appears
 export const ROTATE_HANDLE_SIZE = 28;
-export const MIN_CANVAS_ZOOM = 0.5;
+export const MIN_CANVAS_ZOOM = 0.1; // 10%; must stay above 0 because camera math divides by zoom
 export const MAX_CANVAS_ZOOM = 3.0;
 export const RACK_VIEWPORT_OVERSCAN_METERS = 2;
 export const CELL_VIEWPORT_OVERSCAN_PX = 160;
