@@ -73,23 +73,71 @@ export function resolveBffUrl(baseUrl: string, path: string): string {
   return `${normalizedBase}${normalizedPath}`;
 }
 
-export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = await buildHeaders(init);
-  const response = await fetch(resolveBffUrl(env.bffUrl, path), {
-    ...init,
-    headers
-  });
+function createTimeoutAbortSignal(timeoutMs: number, upstreamSignal?: AbortSignal | null): {
+  signal: AbortSignal;
+  dispose: () => void;
+} {
+  const controller = new AbortController();
 
-  if (!response.ok) {
-    const errorBody = (await readJsonBody<BffErrorBody>(response).catch(() => null)) ?? null;
-    const requestId = errorBody?.requestId ?? response.headers.get('x-request-id');
-    const errorId = errorBody?.errorId ?? null;
-    const message =
-      errorBody?.message ??
-      `BFF request failed with status ${response.status}${requestId ? ` [request ${requestId}]` : ''}${errorId ? ` [error ${errorId}]` : ''}`;
+  const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
-    throw new BffRequestError(response.status, errorBody?.code ?? null, message, requestId, errorId, errorBody?.details ?? null);
+  const onAbort = () => controller.abort(upstreamSignal?.reason);
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) {
+      onAbort();
+    } else {
+      upstreamSignal.addEventListener('abort', onAbort, { once: true });
+    }
   }
 
-  return (await readJsonBody<T>(response)) as T;
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      clearTimeout(timeoutId);
+      upstreamSignal?.removeEventListener('abort', onAbort);
+    }
+  };
+}
+
+export async function bffRequest<T>(
+  path: string,
+  init?: RequestInit & { timeoutMs?: number }
+): Promise<T> {
+  const headers = await buildHeaders(init);
+  const timeoutHandle =
+    typeof init?.timeoutMs === 'number'
+      ? createTimeoutAbortSignal(init.timeoutMs, init.signal)
+      : null;
+
+  try {
+    const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+    const response = await fetch(resolveBffUrl(env.bffUrl, path), {
+      ...requestInit,
+      signal: timeoutHandle?.signal ?? init?.signal,
+      headers
+    });
+
+    if (!response.ok) {
+      const errorBody =
+        (await readJsonBody<BffErrorBody>(response).catch(() => null)) ?? null;
+      const requestId = errorBody?.requestId ?? response.headers.get('x-request-id');
+      const errorId = errorBody?.errorId ?? null;
+      const message =
+        errorBody?.message ??
+        `BFF request failed with status ${response.status}${requestId ? ` [request ${requestId}]` : ''}${errorId ? ` [error ${errorId}]` : ''}`;
+
+      throw new BffRequestError(
+        response.status,
+        errorBody?.code ?? null,
+        message,
+        requestId,
+        errorId,
+        errorBody?.details ?? null
+      );
+    }
+
+    return (await readJsonBody<T>(response)) as T;
+  } finally {
+    timeoutHandle?.dispose();
+  }
 }

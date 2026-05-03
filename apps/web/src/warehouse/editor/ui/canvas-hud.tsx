@@ -30,7 +30,7 @@ type CanvasHudProps = {
   selectedWallAnchorRect: CanvasRect | null;
   selectedStorageCell: Cell | null;
   selectedStorageCellAnchorRect: CanvasRect | null;
-  onOpenInspector: () => void;
+  onOpenInspector?: () => void;
   onSelectRackSide: (side: RackSideFocus) => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
@@ -125,7 +125,7 @@ type StorageCellAffordanceBarProps = {
   cell: Cell;
   anchorRect: CanvasRect;
   viewport: { width: number; height: number };
-  onOpenInspector: () => void;
+  onOpenInspector?: () => void;
 };
 
 function StorageCellAffordanceBar({
@@ -140,12 +140,14 @@ function StorageCellAffordanceBar({
       viewport={viewport}
       label={cell.address.raw}
     >
-      <ObjectLocalAffordanceButton
-        icon={SlidersHorizontal}
-        label="Inspect"
-        variant="accent"
-        onClick={onOpenInspector}
-      />
+      {onOpenInspector && (
+        <ObjectLocalAffordanceButton
+          icon={SlidersHorizontal}
+          label="Inspect"
+          variant="accent"
+          onClick={onOpenInspector}
+        />
+      )}
     </ObjectLocalAffordanceBar>
   );
 }
@@ -154,7 +156,7 @@ type LayoutZoneAffordanceBarProps = {
   zone: Zone;
   anchorRect: CanvasRect;
   viewport: { width: number; height: number };
-  onOpenInspector: () => void;
+  onOpenInspector?: () => void;
 };
 
 function LayoutZoneAffordanceBar({
@@ -169,12 +171,14 @@ function LayoutZoneAffordanceBar({
       viewport={viewport}
       label={zone.name}
     >
-      <ObjectLocalAffordanceButton
-        icon={SlidersHorizontal}
-        label="Inspect"
-        variant="accent"
-        onClick={onOpenInspector}
-      />
+      {onOpenInspector && (
+        <ObjectLocalAffordanceButton
+          icon={SlidersHorizontal}
+          label="Inspect"
+          variant="accent"
+          onClick={onOpenInspector}
+        />
+      )}
     </ObjectLocalAffordanceBar>
   );
 }
@@ -183,7 +187,7 @@ type LayoutWallAffordanceBarProps = {
   wall: Wall;
   anchorRect: CanvasRect;
   viewport: { width: number; height: number };
-  onOpenInspector: () => void;
+  onOpenInspector?: () => void;
 };
 
 function LayoutWallAffordanceBar({
@@ -198,12 +202,14 @@ function LayoutWallAffordanceBar({
       viewport={viewport}
       label={wall.code}
     >
-      <ObjectLocalAffordanceButton
-        icon={SlidersHorizontal}
-        label="Inspect"
-        variant="accent"
-        onClick={onOpenInspector}
-      />
+      {onOpenInspector && (
+        <ObjectLocalAffordanceButton
+          icon={SlidersHorizontal}
+          label="Inspect"
+          variant="accent"
+          onClick={onOpenInspector}
+        />
+      )}
     </ObjectLocalAffordanceBar>
   );
 }
