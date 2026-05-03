@@ -220,8 +220,13 @@ declare
   fixture record;
   draft_uuid uuid;
   status_text text;
+  location_status_after text;
   location_id_after uuid;
   slot_id_after uuid;
+  previous_slot_id uuid;
+  reintroduced_slot_id uuid;
+  location_count_after integer;
+  active_location_count_after integer;
   published_count integer;
   container_type_uuid uuid;
   product_uuid uuid;
@@ -261,8 +266,8 @@ begin
   draft_uuid := public.create_layout_draft(fixture.floor_id, null);
   perform public.publish_layout_version(draft_uuid, null);
 
-  select l.id, l.geometry_slot_id
-  into location_id_after, slot_id_after
+  select l.id, l.geometry_slot_id, l.status
+  into location_id_after, slot_id_after, location_status_after
   from public.locations l
   where l.floor_id = fixture.floor_id
     and l.code = fixture.first_location_code;
@@ -275,7 +280,12 @@ begin
     raise exception 'Unchanged republish must update geometry_slot_id to the new cell.';
   end if;
 
+  if location_status_after <> 'active' then
+    raise exception 'Unchanged republish must keep the location active.';
+  end if;
+
   -- 2. Republish moved same-code slot succeeds.
+  previous_slot_id := slot_id_after;
   draft_uuid := public.create_layout_draft(fixture.floor_id, null);
 
   update public.racks
@@ -285,13 +295,22 @@ begin
 
   perform public.publish_layout_version(draft_uuid, null);
 
-  if (
-    select l.id
-    from public.locations l
-    where l.floor_id = fixture.floor_id
-      and l.code = fixture.first_location_code
-  ) is distinct from fixture.first_location_id then
+  select l.id, l.geometry_slot_id, l.status
+  into location_id_after, slot_id_after, location_status_after
+  from public.locations l
+  where l.floor_id = fixture.floor_id
+    and l.code = fixture.first_location_code;
+
+  if location_id_after is distinct from fixture.first_location_id then
     raise exception 'Moved same-code slot must keep the canonical location row.';
+  end if;
+
+  if slot_id_after is null or slot_id_after = previous_slot_id then
+    raise exception 'Moved same-code slot must update geometry_slot_id to the moved cell.';
+  end if;
+
+  if location_status_after <> 'active' then
+    raise exception 'Moved same-code slot must keep the location active.';
   end if;
 
   -- 3. Republish deleted occupied slot is blocked.
@@ -463,6 +482,10 @@ begin
   perform pg_temp.delete_second_slot_from_draft(draft_uuid);
   perform public.publish_layout_version(draft_uuid, null);
 
+  if (select status from public.locations where id = fixture.second_location_id) <> 'disabled' then
+    raise exception 'Deleted location with only inactive/completed references should be disabled after publish.';
+  end if;
+
   -- 13. Republish deleted empty slot does not block.
   select * into fixture from pg_temp.create_publish_guard_fixture('deleted empty');
   draft_uuid := public.create_layout_draft(fixture.floor_id, null);
@@ -481,6 +504,95 @@ begin
 
   if (select state from public.layout_versions where id = draft_uuid) <> 'published' then
     raise exception 'Deleted empty slot draft should publish successfully.';
+  end if;
+
+  select count(*)
+  into location_count_after
+  from public.locations l
+  where l.floor_id = fixture.floor_id
+    and l.code = fixture.second_location_code;
+
+  if location_count_after <> 1 then
+    raise exception 'Deleted empty slot must keep exactly one historical location row, found %.', location_count_after;
+  end if;
+
+  select l.status
+  into location_status_after
+  from public.locations l
+  where l.id = fixture.second_location_id;
+
+  if location_status_after <> 'disabled' then
+    raise exception 'Deleted empty slot must disable the old location row, found status %.', location_status_after;
+  end if;
+
+  select count(*)
+  into active_location_count_after
+  from public.locations l
+  where l.floor_id = fixture.floor_id
+    and l.code = fixture.second_location_code
+    and l.status = 'active';
+
+  if active_location_count_after <> 0 then
+    raise exception 'Deleted empty slot must not leave an active location for the removed code.';
+  end if;
+
+  if not exists (select 1 from public.locations l where l.id = fixture.second_location_id) then
+    raise exception 'Deleted empty slot must not delete the historical location row.';
+  end if;
+
+  -- 14. Reintroducing a disabled removed code reuses and reactivates the location row.
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+
+  update public.rack_levels rl
+  set slot_count = 2
+  from public.rack_sections rs
+  join public.rack_faces rf on rf.id = rs.rack_face_id
+  join public.racks r on r.id = rf.rack_id
+  where rl.rack_section_id = rs.id
+    and r.layout_version_id = draft_uuid;
+
+  perform public.publish_layout_version(draft_uuid, null);
+
+  select c.id
+  into reintroduced_slot_id
+  from public.cells c
+  where c.layout_version_id = draft_uuid
+    and coalesce(c.address, c.cell_code) = fixture.second_location_code;
+
+  if reintroduced_slot_id is null then
+    raise exception 'Reintroduced draft must publish a cell for the removed code %.', fixture.second_location_code;
+  end if;
+
+  select l.id, l.geometry_slot_id, l.status
+  into location_id_after, slot_id_after, location_status_after
+  from public.locations l
+  where l.floor_id = fixture.floor_id
+    and l.code = fixture.second_location_code;
+
+  if location_id_after is distinct from fixture.second_location_id then
+    raise exception 'Reintroduced code must reuse the original locations.id.';
+  end if;
+
+  if location_status_after <> 'active' then
+    raise exception 'Reintroduced code must reactivate the original location row, found status %.', location_status_after;
+  end if;
+
+  if slot_id_after is distinct from reintroduced_slot_id then
+    raise exception 'Reintroduced code must remap geometry_slot_id to the newly published cell.';
+  end if;
+
+  if slot_id_after = fixture.second_slot_id then
+    raise exception 'Reintroduced code must not keep the original archived geometry slot.';
+  end if;
+
+  select count(*)
+  into location_count_after
+  from public.locations l
+  where l.floor_id = fixture.floor_id
+    and l.code = fixture.second_location_code;
+
+  if location_count_after <> 1 then
+    raise exception 'Reintroduced code must still have exactly one location row, found %.', location_count_after;
   end if;
 end
 $$;
