@@ -1450,15 +1450,15 @@ $$;
 -- create_layout_draft: final version from 0081 (copies zones, walls, racks)
 -- save_layout_draft: final version from 0081 (deletes/reinserts zones, walls, racks)
 -- get_layout_bundle: final version from 0081 (returns zones, walls, racks, draftVersion)
--- publish_layout_version: final version from 0069/0070/0071 (advisory lock, location sync, audit)
+-- publish_layout_version: final version from 0112 (advisory lock, location sync, destructive location guard, audit)
 
 -- NOTE: These functions are too large to inline safely in this baseline.
 -- Copy verbatim from the following migration files when reconstructing:
+--   publish_layout_version    -> 0112_publish_layout_destructive_location_guard.sql
 --   validate_layout_payload   → 0081_layout_walls.sql
 --   create_layout_draft       → 0081_layout_walls.sql
 --   save_layout_draft         → 0081_layout_walls.sql
 --   get_layout_bundle         → 0081_layout_walls.sql
---   publish_layout_version    → 0069 (body) + 0070 (dead remap removal) + 0071 (exception guard)
 --   regenerate_layout_cells   → 0024 (SECURITY DEFINER; REVOKED from public)
 --   validate_layout_version   → 0017
 
