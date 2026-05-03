@@ -101,9 +101,7 @@ describe('bffRequest', () => {
     expect(new Headers(init?.headers).get('content-type')).toBeNull();
   });
 
-
-
-  it('forwards AbortSignal to fetch', async () => {
+  it('passes through caller AbortSignal when no timeoutMs is provided', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
 
     const controller = new AbortController();
@@ -113,13 +111,60 @@ describe('bffRequest', () => {
     expect(init?.signal).toBe(controller.signal);
   });
 
-  it('creates a timeout-backed abort signal when timeoutMs is provided', async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+  it('creates an abort-capable signal when timeoutMs is provided', async () => {
+    vi.useFakeTimers();
 
-    await bffRequest<void>('/with-timeout', { timeoutMs: 50 });
+    try {
+      vi.mocked(fetch).mockImplementation(
+        (_input, init) =>
+          new Promise((_resolve, reject) => {
+            if (init?.signal?.aborted) {
+              reject(new DOMException('Aborted', 'AbortError'));
+              return;
+            }
 
-    const [, init] = vi.mocked(fetch).mock.calls[0];
-    expect(init?.signal).toBeInstanceOf(AbortSignal);
+            init?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('Aborted', 'AbortError')),
+              { once: true }
+            );
+          })
+      );
+
+      const rejection = bffRequest<void>('/slow', { timeoutMs: 10 }).catch(
+        (error) => error
+      );
+      await vi.advanceTimersByTimeAsync(11);
+
+      const error = await rejection;
+      expect(error).toMatchObject({ name: 'AbortError' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears timeout after successful fetch settles', async () => {
+    vi.useFakeTimers();
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    try {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json'
+          }
+        })
+      );
+
+      await expect(
+        bffRequest<{ ok: boolean }>('/ok', { timeoutMs: 1_000 })
+      ).resolves.toEqual({ ok: true });
+      expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      clearTimeoutSpy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('uses fallback error details when the error response has no JSON body', async () => {

@@ -105,7 +105,7 @@ export function EditorCanvas({
 }: {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
-  onOpenInspector: () => void;
+  onOpenInspector?: () => void;
   /**
    * When true, canvas interaction writes go to the V2 StorageFocusStore
    * instead of the legacy editor selection state (no dual-write).

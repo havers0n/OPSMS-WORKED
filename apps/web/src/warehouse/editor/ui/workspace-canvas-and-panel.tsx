@@ -15,7 +15,7 @@ interface WorkspaceCanvasAndPanelProps {
   /**
    * When true, suppresses the legacy RightSidePanelSlot so the V2 path can
    * mount its own right surface (StorageInspectorV2) alongside this component.
-   * Defaults to false — has no effect on the layout-mode or legacy storage path.
+   * Defaults to false - has no effect on the layout-mode or legacy storage path.
    */
   hideRightPanel?: boolean;
   /**
@@ -47,7 +47,7 @@ export function WorkspaceCanvasAndPanel({
   onCloseInspector,
   hideRightPanel,
   hideContextPanel,
-  isStorageV2,
+  isStorageV2
 }: WorkspaceCanvasAndPanelProps) {
   const handleOpenInspector = onOpenInspector ?? (() => undefined);
 
@@ -61,7 +61,7 @@ export function WorkspaceCanvasAndPanel({
           isStorageV2={isStorageV2}
         />
 
-        {!hideContextPanel && (
+        {!hideContextPanel && onOpenInspector && (
           <ContextPanel
             workspace={workspace}
             onOpenInspector={handleOpenInspector}
