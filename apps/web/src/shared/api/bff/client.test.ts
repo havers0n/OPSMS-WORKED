@@ -101,6 +101,27 @@ describe('bffRequest', () => {
     expect(new Headers(init?.headers).get('content-type')).toBeNull();
   });
 
+
+
+  it('forwards AbortSignal to fetch', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+
+    const controller = new AbortController();
+    await bffRequest<void>('/abortable', { signal: controller.signal });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(init?.signal).toBe(controller.signal);
+  });
+
+  it('creates a timeout-backed abort signal when timeoutMs is provided', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+
+    await bffRequest<void>('/with-timeout', { timeoutMs: 50 });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('uses fallback error details when the error response has no JSON body', async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response('', {

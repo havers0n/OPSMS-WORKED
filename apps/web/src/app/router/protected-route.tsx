@@ -34,7 +34,11 @@ export function ProtectedRoute({ children }: PropsWithChildren) {
   const location = useLocation();
 
   if (!isReady) {
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] text-sm text-[var(--text-muted)]">
+        Loading session...
+      </div>
+    );
   }
 
   if (!user) {

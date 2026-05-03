@@ -6,7 +6,11 @@ import { RightSidePanelSlot } from './right-side-panel-slot';
 interface WorkspaceCanvasAndPanelProps {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
-  onOpenInspector: () => undefined;
+  /**
+   * Legacy inspector hook. Optional because storage/layout paths may not wire
+   * a working inspector action yet in this hardening pass.
+   */
+  onOpenInspector?: () => void;
   onCloseInspector: () => void;
   /**
    * When true, suppresses the legacy RightSidePanelSlot so the V2 path can
@@ -45,20 +49,22 @@ export function WorkspaceCanvasAndPanel({
   hideContextPanel,
   isStorageV2,
 }: WorkspaceCanvasAndPanelProps) {
+  const handleOpenInspector = onOpenInspector ?? (() => undefined);
+
   return (
     <>
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <EditorCanvas
           workspace={workspace}
           onAddRack={onAddRack}
-          onOpenInspector={onOpenInspector}
+          onOpenInspector={handleOpenInspector}
           isStorageV2={isStorageV2}
         />
 
         {!hideContextPanel && (
           <ContextPanel
             workspace={workspace}
-            onOpenInspector={onOpenInspector}
+            onOpenInspector={handleOpenInspector}
           />
         )}
       </div>

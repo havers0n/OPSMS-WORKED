@@ -76,7 +76,6 @@ export function WarehouseEditor() {
     );
   }
 
-  const handleOpenInspector = () => undefined;
 
   const handleAddRack = () => {
     clearSelection();
@@ -93,7 +92,6 @@ export function WarehouseEditor() {
       <StorageWorkspaceV2
         workspace={workspace ?? null}
         onAddRack={handleAddRack}
-        onOpenInspector={handleOpenInspector}
         onCloseInspector={handleCloseInspector}
       />
     );
@@ -110,7 +108,6 @@ export function WarehouseEditor() {
       <WorkspaceCanvasAndPanel
         workspace={workspace ?? null}
         onAddRack={handleAddRack}
-        onOpenInspector={handleOpenInspector}
         onCloseInspector={handleCloseInspector}
       />
     </div>
