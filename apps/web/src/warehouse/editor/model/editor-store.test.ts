@@ -1016,6 +1016,27 @@ describe('editor-store', () => {
     expect(faceB?.sections).toEqual([]);
   });
 
+  it('setFaceBRelationship(..., mirrored) creates missing Face B for single-face racks', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    draft.racks[rackId].faces = draft.racks[rackId].faces.filter((face) => face.side === 'A');
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
+
+    const rack = useEditorStore.getState().draft?.racks[rackId];
+    const faceA = rack?.faces.find((face) => face.side === 'A');
+    const faceB = rack?.faces.find((face) => face.side === 'B');
+
+    expect(rack?.kind).toBe('paired');
+    expect(faceB).toBeTruthy();
+    expect(faceB?.relationshipMode).toBe('mirrored');
+    expect(faceB?.isMirrored).toBe(true);
+    expect(faceB?.mirrorSourceFaceId).toBe(faceA?.id);
+    expect(faceB?.enabled).toBe(true);
+    expect(faceB?.sections).toEqual([]);
+  });
+
   it('setFaceBRelationship(..., independent, copy) clones Face A sections with new IDs', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0];

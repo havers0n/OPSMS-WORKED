@@ -1199,11 +1199,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
           const faceA = rack.faces.find((face) => face.side === 'A');
-          const faceB = rack.faces.find((face) => face.side === 'B');
+          const existingFaceB = rack.faces.find((face) => face.side === 'B');
 
-          if (!faceA || !faceB) {
+          if (!faceA) {
             return rack;
           }
+
+          const faceB: RackFace = existingFaceB ?? {
+            id: newEntityId(),
+            side: 'B',
+            enabled: false,
+            slotNumberingDirection: 'ltr',
+            relationshipMode: 'independent',
+            isMirrored: false,
+            mirrorSourceFaceId: null,
+            sections: []
+          };
 
           const sectionsCopy = faceA.sections.map((section) => ({
             ...section,
@@ -1246,7 +1257,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           return {
             ...rack,
             kind: 'paired' as RackKind,
-            faces: rack.faces.map((face) => (face.side === 'B' ? nextFaceB : face))
+            faces: existingFaceB
+              ? rack.faces.map((face) => (face.side === 'B' ? nextFaceB : face))
+              : [...rack.faces, nextFaceB]
           };
         })
       });
