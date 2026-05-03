@@ -283,33 +283,39 @@ function RackQuickActions({ rack }: { rack: Rack }) {
 
   if (!confirmingDelete) {
     return (
-      <div data-testid="rack-inspector-quick-actions" className="mt-2 grid grid-cols-3 gap-1.5">
+      <div data-testid="rack-inspector-quick-actions" className="flex shrink-0 items-center gap-1">
         <button
           type="button"
+          title="Rotate"
+          aria-label="Rotate rack"
           data-testid="rack-inspector-action-rotate"
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-muted)] bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
           onClick={() => rotateRack(rack.id)}
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          Rotate
+          <span className="sr-only">Rotate</span>
         </button>
         <button
           type="button"
+          title="Duplicate"
+          aria-label="Duplicate rack"
           data-testid="rack-inspector-action-duplicate"
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-muted)] bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
           onClick={() => duplicateRack(rack.id)}
         >
           <Copy className="h-3.5 w-3.5" />
-          Duplicate
+          <span className="sr-only">Duplicate</span>
         </button>
         <button
           type="button"
+          title="Delete"
+          aria-label="Delete rack"
           data-testid="rack-inspector-action-delete"
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 shadow-sm transition-colors hover:bg-red-100"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:bg-red-100 hover:text-red-700"
           onClick={() => setConfirmingDelete(true)}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Delete
+          <span className="sr-only">Delete</span>
         </button>
       </div>
     );
@@ -318,30 +324,32 @@ function RackQuickActions({ rack }: { rack: Rack }) {
   return (
     <div
       data-testid="rack-inspector-delete-confirm"
-      className="mt-2 grid grid-cols-[1fr_auto] gap-2 rounded-xl border border-red-200 bg-red-50 p-2"
+      className="flex shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-red-50 p-1 shadow-sm"
     >
-      <div className="self-center px-1 text-[11px] font-medium text-red-600">Delete this rack?</div>
-      <div className="flex gap-1.5">
-        <button
-          type="button"
-          data-testid="rack-inspector-delete-cancel"
-          onClick={() => setConfirmingDelete(false)}
-          className="rounded-lg border border-[var(--border-muted)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          data-testid="rack-inspector-delete-confirm-button"
-          onClick={() => {
-            deleteRack(rack.id);
-            setConfirmingDelete(false);
-          }}
-          className="rounded-lg bg-red-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-red-700"
-        >
-          Delete
-        </button>
-      </div>
+      <div className="px-1 text-[11px] font-medium text-red-600">Delete?</div>
+      <button
+        type="button"
+        title="Cancel delete"
+        aria-label="Cancel delete"
+        data-testid="rack-inspector-delete-cancel"
+        onClick={() => setConfirmingDelete(false)}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border-muted)] bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        title="Confirm delete"
+        aria-label="Confirm delete"
+        data-testid="rack-inspector-delete-confirm-button"
+        onClick={() => {
+          deleteRack(rack.id);
+          setConfirmingDelete(false);
+        }}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-red-600 text-white hover:bg-red-700"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -463,9 +471,10 @@ export function RackInspector({
   return (
     <aside className="flex h-full w-full flex-col overflow-hidden bg-white">
       <div className="shrink-0 border-b border-[var(--border-muted)] bg-[var(--surface-secondary)]">
-        <div className="flex items-start justify-between gap-3 px-5 pt-2 pb-1">
-          <div className="min-w-0">
+        <div className="flex items-center justify-between gap-3 px-5 pt-2 pb-1">
+          <div className="flex min-w-0 items-center gap-2">
             <RackHeaderDisplayCode rack={rack} editable={isLayoutEditable} />
+            {showTaskNav && isLayoutEditable && <RackQuickActions rack={rack} />}
           </div>
           <button
             type="button"
@@ -478,9 +487,8 @@ export function RackInspector({
         </div>
 
         {showTaskNav && (
-          <div className="px-5 pt-1 pb-2">
+          <div className="px-5 pt-0.5 pb-1.5">
             <InspectorTaskNav value={objectWorkContext} onChange={setObjectWorkContext} />
-            {isLayoutEditable && <RackQuickActions rack={rack} />}
           </div>
         )}
       </div>
