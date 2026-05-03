@@ -6,7 +6,8 @@ import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 interface StorageWorkspaceV2Props {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
-  onOpenInspector: () => undefined;
+  /** Optional legacy wiring; currently no-op in WarehouseEditor. */
+  onOpenInspector?: () => void;
   onCloseInspector: () => void;
 }
 

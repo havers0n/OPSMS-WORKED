@@ -28,7 +28,13 @@ export function AppRouter() {
           <Route
             path={`${routes.warehouse}/*`}
             element={
-              <Suspense fallback={null}>
+              <Suspense
+                fallback={
+                  <div className="flex h-full w-full items-center justify-center text-sm text-[var(--text-muted)]">
+                    Loading warehouse workspace...
+                  </div>
+                }
+              >
                 <WarehouseApp />
               </Suspense>
             }

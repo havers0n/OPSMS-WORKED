@@ -73,10 +73,36 @@ export function resolveBffUrl(baseUrl: string, path: string): string {
   return `${normalizedBase}${normalizedPath}`;
 }
 
-export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T> {
+export type BffRequestInit = RequestInit & {
+  timeoutMs?: number;
+};
+
+function createAbortSignal(signal: AbortSignal | null, timeoutMs?: number): AbortSignal | undefined {
+  if (timeoutMs === undefined) {
+    return signal ?? undefined;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    }
+  }
+
+  controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
+  return controller.signal;
+}
+
+export async function bffRequest<T>(path: string, init?: BffRequestInit): Promise<T> {
   const headers = await buildHeaders(init);
+  const signal = createAbortSignal(init?.signal ?? null, init?.timeoutMs);
   const response = await fetch(resolveBffUrl(env.bffUrl, path), {
     ...init,
+    signal,
     headers
   });
 
