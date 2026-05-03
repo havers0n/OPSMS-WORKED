@@ -5,12 +5,17 @@ import type Konva from 'konva';
 import type { ViewMode } from '@/warehouse/editor/model/editor-types';
 import { useCameraStore } from '@/warehouse/editor/model/camera-store';
 import {
+  type CanvasZoomBounds,
   type CanvasPoint,
   clampCanvasZoom,
   getZoomToCursorCamera,
   LOD_CELL_ENTRY,
   WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  useCanvasMaxZoom,
+  useCanvasMinZoom
+} from '@/app/settings/model/canvas-zoom-settings-selectors';
 import { getRackBoundingBox } from '@/entities/layout-version/lib/rack-spacing';
 import { recordCanvasCameraStoreUpdate } from './canvas-diagnostics';
 
@@ -187,6 +192,14 @@ export function useCanvasViewportController({
 }: UseCanvasViewportControllerParams) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState<CanvasViewport>({ width: 0, height: 0 });
+  const minZoom = useCanvasMinZoom();
+  const maxZoom = useCanvasMaxZoom();
+  const zoomBounds = useMemo<CanvasZoomBounds>(
+    () => ({ minZoom, maxZoom }),
+    [minZoom, maxZoom]
+  );
+  const zoomBoundsRef = useRef(zoomBounds);
+  zoomBoundsRef.current = zoomBounds;
 
   // Camera offset is now owned by useCameraStore. Subscribe to offsetX/offsetY
   // with individual selectors so this hook only re-renders when values change.
@@ -217,6 +230,13 @@ export function useCanvasViewportController({
   setCanvasZoomRef.current = setCanvasZoom;
 
   useEffect(() => {
+    const nextZoom = clampCanvasZoom(zoom, zoomBounds);
+    if (nextZoom !== zoom) {
+      setCanvasZoom(nextZoom);
+    }
+  }, [setCanvasZoom, zoom, zoomBounds]);
+
+  useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
     const update = () => setViewport({ width: node.clientWidth, height: node.clientHeight });
@@ -242,7 +262,7 @@ export function useCanvasViewportController({
     const minEntryZoom = getModeEntryMinZoom(viewMode);
 
     if (racks.length === 0) {
-      setCanvasZoom(clampCanvasZoom(Math.max(zoom, minEntryZoom)));
+      setCanvasZoom(clampCanvasZoom(Math.max(zoom, minEntryZoom), zoomBoundsRef.current));
       return;
     }
 
@@ -260,7 +280,10 @@ export function useCanvasViewportController({
     const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : minEntryZoom;
     const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : minEntryZoom;
 
-    const targetZoom = clampCanvasZoom(Math.max(Math.min(scaleX, scaleY), minEntryZoom));
+    const targetZoom = clampCanvasZoom(
+      Math.max(Math.min(scaleX, scaleY), minEntryZoom),
+      zoomBoundsRef.current
+    );
 
     const newOffsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
     const newOffsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;
@@ -273,7 +296,10 @@ export function useCanvasViewportController({
   // re-running on their changes would fight the user's manual zoom adjustments.
 
   const handleZoom = useCallback((delta: number, cursor?: CanvasPoint) => {
-    const nextZoom = clampCanvasZoom(Number((zoomRef.current + delta).toFixed(2)));
+    const nextZoom = clampCanvasZoom(
+      Number((zoomRef.current + delta).toFixed(2)),
+      zoomBoundsRef.current
+    );
 
     if (!cursor) {
       setCanvasZoomRef.current(nextZoom);

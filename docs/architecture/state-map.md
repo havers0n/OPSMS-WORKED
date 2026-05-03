@@ -484,6 +484,19 @@ Properties:
 - disposable
 - safe to reset on auth/floor switch
 
+### User UI preferences
+
+Examples:
+
+- canvas minimum zoom
+- canvas maximum zoom
+
+Properties:
+
+- stored in browser localStorage
+- scoped to the current browser/device
+- may clamp ephemeral runtime state, but does not change warehouse/domain truth
+
 ### Persisted draft state
 
 Examples:

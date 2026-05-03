@@ -5,6 +5,7 @@ export const routes = {
   products: '/products',
   productDetail: '/products/:productId',
   operations: '/operations',
+  settings: '/settings',
   orderDetail: '/operations/orders/:orderId',
   waveDetail: '/operations/waves/:id',
   pickTaskDetail: '/operations/pick-tasks/:id',

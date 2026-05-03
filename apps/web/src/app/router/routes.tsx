@@ -8,6 +8,7 @@ import { OrderDetailPage } from '@/pages/order-detail/ui/order-detail-page';
 import { ProductDetailPage } from '@/pages/product-detail/ui/product-detail-page';
 import { PickTaskPage } from '@/pages/pick-task/ui/pick-task-page';
 import { ProductsPage } from '@/pages/products/ui/products-page';
+import { SettingsPage } from '@/pages/settings/ui/settings-page';
 import { WaveDetailPage } from '@/pages/wave-detail/ui/wave-detail-page';
 import { routes } from '@/shared/config/routes';
 
@@ -42,6 +43,7 @@ export function AppRouter() {
           <Route path={routes.products} element={<ProductsPage />} />
           <Route path={routes.productDetail} element={<ProductDetailPage />} />
           <Route path={routes.operations} element={<OperationsPage />} />
+          <Route path={routes.settings} element={<SettingsPage />} />
           <Route path={routes.orderDetail} element={<OrderDetailPage />} />
           <Route path={routes.waveDetail} element={<WaveDetailPage />} />
           <Route path={routes.pickTaskDetail} element={<PickTaskPage />} />

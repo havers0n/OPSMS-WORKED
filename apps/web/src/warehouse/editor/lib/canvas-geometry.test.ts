@@ -74,6 +74,12 @@ describe('canvas geometry helpers', () => {
     expect(clampCanvasZoom(5)).toBe(MAX_CANVAS_ZOOM);
   });
 
+  it('clamps zoom into caller-provided canvas bounds', () => {
+    expect(clampCanvasZoom(0.4, { minZoom: 0.2, maxZoom: 2 })).toBe(0.4);
+    expect(clampCanvasZoom(0.1, { minZoom: 0.2, maxZoom: 2 })).toBe(0.2);
+    expect(clampCanvasZoom(3, { minZoom: 0.2, maxZoom: 2 })).toBe(2);
+  });
+
   it('keeps the canvas point under the cursor stable after zoom', () => {
     const camera = { zoom: 1, offsetX: 120, offsetY: -80 };
     const cursor = { x: 350, y: 240 };

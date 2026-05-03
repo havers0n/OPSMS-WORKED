@@ -8,8 +8,10 @@ export const GRID_SIZE = WORLD_SCALE; // minor grid step = 1 m = 40 px
 export const MAJOR_GRID_SIZE = WORLD_SCALE * 5; // major grid step = 5 m = 200 px
 export const MINOR_GRID_ZOOM_THRESHOLD = 1.2; // zoom level at which 1 m minor grid appears
 export const ROTATE_HANDLE_SIZE = 28;
-export const MIN_CANVAS_ZOOM = 0.1; // 10%; must stay above 0 because camera math divides by zoom
-export const MAX_CANVAS_ZOOM = 3.0;
+export const MIN_CANVAS_ZOOM = 0.1; // default 10%; must stay above 0 because camera math divides by zoom
+export const MAX_CANVAS_ZOOM = 3.0; // default 300%
+export const HARD_MIN_CANVAS_ZOOM = 0.05;
+export const HARD_MAX_CANVAS_ZOOM = 5.0;
 export const RACK_VIEWPORT_OVERSCAN_METERS = 2;
 export const CELL_VIEWPORT_OVERSCAN_PX = 160;
 
@@ -114,13 +116,49 @@ export type CanvasCamera = {
   offsetY: number;
 };
 
+export type CanvasZoomBounds = {
+  minZoom: number;
+  maxZoom: number;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 export function clampCanvasPosition(value: number) {
   return Math.max(0, value);
 }
 
-export function clampCanvasZoom(value: number) {
-  return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value));
+export function normalizeCanvasZoomBounds(
+  bounds: Partial<CanvasZoomBounds> = {}
+): CanvasZoomBounds {
+  const minZoom =
+    typeof bounds.minZoom === 'number' && Number.isFinite(bounds.minZoom)
+      ? bounds.minZoom
+      : MIN_CANVAS_ZOOM;
+  const maxZoom =
+    typeof bounds.maxZoom === 'number' && Number.isFinite(bounds.maxZoom)
+      ? bounds.maxZoom
+      : MAX_CANVAS_ZOOM;
+  const normalizedMin = Math.min(
+    HARD_MAX_CANVAS_ZOOM,
+    Math.max(HARD_MIN_CANVAS_ZOOM, minZoom)
+  );
+  const normalizedMax = Math.min(
+    HARD_MAX_CANVAS_ZOOM,
+    Math.max(HARD_MIN_CANVAS_ZOOM, maxZoom)
+  );
+
+  if (normalizedMin <= normalizedMax) {
+    return { minZoom: normalizedMin, maxZoom: normalizedMax };
+  }
+
+  return { minZoom: normalizedMax, maxZoom: normalizedMin };
+}
+
+export function clampCanvasZoom(
+  value: number,
+  bounds?: Partial<CanvasZoomBounds>
+) {
+  const { minZoom, maxZoom } = normalizeCanvasZoomBounds(bounds);
+  return Math.min(maxZoom, Math.max(minZoom, value));
 }
 
 function getCanvasPointFromViewportPoint(

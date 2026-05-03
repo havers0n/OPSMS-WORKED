@@ -1,4 +1,4 @@
-import { BarChart3, Eye, Layers, LayoutGrid, Package, X } from 'lucide-react';
+import { BarChart3, Eye, Layers, LayoutGrid, Package, Settings2, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
@@ -36,6 +36,13 @@ const items: NavigationItem[] = [
     description: 'Waves & orders',
     icon: Layers,
     to: routes.operations,
+    enabled: true
+  },
+  {
+    label: 'Settings',
+    description: 'Workspace preferences',
+    icon: Settings2,
+    to: routes.settings,
     enabled: true
   },
   {
