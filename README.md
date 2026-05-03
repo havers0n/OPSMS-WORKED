@@ -106,15 +106,18 @@ npm install
 
 ## Environment variables
 
-Base template: [`.env.example`](./.env.example)
+Repo root template: [`.env.example`](./.env.example)
+
+BFF local template: [`apps/bff/.env.example`](./apps/bff/.env.example)
 
 ```env
 BFF_PORT=8787
 BFF_HOST=127.0.0.1
 BFF_LOG_LEVEL=info
-BFF_CORS_ORIGIN=http://127.0.0.1:5173
+# BFF_CORS_ORIGIN is optional. When unset, the BFF allows local Vite dev and E2E ports.
+# BFF_CORS_ORIGIN=http://127.0.0.1:5173
 SUPABASE_URL=http://127.0.0.1:54421
-SUPABASE_ANON_KEY=
+SUPABASE_ANON_KEY=<local Supabase anon key>
 
 VITE_SUPABASE_URL=http://127.0.0.1:54421
 VITE_SUPABASE_ANON_KEY=
@@ -125,6 +128,7 @@ VITE_DEV_AUTH_PASSWORD=warehouse123
 ```
 
 Backend (`apps/bff`) requires `SUPABASE_URL` and `SUPABASE_ANON_KEY` and reads only backend-prefixed variables for service settings.
+The BFF dev script runs from `apps/bff` and loads `apps/bff/.env.local`.
 
 ## Local development
 
@@ -141,7 +145,12 @@ Current local ports from `apps/supabase/config.toml`:
 - Studio: `http://127.0.0.1:54423`
 - DB: `127.0.0.1:54422`
 
-2. Create `.env` in the repo root based on `.env.example`.
+2. Create the local env files from the templates:
+
+```powershell
+cp .env.example .env
+cp apps/bff/.env.example apps/bff/.env.local
+```
 
 3. Start frontend and BFF from the root:
 
