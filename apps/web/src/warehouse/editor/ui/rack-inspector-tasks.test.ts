@@ -285,6 +285,34 @@ describe('RackInspector tasks', () => {
     }).toEqual(rackShapeBefore);
   });
 
+  it('renders paired rack state in the geometry SVG', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const rack = draft.racks[rackId];
+    rack.kind = 'paired';
+    rack.totalLength = 17;
+    rack.depth = 2.3;
+    rack.faces[1].enabled = true;
+    rack.faces[1].relationshipMode = 'mirrored';
+    rack.faces[1].isMirrored = true;
+    rack.faces[1].mirrorSourceFaceId = rack.faces[0].id;
+
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    const faceABand = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-face-a-band' });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-paired-spine' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-face-a-band' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-face-b-band' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-face-a-token' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-face-b-token' })).toHaveLength(1);
+    expect(faceABand.props.height).toBeGreaterThanOrEqual(24);
+  });
+
   it('edits length/depth from SVG and keeps only one inline editor active', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0];

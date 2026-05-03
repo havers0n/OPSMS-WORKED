@@ -49,11 +49,19 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   const PADDING = 20;
   const SVG_WIDTH = WIDTH - PADDING * 2;
   const SVG_HEIGHT = HEIGHT - PADDING * 2;
+  const MIN_SINGLE_RACK_HEIGHT = 30;
+  const MIN_PAIRED_RACK_HEIGHT = 48;
 
   const normalizedRotation = ((rack.rotationDeg ?? 0) % 360 + 360) % 360;
+  const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
+  const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
+  const isPaired = rack.kind === 'paired' && !!faceB?.enabled;
+  const faceALength = Math.max(faceA?.faceLength ?? rack.totalLength, 0.1);
+  const faceBLength = Math.max(isPaired ? (faceB?.faceLength ?? rack.totalLength) : faceALength, 0.1);
   const safeLength = Math.max(rack.totalLength, 0.1);
   const safeDepth = Math.max(rack.depth, 0.1);
-  const aspect = safeLength / safeDepth;
+  const visualLength = Math.max(safeLength, faceALength, faceBLength);
+  const aspect = visualLength / safeDepth;
   let rectW = SVG_WIDTH;
   let rectH = SVG_HEIGHT;
 
@@ -62,6 +70,8 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   } else {
     rectW = rectH * aspect;
   }
+
+  rectH = Math.max(rectH, isPaired ? MIN_PAIRED_RACK_HEIGHT : MIN_SINGLE_RACK_HEIGHT);
 
   const offsetX = PADDING + (SVG_WIDTH - rectW) / 2;
   const offsetY = PADDING + (SVG_HEIGHT - rectH) / 2;
@@ -77,6 +87,12 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
   const rotationChipX = WIDTH / 2 - 52;
   const rotationChipY = HEIGHT - PADDING - 22;
   const labelGap = 8;
+  const spineY = offsetY + rectH / 2;
+  const faceAVisualWidth = isPaired ? rectW * (faceALength / visualLength) : rectW;
+  const faceBVisualWidth = isPaired ? rectW * (faceBLength / visualLength) : rectW;
+  const stripeHeight = Math.max(3, Math.min(8, rectH * 0.16));
+  const faceTokenWidth = 18;
+  const faceTokenHeight = 14;
 
   const getRotationLabel = () => {
     if (normalizedRotation === 0) return '0°';
@@ -245,6 +261,104 @@ export function GeometryBlueprint({ rack, readOnly = false }: { rack: Rack; read
             strokeWidth="2"
             rx="2"
           />
+
+          {isPaired && (
+            <>
+              <rect
+                data-testid="geometry-blueprint-face-a-band"
+                x={offsetX}
+                y={offsetY}
+                width={faceAVisualWidth}
+                height={rectH / 2}
+                fill="#e0f2fe"
+                opacity="0.42"
+              />
+              <rect
+                data-testid="geometry-blueprint-face-b-band"
+                x={offsetX}
+                y={spineY}
+                width={faceBVisualWidth}
+                height={rectH / 2}
+                fill="#ede9fe"
+                opacity="0.42"
+              />
+              <rect
+                x={offsetX}
+                y={offsetY}
+                width={faceAVisualWidth}
+                height={stripeHeight}
+                fill="#0ea5e9"
+                opacity="0.45"
+              />
+              <rect
+                x={offsetX}
+                y={offsetY + rectH - stripeHeight}
+                width={faceBVisualWidth}
+                height={stripeHeight}
+                fill="#7c3aed"
+                opacity="0.36"
+              />
+              <line
+                data-testid="geometry-blueprint-paired-spine"
+                x1={offsetX + 4}
+                y1={spineY}
+                x2={offsetX + rectW - 4}
+                y2={spineY}
+                stroke="#94a3b8"
+                strokeWidth="1"
+                strokeDasharray="4,3"
+              />
+              <g
+                data-testid="geometry-blueprint-face-a-token"
+                transform={`translate(${offsetX + 14} ${offsetY + Math.max(10, rectH * 0.25)})`}
+              >
+                <rect
+                  x={-faceTokenWidth / 2}
+                  y={-faceTokenHeight / 2}
+                  width={faceTokenWidth}
+                  height={faceTokenHeight}
+                  rx="6"
+                  fill="#ffffff"
+                  stroke="#7dd3fc"
+                  strokeWidth="1"
+                />
+                <text x="0" y="3" textAnchor="middle" className="text-[9px] font-semibold fill-sky-700">
+                  A
+                </text>
+              </g>
+              <g
+                data-testid="geometry-blueprint-face-b-token"
+                transform={`translate(${offsetX + 14} ${spineY + Math.max(10, rectH * 0.25)})`}
+              >
+                <rect
+                  x={-faceTokenWidth / 2}
+                  y={-faceTokenHeight / 2}
+                  width={faceTokenWidth}
+                  height={faceTokenHeight}
+                  rx="6"
+                  fill="#ffffff"
+                  stroke="#c4b5fd"
+                  strokeWidth="1"
+                />
+                <text x="0" y="3" textAnchor="middle" className="text-[9px] font-semibold fill-violet-700">
+                  B
+                </text>
+              </g>
+            </>
+          )}
+
+          {isPaired && (
+            <rect
+              x={offsetX}
+              y={offsetY}
+              width={rectW}
+              height={rectH}
+              fill="none"
+              stroke="#1e293b"
+              strokeWidth="2"
+              rx="2"
+            />
+          )}
 
           <line
             x1={offsetX - dimOffset}
