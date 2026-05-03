@@ -75,14 +75,9 @@ begin
   destructive_reference_source := null;
 
   with old_published_codes as (
-    select distinct l.code
+    select distinct coalesce(c.address, c.cell_code) as code
     from public.layout_versions lv
     join public.cells c on c.layout_version_id = lv.id
-    join public.locations l
-      on l.floor_id = lv.floor_id
-     and l.code = coalesce(c.address, c.cell_code)
-     and l.location_type = 'rack_slot'
-     and l.geometry_slot_id = c.id
     where lv.floor_id = floor_uuid
       and lv.state = 'published'
       and lv.id <> layout_version_uuid
@@ -94,15 +89,19 @@ begin
     where c.layout_version_id = layout_version_uuid
       and coalesce(c.address, c.cell_code) is not null
   ),
-  removed_locations as (
-    select l.id, l.code
+  removed_codes as (
+    select old_code.code
     from old_published_codes old_code
-    join public.locations l
-      on l.floor_id = floor_uuid
-     and l.code = old_code.code
     left join new_draft_codes new_code
       on new_code.code = old_code.code
     where new_code.code is null
+  ),
+  removed_locations as (
+    select l.id, l.code
+    from removed_codes removed_code
+    join public.locations l
+      on l.floor_id = floor_uuid
+     and l.code = removed_code.code
   ),
   blocking_references as (
     select rl.code, 'containers.current_location_id' as source

@@ -154,6 +154,50 @@ as $$
     and r.layout_version_id = draft_uuid;
 $$;
 
+create or replace function pg_temp.create_guard_product()
+returns uuid
+language plpgsql
+as $$
+declare
+  product_uuid uuid := gen_random_uuid();
+begin
+  insert into public.products (id, source, external_product_id, sku, name)
+  values (
+    product_uuid,
+    'phase1-guard',
+    product_uuid::text,
+    'P1G-' || upper(substring(replace(product_uuid::text, '-', '') from 1 for 10)),
+    'Phase 1 Guard Product ' || product_uuid::text
+  );
+
+  return product_uuid;
+end
+$$;
+
+create or replace function pg_temp.create_guard_pick_step(
+  tenant_uuid uuid,
+  source_location_uuid uuid,
+  step_status text
+)
+returns void
+language plpgsql
+as $$
+declare
+  task_uuid uuid;
+begin
+  insert into public.pick_tasks (tenant_id, source_type, source_id, status)
+  values (tenant_uuid, 'wave', gen_random_uuid(), 'ready')
+  returning id into task_uuid;
+
+  insert into public.pick_steps (
+    task_id, tenant_id, sequence_no, sku, item_name, qty_required, status, source_location_id
+  )
+  values (
+    task_uuid, tenant_uuid, 1, 'P1G-PICK', 'Phase 1 Guard Pick Item', 1, step_status, source_location_uuid
+  );
+end
+$$;
+
 create or replace function pg_temp.expect_destructive_publish_blocked(draft_uuid uuid, expected_fragment text)
 returns void
 language plpgsql
@@ -175,6 +219,7 @@ declare
   actor_uuid uuid := gen_random_uuid();
   fixture record;
   draft_uuid uuid;
+  status_text text;
   location_id_after uuid;
   slot_id_after uuid;
   published_count integer;
@@ -277,12 +322,25 @@ begin
 
   perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'containers.current_location_id');
 
-  -- 5. Republish deleted location with product_location_roles is blocked.
-  select * into fixture from pg_temp.create_publish_guard_fixture('product role');
-  product_uuid := gen_random_uuid();
+  -- 5. Republish deleted referenced stale location is blocked by floor/code, not geometry_slot_id.
+  select * into fixture from pg_temp.create_publish_guard_fixture('stale geometry');
 
-  insert into public.products (id, source, external_product_id, sku, name)
-  values (product_uuid, 'phase1-guard', product_uuid::text, 'P1G-ROLE', 'Phase 1 Role Product');
+  alter table public.locations disable trigger validate_location_row;
+  update public.locations
+  set geometry_slot_id = null
+  where id = fixture.second_location_id;
+  alter table public.locations enable trigger validate_location_row;
+
+  insert into public.containers (tenant_id, external_code, container_type_id, status, current_location_id)
+  values (fixture.tenant_id, 'P1G-STL-' || substring(fixture.floor_id::text from 1 for 8), container_type_uuid, 'active', fixture.second_location_id);
+
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+  perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+  perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'containers.current_location_id');
+
+  -- 6. Republish deleted location with product_location_roles is blocked.
+  select * into fixture from pg_temp.create_publish_guard_fixture('product role');
+  product_uuid := pg_temp.create_guard_product();
 
   insert into public.product_location_roles (tenant_id, product_id, location_id, role, state)
   values (fixture.tenant_id, product_uuid, fixture.second_location_id, 'primary_pick', 'published');
@@ -291,12 +349,9 @@ begin
   perform pg_temp.delete_second_slot_from_draft(draft_uuid);
   perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'product_location_roles.location_id');
 
-  -- 6. Republish deleted location with sku_location_policies is blocked.
+  -- 7. Republish deleted location with sku_location_policies is blocked.
   select * into fixture from pg_temp.create_publish_guard_fixture('sku policy');
-  product_uuid := gen_random_uuid();
-
-  insert into public.products (id, source, external_product_id, sku, name)
-  values (product_uuid, 'phase1-guard', product_uuid::text, 'P1G-SKU', 'Phase 1 SKU Policy Product');
+  product_uuid := pg_temp.create_guard_product();
 
   insert into public.sku_location_policies (tenant_id, location_id, product_id, min_qty_each, max_qty_each, status)
   values (fixture.tenant_id, fixture.second_location_id, product_uuid, 1, 10, 'active');
@@ -305,7 +360,110 @@ begin
   perform pg_temp.delete_second_slot_from_draft(draft_uuid);
   perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'sku_location_policies.location_id');
 
-  -- 7. Republish deleted empty slot does not block.
+  -- 8. Republish deleted location with active location_policies is blocked.
+  select * into fixture from pg_temp.create_publish_guard_fixture('location policy');
+
+  insert into public.location_policies (tenant_id, location_id, status)
+  values (fixture.tenant_id, fixture.second_location_id, 'active');
+
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+  perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+  perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'location_policies.location_id');
+
+  -- 9. Republish deleted location with active pick_steps statuses is blocked.
+  foreach status_text in array array['pending', 'partial', 'needs_replenishment'] loop
+    select * into fixture from pg_temp.create_publish_guard_fixture('pick step ' || status_text);
+
+    perform pg_temp.create_guard_pick_step(fixture.tenant_id, fixture.second_location_id, status_text);
+
+    draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+    perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+    perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'pick_steps.source_location_id');
+  end loop;
+
+  -- 10. Republish deleted location with pending stock movement source/target is blocked.
+  select * into fixture from pg_temp.create_publish_guard_fixture('stock movement source');
+
+  insert into public.stock_movements (tenant_id, movement_type, source_location_id, status)
+  values (fixture.tenant_id, 'receive', fixture.second_location_id, 'pending');
+
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+  perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+  perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'stock_movements.source_location_id');
+
+  select * into fixture from pg_temp.create_publish_guard_fixture('stock movement target');
+
+  insert into public.stock_movements (tenant_id, movement_type, target_location_id, status)
+  values (fixture.tenant_id, 'receive', fixture.second_location_id, 'pending');
+
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+  perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+  perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'stock_movements.target_location_id');
+
+  -- 11. Republish deleted location with active location-scoped packaging_profiles is blocked.
+  select * into fixture from pg_temp.create_publish_guard_fixture('packaging profile');
+  product_uuid := pg_temp.create_guard_product();
+
+  insert into public.packaging_profiles (
+    tenant_id, product_id, code, name, profile_type, scope_type, scope_id, status
+  )
+  values (
+    fixture.tenant_id,
+    product_uuid,
+    'P1G-PP-' || upper(substring(replace(product_uuid::text, '-', '') from 1 for 8)),
+    'Phase 1 Guard Packaging Profile',
+    'storage',
+    'location',
+    fixture.second_location_id,
+    'active'
+  );
+
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+  perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+  perform pg_temp.expect_destructive_publish_blocked(draft_uuid, 'packaging_profiles.scope_id');
+
+  -- 12. Inactive or completed references on a deleted location do not block.
+  select * into fixture from pg_temp.create_publish_guard_fixture('inactive references');
+  product_uuid := pg_temp.create_guard_product();
+
+  insert into public.product_location_roles (tenant_id, product_id, location_id, role, state)
+  values (fixture.tenant_id, product_uuid, fixture.second_location_id, 'primary_pick', 'inactive');
+
+  insert into public.sku_location_policies (tenant_id, location_id, product_id, min_qty_each, max_qty_each, status)
+  values (fixture.tenant_id, fixture.second_location_id, product_uuid, 1, 10, 'inactive');
+
+  insert into public.location_policies (tenant_id, location_id, status)
+  values (fixture.tenant_id, fixture.second_location_id, 'inactive');
+
+  foreach status_text in array array['picked', 'skipped', 'exception'] loop
+    perform pg_temp.create_guard_pick_step(fixture.tenant_id, fixture.second_location_id, status_text);
+  end loop;
+
+  insert into public.stock_movements (tenant_id, movement_type, source_location_id, status)
+  values (fixture.tenant_id, 'receive', fixture.second_location_id, 'done');
+
+  insert into public.stock_movements (tenant_id, movement_type, target_location_id, status)
+  values (fixture.tenant_id, 'receive', fixture.second_location_id, 'cancelled');
+
+  insert into public.packaging_profiles (
+    tenant_id, product_id, code, name, profile_type, scope_type, scope_id, status
+  )
+  values (
+    fixture.tenant_id,
+    product_uuid,
+    'P1G-IN-' || upper(substring(replace(product_uuid::text, '-', '') from 1 for 8)),
+    'Phase 1 Guard Inactive Packaging Profile',
+    'storage',
+    'location',
+    fixture.second_location_id,
+    'inactive'
+  );
+
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+  perform pg_temp.delete_second_slot_from_draft(draft_uuid);
+  perform public.publish_layout_version(draft_uuid, null);
+
+  -- 13. Republish deleted empty slot does not block.
   select * into fixture from pg_temp.create_publish_guard_fixture('deleted empty');
   draft_uuid := public.create_layout_draft(fixture.floor_id, null);
   perform pg_temp.delete_second_slot_from_draft(draft_uuid);

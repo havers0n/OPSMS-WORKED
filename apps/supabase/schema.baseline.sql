@@ -1450,7 +1450,7 @@ $$;
 -- create_layout_draft: final version from 0081 (copies zones, walls, racks)
 -- save_layout_draft: final version from 0081 (deletes/reinserts zones, walls, racks)
 -- get_layout_bundle: final version from 0081 (returns zones, walls, racks, draftVersion)
--- publish_layout_version: final version from 0112 (advisory lock, location sync, destructive location guard, audit)
+-- publish_layout_version: final version from 0112 (advisory lock, location sync, destructive guard resolves removed cell codes by floor/code, audit)
 
 -- NOTE: These functions are too large to inline safely in this baseline.
 -- Copy verbatim from the following migration files when reconstructing:
