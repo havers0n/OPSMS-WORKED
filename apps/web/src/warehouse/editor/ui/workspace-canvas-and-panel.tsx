@@ -6,7 +6,7 @@ import { RightSidePanelSlot } from './right-side-panel-slot';
 interface WorkspaceCanvasAndPanelProps {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
-  onOpenInspector: () => undefined;
+  onOpenInspector?: () => void;
   onCloseInspector: () => void;
   /**
    * When true, suppresses the legacy RightSidePanelSlot so the V2 path can
@@ -55,7 +55,7 @@ export function WorkspaceCanvasAndPanel({
           isStorageV2={isStorageV2}
         />
 
-        {!hideContextPanel && (
+        {!hideContextPanel && onOpenInspector && (
           <ContextPanel
             workspace={workspace}
             onOpenInspector={onOpenInspector}

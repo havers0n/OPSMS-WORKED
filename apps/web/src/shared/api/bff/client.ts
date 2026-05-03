@@ -73,14 +73,70 @@ export function resolveBffUrl(baseUrl: string, path: string): string {
   return `${normalizedBase}${normalizedPath}`;
 }
 
-export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = await buildHeaders(init);
-  const response = await fetch(resolveBffUrl(env.bffUrl, path), {
-    ...init,
-    headers
-  });
+function createAbortController(initSignal: AbortSignal | null, timeoutMs?: number): { signal: AbortSignal; dispose: () => void } {
+  const controller = new AbortController();
 
-  if (!response.ok) {
+  if (initSignal) {
+    if (initSignal.aborted) {
+      controller.abort(initSignal.reason);
+    } else {
+      const onAbort = () => controller.abort(initSignal.reason);
+      initSignal.addEventListener('abort', onAbort, { once: true });
+      const priorDispose = () => initSignal.removeEventListener('abort', onAbort);
+      const baseDispose = () => {
+        priorDispose();
+      };
+
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      if (typeof timeoutMs === 'number') {
+        timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
+      }
+
+      return {
+        signal: controller.signal,
+        dispose: () => {
+          baseDispose();
+          if (timeoutId !== null) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+        }
+      };
+    }
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  if (typeof timeoutMs === 'number') {
+    timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
+  }
+
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    }
+  };
+}
+
+export async function bffRequest<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+  const headers = await buildHeaders(init);
+  const timeoutController =
+    typeof init?.timeoutMs === 'number' || init?.signal
+      ? createAbortController(init.signal ?? null, init.timeoutMs)
+      : null;
+
+  try {
+    const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+    const response = await fetch(resolveBffUrl(env.bffUrl, path), {
+      ...requestInit,
+      signal: timeoutController?.signal ?? init?.signal,
+      headers
+    });
+
+    if (!response.ok) {
     const errorBody = (await readJsonBody<BffErrorBody>(response).catch(() => null)) ?? null;
     const requestId = errorBody?.requestId ?? response.headers.get('x-request-id');
     const errorId = errorBody?.errorId ?? null;
@@ -88,8 +144,11 @@ export async function bffRequest<T>(path: string, init?: RequestInit): Promise<T
       errorBody?.message ??
       `BFF request failed with status ${response.status}${requestId ? ` [request ${requestId}]` : ''}${errorId ? ` [error ${errorId}]` : ''}`;
 
-    throw new BffRequestError(response.status, errorBody?.code ?? null, message, requestId, errorId, errorBody?.details ?? null);
-  }
+      throw new BffRequestError(response.status, errorBody?.code ?? null, message, requestId, errorId, errorBody?.details ?? null);
+    }
 
-  return (await readJsonBody<T>(response)) as T;
+    return (await readJsonBody<T>(response)) as T;
+  } finally {
+    timeoutController?.dispose();
+  }
 }
