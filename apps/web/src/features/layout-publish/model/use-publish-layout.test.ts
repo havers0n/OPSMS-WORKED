@@ -4,7 +4,10 @@ import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
+import { locationKeys } from '@/entities/location/api/queries';
+import { productLocationRoleKeys } from '@/entities/product-location-role/api/queries';
 import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
+import { resetStorageFocusStore, useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
 import {
   getWarehouseDraftPersistenceSnapshot,
   getWarehouseDraftSnapshot,
@@ -50,6 +53,7 @@ type PublishHookResult = ReturnType<typeof usePublishLayout>;
 function resetStores() {
   warehouseViewModeActions.reset();
   warehouseInteractionActions.resetAll();
+  resetStorageFocusStore();
   warehouseLayoutDraftActions.resetDraft();
 }
 
@@ -272,6 +276,54 @@ describe('usePublishLayout', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: layoutVersionKeys.publishedSummary(draft.floorId) });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: layoutVersionKeys.workspace(draft.floorId) });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: cellKeys.publishedByFloor(draft.floorId) });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: locationKeys.byCellAll() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: locationKeys.storageAll() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: productLocationRoleKeys.byLocationAll() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: productLocationRoleKeys.effectiveRoleAll() });
+  });
+
+  it('clears stale storage cell focus after publish success', async () => {
+    const queryClient = new QueryClient();
+    const draft = createLayoutDraftFixture();
+    let publishHook!: PublishHookResult;
+
+    warehouseLayoutDraftActions.initializeDraft(draft);
+    useStorageFocusStore.getState().selectCell({
+      cellId: '11111111-1111-4111-8111-111111111111',
+      rackId: '22222222-2222-4222-8222-222222222222',
+      level: 1
+    });
+
+    vi.mocked(publishLayoutVersion).mockResolvedValue({
+      layoutVersionId: draft.layoutVersionId,
+      publishedAt: '2026-04-08T12:30:00.000Z',
+      generatedCells: 8,
+      validation: {
+        isValid: true,
+        issues: []
+      }
+    });
+    vi.mocked(createLayoutDraft).mockResolvedValue('draft-2');
+
+    await act(async () => {
+      TestRenderer.create(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(HookHarness, { floorId: draft.floorId, onReady: (result) => (publishHook = result) })
+        )
+      );
+    });
+
+    await act(async () => {
+      await publishHook.mutateAsync();
+    });
+
+    expect(useStorageFocusStore.getState()).toMatchObject({
+      selectedCellId: null,
+      selectedRackId: null,
+      activeLevel: null
+    });
   });
 
   it('conflict then publish retry keeps persistence surface consistent (retry may succeed or remain blocked)', async () => {

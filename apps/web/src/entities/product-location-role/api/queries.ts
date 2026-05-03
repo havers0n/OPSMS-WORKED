@@ -28,10 +28,12 @@ export type LocationEffectiveRole = {
 
 export const productLocationRoleKeys = {
   all: ['product-location-role'] as const,
+  byLocationAll: () => [...productLocationRoleKeys.all, 'by-location'] as const,
   byLocation: (locationId: string | null) =>
-    [...productLocationRoleKeys.all, 'by-location', locationId ?? 'none'] as const,
+    [...productLocationRoleKeys.byLocationAll(), locationId ?? 'none'] as const,
+  effectiveRoleAll: () => [...productLocationRoleKeys.all, 'effective-role'] as const,
   effectiveRole: (locationId: string | null, productId: string | null) =>
-    [...productLocationRoleKeys.all, 'effective-role', locationId ?? 'none', productId ?? 'none'] as const
+    [...productLocationRoleKeys.effectiveRoleAll(), locationId ?? 'none', productId ?? 'none'] as const
 };
 
 async function fetchLocationProductAssignments(

@@ -12,6 +12,10 @@ vi.mock('@/shared/api/bff/client', () => ({
 
 describe('productLocationRoleKeys', () => {
   it('uses stable location keys and none sentinels', () => {
+    expect(productLocationRoleKeys.byLocationAll()).toEqual([
+      'product-location-role',
+      'by-location'
+    ]);
     expect(productLocationRoleKeys.byLocation('location-a')).toEqual([
       'product-location-role',
       'by-location',
@@ -21,6 +25,10 @@ describe('productLocationRoleKeys', () => {
       'product-location-role',
       'by-location',
       'none'
+    ]);
+    expect(productLocationRoleKeys.effectiveRoleAll()).toEqual([
+      'product-location-role',
+      'effective-role'
     ]);
   });
 });

@@ -228,6 +228,9 @@ declare
   location_count_after integer;
   active_location_count_after integer;
   published_count integer;
+  product_role_count integer;
+  sku_policy_count integer;
+  location_policy_count integer;
   container_type_uuid uuid;
   product_uuid uuid;
 begin
@@ -311,6 +314,91 @@ begin
 
   if location_status_after <> 'active' then
     raise exception 'Moved same-code slot must keep the location active.';
+  end if;
+
+  -- 2a. Republish moved same-code slot preserves location-owned assortment and policies.
+  select * into fixture from pg_temp.create_publish_guard_fixture('same code assortment');
+  product_uuid := pg_temp.create_guard_product();
+
+  insert into public.product_location_roles (tenant_id, product_id, location_id, role, state)
+  values (fixture.tenant_id, product_uuid, fixture.first_location_id, 'primary_pick', 'published');
+
+  insert into public.sku_location_policies (tenant_id, location_id, product_id, min_qty_each, max_qty_each, status)
+  values (fixture.tenant_id, fixture.first_location_id, product_uuid, 1, 10, 'active');
+
+  insert into public.location_policies (tenant_id, location_id, status)
+  values (fixture.tenant_id, fixture.first_location_id, 'active');
+
+  previous_slot_id := fixture.first_slot_id;
+  draft_uuid := public.create_layout_draft(fixture.floor_id, null);
+
+  update public.racks
+  set x = x + 75,
+      y = y + 25
+  where layout_version_id = draft_uuid;
+
+  perform public.publish_layout_version(draft_uuid, null);
+
+  select l.id, l.geometry_slot_id, l.status
+  into location_id_after, slot_id_after, location_status_after
+  from public.locations l
+  where l.floor_id = fixture.floor_id
+    and l.code = fixture.first_location_code;
+
+  if location_id_after is distinct from fixture.first_location_id then
+    raise exception 'Same-code assortment publish must preserve locations.id.';
+  end if;
+
+  if slot_id_after is null or slot_id_after = previous_slot_id then
+    raise exception 'Same-code assortment publish must remap geometry_slot_id to the new cell.';
+  end if;
+
+  if location_status_after <> 'active' then
+    raise exception 'Same-code assortment publish must keep the location active.';
+  end if;
+
+  select count(*)
+  into product_role_count
+  from public.product_location_roles
+  where tenant_id = fixture.tenant_id
+    and product_id = product_uuid
+    and location_id = fixture.first_location_id
+    and state = 'published';
+
+  if product_role_count <> 1 then
+    raise exception 'Same-code publish must preserve product_location_roles by location_id.';
+  end if;
+
+  select count(*)
+  into sku_policy_count
+  from public.sku_location_policies
+  where tenant_id = fixture.tenant_id
+    and product_id = product_uuid
+    and location_id = fixture.first_location_id
+    and status = 'active';
+
+  if sku_policy_count <> 1 then
+    raise exception 'Same-code publish must preserve sku_location_policies by location_id.';
+  end if;
+
+  select count(*)
+  into location_policy_count
+  from public.location_policies
+  where tenant_id = fixture.tenant_id
+    and location_id = fixture.first_location_id
+    and status = 'active';
+
+  if location_policy_count <> 1 then
+    raise exception 'Same-code publish must preserve location_policies by location_id.';
+  end if;
+
+  if exists (
+    select 1
+    from public.locations
+    where geometry_slot_id = previous_slot_id
+      and status = 'active'
+  ) then
+    raise exception 'Old cell id must not resolve an active location after same-code publish.';
   end if;
 
   -- 3. Republish deleted occupied slot is blocked.

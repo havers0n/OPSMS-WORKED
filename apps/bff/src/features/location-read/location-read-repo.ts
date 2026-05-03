@@ -100,6 +100,7 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
         .from('locations')
         .select('id,code,location_type,geometry_slot_id')
         .eq('geometry_slot_id', cellId)
+        .eq('status', 'active')
         .maybeSingle();
 
       if (error) {

@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { cellKeys } from '@/entities/cell/api/queries';
 import { layoutVersionKeys } from '@/entities/layout-version/api/queries';
+import { locationKeys } from '@/entities/location/api/queries';
+import { productLocationRoleKeys } from '@/entities/product-location-role/api/queries';
 import {
   getWarehouseDraftPersistenceSnapshot,
   getWarehouseDraftSnapshot
 } from '@/warehouse/state/layout-draft';
+import { warehouseStorageFocusActions } from '@/warehouse/state/storage-focus';
 import { BffRequestError } from '@/shared/api/bff/client';
 import {
   cancelScheduledLayoutDraftSave,
@@ -84,6 +87,11 @@ export function usePublishLayout(floorId: string | null) {
       // Published cells reference UUIDs from the newly-promoted layout version.
       // Invalidate so that RackCells lookup keys align with the fresh published rack tree.
       void queryClient.invalidateQueries({ queryKey: cellKeys.publishedByFloor(floorId) });
+      void queryClient.invalidateQueries({ queryKey: locationKeys.byCellAll() });
+      void queryClient.invalidateQueries({ queryKey: locationKeys.storageAll() });
+      void queryClient.invalidateQueries({ queryKey: productLocationRoleKeys.byLocationAll() });
+      void queryClient.invalidateQueries({ queryKey: productLocationRoleKeys.effectiveRoleAll() });
+      warehouseStorageFocusActions.clearAllFocus();
     },
     onError: (error) => {
       // The DB publish may have succeeded even if the BFF response failed (e.g.

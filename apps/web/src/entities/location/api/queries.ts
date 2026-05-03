@@ -10,12 +10,14 @@ import { bffRequest } from '@/shared/api/bff/client';
 
 export const locationKeys = {
   all: ['location'] as const,
+  byCellAll: () => [...locationKeys.all, 'by-cell'] as const,
   byCell: (cellId: string | null) =>
-    [...locationKeys.all, 'by-cell', cellId ?? 'none'] as const,
+    [...locationKeys.byCellAll(), cellId ?? 'none'] as const,
   containers: (locationId: string | null) =>
     [...locationKeys.all, 'containers', locationId ?? 'none'] as const,
+  storageAll: () => [...locationKeys.all, 'storage'] as const,
   storage: (locationId: string | null) =>
-    [...locationKeys.all, 'storage', locationId ?? 'none'] as const,
+    [...locationKeys.storageAll(), locationId ?? 'none'] as const,
   occupancyByFloor: (floorId: string | null) =>
     [...locationKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const,
   operationsCellsByFloor: (floorId: string | null) =>
