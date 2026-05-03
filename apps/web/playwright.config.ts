@@ -4,6 +4,7 @@ import { defineConfig } from '@playwright/test';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 export default defineConfig({
   testDir: './e2e',
@@ -14,14 +15,14 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'npm.cmd run dev --workspace @wos/bff',
+      command: `${npmCommand} run dev --workspace @wos/bff`,
       cwd: path.resolve(__dirname, '../..'),
       url: 'http://127.0.0.1:8787/ready',
       reuseExistingServer: true,
       timeout: 120000
     },
     {
-      command: 'npm.cmd run dev -- --host 127.0.0.1 --port 4173',
+      command: `${npmCommand} run dev -- --host 127.0.0.1 --port 4173`,
       cwd: __dirname,
       url: 'http://127.0.0.1:4173/warehouse',
       env: {
