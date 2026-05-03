@@ -257,54 +257,61 @@ export function WarehouseTopBar() {
   return (
     <div className="relative shrink-0">
       <TopBarShell
-        className="[&>div]:h-11"
+        className="[&>div]:h-14 [&>div]:grid-cols-[auto_minmax(0,1fr)_auto] [&>div]:gap-1 [&>div]:px-2 md:[&>div]:grid-cols-[minmax(0,1.1fr)_auto_minmax(0,1fr)] md:[&>div]:gap-4 md:[&>div]:px-3"
         style={{
           background: 'var(--surface-primary)'
         }}
         left={
-          <div className="flex h-full items-center">
+          <div className="flex h-full min-w-0 items-center gap-3">
             <div
-              className="flex h-full items-center gap-2 border-r px-3"
-              style={{ borderColor: 'var(--border-muted)' }}
+              className="flex h-full shrink-0 items-center gap-2 pr-3"
             >
               <IconButton
                 icon={<Menu className="h-4 w-4" />}
                 onClick={toggle}
                 title={isCollapsed ? 'Open navigation' : 'Close navigation'}
-                className="rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                className="h-8 w-8 rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700"
               />
-              <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[13px] font-black tracking-widest text-white"
+                style={{ background: 'var(--accent)' }}
+                aria-hidden="true"
+              >
                 W
               </span>
-              <span className="text-sm font-semibold text-slate-700">Warehouse Ops</span>
+              <span className="hidden text-sm font-semibold text-slate-800 sm:inline">Warehouse Ops</span>
             </div>
 
-            <WorkspaceNav
-              onContextSwitched={() => setStatusMessage(null)}
-              statusBadge={
-                <WorkspaceStatus
-                  variant="badge"
-                  label={workspaceStateLabel}
-                  isCurrentModeLocked={isCurrentModeLocked}
-                  style={workspaceStateStyle}
-                  tooltip={workspaceTooltip}
-                />
-              }
-            />
+            <div className="hidden min-w-0 border-l pl-3 md:block" style={{ borderColor: 'var(--border-muted)' }}>
+              <WorkspaceNav
+                onContextSwitched={() => setStatusMessage(null)}
+                statusBadge={
+                  <WorkspaceStatus
+                    variant="badge"
+                    label={workspaceStateLabel}
+                    isCurrentModeLocked={isCurrentModeLocked}
+                    style={workspaceStateStyle}
+                    tooltip={workspaceTooltip}
+                  />
+                }
+              />
+            </div>
           </div>
         }
         center={<ViewModeSwitcher />}
         right={
-          <div className="flex h-full items-center">
+          <div className="flex h-full min-w-0 items-center justify-end gap-3">
             <div
-              className="flex h-full items-center gap-1 border-l px-3"
+              className="hidden min-w-0 items-center gap-2 border-l pl-3 md:flex"
               style={{ borderColor: 'var(--border-muted)' }}
             >
               <WorkspaceStatus variant="inline" message={inlineStatusMessage} />
               <WorkspaceActions onStatusMessageChange={setStatusMessage} />
             </div>
 
-            <AccountControls />
+            <div className="border-l" style={{ borderColor: 'var(--border-muted)' }}>
+              <AccountControls />
+            </div>
           </div>
         }
       />

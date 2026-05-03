@@ -48,7 +48,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     isDraftDirty
   });
 
-  // True when viewing a published layout with no active draft — the editor is
+  // True when viewing a published layout with no active draft - the editor is
   // in read-only mode and the primary action is to create a new draft.
   const canShowLayoutActions = viewMode === 'layout';
   const isPublishedMode = canShowLayoutActions && actions.canCreateDraft && latestPublished !== null;
@@ -95,7 +95,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync();
-      onStatusMessageChange(`Published · ${result.generatedCells} cells · new draft ready`);
+      onStatusMessageChange(`Published - ${result.generatedCells} cells - new draft ready`);
     } catch (error) {
       if (error instanceof BffRequestError && error.code === 'LAYOUT_VALIDATION_FAILED') {
         try {
@@ -131,11 +131,11 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         size="sm"
         disabled={isBusy}
         onClick={handleCreateDraft}
-        className="gap-1.5 text-white disabled:opacity-50"
+        className="h-8 gap-1.5 rounded-md px-3 text-sm text-white disabled:opacity-50"
         style={{ background: 'var(--accent)' }}
       >
         <FilePlus2 className="h-3.5 w-3.5" />
-        {createDraft.isPending ? 'Creating…' : 'Create Draft'}
+        {createDraft.isPending ? 'Creating...' : 'Create Draft'}
       </Button>
     );
   }
@@ -151,14 +151,14 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         variant="ghost"
         disabled
         title="Undo (coming soon)"
-        className="text-slate-300"
+        className="h-8 w-8 rounded-md text-slate-300"
       />
       <IconButton
         icon={<Redo2 className="h-3.5 w-3.5" />}
         variant="ghost"
         disabled
         title="Redo (coming soon)"
-        className="text-slate-300"
+        className="h-8 w-8 rounded-md text-slate-300"
       />
 
       <Divider orientation="vertical" className="mx-1 h-4 bg-slate-200" />
@@ -169,7 +169,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         disabled={!actions.canValidateDraft || isBusy}
         onClick={handleValidate}
         title="Validate layout"
-        className="disabled:opacity-30"
+        className="h-8 w-8 rounded-md disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
       />
 
@@ -179,7 +179,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         disabled={!actions.canSaveDraft || isBusy || persistenceStatus === 'conflict'}
         onClick={handleSaveDraft}
         title="Save draft"
-        className="gap-1 px-2 font-medium disabled:opacity-30"
+        className="h-8 gap-1.5 rounded-md px-2.5 text-sm font-medium disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
       >
         <Save className="h-3.5 w-3.5" />
@@ -191,7 +191,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         size="sm"
         disabled={!actions.canPublishDraft || isBusy || persistenceStatus === 'conflict'}
         onClick={handlePublish}
-        className="gap-1.5 text-white disabled:opacity-30"
+        className="h-8 gap-1.5 rounded-md px-3 text-sm text-white shadow-sm disabled:opacity-30"
         style={{ background: 'var(--accent)' }}
       >
         <CheckCircle2 className="h-3.5 w-3.5" />

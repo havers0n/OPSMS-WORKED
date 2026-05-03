@@ -32,10 +32,14 @@ export function WorkspaceStatus(props: WorkspaceStatusProps) {
 
   return (
     <Badge
-      className="group relative flex cursor-help items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+      className="group relative flex cursor-help items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
       style={props.style}
     >
-      {props.isCurrentModeLocked ? <Lock className="h-3 w-3" /> : null}
+      {props.isCurrentModeLocked ? (
+        <Lock className="h-3 w-3" />
+      ) : (
+        <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+      )}
       {props.label}
 
       {props.tooltip && (

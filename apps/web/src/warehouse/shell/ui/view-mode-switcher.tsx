@@ -17,10 +17,10 @@ export function ViewModeSwitcher() {
   const setViewMode = useSetWarehouseViewMode();
 
   return (
-    <div className="flex flex-1 items-center justify-center gap-2 px-4">
+    <div className="flex flex-1 items-center justify-center gap-2">
       <div
-        className="flex items-center gap-0.5 rounded-lg p-0.5"
-        style={{ background: 'var(--surface-secondary)', border: '1px solid var(--border-muted)' }}
+        className="flex h-9 items-center gap-1 rounded-md border bg-white p-1 shadow-sm"
+        style={{ borderColor: 'var(--border-muted)' }}
       >
         {VIEW_MODES.map((mode) => {
           const isActive = viewMode === mode.id;
@@ -30,14 +30,13 @@ export function ViewModeSwitcher() {
               variant="ghost"
               size="sm"
               onClick={() => setViewMode(mode.id)}
-              className="h-auto rounded-md px-3 py-1 text-xs font-medium transition-all hover:bg-transparent"
+              className="relative h-7 rounded px-2 text-xs font-medium transition-colors hover:bg-slate-50 md:px-3 md:text-sm"
               aria-pressed={isActive}
               style={
                 isActive
                   ? {
-                      background: 'var(--surface-strong)',
+                      background: 'var(--surface-secondary)',
                       color: 'var(--accent)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
                       cursor: 'default'
                     }
                   : { color: 'var(--text-muted)', cursor: 'pointer' }

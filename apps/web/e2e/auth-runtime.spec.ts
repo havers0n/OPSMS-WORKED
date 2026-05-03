@@ -1,6 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { fillCredentials, installSupabaseAuthRoutes, signInToWarehouse } from './support/auth';
 import { resetWarehouseData } from './support/local-supabase';
+
+async function openAccountMenu(page: Page) {
+  await page.getByLabel('Account menu').click();
+}
 
 test.describe('auth runtime smoke', () => {
   test('anonymous protected navigation resolves to login without an auth loading loop', async ({ page }) => {
@@ -27,10 +31,12 @@ test.describe('auth runtime smoke', () => {
     await expect(page.getByText('Bootstrap Warehouse Setup')).toBeVisible();
 
     await page.goto('/operations');
+    await openAccountMenu(page);
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 
     await page.reload();
     await expect(page).toHaveURL(/\/operations$/);
+    await openAccountMenu(page);
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Sign Out' }).click();
