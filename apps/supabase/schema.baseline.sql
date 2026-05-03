@@ -1450,11 +1450,13 @@ $$;
 -- create_layout_draft: final version from 0081 (copies zones, walls, racks)
 -- save_layout_draft: final version from 0081 (deletes/reinserts zones, walls, racks)
 -- get_layout_bundle: final version from 0081 (returns zones, walls, racks, draftVersion)
--- publish_layout_version: final version from 0113 (advisory lock, location sync, destructive guard resolves removed cell codes by floor/code, disables unreferenced removed locations, audit)
+-- publish_layout_version_with_renames: final version from 0114 (advisory lock, location sync, destructive guard resolves removed cell codes by floor/code, disables unreferenced removed locations, explicit rename mappings, audit)
+-- publish_layout_version: compatibility wrapper from 0114 (calls publish_layout_version_with_renames with an empty mapping array)
 
 -- NOTE: These functions are too large to inline safely in this baseline.
 -- Copy verbatim from the following migration files when reconstructing:
---   publish_layout_version    -> 0113_disable_empty_removed_locations_on_publish.sql
+--   publish_layout_version_with_renames -> 0114_publish_layout_explicit_rename_mappings.sql
+--   publish_layout_version              -> 0114_publish_layout_explicit_rename_mappings.sql
 --   validate_layout_payload   → 0081_layout_walls.sql
 --   create_layout_draft       → 0081_layout_walls.sql
 --   save_layout_draft         → 0081_layout_walls.sql
@@ -1676,6 +1678,7 @@ grant select, insert, update on public.order_reservations to authenticated;
 -- RPC grants
 grant execute on function public.create_layout_draft(uuid, uuid) to authenticated;
 grant execute on function public.save_layout_draft(jsonb, uuid) to authenticated;
+grant execute on function public.publish_layout_version_with_renames(uuid, uuid, jsonb) to authenticated;
 grant execute on function public.publish_layout_version(uuid, uuid) to authenticated;
 grant execute on function public.get_layout_bundle(uuid) to authenticated;
 grant execute on function public.allocate_pick_steps(uuid) to authenticated;
