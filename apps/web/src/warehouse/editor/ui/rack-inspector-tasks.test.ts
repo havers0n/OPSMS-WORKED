@@ -99,6 +99,13 @@ function summaryText(renderer: TestRenderer.ReactTestRenderer) {
   return textParts.join(' ');
 }
 
+function expandSummary(renderer: TestRenderer.ReactTestRenderer) {
+  const expandButton = renderer.root.findByProps({ title: 'Expand summary' });
+  act(() => {
+    expandButton.props.onClick();
+  });
+}
+
 function clickTab(
   renderer: TestRenderer.ReactTestRenderer,
   tab: 'geometry' | 'structure' | 'addressing' | 'face-mode'
@@ -208,6 +215,9 @@ describe('RackInspector tasks', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-toggle' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-advanced-panel' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-quick-actions' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary-collapsed' })).toHaveLength(1);
+    expandSummary(renderer);
     expect(summaryText(renderer)).toContain('Faces');
     expect(summaryText(renderer)).toContain('Single');
     expect(summaryText(renderer)).toContain('Cells');
@@ -1030,6 +1040,7 @@ describe('RackInspector tasks', () => {
     });
 
     const renderer = renderInspector(createWorkspace(draft));
+    expandSummary(renderer);
     expect(summaryText(renderer)).toContain('Paired / Independent');
     expect(summaryText(renderer)).toContain('Default roles');
     expect(summaryText(renderer)).toContain('Mixed');
@@ -1058,6 +1069,7 @@ describe('RackInspector tasks', () => {
     });
 
     const renderer = renderInspector(createWorkspace(draft));
+    expandSummary(renderer);
     expect(summaryText(renderer)).toContain('Paired / Independent');
     expect(summaryText(renderer)).toContain('Default roles');
     expect(summaryText(renderer)).toContain('Aligned');
@@ -1287,6 +1299,7 @@ describe('RackInspector tasks', () => {
 
     const renderer = renderInspector(createWorkspace(draft));
 
+    expandSummary(renderer);
     expect(summaryText(renderer)).toContain('Paired / Mirrored');
     expect(summaryText(renderer)).not.toContain('Default roles');
 
@@ -1313,7 +1326,7 @@ describe('RackInspector tasks', () => {
     expect(hasText(renderer, 'Face B is mirrored, so editable defaults are applied through Face A.')).toBe(true);
   });
 
-  it('keeps task body stable when summary is collapsed and expanded', () => {
+  it('starts with summary collapsed and keeps task body stable when expanded', () => {
     const draft = createLayoutDraftFixture();
     act(() => {
       useEditorStore.getState().initializeDraft(draft);
@@ -1323,19 +1336,11 @@ describe('RackInspector tasks', () => {
     const renderer = renderInspector(createWorkspace(draft));
     expect(hasText(renderer, 'Position X')).toBe(false);
 
-    const collapseButton = renderer.root.findByProps({ title: 'Collapse summary' });
-    act(() => {
-      collapseButton.props.onClick();
-    });
-
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary-collapsed' })).toHaveLength(1);
     expect(hasText(renderer, 'Position X')).toBe(false);
 
-    const expandButton = renderer.root.findByProps({ title: 'Expand summary' });
-    act(() => {
-      expandButton.props.onClick();
-    });
+    expandSummary(renderer);
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-summary' })).toHaveLength(1);
     expect(hasText(renderer, 'Position X')).toBe(false);

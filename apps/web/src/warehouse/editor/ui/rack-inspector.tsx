@@ -38,7 +38,7 @@ function InspectorSummaryBar({
   rackCells: Array<{ address: { raw: string } }>;
   issues: LayoutValidationIssue[];
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
   const faceBConfigured = !!faceB && faceB.enabled;
