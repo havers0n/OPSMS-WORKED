@@ -1072,6 +1072,36 @@ function createActiveDraftSupabaseStub() {
   };
 }
 
+function createPublishReadySupabaseStub(layoutVersionId: string, expectedDraftVersion = 7) {
+  const supabase = createSupabaseStub();
+  const originalFrom = supabase.from;
+  supabase.from = vi.fn((table: string) => {
+    if (table === 'layout_versions') {
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(async () => ({
+              data: {
+                id: layoutVersionId,
+                floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+                draft_version: expectedDraftVersion,
+                version_no: 4,
+                state: 'draft',
+                published_at: null
+              },
+              error: null
+            }))
+          }))
+        }))
+      };
+    }
+
+    return originalFrom(table);
+  });
+
+  return supabase;
+}
+
 function createFloorWorkspaceSupabaseStub() {
   const draftVersionId = '11111111-1111-4111-8111-111111111111';
   const publishedVersionId = '22222222-2222-4222-8222-222222222222';
@@ -4110,6 +4140,454 @@ describe('buildApp', () => {
       layout_version_uuid: layoutVersionId,
       actor_uuid: authContext.user.id
     });
+
+    await app.close();
+  });
+
+  it('publishes a layout draft with empty rename mappings using existing publish rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
+    const supabase = createPublishReadySupabaseStub(layoutVersionId, expectedDraftVersion);
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version') {
+        return {
+          data: {
+            layoutVersionId,
+            publishedAt: '2026-03-21T10:15:00.000Z',
+            generatedCells: 8,
+            validation: {
+              isValid: true,
+              issues: []
+            }
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion,
+        renameMappings: []
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(supabase.rpc).toHaveBeenCalledWith('publish_layout_version', {
+      layout_version_uuid: layoutVersionId,
+      actor_uuid: authContext.user.id
+    });
+    expect(supabase.rpc).not.toHaveBeenCalledWith(
+      'publish_layout_version_with_renames',
+      expect.anything()
+    );
+
+    await app.close();
+  });
+
+  it('publishes a layout draft with one rename mapping using snake-case rpc payload', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
+    const supabase = createPublishReadySupabaseStub(layoutVersionId, expectedDraftVersion);
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version_with_renames') {
+        return {
+          data: {
+            layoutVersionId,
+            publishedAt: '2026-03-21T10:15:00.000Z',
+            generatedCells: 8,
+            validation: {
+              isValid: true,
+              issues: []
+            }
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion,
+        renameMappings: [{ oldCode: '03-A.01.01.01', newCode: '03-A.01.01.02' }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(supabase.rpc).toHaveBeenCalledWith('publish_layout_version_with_renames', {
+      layout_version_uuid: layoutVersionId,
+      actor_uuid: authContext.user.id,
+      rename_mappings: [{ old_code: '03-A.01.01.01', new_code: '03-A.01.01.02' }]
+    });
+
+    await app.close();
+  });
+
+  it('passes multiple rename mappings in request order', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
+    const supabase = createPublishReadySupabaseStub(layoutVersionId, expectedDraftVersion);
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version_with_renames') {
+        return {
+          data: {
+            layoutVersionId,
+            publishedAt: '2026-03-21T10:15:00.000Z',
+            generatedCells: 8,
+            validation: {
+              isValid: true,
+              issues: []
+            }
+          },
+          error: null
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion,
+        renameMappings: [
+          { oldCode: '03-A.01.01.01', newCode: '03-A.01.01.02' },
+          { oldCode: '03-A.01.02.01', newCode: '03-A.01.02.02' }
+        ]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(supabase.rpc).toHaveBeenCalledWith('publish_layout_version_with_renames', {
+      layout_version_uuid: layoutVersionId,
+      actor_uuid: authContext.user.id,
+      rename_mappings: [
+        { old_code: '03-A.01.01.01', new_code: '03-A.01.01.02' },
+        { old_code: '03-A.01.02.01', new_code: '03-A.01.02.02' }
+      ]
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid rename mappings shape before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: { oldCode: '03-A.01.01.01', newCode: '03-A.01.01.02' }
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects rename mapping items that are not objects before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: ['03-A.01.01.01']
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects rename mapping with missing oldCode before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: [{ newCode: '03-A.01.01.02' }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects rename mapping with missing newCode before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: [{ oldCode: '03-A.01.01.01' }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects rename mapping with non-string oldCode before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: [{ oldCode: 3010101, newCode: '03-A.01.01.02' }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects rename mapping with non-string newCode before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: [{ oldCode: '03-A.01.01.01', newCode: 3010102 }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects rename mapping with blank codes before rpc', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const supabase = createPublishReadySupabaseStub(layoutVersionId);
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion: 7,
+        renameMappings: [{ oldCode: ' ', newCode: '03-A.01.01.02' }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('surfaces db rename publish errors with distinct error code', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
+    const supabase = createPublishReadySupabaseStub(layoutVersionId, expectedDraftVersion);
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version_with_renames') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'PUBLISH_LAYOUT_RENAME_NEW_CODE_NOT_IN_DRAFT: new_code 03-A.01.01.02 is not in the regenerated draft cells.'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion,
+        renameMappings: [{ oldCode: '03-A.01.01.01', newCode: '03-A.01.01.02' }]
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PUBLISH_LAYOUT_RENAME_NEW_CODE_NOT_IN_DRAFT',
+      message: 'PUBLISH_LAYOUT_RENAME_NEW_CODE_NOT_IN_DRAFT: new_code 03-A.01.01.02 is not in the regenerated draft cells.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('keeps destructive publish rpc errors on the existing fallback contract', async () => {
+    const layoutVersionId = '3dbf2a90-b1cb-42f0-afec-57f436a22f5d';
+    const expectedDraftVersion = 7;
+    const supabase = createPublishReadySupabaseStub(layoutVersionId, expectedDraftVersion);
+    supabase.rpc = vi.fn(async (fn: string) => {
+      if (fn === 'publish_layout_version') {
+        return {
+          data: null,
+          error: {
+            code: 'P0001',
+            message: 'PUBLISH_LAYOUT_DESTRUCTIVE_LOCATION_BLOCKED: removed location code 03-A.01.01.01 is still referenced by storage.'
+          }
+        };
+      }
+
+      return { data: null, error: null };
+    });
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/layout-drafts/${layoutVersionId}/publish`,
+      payload: {
+        expectedDraftVersion
+      },
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: 'PLACEMENT_CONFLICT',
+      message: 'PUBLISH_LAYOUT_DESTRUCTIVE_LOCATION_BLOCKED: removed location code 03-A.01.01.01 is still referenced by storage.'
+    });
+    expect(response.json().requestId).toBeTruthy();
+    expect(response.json().errorId).toBeTruthy();
 
     await app.close();
   });

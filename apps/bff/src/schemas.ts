@@ -28,6 +28,7 @@ import {
   floorSchema,
   floorWorkspaceSchema,
   layoutDraftSchema,
+  layoutPublishRequestSchema,
   layoutPublishResultSchema,
   layoutValidationResultSchema,
   publishedLayoutSummarySchema,
@@ -230,9 +231,7 @@ export const saveLayoutDraftResponseSchema = z.object({
   changeClass: layoutChangeClassSchema
 });
 
-export const publishLayoutDraftBodySchema = z.object({
-  expectedDraftVersion: z.number().int().min(0)
-});
+export const publishLayoutDraftBodySchema = layoutPublishRequestSchema;
 
 export const sitesResponseSchema = z.array(siteSchema);
 export const floorsResponseSchema = z.array(floorSchema);

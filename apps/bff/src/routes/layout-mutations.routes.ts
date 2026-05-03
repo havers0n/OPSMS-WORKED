@@ -58,7 +58,12 @@ export function registerLayoutMutationsRoutes(app: FastifyInstance, deps: Layout
     const layoutVersionId = parseOrThrow(idResponseSchema, { id: (request.params as { layoutVersionId: string }).layoutVersionId }).id;
     const body = parseOrThrow(publishLayoutDraftBodySchema, request.body);
     const layoutService = deps.getLayoutService(auth);
-    const result = await layoutService.publishDraft(layoutVersionId, body.expectedDraftVersion, auth.user.id);
+    const result = await layoutService.publishDraft(
+      layoutVersionId,
+      body.expectedDraftVersion,
+      auth.user.id,
+      body.renameMappings ?? []
+    );
 
     return parseOrThrow(publishResponseSchema, result);
   });

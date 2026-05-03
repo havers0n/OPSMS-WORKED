@@ -20,8 +20,30 @@ type SupabaseLikeError = {
   hint?: string;
 };
 
+const publishLayoutRenameErrorCodes = new Set([
+  'PUBLISH_LAYOUT_RENAME_INVALID_PAYLOAD',
+  'PUBLISH_LAYOUT_RENAME_BLANK_CODE',
+  'PUBLISH_LAYOUT_RENAME_SAME_CODE',
+  'PUBLISH_LAYOUT_RENAME_DUPLICATE_OLD_CODE',
+  'PUBLISH_LAYOUT_RENAME_DUPLICATE_NEW_CODE',
+  'PUBLISH_LAYOUT_RENAME_OLD_CODE_NOT_PUBLISHED',
+  'PUBLISH_LAYOUT_RENAME_OLD_LOCATION_NOT_FOUND',
+  'PUBLISH_LAYOUT_RENAME_NEW_CODE_NOT_IN_DRAFT',
+  'PUBLISH_LAYOUT_RENAME_OLD_CODE_STILL_IN_DRAFT',
+  'PUBLISH_LAYOUT_RENAME_TARGET_LOCATION_EXISTS',
+  'PUBLISH_LAYOUT_RENAME_CHAIN_OR_CYCLE_UNSUPPORTED'
+]);
+
 function isSupabaseLikeError(error: unknown): error is SupabaseLikeError {
   return typeof error === 'object' && error !== null && ('code' in error || 'message' in error);
+}
+
+function extractRpcMessageCode(message: string | undefined): string | null {
+  if (!message) {
+    return null;
+  }
+
+  return message.split(':', 1)[0] ?? null;
 }
 
 export function mapSupabaseError(error: unknown) {
@@ -41,6 +63,10 @@ export function mapSupabaseError(error: unknown) {
     }
     if (typeof error.message === 'string' && error.message.includes('failed validation')) {
       return new ApiError(409, 'LAYOUT_VALIDATION_FAILED', 'Layout draft failed validation. Please review the reported issues.');
+    }
+    const rpcMessageCode = extractRpcMessageCode(error.message);
+    if (rpcMessageCode && publishLayoutRenameErrorCodes.has(rpcMessageCode)) {
+      return new ApiError(409, rpcMessageCode, error.message ?? rpcMessageCode);
     }
     switch (error.message) {
       case 'CONTAINER_NOT_FOUND':

@@ -28,6 +28,18 @@ export const layoutPublishResultSchema = z.object({
 });
 export type LayoutPublishResult = z.infer<typeof layoutPublishResultSchema>;
 
+export const layoutPublishRenameMappingSchema = z.object({
+  oldCode: z.string().trim().min(1),
+  newCode: z.string().trim().min(1)
+});
+export type LayoutPublishRenameMapping = z.infer<typeof layoutPublishRenameMappingSchema>;
+
+export const layoutPublishRequestSchema = z.object({
+  expectedDraftVersion: z.number().int().min(0),
+  renameMappings: z.array(layoutPublishRenameMappingSchema).optional()
+});
+export type LayoutPublishRequest = z.infer<typeof layoutPublishRequestSchema>;
+
 export type LayoutPublishImpact = {
   createdCells: number;
   removedCells: number;

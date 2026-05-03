@@ -1440,6 +1440,8 @@ Request schema:
 
 - path param `layoutVersionId: uuid`
 - validated via `idResponseSchema`
+- body `expectedDraftVersion: integer >= 0`
+- optional body `renameMappings: Array<{ oldCode: string; newCode: string }>`
 - actor is implied from bearer token
 
 Response schema:
@@ -1461,10 +1463,12 @@ Response schema:
 Source of truth:
 
 - RPC `public.publish_layout_version(layout_version_uuid, actor_uuid)`
+- RPC `public.publish_layout_version_with_renames(layout_version_uuid, actor_uuid, rename_mappings)` when explicit rename mappings are supplied
 
 Related RPC/tables:
 
 - RPC `public.publish_layout_version`
+- RPC `public.publish_layout_version_with_renames`
 - RPC `public.validate_layout_version`
 - helper `public.regenerate_layout_cells`
 - tables `public.layout_versions`, `public.racks`, `public.rack_faces`, `public.rack_sections`, `public.rack_levels`, `public.cells`
@@ -1494,6 +1498,7 @@ Failure cases:
 - target layout version is not an active draft
 - floor/layout publish access denial
 - validation blockers
+- explicit rename mapping validation failures (`PUBLISH_LAYOUT_RENAME_*`)
 - duplicate/generated address conflicts
 - race on draft state transition
 - downstream cell-regeneration or audit-write failure

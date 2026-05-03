@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Cell, LayoutDraft, PublishedLayoutSummary } from '@wos/domain';
+import type { Cell, LayoutDraft, LayoutPublishRenameMapping, PublishedLayoutSummary } from '@wos/domain';
 import { mapCellRowToDomain, mapLayoutBundleJsonToDomain, mapLayoutDraftBundleToDomain } from '../../mappers.js';
 
 export type LayoutVersionRow = {
@@ -14,6 +14,11 @@ export type LayoutVersionRow = {
 type SaveDraftResult = {
   layoutVersionId: string;
   draftVersion: number | null;
+};
+
+type DbRenameMapping = {
+  old_code: string;
+  new_code: string;
 };
 
 type CellRow = {
@@ -112,8 +117,15 @@ export type LayoutRepo = {
   createDraft(floorId: string, actorId: string): Promise<string>;
   saveDraft(layoutDraft: unknown, actorId: string): Promise<SaveDraftResult>;
   validateVersion(layoutVersionId: string): Promise<unknown>;
-  publishVersion(layoutVersionId: string, actorId: string): Promise<unknown>;
+  publishVersion(layoutVersionId: string, actorId: string, renameMappings?: LayoutPublishRenameMapping[]): Promise<unknown>;
 };
+
+function mapRenameMappingsToDb(renameMappings: LayoutPublishRenameMapping[]): DbRenameMapping[] {
+  return renameMappings.map((mapping) => ({
+    old_code: mapping.oldCode,
+    new_code: mapping.newCode
+  }));
+}
 
 function omitVersionNo(layout: LayoutDraft | null): LayoutDraft | null {
   if (!layout) {
@@ -425,11 +437,18 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
       return data ?? { isValid: false, issues: [] };
     },
 
-    async publishVersion(layoutVersionId, actorId) {
-      const { data, error } = await supabase.rpc('publish_layout_version', {
-        layout_version_uuid: layoutVersionId,
-        actor_uuid: actorId
-      });
+    async publishVersion(layoutVersionId, actorId, renameMappings = []) {
+      const hasRenameMappings = renameMappings.length > 0;
+      const { data, error } = hasRenameMappings
+        ? await supabase.rpc('publish_layout_version_with_renames', {
+            layout_version_uuid: layoutVersionId,
+            actor_uuid: actorId,
+            rename_mappings: mapRenameMappingsToDb(renameMappings)
+          })
+        : await supabase.rpc('publish_layout_version', {
+            layout_version_uuid: layoutVersionId,
+            actor_uuid: actorId
+          });
 
       if (error) {
         throw error;

@@ -33,6 +33,7 @@ Layout:
 - `save_layout_draft`
 - `validate_layout_version`
 - `publish_layout_version`
+- `publish_layout_version_with_renames`
 - `get_layout_bundle`
 
 Inventory and storage:

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { layoutLifecycleInfoSchema, type LayoutChangeClass } from '@wos/domain';
+import { layoutLifecycleInfoSchema, type LayoutChangeClass, type LayoutPublishRenameMapping } from '@wos/domain';
 import { ApiError } from '../../errors.js';
 import type { SaveLayoutDraftPayload } from '../../schemas.js';
 import { buildNormalizedDraftFromSavePayload, classifyLayoutDraftChange } from './change-classification.js';
@@ -12,7 +12,12 @@ export type LayoutService = {
     actorId: string
   ): Promise<{ layoutVersionId: string; draftVersion: number | null; changeClass: LayoutChangeClass }>;
   validateVersion(layoutVersionId: string): Promise<unknown>;
-  publishDraft(layoutVersionId: string, expectedDraftVersion: number, actorId: string): Promise<unknown>;
+  publishDraft(
+    layoutVersionId: string,
+    expectedDraftVersion: number,
+    actorId: string,
+    renameMappings?: LayoutPublishRenameMapping[]
+  ): Promise<unknown>;
 };
 
 export function createLayoutService(supabase: SupabaseClient): LayoutService {
@@ -45,7 +50,7 @@ export function createLayoutService(supabase: SupabaseClient): LayoutService {
       };
     },
     validateVersion: (layoutVersionId) => repo.validateVersion(layoutVersionId),
-    async publishDraft(layoutVersionId, expectedDraftVersion, actorId) {
+    async publishDraft(layoutVersionId, expectedDraftVersion, actorId, renameMappings = []) {
       const currentVersion = await repo.findVersion(layoutVersionId);
 
       if (!currentVersion || currentVersion.state !== 'draft') {
@@ -56,7 +61,7 @@ export function createLayoutService(supabase: SupabaseClient): LayoutService {
         throw new ApiError(409, 'DRAFT_CONFLICT', 'Layout draft was changed by another session. Please reload.');
       }
 
-      return repo.publishVersion(layoutVersionId, actorId);
+      return repo.publishVersion(layoutVersionId, actorId, renameMappings);
     }
   };
 }
