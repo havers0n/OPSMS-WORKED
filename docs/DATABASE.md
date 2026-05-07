@@ -35,6 +35,7 @@ Layout:
 - `publish_layout_version`
 - `publish_layout_version_with_renames`
 - `get_layout_bundle`
+- `list_published_cells_by_floor`
 
 Inventory and storage:
 - `receive_inventory_unit`

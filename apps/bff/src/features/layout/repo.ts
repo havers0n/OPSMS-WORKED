@@ -103,8 +103,6 @@ type LayoutWallRow = {
   blocks_rack_placement: boolean;
 };
 
-const publishedCellSelectColumns =
-  'id,layout_version_id,rack_id,rack_face_id,rack_section_id,rack_level_id,slot_no,address,address_sort_key,cell_code,x,y,status';
 const PUBLISHED_CELLS_PAGE_SIZE = 1000;
 
 export type LayoutRepo = {
@@ -353,22 +351,15 @@ export function createLayoutRepo(supabase: SupabaseClient): LayoutRepo {
     },
 
     async listPublishedCells(floorId) {
-      const publishedVersion = await findLatestLayoutVersionByState(supabase, floorId, 'published');
-
-      if (!publishedVersion) {
-        return [];
-      }
-
       const rows: CellRow[] = [];
       let from = 0;
 
       while (true) {
-        const { data, error } = await supabase
-          .from('cells')
-          .select(publishedCellSelectColumns)
-          .eq('layout_version_id', publishedVersion.id)
-          .order('address_sort_key', { ascending: true })
-          .range(from, from + PUBLISHED_CELLS_PAGE_SIZE - 1);
+        const { data, error } = await supabase.rpc('list_published_cells_by_floor', {
+          p_floor_id: floorId,
+          p_limit: PUBLISHED_CELLS_PAGE_SIZE,
+          p_offset: from
+        });
 
         if (error) {
           throw error;

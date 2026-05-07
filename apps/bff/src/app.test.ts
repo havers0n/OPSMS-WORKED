@@ -819,6 +819,20 @@ function createSupabaseStub() {
       };
     }),
     rpc: vi.fn(async (fn: string, args?: Record<string, unknown>) => {
+      if (fn === 'list_published_cells_by_floor') {
+        const offset = typeof args?.p_offset === 'number' ? args.p_offset : 0;
+        const limit = typeof args?.p_limit === 'number' ? args.p_limit : 1000;
+        const rows = [...publishedCellRows].sort((left, right) => {
+          const addressComparison = left.address_sort_key.localeCompare(right.address_sort_key);
+          return addressComparison !== 0 ? addressComparison : left.cell_code.localeCompare(right.cell_code);
+        });
+
+        return {
+          data: rows.slice(offset, offset + limit),
+          error: null
+        };
+      }
+
       if (fn === 'receive_inventory_unit') {
         const tenantId = typeof args?.tenant_uuid === 'string' ? args.tenant_uuid : '';
         const containerId = typeof args?.container_uuid === 'string' ? args.container_uuid : '';
@@ -2341,6 +2355,11 @@ describe('buildApp', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(supabase.rpc).toHaveBeenCalledWith('list_published_cells_by_floor', {
+      p_floor_id: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      p_limit: 1000,
+      p_offset: 0
+    });
     expect(response.json()).toEqual([
       {
         id: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
