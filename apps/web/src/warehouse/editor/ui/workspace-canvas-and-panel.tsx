@@ -24,11 +24,6 @@ interface WorkspaceCanvasAndPanelProps {
    * Defaults to false.
    */
   hideContextPanel?: boolean;
-  /**
-   * Forwarded to EditorCanvas to activate V2 StorageFocusStore canvas interactions.
-   * When true, canvas writes go exclusively to the focus store.
-   */
-  isStorageV2?: boolean;
 }
 
 /**
@@ -47,7 +42,6 @@ export function WorkspaceCanvasAndPanel({
   onCloseInspector,
   hideRightPanel,
   hideContextPanel,
-  isStorageV2
 }: WorkspaceCanvasAndPanelProps) {
   const handleOpenInspector = onOpenInspector ?? (() => undefined);
 
@@ -58,7 +52,6 @@ export function WorkspaceCanvasAndPanel({
           workspace={workspace}
           onAddRack={onAddRack}
           onOpenInspector={handleOpenInspector}
-          isStorageV2={isStorageV2}
         />
 
         {!hideContextPanel && onOpenInspector && (

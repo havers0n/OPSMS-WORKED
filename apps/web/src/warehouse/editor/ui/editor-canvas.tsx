@@ -101,17 +101,10 @@ export function EditorCanvas({
   workspace,
   onAddRack: _onAddRack,
   onOpenInspector,
-  isStorageV2 = false
 }: {
   workspace: FloorWorkspace | null;
   onAddRack: () => void;
   onOpenInspector?: () => void;
-  /**
-   * When true, canvas interaction writes go to the V2 StorageFocusStore
-   * instead of the legacy editor selection state (no dual-write).
-   * Passed by StorageWorkspaceV2 → WorkspaceCanvasAndPanel → here.
-   */
-  isStorageV2?: boolean;
 }) {
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
@@ -126,7 +119,7 @@ export function EditorCanvas({
     usePickingPlanningOverlayStore(
       (state) => state.reorderedStepIdsByPackageId
     );
-  const isStorageV2Active = isStorageV2 && viewMode === 'storage';
+  const isStorageV2Active = viewMode === 'storage';
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
   const diagnosticsFlags = useCanvasDiagnosticsFlags();
@@ -361,17 +354,7 @@ export function EditorCanvas({
 
   const primarySelectedRackId = isStorageV2Active
     ? storageFocusSelectedRackId
-    : viewMode === 'storage'
-      ? selection.type === 'rack'
-        ? (selection.rackIds[0] ?? null)
-        : selection.type === 'cell'
-          ? (publishedCellsById.get(selection.cellId)?.rackId ?? null)
-          : selection.type === 'container'
-            ? selection.sourceCellId
-              ? (publishedCellsById.get(selection.sourceCellId)?.rackId ?? null)
-              : null
-            : null
-      : selectedRackId;
+    : selectedRackId;
   const selectedRackActiveLevelIndex = useMemo(() => {
     if (!isStorageV2Active) return selectedRackActiveLevel;
     if (!primarySelectedRackId) return null;
@@ -525,7 +508,7 @@ export function EditorCanvas({
     ],
     snapshot: {
       floorId: workspace?.floorId ?? null,
-      isStorageV2,
+      isStorageV2Active,
       zoom,
       viewMode,
       editorMode,

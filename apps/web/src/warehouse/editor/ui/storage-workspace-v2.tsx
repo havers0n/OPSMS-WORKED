@@ -54,7 +54,6 @@ export function StorageWorkspaceV2({
         onCloseInspector={onCloseInspector}
         hideRightPanel
         hideContextPanel
-        isStorageV2
       />
 
       <StorageInspectorV2 workspace={workspace} />
