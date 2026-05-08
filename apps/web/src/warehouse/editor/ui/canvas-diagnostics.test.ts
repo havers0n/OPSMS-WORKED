@@ -7,6 +7,8 @@ import {
   recordCanvasCullingMetrics,
   recordCanvasCameraStoreUpdate,
   recordCanvasRenderMode,
+  recordCanvasZoomDurableCommit,
+  recordCanvasZoomTransientUpdate,
   resetCanvasRenderPipelineDiagnostics,
   resetCanvasCullingMetrics
 } from './canvas-diagnostics';
@@ -140,6 +142,23 @@ describe('canvas render pipeline diagnostics', () => {
 
     expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
       currentRenderMode: 'interaction-light'
+    });
+  });
+
+  it('separates transient zoom updates from durable camera commits', () => {
+    vi.stubGlobal('window', {});
+
+    resetCanvasRenderPipelineDiagnostics();
+    recordCanvasZoomTransientUpdate();
+    recordCanvasZoomTransientUpdate();
+    recordCanvasZoomDurableCommit();
+    recordCanvasCameraStoreUpdate('camera');
+
+    expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
+      cameraStoreUpdates: 1,
+      zoomCameraUpdates: 1,
+      zoomTransientUpdates: 2,
+      zoomDurableCommits: 1
     });
   });
 });

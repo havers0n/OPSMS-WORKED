@@ -46,6 +46,8 @@ export type CanvasRenderPipelineDiagnostics = {
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
+  zoomTransientUpdates: number;
+  zoomDurableCommits: number;
   components: Record<CanvasRenderComponentName, CanvasRenderComponentMetrics>;
   konva: {
     layerDrawCalls: number;
@@ -222,6 +224,8 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     cameraStoreUpdates: 0,
     offsetUpdates: 0,
     zoomCameraUpdates: 0,
+    zoomTransientUpdates: 0,
+    zoomDurableCommits: 0,
     components: {
       EditorCanvas: createComponentMetrics(),
       RackLayer: createComponentMetrics(),
@@ -269,6 +273,20 @@ export function recordCanvasCameraStoreUpdate(kind: 'offset' | 'camera') {
   } else {
     diagnostics.zoomCameraUpdates += 1;
   }
+}
+
+export function recordCanvasZoomTransientUpdate() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.zoomTransientUpdates += 1;
+}
+
+export function recordCanvasZoomDurableCommit() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.zoomDurableCommits += 1;
 }
 
 export function recordCanvasRenderMode(renderMode: CanvasRenderMode) {

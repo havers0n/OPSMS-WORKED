@@ -3,32 +3,46 @@ import { describe, expect, it, vi } from 'vitest';
 import { LOD_CELL_ENTRY } from '@/entities/layout-version/lib/canvas-geometry';
 import {
   batchDrawStageLayers,
+  createTransformOnlyZoomState,
   createTransformOnlyPanState,
   finishTransformOnlyPan,
+  finishTransformOnlyZoom,
   getModeEntryMinZoom,
   isStageCameraOffsetSynced,
   moveTransformOnlyPan,
-  startTransformOnlyPan
+  startTransformOnlyPan,
+  updateTransformOnlyZoom
 } from './use-canvas-viewport-controller';
 
 type FakeStage = Konva.Stage & {
   __position: { x: number; y: number };
+  __scale: { x: number; y: number };
   __batchDraw: ReturnType<typeof vi.fn>;
 };
 
 function createFakeStage(initial = { x: 0, y: 0 }) {
   const batchDraw = vi.fn();
   let position = { ...initial };
+  let scale = { x: 1, y: 1 };
   const stage = {
     get __position() {
       return position;
     },
     __batchDraw: batchDraw,
+    get __scale() {
+      return scale;
+    },
     position(next?: { x: number; y: number }) {
       if (next) {
         position = { ...next };
       }
       return position;
+    },
+    scale(next?: { x: number; y: number }) {
+      if (next) {
+        scale = { ...next };
+      }
+      return scale;
     },
     x() {
       return position.x;
@@ -55,6 +69,119 @@ describe('getModeEntryMinZoom', () => {
 
   it('does not apply entry floor in layout mode', () => {
     expect(getModeEntryMinZoom('layout')).toBe(0);
+  });
+});
+
+describe('transform-only zoom helpers', () => {
+  it('applies cursor-preserving zoom to the Stage without committing until idle', () => {
+    const stage = createFakeStage({ x: 10, y: 20 });
+    const state = createTransformOnlyZoomState({
+      zoom: 1,
+      offsetX: 10,
+      offsetY: 20
+    });
+    const scheduleDraw = vi.fn();
+    const commitCamera = vi.fn();
+    const recordCameraCommit = vi.fn();
+    const cancelDraw = vi.fn();
+
+    const liveCamera = updateTransformOnlyZoom({
+      committedCamera: { zoom: 1, offsetX: 10, offsetY: 20 },
+      cursor: { x: 110, y: 220 },
+      nextZoom: 1.5,
+      scheduleDraw,
+      stage,
+      state
+    });
+
+    expect(liveCamera).toEqual({ zoom: 1.5, offsetX: -40, offsetY: -80 });
+    expect(stage.__scale).toEqual({ x: 1.5, y: 1.5 });
+    expect(stage.__position).toEqual({ x: -40, y: -80 });
+    expect(scheduleDraw).toHaveBeenCalledOnce();
+    expect(commitCamera).not.toHaveBeenCalled();
+
+    const finalCamera = finishTransformOnlyZoom({
+      cancelDraw,
+      commitCamera,
+      recordCameraCommit,
+      stage,
+      state
+    });
+
+    expect(finalCamera).toEqual(liveCamera);
+    expect(commitCamera).toHaveBeenCalledWith(liveCamera);
+    expect(recordCameraCommit).toHaveBeenCalledOnce();
+    expect(cancelDraw).toHaveBeenCalledOnce();
+  });
+
+  it('chains repeated wheel ticks from the live transient camera', () => {
+    const stage = createFakeStage({ x: 0, y: 0 });
+    const state = createTransformOnlyZoomState({
+      zoom: 1,
+      offsetX: 0,
+      offsetY: 0
+    });
+
+    updateTransformOnlyZoom({
+      committedCamera: { zoom: 1, offsetX: 0, offsetY: 0 },
+      cursor: { x: 100, y: 100 },
+      nextZoom: 1.1,
+      scheduleDraw: () => undefined,
+      stage,
+      state
+    });
+    const second = updateTransformOnlyZoom({
+      committedCamera: { zoom: 1, offsetX: 0, offsetY: 0 },
+      cursor: { x: 100, y: 100 },
+      nextZoom: 1.2,
+      scheduleDraw: () => undefined,
+      stage,
+      state
+    });
+
+    expect(second.zoom).toBe(1.2);
+    expect(second.offsetX).toBeCloseTo(-20);
+    expect(second.offsetY).toBeCloseTo(-20);
+  });
+
+  it('keeps post-zoom hit targeting aligned with the final committed camera', () => {
+    const stage = createFakeStage({ x: 0, y: 0 });
+    const state = createTransformOnlyZoomState({
+      zoom: 1,
+      offsetX: 0,
+      offsetY: 0
+    });
+    let committedCamera = { zoom: 1, offsetX: 0, offsetY: 0 };
+
+    updateTransformOnlyZoom({
+      committedCamera,
+      cursor: { x: 160, y: 120 },
+      nextZoom: 1.4,
+      scheduleDraw: () => undefined,
+      stage,
+      state
+    });
+    finishTransformOnlyZoom({
+      cancelDraw: () => undefined,
+      commitCamera: (camera) => {
+        committedCamera = camera;
+      },
+      recordCameraCommit: () => undefined,
+      stage,
+      state
+    });
+
+    const screenPoint = { x: 240, y: 200 };
+    const worldFromStore = {
+      x: (screenPoint.x - committedCamera.offsetX) / committedCamera.zoom,
+      y: (screenPoint.y - committedCamera.offsetY) / committedCamera.zoom
+    };
+    const worldFromStage = {
+      x: (screenPoint.x - stage.x()) / stage.__scale.x,
+      y: (screenPoint.y - stage.y()) / stage.__scale.y
+    };
+
+    expect(worldFromStage).toEqual(worldFromStore);
   });
 });
 

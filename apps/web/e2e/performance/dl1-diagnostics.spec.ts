@@ -114,9 +114,12 @@ type RenderComponentMetrics = {
 
 type RenderPipelineDiagnostics = {
   enabled: boolean;
+  currentRenderMode: 'full' | 'interaction-light';
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
+  zoomTransientUpdates: number;
+  zoomDurableCommits: number;
   components: {
     EditorCanvas: RenderComponentMetrics;
     RackLayer: RenderComponentMetrics;
@@ -832,9 +835,12 @@ async function startRenderPipelineProbe(page: Page) {
     };
     global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ = {
       enabled: true,
+      currentRenderMode: 'full',
       cameraStoreUpdates: 0,
       offsetUpdates: 0,
       zoomCameraUpdates: 0,
+      zoomTransientUpdates: 0,
+      zoomDurableCommits: 0,
       components: {
         EditorCanvas: createComponentMetrics(),
         RackLayer: createComponentMetrics(),
@@ -865,6 +871,22 @@ async function stopRenderPipelineProbe(
     diagnostics.enabled = false;
     return diagnostics;
   });
+}
+
+async function waitForFullRenderModeAfterInteraction(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const global = window as unknown as {
+        __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+      };
+      return (
+        global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__
+          ?.currentRenderMode === 'full'
+      );
+    },
+    undefined,
+    { timeout: 10000 }
+  );
 }
 
 async function startKonvaPipelineProbe(page: Page) {
@@ -2209,13 +2231,16 @@ async function runMeasuredScenario({
   const guard = installPageStabilityGuard(page);
   const frameProbeId = await startFrameProbe(page);
 
-  let rawResult: RawProbeResult;
+  let rawResult: RawProbeResult | null = null;
   try {
     if (scenario === 'pan') {
       await samplePan(page, SAMPLE_DURATION_MS, frameProbeId, guard);
     } else if (scenario === 'zoom') {
       await sampleZoom(page, SAMPLE_DURATION_MS);
       await assertFrameProbeAlive(page, frameProbeId, guard);
+      rawResult = await stopFrameProbe(page, frameProbeId, guard);
+      await waitForFullRenderModeAfterInteraction(page);
+      guard.assertClean();
     } else if (scenario === 'select') {
       await sampleSelect(page, SAMPLE_DURATION_MS);
       await assertFrameProbeAlive(page, frameProbeId, guard);
@@ -2226,9 +2251,14 @@ async function runMeasuredScenario({
       throw new Error(`Unsupported measured scenario: ${scenario}`);
     }
 
-    rawResult = await stopFrameProbe(page, frameProbeId, guard);
+    if (rawResult === null) {
+      rawResult = await stopFrameProbe(page, frameProbeId, guard);
+    }
   } finally {
     guard.dispose();
+  }
+  if (rawResult === null) {
+    throw new Error('DL1 frame probe did not produce a result.');
   }
   const renderPipeline = await stopRenderPipelineProbe(page);
   const konvaPipeline = await stopKonvaPipelineProbe(page);
@@ -2848,6 +2878,9 @@ ${panClassification}
 Camera/store updates: ${diagnostics.cameraStoreUpdates}
 Offset updates: ${diagnostics.offsetUpdates}
 Zoom camera updates: ${diagnostics.zoomCameraUpdates}
+Zoom transient updates: ${diagnostics.zoomTransientUpdates}
+Zoom durable commits: ${diagnostics.zoomDurableCommits}
+Current render mode: ${diagnostics.currentRenderMode}
 
 ## Hit Test Impact
 p95FrameMs difference: ${formatDelta(hitP95Delta)}
@@ -3014,6 +3047,10 @@ test.describe('DL1 diagnostics harness', () => {
           panStartFirstFrameMs: entry.metrics.panStartFirstFrameMs,
           panEndFirstFrameMs: entry.metrics.panEndFirstFrameMs,
           offsetUpdates: entry.renderPipeline.offsetUpdates,
+          zoomTransientUpdates: entry.renderPipeline.zoomTransientUpdates,
+          zoomDurableCommits: entry.renderPipeline.zoomDurableCommits,
+          zoomCameraUpdates: entry.renderPipeline.zoomCameraUpdates,
+          renderMode: entry.renderPipeline.currentRenderMode,
           editorRenders:
             entry.renderPipeline.components.EditorCanvas.renders,
           rackLayerRenders:

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import type { MutableRefObject } from 'react';
 import type { Rack } from '@wos/domain';
 import type Konva from 'konva';
@@ -6,6 +13,7 @@ import type { ViewMode } from '@/warehouse/editor/model/editor-types';
 import { useCameraStore } from '@/warehouse/editor/model/camera-store';
 import {
   type CanvasZoomBounds,
+  type CanvasCamera,
   type CanvasPoint,
   clampCanvasZoom,
   getZoomToCursorCamera,
@@ -17,7 +25,11 @@ import {
   useCanvasMinZoom
 } from '@/app/settings/model/canvas-zoom-settings-selectors';
 import { getRackBoundingBox } from '@/entities/layout-version/lib/rack-spacing';
-import { recordCanvasCameraStoreUpdate } from './canvas-diagnostics';
+import {
+  recordCanvasCameraStoreUpdate,
+  recordCanvasZoomDurableCommit,
+  recordCanvasZoomTransientUpdate
+} from './canvas-diagnostics';
 
 type CanvasViewport = {
   width: number;
@@ -54,6 +66,11 @@ export type TransformOnlyPanState = {
   liveOffset: StageOffset;
 };
 
+export type TransformOnlyZoomState = {
+  isZooming: boolean;
+  liveCamera: CanvasCamera;
+};
+
 export function applyTransformOnlyPanPosition(
   stage: Konva.Stage,
   offset: StageOffset
@@ -67,6 +84,17 @@ export function batchDrawStageLayers(stage: Konva.Stage) {
   if (isManualPanBatchDrawDisabled()) return;
 
   withKonvaDiagnosticsSource('manual-pan-raf', () => {
+    for (const layer of stage.getLayers()) {
+      layer.batchDraw();
+    }
+  });
+}
+
+export function batchDrawStageLayersWithSource(
+  stage: Konva.Stage,
+  source: string
+) {
+  withKonvaDiagnosticsSource(source, () => {
     for (const layer of stage.getLayers()) {
       layer.batchDraw();
     }
@@ -88,6 +116,15 @@ export function createTransformOnlyPanState(
     panStart: { x: 0, y: 0 },
     offsetAtPanStart: initialOffset,
     liveOffset: initialOffset
+  };
+}
+
+export function createTransformOnlyZoomState(
+  initialCamera: CanvasCamera = { zoom: 1, offsetX: 0, offsetY: 0 }
+): TransformOnlyZoomState {
+  return {
+    isZooming: false,
+    liveCamera: initialCamera
   };
 }
 
@@ -179,6 +216,65 @@ export function finishTransformOnlyPan({
   return finalOffset;
 }
 
+export function applyTransformOnlyZoomCamera(
+  stage: Konva.Stage,
+  camera: CanvasCamera
+) {
+  withKonvaDiagnosticsSource('stage-camera', () => {
+    stage.scale({ x: camera.zoom, y: camera.zoom });
+    stage.position({ x: camera.offsetX, y: camera.offsetY });
+  });
+}
+
+export function updateTransformOnlyZoom({
+  committedCamera,
+  cursor,
+  nextZoom,
+  scheduleDraw,
+  stage,
+  state
+}: {
+  committedCamera: CanvasCamera;
+  cursor: CanvasPoint;
+  nextZoom: number;
+  scheduleDraw: () => void;
+  stage: Konva.Stage;
+  state: TransformOnlyZoomState;
+}) {
+  const baseCamera = state.isZooming ? state.liveCamera : committedCamera;
+  const nextCamera = getZoomToCursorCamera(baseCamera, cursor, nextZoom);
+  state.isZooming = true;
+  state.liveCamera = nextCamera;
+  applyTransformOnlyZoomCamera(stage, nextCamera);
+  scheduleDraw();
+  return nextCamera;
+}
+
+export function finishTransformOnlyZoom({
+  cancelDraw,
+  commitCamera,
+  recordCameraCommit,
+  stage,
+  state
+}: {
+  cancelDraw: () => void;
+  commitCamera: (camera: CanvasCamera) => void;
+  recordCameraCommit: () => void;
+  stage: Konva.Stage | null;
+  state: TransformOnlyZoomState;
+}) {
+  if (!state.isZooming) return null;
+  state.isZooming = false;
+  cancelDraw();
+  const finalCamera = state.liveCamera;
+  if (stage) {
+    applyTransformOnlyZoomCamera(stage, finalCamera);
+  }
+  commitCamera(finalCamera);
+  recordCameraCommit();
+  return finalCamera;
+}
+
 export function getModeEntryMinZoom(viewMode: ViewMode): number {
   return viewMode === 'view' ? LOD_CELL_ENTRY : 0;
 }
@@ -217,7 +313,12 @@ export function useCanvasViewportController({
   const panStateRef = useRef(
     createTransformOnlyPanState({ x: offsetX, y: offsetY })
   );
+  const zoomStateRef = useRef(
+    createTransformOnlyZoomState({ zoom, offsetX, offsetY })
+  );
   const panFrameRef = useRef<number | null>(null);
+  const zoomFrameRef = useRef<number | null>(null);
+  const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchPanActiveRef = useRef(false);
   const pinchStartDistRef = useRef<number | null>(null);
 
@@ -228,6 +329,14 @@ export function useCanvasViewportController({
   zoomRef.current = zoom;
   const setCanvasZoomRef = useRef(setCanvasZoom);
   setCanvasZoomRef.current = setCanvasZoom;
+
+  useLayoutEffect(() => {
+    const state = zoomStateRef.current;
+    const stage = stageRef.current;
+    if (!state.isZooming || !stage) return;
+
+    applyTransformOnlyZoomCamera(stage, state.liveCamera);
+  });
 
   useEffect(() => {
     const nextZoom = clampCanvasZoom(zoom, zoomBounds);
@@ -295,22 +404,92 @@ export function useCanvasViewportController({
   // Intentionally reads viewport/autoFitRacks/zoom via closure at transition time —
   // re-running on their changes would fight the user's manual zoom adjustments.
 
-  const handleZoom = useCallback((delta: number, cursor?: CanvasPoint) => {
-    const nextZoom = clampCanvasZoom(
-      Number((zoomRef.current + delta).toFixed(2)),
-      zoomBoundsRef.current
-    );
+  // Wheel/pinch zoom is transform-only while active. The camera store is updated
+  // once on idle so RackLayer culling and full render mode catch up after the burst.
+  const cancelScheduledZoomDraw = useCallback(() => {
+    if (zoomFrameRef.current === null) return;
+    window.cancelAnimationFrame(zoomFrameRef.current);
+    zoomFrameRef.current = null;
+  }, []);
 
-    if (!cursor) {
-      setCanvasZoomRef.current(nextZoom);
-      return;
+  const scheduleZoomDraw = useCallback(() => {
+    if (zoomFrameRef.current !== null) return;
+    zoomFrameRef.current = window.requestAnimationFrame(() => {
+      zoomFrameRef.current = null;
+      const stage = stageRef.current;
+      if (!stage || !zoomStateRef.current.isZooming) return;
+      batchDrawStageLayersWithSource(stage, 'manual-zoom-raf');
+    });
+  }, [stageRef]);
+
+  const commitTransformOnlyZoom = useCallback(() => {
+    if (zoomIdleTimerRef.current !== null) {
+      globalThis.clearTimeout(zoomIdleTimerRef.current);
+      zoomIdleTimerRef.current = null;
     }
 
-    const camera = useCameraStore.getState();
-    const nextCamera = getZoomToCursorCamera(camera, cursor, nextZoom);
-    camera.setCamera(nextCamera.zoom, nextCamera.offsetX, nextCamera.offsetY);
-    recordCanvasCameraStoreUpdate('camera');
-  }, []);
+    return finishTransformOnlyZoom({
+      cancelDraw: cancelScheduledZoomDraw,
+      commitCamera: (camera) => {
+        useCameraStore
+          .getState()
+          .setCamera(camera.zoom, camera.offsetX, camera.offsetY);
+      },
+      recordCameraCommit: () => {
+        recordCanvasCameraStoreUpdate('camera');
+        recordCanvasZoomDurableCommit();
+      },
+      stage: stageRef.current,
+      state: zoomStateRef.current
+    });
+  }, [cancelScheduledZoomDraw, stageRef]);
+
+  const scheduleZoomCommit = useCallback(() => {
+    if (zoomIdleTimerRef.current !== null) {
+      globalThis.clearTimeout(zoomIdleTimerRef.current);
+    }
+    zoomIdleTimerRef.current = globalThis.setTimeout(() => {
+      zoomIdleTimerRef.current = null;
+      commitTransformOnlyZoom();
+    }, 180);
+  }, [commitTransformOnlyZoom]);
+
+  const handleZoom = useCallback(
+    (delta: number, cursor?: CanvasPoint) => {
+      const stage = stageRef.current;
+      const activeZoomState = zoomStateRef.current;
+      const currentZoom = activeZoomState.isZooming
+        ? activeZoomState.liveCamera.zoom
+        : zoomRef.current;
+      const nextZoom = clampCanvasZoom(
+        Number((currentZoom + delta).toFixed(2)),
+        zoomBoundsRef.current
+      );
+
+      if (!cursor || !stage) {
+        commitTransformOnlyZoom();
+        setCanvasZoomRef.current(nextZoom);
+        return;
+      }
+
+      const camera = useCameraStore.getState();
+      updateTransformOnlyZoom({
+        committedCamera: {
+          zoom: camera.zoom,
+          offsetX: camera.offsetX,
+          offsetY: camera.offsetY
+        },
+        cursor,
+        nextZoom,
+        scheduleDraw: scheduleZoomDraw,
+        stage,
+        state: activeZoomState
+      });
+      recordCanvasZoomTransientUpdate();
+      scheduleZoomCommit();
+    },
+    [commitTransformOnlyZoom, scheduleZoomCommit, scheduleZoomDraw, stageRef]
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -336,6 +515,7 @@ export function useCanvasViewportController({
       if (event.button !== 1) return;
       const stage = stageRef.current;
       if (!stage) return;
+      commitTransformOnlyZoom();
       isPanningRef.current = true;
       // Snapshot current offset at pan start via getState() — avoids stale closures
       // without needing a ref that mirrors the store value.
@@ -406,6 +586,7 @@ export function useCanvasViewportController({
 
       touchPanActiveRef.current = true;
       isPanningRef.current = true;
+      commitTransformOnlyZoom();
       const { offsetX: ox, offsetY: oy } = useCameraStore.getState();
       startTransformOnlyPan({
         committedOffset: { x: ox, y: oy },
@@ -478,6 +659,11 @@ export function useCanvasViewportController({
 
     return () => {
       cancelScheduledPanDraw();
+      if (zoomIdleTimerRef.current !== null) {
+        globalThis.clearTimeout(zoomIdleTimerRef.current);
+        zoomIdleTimerRef.current = null;
+      }
+      cancelScheduledZoomDraw();
       container.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
@@ -485,7 +671,12 @@ export function useCanvasViewportController({
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
     };
-  }, [stageRef, handleZoom]);
+  }, [
+    stageRef,
+    handleZoom,
+    commitTransformOnlyZoom,
+    cancelScheduledZoomDraw
+  ]);
 
   return {
     containerRef,
