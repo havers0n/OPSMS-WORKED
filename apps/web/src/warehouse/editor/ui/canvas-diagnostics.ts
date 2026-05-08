@@ -40,10 +40,34 @@ export type CanvasRenderComponentMetrics = {
   changedKeys: Record<string, number>;
 };
 
+export type CanvasDiagnosticsPhase =
+  | 'idle'
+  | 'active-skeleton'
+  | 'restore-full'
+  | 'settled-full';
+
+export type CanvasDiagnosticsPhaseMarkKind =
+  | 'active-start'
+  | 'active-end'
+  | 'restore-start'
+  | 'restore-complete'
+  | 'settled';
+
+export type CanvasDiagnosticsPhaseMark = {
+  kind: CanvasDiagnosticsPhaseMarkKind;
+  phase: CanvasDiagnosticsPhase;
+  renderMode: CanvasRenderMode;
+  timeMs: number;
+};
+
 export type CanvasRenderPipelineDiagnostics = {
   enabled: boolean;
   currentRenderMode: CanvasRenderMode;
   renderModeCounts: Record<CanvasRenderMode, number>;
+  renderModeTransitionCounts: Record<string, number>;
+  currentPhase: CanvasDiagnosticsPhase;
+  phaseCounts: Record<CanvasDiagnosticsPhase, number>;
+  phaseMarks: CanvasDiagnosticsPhaseMark[];
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
@@ -227,6 +251,15 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
       'interaction-light': 0,
       'interaction-skeleton': 0
     },
+    renderModeTransitionCounts: {},
+    currentPhase: 'idle',
+    phaseCounts: {
+      idle: 0,
+      'active-skeleton': 0,
+      'restore-full': 0,
+      'settled-full': 0
+    },
+    phaseMarks: [],
     cameraStoreUpdates: 0,
     offsetUpdates: 0,
     zoomCameraUpdates: 0,
@@ -299,8 +332,90 @@ export function recordCanvasRenderMode(renderMode: CanvasRenderMode) {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
-  diagnostics.currentRenderMode = renderMode;
+  const previousRenderMode = diagnostics.currentRenderMode;
+  if (previousRenderMode !== renderMode) {
+    const transitionKey = `${previousRenderMode}->${renderMode}`;
+    diagnostics.renderModeTransitionCounts[transitionKey] =
+      (diagnostics.renderModeTransitionCounts[transitionKey] ?? 0) + 1;
+    diagnostics.currentRenderMode = renderMode;
+
+    if (renderMode === 'interaction-skeleton') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-start');
+    } else if (
+      previousRenderMode === 'interaction-skeleton' &&
+      renderMode === 'full'
+    ) {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
+      if (diagnostics.currentPhase !== 'restore-full') {
+        recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-start');
+      }
+    }
+  } else {
+    diagnostics.currentRenderMode = renderMode;
+  }
+
   diagnostics.renderModeCounts[renderMode] += 1;
+}
+
+function nowMs() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function phaseForMark(
+  kind: CanvasDiagnosticsPhaseMarkKind
+): CanvasDiagnosticsPhase {
+  if (kind === 'active-start' || kind === 'active-end') {
+    return 'active-skeleton';
+  }
+  if (kind === 'restore-start' || kind === 'restore-complete') {
+    return 'restore-full';
+  }
+  return 'settled-full';
+}
+
+function recordCanvasDiagnosticsPhaseMark(
+  diagnostics: CanvasRenderPipelineDiagnostics,
+  kind: CanvasDiagnosticsPhaseMarkKind
+) {
+  const phase = phaseForMark(kind);
+  diagnostics.currentPhase = phase;
+  diagnostics.phaseCounts[phase] += 1;
+  diagnostics.phaseMarks.push({
+    kind,
+    phase,
+    renderMode: diagnostics.currentRenderMode,
+    timeMs: nowMs()
+  });
+}
+
+export function recordCanvasActiveInteractionStart() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-start');
+}
+
+export function recordCanvasActiveInteractionEnd() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
+}
+
+export function recordCanvasFullRestoreStart() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-start');
+}
+
+export function recordCanvasFullRestoreComplete() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-complete');
+}
+
+export function recordCanvasSettledFull() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'settled');
 }
 
 export function recordCanvasKonvaLayerDraw(kind: 'draw' | 'batchDraw') {

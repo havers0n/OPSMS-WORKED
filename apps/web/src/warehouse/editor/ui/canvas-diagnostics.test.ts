@@ -7,6 +7,8 @@ import {
   recordCanvasCullingMetrics,
   recordCanvasCameraStoreUpdate,
   recordCanvasRenderMode,
+  recordCanvasFullRestoreComplete,
+  recordCanvasSettledFull,
   recordCanvasZoomDurableCommit,
   recordCanvasZoomTransientUpdate,
   resetCanvasRenderPipelineDiagnostics,
@@ -144,8 +146,56 @@ describe('canvas render pipeline diagnostics', () => {
       currentRenderMode: 'interaction-skeleton',
       renderModeCounts: {
         'interaction-skeleton': 1
+      },
+      renderModeTransitionCounts: {
+        'full->interaction-skeleton': 1
+      },
+      currentPhase: 'active-skeleton',
+      phaseCounts: {
+        'active-skeleton': 1
       }
     });
+  });
+
+  it('records render mode transitions separately from render observations', () => {
+    vi.stubGlobal('window', {});
+
+    resetCanvasRenderPipelineDiagnostics();
+    recordCanvasRenderMode('full');
+    recordCanvasRenderMode('interaction-skeleton');
+    recordCanvasRenderMode('interaction-skeleton');
+    recordCanvasRenderMode('full');
+    recordCanvasFullRestoreComplete();
+    recordCanvasSettledFull();
+
+    expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
+      currentRenderMode: 'full',
+      currentPhase: 'settled-full',
+      renderModeCounts: {
+        full: 2,
+        'interaction-skeleton': 2
+      },
+      renderModeTransitionCounts: {
+        'full->interaction-skeleton': 1,
+        'interaction-skeleton->full': 1
+      },
+      phaseCounts: {
+        'active-skeleton': 2,
+        'restore-full': 2,
+        'settled-full': 1
+      }
+    });
+    expect(
+      window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?.phaseMarks.map(
+        (mark) => mark.kind
+      )
+    ).toEqual([
+      'active-start',
+      'active-end',
+      'restore-start',
+      'restore-complete',
+      'settled'
+    ]);
   });
 
   it('separates transient zoom updates from durable camera commits', () => {

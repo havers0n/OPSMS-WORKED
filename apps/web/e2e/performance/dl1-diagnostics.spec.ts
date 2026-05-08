@@ -71,6 +71,7 @@ type ScenarioName =
   | 'route-preview';
 
 type RawProbeResult = {
+  sampleDurationMs: number;
   frameTimes: number[];
   longTasks: Array<{ duration: number; startTime: number; name: string }>;
   panStartFirstFrameMs: number | null;
@@ -112,6 +113,26 @@ type RenderComponentMetrics = {
   changedKeys: Record<string, number>;
 };
 
+type DiagnosticsPhase =
+  | 'idle'
+  | 'active-skeleton'
+  | 'restore-full'
+  | 'settled-full';
+
+type DiagnosticsPhaseMarkKind =
+  | 'active-start'
+  | 'active-end'
+  | 'restore-start'
+  | 'restore-complete'
+  | 'settled';
+
+type DiagnosticsPhaseMark = {
+  kind: DiagnosticsPhaseMarkKind;
+  phase: DiagnosticsPhase;
+  renderMode: 'full' | 'interaction-light' | 'interaction-skeleton';
+  timeMs: number;
+};
+
 type RenderPipelineDiagnostics = {
   enabled: boolean;
   currentRenderMode: 'full' | 'interaction-light' | 'interaction-skeleton';
@@ -119,6 +140,10 @@ type RenderPipelineDiagnostics = {
     'full' | 'interaction-light' | 'interaction-skeleton',
     number
   >;
+  renderModeTransitionCounts: Record<string, number>;
+  currentPhase: DiagnosticsPhase;
+  phaseCounts: Record<DiagnosticsPhase, number>;
+  phaseMarks: DiagnosticsPhaseMark[];
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
@@ -273,6 +298,16 @@ type DeltaVsProductionCulling = {
   droppedFramesOver100MsDelta: number;
 } | null;
 
+type DiagnosticsMeasuredPhase = Exclude<DiagnosticsPhase, 'idle'>;
+
+type PhaseReport = {
+  phase: DiagnosticsMeasuredPhase;
+  metrics: Metrics;
+  frameBuckets: FrameBuckets;
+  renderPipeline: RenderPipelineDiagnostics;
+  konvaPipeline: KonvaPipelineProbeResult;
+};
+
 type ReportEntry = {
   scenario: ScenarioName;
   variant: string;
@@ -291,6 +326,7 @@ type ReportEntry = {
   deltaVsFullRender: DeltaVsProductionCulling;
   renderPipeline: RenderPipelineDiagnostics;
   konvaPipeline: KonvaPipelineProbeResult;
+  phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>>;
   browserEnvironment: BrowserEnvironment;
   seed: {
     floorId: string;
@@ -570,7 +606,7 @@ function summarizeMetrics(raw: RawProbeResult): {
 
   return {
     metrics: {
-      sampleDurationMs: SAMPLE_DURATION_MS,
+      sampleDurationMs: round(raw.sampleDurationMs),
       frames: frameTimes.length,
       averageFps: averageFrameMs > 0 ? round(1000 / averageFrameMs) : 0,
       p50Fps: p50FrameMs > 0 ? round(1000 / p50FrameMs) : 0,
@@ -819,8 +855,11 @@ async function getCanvasCullingMetrics(page: Page): Promise<CullingMetrics> {
   });
 }
 
-async function startRenderPipelineProbe(page: Page) {
-  await page.evaluate(() => {
+async function startRenderPipelineProbe(
+  page: Page,
+  phase: DiagnosticsMeasuredPhase | null = null
+) {
+  await page.evaluate((initialPhase) => {
     const createComponentMetrics = () => ({
       renders: 0,
       causes: {
@@ -837,14 +876,42 @@ async function startRenderPipelineProbe(page: Page) {
         Record<string, unknown>
       >;
     };
+    const previousRenderMode =
+      global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?.currentRenderMode ??
+      'full';
+    const phaseCounts: Record<DiagnosticsPhase, number> = {
+      idle: 0,
+      'active-skeleton': 0,
+      'restore-full': 0,
+      'settled-full': 0
+    };
+    const phaseMarks: DiagnosticsPhaseMark[] = [];
+    if (initialPhase) {
+      phaseCounts[initialPhase] = 1;
+      phaseMarks.push({
+        kind:
+          initialPhase === 'active-skeleton'
+            ? 'active-start'
+            : initialPhase === 'restore-full'
+              ? 'restore-start'
+              : 'settled',
+        phase: initialPhase,
+        renderMode: previousRenderMode,
+        timeMs: performance.now()
+      });
+    }
     global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ = {
       enabled: true,
-      currentRenderMode: 'full',
+      currentRenderMode: previousRenderMode,
       renderModeCounts: {
         full: 0,
         'interaction-light': 0,
         'interaction-skeleton': 0
       },
+      renderModeTransitionCounts: {},
+      currentPhase: initialPhase ?? 'idle',
+      phaseCounts,
+      phaseMarks,
       cameraStoreUpdates: 0,
       offsetUpdates: 0,
       zoomCameraUpdates: 0,
@@ -862,7 +929,7 @@ async function startRenderPipelineProbe(page: Page) {
       }
     };
     global.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
-  });
+  }, phase);
 }
 
 async function stopRenderPipelineProbe(
@@ -896,6 +963,71 @@ async function waitForFullRenderModeAfterInteraction(page: Page) {
     undefined,
     { timeout: 10000 }
   );
+}
+
+async function waitForRenderMode(
+  page: Page,
+  renderMode: RenderPipelineDiagnostics['currentRenderMode']
+) {
+  await page.waitForFunction(
+    (expectedRenderMode) => {
+      const global = window as unknown as {
+        __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+      };
+      return (
+        global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__
+          ?.currentRenderMode === expectedRenderMode
+      );
+    },
+    renderMode,
+    { timeout: 10000 }
+  );
+}
+
+async function waitForAnimationFrames(page: Page, frameCount: number) {
+  await page.evaluate(
+    (count) =>
+      new Promise<void>((resolve) => {
+        let remaining = count;
+        const tick = () => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            resolve();
+            return;
+          }
+          window.requestAnimationFrame(tick);
+        };
+        window.requestAnimationFrame(tick);
+      }),
+    frameCount
+  );
+}
+
+async function markRenderPipelinePhase(
+  page: Page,
+  kind: DiagnosticsPhaseMarkKind
+) {
+  await page.evaluate((markKind) => {
+    const global = window as unknown as {
+      __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+    };
+    const diagnostics = global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
+    if (!diagnostics?.enabled) return;
+    const phase: DiagnosticsPhase =
+      markKind === 'active-start' || markKind === 'active-end'
+        ? 'active-skeleton'
+        : markKind === 'restore-start' || markKind === 'restore-complete'
+          ? 'restore-full'
+          : 'settled-full';
+    diagnostics.currentPhase = phase;
+    diagnostics.phaseCounts[phase] += 1;
+    diagnostics.phaseMarks.push({
+      kind: markKind,
+      phase,
+      renderMode: diagnostics.currentRenderMode,
+      timeMs: performance.now()
+    });
+  }, kind);
 }
 
 async function startKonvaPipelineProbe(page: Page) {
@@ -1701,6 +1833,7 @@ async function startFrameProbe(page: Page) {
       start: null,
       end: null
     };
+    const startedAt = performance.now();
     let previousFrameTime: number | null = null;
     let stopped = false;
     let rafId = 0;
@@ -1771,6 +1904,7 @@ async function startFrameProbe(page: Page) {
           : null;
 
         return {
+          sampleDurationMs: performance.now() - startedAt,
           frameTimes,
           longTasks,
           panStartFirstFrameMs: panTransitionFrames.start,
@@ -2079,6 +2213,50 @@ async function samplePan(
   }
 }
 
+async function startAndSampleActivePan(
+  page: Page,
+  durationMs: number,
+  probeId: string,
+  guard: PageStabilityGuard
+) {
+  const box = await getCanvasBox(page);
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+
+  await assertFrameProbeAlive(page, probeId, guard);
+  await page.mouse.move(centerX, centerY);
+  await page.mouse.down({ button: 'middle' });
+  await markPanTransitionFrameProbe(page, probeId, 'start', guard);
+  await waitForRenderMode(page, 'interaction-skeleton');
+
+  const deadline = Date.now() + durationMs;
+  let direction = 1;
+  while (Date.now() < deadline) {
+    await assertFrameProbeAlive(page, probeId, guard);
+    await page.mouse.move(
+      centerX + 220 * direction,
+      centerY + 55 * direction,
+      { steps: 20 }
+    );
+    direction *= -1;
+  }
+  await assertFrameProbeAlive(page, probeId, guard);
+}
+
+async function samplePanRestore(
+  page: Page,
+  probeId: string,
+  guard: PageStabilityGuard
+) {
+  await assertFrameProbeAlive(page, probeId, guard);
+  await page.mouse.up({ button: 'middle' });
+  await markPanTransitionFrameProbe(page, probeId, 'end', guard);
+  await waitForFullRenderModeAfterInteraction(page);
+  await waitForAnimationFrames(page, 2);
+  await markRenderPipelinePhase(page, 'restore-complete');
+  await assertFrameProbeAlive(page, probeId, guard);
+}
+
 async function sampleZoom(page: Page, durationMs: number) {
   const box = await getCanvasBox(page);
   const centerX = box.x + box.width / 2;
@@ -2144,6 +2322,126 @@ async function getBrowserEnvironment(page: Page): Promise<BrowserEnvironment> {
   }));
 }
 
+async function measureDiagnosticsPhase({
+  guard,
+  page,
+  phase,
+  sample
+}: {
+  guard: PageStabilityGuard;
+  page: Page;
+  phase: DiagnosticsMeasuredPhase;
+  sample: (probeId: string) => Promise<void>;
+}): Promise<PhaseReport> {
+  await startRenderPipelineProbe(
+    page,
+    phase === 'active-skeleton' ? null : phase
+  );
+  await startKonvaPipelineProbe(page);
+  const frameProbeId = await startFrameProbe(page);
+  let rawResult: RawProbeResult | null = null;
+  try {
+    await sample(frameProbeId);
+    await assertFrameProbeAlive(page, frameProbeId, guard);
+    rawResult = await stopFrameProbe(page, frameProbeId, guard);
+  } catch (error) {
+    await stopFrameProbe(page, frameProbeId, guard).catch(() => undefined);
+    await stopRenderPipelineProbe(page).catch(() => undefined);
+    await stopKonvaPipelineProbe(page).catch(() => undefined);
+    throw error;
+  }
+
+  const renderPipeline = await stopRenderPipelineProbe(page);
+  const konvaPipeline = await stopKonvaPipelineProbe(page);
+  const { metrics, frameBuckets } = summarizeMetrics(rawResult);
+  return {
+    phase,
+    metrics,
+    frameBuckets,
+    renderPipeline,
+    konvaPipeline
+  };
+}
+
+async function measurePanPhases(page: Page, guard: PageStabilityGuard) {
+  const phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>> = {};
+  let activePanHeld = false;
+  try {
+    phases['active-skeleton'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'active-skeleton',
+      sample: async (probeId) => {
+        await startAndSampleActivePan(page, SAMPLE_DURATION_MS, probeId, guard);
+        activePanHeld = true;
+      }
+    });
+    phases['restore-full'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'restore-full',
+      sample: async (probeId) => {
+        await samplePanRestore(page, probeId, guard);
+        activePanHeld = false;
+      }
+    });
+    phases['settled-full'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'settled-full',
+      sample: async () => {
+        await waitForFullRenderModeAfterInteraction(page);
+        await waitForAnimationFrames(page, 2);
+        await page.waitForTimeout(250);
+        await markRenderPipelinePhase(page, 'settled');
+      }
+    });
+  } finally {
+    if (activePanHeld) {
+      await page.mouse.up({ button: 'middle' }).catch(() => undefined);
+      await waitForFullRenderModeAfterInteraction(page).catch(() => undefined);
+    }
+  }
+
+  return phases;
+}
+
+async function measureZoomPhases(page: Page, guard: PageStabilityGuard) {
+  const phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>> = {};
+  phases['active-skeleton'] = await measureDiagnosticsPhase({
+    guard,
+    page,
+    phase: 'active-skeleton',
+    sample: async () => {
+      await sampleZoom(page, SAMPLE_DURATION_MS);
+      await waitForRenderMode(page, 'interaction-skeleton');
+    }
+  });
+  phases['restore-full'] = await measureDiagnosticsPhase({
+    guard,
+    page,
+    phase: 'restore-full',
+    sample: async () => {
+      await waitForFullRenderModeAfterInteraction(page);
+      await waitForAnimationFrames(page, 2);
+      await markRenderPipelinePhase(page, 'restore-complete');
+    }
+  });
+  phases['settled-full'] = await measureDiagnosticsPhase({
+    guard,
+    page,
+    phase: 'settled-full',
+    sample: async () => {
+      await waitForFullRenderModeAfterInteraction(page);
+      await waitForAnimationFrames(page, 2);
+      await page.waitForTimeout(250);
+      await markRenderPipelinePhase(page, 'settled');
+    }
+  });
+
+  return phases;
+}
+
 async function runMeasuredScenario({
   floorId,
   flags,
@@ -2191,6 +2489,7 @@ async function runMeasuredScenario({
       browserEnvironment,
       cullingMetrics,
       konvaPipeline,
+      phases: {},
       renderPipeline
     };
   }
@@ -2221,6 +2520,7 @@ async function runMeasuredScenario({
       browserEnvironment,
       cullingMetrics,
       konvaPipeline,
+      phases: {},
       renderPipeline
     };
   }
@@ -2241,6 +2541,9 @@ async function runMeasuredScenario({
   const frameProbeId = await startFrameProbe(page);
 
   let rawResult: RawProbeResult | null = null;
+  let renderPipeline: RenderPipelineDiagnostics | null = null;
+  let konvaPipeline: KonvaPipelineProbeResult | null = null;
+  let phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>> = {};
   try {
     if (scenario === 'pan') {
       await samplePan(page, SAMPLE_DURATION_MS, frameProbeId, guard);
@@ -2263,14 +2566,24 @@ async function runMeasuredScenario({
     if (rawResult === null) {
       rawResult = await stopFrameProbe(page, frameProbeId, guard);
     }
+
+    renderPipeline = await stopRenderPipelineProbe(page);
+    konvaPipeline = await stopKonvaPipelineProbe(page);
+
+    if (scenario === 'pan') {
+      phases = await measurePanPhases(page, guard);
+    } else if (scenario === 'zoom') {
+      phases = await measureZoomPhases(page, guard);
+    }
   } finally {
     guard.dispose();
   }
   if (rawResult === null) {
     throw new Error('DL1 frame probe did not produce a result.');
   }
-  const renderPipeline = await stopRenderPipelineProbe(page);
-  const konvaPipeline = await stopKonvaPipelineProbe(page);
+  if (!renderPipeline || !konvaPipeline) {
+    throw new Error('DL1 aggregate pipeline probes did not produce a result.');
+  }
   if (scenario === 'pan' && runtimeOptions?.rackLayerListeningOffDuringPan) {
     await setRackLayerListening(page, true);
   }
@@ -2284,6 +2597,7 @@ async function runMeasuredScenario({
     browserEnvironment,
     cullingMetrics,
     konvaPipeline,
+    phases,
     renderPipeline
   };
 }
@@ -2306,6 +2620,70 @@ function findEntry(
 function formatDelta(value: number | null | undefined) {
   if (value === null || value === undefined) return 'n/a';
   return value > 0 ? `+${value}` : String(value);
+}
+
+function formatRenderModeTransitions(diagnostics: RenderPipelineDiagnostics) {
+  const entries = Object.entries(diagnostics.renderModeTransitionCounts);
+  return entries.length === 0
+    ? 'none'
+    : entries.map(([transition, count]) => `${transition}:${count}`).join(', ');
+}
+
+function activePhaseTableRows(entries: ReportEntry[]) {
+  return entries
+    .map((entry) => {
+      const phase = entry.phases['active-skeleton'];
+      if (!phase) return null;
+      return {
+        scenario: entry.scenario,
+        variant: entry.variant,
+        profile: entry.profile.name,
+        phase: phase.phase,
+        avgFps: phase.metrics.averageFps,
+        p95FrameMs: phase.metrics.p95FrameMs,
+        worstFrameMs: phase.metrics.worstFrameMs,
+        drawScene: phase.konvaPipeline.drawSceneCalls,
+        drawSceneMs: phase.konvaPipeline.drawSceneTotalMs,
+        textDrawMs:
+          phase.konvaPipeline.nodeSceneDrawCostBuckets.Text?.totalMs ?? 0,
+        rectDrawMs:
+          phase.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ?? 0,
+        nodes: phase.konvaPipeline.rackLayerComposition.total,
+        listeningTrue: phase.konvaPipeline.rackLayerComposition.listeningTrue,
+        renderMode: phase.renderPipeline.currentRenderMode,
+        skeletonRenders:
+          phase.renderPipeline.renderModeCounts['interaction-skeleton']
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+}
+
+function restorePhaseTableRows(entries: ReportEntry[]) {
+  return entries
+    .flatMap((entry) =>
+      (['restore-full', 'settled-full'] as const).map((phaseName) => {
+        const phase = entry.phases[phaseName];
+        if (!phase) return null;
+        return {
+          scenario: entry.scenario,
+          variant: entry.variant,
+          profile: entry.profile.name,
+          phase: phase.phase,
+          p95FrameMs: phase.metrics.p95FrameMs,
+          worstFrameMs: phase.metrics.worstFrameMs,
+          drawScene: phase.konvaPipeline.drawSceneCalls,
+          drawSceneMs: phase.konvaPipeline.drawSceneTotalMs,
+          textDrawMs:
+            phase.konvaPipeline.nodeSceneDrawCostBuckets.Text?.totalMs ?? 0,
+          rectDrawMs:
+            phase.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ?? 0,
+          renderModeTransitions: formatRenderModeTransitions(
+            phase.renderPipeline
+          )
+        };
+      })
+    )
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 }
 
 function summarizeChangedKeys(metrics: RenderComponentMetrics) {
@@ -2671,6 +3049,39 @@ function recommendHighestImpactFix(entries: ReportEntry[], baseline: ReportEntry
   return `${best.fix} This is based on ${best.variant} improving p95FrameMs by ${round(best.improvement)}ms versus normal.`;
 }
 
+function buildPhaseInterpretation(entry: ReportEntry | null) {
+  const active = entry?.phases['active-skeleton'];
+  const restore = entry?.phases['restore-full'];
+  if (!entry || !active || !restore) {
+    return 'Phase-specific pan/zoom samples were not recorded for this scenario.';
+  }
+
+  const activeP95 = active.metrics.p95FrameMs;
+  const restoreP95 = restore.metrics.p95FrameMs;
+  const activeDrawScene = active.konvaPipeline.drawSceneTotalMs;
+  const restoreDrawScene = restore.konvaPipeline.drawSceneTotalMs;
+  const activeDominates =
+    activeP95 > restoreP95 * 1.25 || activeDrawScene > restoreDrawScene * 1.25;
+  const restoreDominates =
+    restoreP95 > activeP95 * 1.25 || restoreDrawScene > activeDrawScene * 1.25;
+  const classification =
+    activeDominates && restoreDominates
+      ? 'mixed bottleneck'
+      : activeDominates
+        ? 'active interaction bottleneck'
+        : restoreDominates
+          ? 'full-detail restore bottleneck'
+          : 'balanced active/restore cost';
+  const nextFix =
+    restoreDominates && !activeDominates
+      ? 'Recommended next fix: staged full restore.'
+      : activeDominates && !restoreDominates
+        ? 'Recommended next fix: optimize interaction-skeleton active draw cost.'
+        : 'Recommended next fix: compare active skeleton and restore traces before choosing the optimization target.';
+
+  return `${classification}. Active p95=${activeP95}ms, active drawScene=${activeDrawScene}ms; restore p95=${restoreP95}ms, restore drawScene=${restoreDrawScene}ms. ${nextFix}`;
+}
+
 function buildRenderPipelineMarkdown(
   scenario: ScenarioName,
   entries: ReportEntry[]
@@ -2790,6 +3201,9 @@ Lines / Shapes draw cost: ${linesShapesDrawCost} ms
 Other: ${otherDrawCost} ms
 
 Node draw cost by type: ${JSON.stringify(konvaProbe.nodeSceneDrawCostByType)}
+
+## Phase Interpretation
+${buildPhaseInterpretation(production)}
 
 ## Rect Cost Breakdown
 | category | count | total ms | avg ms/node | avg ms/call | style counters | roles |
@@ -3006,6 +3420,7 @@ test.describe('DL1 diagnostics harness', () => {
                 deltaVsFullRender: deltaVsProductionCulling,
                 renderPipeline: result.renderPipeline,
                 konvaPipeline: result.konvaPipeline,
+                phases: result.phases,
                 browserEnvironment: result.browserEnvironment,
                 seed: {
                   floorId: floor.id,
@@ -3060,6 +3475,9 @@ test.describe('DL1 diagnostics harness', () => {
           zoomDurableCommits: entry.renderPipeline.zoomDurableCommits,
           zoomCameraUpdates: entry.renderPipeline.zoomCameraUpdates,
           renderMode: entry.renderPipeline.currentRenderMode,
+          renderTransitions: formatRenderModeTransitions(
+            entry.renderPipeline
+          ),
           skeletonRenders:
             entry.renderPipeline.renderModeCounts['interaction-skeleton'],
           editorRenders:
@@ -3100,11 +3518,25 @@ test.describe('DL1 diagnostics harness', () => {
           p95Delta: entry.deltaVsProductionCulling?.p95FrameMsDelta ?? null
         }))
       );
+      if (scenario === 'pan' || scenario === 'zoom') {
+        console.table(activePhaseTableRows(entries));
+        console.table(restorePhaseTableRows(entries));
+      }
 
       expect(entries.length).toBe(
         selectedProfiles.length * selectedVariants.length
       );
       expect(entries.every((entry) => entry.metrics.frames > 0)).toBe(true);
+      if (scenario === 'pan' || scenario === 'zoom') {
+        expect(
+          entries.every(
+            (entry) =>
+              entry.phases['active-skeleton'] &&
+              entry.phases['restore-full'] &&
+              entry.phases['settled-full']
+          )
+        ).toBe(true);
+      }
       expect(
         entries.every(
           (entry) =>
