@@ -36,6 +36,7 @@ import {
   recordCanvasCullingMetrics,
   type CanvasDiagnosticsFlags
 } from '../canvas-diagnostics';
+import type { CanvasRenderMode } from '../canvas-render-mode';
 
 const MIN_CELL_W = 5;
 const MIN_CELL_H = 4;
@@ -68,6 +69,7 @@ type FaceProps = {
   diagnosticsViewport: DiagnosticsViewport;
   rackGeometry: CanvasRackGeometry;
   isActivelyPanning: boolean;
+  renderMode: CanvasRenderMode;
   forceRenderAllCells: boolean;
   onCellClick: (cellId: string, anchor: { x: number; y: number }) => void;
 };
@@ -124,9 +126,11 @@ function FaceCells({
   diagnosticsViewport,
   rackGeometry,
   isActivelyPanning,
+  renderMode,
   forceRenderAllCells,
   onCellClick
 }: FaceProps) {
+  const isInteractionLight = renderMode === 'interaction-light';
   const isRtl = face.slotNumberingDirection === 'rtl';
   const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
   const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
@@ -149,7 +153,10 @@ function FaceCells({
   const cullingEnabled =
     diagnosticsFlags.cells !== 'unculled' &&
     diagnosticsFlags.enableProductionCellCulling;
-  const cellOverlaysOff = diagnosticsFlags.cellOverlays === 'off';
+  const cellOverlaysMode = isInteractionLight
+    ? 'off'
+    : diagnosticsFlags.cellOverlays;
+  const cellOverlaysOff = cellOverlaysMode === 'off';
 
   orderedSections.forEach((sec, si) => {
     const secX = sectionOffsets[si];
@@ -250,7 +257,7 @@ function FaceCells({
         },
         visualPalette
       );
-      if (shouldRevealAddress && addressText) {
+      if (!isInteractionLight && shouldRevealAddress && addressText) {
         focusedAddressLabels.push({
           key: `${sec.id}-${level.id}-slot-${slotLabel}`,
           addressText,
@@ -270,18 +277,20 @@ function FaceCells({
   recordCanvasCullingMetrics(metricSourceId, { cellsTotal, cellsRendered });
 
   return (
-    <Group listening={isInteractive}>
+    <Group listening={!isInteractionLight && isInteractive}>
       <BatchedCellBaseShape
         cells={renderedCells}
         disableStroke={cellOverlaysOff}
       />
       {renderedCells.map((renderedCell) => (
         <Group key={renderedCell.key}>
-          <CellSurfacePatternVisual
-            geometry={renderedCell.geometry}
-            visualState={renderedCell.visualState}
-          />
-          {diagnosticsFlags.cellOverlays === 'normal' && (
+          {!isInteractionLight && (
+            <CellSurfacePatternVisual
+              geometry={renderedCell.geometry}
+              visualState={renderedCell.visualState}
+            />
+          )}
+          {cellOverlaysMode === 'normal' && (
             <>
               <CellTruthMarkerOverlay
                 geometry={renderedCell.geometry}
@@ -302,21 +311,23 @@ function FaceCells({
               />
             </>
           )}
-          <CellInteractionOverlay
-            geometry={renderedCell.geometry}
-            visualState={renderedCell.visualState}
-            isClickable={renderedCell.visualState.isClickable}
-            onCellClick={
-              renderedCell.cellId !== null
-                ? (anchor) => {
-                    if (renderedCell.cellId !== null) {
-                      onCellClick(renderedCell.cellId, anchor);
+          {!isInteractionLight && (
+            <CellInteractionOverlay
+              geometry={renderedCell.geometry}
+              visualState={renderedCell.visualState}
+              isClickable={renderedCell.visualState.isClickable}
+              onCellClick={
+                renderedCell.cellId !== null
+                  ? (anchor) => {
+                      if (renderedCell.cellId !== null) {
+                        onCellClick(renderedCell.cellId, anchor);
+                      }
                     }
-                  }
-                : undefined
-            }
-          />
-          {showCellNumbers && (
+                  : undefined
+              }
+            />
+          )}
+          {!isInteractionLight && showCellNumbers && (
             <CellInteriorSlotLabel
               slotNumber={renderedCell.slotLabel}
               geometry={renderedCell.geometry}
@@ -326,16 +337,18 @@ function FaceCells({
           )}
         </Group>
       ))}
-      <Group listening={false} name="focused-address-overlay-group">
-        {focusedAddressLabels.map((overlay) => (
-          <FocusedCellAddressOverlay
-            key={overlay.key}
-            addressText={overlay.addressText}
-            geometry={overlay.geometry}
-            rackRotationDeg={rackRotationDeg}
-          />
-        ))}
-      </Group>
+      {!isInteractionLight && (
+        <Group listening={false} name="focused-address-overlay-group">
+          {focusedAddressLabels.map((overlay) => (
+            <FocusedCellAddressOverlay
+              key={overlay.key}
+              addressText={overlay.addressText}
+              geometry={overlay.geometry}
+              rackRotationDeg={rackRotationDeg}
+            />
+          ))}
+        </Group>
+      )}
     </Group>
   );
 }
@@ -363,6 +376,7 @@ type Props = {
   diagnosticsFlags?: CanvasDiagnosticsFlags;
   diagnosticsViewport?: DiagnosticsViewport;
   isActivelyPanning?: boolean;
+  renderMode?: CanvasRenderMode;
   forceRenderAllCells?: boolean;
   showCellNumbers?: boolean;
   cellNumberProminence?: LabelProminence;
@@ -414,6 +428,7 @@ export function RackCells({
   diagnosticsFlags = DEFAULT_DIAGNOSTICS_FLAGS,
   diagnosticsViewport = DEFAULT_DIAGNOSTICS_VIEWPORT,
   isActivelyPanning = false,
+  renderMode = 'full',
   forceRenderAllCells = false,
   showCellNumbers = true,
   cellNumberProminence = 'dominant',
@@ -454,6 +469,7 @@ export function RackCells({
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
       'isActivelyPanning',
+      'renderMode',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -483,6 +499,7 @@ export function RackCells({
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       isActivelyPanning,
+      renderMode,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
@@ -525,6 +542,7 @@ export function RackCells({
         diagnosticsViewport={diagnosticsViewport}
         rackGeometry={geometry}
         isActivelyPanning={isActivelyPanning}
+        renderMode={renderMode}
         forceRenderAllCells={forceRenderAllCells}
         onCellClick={onCellClick}
       />
@@ -560,6 +578,7 @@ export function RackCells({
           diagnosticsViewport={diagnosticsViewport}
           rackGeometry={geometry}
           isActivelyPanning={isActivelyPanning}
+          renderMode={renderMode}
           forceRenderAllCells={forceRenderAllCells}
           onCellClick={onCellClick}
         />

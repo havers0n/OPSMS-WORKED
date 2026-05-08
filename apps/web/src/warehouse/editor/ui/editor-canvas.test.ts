@@ -22,6 +22,7 @@ let mockStorageFocusActiveLevel: number | null = null;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
 let mockIsPanning = false;
+let mockHandleZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
@@ -159,7 +160,7 @@ vi.mock('./use-canvas-viewport-controller', () => ({
     viewport: { width: 1000, height: 800, x: 0, y: 0 },
     canvasOffset: { x: 0, y: 0 },
     isPanning: mockIsPanning,
-    handleZoom: () => undefined
+    handleZoom: mockHandleZoom
   })
 }));
 
@@ -253,6 +254,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
     mockIsPanning = false;
+    mockHandleZoom = vi.fn();
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
   });
@@ -689,6 +691,22 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(racks.map((rack) => rack.id)).toContain(rackId);
   });
 
+  it('defaults the canvas render mode to full', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.renderMode).toBe('full');
+  });
+
   it('forwards active pan visual mode to RackLayer and restores idle mode', () => {
     const draft = createLayoutDraftFixture();
     mockLayoutDraft = draft;
@@ -704,6 +722,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
+    expect(rackLayerLastProps?.renderMode).toBe('interaction-light');
 
     act(() => {
       mockIsPanning = false;
@@ -721,5 +740,50 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
+    expect(rackLayerLastProps?.renderMode).toBe('full');
+  });
+
+  it('uses interaction-light render mode during wheel zoom and restores after idle debounce', () => {
+    vi.useFakeTimers();
+    try {
+      const draft = createLayoutDraftFixture();
+      mockLayoutDraft = draft;
+      mockViewMode = 'storage';
+      mockSelection = { type: 'none' };
+      mockPublishedCellsById = new Map();
+
+      const renderer = renderCanvas({
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      });
+      const stage = renderer.root.findAll(
+        (node) => String(node.type) === 'Stage'
+      )[0];
+
+      expect(rackLayerLastProps?.renderMode).toBe('full');
+
+      act(() => {
+        stage?.props.onWheel({
+          evt: { preventDefault: vi.fn(), deltaY: -100 },
+          target: {
+            getStage: () => ({
+              getPointerPosition: () => ({ x: 25, y: 30 })
+            })
+          }
+        });
+      });
+
+      expect(mockHandleZoom).toHaveBeenCalledWith(0.1, { x: 25, y: 30 });
+      expect(rackLayerLastProps?.renderMode).toBe('interaction-light');
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(rackLayerLastProps?.renderMode).toBe('full');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

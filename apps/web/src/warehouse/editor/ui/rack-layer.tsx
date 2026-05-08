@@ -29,6 +29,7 @@ import {
   recordCanvasRackLayerNodeCount,
   type CanvasDiagnosticsFlags
 } from './canvas-diagnostics';
+import type { CanvasRenderMode } from './canvas-render-mode';
 
 type SnapGuide = {
   type: 'x' | 'y';
@@ -197,6 +198,7 @@ type RackLayerProps = {
     zoom: number;
   };
   isActivelyPanning?: boolean;
+  renderMode?: CanvasRenderMode;
   canvasSelectedCellId: string | null;
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   clearHighlightedCellIds: () => void;
@@ -248,6 +250,7 @@ export function RackLayer({
   diagnosticsFlags,
   diagnosticsViewport,
   isActivelyPanning = false,
+  renderMode = 'full',
   canvasSelectedCellId,
   cellRuntimeById,
   clearHighlightedCellIds,
@@ -285,11 +288,15 @@ export function RackLayer({
   onV2StorageCellSelect,
   onV2StorageRackSelect,
 }: RackLayerProps) {
+  const isInteractionLight = renderMode === 'interaction-light';
   const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
-  const labelsEnabled = diagnosticsFlags.labels === 'normal';
-  const hitTestEnabled = diagnosticsFlags.hitTest === 'normal';
+  const labelsEnabled =
+    !isInteractionLight && diagnosticsFlags.labels === 'normal';
+  const hitTestEnabled =
+    !isInteractionLight && diagnosticsFlags.hitTest === 'normal';
   const renderCells = diagnosticsFlags.cells !== 'off';
-  const overlaysEnabled = diagnosticsFlags.cellOverlays !== 'off';
+  const overlaysEnabled =
+    !isInteractionLight && diagnosticsFlags.cellOverlays !== 'off';
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -340,6 +347,7 @@ export function RackLayer({
       'diagnosticsCulling',
       'diagnosticsRackLayerRenderer',
       'isActivelyPanning',
+      'renderMode',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -365,6 +373,7 @@ export function RackLayer({
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
       isActivelyPanning,
+      renderMode,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
@@ -468,7 +477,11 @@ export function RackLayer({
   // This is necessary because RackCells.onCellClick only receives cellId.
 
   return (
-    <RackLayerComponent ref={layerRef} name="rack-layer">
+    <RackLayerComponent
+      ref={layerRef}
+      name="rack-layer"
+      listening={hitTestEnabled}
+    >
       {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
         const isSelected = overlaysEnabled && selectedRackIds.includes(rack.id);
@@ -553,14 +566,16 @@ export function RackLayer({
               }
             }}
           >
-            <Rect
-              x={0}
-              y={0}
-              width={geometry.width}
-              height={geometry.height}
-              fill="transparent"
-              wosRectRole="rack-interaction"
-            />
+            {!isInteractionLight && (
+              <Rect
+                x={0}
+                y={0}
+                width={geometry.width}
+                height={geometry.height}
+                fill="transparent"
+                wosRectRole="rack-interaction"
+              />
+            )}
 
             <RackBody
               geometry={geometry}
@@ -611,6 +626,7 @@ export function RackLayer({
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
                 isActivelyPanning={isActivelyPanning}
+                renderMode={renderMode}
                 forceRenderAllCells={shouldForceRenderAllCells}
                 isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}

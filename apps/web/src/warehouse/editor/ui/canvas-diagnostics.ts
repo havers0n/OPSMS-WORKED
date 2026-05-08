@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { CanvasRenderMode } from './canvas-render-mode';
 
 export type CanvasDiagnosticsFlags = {
   labels: 'normal' | 'off';
@@ -41,6 +42,7 @@ export type CanvasRenderComponentMetrics = {
 
 export type CanvasRenderPipelineDiagnostics = {
   enabled: boolean;
+  currentRenderMode: CanvasRenderMode;
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
@@ -216,6 +218,7 @@ function createComponentMetrics(): CanvasRenderComponentMetrics {
 export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDiagnostics {
   return {
     enabled: true,
+    currentRenderMode: 'full',
     cameraStoreUpdates: 0,
     offsetUpdates: 0,
     zoomCameraUpdates: 0,
@@ -266,6 +269,13 @@ export function recordCanvasCameraStoreUpdate(kind: 'offset' | 'camera') {
   } else {
     diagnostics.zoomCameraUpdates += 1;
   }
+}
+
+export function recordCanvasRenderMode(renderMode: CanvasRenderMode) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.currentRenderMode = renderMode;
 }
 
 export function recordCanvasKonvaLayerDraw(kind: 'draw' | 'batchDraw') {

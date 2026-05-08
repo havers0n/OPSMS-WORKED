@@ -55,6 +55,10 @@ npm run perf:dl1:diagnostics --workspace @wos/web
 
 Budget failures в diagnostics report-only: они пишутся в JSON как `budgetStatus: "fail"`, но не валят Playwright test.
 
+## Canvas Lightweight Mode
+
+Pan and wheel zoom switch the canvas from `full` to `interaction-light` rendering while the interaction is active. This keeps rack shells, section outlines, and batched cell base surfaces visible, but temporarily disables per-cell labels, focused address labels, cell interaction hit rects, and cell overlay/detail nodes. The rack layer is also non-listening during this transient mode. After pan end, or after the wheel idle debounce, rendering returns to `full` so idle selection/click behavior and visuals are unchanged.
+
 ## Что измеряется
 
 - `averageFps` и `p50Fps`: общий уровень плавности во время drag/zoom по canvas.

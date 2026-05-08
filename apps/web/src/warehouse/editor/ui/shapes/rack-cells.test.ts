@@ -161,6 +161,7 @@ function renderRackCellsWithProps(params: {
   showCellNumbers?: boolean;
   showFocusedFullAddress?: boolean;
   isSelected?: boolean;
+  renderMode?: 'full' | 'interaction-light';
 }) {
   const levelIds = params.levelIds ?? ['level-only'];
   const slotCount = params.slotCount ?? 2;
@@ -183,6 +184,7 @@ function renderRackCellsWithProps(params: {
         diagnosticsFlags: params.diagnosticsFlags,
         diagnosticsViewport: params.diagnosticsViewport,
         isActivelyPanning: params.isActivelyPanning,
+        renderMode: params.renderMode,
         forceRenderAllCells: params.forceRenderAllCells,
         showCellNumbers: params.showCellNumbers ?? true,
         showFocusedFullAddress: params.showFocusedFullAddress ?? true,
@@ -196,7 +198,8 @@ function renderRackCellsWithProps(params: {
 
 function clickCellIdsWithCollector(
   activeLevelIndex: number | null,
-  levelIds: string[]
+  levelIds: string[],
+  renderMode: 'full' | 'interaction-light' = 'full'
 ) {
   const selected: string[] = [];
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -212,6 +215,7 @@ function clickCellIdsWithCollector(
         activeLevelIndex,
         publishedCellsByStructure: createCellsMap(levelIds),
         isInteractive: true,
+        renderMode,
         onCellClick: (cellId: string) => selected.push(cellId),
         showCellNumbers: true,
         showFocusedFullAddress: true
@@ -354,6 +358,57 @@ describe('RackCells', () => {
     expect(shapes[0]?.props.listening).toBe(false);
     expect(cells).toHaveLength(2);
     expect(getCellBaseRects(renderer)).toHaveLength(0);
+  });
+
+  it('defaults to full render mode with labels and interaction overlays', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(
+      getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
+        /^\d+$/.test(value)
+      )
+    ).toEqual(['1', '2']);
+  });
+
+  it('uses interaction-light mode to disable labels and cell hit overlays', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'interaction-light'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(getBatchedCellBaseShapes(renderer)[0]?.props.disableStroke).toBe(
+      true
+    );
+    expect(countInteractionRects(renderer)).toBe(0);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(
+      getRects(renderer).some((rect) =>
+        [
+          'cell-truth-overlay',
+          'cell-outline-overlay',
+          'cell-halo-overlay',
+          'cell-badge'
+        ].includes(String(rect.props.wosRectRole))
+      )
+    ).toBe(false);
+  });
+
+  it('restores cell click behavior when interaction-light returns to full', () => {
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'interaction-light')
+    ).toEqual([]);
+    expect(clickCellIdsWithCollector(0, ['level-only'], 'full')).toEqual([
+      'cell-level-only-1',
+      'cell-level-only-2'
+    ]);
   });
 
   it('passes old cell-local Rect coordinates to the batched Shape without extra transforms', () => {

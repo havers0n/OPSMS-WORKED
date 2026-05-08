@@ -6,6 +6,7 @@ import {
   recordCanvasComponentRender,
   recordCanvasCullingMetrics,
   recordCanvasCameraStoreUpdate,
+  recordCanvasRenderMode,
   resetCanvasRenderPipelineDiagnostics,
   resetCanvasCullingMetrics
 } from './canvas-diagnostics';
@@ -117,6 +118,7 @@ describe('canvas render pipeline diagnostics', () => {
     });
 
     expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
+      currentRenderMode: 'full',
       cameraStoreUpdates: 1,
       offsetUpdates: 1,
       components: {
@@ -127,6 +129,17 @@ describe('canvas render pipeline diagnostics', () => {
           }
         }
       }
+    });
+  });
+
+  it('records the current canvas render mode while diagnostics are enabled', () => {
+    vi.stubGlobal('window', {});
+
+    resetCanvasRenderPipelineDiagnostics();
+    recordCanvasRenderMode('interaction-light');
+
+    expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
+      currentRenderMode: 'interaction-light'
     });
   });
 });

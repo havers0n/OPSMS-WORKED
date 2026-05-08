@@ -112,6 +112,7 @@ function renderRackLayer(params: {
   canSelectCells?: boolean;
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
+  renderMode?: 'full' | 'interaction-light';
   temporaryLocateTargetCellId?: string | null;
   moveSourceCellId?: string | null;
   moveSourceRackId?: string | null;
@@ -156,6 +157,7 @@ function renderRackLayer(params: {
           zoom: params.zoom ?? 1.5
         },
         isActivelyPanning: params.isActivelyPanning ?? false,
+        renderMode: params.renderMode,
         highlightedCellIds: new Set<string>(),
         hoveredRackId: null,
         isLayoutEditable: true,
@@ -452,13 +454,40 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
     expect(rackCells.props.showFocusedFullAddress).toBe(true);
   });
 
+  it('defaults to full render mode with labels and hit testing enabled', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1'
+    });
+
+    const layer = renderer.root.findAll(
+      (node) => String(node.type) === 'Layer'
+    )[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+
+    expect(layer?.props.listening).toBe(true);
+    expect(rackBody?.props.showRackCode).toBe(true);
+    expect(rackCells?.props.renderMode).toBe('full');
+    expect(rackCells?.props.isInteractive).toBe(false);
+    expect(rackCells?.props.showCellNumbers).toBe(true);
+  });
+
   it('passes active pan lightweight visual mode without unmounting rack/cell subtrees', () => {
     const renderer = renderRackLayer({
       selectedRackIds: ['rack-1'],
       primarySelectedRackId: 'rack-1',
-      isActivelyPanning: true
+      isActivelyPanning: true,
+      renderMode: 'interaction-light'
     });
 
+    const layer = renderer.root.findAll(
+      (node) => String(node.type) === 'Layer'
+    )[0];
     const rackBodies = renderer.root.findAll(
       (node) => String(node.type) === 'RackBody'
     );
@@ -475,6 +504,21 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
     expect(rackBodies[0]?.props.isActivelyPanning).toBe(true);
     expect(rackSections[0]?.props.isActivelyPanning).toBe(true);
     expect(rackCells[0]?.props.isActivelyPanning).toBe(true);
+    expect(layer?.props.listening).toBe(false);
+    expect(rackBodies[0]?.props.showRackCode).toBe(false);
+    expect(rackSections[0]?.props.showFaceToken).toBe(false);
+    expect(rackSections[0]?.props.showSectionNumbers).toBe(false);
+    expect(rackCells[0]?.props.renderMode).toBe('interaction-light');
+    expect(rackCells[0]?.props.isInteractive).toBe(false);
+    expect(rackCells[0]?.props.showCellNumbers).toBe(false);
+    expect(rackCells[0]?.props.showFocusedFullAddress).toBe(false);
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Rect' &&
+          node.props.wosRectRole === 'rack-interaction'
+      )
+    ).toHaveLength(0);
   });
 });
 

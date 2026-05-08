@@ -90,12 +90,15 @@ import { ZoneLayer } from './zone-layer';
 import { getWarehouseCanvasChromeTokens } from './shapes/warehouse-semantic-canvas-palette';
 import {
   recordCanvasComponentRender,
+  recordCanvasRenderMode,
   useCanvasDiagnosticsFlags
 } from './canvas-diagnostics';
+import type { CanvasRenderMode } from './canvas-render-mode';
 
 const EMPTY_RACK_IDS: string[] = [];
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
+const ZOOM_INTERACTION_IDLE_MS = 200;
 
 export function EditorCanvas({
   workspace,
@@ -254,6 +257,34 @@ export function EditorCanvas({
       viewMode,
       zoom
     });
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startZoomInteraction = () => {
+    setIsZooming(true);
+    if (zoomIdleTimerRef.current !== null) {
+      globalThis.clearTimeout(zoomIdleTimerRef.current);
+    }
+    zoomIdleTimerRef.current = globalThis.setTimeout(() => {
+      zoomIdleTimerRef.current = null;
+      setIsZooming(false);
+    }, ZOOM_INTERACTION_IDLE_MS);
+  };
+  const handleInteractionZoom = (delta: number, cursor?: { x: number; y: number }) => {
+    startZoomInteraction();
+    handleZoom(delta, cursor);
+  };
+  useEffect(
+    () => () => {
+      if (zoomIdleTimerRef.current !== null) {
+        globalThis.clearTimeout(zoomIdleTimerRef.current);
+      }
+    },
+    []
+  );
+  const renderMode: CanvasRenderMode =
+    isPanning || isZooming ? 'interaction-light' : 'full';
+  recordCanvasRenderMode(renderMode);
+
   const effectiveSelectedCellId = isStorageV2Active
     ? storageFocusSelectedCellId
     : selectedCellId;
@@ -521,7 +552,9 @@ export function EditorCanvas({
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
       'diagnosticsRackLayerRenderer',
-      'isActivelyPanning'
+      'isActivelyPanning',
+      'isZooming',
+      'renderMode'
     ],
     snapshot: {
       floorId: workspace?.floorId ?? null,
@@ -544,7 +577,9 @@ export function EditorCanvas({
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
-      isActivelyPanning: isPanning
+      isActivelyPanning: isPanning,
+      isZooming,
+      renderMode
     }
   });
 
@@ -736,9 +771,12 @@ export function EditorCanvas({
                 setSelectedRackSide(selectedRack.id, side);
               }
             }}
-            onZoomOut={() => handleZoom(-0.1)}
-            onZoomReset={() => setCanvasZoom(1)}
-            onZoomIn={() => handleZoom(0.1)}
+            onZoomOut={() => handleInteractionZoom(-0.1)}
+            onZoomReset={() => {
+              startZoomInteraction();
+              setCanvasZoom(1);
+            }}
+            onZoomIn={() => handleInteractionZoom(0.1)}
           />
 
           {shouldShowPickingPlanningOverlay && (
@@ -759,7 +797,7 @@ export function EditorCanvas({
                 event.evt.preventDefault();
                 const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
                 const pointer = event.target.getStage()?.getPointerPosition();
-                handleZoom(delta, pointer ?? undefined);
+                handleInteractionZoom(delta, pointer ?? undefined);
               }}
               onMouseDown={onMouseDown}
               onMouseMove={onMouseMove}
@@ -904,6 +942,7 @@ export function EditorCanvas({
                   zoom
                 }}
                 isActivelyPanning={isPanning}
+                renderMode={renderMode}
                 canvasSelectedCellId={canvasSelectedCellId}
                 cellRuntimeById={floorOperationsCellsById}
                 clearHighlightedCellIds={clearHighlightedCellIds}
