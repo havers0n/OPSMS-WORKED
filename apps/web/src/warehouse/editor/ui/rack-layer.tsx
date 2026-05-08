@@ -1,27 +1,26 @@
-import {
-  buildCellStructureKey,
-  resolveRackFaceSections,
-  type Cell,
-  type OperationsCellRuntime,
-  type Rack,
-  type RackFace
+import type {
+  Cell,
+  OperationsCellRuntime,
+  Rack,
+  RackFace
 } from '@wos/domain';
 import { useEffect, useRef } from 'react';
 import type Konva from 'konva';
 import { FastLayer, Group, Layer, Rect } from 'react-konva';
 import {
   getRackGeometry,
-  getSectionWidths,
   WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
 import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
-import {
-  collectRackSemanticLevels,
-  resolveSemanticLevelForIndex
-} from '@/warehouse/editor/model/storage-level-mapping';
+import { collectRackSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
+import {
+  getEffectiveRackFaceB,
+  resolveCellIdFromFacePoint
+} from './shapes/rack-cell-geometry';
+import { SelectionOverlayLayer } from './shapes/selection-overlay-layer';
 import { RackSections } from './shapes/rack-sections';
 import {
   recordCanvasComponentRender,
@@ -40,9 +39,6 @@ type SnapGuide = {
   position: number;
 };
 
-const MIN_CELL_W = 5;
-const MIN_CELL_H = 4;
-const CELL_INSET = 4;
 const EMPTY_CELL_IDS = new Set<string>();
 
 type LocalPoint = { x: number; y: number };
@@ -79,66 +75,17 @@ function resolveCellIdFromFaceAtPoint({
   point: LocalPoint;
   publishedCellsByStructure: Map<string, Cell>;
 }): string | null {
-  if (!face.enabled || face.sections.length === 0) return null;
-
-  const inset = CELL_INSET;
-  const cellH = bandH - inset * 2;
-  if (cellH < MIN_CELL_H) return null;
-
-  const isRtl = face.slotNumberingDirection === 'rtl';
-  const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
-  const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
-  const semanticLevel = resolveSemanticLevelForIndex(semanticLevels, activeLevelIndex);
-  if (semanticLevel === null) return null;
-
-  for (let si = 0; si < orderedSections.length; si += 1) {
-    const sec = orderedSections[si];
-    const secX = sectionOffsets[si] ?? 0;
-    const secW = (sectionOffsets[si + 1] ?? 0) - secX;
-    if (secW < MIN_CELL_W * 2) continue;
-
-    const level = sec.levels.find((sectionLevel) => sectionLevel.ordinal === semanticLevel) ?? null;
-    if (!level) continue;
-    const slotCount = level.slotCount;
-    if (!slotCount) continue;
-
-    const slotW = secW / slotCount;
-    if (slotW < MIN_CELL_W) continue;
-    if (cellH < MIN_CELL_H) continue;
-
-    for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
-      const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
-      const cellX = secX + slotIndex * slotW;
-      const cellY = bandY + inset;
-      const cellW = slotW - 1;
-      const rect = {
-        x: cellX + 0.5,
-        y: cellY + 0.5,
-        width: Math.max(1, cellW),
-        height: Math.max(1, cellH - 1)
-      };
-
-      if (
-        point.x >= rect.x &&
-        point.x <= rect.x + rect.width &&
-        point.y >= rect.y &&
-        point.y <= rect.y + rect.height
-      ) {
-        const cell = publishedCellsByStructure.get(
-          buildCellStructureKey({
-            rackId,
-            rackFaceId: face.id,
-            rackSectionId: sec.id,
-            rackLevelId: level.id,
-            slotNo: slotLabel
-          })
-        );
-        return cell?.id ?? null;
-      }
-    }
-  }
-
-  return null;
+  return resolveCellIdFromFacePoint({
+    activeLevelIndex,
+    bandH,
+    bandY,
+    face,
+    point,
+    publishedCellsByStructure,
+    rackId,
+    semanticLevels,
+    totalWidth
+  });
 }
 
 function resolveCellIdFromRackPoint({
@@ -154,11 +101,8 @@ function resolveCellIdFromRackPoint({
 }): string | null {
   const geometry = getRackGeometry(rack);
   const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
-  const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
   if (!faceA) return null;
-  const effectiveFaceB = faceB
-    ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
-    : null;
+  const effectiveFaceB = getEffectiveRackFaceB(rack);
   const semanticLevels = collectRackSemanticLevels(rack);
 
   const cellIdInFaceA = resolveCellIdFromFaceAtPoint({
@@ -222,6 +166,7 @@ type RackLayerProps = {
   moveSourceRackId: string | null;
   temporaryLocateTargetCellId: string | null;
   occupiedCellIds: Set<string>;
+  publishedCellsById: Map<string, Cell>;
   publishedCellsByStructure: Map<string, Cell>;
   primarySelectedRackId: string | null;
   rackLookup: Record<string, Rack>;
@@ -274,6 +219,7 @@ export function RackLayer({
   moveSourceRackId,
   temporaryLocateTargetCellId,
   occupiedCellIds,
+  publishedCellsById,
   publishedCellsByStructure,
   primarySelectedRackId,
   rackLookup,
@@ -309,6 +255,8 @@ export function RackLayer({
   const overlaysEnabled =
     (renderMode === 'full' || isRestoreOverlays) &&
     diagnosticsFlags.cellOverlays !== 'off';
+  const selectionOverlayEnabled =
+    overlaysEnabled && diagnosticsFlags.cellOverlays === 'normal';
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -509,10 +457,7 @@ export function RackLayer({
           activeCellRackId !== rack.id &&
           moveSourceRackId !== rack.id;
         const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
-        const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
-        const effectiveFaceB = faceB
-          ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
-          : null;
+        const effectiveFaceB = getEffectiveRackFaceB(rack);
         const semanticLevels = collectRackSemanticLevels(rack);
 
         // Per-rack cell click handler: closure captures rack.id for V2 focus store call.
@@ -653,7 +598,13 @@ export function RackLayer({
                 isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}
-                selectedCellId={overlaysEnabled ? canvasSelectedCellId : null}
+                selectedCellId={
+                  selectionOverlayEnabled
+                    ? null
+                    : overlaysEnabled
+                      ? canvasSelectedCellId
+                      : null
+                }
                 locateTargetCellId={
                   overlaysEnabled ? temporaryLocateTargetCellId : null
                 }
@@ -668,6 +619,20 @@ export function RackLayer({
           </Group>
         );
       })}
+      {selectionOverlayEnabled && (
+        <SelectionOverlayLayer
+          selectedCellId={canvasSelectedCellId}
+          racks={racks}
+          primarySelectedRackId={primarySelectedRackId}
+          selectedRackActiveLevel={selectedRackActiveLevel}
+          publishedCellsById={publishedCellsById}
+          publishedCellsByStructure={publishedCellsByStructure}
+          showFocusedFullAddress={
+            labelsEnabled && labelRevealPolicy.showFocusedFullAddress
+          }
+          isActivelyPanning={isActivelyPanning}
+        />
+      )}
     </RackLayerComponent>
   );
 }

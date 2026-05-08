@@ -1047,6 +1047,7 @@ export function EditorCanvas({
                 moveSourceRackId={moveSourceRackId}
                 temporaryLocateTargetCellId={temporaryLocateTargetCellId}
                 occupiedCellIds={occupiedCellIds}
+                publishedCellsById={publishedCellsById}
                 publishedCellsByStructure={publishedCellsByStructure}
                 primarySelectedRackId={primarySelectedRackId}
                 rackLookup={layoutDraft.racks}

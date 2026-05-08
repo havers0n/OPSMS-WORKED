@@ -29,7 +29,8 @@ export const CANVAS_DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 export type CanvasRenderComponentName =
   | 'EditorCanvas'
   | 'RackLayer'
-  | 'RackCells';
+  | 'RackCells'
+  | 'SelectionOverlayLayer';
 
 export type CanvasRenderCauseCounts = {
   stateUpdates: number;
@@ -85,6 +86,11 @@ export type CanvasRenderPipelineDiagnostics = {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
     rackLayerNodeCount: number;
+  };
+  selectionOverlay: {
+    affectedCellCount: number;
+    resolvedCount: number;
+    unresolvedCount: number;
   };
 };
 
@@ -280,12 +286,18 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     components: {
       EditorCanvas: createComponentMetrics(),
       RackLayer: createComponentMetrics(),
-      RackCells: createComponentMetrics()
+      RackCells: createComponentMetrics(),
+      SelectionOverlayLayer: createComponentMetrics()
     },
     konva: {
       layerDrawCalls: 0,
       layerBatchDrawCalls: 0,
       rackLayerNodeCount: 0
+    },
+    selectionOverlay: {
+      affectedCellCount: 0,
+      resolvedCount: 0,
+      unresolvedCount: 0
     }
   };
 }
@@ -469,6 +481,29 @@ export function recordCanvasRackLayerNodeCount(nodeCount: number) {
   diagnostics.konva.rackLayerNodeCount = nodeCount;
 }
 
+export function recordCanvasSelectionOverlayMetrics({
+  affectedCellCount,
+  resolved
+}: {
+  affectedCellCount: number;
+  resolved: boolean;
+}) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.selectionOverlay ??= {
+    affectedCellCount: 0,
+    resolvedCount: 0,
+    unresolvedCount: 0
+  };
+  diagnostics.selectionOverlay.affectedCellCount = affectedCellCount;
+  if (resolved) {
+    diagnostics.selectionOverlay.resolvedCount += 1;
+  } else {
+    diagnostics.selectionOverlay.unresolvedCount += 1;
+  }
+}
+
 export function recordCanvasComponentRender({
   component,
   instanceId = 'default',
@@ -485,7 +520,9 @@ export function recordCanvasComponentRender({
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
-  const metrics = diagnostics.components[component];
+  const metrics =
+    diagnostics.components[component] ??
+    (diagnostics.components[component] = createComponentMetrics());
   const snapshotKey = `${component}:${instanceId}`;
   const prevSnapshots =
     window.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ ?? {};

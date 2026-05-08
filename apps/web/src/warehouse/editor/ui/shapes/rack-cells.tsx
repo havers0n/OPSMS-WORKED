@@ -1,16 +1,12 @@
 import { Group } from 'react-konva';
-import { buildCellStructureKey, isRackFaceMirrored, type Cell, type RackFace } from '@wos/domain';
+import { isRackFaceMirrored, type Cell, type RackFace } from '@wos/domain';
 import type { OperationsCellRuntime } from '@wos/domain';
 import {
-  getSectionWidths,
   shouldRenderCanvasCell,
   type CanvasRackGeometry,
   type CanvasViewport
 } from '@/entities/layout-version/lib/canvas-geometry';
-import {
-  collectFaceSemanticLevels,
-  resolveSemanticLevelForIndex
-} from '@/warehouse/editor/model/storage-level-mapping';
+import { collectFaceSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
 import {
   resolveCellVisualState,
   type CellVisualPalette
@@ -32,14 +28,16 @@ import {
 } from './rack-label-overlays';
 import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
 import {
+  CELL_INSET,
+  collectRenderedFaceCellGeometries,
+  MIN_CELL_H
+} from './rack-cell-geometry';
+import {
   recordCanvasComponentRender,
   recordCanvasCullingMetrics,
   type CanvasDiagnosticsFlags
 } from '../canvas-diagnostics';
 import type { CanvasRenderMode } from '../canvas-render-mode';
-
-const MIN_CELL_W = 5;
-const MIN_CELL_H = 4;
 
 type FaceProps = {
   face: RackFace;
@@ -145,15 +143,11 @@ function FaceCells({
     return null;
   }
 
-  const isRtl = face.slotNumberingDirection === 'rtl';
-  const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
-  const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
   const focusedAddressLabels: FocusedAddressLabel[] = [];
   const renderedCells: RenderedCell[] = [];
-  let cellsTotal = 0;
   let cellsRendered = 0;
 
-  const inset = 4;
+  const inset = CELL_INSET;
   const cellH = bandH - inset * 2;
   if (!face.sections.length || cellH < MIN_CELL_H) {
     recordCanvasCullingMetrics(metricSourceId, {
@@ -171,65 +165,38 @@ function FaceCells({
     : diagnosticsFlags.cellOverlays;
   const cellOverlaysOff = cellOverlaysMode === 'off';
 
-  orderedSections.forEach((sec, si) => {
-    const secX = sectionOffsets[si];
-    const secW = sectionOffsets[si + 1] - secX;
-    if (secW < MIN_CELL_W * 2) return;
+  const faceCellGeometries = collectRenderedFaceCellGeometries({
+    activeLevelIndex,
+    bandH,
+    bandY,
+    face,
+    publishedCellsByStructure,
+    rackId,
+    semanticLevels,
+    totalWidth
+  });
 
-    const semanticLevel = resolveSemanticLevelForIndex(
-      semanticLevels,
-      activeLevelIndex
-    );
-    const level =
-      semanticLevel === null
-        ? null
-        : (sec.levels.find(
-            (sectionLevel) => sectionLevel.ordinal === semanticLevel
-          ) ?? null);
-    if (!level) return;
-    const slotCount = level.slotCount;
-    if (!slotCount) return;
-
-    const slotW = secW / slotCount;
-    if (slotW < MIN_CELL_W) return;
-    if (cellH < MIN_CELL_H) return;
-
-    Array.from({ length: slotCount }, (_, slotIndex) => {
-      const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
-      const cell = publishedCellsByStructure.get(
-        buildCellStructureKey({
-          rackId,
-          rackFaceId: face.id,
-          rackSectionId: sec.id,
-          rackLevelId: level.id,
-          slotNo: slotLabel
-        })
-      );
-      const cellId = cell?.id ?? null;
-      const isSelected = selectedCellId === cellId;
-      const isFocused = isSelected && showFocusedFullAddress;
-      const isLocateTarget =
-        locateTargetCellId !== null && locateTargetCellId === cellId;
-      const isWorkflowSource =
-        workflowSourceCellId !== null && workflowSourceCellId === cellId;
-      const isSearchHit = cellId !== null && highlightedCellIds.has(cellId);
-      const shouldRevealAddress =
-        showFocusedFullAddress &&
-        shouldShowFocusedFullAddress({
-          isSelected,
-          isHighlighted: isSearchHit,
-          isWorkflowSource
-        });
-      const cellX = secX + slotIndex * slotW;
-      const cellY = bandY + inset;
-      const cellW = slotW - 1;
-      const cellGeometry = {
-        x: cellX + 0.5,
-        y: cellY + 0.5,
-        width: Math.max(1, cellW),
-        height: Math.max(1, cellH - 1)
-      };
-      cellsTotal += 1;
+  faceCellGeometries.forEach((faceCellGeometry) => {
+    const {
+      cell,
+      cellId,
+      geometry: cellGeometry,
+      slotLabel
+    } = faceCellGeometry;
+    const isSelected = selectedCellId === cellId;
+    const isFocused = isSelected && showFocusedFullAddress;
+    const isLocateTarget =
+      locateTargetCellId !== null && locateTargetCellId === cellId;
+    const isWorkflowSource =
+      workflowSourceCellId !== null && workflowSourceCellId === cellId;
+    const isSearchHit = cellId !== null && highlightedCellIds.has(cellId);
+    const shouldRevealAddress =
+      showFocusedFullAddress &&
+      shouldShowFocusedFullAddress({
+        isSelected,
+        isHighlighted: isSearchHit,
+        isWorkflowSource
+      });
       if (
         cullingEnabled &&
         !shouldRenderCanvasCell({
@@ -249,45 +216,47 @@ function FaceCells({
         return null;
       }
 
-      cellsRendered += 1;
-      const addressText = cell?.address?.raw ?? null;
-      const runtime = cellId ? cellRuntimeById.get(cellId) : null;
-      const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
-      const visualState = resolveCellVisualState(
-        {
-          isInteractive,
-          isWorkflowScope,
-          isRackPassive,
-          isRackSelected,
-          hasCellIdentity: cellId !== null,
-          isSelected,
-          isFocused,
-          isLocateTarget,
-          isWorkflowSource,
-          isSearchHit,
-          isOccupiedByFallback: isOccupied,
-          runtimeStatus: runtime?.status ?? null
-        },
-        visualPalette
-      );
-      if (labelsEnabled && shouldRevealAddress && addressText) {
-        focusedAddressLabels.push({
-          key: `${sec.id}-${level.id}-slot-${slotLabel}`,
-          addressText,
-          geometry: cellGeometry
-        });
-      }
-
-      renderedCells.push({
-        key: `${sec.id}-${level.id}-slot-${slotLabel}`,
-        cellId,
-        slotLabel,
-        geometry: cellGeometry,
-        visualState
+    cellsRendered += 1;
+    const addressText = cell?.address?.raw ?? null;
+    const runtime = cellId ? cellRuntimeById.get(cellId) : null;
+    const isOccupied = cellId !== null && occupiedCellIds.has(cellId);
+    const visualState = resolveCellVisualState(
+      {
+        isInteractive,
+        isWorkflowScope,
+        isRackPassive,
+        isRackSelected,
+        hasCellIdentity: cellId !== null,
+        isSelected,
+        isFocused,
+        isLocateTarget,
+        isWorkflowSource,
+        isSearchHit,
+        isOccupiedByFallback: isOccupied,
+        runtimeStatus: runtime?.status ?? null
+      },
+      visualPalette
+    );
+    if (labelsEnabled && shouldRevealAddress && addressText) {
+      focusedAddressLabels.push({
+        key: faceCellGeometry.key,
+        addressText,
+        geometry: cellGeometry
       });
+    }
+
+    renderedCells.push({
+      key: faceCellGeometry.key,
+      cellId,
+      slotLabel,
+      geometry: cellGeometry,
+      visualState
     });
   });
-  recordCanvasCullingMetrics(metricSourceId, { cellsTotal, cellsRendered });
+  recordCanvasCullingMetrics(metricSourceId, {
+    cellsTotal: faceCellGeometries.length,
+    cellsRendered
+  });
 
   return (
     <Group listening={detailsEnabled && isInteractive}>
