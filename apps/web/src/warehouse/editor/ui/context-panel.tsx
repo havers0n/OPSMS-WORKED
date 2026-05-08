@@ -26,7 +26,6 @@ import {
 } from '@/warehouse/editor/model/editor-selectors';
 import { resolveContextPanelIntent, type ContextPanelIntent } from './context-panel-logic';
 import { LayoutContextPanel } from './context-panel/layout-context-panel';
-import { StorageContextPanel } from './context-panel/storage-context-panel';
 
 const INTENT_CONFIG: Record<
   Exclude<ContextPanelIntent, 'hidden'>,
@@ -173,12 +172,6 @@ export function ContextPanel({
           onOpenInspector={onOpenInspector}
           intent={intent}
           viewMode={viewMode}
-        />
-        <StorageContextPanel
-          workspace={workspace}
-          intent={intent}
-          viewMode={viewMode}
-          panelMode={contextPanelMode}
         />
         {shouldRenderFallback(intent, viewMode) && (
           <PlaceholderContent description={config.description} />

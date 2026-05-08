@@ -9,23 +9,13 @@ import type {
 
 export type InspectorKind =
   | 'rack-structure'         // layout/view + single rack selected (existing)
-  | 'storage-shell'          // storage + none/rack/cell/resolved-container (persistent storage hierarchy shell)
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'zone-detail'            // layout + single zone selected → editable inspector
-  | 'zone-readonly'          // view/storage + zone selected → context-only, no actions
+  | 'zone-readonly'          // view + zone selected → context-only, no actions
   | 'wall-detail'            // layout + single wall selected
-  | 'placement-placeholder'  // view/storage mode + no selection
-  | 'placement-cell'         // view/storage mode + cell selected
-  | 'placement-container';   // view/storage mode + container selected
-
-type ResolveInspectorKindContext = {
-  hasResolvedStorageContainerRackContext: boolean;
-  /**
-   * Legacy storage inspector routing is disabled by default.
-   * PublishedViewer is the only runtime path that should enable this.
-   */
-  enableLegacyStorageRouting: boolean;
-};
+  | 'placement-placeholder'  // view mode + no selection
+  | 'placement-cell'         // view mode + cell selected
+  | 'placement-container';   // view mode + container selected
 
 /**
  * Maps (viewMode, selection) → InspectorKind | null.
@@ -44,25 +34,14 @@ type ResolveInspectorKindContext = {
  *   view + container            → placement-container
  *   view + none                 → placement-placeholder
  *
- * Storage routing contract:
- *   storage + none/rack/cell    → storage-shell
- *   storage + zone              → zone-readonly  (zone is not a placement target)
- *   storage + container (resolved source context)   → storage-shell
- *   storage + container (unresolved/no-source)      → placement-container
- *   storage + anything else     → storage-shell
- *
  * Note: canSelectZone in use-canvas-scene-model.ts currently prevents zone
  * selection outside layout mode, so zone-readonly is unreachable in practice.
  * It is declared here to make the contract explicit and guard against future
- * changes that allow zone selection in view/storage modes.
+ * changes that allow zone selection in view mode.
  */
 export function resolveInspectorKind(
   viewMode: ViewMode,
-  selection: EditorSelection,
-  context: ResolveInspectorKindContext = {
-    hasResolvedStorageContainerRackContext: false,
-    enableLegacyStorageRouting: false
-  }
+  selection: EditorSelection
 ): InspectorKind | null {
   if (viewMode === 'layout') {
     if (selection.type === 'rack') {
@@ -81,18 +60,11 @@ export function resolveInspectorKind(
   if (viewMode === 'view' && selection.type === 'rack') {
     return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
   }
-  if (viewMode === 'storage') {
-    if (!context.enableLegacyStorageRouting) return null;
-    if (selection.type === 'zone') return 'zone-readonly';
-    if (selection.type === 'container') {
-      return context.hasResolvedStorageContainerRackContext ? 'storage-shell' : 'placement-container';
-    }
-    return 'storage-shell';
-  }
+  if (viewMode === 'storage') return null;
 
-  // viewMode === 'view' | 'storage'
+  // viewMode === 'view'
   // Zone is a spatial context area, not a placement target.
-  // Show a readonly context panel rather than the storage placeholder.
+  // Show a readonly context panel rather than the view placeholder.
   if (selection.type === 'zone') return 'zone-readonly';
   if (selection.type === 'cell') return 'placement-cell';
   if (selection.type === 'container') return 'placement-container';
