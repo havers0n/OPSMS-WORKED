@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { CanvasRenderMode } from './canvas-render-mode';
+import {
+  isCanvasRestoreRenderMode,
+  type CanvasRenderMode
+} from './canvas-render-mode';
 
 export type CanvasDiagnosticsFlags = {
   labels: 'normal' | 'off';
@@ -43,13 +46,17 @@ export type CanvasRenderComponentMetrics = {
 export type CanvasDiagnosticsPhase =
   | 'idle'
   | 'active-skeleton'
-  | 'restore-full'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels'
   | 'settled-full';
 
 export type CanvasDiagnosticsPhaseMarkKind =
   | 'active-start'
   | 'active-end'
-  | 'restore-start'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels'
   | 'restore-complete'
   | 'settled';
 
@@ -249,14 +256,19 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     renderModeCounts: {
       full: 0,
       'interaction-light': 0,
-      'interaction-skeleton': 0
+      'interaction-skeleton': 0,
+      'restore-base': 0,
+      'restore-overlays': 0,
+      'restore-labels': 0
     },
     renderModeTransitionCounts: {},
     currentPhase: 'idle',
     phaseCounts: {
       idle: 0,
       'active-skeleton': 0,
-      'restore-full': 0,
+      'restore-base': 0,
+      'restore-overlays': 0,
+      'restore-labels': 0,
       'settled-full': 0
     },
     phaseMarks: [],
@@ -343,12 +355,27 @@ export function recordCanvasRenderMode(renderMode: CanvasRenderMode) {
       recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-start');
     } else if (
       previousRenderMode === 'interaction-skeleton' &&
+      renderMode === 'restore-base'
+    ) {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-base');
+    } else if (
+      previousRenderMode === 'interaction-skeleton' &&
       renderMode === 'full'
     ) {
       recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
-      if (diagnostics.currentPhase !== 'restore-full') {
-        recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-start');
-      }
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-complete');
+    } else if (renderMode === 'restore-base') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-base');
+    } else if (renderMode === 'restore-overlays') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-overlays');
+    } else if (renderMode === 'restore-labels') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-labels');
+    } else if (
+      renderMode === 'full' &&
+      isCanvasRestoreRenderMode(previousRenderMode)
+    ) {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-complete');
     }
   } else {
     diagnostics.currentRenderMode = renderMode;
@@ -367,8 +394,14 @@ function phaseForMark(
   if (kind === 'active-start' || kind === 'active-end') {
     return 'active-skeleton';
   }
-  if (kind === 'restore-start' || kind === 'restore-complete') {
-    return 'restore-full';
+  if (kind === 'restore-base') {
+    return 'restore-base';
+  }
+  if (kind === 'restore-overlays') {
+    return 'restore-overlays';
+  }
+  if (kind === 'restore-labels') {
+    return 'restore-labels';
   }
   return 'settled-full';
 }
@@ -403,7 +436,7 @@ export function recordCanvasActiveInteractionEnd() {
 export function recordCanvasFullRestoreStart() {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
-  recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-start');
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-base');
 }
 
 export function recordCanvasFullRestoreComplete() {

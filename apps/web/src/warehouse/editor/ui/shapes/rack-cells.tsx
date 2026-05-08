@@ -132,6 +132,10 @@ function FaceCells({
 }: FaceProps) {
   const isInteractionLight = renderMode === 'interaction-light';
   const isInteractionSkeleton = renderMode === 'interaction-skeleton';
+  const isRestoreBase = renderMode === 'restore-base';
+  const labelsEnabled =
+    renderMode === 'full' || renderMode === 'restore-labels';
+  const detailsEnabled = !isInteractionLight && !isRestoreBase;
   const metricSourceId = `${rackId}:${face.id}`;
   if (isInteractionSkeleton) {
     recordCanvasCullingMetrics(metricSourceId, {
@@ -162,7 +166,7 @@ function FaceCells({
   const cullingEnabled =
     diagnosticsFlags.cells !== 'unculled' &&
     diagnosticsFlags.enableProductionCellCulling;
-  const cellOverlaysMode = isInteractionLight
+  const cellOverlaysMode = isInteractionLight || isRestoreBase
     ? 'off'
     : diagnosticsFlags.cellOverlays;
   const cellOverlaysOff = cellOverlaysMode === 'off';
@@ -266,7 +270,7 @@ function FaceCells({
         },
         visualPalette
       );
-      if (!isInteractionLight && shouldRevealAddress && addressText) {
+      if (labelsEnabled && shouldRevealAddress && addressText) {
         focusedAddressLabels.push({
           key: `${sec.id}-${level.id}-slot-${slotLabel}`,
           addressText,
@@ -286,14 +290,14 @@ function FaceCells({
   recordCanvasCullingMetrics(metricSourceId, { cellsTotal, cellsRendered });
 
   return (
-    <Group listening={!isInteractionLight && isInteractive}>
+    <Group listening={detailsEnabled && isInteractive}>
       <BatchedCellBaseShape
         cells={renderedCells}
-        disableStroke={cellOverlaysOff}
+        disableStroke={cellOverlaysOff || isRestoreBase}
       />
       {renderedCells.map((renderedCell) => (
         <Group key={renderedCell.key}>
-          {!isInteractionLight && (
+          {detailsEnabled && (
             <CellSurfacePatternVisual
               geometry={renderedCell.geometry}
               visualState={renderedCell.visualState}
@@ -320,7 +324,7 @@ function FaceCells({
               />
             </>
           )}
-          {!isInteractionLight && (
+          {detailsEnabled && (
             <CellInteractionOverlay
               geometry={renderedCell.geometry}
               visualState={renderedCell.visualState}
@@ -336,7 +340,7 @@ function FaceCells({
               }
             />
           )}
-          {!isInteractionLight && showCellNumbers && (
+          {labelsEnabled && showCellNumbers && (
             <CellInteriorSlotLabel
               slotNumber={renderedCell.slotLabel}
               geometry={renderedCell.geometry}
@@ -346,7 +350,7 @@ function FaceCells({
           )}
         </Group>
       ))}
-      {!isInteractionLight && (
+      {labelsEnabled && (
         <Group listening={false} name="focused-address-overlay-group">
           {focusedAddressLabels.map((overlay) => (
             <FocusedCellAddressOverlay

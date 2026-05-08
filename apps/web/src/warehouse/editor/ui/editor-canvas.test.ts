@@ -24,6 +24,7 @@ let mockPublishedCellsById = new Map<string, Cell>();
 let mockIsPanning = false;
 let mockHandleZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
+let rackLayerRenderSnapshots: Array<Record<string, unknown>> = [];
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
@@ -121,6 +122,10 @@ vi.mock('./canvas-hud', () => ({
 vi.mock('./rack-layer', () => ({
   RackLayer: (props: Record<string, unknown>) => {
     rackLayerLastProps = props;
+    rackLayerRenderSnapshots.push({
+      isActivelyPanning: props.isActivelyPanning,
+      renderMode: props.renderMode
+    });
     return createElement('RackLayer', props);
   }
 }));
@@ -246,9 +251,17 @@ function renderCanvas(
   return renderer;
 }
 
+function advanceRestoreBoundary() {
+  act(() => {
+    vi.advanceTimersToNextTimer();
+    vi.advanceTimersToNextTimer();
+  });
+}
+
 describe('EditorCanvas storage active-rack wiring', () => {
   beforeEach(() => {
     rackLayerLastProps = null;
+    rackLayerRenderSnapshots = [];
     canvasHudLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
@@ -707,43 +720,70 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.renderMode).toBe('full');
   });
 
-  it('forwards active pan skeleton mode to RackLayer and restores idle mode', () => {
-    const draft = createLayoutDraftFixture();
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelection = { type: 'none' };
-    mockPublishedCellsById = new Map();
-    mockIsPanning = true;
+  it('forwards active pan skeleton mode and stages restore back to full', () => {
+    vi.useFakeTimers();
+    try {
+      const draft = createLayoutDraftFixture();
+      mockLayoutDraft = draft;
+      mockViewMode = 'storage';
+      mockSelection = { type: 'none' };
+      mockPublishedCellsById = new Map();
+      mockIsPanning = true;
 
-    const renderer = renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
+      const renderer = renderCanvas({
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      });
 
-    expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
-    expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
+      expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
+      expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
+      expect(
+        rackLayerRenderSnapshots.some(
+          (snapshot) =>
+            snapshot.isActivelyPanning === true &&
+            snapshot.renderMode === 'full'
+        )
+      ).toBe(false);
+      const rendersBeforePanEnd = rackLayerRenderSnapshots.length;
 
-    act(() => {
-      mockIsPanning = false;
-      renderer.update(
-        createElement(EditorCanvas, {
-          workspace: {
-            floorId: draft.floorId,
-            activeDraft: draft,
-            latestPublished: draft
-          },
-          onAddRack: () => undefined,
-          onOpenInspector: () => undefined
-        })
-      );
-    });
+      act(() => {
+        mockIsPanning = false;
+        renderer.update(
+          createElement(EditorCanvas, {
+            workspace: {
+              floorId: draft.floorId,
+              activeDraft: draft,
+              latestPublished: draft
+            },
+            onAddRack: () => undefined,
+            onOpenInspector: () => undefined
+          })
+        );
+      });
 
-    expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
-    expect(rackLayerLastProps?.renderMode).toBe('full');
+      expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
+      expect(rackLayerLastProps?.renderMode).toBe('restore-base');
+      expect(
+        rackLayerRenderSnapshots
+          .slice(rendersBeforePanEnd)
+          .map((snapshot) => snapshot.renderMode)
+      ).not.toContain('full');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-overlays');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-labels');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('full');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('uses interaction-skeleton render mode during wheel zoom and restores after idle debounce', () => {
+  it('uses interaction-skeleton during wheel zoom and stages restore after idle debounce', () => {
     vi.useFakeTimers();
     try {
       const draft = createLayoutDraftFixture();
@@ -762,6 +802,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
       )[0];
 
       expect(rackLayerLastProps?.renderMode).toBe('full');
+      const rendersBeforeZoom = rackLayerRenderSnapshots.length;
 
       act(() => {
         stage?.props.onWheel({
@@ -775,12 +816,31 @@ describe('EditorCanvas storage active-rack wiring', () => {
       });
 
       expect(mockHandleZoom).toHaveBeenCalledWith(0.1, { x: 25, y: 30 });
+      const zoomStartModes = rackLayerRenderSnapshots
+        .slice(rendersBeforeZoom)
+        .map((snapshot) => snapshot.renderMode);
+      expect(zoomStartModes[0]).toBe('interaction-skeleton');
+      expect(zoomStartModes).not.toContain('full');
       expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
 
       act(() => {
         vi.advanceTimersByTime(500);
       });
 
+      expect(rackLayerLastProps?.renderMode).toBe('restore-base');
+      expect(
+        rackLayerRenderSnapshots
+          .slice(rendersBeforeZoom)
+          .map((snapshot) => snapshot.renderMode)
+      ).not.toContain('full');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-overlays');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-labels');
+
+      advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('full');
     } finally {
       vi.useRealTimers();

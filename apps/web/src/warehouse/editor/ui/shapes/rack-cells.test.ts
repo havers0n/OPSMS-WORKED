@@ -426,6 +426,76 @@ describe('RackCells', () => {
     ).toBe(false);
   });
 
+  it('uses restore-base mode for cell base surfaces without labels, overlays, or click targets', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'restore-base'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(getBatchedCellBaseShapes(renderer)[0]?.props.disableStroke).toBe(
+      true
+    );
+    expect(countInteractionRects(renderer)).toBe(0);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(clickCellIdsWithCollector(0, ['level-only'], 'restore-base')).toEqual(
+      []
+    );
+    expect(
+      getRects(renderer).some((rect) =>
+        [
+          'cell-truth-overlay',
+          'cell-outline-overlay',
+          'cell-halo-overlay',
+          'cell-badge'
+        ].includes(String(rect.props.wosRectRole))
+      )
+    ).toBe(false);
+  });
+
+  it('uses restore-overlays mode to restore click targets and overlays before labels', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'restore-overlays'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(
+      getRects(renderer).some(
+        (rect) => rect.props.wosRectRole === 'cell-outline-overlay'
+      )
+    ).toBe(true);
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'restore-overlays')
+    ).toEqual(['cell-level-only-1', 'cell-level-only-2']);
+  });
+
+  it('uses restore-labels mode to restore labels before final full mode', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'restore-labels'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(
+      getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
+        /^\d+$/.test(value)
+      )
+    ).toEqual(['1', '2']);
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'restore-labels')
+    ).toEqual(['cell-level-only-1', 'cell-level-only-2']);
+  });
+
   it('restores cell click behavior when interaction-light returns to full', () => {
     expect(
       clickCellIdsWithCollector(0, ['level-only'], 'interaction-light')

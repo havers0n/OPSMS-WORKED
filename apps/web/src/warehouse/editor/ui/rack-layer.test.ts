@@ -559,6 +559,112 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
       )
     ).toHaveLength(0);
   });
+
+  it('uses restore-base to mount rack and cell bases without labels, overlays, or hit testing', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      renderMode: 'restore-base'
+    });
+
+    const layer = renderer.root.findAll(
+      (node) => String(node.type) === 'Layer'
+    )[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+
+    expect(layer?.props.listening).toBe(false);
+    expect(rackBody?.props.isSelected).toBe(false);
+    expect(rackBody?.props.showRackCode).toBe(false);
+    expect(rackSections?.props.showFaceToken).toBe(false);
+    expect(rackSections?.props.showSectionNumbers).toBe(false);
+    expect(rackCells?.props.renderMode).toBe('restore-base');
+    expect(rackCells?.props.isInteractive).toBe(false);
+    expect(rackCells?.props.selectedCellId).toBeNull();
+    expect(rackCells?.props.showCellNumbers).toBe(false);
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Rect' &&
+          node.props.wosRectRole === 'rack-interaction'
+      )
+    ).toHaveLength(0);
+  });
+
+  it('uses restore-overlays to restore outlines and hit testing while labels stay off', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canSelectCells: true,
+      renderMode: 'restore-overlays'
+    });
+
+    const layer = renderer.root.findAll(
+      (node) => String(node.type) === 'Layer'
+    )[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+
+    expect(layer?.props.listening).toBe(true);
+    expect(rackBody?.props.isSelected).toBe(true);
+    expect(rackBody?.props.showRackCode).toBe(false);
+    expect(rackSections?.props.showFaceToken).toBe(false);
+    expect(rackSections?.props.showSectionNumbers).toBe(false);
+    expect(rackCells?.props.renderMode).toBe('restore-overlays');
+    expect(rackCells?.props.isInteractive).toBe(true);
+    expect(rackCells?.props.showCellNumbers).toBe(false);
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Rect' &&
+          node.props.wosRectRole === 'rack-interaction'
+      )
+    ).toHaveLength(2);
+  });
+
+  it('uses restore-labels to restore label policy before final full mode', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canSelectCells: true,
+      renderMode: 'restore-labels'
+    });
+
+    const layer = renderer.root.findAll(
+      (node) => String(node.type) === 'Layer'
+    )[0];
+    const rackBody = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    )[0];
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+
+    expect(layer?.props.listening).toBe(true);
+    expect(rackBody?.props.isSelected).toBe(true);
+    expect(rackBody?.props.showRackCode).toBe(true);
+    expect(rackSections?.props.showFaceToken).toBe(true);
+    expect(rackCells?.props.renderMode).toBe('restore-labels');
+    expect(rackCells?.props.isInteractive).toBe(true);
+    expect(rackCells?.props.showCellNumbers).toBe(true);
+  });
 });
 
 describe('RackLayer storage interaction depth', () => {

@@ -281,8 +281,93 @@ export function EditorCanvas({
     },
     []
   );
-  const renderMode: CanvasRenderMode =
-    isPanning || isZooming ? 'interaction-skeleton' : 'full';
+  type RestoreFrameHandle = {
+    id: number | ReturnType<typeof globalThis.setTimeout>;
+    kind: 'raf' | 'timeout';
+  };
+  const isInteractingWithCamera = isPanning || isZooming;
+  const wasInteractingWithCameraRef = useRef(isInteractingWithCamera);
+  const [restoreMode, setRestoreMode] = useState<CanvasRenderMode>('full');
+  const renderMode: CanvasRenderMode = isInteractingWithCamera
+    ? 'interaction-skeleton'
+    : wasInteractingWithCameraRef.current
+      ? 'restore-base'
+    : restoreMode;
+  const restoreFrameHandlesRef = useRef<RestoreFrameHandle[]>([]);
+
+  useEffect(() => {
+    const cancelRestoreFrames = () => {
+      for (const handle of restoreFrameHandlesRef.current) {
+        if (
+          handle.kind === 'raf' &&
+          typeof globalThis.cancelAnimationFrame === 'function'
+        ) {
+          globalThis.cancelAnimationFrame(handle.id as number);
+        } else {
+          globalThis.clearTimeout(handle.id);
+        }
+      }
+      restoreFrameHandlesRef.current = [];
+    };
+    const scheduleRestoreFrame = (callback: () => void) => {
+      if (typeof globalThis.requestAnimationFrame === 'function') {
+        const id = globalThis.requestAnimationFrame(callback);
+        restoreFrameHandlesRef.current.push({ id, kind: 'raf' });
+        return;
+      }
+      const id = globalThis.setTimeout(callback, 0);
+      restoreFrameHandlesRef.current.push({ id, kind: 'timeout' });
+    };
+    const getDiagnosticsRestoreStageDelayMs = () => {
+      if (typeof window === 'undefined') return 0;
+      const value = (
+        window as unknown as {
+          __WOS_CANVAS_RESTORE_STAGE_DELAY_MS__?: unknown;
+        }
+      ).__WOS_CANVAS_RESTORE_STAGE_DELAY_MS__;
+      return typeof value === 'number' && Number.isFinite(value) && value > 0
+        ? value
+        : 0;
+    };
+    const scheduleRestoreBoundary = (callback: () => void) => {
+      scheduleRestoreFrame(() => {
+        scheduleRestoreFrame(() => {
+          const delayMs = getDiagnosticsRestoreStageDelayMs();
+          if (delayMs > 0) {
+            const id = globalThis.setTimeout(callback, delayMs);
+            restoreFrameHandlesRef.current.push({ id, kind: 'timeout' });
+            return;
+          }
+          callback();
+        });
+      });
+    };
+
+    if (isInteractingWithCamera) {
+      wasInteractingWithCameraRef.current = true;
+      cancelRestoreFrames();
+      return cancelRestoreFrames;
+    }
+
+    if (!wasInteractingWithCameraRef.current) {
+      return cancelRestoreFrames;
+    }
+
+    wasInteractingWithCameraRef.current = false;
+    cancelRestoreFrames();
+    setRestoreMode('restore-base');
+    scheduleRestoreBoundary(() => {
+      setRestoreMode('restore-overlays');
+      scheduleRestoreBoundary(() => {
+        setRestoreMode('restore-labels');
+        scheduleRestoreBoundary(() => {
+          setRestoreMode('full');
+        });
+      });
+    });
+
+    return cancelRestoreFrames;
+  }, [isInteractingWithCamera]);
   recordCanvasRenderMode(renderMode);
 
   const effectiveSelectedCellId = isStorageV2Active

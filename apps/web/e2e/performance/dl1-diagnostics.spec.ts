@@ -26,6 +26,9 @@ const SAMPLE_DURATION_MS = Number(
     process.env.DL1_PERF_DURATION_MS ??
     2000
 );
+const RESTORE_STAGE_DIAGNOSTIC_DELAY_MS = 500;
+const ENABLE_PHASE_DIAGNOSTICS =
+  process.env.DL1_PHASE_DIAGNOSTICS === '1';
 const INCLUDE_LOW_END_PROFILE =
   process.env.DL1_DIAGNOSTICS_INCLUDE_LOW_END === '1';
 const DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
@@ -116,30 +119,39 @@ type RenderComponentMetrics = {
 type DiagnosticsPhase =
   | 'idle'
   | 'active-skeleton'
-  | 'restore-full'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels'
   | 'settled-full';
 
 type DiagnosticsPhaseMarkKind =
   | 'active-start'
   | 'active-end'
-  | 'restore-start'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels'
   | 'restore-complete'
   | 'settled';
+
+type DiagnosticsRenderMode =
+  | 'full'
+  | 'interaction-light'
+  | 'interaction-skeleton'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels';
 
 type DiagnosticsPhaseMark = {
   kind: DiagnosticsPhaseMarkKind;
   phase: DiagnosticsPhase;
-  renderMode: 'full' | 'interaction-light' | 'interaction-skeleton';
+  renderMode: DiagnosticsRenderMode;
   timeMs: number;
 };
 
 type RenderPipelineDiagnostics = {
   enabled: boolean;
-  currentRenderMode: 'full' | 'interaction-light' | 'interaction-skeleton';
-  renderModeCounts: Record<
-    'full' | 'interaction-light' | 'interaction-skeleton',
-    number
-  >;
+  currentRenderMode: DiagnosticsRenderMode;
+  renderModeCounts: Record<DiagnosticsRenderMode, number>;
   renderModeTransitionCounts: Record<string, number>;
   currentPhase: DiagnosticsPhase;
   phaseCounts: Record<DiagnosticsPhase, number>;
@@ -882,7 +894,9 @@ async function startRenderPipelineProbe(
     const phaseCounts: Record<DiagnosticsPhase, number> = {
       idle: 0,
       'active-skeleton': 0,
-      'restore-full': 0,
+      'restore-base': 0,
+      'restore-overlays': 0,
+      'restore-labels': 0,
       'settled-full': 0
     };
     const phaseMarks: DiagnosticsPhaseMark[] = [];
@@ -892,9 +906,9 @@ async function startRenderPipelineProbe(
         kind:
           initialPhase === 'active-skeleton'
             ? 'active-start'
-            : initialPhase === 'restore-full'
-              ? 'restore-start'
-              : 'settled',
+            : initialPhase === 'settled-full'
+              ? 'settled'
+              : initialPhase,
         phase: initialPhase,
         renderMode: previousRenderMode,
         timeMs: performance.now()
@@ -906,7 +920,10 @@ async function startRenderPipelineProbe(
       renderModeCounts: {
         full: 0,
         'interaction-light': 0,
-        'interaction-skeleton': 0
+        'interaction-skeleton': 0,
+        'restore-base': 0,
+        'restore-overlays': 0,
+        'restore-labels': 0
       },
       renderModeTransitionCounts: {},
       currentPhase: initialPhase ?? 'idle',
@@ -932,6 +949,22 @@ async function startRenderPipelineProbe(
   }, phase);
 }
 
+async function setRestoreStageDiagnosticDelay(
+  page: Page,
+  delayMs: number | null
+) {
+  await page.evaluate((nextDelayMs) => {
+    const global = window as Window & {
+      __WOS_CANVAS_RESTORE_STAGE_DELAY_MS__?: number;
+    };
+    if (typeof nextDelayMs === 'number') {
+      global.__WOS_CANVAS_RESTORE_STAGE_DELAY_MS__ = nextDelayMs;
+    } else {
+      delete global.__WOS_CANVAS_RESTORE_STAGE_DELAY_MS__;
+    }
+  }, delayMs);
+}
+
 async function stopRenderPipelineProbe(
   page: Page
 ): Promise<RenderPipelineDiagnostics> {
@@ -949,25 +982,61 @@ async function stopRenderPipelineProbe(
   });
 }
 
-async function waitForFullRenderModeAfterInteraction(page: Page) {
-  await page.waitForFunction(
-    () => {
-      const global = window as unknown as {
-        __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
-      };
-      return (
-        global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__
-          ?.currentRenderMode === 'full'
-      );
-    },
-    undefined,
-    { timeout: 10000 }
-  );
+async function getRenderModeDebugState(page: Page) {
+  return page.evaluate(() => {
+    const global = window as unknown as {
+      __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+      __WOS_CANVAS_RESTORE_STAGE_DELAY_MS__?: number;
+    };
+    const diagnostics = global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
+    return {
+      currentRenderMode: diagnostics?.currentRenderMode ?? null,
+      currentPhase: diagnostics?.currentPhase ?? null,
+      renderModeTransitionCounts:
+        diagnostics?.renderModeTransitionCounts ?? {},
+      renderModeCounts: diagnostics?.renderModeCounts ?? {},
+      phaseCounts: diagnostics?.phaseCounts ?? {},
+      diagnosticsRestoreStageDelayMs:
+        global.__WOS_CANVAS_RESTORE_STAGE_DELAY_MS__ ?? null
+    };
+  });
+}
+
+async function waitForFullRenderModeAfterInteraction(
+  page: Page,
+  label = 'post-interaction restore'
+) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const global = window as unknown as {
+          __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
+        };
+        return (
+          global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__
+            ?.currentRenderMode === 'full'
+        );
+      },
+      undefined,
+      { timeout: 10000 }
+    );
+  } catch (error) {
+    const debugState = await getRenderModeDebugState(page).catch(
+      () => null
+    );
+    const wrappedError = new Error(
+      `Timed out waiting for full render mode during ${label}. ` +
+        `Render mode debug state: ${JSON.stringify(debugState)}`
+    );
+    (wrappedError as Error & { cause?: unknown }).cause = error;
+    throw wrappedError;
+  }
 }
 
 async function waitForRenderMode(
   page: Page,
-  renderMode: RenderPipelineDiagnostics['currentRenderMode']
+  renderMode: RenderPipelineDiagnostics['currentRenderMode'],
+  options: { timeoutMs?: number } = {}
 ) {
   await page.waitForFunction(
     (expectedRenderMode) => {
@@ -980,7 +1049,7 @@ async function waitForRenderMode(
       );
     },
     renderMode,
-    { timeout: 10000 }
+    { timeout: options.timeoutMs ?? 10000 }
   );
 }
 
@@ -1016,9 +1085,13 @@ async function markRenderPipelinePhase(
     const phase: DiagnosticsPhase =
       markKind === 'active-start' || markKind === 'active-end'
         ? 'active-skeleton'
-        : markKind === 'restore-start' || markKind === 'restore-complete'
-          ? 'restore-full'
-          : 'settled-full';
+        : markKind === 'restore-base'
+          ? 'restore-base'
+          : markKind === 'restore-overlays'
+            ? 'restore-overlays'
+            : markKind === 'restore-labels'
+              ? 'restore-labels'
+              : 'settled-full';
     diagnostics.currentPhase = phase;
     diagnostics.phaseCounts[phase] += 1;
     diagnostics.phaseMarks.push({
@@ -2243,7 +2316,7 @@ async function startAndSampleActivePan(
   await assertFrameProbeAlive(page, probeId, guard);
 }
 
-async function samplePanRestore(
+async function releaseActivePanToRestoreBase(
   page: Page,
   probeId: string,
   guard: PageStabilityGuard
@@ -2251,9 +2324,7 @@ async function samplePanRestore(
   await assertFrameProbeAlive(page, probeId, guard);
   await page.mouse.up({ button: 'middle' });
   await markPanTransitionFrameProbe(page, probeId, 'end', guard);
-  await waitForFullRenderModeAfterInteraction(page);
-  await waitForAnimationFrames(page, 2);
-  await markRenderPipelinePhase(page, 'restore-complete');
+  await waitForRenderMode(page, 'restore-base');
   await assertFrameProbeAlive(page, probeId, guard);
 }
 
@@ -2270,6 +2341,87 @@ async function sampleZoom(page: Page, durationMs: number) {
     await page.mouse.wheel(0, 360);
     await page.waitForTimeout(50);
   }
+}
+
+async function enterZoomSkeletonMode(page: Page) {
+  await startRenderPipelineProbe(page);
+  try {
+    const box = await getCanvasBox(page);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    let observedSkeleton = false;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await page.mouse.wheel(0, attempt % 2 === 0 ? -360 : 360);
+      try {
+        await waitForRenderMode(page, 'interaction-skeleton', {
+          timeoutMs: 750
+        });
+        observedSkeleton = true;
+        break;
+      } catch {
+        // Retry with the opposite wheel direction; some matrix variants start at zoom bounds.
+      }
+    }
+    if (!observedSkeleton) {
+      await waitForRenderMode(page, 'interaction-skeleton');
+    }
+  } finally {
+    await stopRenderPipelineProbe(page).catch(() => undefined);
+  }
+}
+
+async function sampleActiveZoom(
+  page: Page,
+  durationMs: number,
+  probeId: string,
+  guard: PageStabilityGuard
+) {
+  const box = await getCanvasBox(page);
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+  const deadline = Date.now() + durationMs;
+  let direction = -1;
+
+  await page.mouse.move(centerX, centerY);
+  try {
+    await waitForRenderMode(page, 'interaction-skeleton', { timeoutMs: 750 });
+  } catch {
+    let observedSkeleton = false;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await assertFrameProbeAlive(page, probeId, guard);
+      await page.mouse.wheel(0, 360 * direction);
+      direction *= -1;
+      try {
+        await waitForRenderMode(page, 'interaction-skeleton', {
+          timeoutMs: 750
+        });
+        observedSkeleton = true;
+        break;
+      } catch {
+        // Keep driving wheel input until the active probe observes skeleton mode.
+      }
+    }
+    if (!observedSkeleton) {
+      await waitForRenderMode(page, 'interaction-skeleton');
+    }
+  }
+  while (Date.now() < deadline) {
+    await assertFrameProbeAlive(page, probeId, guard);
+    await page.mouse.wheel(0, 360 * direction);
+    direction *= -1;
+    await page.waitForTimeout(25);
+  }
+  await waitForRenderMode(page, 'interaction-skeleton');
+  await assertFrameProbeAlive(page, probeId, guard);
+}
+
+async function sampleRestoreStage(
+  page: Page,
+  renderMode: RenderPipelineDiagnostics['currentRenderMode'],
+  probeId: string,
+  guard: PageStabilityGuard
+) {
+  await waitForRenderMode(page, renderMode);
+  await assertFrameProbeAlive(page, probeId, guard);
 }
 
 async function sampleSelect(page: Page, durationMs: number) {
@@ -2323,16 +2475,19 @@ async function getBrowserEnvironment(page: Page): Promise<BrowserEnvironment> {
 }
 
 async function measureDiagnosticsPhase({
+  beforeStartProbe,
   guard,
   page,
   phase,
   sample
 }: {
+  beforeStartProbe?: () => Promise<void>;
   guard: PageStabilityGuard;
   page: Page;
   phase: DiagnosticsMeasuredPhase;
   sample: (probeId: string) => Promise<void>;
 }): Promise<PhaseReport> {
+  await beforeStartProbe?.();
   await startRenderPipelineProbe(
     page,
     phase === 'active-skeleton' ? null : phase
@@ -2367,6 +2522,10 @@ async function measurePanPhases(page: Page, guard: PageStabilityGuard) {
   const phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>> = {};
   let activePanHeld = false;
   try {
+    await setRestoreStageDiagnosticDelay(
+      page,
+      RESTORE_STAGE_DIAGNOSTIC_DELAY_MS
+    );
     phases['active-skeleton'] = await measureDiagnosticsPhase({
       guard,
       page,
@@ -2376,13 +2535,29 @@ async function measurePanPhases(page: Page, guard: PageStabilityGuard) {
         activePanHeld = true;
       }
     });
-    phases['restore-full'] = await measureDiagnosticsPhase({
+    phases['restore-base'] = await measureDiagnosticsPhase({
       guard,
       page,
-      phase: 'restore-full',
+      phase: 'restore-base',
       sample: async (probeId) => {
-        await samplePanRestore(page, probeId, guard);
+        await releaseActivePanToRestoreBase(page, probeId, guard);
         activePanHeld = false;
+      }
+    });
+    phases['restore-overlays'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'restore-overlays',
+      sample: async (probeId) => {
+        await sampleRestoreStage(page, 'restore-overlays', probeId, guard);
+      }
+    });
+    phases['restore-labels'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'restore-labels',
+      sample: async (probeId) => {
+        await sampleRestoreStage(page, 'restore-labels', probeId, guard);
       }
     });
     phases['settled-full'] = await measureDiagnosticsPhase({
@@ -2397,6 +2572,7 @@ async function measurePanPhases(page: Page, guard: PageStabilityGuard) {
       }
     });
   } finally {
+    await setRestoreStageDiagnosticDelay(page, null).catch(() => undefined);
     if (activePanHeld) {
       await page.mouse.up({ button: 'middle' }).catch(() => undefined);
       await waitForFullRenderModeAfterInteraction(page).catch(() => undefined);
@@ -2408,36 +2584,60 @@ async function measurePanPhases(page: Page, guard: PageStabilityGuard) {
 
 async function measureZoomPhases(page: Page, guard: PageStabilityGuard) {
   const phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>> = {};
-  phases['active-skeleton'] = await measureDiagnosticsPhase({
-    guard,
-    page,
-    phase: 'active-skeleton',
-    sample: async () => {
-      await sampleZoom(page, SAMPLE_DURATION_MS);
-      await waitForRenderMode(page, 'interaction-skeleton');
-    }
-  });
-  phases['restore-full'] = await measureDiagnosticsPhase({
-    guard,
-    page,
-    phase: 'restore-full',
-    sample: async () => {
-      await waitForFullRenderModeAfterInteraction(page);
-      await waitForAnimationFrames(page, 2);
-      await markRenderPipelinePhase(page, 'restore-complete');
-    }
-  });
-  phases['settled-full'] = await measureDiagnosticsPhase({
-    guard,
-    page,
-    phase: 'settled-full',
-    sample: async () => {
-      await waitForFullRenderModeAfterInteraction(page);
-      await waitForAnimationFrames(page, 2);
-      await page.waitForTimeout(250);
-      await markRenderPipelinePhase(page, 'settled');
-    }
-  });
+  try {
+    await setRestoreStageDiagnosticDelay(
+      page,
+      RESTORE_STAGE_DIAGNOSTIC_DELAY_MS
+    );
+    phases['active-skeleton'] = await measureDiagnosticsPhase({
+      beforeStartProbe: async () => {
+        await enterZoomSkeletonMode(page);
+      },
+      guard,
+      page,
+      phase: 'active-skeleton',
+      sample: async (probeId) => {
+        await sampleActiveZoom(page, SAMPLE_DURATION_MS, probeId, guard);
+      }
+    });
+    phases['restore-base'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'restore-base',
+      sample: async (probeId) => {
+        await sampleRestoreStage(page, 'restore-base', probeId, guard);
+      }
+    });
+    phases['restore-overlays'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'restore-overlays',
+      sample: async (probeId) => {
+        await sampleRestoreStage(page, 'restore-overlays', probeId, guard);
+      }
+    });
+    phases['restore-labels'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'restore-labels',
+      sample: async (probeId) => {
+        await sampleRestoreStage(page, 'restore-labels', probeId, guard);
+      }
+    });
+    phases['settled-full'] = await measureDiagnosticsPhase({
+      guard,
+      page,
+      phase: 'settled-full',
+      sample: async () => {
+        await waitForFullRenderModeAfterInteraction(page);
+        await waitForAnimationFrames(page, 2);
+        await page.waitForTimeout(250);
+        await markRenderPipelinePhase(page, 'settled');
+      }
+    });
+  } finally {
+    await setRestoreStageDiagnosticDelay(page, null).catch(() => undefined);
+  }
 
   return phases;
 }
@@ -2445,6 +2645,7 @@ async function measureZoomPhases(page: Page, guard: PageStabilityGuard) {
 async function runMeasuredScenario({
   floorId,
   flags,
+  measurePhases,
   page,
   profile,
   runtimeOptions,
@@ -2452,6 +2653,7 @@ async function runMeasuredScenario({
 }: {
   floorId: string;
   flags: DiagnosticsFlags | null;
+  measurePhases: boolean;
   page: Page;
   profile: DeviceProfile;
   runtimeOptions?: VariantRuntimeOptions;
@@ -2527,6 +2729,7 @@ async function runMeasuredScenario({
 
   await prepareWarehouseEditor(page, floorId, flags);
   await setVariantRuntimeOptions(page, runtimeOptions);
+  await setRestoreStageDiagnosticDelay(page, null);
   const browserEnvironment = await getBrowserEnvironment(page);
   if (scenario === 'pan' && runtimeOptions?.rackLayerListeningOffDuringPan) {
     await setRackLayerListening(page, false);
@@ -2551,7 +2754,10 @@ async function runMeasuredScenario({
       await sampleZoom(page, SAMPLE_DURATION_MS);
       await assertFrameProbeAlive(page, frameProbeId, guard);
       rawResult = await stopFrameProbe(page, frameProbeId, guard);
-      await waitForFullRenderModeAfterInteraction(page);
+      await waitForFullRenderModeAfterInteraction(
+        page,
+        'aggregate zoom sample'
+      );
       guard.assertClean();
     } else if (scenario === 'select') {
       await sampleSelect(page, SAMPLE_DURATION_MS);
@@ -2570,12 +2776,13 @@ async function runMeasuredScenario({
     renderPipeline = await stopRenderPipelineProbe(page);
     konvaPipeline = await stopKonvaPipelineProbe(page);
 
-    if (scenario === 'pan') {
+    if (measurePhases && scenario === 'pan') {
       phases = await measurePanPhases(page, guard);
-    } else if (scenario === 'zoom') {
+    } else if (measurePhases && scenario === 'zoom') {
       phases = await measureZoomPhases(page, guard);
     }
   } finally {
+    await setRestoreStageDiagnosticDelay(page, null).catch(() => undefined);
     guard.dispose();
   }
   if (rawResult === null) {
@@ -2629,6 +2836,17 @@ function formatRenderModeTransitions(diagnostics: RenderPipelineDiagnostics) {
     : entries.map(([transition, count]) => `${transition}:${count}`).join(', ');
 }
 
+function shouldMeasurePhaseDiagnostics(
+  scenario: ScenarioName,
+  variant: Variant
+) {
+  return (
+    ENABLE_PHASE_DIAGNOSTICS &&
+    (scenario === 'pan' || scenario === 'zoom') &&
+    variant.name === 'production-culling'
+  );
+}
+
 function activePhaseTableRows(entries: ReportEntry[]) {
   return entries
     .map((entry) => {
@@ -2661,7 +2879,14 @@ function activePhaseTableRows(entries: ReportEntry[]) {
 function restorePhaseTableRows(entries: ReportEntry[]) {
   return entries
     .flatMap((entry) =>
-      (['restore-full', 'settled-full'] as const).map((phaseName) => {
+      (
+        [
+          'restore-base',
+          'restore-overlays',
+          'restore-labels',
+          'settled-full'
+        ] as const
+      ).map((phaseName) => {
         const phase = entry.phases[phaseName];
         if (!phase) return null;
         return {
@@ -3051,7 +3276,10 @@ function recommendHighestImpactFix(entries: ReportEntry[], baseline: ReportEntry
 
 function buildPhaseInterpretation(entry: ReportEntry | null) {
   const active = entry?.phases['active-skeleton'];
-  const restore = entry?.phases['restore-full'];
+  const restore =
+    entry?.phases['restore-labels'] ??
+    entry?.phases['restore-overlays'] ??
+    entry?.phases['restore-base'];
   if (!entry || !active || !restore) {
     return 'Phase-specific pan/zoom samples were not recorded for this scenario.';
   }
@@ -3339,13 +3567,21 @@ Conclusion: ${production.metrics.longTaskCount > 0 ? 'Frames include JS main-thr
 }
 
 test.describe('DL1 diagnostics harness', () => {
+  const aggregateEntryCount = selectedProfiles.length * selectedVariants.length;
+  const phaseEntryCount = ENABLE_PHASE_DIAGNOSTICS
+    ? selectedProfiles.length *
+      selectedVariants.filter((variant) => variant.name === 'production-culling')
+        .length
+    : 0;
+  const aggregateTimeoutMs = SAMPLE_DURATION_MS * aggregateEntryCount * 12;
+  const phaseTimeoutMs =
+    phaseEntryCount *
+    (SAMPLE_DURATION_MS * 2 + RESTORE_STAGE_DIAGNOSTIC_DELAY_MS * 8 + 15000);
+
   test.setTimeout(
     Math.max(
       600000,
-      SAMPLE_DURATION_MS *
-        selectedProfiles.length *
-        selectedVariants.length *
-        12
+      aggregateTimeoutMs + phaseTimeoutMs
     )
   );
 
@@ -3383,6 +3619,10 @@ test.describe('DL1 diagnostics harness', () => {
               const result = await runMeasuredScenario({
                 floorId: floor.id,
                 flags: variant.flags,
+                measurePhases: shouldMeasurePhaseDiagnostics(
+                  scenario,
+                  variant
+                ),
                 page,
                 profile,
                 runtimeOptions: variant.runtimeOptions,
@@ -3519,23 +3759,43 @@ test.describe('DL1 diagnostics harness', () => {
         }))
       );
       if (scenario === 'pan' || scenario === 'zoom') {
-        console.table(activePhaseTableRows(entries));
-        console.table(restorePhaseTableRows(entries));
+        const activeRows = activePhaseTableRows(entries);
+        const restoreRows = restorePhaseTableRows(entries);
+        if (activeRows.length > 0) {
+          console.table(activeRows);
+        }
+        if (restoreRows.length > 0) {
+          console.table(restoreRows);
+        }
       }
 
       expect(entries.length).toBe(
         selectedProfiles.length * selectedVariants.length
       );
       expect(entries.every((entry) => entry.metrics.frames > 0)).toBe(true);
-      if (scenario === 'pan' || scenario === 'zoom') {
+      if (
+        ENABLE_PHASE_DIAGNOSTICS &&
+        (scenario === 'pan' || scenario === 'zoom')
+      ) {
+        const entriesWithPhaseDiagnostics = entries.filter(
+          (entry) => entry.variant === 'production-culling'
+        );
         expect(
-          entries.every(
+          entriesWithPhaseDiagnostics.length
+        ).toBe(selectedProfiles.length);
+        expect(
+          entriesWithPhaseDiagnostics.every(
             (entry) =>
               entry.phases['active-skeleton'] &&
-              entry.phases['restore-full'] &&
+              entry.phases['restore-base'] &&
+              entry.phases['restore-overlays'] &&
+              entry.phases['restore-labels'] &&
               entry.phases['settled-full']
           )
         ).toBe(true);
+      } else if (scenario === 'pan' || scenario === 'zoom') {
+        expect(entries.every((entry) => Object.keys(entry.phases).length === 0))
+          .toBe(true);
       }
       expect(
         entries.every(

@@ -164,6 +164,9 @@ describe('canvas render pipeline diagnostics', () => {
     recordCanvasRenderMode('full');
     recordCanvasRenderMode('interaction-skeleton');
     recordCanvasRenderMode('interaction-skeleton');
+    recordCanvasRenderMode('restore-base');
+    recordCanvasRenderMode('restore-overlays');
+    recordCanvasRenderMode('restore-labels');
     recordCanvasRenderMode('full');
     recordCanvasFullRestoreComplete();
     recordCanvasSettledFull();
@@ -173,16 +176,24 @@ describe('canvas render pipeline diagnostics', () => {
       currentPhase: 'settled-full',
       renderModeCounts: {
         full: 2,
-        'interaction-skeleton': 2
+        'interaction-skeleton': 2,
+        'restore-base': 1,
+        'restore-overlays': 1,
+        'restore-labels': 1
       },
       renderModeTransitionCounts: {
         'full->interaction-skeleton': 1,
-        'interaction-skeleton->full': 1
+        'interaction-skeleton->restore-base': 1,
+        'restore-base->restore-overlays': 1,
+        'restore-overlays->restore-labels': 1,
+        'restore-labels->full': 1
       },
       phaseCounts: {
         'active-skeleton': 2,
-        'restore-full': 2,
-        'settled-full': 1
+        'restore-base': 1,
+        'restore-overlays': 1,
+        'restore-labels': 1,
+        'settled-full': 3
       }
     });
     expect(
@@ -192,7 +203,10 @@ describe('canvas render pipeline diagnostics', () => {
     ).toEqual([
       'active-start',
       'active-end',
-      'restore-start',
+      'restore-base',
+      'restore-overlays',
+      'restore-labels',
+      'restore-complete',
       'restore-complete',
       'settled'
     ]);

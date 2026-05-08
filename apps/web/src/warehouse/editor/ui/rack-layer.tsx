@@ -29,7 +29,11 @@ import {
   recordCanvasRackLayerNodeCount,
   type CanvasDiagnosticsFlags
 } from './canvas-diagnostics';
-import type { CanvasRenderMode } from './canvas-render-mode';
+import {
+  isCanvasFullDetailRenderMode,
+  isCanvasInteractionRenderMode,
+  type CanvasRenderMode
+} from './canvas-render-mode';
 
 type SnapGuide = {
   type: 'x' | 'y';
@@ -288,17 +292,23 @@ export function RackLayer({
   onV2StorageCellSelect,
   onV2StorageRackSelect,
 }: RackLayerProps) {
-  const isInteractionMode = renderMode !== 'full';
+  const isInteractionMode = isCanvasInteractionRenderMode(renderMode);
   const isInteractionSkeleton = renderMode === 'interaction-skeleton';
+  const isRestoreBase = renderMode === 'restore-base';
+  const isRestoreOverlays =
+    renderMode === 'restore-overlays' || renderMode === 'restore-labels';
   const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
   const labelsEnabled =
-    !isInteractionMode && diagnosticsFlags.labels === 'normal';
+    isCanvasFullDetailRenderMode(renderMode) &&
+    diagnosticsFlags.labels === 'normal';
   const hitTestEnabled =
-    !isInteractionMode && diagnosticsFlags.hitTest === 'normal';
+    (renderMode === 'full' || isRestoreOverlays) &&
+    diagnosticsFlags.hitTest === 'normal';
   const renderCells =
     !isInteractionSkeleton && diagnosticsFlags.cells !== 'off';
   const overlaysEnabled =
-    !isInteractionMode && diagnosticsFlags.cellOverlays !== 'off';
+    (renderMode === 'full' || isRestoreOverlays) &&
+    diagnosticsFlags.cellOverlays !== 'off';
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -536,10 +546,20 @@ export function RackLayer({
             offsetX={geometry.centerX}
             offsetY={geometry.centerY}
             rotation={rack.rotationDeg}
-            draggable={!isInteractionMode && isLayoutEditable && !isPlacing}
+            draggable={
+              renderMode === 'full' && isLayoutEditable && !isPlacing
+            }
             onMouseDown={(event) => {
               // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
               event.cancelBubble = true;
+            }}
+            onTouchStart={(event) => {
+              // Mirror onMouseDown: stop native DOM propagation so the viewport
+              // controller's container-level touchstart listener doesn't start a pan
+              // when the user touches a rack. Also cancel Konva bubble to match
+              // the mouse path (prevents any stage-level touchstart handler).
+              event.cancelBubble = true;
+              event.evt.stopPropagation();
             }}
             onClick={(event) => handleRackPress(rack, event)}
             onTap={(event) => handleRackPress(rack, event)}
@@ -568,7 +588,7 @@ export function RackLayer({
               }
             }}
           >
-            {!isInteractionMode && (
+            {!isInteractionMode && !isRestoreBase && (
               <Rect
                 x={0}
                 y={0}
