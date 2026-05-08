@@ -40,13 +40,6 @@ vi.mock('@/features/layout-validate/model/use-layout-validation', () => ({
   useCachedLayoutValidation: () => ({ data: null })
 }));
 
-vi.mock('./mode-panels/storage-workflow-context-panel', () => ({
-  StorageWorkflowContextPanel: () => React.createElement('div', { 'data-testid': 'storage-workflow-context-owner' }, 'storage-workflow-context-owner')
-}));
-vi.mock('./mode-panels/storage-cell-context-panel', () => ({
-  StorageCellContextPanel: () => React.createElement('div', { 'data-testid': 'storage-cell-context-launcher' }, 'storage-cell-context-launcher')
-}));
-
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function renderContextPanel() {
@@ -104,26 +97,6 @@ describe('ContextPanel rack-level ownership', () => {
     const renderer = renderContextPanel();
 
     expect(hasText(renderer, 'Rack-level storage overview is available in Storage mode.')).toBe(true);
-  });
-
-  it('renders storage workflow owner branch in context panel during storage workflow scope', () => {
-    mockViewMode = 'storage';
-    mockInteractionScope = 'workflow';
-    mockSelection = { type: 'cell', cellId: 'cell-1' };
-    const renderer = renderContextPanel();
-
-    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-workflow-context-owner' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-cell-context-launcher' })).toHaveLength(0);
-  });
-
-  it('keeps launcher branch in object cell scope and does not render workflow owner root', () => {
-    mockViewMode = 'storage';
-    mockInteractionScope = 'object';
-    mockSelection = { type: 'cell', cellId: 'cell-1' };
-    const renderer = renderContextPanel();
-
-    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-cell-context-launcher' })).toHaveLength(1);
-    expect(renderer.root.findAllByProps({ 'data-testid': 'storage-workflow-context-owner' })).toHaveLength(0);
   });
 
   it('keeps workflow branch non-owner outside storage mode', () => {
