@@ -131,6 +131,16 @@ function FaceCells({
   onCellClick
 }: FaceProps) {
   const isInteractionLight = renderMode === 'interaction-light';
+  const isInteractionSkeleton = renderMode === 'interaction-skeleton';
+  const metricSourceId = `${rackId}:${face.id}`;
+  if (isInteractionSkeleton) {
+    recordCanvasCullingMetrics(metricSourceId, {
+      cellsTotal: 0,
+      cellsRendered: 0
+    });
+    return null;
+  }
+
   const isRtl = face.slotNumberingDirection === 'rtl';
   const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
   const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
@@ -138,7 +148,6 @@ function FaceCells({
   const renderedCells: RenderedCell[] = [];
   let cellsTotal = 0;
   let cellsRendered = 0;
-  const metricSourceId = `${rackId}:${face.id}`;
 
   const inset = 4;
   const cellH = bandH - inset * 2;

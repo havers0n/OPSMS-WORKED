@@ -98,7 +98,7 @@ import type { CanvasRenderMode } from './canvas-render-mode';
 const EMPTY_RACK_IDS: string[] = [];
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
-const ZOOM_INTERACTION_IDLE_MS = 200;
+const ZOOM_INTERACTION_IDLE_MS = 500;
 
 export function EditorCanvas({
   workspace,
@@ -282,7 +282,7 @@ export function EditorCanvas({
     []
   );
   const renderMode: CanvasRenderMode =
-    isPanning || isZooming ? 'interaction-light' : 'full';
+    isPanning || isZooming ? 'interaction-skeleton' : 'full';
   recordCanvasRenderMode(renderMode);
 
   const effectiveSelectedCellId = isStorageV2Active

@@ -8,6 +8,7 @@ import {
   type RackFace
 } from '@wos/domain';
 import { RackLayer } from './rack-layer';
+import type { CanvasRenderMode } from './canvas-render-mode';
 
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -112,7 +113,7 @@ function renderRackLayer(params: {
   canSelectCells?: boolean;
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
-  renderMode?: 'full' | 'interaction-light';
+  renderMode?: CanvasRenderMode;
   temporaryLocateTargetCellId?: string | null;
   moveSourceCellId?: string | null;
   moveSourceRackId?: string | null;
@@ -512,6 +513,44 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
     expect(rackCells[0]?.props.isInteractive).toBe(false);
     expect(rackCells[0]?.props.showCellNumbers).toBe(false);
     expect(rackCells[0]?.props.showFocusedFullAddress).toBe(false);
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Rect' &&
+          node.props.wosRectRole === 'rack-interaction'
+      )
+    ).toHaveLength(0);
+  });
+
+  it('uses skeleton mode during transient interaction without mounting RackCells', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      isActivelyPanning: true,
+      renderMode: 'interaction-skeleton'
+    });
+
+    const layer = renderer.root.findAll(
+      (node) => String(node.type) === 'Layer'
+    )[0];
+    const rackBodies = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+    const rackSections = renderer.root.findAll(
+      (node) => String(node.type) === 'RackSections'
+    );
+
+    expect(layer?.props.listening).toBe(false);
+    expect(rackBodies).toHaveLength(2);
+    expect(rackSections).toHaveLength(2);
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RackCells')
+    ).toHaveLength(0);
+    expect(rackBodies[0]?.props.showRackCode).toBe(false);
+    expect(rackBodies[0]?.props.isActivelyPanning).toBe(true);
+    expect(rackSections[0]?.props.showFaceToken).toBe(false);
+    expect(rackSections[0]?.props.showSectionNumbers).toBe(false);
+    expect(rackSections[0]?.props.isActivelyPanning).toBe(true);
     expect(
       renderer.root.findAll(
         (node) =>

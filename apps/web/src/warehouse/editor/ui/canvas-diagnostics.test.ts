@@ -138,10 +138,13 @@ describe('canvas render pipeline diagnostics', () => {
     vi.stubGlobal('window', {});
 
     resetCanvasRenderPipelineDiagnostics();
-    recordCanvasRenderMode('interaction-light');
+    recordCanvasRenderMode('interaction-skeleton');
 
     expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
-      currentRenderMode: 'interaction-light'
+      currentRenderMode: 'interaction-skeleton',
+      renderModeCounts: {
+        'interaction-skeleton': 1
+      }
     });
   });
 

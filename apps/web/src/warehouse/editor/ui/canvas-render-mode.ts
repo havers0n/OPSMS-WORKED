@@ -1,1 +1,4 @@
-export type CanvasRenderMode = 'full' | 'interaction-light';
+export type CanvasRenderMode =
+  | 'full'
+  | 'interaction-light'
+  | 'interaction-skeleton';

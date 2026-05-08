@@ -9,6 +9,7 @@ import {
 } from '@wos/domain';
 import { CellSurfaceVisual } from './rack-cell-overlays';
 import { RackCells } from './rack-cells';
+import type { CanvasRenderMode } from '../canvas-render-mode';
 import {
   resolveCellVisualState,
   type CellVisualPalette
@@ -161,7 +162,7 @@ function renderRackCellsWithProps(params: {
   showCellNumbers?: boolean;
   showFocusedFullAddress?: boolean;
   isSelected?: boolean;
-  renderMode?: 'full' | 'interaction-light';
+  renderMode?: CanvasRenderMode;
 }) {
   const levelIds = params.levelIds ?? ['level-only'];
   const slotCount = params.slotCount ?? 2;
@@ -199,7 +200,7 @@ function renderRackCellsWithProps(params: {
 function clickCellIdsWithCollector(
   activeLevelIndex: number | null,
   levelIds: string[],
-  renderMode: 'full' | 'interaction-light' = 'full'
+  renderMode: CanvasRenderMode = 'full'
 ) {
   const selected: string[] = [];
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -401,9 +402,43 @@ describe('RackCells', () => {
     ).toBe(false);
   });
 
+  it('uses interaction-skeleton mode to skip cell base surfaces and overlays', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'interaction-skeleton'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(0);
+    expect(getBatchedCellBaseShapes(renderer)).toHaveLength(0);
+    expect(countInteractionRects(renderer)).toBe(0);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(
+      getRects(renderer).some((rect) =>
+        [
+          'cell-truth-overlay',
+          'cell-outline-overlay',
+          'cell-halo-overlay',
+          'cell-badge'
+        ].includes(String(rect.props.wosRectRole))
+      )
+    ).toBe(false);
+  });
+
   it('restores cell click behavior when interaction-light returns to full', () => {
     expect(
       clickCellIdsWithCollector(0, ['level-only'], 'interaction-light')
+    ).toEqual([]);
+    expect(clickCellIdsWithCollector(0, ['level-only'], 'full')).toEqual([
+      'cell-level-only-1',
+      'cell-level-only-2'
+    ]);
+  });
+
+  it('restores cell click behavior when interaction-skeleton returns to full', () => {
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'interaction-skeleton')
     ).toEqual([]);
     expect(clickCellIdsWithCollector(0, ['level-only'], 'full')).toEqual([
       'cell-level-only-1',

@@ -288,15 +288,17 @@ export function RackLayer({
   onV2StorageCellSelect,
   onV2StorageRackSelect,
 }: RackLayerProps) {
-  const isInteractionLight = renderMode === 'interaction-light';
+  const isInteractionMode = renderMode !== 'full';
+  const isInteractionSkeleton = renderMode === 'interaction-skeleton';
   const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
   const labelsEnabled =
-    !isInteractionLight && diagnosticsFlags.labels === 'normal';
+    !isInteractionMode && diagnosticsFlags.labels === 'normal';
   const hitTestEnabled =
-    !isInteractionLight && diagnosticsFlags.hitTest === 'normal';
-  const renderCells = diagnosticsFlags.cells !== 'off';
+    !isInteractionMode && diagnosticsFlags.hitTest === 'normal';
+  const renderCells =
+    !isInteractionSkeleton && diagnosticsFlags.cells !== 'off';
   const overlaysEnabled =
-    !isInteractionLight && diagnosticsFlags.cellOverlays !== 'off';
+    !isInteractionMode && diagnosticsFlags.cellOverlays !== 'off';
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -534,7 +536,7 @@ export function RackLayer({
             offsetX={geometry.centerX}
             offsetY={geometry.centerY}
             rotation={rack.rotationDeg}
-            draggable={isLayoutEditable && !isPlacing}
+            draggable={!isInteractionMode && isLayoutEditable && !isPlacing}
             onMouseDown={(event) => {
               // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
               event.cancelBubble = true;
@@ -566,7 +568,7 @@ export function RackLayer({
               }
             }}
           >
-            {!isInteractionLight && (
+            {!isInteractionMode && (
               <Rect
                 x={0}
                 y={0}
@@ -588,7 +590,7 @@ export function RackLayer({
               rackCodeProminence={labelRevealPolicy.rackCodeProminence}
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
               disableStrokes={!overlaysEnabled}
-              isActivelyPanning={isActivelyPanning}
+              isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
             />
 
             {lod >= 1 && faceA && (
@@ -604,7 +606,7 @@ export function RackLayer({
                 sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
                 rackRotationDeg={rack.rotationDeg}
                 disableStrokes={!overlaysEnabled}
-                isActivelyPanning={isActivelyPanning}
+                isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
               />
             )}
 

@@ -114,7 +114,11 @@ type RenderComponentMetrics = {
 
 type RenderPipelineDiagnostics = {
   enabled: boolean;
-  currentRenderMode: 'full' | 'interaction-light';
+  currentRenderMode: 'full' | 'interaction-light' | 'interaction-skeleton';
+  renderModeCounts: Record<
+    'full' | 'interaction-light' | 'interaction-skeleton',
+    number
+  >;
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
@@ -836,6 +840,11 @@ async function startRenderPipelineProbe(page: Page) {
     global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ = {
       enabled: true,
       currentRenderMode: 'full',
+      renderModeCounts: {
+        full: 0,
+        'interaction-light': 0,
+        'interaction-skeleton': 0
+      },
       cameraStoreUpdates: 0,
       offsetUpdates: 0,
       zoomCameraUpdates: 0,
@@ -3051,6 +3060,8 @@ test.describe('DL1 diagnostics harness', () => {
           zoomDurableCommits: entry.renderPipeline.zoomDurableCommits,
           zoomCameraUpdates: entry.renderPipeline.zoomCameraUpdates,
           renderMode: entry.renderPipeline.currentRenderMode,
+          skeletonRenders:
+            entry.renderPipeline.renderModeCounts['interaction-skeleton'],
           editorRenders:
             entry.renderPipeline.components.EditorCanvas.renders,
           rackLayerRenders:

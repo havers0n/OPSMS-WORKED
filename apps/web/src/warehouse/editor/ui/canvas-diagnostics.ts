@@ -43,6 +43,7 @@ export type CanvasRenderComponentMetrics = {
 export type CanvasRenderPipelineDiagnostics = {
   enabled: boolean;
   currentRenderMode: CanvasRenderMode;
+  renderModeCounts: Record<CanvasRenderMode, number>;
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
@@ -221,6 +222,11 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
   return {
     enabled: true,
     currentRenderMode: 'full',
+    renderModeCounts: {
+      full: 0,
+      'interaction-light': 0,
+      'interaction-skeleton': 0
+    },
     cameraStoreUpdates: 0,
     offsetUpdates: 0,
     zoomCameraUpdates: 0,
@@ -294,6 +300,7 @@ export function recordCanvasRenderMode(renderMode: CanvasRenderMode) {
   if (!diagnostics) return;
 
   diagnostics.currentRenderMode = renderMode;
+  diagnostics.renderModeCounts[renderMode] += 1;
 }
 
 export function recordCanvasKonvaLayerDraw(kind: 'draw' | 'batchDraw') {

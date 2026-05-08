@@ -707,7 +707,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.renderMode).toBe('full');
   });
 
-  it('forwards active pan visual mode to RackLayer and restores idle mode', () => {
+  it('forwards active pan skeleton mode to RackLayer and restores idle mode', () => {
     const draft = createLayoutDraftFixture();
     mockLayoutDraft = draft;
     mockViewMode = 'storage';
@@ -722,7 +722,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
-    expect(rackLayerLastProps?.renderMode).toBe('interaction-light');
+    expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
 
     act(() => {
       mockIsPanning = false;
@@ -743,7 +743,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.renderMode).toBe('full');
   });
 
-  it('uses interaction-light render mode during wheel zoom and restores after idle debounce', () => {
+  it('uses interaction-skeleton render mode during wheel zoom and restores after idle debounce', () => {
     vi.useFakeTimers();
     try {
       const draft = createLayoutDraftFixture();
@@ -775,10 +775,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
       });
 
       expect(mockHandleZoom).toHaveBeenCalledWith(0.1, { x: 25, y: 30 });
-      expect(rackLayerLastProps?.renderMode).toBe('interaction-light');
+      expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
 
       act(() => {
-        vi.advanceTimersByTime(200);
+        vi.advanceTimersByTime(500);
       });
 
       expect(rackLayerLastProps?.renderMode).toBe('full');
