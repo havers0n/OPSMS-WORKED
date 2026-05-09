@@ -21,6 +21,7 @@ let mockSelectedRackActiveLevel = 2;
 let mockStorageFocusActiveLevel: number | null = null;
 let mockLayoutDraft: LayoutDraft | null = null;
 let mockPublishedCellsById = new Map<string, Cell>();
+let mockHighlightedCellIds: string[] = [];
 let mockIsPanning = false;
 let mockHandleZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
@@ -76,7 +77,7 @@ vi.mock('@/warehouse/editor/model/editor-selectors', () => ({
   useSetCanvasZoom: () => () => undefined,
   useSetEditorMode: () => () => undefined,
   useSetHoveredRackId: () => () => undefined,
-  useHighlightedCellIds: () => [],
+  useHighlightedCellIds: () => mockHighlightedCellIds,
   useSetHighlightedCellIds: () => () => undefined,
   useSetSelectedRackSide: () => () => undefined,
   useSetSelectedRackIds: () => () => undefined,
@@ -180,63 +181,74 @@ vi.mock('./use-canvas-viewport-controller', () => ({
 }));
 
 vi.mock('./use-canvas-scene-model', () => ({
-  useCanvasSceneModel: () => ({
-    hud: {
-      hintText: '',
-      selectedRackAnchorRect: null,
-      selectedRackSideFocus: null,
-      selectedStorageCellAnchorRect: null,
-      selectedWallAnchorRect: null,
-      selectedZoneAnchorRect: null,
-      shouldShowLayoutRackGeometryBar: false,
-      shouldShowLayoutRackSideHandles: false,
-      shouldShowLayoutWallBar: false,
-      shouldShowLayoutZoneBar: false,
-      shouldShowStorageCellBar: false
-    },
-    interaction: {
-      canSelectCells: true,
-      canSelectRack: true,
-      canSelectWall: false,
-      canSelectZone: false,
-      interactionLevel: 'L3' as const,
-      isDrawingWall: false,
-      isDrawingZone: false,
-      isLayoutDrawToolActive: false,
-      isLayoutMode: false,
-      isPlacementMoveMode: false,
-      isPlacing: false,
-      isStorageMode: true,
-      isViewMode: false,
-      lod: 2 as const
-    },
-    layers: {
-      placementLayout: mockLayoutDraft,
-      racks: mockLayoutDraft ? Object.values(mockLayoutDraft.racks) : [],
-      walls: [],
-      zones: []
-    },
-    lookups: {
-      floorOperationsCellsById: new Map(),
-      highlightedCellIdSet: new Set<string>(),
-      occupiedCellIds: new Set<string>(),
-      publishedCellsById: mockPublishedCellsById,
-      publishedCellsByStructure: new Map()
-    },
-    selection: {
-      activeCellRackId: null,
-      canvasSelectedCellId:
-        mockSelection.type === 'cell' ? mockSelection.cellId : null,
-      moveSourceRackId: null,
-      selectedRack: null,
-      selectedStorageCell: null,
-      selectedWall: null,
-      selectedZone: null
-    },
-    workflow: {
-      moveSourceCellId: null
-    }
-  })
+  useCanvasSceneModel: () => {
+    const canvasSelectedCellId =
+      mockSelection.type === 'cell'
+        ? mockSelection.cellId
+        : mockSelection.type === 'container'
+          ? (mockSelection.sourceCellId ?? null)
+          : null;
+    const activeCellRackId = canvasSelectedCellId
+      ? (mockPublishedCellsById.get(canvasSelectedCellId)?.rackId ?? null)
+      : null;
+
+    return {
+      hud: {
+        hintText: '',
+        selectedRackAnchorRect: null,
+        selectedRackSideFocus: null,
+        selectedStorageCellAnchorRect: null,
+        selectedWallAnchorRect: null,
+        selectedZoneAnchorRect: null,
+        shouldShowLayoutRackGeometryBar: false,
+        shouldShowLayoutRackSideHandles: false,
+        shouldShowLayoutWallBar: false,
+        shouldShowLayoutZoneBar: false,
+        shouldShowStorageCellBar: false
+      },
+      interaction: {
+        canSelectCells: true,
+        canSelectRack: true,
+        canSelectWall: false,
+        canSelectZone: false,
+        interactionLevel: 'L3' as const,
+        isDrawingWall: false,
+        isDrawingZone: false,
+        isLayoutDrawToolActive: false,
+        isLayoutMode: false,
+        isPlacementMoveMode: false,
+        isPlacing: false,
+        isStorageMode: true,
+        isViewMode: false,
+        lod: 2 as const
+      },
+      layers: {
+        placementLayout: mockLayoutDraft,
+        racks: mockLayoutDraft ? Object.values(mockLayoutDraft.racks) : [],
+        walls: [],
+        zones: []
+      },
+      lookups: {
+        floorOperationsCellsById: new Map(),
+        highlightedCellIdSet: new Set<string>(mockHighlightedCellIds),
+        occupiedCellIds: new Set<string>(),
+        publishedCellsById: mockPublishedCellsById,
+        publishedCellsByStructure: new Map()
+      },
+      selection: {
+        activeCellRackId,
+        canvasSelectedCellId,
+        moveSourceRackId: null,
+        selectedRack: null,
+        selectedStorageCell: null,
+        selectedWall: null,
+        selectedZone: null
+      },
+      workflow: {
+        moveSourceCellId: null
+      }
+    };
+  }
 }));
 
 (
@@ -278,12 +290,13 @@ describe('EditorCanvas storage active-rack wiring', () => {
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
     mockIsPanning = false;
+    mockHighlightedCellIds = [];
     mockHandleZoom = vi.fn();
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
   });
 
-  it('passes selected cell parent rack id to RackLayer in storage mode', () => {
+  it('keeps ordinary selected cell parent rack id out of RackLayer in storage mode', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
     mockLayoutDraft = draft;
@@ -319,7 +332,11 @@ describe('EditorCanvas storage active-rack wiring', () => {
       latestPublished: draft
     });
 
-    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
+    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
+    expect(rackLayerLastProps?.activeCellRackId).toBeNull();
+    expect(rackLayerLastProps?.selectedRackActiveLevel).toBeNull();
+    expect(rackLayerLastProps?.selectedRackIds).toEqual([]);
+    expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
   it('passes selected rack id from shared resolver for storage rack selection', () => {
@@ -398,7 +415,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
   });
 
-  it('sets primarySelectedRackId for resolved storage container selection', () => {
+  it('sets overlay primarySelectedRackId for resolved storage container selection', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
     mockLayoutDraft = draft;
@@ -438,7 +455,8 @@ describe('EditorCanvas storage active-rack wiring', () => {
       latestPublished: draft
     });
 
-    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
+    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
+    expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
   it('keeps explicit unresolved container fallback: no primarySelectedRackId without source-cell context', () => {
@@ -723,6 +741,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockSelectedRackId = null;
     mockSelectedRackActiveLevel = 2;
     mockSelection = { type: 'cell', cellId: 'cell-1' };
+    mockHighlightedCellIds = ['cell-1'];
     mockPublishedCellsById = new Map([
       [
         'cell-1',
@@ -753,12 +772,64 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
     expect(rackLayerLastProps?.renderSelectionOverlay).toBe(false);
     expect(rackLayerLastProps?.canvasSelectedCellId).toBeNull();
+    expect(rackLayerLastProps?.activeCellRackId).toBeNull();
+    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
+    expect(rackLayerLastProps?.selectedRackActiveLevel).toBeNull();
+    expect(rackLayerLastProps?.selectedRackIds).toEqual([]);
+    expect(rackLayerLastProps?.highlightedCellIds).toBeInstanceOf(Set);
+    expect((rackLayerLastProps?.highlightedCellIds as Set<string>).size).toBe(0);
     const overlay = renderer.root.findAll(
       (node) => String(node.type) === 'CellStateOverlayLayer'
     )[0];
     expect(overlay).toBeTruthy();
     expect(cellStateOverlayLastProps?.selectedCellId).toBe('cell-1');
+    expect(cellStateOverlayLastProps?.highlightedCellId).toBe('cell-1');
     expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
+  });
+
+  it('keeps multi-cell highlights on the base RackLayer path', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = null;
+    mockSelectedRackActiveLevel = 2;
+    mockSelection = { type: 'cell', cellId: 'cell-1' };
+    mockHighlightedCellIds = ['cell-1', 'cell-2'];
+    mockPublishedCellsById = new Map([
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
+    ]);
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.highlightedCellIds).toBeInstanceOf(Set);
+    expect([...(rackLayerLastProps?.highlightedCellIds as Set<string>)]).toEqual([
+      'cell-1',
+      'cell-2'
+    ]);
+    expect(cellStateOverlayLastProps?.highlightedCellId).toBeNull();
   });
 
   it('defaults the canvas render mode to full', () => {

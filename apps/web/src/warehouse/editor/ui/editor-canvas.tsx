@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
 import KonvaRuntime from 'konva';
@@ -103,6 +103,7 @@ const EMPTY_CELL_ID_SET = new Set<string>();
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
 const ZOOM_INTERACTION_IDLE_MS = 500;
+const noopSetHoveredRackId = () => undefined;
 
 export function EditorCanvas({
   workspace,
@@ -458,25 +459,33 @@ export function EditorCanvas({
   const { moveSourceCellId } = scene.workflow;
   // V2 cell-select callback: resolves level from publishedCellsById before calling selectCell.
   // Passed to RackLayer as onV2StorageCellSelect — only when V2 is active.
+  const handleV2StorageCellSelect = useCallback(
+    ({ cellId, rackId }: { cellId: string; rackId: string }) => {
+      const cell = publishedCellsById.get(cellId);
+      const level = cell?.address.parts.level ?? null;
+      storageFocusSelectCell({ cellId, rackId, level });
+    },
+    [publishedCellsById, storageFocusSelectCell]
+  );
   const onV2StorageCellSelect = isStorageV2Active
-    ? ({ cellId, rackId }: { cellId: string; rackId: string }) => {
-        const cell = publishedCellsById.get(cellId);
-        const level = cell?.address.parts.level ?? null;
-        storageFocusSelectCell({ cellId, rackId, level });
-      }
+    ? handleV2StorageCellSelect
     : undefined;
 
   // V2 rack-select callback — only when V2 is active.
+  const handleV2StorageRackSelect = useCallback(
+    ({ rackId }: { rackId: string }) => {
+      storageFocusSelectRack({
+        rackId,
+        level: resolveInitialRackSemanticLevel(
+          publishedCellsById.values(),
+          rackId
+        )
+      });
+    },
+    [publishedCellsById, storageFocusSelectRack]
+  );
   const onV2StorageRackSelect = isStorageV2Active
-    ? ({ rackId }: { rackId: string }) => {
-        storageFocusSelectRack({
-          rackId,
-          level: resolveInitialRackSemanticLevel(
-            publishedCellsById.values(),
-            rackId
-          )
-        });
-      }
+    ? handleV2StorageRackSelect
     : undefined;
 
   const primarySelectedRackId = isStorageV2Active
@@ -629,7 +638,34 @@ export function EditorCanvas({
   const rackLayerHighlightedCellIds =
     cellStateOverlayHighlightedCellId !== null
       ? EMPTY_CELL_ID_SET
-      : highlightedCellIdSet;
+      : highlightedCellIdSet.size === 0
+        ? EMPTY_CELL_ID_SET
+        : highlightedCellIdSet;
+  const isOrdinaryCellStateOverlaySelection =
+    cellStateOverlaysEnabled &&
+    canvasSelectedCellId !== null &&
+    !isPlacementMoveMode;
+  const rackLayerActiveCellRackId = isOrdinaryCellStateOverlaySelection
+    ? null
+    : activeCellRackId;
+  const rackLayerPrimarySelectedRackId = isOrdinaryCellStateOverlaySelection
+    ? null
+    : primarySelectedRackId;
+  const rackLayerSelectedRackActiveLevel =
+    rackLayerPrimarySelectedRackId === null
+      ? null
+      : selectedRackActiveLevelIndex;
+  const rackLayerSelectedRackIds = isOrdinaryCellStateOverlaySelection
+    ? EMPTY_RACK_IDS
+    : effectiveSelectedRackIds;
+  const diagnosticsViewport = useMemo(
+    () => ({
+      canvasOffset: { x: canvasOffset.x, y: canvasOffset.y },
+      viewport: { width: viewport.width, height: viewport.height },
+      zoom
+    }),
+    [canvasOffset.x, canvasOffset.y, viewport.height, viewport.width, zoom]
+  );
 
   recordCanvasComponentRender({
     component: 'EditorCanvas',
@@ -1033,15 +1069,11 @@ export function EditorCanvas({
               <SnapGuides guides={snapGuides} gridLines={gridLines} />
 
               <RackLayer
-                activeCellRackId={activeCellRackId}
+                activeCellRackId={rackLayerActiveCellRackId}
                 canSelectCells={canSelectCells}
                 canSelectRack={canSelectRack}
                 diagnosticsFlags={diagnosticsFlags}
-                diagnosticsViewport={{
-                  canvasOffset,
-                  viewport,
-                  zoom
-                }}
+                diagnosticsViewport={diagnosticsViewport}
                 isActivelyPanning={isPanning}
                 renderMode={renderMode}
                 renderSelectionOverlay={false}
@@ -1066,15 +1098,15 @@ export function EditorCanvas({
                 occupiedCellIds={occupiedCellIds}
                 publishedCellsById={publishedCellsById}
                 publishedCellsByStructure={publishedCellsByStructure}
-                primarySelectedRackId={primarySelectedRackId}
+                primarySelectedRackId={rackLayerPrimarySelectedRackId}
                 rackLookup={layoutDraft.racks}
                 racks={visibleRacks}
-                selectedRackActiveLevel={selectedRackActiveLevelIndex}
-                selectedRackIds={effectiveSelectedRackIds}
+                selectedRackActiveLevel={rackLayerSelectedRackActiveLevel}
+                selectedRackIds={rackLayerSelectedRackIds}
                 setHighlightedCellIds={setHighlightedCellIds}
                 setHoveredRackId={
                   isDiagnosticsHitTestDisabled
-                    ? () => undefined
+                    ? noopSetHoveredRackId
                     : setHoveredRackId
                 }
                 setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}

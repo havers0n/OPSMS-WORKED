@@ -4,7 +4,7 @@ import type {
   Rack,
   RackFace
 } from '@wos/domain';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import type Konva from 'konva';
 import { FastLayer, Group, Layer, Rect } from 'react-konva';
 import {
@@ -212,7 +212,7 @@ type RackLayerProps = {
   onV2StorageRackSelect?: (params: { rackId: string }) => void;
 };
 
-export function RackLayer({
+export const RackLayer = memo(function RackLayer({
   activeCellRackId,
   canSelectCells,
   canSelectRack,
@@ -338,6 +338,9 @@ export function RackLayer({
     propsKeys: [
       'rackIds',
       'zoom',
+      'activeCellRackId',
+      'primarySelectedRackId',
+      'selectedRackActiveLevel',
       'selectedRackIds',
       'hoveredRackId',
       'canvasSelectedCellId',
@@ -369,6 +372,9 @@ export function RackLayer({
     snapshot: {
       rackIds: racks.map((rack) => rack.id).join('|'),
       zoom,
+      activeCellRackId,
+      primarySelectedRackId,
+      selectedRackActiveLevel,
       selectedRackIds: selectedRackIds.join('|'),
       hoveredRackId,
       canvasSelectedCellId,
@@ -697,4 +703,4 @@ export function RackLayer({
       )}
     </RackLayerComponent>
   );
-}
+});
