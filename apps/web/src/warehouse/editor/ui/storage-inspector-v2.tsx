@@ -1345,7 +1345,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   };
 
   if (mode.kind === 'empty') {
-    return <EmptyState />;
+    return null;
   }
 
   if (mode.kind === 'rack-overview') {
