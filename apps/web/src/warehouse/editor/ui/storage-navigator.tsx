@@ -1,5 +1,6 @@
 import type { FloorWorkspace, Rack } from '@wos/domain';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { PanelLeft } from 'lucide-react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { collectRackPublishedSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
@@ -10,6 +11,16 @@ import {
   useStorageFocusSelectCell,
   useStorageFocusSetActiveLevel,
 } from '../model/v2/v2-selectors';
+
+const COLLAPSED_KEY = 'wos:storage-navigator-collapsed';
+
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 interface StorageNavigatorProps {
   workspace: FloorWorkspace | null;
@@ -28,6 +39,29 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(floorId);
   const { data: occupancyRows = [], isLoading: occupancyLoading } = useFloorLocationOccupancy(floorId);
+
+  const [isCollapsed, setIsCollapsed] = useState(readCollapsed);
+
+  const toggle = useCallback(() => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COLLAPSED_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== '`' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      toggle();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [toggle]);
 
   const occupancyByCellId = useMemo(() => {
     const map = new Map<string, (typeof occupancyRows)[number]>();
@@ -77,14 +111,39 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const noRackContext = !rackId && !isLoading;
   const levelButtons = availableLevels.length > 0 ? availableLevels : [1, 2, 3];
 
+  if (isCollapsed) {
+    return (
+      <div className="flex h-full w-10 flex-shrink-0 flex-col items-center border-r border-gray-200 bg-white pt-2.5">
+        <button
+          type="button"
+          onClick={toggle}
+          title="Show navigator (`)"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+        >
+          <PanelLeft className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full w-72 flex-col overflow-hidden border-r border-gray-200 bg-white">
+    <div className="flex h-full w-72 flex-shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white">
       <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Rack</span>
-          <span className="rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-800">
-            {isLoading ? '...' : rackDisplayCode}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-800">
+              {isLoading ? '...' : rackDisplayCode}
+            </span>
+            <button
+              type="button"
+              onClick={toggle}
+              title="Hide navigator (`)"
+              className="flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            >
+              <PanelLeft className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 

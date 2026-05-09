@@ -9,7 +9,7 @@ import {
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
-import { CellPlacementOperationalBody } from '../storage-location-detail-body';
+import { CellPlacementOperationalBody } from './cell-placement-operational-body';
 
 export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspace | null }) {
   const selection = useEditorSelection();
@@ -82,7 +82,6 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             selectedCell={selectedCell}
             locationId={locationId}
             rows={data}
-            isReadOnlyView={isReadOnlyView}
           />
         )}
 

@@ -272,8 +272,7 @@ describe('Storage V2 focus cutover integration', () => {
     expect(workspaceCanvasAndPanelSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({
         hideContextPanel: true,
-        hideRightPanel: true,
-        isStorageV2: true
+        hideRightPanel: true
       })
     );
     let tree = JSON.stringify(renderer.toJSON());

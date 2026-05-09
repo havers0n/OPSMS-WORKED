@@ -1,21 +1,13 @@
 import type { FloorWorkspace } from '@wos/domain';
 import { getZonePlacementBehavior } from '@wos/domain';
 import { MapPin, X } from 'lucide-react';
-import { useMemo } from 'react';
 import {
   useEditorSelection,
   useViewMode
 } from '@/warehouse/editor/model/editor-selectors';
-import {
-  resolveStorageFocusContext,
-  useStorageSelectedRackActiveLevel,
-  useStorageSelection
-} from '@/warehouse/editor/model/storage-ui-facade';
-import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { RackInspector } from './rack-inspector';
 import { RackMultiInspector } from './rack-multi-inspector';
-import { StorageRackInspector } from './storage-rack-inspector';
 import { WallInspector } from './wall-inspector';
 import { ZoneInspector } from './zone-inspector';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
@@ -34,7 +26,7 @@ const PLACEMENT_BEHAVIOR_LABELS = {
 } as const;
 
 /**
- * Read-only zone panel shown in view/storage mode.
+ * Read-only zone panel shown in view mode.
  * Communicates that the zone is a context area — not a placement target.
  */
 function ZoneReadonlyPanel({
@@ -161,11 +153,6 @@ type InspectorRouterProps = {
   workspace: FloorWorkspace | null;
   /** Called by layout-mode inspectors when the user clicks the close button. */
   onClose: () => void;
-  /**
-   * Legacy storage inspector routing is intentionally opt-in.
-   * PublishedViewer is the only runtime path expected to enable it.
-   */
-  enableLegacyStorageRouting?: boolean;
 };
 
 /**
@@ -178,44 +165,19 @@ type InspectorRouterProps = {
  *   layout  + rack(1, existing) → RackInspector (structural)
  *   layout  + rack(≥2)         → RackMultiInspector (spacing/alignment)
  *   view    + rack             → RackInspector (read-only)
- *   storage + none/rack/cell   → StorageRackInspector (persistent storage shell)
  *   view    + cell             → CellPlacementInspector (read-only)
  *   view    + container        → ContainerPlacementInspector (read-only)
- *   storage + resolved container → StorageRackInspector
- *   storage + unresolved/no-source container → ContainerPlacementInspector
- *   view + none                → PlacementModePanel
+ *   view    + none             → PlacementModePanel
  */
-export function InspectorRouter({
-  workspace,
-  onClose,
-  enableLegacyStorageRouting = false
-}: InspectorRouterProps) {
+export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
   const viewMode = useViewMode();
   const selection = useEditorSelection();
-  if (viewMode === 'storage' && !enableLegacyStorageRouting) {
-    return null;
-  }
-  if (viewMode === 'storage' && selection.type === 'container') {
-    return (
-      <StorageContainerRouteGate
-        workspace={workspace}
-        onClose={onClose}
-        enableLegacyStorageRouting={enableLegacyStorageRouting}
-      />
-    );
-  }
 
-  const kind = resolveInspectorKind(viewMode, selection, {
-    hasResolvedStorageContainerRackContext: false,
-    enableLegacyStorageRouting
-  });
+  const kind = resolveInspectorKind(viewMode, selection);
 
   switch (kind) {
     case 'rack-structure':
       return <RackInspector workspace={workspace} onClose={onClose} />;
-
-    case 'storage-shell':
-      return <StorageRackInspector workspace={workspace} onClose={onClose} />;
 
     case 'rack-multi':
       return <RackMultiInspector onClose={onClose} />;
@@ -241,34 +203,4 @@ export function InspectorRouter({
     case null:
       return null;
   }
-}
-
-function StorageContainerRouteGate({
-  workspace,
-  onClose,
-  enableLegacyStorageRouting = false
-}: InspectorRouterProps) {
-  const selection = useStorageSelection();
-  const selectedRackActiveLevel = useStorageSelectedRackActiveLevel();
-  const { data: publishedCells = [] } = usePublishedCells(workspace?.floorId ?? null);
-  const publishedCellsById = useMemo(
-    () => new Map(publishedCells.map((cell) => [cell.id, cell] as const)),
-    [publishedCells]
-  );
-  const storageFocusContext = resolveStorageFocusContext({
-    viewMode: 'storage',
-    selection,
-    selectedRackActiveLevel,
-    publishedCellsById
-  });
-  const kind = resolveInspectorKind('storage', selection, {
-    hasResolvedStorageContainerRackContext: storageFocusContext.hasResolvedRackContext,
-    enableLegacyStorageRouting
-  });
-
-  if (kind === 'storage-shell') {
-    return <StorageRackInspector workspace={workspace} onClose={onClose} />;
-  }
-
-  return <ContainerPlacementInspector workspace={workspace} />;
 }
