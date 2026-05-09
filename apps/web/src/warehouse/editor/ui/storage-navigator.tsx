@@ -14,9 +14,21 @@ import {
 
 const COLLAPSED_KEY = 'wos:storage-navigator-collapsed';
 
+function getBrowserStorage(): Storage | null {
+  if (
+    typeof window === 'undefined' ||
+    typeof window.localStorage === 'undefined'
+  ) {
+    return null;
+  }
+  return window.localStorage;
+}
+
 function readCollapsed(): boolean {
+  const storage = getBrowserStorage();
+  if (!storage) return false;
   try {
-    return localStorage.getItem(COLLAPSED_KEY) === 'true';
+    return storage.getItem(COLLAPSED_KEY) === 'true';
   } catch {
     return false;
   }
@@ -45,14 +57,17 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const toggle = useCallback(() => {
     setIsCollapsed((prev) => {
       const next = !prev;
+      const storage = getBrowserStorage();
       try {
-        localStorage.setItem(COLLAPSED_KEY, String(next));
+        storage?.setItem(COLLAPSED_KEY, String(next));
       } catch {}
       return next;
     });
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
     const handleKey = (e: KeyboardEvent) => {
       if (e.key !== '`' || e.ctrlKey || e.metaKey || e.altKey) return;
       const tag = (e.target as HTMLElement).tagName;

@@ -272,7 +272,7 @@ describe('CellPlacementInspector render hierarchy', () => {
 
     expectTextOrder(markup, 'Current containers', 'Location Policy');
     expectTextOrder(markup, 'Current inventory', 'Location Policy');
-    expect(markup).toContain('Placement actions');
+    expect(markup).toContain('No SKU policies are assigned to this location.');
   });
 });
 
@@ -334,19 +334,22 @@ describe('CellPlacementInspector placement mode transitions', () => {
     mockContainerTypes = [pallet];
   });
 
-  it('defaults to details mode and hides workflow task forms', () => {
+  it('defaults to details mode and hides legacy workflow task forms', () => {
     const view = renderInteractiveInspector();
 
     expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-view')).toBeNull();
     expect(view.text()).toContain('Current containers');
     expect(view.text()).toContain('Current inventory');
-    expect(view.text()).toContain('Placement actions');
-    expect(view.text()).toContain('Place existing');
-    expect(view.text()).toContain('Create + place');
     expect(view.text()).toContain('Location Policy');
+    expect(view.text()).toContain('No SKU policies are assigned to this location.');
+    expect(view.text()).not.toContain('Placement actions');
+    expect(view.text()).not.toContain('Place existing');
+    expect(view.text()).not.toContain('Create + place');
+    expect(view.text()).not.toContain('Edit policy');
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
+    expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
     expect(view.text()).not.toContain('Confirm place');
     expect(view.text()).not.toContain('Create and place');
     expect(view.text()).not.toContain('Dev details');
@@ -388,7 +391,10 @@ describe('CellPlacementInspector placement mode transitions', () => {
 
     expect(view.findByTestId('cell-placement-policy-summary')).not.toBeNull();
     expect(view.findByTestId('cell-placement-policy-editor')).toBeNull();
-    expect(view.text()).toContain('Edit policy');
+    expect(view.text()).toContain('policy assignment');
+    expect(view.text()).toContain('Widget');
+    expect(view.text()).toContain('Primary pick');
+    expect(view.text()).not.toContain('Edit policy');
     expect(view.text()).not.toContain('+ Add SKU policy');
     expect(view.text()).not.toContain('Search by name or SKU');
     expect(view.text()).not.toContain('Save policy');
@@ -396,7 +402,7 @@ describe('CellPlacementInspector placement mode transitions', () => {
     view.unmount();
   });
 
-  it('opens only the edit-policy task body from the launcher', () => {
+  it('does not expose the legacy edit-policy task body from the details view', () => {
     mockPolicyAssignments = [
       makePolicyAssignment({
         id: 'role-1',
@@ -412,36 +418,28 @@ describe('CellPlacementInspector placement mode transitions', () => {
 
     const view = renderInteractiveInspector();
 
-    act(() => {
-      view.findButtonByText('Edit policy')?.props.onClick();
-    });
-
-    expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-body')).not.toBeNull();
-    expect(view.text()).toContain('Policy editor');
-    expect(view.text()).toContain('Edit location policy');
-    expect(view.findByTestId('cell-placement-task-edit-policy')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-policy-editor')).not.toBeNull();
+    expect(view.findButtonByText('Edit policy')).toBeNull();
+    expect(view.findByTestId('cell-placement-task-header')).toBeNull();
+    expect(view.findByTestId('cell-placement-task-body')).toBeNull();
+    expect(view.text()).not.toContain('Policy editor');
+    expect(view.text()).not.toContain('Edit location policy');
+    expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
+    expect(view.findByTestId('cell-placement-policy-editor')).toBeNull();
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
-    expect(view.text()).toContain('+ Add SKU policy');
-    expect(view.text()).not.toContain('Current containers');
+    expect(view.text()).not.toContain('+ Add SKU policy');
+    expect(view.text()).toContain('Current containers');
+    expect(view.text()).toContain('Location Policy');
+    expect(view.text()).toContain('Reserve');
 
     view.unmount();
   });
 
-  it('returns to details mode when backing out of policy task mode', () => {
+  it('keeps details mode stable when no policy task launcher is available', () => {
     const view = renderInteractiveInspector();
 
-    act(() => {
-      view.findButtonByText('Edit policy')?.props.onClick();
-    });
-
-    act(() => {
-      view.findButtonByText('Back')?.props.onClick();
-    });
-
     expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
+    expect(view.findButtonByText('Back')).toBeNull();
     expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
     expect(view.findByTestId('cell-placement-policy-summary')).not.toBeNull();
     expect(view.text()).toContain('Current containers');
@@ -449,12 +447,8 @@ describe('CellPlacementInspector placement mode transitions', () => {
     view.unmount();
   });
 
-  it('resets to details mode when selection changes during policy editing', () => {
+  it('updates the details view when selection changes', () => {
     const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('Edit policy')?.props.onClick();
-    });
 
     mockSelection = { type: 'cell', cellId: 'cell-2' };
     mockPublishedCells = [{ id: 'cell-2', address: { raw: 'A-01-02' } }];
@@ -469,20 +463,16 @@ describe('CellPlacementInspector placement mode transitions', () => {
     view.unmount();
   });
 
-  it('keeps details sections out of the task body while policy editing is active', () => {
+  it('keeps details sections in the main details view without a task body', () => {
     const view = renderInteractiveInspector();
-
-    act(() => {
-      view.findButtonByText('Edit policy')?.props.onClick();
-    });
 
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-edit-policy')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-task-header')).not.toBeNull();
-    expect(view.findByTestId('cell-placement-policy-summary')).toBeNull();
-    expect(view.text()).not.toContain('Current containers');
-    expect(view.text()).not.toContain('Current inventory');
+    expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
+    expect(view.findByTestId('cell-placement-task-header')).toBeNull();
+    expect(view.findByTestId('cell-placement-policy-summary')).not.toBeNull();
+    expect(view.text()).toContain('Current containers');
+    expect(view.text()).toContain('Current inventory');
 
     view.unmount();
   });

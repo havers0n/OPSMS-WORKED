@@ -203,6 +203,7 @@ function renderRackLayer(params: {
           params.clearHighlightedCellIds ?? (() => undefined),
         diagnosticsFlags: {
           labels: 'normal',
+          grid: 'normal',
           hitTest: 'normal',
           cells: 'normal',
           cellOverlays: 'normal',
@@ -929,6 +930,8 @@ describe('RackLayer storage interaction depth', () => {
     const setSelectedCellId = vi.fn();
     const setSelectedRackIds = vi.fn();
     const clearHighlightedCellIds = vi.fn();
+    const onV2StorageCellSelect = vi.fn();
+    const onV2StorageRackSelect = vi.fn();
 
     const renderer = renderRackLayer({
       selectedRackIds: [],
@@ -938,7 +941,9 @@ describe('RackLayer storage interaction depth', () => {
       canSelectCells: true,
       setSelectedCellId,
       setSelectedRackIds,
-      clearHighlightedCellIds
+      clearHighlightedCellIds,
+      onV2StorageCellSelect,
+      onV2StorageRackSelect
     });
 
     const rackCells = renderer.root.findAll(
@@ -948,15 +953,22 @@ describe('RackLayer storage interaction depth', () => {
       rackCells[0].props.onCellClick('cell-1', { x: 10, y: 20 });
     });
 
-    expect(setSelectedCellId).toHaveBeenCalledWith('cell-1');
+    expect(onV2StorageCellSelect).toHaveBeenCalledWith({
+      cellId: 'cell-1',
+      rackId: 'rack-1'
+    });
+    expect(onV2StorageRackSelect).not.toHaveBeenCalled();
+    expect(setSelectedCellId).not.toHaveBeenCalled();
     expect(setSelectedRackIds).not.toHaveBeenCalled();
     expect(clearHighlightedCellIds).not.toHaveBeenCalled();
   });
 
-  it('rack body click in storage mode selects rack and clears selected cell context', () => {
+  it('rack body click in storage mode selects rack through V2 focus context', () => {
     const setSelectedCellId = vi.fn();
     const setSelectedRackIds = vi.fn();
     const clearHighlightedCellIds = vi.fn();
+    const onV2StorageCellSelect = vi.fn();
+    const onV2StorageRackSelect = vi.fn();
 
     const renderer = renderRackLayer({
       selectedRackIds: [],
@@ -966,7 +978,9 @@ describe('RackLayer storage interaction depth', () => {
       canSelectRack: true,
       setSelectedCellId,
       setSelectedRackIds,
-      clearHighlightedCellIds
+      clearHighlightedCellIds,
+      onV2StorageCellSelect,
+      onV2StorageRackSelect
     });
 
     const rackGroups = renderer.root.findAll(
@@ -986,8 +1000,10 @@ describe('RackLayer storage interaction depth', () => {
     });
 
     expect(clearHighlightedCellIds).toHaveBeenCalledTimes(1);
-    expect(setSelectedCellId).toHaveBeenCalledWith(null);
-    expect(setSelectedRackIds).toHaveBeenCalledWith(['rack-1']);
+    expect(onV2StorageCellSelect).not.toHaveBeenCalled();
+    expect(onV2StorageRackSelect).toHaveBeenCalledWith({ rackId: 'rack-1' });
+    expect(setSelectedCellId).not.toHaveBeenCalled();
+    expect(setSelectedRackIds).not.toHaveBeenCalled();
   });
 
   it('storage workflow cell click keeps move-target behavior', () => {
