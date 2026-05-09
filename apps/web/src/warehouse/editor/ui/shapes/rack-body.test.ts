@@ -34,11 +34,20 @@ const pairedGeometry = {
   isPaired: true
 };
 
+const asymmetricGeometry = {
+  ...pairedGeometry,
+  width: 220,
+  faceAWidth: 220,
+  faceBWidth: 200,
+  centerX: 110
+};
+
 function renderRackBody(params?: {
   prominence?: 'dominant' | 'secondary' | 'background';
   placement?: 'header-left' | 'lower-left-mid';
   rotationDeg?: 0 | 90 | 180 | 270;
   isPaired?: boolean;
+  isAsymmetric?: boolean;
   isSelected?: boolean;
   isActivelyPanning?: boolean;
 }) {
@@ -46,7 +55,11 @@ function renderRackBody(params?: {
   act(() => {
     renderer = TestRenderer.create(
       createElement(RackBody, {
-        geometry: params?.isPaired ? pairedGeometry : singleGeometry,
+        geometry: params?.isAsymmetric
+          ? asymmetricGeometry
+          : params?.isPaired
+            ? pairedGeometry
+            : singleGeometry,
         displayCode: 'R-01',
         rotationDeg: params?.rotationDeg ?? 0,
         isSelected: params?.isSelected ?? false,
@@ -74,7 +87,33 @@ function getRects(renderer: TestRenderer.ReactTestRenderer) {
   return renderer.root.findAll((node) => String(node.type) === 'Rect');
 }
 
+function countRectsByRole(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).reduce<Record<string, number>>((counts, rect) => {
+    const role = String(rect.props.wosRectRole ?? 'unknown');
+    counts[role] = (counts[role] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
 describe('RackBody identity label ownership', () => {
+  it('splits rack shell diagnostics into stable body sub-roles', () => {
+    expect(countRectsByRole(renderRackBody())).toMatchObject({
+      'rack-body-main': 1,
+      'rack-body-stripe': 1
+    });
+    expect(countRectsByRole(renderRackBody({ isPaired: true }))).toMatchObject({
+      'rack-body-main': 1,
+      'rack-body-stripe': 2
+    });
+    expect(
+      countRectsByRole(renderRackBody({ isAsymmetric: true }))
+    ).toMatchObject({
+      'rack-body-main': 1,
+      'rack-body-overhang': 1,
+      'rack-body-stripe': 2
+    });
+  });
+
   it('renders paired face B stripe on the outer edge, not the internal seam', () => {
     const renderer = renderRackBody({ isPaired: true });
     const faceBStripe = renderer.root.find(
@@ -171,7 +210,9 @@ describe('RackBody identity label ownership', () => {
   it('keeps full rack body visual effects while idle', () => {
     const renderer = renderRackBody({ isSelected: true });
     const rects = getRects(renderer);
-    const body = rects.find((rect) => rect.props.wosRectRole === 'rack-body');
+    const body = rects.find(
+      (rect) => rect.props.wosRectRole === 'rack-body-main'
+    );
     const selection = rects.find(
       (rect) => rect.props.wosRectRole === 'selection-highlight'
     );
@@ -192,7 +233,9 @@ describe('RackBody identity label ownership', () => {
       isActivelyPanning: true
     });
     const rects = getRects(renderer);
-    const body = rects.find((rect) => rect.props.wosRectRole === 'rack-body');
+    const body = rects.find(
+      (rect) => rect.props.wosRectRole === 'rack-body-main'
+    );
     const selection = rects.find(
       (rect) => rect.props.wosRectRole === 'selection-highlight'
     );

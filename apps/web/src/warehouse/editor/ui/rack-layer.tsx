@@ -605,6 +605,7 @@ export const RackLayer = memo(function RackLayer({
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
               disableStrokes={!overlaysEnabled}
               isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
+              shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
             />
 
             {lod >= 1 && faceA && (

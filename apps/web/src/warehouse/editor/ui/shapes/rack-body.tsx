@@ -1,5 +1,8 @@
+import { useLayoutEffect, useRef } from 'react';
 import { Group, Line, Rect, Text } from 'react-konva';
+import type Konva from 'konva';
 import type { CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
+import { recordCanvasComponentRender } from '../canvas-diagnostics';
 import type { LabelProminence, RackCodePlacement } from './rack-label-reveal-policy';
 
 const C = {
@@ -31,6 +34,7 @@ type Props = {
   rackCodePlacement: RackCodePlacement;
   disableStrokes?: boolean;
   isActivelyPanning?: boolean;
+  shellRendering?: 'normal' | 'cached';
 };
 
 export function RackBody({
@@ -44,9 +48,50 @@ export function RackBody({
   rackCodeProminence,
   rackCodePlacement,
   disableStrokes = false,
-  isActivelyPanning = false
+  isActivelyPanning = false,
+  shellRendering = 'normal'
 }: Props) {
+  const shellRef = useRef<Konva.Group | null>(null);
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
+
+  recordCanvasComponentRender({
+    component: 'RackBody',
+    instanceId: displayCode,
+    propsKeys: [
+      'geometryX',
+      'geometryY',
+      'geometryWidth',
+      'geometryHeight',
+      'displayCode',
+      'rotationDeg',
+      'isSelected',
+      'isHovered',
+      'isPassive',
+      'showRackCode',
+      'rackCodeProminence',
+      'rackCodePlacement',
+      'disableStrokes',
+      'isActivelyPanning',
+      'shellRendering'
+    ],
+    snapshot: {
+      geometryX: geometry.x,
+      geometryY: geometry.y,
+      geometryWidth: geometry.width,
+      geometryHeight: geometry.height,
+      displayCode,
+      rotationDeg,
+      isSelected,
+      isHovered,
+      isPassive,
+      showRackCode,
+      rackCodeProminence,
+      rackCodePlacement,
+      disableStrokes,
+      isActivelyPanning,
+      shellRendering
+    }
+  });
 
   const lightweightVisuals = disableStrokes || isActivelyPanning;
   const visualSelected = isActivelyPanning ? false : isSelected;
@@ -121,8 +166,60 @@ export function RackBody({
     labelY = cy + dx * sinInv + dy * cosInv;
   }
 
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    if (shellRendering !== 'cached') {
+      shell.clearCache();
+      return;
+    }
+
+    shell.clearCache();
+    shell.cache({
+      pixelRatio:
+        typeof window !== 'undefined' && window.devicePixelRatio > 0
+          ? window.devicePixelRatio
+          : 1
+    });
+    shell.getLayer()?.batchDraw();
+  }, [
+    disableStrokes,
+    displayCode,
+    faceAWidth,
+    faceBWidth,
+    fill,
+    height,
+    isActivelyPanning,
+    isAsymmetric,
+    isPaired,
+    isSelected,
+    labelBgOpacity,
+    labelFontSize,
+    labelFontStyle,
+    labelHeight,
+    labelShadowOpacity,
+    labelStrokeOpacity,
+    labelTextOpacity,
+    labelWidth,
+    labelX,
+    labelY,
+    rackCodePlacement,
+    rackCodeProminence,
+    rotationDeg,
+    shellRendering,
+    spineY,
+    stripeH,
+    stroke,
+    width
+  ]);
+
   return (
-    <Group listening={false} opacity={isActivelyPanning ? 1 : isPassive && !isSelected ? 0.5 : 1}>
+    <Group
+      ref={shellRef}
+      listening={false}
+      opacity={isActivelyPanning ? 1 : isPassive && !isSelected ? 0.5 : 1}
+    >
       <Rect
         x={0}
         y={0}
@@ -137,7 +234,7 @@ export function RackBody({
         shadowBlur={lightweightVisuals ? 0 : isSelected ? 12 : 6}
         shadowOpacity={lightweightVisuals ? 0 : isSelected ? 0.12 : 0.07}
         shadowOffsetY={3}
-        wosRectRole="rack-body"
+        wosRectRole="rack-body-main"
       />
 
       {isSelected && (
@@ -164,7 +261,7 @@ export function RackBody({
           height={height - spineY}
           fill={C.emptyZone}
           opacity={0.7}
-          wosRectRole="rack-body"
+          wosRectRole="rack-body-overhang"
         />
       )}
       {isAsymmetric && faceBOverhang && (
@@ -175,7 +272,7 @@ export function RackBody({
           height={spineY}
           fill={C.emptyZone}
           opacity={0.7}
-          wosRectRole="rack-body"
+          wosRectRole="rack-body-overhang"
         />
       )}
 
@@ -187,7 +284,7 @@ export function RackBody({
         cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
         fill={C.stripeA}
         opacity={visualSelected ? 0.6 : 0.4}
-        wosRectRole="rack-body"
+        wosRectRole="rack-body-stripe"
       />
 
       {isPaired && (
@@ -200,7 +297,7 @@ export function RackBody({
           height={stripeH}
           fill={C.stripeB}
           opacity={visualSelected ? 0.5 : 0.28}
-          wosRectRole="rack-body"
+          wosRectRole="rack-body-stripe"
         />
       )}
 
