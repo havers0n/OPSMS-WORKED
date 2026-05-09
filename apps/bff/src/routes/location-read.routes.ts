@@ -1,4 +1,7 @@
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
+
+const cellIdListSchema = z.array(z.string().uuid());
 import { ApiError } from '../errors.js';
 import { createLocationReadRepo } from '../features/location-read/location-read-repo.js';
 import {
@@ -105,6 +108,23 @@ export function registerLocationReadRoutes(app: FastifyInstance, deps: LocationR
     const rows = await locationReadRepo.listFloorLocationOccupancy(floorId);
 
     return parseOrThrow(locationOccupancyRowsResponseSchema, rows.map(mapLocationOccupancyRowToDomain));
+  });
+
+  app.get('/api/floors/:floorId/cells-by-product', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const productId = parseOrThrow(idResponseSchema, {
+      id: (request.query as { productId?: string }).productId ?? ''
+    }).id;
+
+    const supabase = deps.getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const cellIds = await locationReadRepo.listFloorCellsByProduct(floorId, productId);
+    return parseOrThrow(cellIdListSchema, cellIds);
   });
 
   app.get('/api/floors/:floorId/non-rack-locations', async (request, reply) => {

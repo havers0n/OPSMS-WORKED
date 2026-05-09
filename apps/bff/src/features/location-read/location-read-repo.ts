@@ -63,6 +63,7 @@ export type LocationReadRepo = {
   listCellContainers(cellId: string): Promise<LocationOccupancyRowRecord[]>;
   listFloorLocationOccupancy(floorId: string): Promise<LocationOccupancyRowRecord[]>;
   listFloorNonRackLocations(floorId: string): Promise<NonRackLocationRefRecord[]>;
+  listFloorCellsByProduct(floorId: string, productId: string): Promise<string[]>;
   listLocationStorage(locationId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorage(cellId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorageByIds(cellIds: string[]): Promise<LocationStorageSnapshotRowRecord[]>;
@@ -159,6 +160,21 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
       }
 
       return (data ?? []) as LocationOccupancyRowRecord[];
+    },
+
+    async listFloorCellsByProduct(floorId, productId) {
+      const { data, error } = await supabase
+        .from('location_storage_canonical_v')
+        .select('cell_id')
+        .eq('floor_id', floorId)
+        .eq('product_id', productId)
+        .not('cell_id', 'is', null);
+
+      if (error) {
+        throw error;
+      }
+
+      return [...new Set((data ?? []).map((row) => row.cell_id).filter(Boolean))] as string[];
     },
 
     async listFloorNonRackLocations(floorId) {
