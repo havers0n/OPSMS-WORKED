@@ -42,6 +42,32 @@ describe('canvas diagnostics flags', () => {
     });
   });
 
+  it('keeps RackBody shell caching diagnostics-only', () => {
+    vi.stubGlobal('window', {});
+
+    expect(getCanvasDiagnosticsFlags().rackBodyShell).toBe('normal');
+  });
+
+  it('accepts the RackBody shell cache diagnostic override', () => {
+    vi.stubGlobal('window', {
+      __WOS_CANVAS_PERF_DIAGNOSTICS__: {
+        rackBodyShell: 'cached'
+      }
+    });
+
+    expect(getCanvasDiagnosticsFlags().rackBodyShell).toBe('cached');
+  });
+
+  it('falls back to normal RackBody shell rendering for invalid overrides', () => {
+    vi.stubGlobal('window', {
+      __WOS_CANVAS_PERF_DIAGNOSTICS__: {
+        rackBodyShell: 'invalid'
+      }
+    });
+
+    expect(getCanvasDiagnosticsFlags().rackBodyShell).toBe('normal');
+  });
+
   it('reads the internal rollback override from session storage', () => {
     vi.stubGlobal('window', {
       sessionStorage: {
