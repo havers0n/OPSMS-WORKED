@@ -16,13 +16,15 @@ async function selectFirstRack(page: Page) {
   await expect(canvas).toBeVisible();
   await page.waitForFunction(() => {
     const stage = (window as Window & { __WOS_CANVAS_STAGE__?: any }).__WOS_CANVAS_STAGE__;
-    const rackLayer = stage?.findOne?.('.rack-layer');
+    const rackLayer =
+      stage?.findOne?.('.rack-base-layer') ?? stage?.findOne?.('.rack-layer');
     return Boolean(rackLayer?.getChildren?.().length);
   });
 
   const point = await page.evaluate(() => {
     const stage = (window as Window & { __WOS_CANVAS_STAGE__?: any }).__WOS_CANVAS_STAGE__;
-    const rackLayer = stage.findOne('.rack-layer');
+    const rackLayer =
+      stage.findOne('.rack-base-layer') ?? stage.findOne('.rack-layer');
     const rackGroup = rackLayer.getChildren()[0];
     const rect = rackGroup.getClientRect({ relativeTo: stage });
     const containerRect = stage.container().getBoundingClientRect();

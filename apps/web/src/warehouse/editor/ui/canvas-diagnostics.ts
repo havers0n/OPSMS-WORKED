@@ -28,6 +28,7 @@ export const CANVAS_DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 
 export type CanvasRenderComponentName =
   | 'EditorCanvas'
+  | 'CellStateOverlayLayer'
   | 'RackLayer'
   | 'RackCells'
   | 'SelectionOverlayLayer';
@@ -85,7 +86,11 @@ export type CanvasRenderPipelineDiagnostics = {
   konva: {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
+    layerDrawCallsByName: Record<string, number>;
+    layerBatchDrawCallsByName: Record<string, number>;
+    layerNodeCountsByName: Record<string, number>;
     rackLayerNodeCount: number;
+    cellStateOverlayLayerNodeCount: number;
   };
   selectionOverlay: {
     affectedCellCount: number;
@@ -286,6 +291,7 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     zoomDurableCommits: 0,
     components: {
       EditorCanvas: createComponentMetrics(),
+      CellStateOverlayLayer: createComponentMetrics(),
       RackLayer: createComponentMetrics(),
       RackCells: createComponentMetrics(),
       SelectionOverlayLayer: createComponentMetrics()
@@ -293,7 +299,11 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     konva: {
       layerDrawCalls: 0,
       layerBatchDrawCalls: 0,
-      rackLayerNodeCount: 0
+      layerDrawCallsByName: {},
+      layerBatchDrawCallsByName: {},
+      layerNodeCountsByName: {},
+      rackLayerNodeCount: 0,
+      cellStateOverlayLayerNodeCount: 0
     },
     selectionOverlay: {
       affectedCellCount: 0,
@@ -465,22 +475,46 @@ export function recordCanvasSettledFull() {
   recordCanvasDiagnosticsPhaseMark(diagnostics, 'settled');
 }
 
-export function recordCanvasKonvaLayerDraw(kind: 'draw' | 'batchDraw') {
+export function recordCanvasKonvaLayerDraw(
+  kind: 'draw' | 'batchDraw',
+  layerName = 'unknown-layer'
+) {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
+  diagnostics.konva.layerDrawCallsByName ??= {};
+  diagnostics.konva.layerBatchDrawCallsByName ??= {};
+
   if (kind === 'draw') {
     diagnostics.konva.layerDrawCalls += 1;
+    diagnostics.konva.layerDrawCallsByName[layerName] =
+      (diagnostics.konva.layerDrawCallsByName[layerName] ?? 0) + 1;
   } else {
     diagnostics.konva.layerBatchDrawCalls += 1;
+    diagnostics.konva.layerBatchDrawCallsByName[layerName] =
+      (diagnostics.konva.layerBatchDrawCallsByName[layerName] ?? 0) + 1;
+  }
+}
+
+export function recordCanvasLayerNodeCount(
+  layerName: string,
+  nodeCount: number
+) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.konva.layerNodeCountsByName ??= {};
+  diagnostics.konva.layerNodeCountsByName[layerName] = nodeCount;
+  if (layerName === 'rack-base-layer') {
+    diagnostics.konva.rackLayerNodeCount = nodeCount;
+  }
+  if (layerName === 'cell-state-overlay-layer') {
+    diagnostics.konva.cellStateOverlayLayerNodeCount = nodeCount;
   }
 }
 
 export function recordCanvasRackLayerNodeCount(nodeCount: number) {
-  const diagnostics = getActiveRenderPipelineDiagnostics();
-  if (!diagnostics) return;
-
-  diagnostics.konva.rackLayerNodeCount = nodeCount;
+  recordCanvasLayerNodeCount('rack-base-layer', nodeCount);
 }
 
 export function recordCanvasSelectionOverlayMetrics({

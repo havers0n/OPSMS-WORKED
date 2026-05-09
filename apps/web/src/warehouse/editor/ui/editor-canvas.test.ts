@@ -25,6 +25,7 @@ let mockIsPanning = false;
 let mockHandleZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
 let rackLayerRenderSnapshots: Array<Record<string, unknown>> = [];
+let cellStateOverlayLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
@@ -42,6 +43,8 @@ vi.mock('react-konva', () => ({
 
 vi.mock('@/entities/layout-version/lib/canvas-geometry', () => ({
   GRID_SIZE: 1,
+  LOD_CELL_THRESHOLD: 1.3,
+  LOD_SECTION_THRESHOLD: 0.9,
   MAJOR_GRID_SIZE: 5,
   MINOR_GRID_ZOOM_THRESHOLD: 999,
   isRackInViewport: mockIsRackInViewport
@@ -127,6 +130,13 @@ vi.mock('./rack-layer', () => ({
       renderMode: props.renderMode
     });
     return createElement('RackLayer', props);
+  }
+}));
+
+vi.mock('./shapes/selection-overlay-layer', () => ({
+  CellStateOverlayLayer: (props: Record<string, unknown>) => {
+    cellStateOverlayLastProps = props;
+    return createElement('CellStateOverlayLayer', props);
   }
 }));
 
@@ -262,6 +272,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
   beforeEach(() => {
     rackLayerLastProps = null;
     rackLayerRenderSnapshots = [];
+    cellStateOverlayLastProps = null;
     canvasHudLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
@@ -702,6 +713,52 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
     const racks = rackLayerLastProps?.racks as Array<{ id: string }>;
     expect(racks.map((rack) => rack.id)).toContain(rackId);
+  });
+
+  it('renders selected cell state in a separate overlay layer and disables the base rack overlay', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = null;
+    mockSelectedRackActiveLevel = 2;
+    mockSelection = { type: 'cell', cellId: 'cell-1' };
+    mockPublishedCellsById = new Map([
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
+    ]);
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.renderSelectionOverlay).toBe(false);
+    expect(rackLayerLastProps?.canvasSelectedCellId).toBeNull();
+    const overlay = renderer.root.findAll(
+      (node) => String(node.type) === 'CellStateOverlayLayer'
+    )[0];
+    expect(overlay).toBeTruthy();
+    expect(cellStateOverlayLastProps?.selectedCellId).toBe('cell-1');
+    expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
   it('defaults the canvas render mode to full', () => {

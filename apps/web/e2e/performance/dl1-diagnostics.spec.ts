@@ -163,6 +163,7 @@ type RenderPipelineDiagnostics = {
   zoomDurableCommits: number;
   components: {
     EditorCanvas: RenderComponentMetrics;
+    CellStateOverlayLayer: RenderComponentMetrics;
     RackLayer: RenderComponentMetrics;
     RackCells: RenderComponentMetrics;
     SelectionOverlayLayer: RenderComponentMetrics;
@@ -170,7 +171,11 @@ type RenderPipelineDiagnostics = {
   konva: {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
+    layerDrawCallsByName: Record<string, number>;
+    layerBatchDrawCallsByName: Record<string, number>;
+    layerNodeCountsByName: Record<string, number>;
     rackLayerNodeCount: number;
+    cellStateOverlayLayerNodeCount: number;
   };
   selectionOverlay: {
     affectedCellCount: number;
@@ -823,10 +828,10 @@ async function setRackLayerListening(page: Page, listening: boolean) {
           : typeof layer.getAttr === 'function'
             ? layer.getAttr('name')
             : '';
-      return name === 'rack-layer';
+      return name === 'rack-base-layer' || name === 'rack-layer';
     });
     if (!rackLayer) {
-      throw new Error('DL1 diagnostics could not find rack-layer.');
+      throw new Error('DL1 diagnostics could not find rack-base-layer.');
     }
     rackLayer.listening(nextListening);
     rackLayer.batchDraw();
@@ -943,6 +948,7 @@ async function startRenderPipelineProbe(
       zoomDurableCommits: 0,
       components: {
         EditorCanvas: createComponentMetrics(),
+        CellStateOverlayLayer: createComponentMetrics(),
         RackLayer: createComponentMetrics(),
         RackCells: createComponentMetrics(),
         SelectionOverlayLayer: createComponentMetrics()
@@ -950,7 +956,11 @@ async function startRenderPipelineProbe(
       konva: {
         layerDrawCalls: 0,
         layerBatchDrawCalls: 0,
-        rackLayerNodeCount: 0
+        layerDrawCallsByName: {},
+        layerBatchDrawCallsByName: {},
+        layerNodeCountsByName: {},
+        rackLayerNodeCount: 0,
+        cellStateOverlayLayerNodeCount: 0
       },
       selectionOverlay: {
         affectedCellCount: 0,
@@ -1361,6 +1371,7 @@ async function startKonvaPipelineProbe(page: Page) {
     };
 
     const rackLayerForNodeProbe =
+      layers.find((layer: any) => getLayerName(layer) === 'rack-base-layer') ??
       layers.find((layer: any) => getLayerName(layer) === 'rack-layer') ??
       firstLayer;
     const rackNodesForNodeProbe = collectNodes(rackLayerForNodeProbe);
@@ -1755,7 +1766,10 @@ async function stopKonvaPipelineProbe(
       children.forEach((child: any) => visit(child, composition, isListening, isVisible));
     };
 
-    const rackLayer = layers.find((layer: any) => getLayerName(layer) === 'rack-layer') ?? null;
+    const rackLayer =
+      layers.find((layer: any) => getLayerName(layer) === 'rack-base-layer') ??
+      layers.find((layer: any) => getLayerName(layer) === 'rack-layer') ??
+      null;
     const rackLayerComposition: RackLayerNodeComposition = {
       total: 0,
       byType: {},
@@ -2097,6 +2111,7 @@ type WarehouseCanvasSnapshot = {
   stageId: string;
   layerCount: number;
   rackLayerNodeCount: number;
+  cellStateOverlayLayerNodeCount: number;
 };
 
 async function readWarehouseCanvasSnapshot(
@@ -2114,7 +2129,16 @@ async function readWarehouseCanvasSnapshot(
           : typeof layer.getAttr === 'function'
             ? layer.getAttr('name')
             : '';
-      return name === 'rack-layer';
+      return name === 'rack-base-layer' || name === 'rack-layer';
+    });
+    const cellStateOverlayLayer = layers.find((layer: any) => {
+      const name =
+        typeof layer.name === 'function'
+          ? layer.name()
+          : typeof layer.getAttr === 'function'
+            ? layer.getAttr('name')
+            : '';
+      return name === 'cell-state-overlay-layer';
     });
     const countNodeTree = (node: any): number => {
       if (!node) return 0;
@@ -2145,7 +2169,8 @@ async function readWarehouseCanvasSnapshot(
       hasStage: !!stage,
       stageId: String(stage?._id ?? stage?._idCounter ?? 'none'),
       layerCount: layers.length,
-      rackLayerNodeCount: countNodeTree(rackLayer)
+      rackLayerNodeCount: countNodeTree(rackLayer),
+      cellStateOverlayLayerNodeCount: countNodeTree(cellStateOverlayLayer)
     };
   });
 }
@@ -2159,7 +2184,8 @@ function stableSnapshotFields(snapshot: WarehouseCanvasSnapshot) {
     hasStage: snapshot.hasStage,
     stageId: snapshot.stageId,
     layerCount: snapshot.layerCount,
-    rackLayerNodeCount: snapshot.rackLayerNodeCount
+    rackLayerNodeCount: snapshot.rackLayerNodeCount,
+    cellStateOverlayLayerNodeCount: snapshot.cellStateOverlayLayerNodeCount
   };
 }
 
@@ -3509,7 +3535,7 @@ drawHit calls: ${konvaProbe.drawHitCalls}
 ${formatLayerScope(konvaProbe)}
 
 ## Node Composition
-Total rack-layer nodes: ${konvaProbe.rackLayerComposition.total}
+Total rack-base-layer nodes: ${konvaProbe.rackLayerComposition.total}
 By type: ${JSON.stringify(konvaProbe.rackLayerComposition.byType)}
 listening=true nodes: ${konvaProbe.rackLayerComposition.listeningTrue}
 hit-graph eligible nodes: ${konvaProbe.rackLayerComposition.hitGraphEligible}
@@ -3529,6 +3555,7 @@ Conclusion: ${manualOff ? 'Measured by direct A/B comparison.' : 'manual-pan-bat
 
 ## React Rendering Context
 ${componentRenderLine('EditorCanvas', diagnostics)}
+${componentRenderLine('CellStateOverlayLayer', diagnostics)}
 ${componentRenderLine('RackLayer', diagnostics)}
 ${componentRenderLine('RackCells', diagnostics)}
 ${componentRenderLine('SelectionOverlayLayer', diagnostics)}
@@ -3536,7 +3563,11 @@ ${componentRenderLine('SelectionOverlayLayer', diagnostics)}
 ## Existing Konva Rendering Counters
 Layer draw calls: ${diagnostics.konva.layerDrawCalls}
 Layer batchDraw calls: ${diagnostics.konva.layerBatchDrawCalls}
-Konva node count: ${diagnostics.konva.rackLayerNodeCount}
+Layer draw calls by name: ${JSON.stringify(diagnostics.konva.layerDrawCallsByName ?? {})}
+Layer batchDraw calls by name: ${JSON.stringify(diagnostics.konva.layerBatchDrawCallsByName ?? {})}
+Layer node counts by name: ${JSON.stringify(diagnostics.konva.layerNodeCountsByName ?? {})}
+rack-base-layer node count: ${diagnostics.konva.rackLayerNodeCount}
+cell-state-overlay-layer node count: ${diagnostics.konva.cellStateOverlayLayerNodeCount ?? 0}
 
 ## Pan Architecture
 ${panClassification}

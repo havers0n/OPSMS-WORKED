@@ -165,6 +165,7 @@ function renderRackLayer(params: {
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
   renderMode?: CanvasRenderMode;
+  renderSelectionOverlay?: boolean;
   canvasSelectedCellId?: string | null;
   temporaryLocateTargetCellId?: string | null;
   moveSourceCellId?: string | null;
@@ -214,6 +215,7 @@ function renderRackLayer(params: {
         },
         isActivelyPanning: params.isActivelyPanning ?? false,
         renderMode: params.renderMode,
+        renderSelectionOverlay: params.renderSelectionOverlay,
         highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
         hoveredRackId: null,
         isLayoutEditable: true,
@@ -498,6 +500,34 @@ describe('RackLayer high-LOD cell mounting', () => {
 
     expect(rackCells[0]?.props.highlightedCellIds).toBe(highlightedCellIds);
     expect(overlayHalos).toHaveLength(0);
+  });
+
+  it('can keep sparse selection visuals out of the base rack layer', () => {
+    const rack = createRack('rack-1', 0);
+    const selectedCell = createPublishedCell(rack, 1);
+    const cells = indexCells([selectedCell]);
+
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canvasSelectedCellId: selectedCell.id,
+      renderSelectionOverlay: false,
+      racks: [rack],
+      publishedCellsById: cells.byId,
+      publishedCellsByStructure: cells.byStructure
+    });
+
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+    const overlayOutlines = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Rect' &&
+        node.props.wosRectRole === 'cell-outline-overlay'
+    );
+
+    expect(rackCells[0]?.props.selectedCellId).toBeNull();
+    expect(overlayOutlines).toHaveLength(0);
   });
 
   it('keeps view-mode cell click selection and highlight writes unchanged', () => {

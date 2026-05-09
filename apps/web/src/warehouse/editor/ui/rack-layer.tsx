@@ -154,6 +154,7 @@ type RackLayerProps = {
   };
   isActivelyPanning?: boolean;
   renderMode?: CanvasRenderMode;
+  renderSelectionOverlay?: boolean;
   canvasSelectedCellId: string | null;
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   clearHighlightedCellIds: () => void;
@@ -207,6 +208,7 @@ export function RackLayer({
   diagnosticsViewport,
   isActivelyPanning = false,
   renderMode = 'full',
+  renderSelectionOverlay = true,
   canvasSelectedCellId,
   cellRuntimeById,
   clearHighlightedCellIds,
@@ -291,11 +293,11 @@ export function RackLayer({
       const originalDraw = layer.draw.bind(layer);
       const originalBatchDraw = layer.batchDraw.bind(layer);
       layer.draw = (...args: Parameters<Konva.Layer['draw']>) => {
-        recordCanvasKonvaLayerDraw('draw');
+        recordCanvasKonvaLayerDraw('draw', 'rack-base-layer');
         return originalDraw(...args);
       };
       layer.batchDraw = (...args: Parameters<Konva.Layer['batchDraw']>) => {
-        recordCanvasKonvaLayerDraw('batchDraw');
+        recordCanvasKonvaLayerDraw('batchDraw', 'rack-base-layer');
         return originalBatchDraw(...args);
       };
       diagnosticLayer.__wosDrawDiagnosticsWrapped = true;
@@ -327,6 +329,7 @@ export function RackLayer({
       'diagnosticsRackLayerRenderer',
       'isActivelyPanning',
       'renderMode',
+      'renderSelectionOverlay',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -357,6 +360,7 @@ export function RackLayer({
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
       isActivelyPanning,
       renderMode,
+      renderSelectionOverlay,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
@@ -466,7 +470,7 @@ export function RackLayer({
   return (
     <RackLayerComponent
       ref={layerRef}
-      name="rack-layer"
+      name="rack-base-layer"
       listening={hitTestEnabled}
     >
       {racks.map((rack) => {
@@ -646,7 +650,7 @@ export function RackLayer({
           </Group>
         );
       })}
-      {selectionOverlayEnabled && (
+      {selectionOverlayEnabled && renderSelectionOverlay && (
         <SelectionOverlayLayer
           selectedCellId={canvasSelectedCellId}
           highlightedCellId={singleOverlayHighlightedCellId}

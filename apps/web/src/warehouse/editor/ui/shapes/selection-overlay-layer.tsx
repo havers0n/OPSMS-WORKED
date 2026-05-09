@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
-import { Group } from 'react-konva';
+import { useEffect, useMemo, useRef } from 'react';
+import type Konva from 'konva';
+import { Group, Layer } from 'react-konva';
 import type { Cell, Rack } from '@wos/domain';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
 import { FocusedCellAddressOverlay } from './rack-label-overlays';
@@ -7,6 +8,8 @@ import { CellHaloOverlay, CellOutlineOverlay } from './rack-cell-overlays';
 import { resolveCellVisualState } from './rack-cells-visual-state';
 import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
 import {
+  recordCanvasKonvaLayerDraw,
+  recordCanvasLayerNodeCount,
   recordCanvasComponentRender,
   recordCanvasSelectionOverlayMetrics
 } from '../canvas-diagnostics';
@@ -26,6 +29,80 @@ type Props = {
   showFocusedFullAddress: boolean;
   isActivelyPanning?: boolean;
 };
+
+function countKonvaNodeTree(node: Konva.Node): number {
+  const container = node as Konva.Container;
+  const children =
+    typeof container.getChildren === 'function' ? container.getChildren() : [];
+  let count = 1;
+  children.forEach((child) => {
+    count += countKonvaNodeTree(child);
+  });
+  return count;
+}
+
+export function CellStateOverlayLayer(props: Props) {
+  const layerRef = useRef<Konva.Layer | null>(null);
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    const diagnosticLayer = layer as Konva.Layer & {
+      __wosDrawDiagnosticsWrapped?: boolean;
+    };
+    if (!diagnosticLayer.__wosDrawDiagnosticsWrapped) {
+      const originalDraw = layer.draw.bind(layer);
+      const originalBatchDraw = layer.batchDraw.bind(layer);
+      layer.draw = (...args: Parameters<Konva.Layer['draw']>) => {
+        recordCanvasKonvaLayerDraw('draw', 'cell-state-overlay-layer');
+        return originalDraw(...args);
+      };
+      layer.batchDraw = (...args: Parameters<Konva.Layer['batchDraw']>) => {
+        recordCanvasKonvaLayerDraw('batchDraw', 'cell-state-overlay-layer');
+        return originalBatchDraw(...args);
+      };
+      diagnosticLayer.__wosDrawDiagnosticsWrapped = true;
+    }
+
+    recordCanvasLayerNodeCount(
+      'cell-state-overlay-layer',
+      countKonvaNodeTree(layer)
+    );
+  });
+
+  recordCanvasComponentRender({
+    component: 'CellStateOverlayLayer',
+    propsKeys: [
+      'selectedCellId',
+      'highlightedCellId',
+      'visibleRackIds',
+      'primarySelectedRackId',
+      'selectedRackActiveLevel',
+      'showFocusedFullAddress',
+      'isActivelyPanning'
+    ],
+    snapshot: {
+      selectedCellId: props.selectedCellId,
+      highlightedCellId: props.highlightedCellId ?? null,
+      visibleRackIds: props.racks.map((rack) => rack.id).join('|'),
+      primarySelectedRackId: props.primarySelectedRackId,
+      selectedRackActiveLevel: props.selectedRackActiveLevel,
+      showFocusedFullAddress: props.showFocusedFullAddress,
+      isActivelyPanning: props.isActivelyPanning ?? false
+    }
+  });
+
+  return (
+    <Layer
+      ref={layerRef}
+      listening={false}
+      name="cell-state-overlay-layer"
+    >
+      <SelectionOverlayLayer {...props} />
+    </Layer>
+  );
+}
 
 export function SelectionOverlayLayer({
   selectedCellId,

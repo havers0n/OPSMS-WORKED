@@ -7,9 +7,14 @@ import {
   type Rack,
   type RackFace
 } from '@wos/domain';
-import { SelectionOverlayLayer } from './selection-overlay-layer';
+import {
+  CellStateOverlayLayer,
+  SelectionOverlayLayer
+} from './selection-overlay-layer';
 
 vi.mock('react-konva', () => ({
+  Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Layer', props, children),
   Group: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Group', props, children),
   Circle: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -108,14 +113,18 @@ function renderSelectionOverlay(params: {
   selectedCellId: string | null;
   highlightedCellId?: string | null;
   showFocusedFullAddress?: boolean;
+  topLevelLayer?: boolean;
 }) {
   const rack = createRack();
   const cells = indexCells([createCell(1), createCell(2)]);
+  const Component = params.topLevelLayer
+    ? CellStateOverlayLayer
+    : SelectionOverlayLayer;
   let renderer!: TestRenderer.ReactTestRenderer;
 
   act(() => {
     renderer = TestRenderer.create(
-      createElement(SelectionOverlayLayer, {
+      createElement(Component, {
         selectedCellId: params.selectedCellId,
         highlightedCellId: params.highlightedCellId ?? null,
         racks: [rack],
@@ -224,5 +233,25 @@ describe('SelectionOverlayLayer', () => {
       getFocusedAddressLabels(visibleRenderer).map((node) => node.props.text)
     ).toEqual(['ADDR-1']);
     expect(getFocusedAddressLabels(hiddenRenderer)).toHaveLength(0);
+  });
+});
+
+describe('CellStateOverlayLayer', () => {
+  it('renders the sparse cell state overlay as its own non-listening Konva layer', () => {
+    const renderer = renderSelectionOverlay({
+      selectedCellId: 'cell-1',
+      highlightedCellId: 'cell-1',
+      topLevelLayer: true
+    });
+
+    const layers = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Layer' &&
+        node.props.name === 'cell-state-overlay-layer'
+    );
+    expect(layers).toHaveLength(1);
+    expect(layers[0]?.props.listening).toBe(false);
+    expect(getOutlineRects(renderer)).toHaveLength(1);
+    expect(getHaloRects(renderer)).toHaveLength(1);
   });
 });
