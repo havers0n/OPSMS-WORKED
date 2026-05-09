@@ -14,8 +14,6 @@ import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 
-const ENABLE_STORAGE_WORKSPACE_V2 = true;
-
 export function WarehouseEditor() {
   const activeFloorId = useActiveFloorId();
   const { data: workspace } = useFloorWorkspace(activeFloorId);
@@ -86,8 +84,7 @@ export function WarehouseEditor() {
     clearSelection();
   };
 
-  // V2 gate: route to StorageWorkspaceV2 if enabled and in storage mode
-  if (viewMode === 'storage' && ENABLE_STORAGE_WORKSPACE_V2) {
+  if (viewMode === 'storage') {
     return (
       <StorageWorkspaceV2
         workspace={workspace ?? null}

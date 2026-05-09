@@ -228,10 +228,7 @@ vi.mock('./use-canvas-scene-model', () => ({
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function renderCanvas(
-  workspace: FloorWorkspace,
-  params?: { isStorageV2?: boolean }
-) {
+function renderCanvas(workspace: FloorWorkspace) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -239,7 +236,6 @@ function renderCanvas(
         workspace,
         onAddRack: () => undefined,
         onOpenInspector: () => undefined,
-        isStorageV2: params?.isStorageV2
       })
     );
   });
@@ -257,64 +253,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockHandleZoom = vi.fn();
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
-  });
-
-  it('passes selected cell parent rack id to RackLayer in storage mode', () => {
-    const draft = createLayoutDraftFixture();
-    const rackId = draft.rackIds[0] as string;
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelectedRackId = null;
-    mockSelectedRackActiveLevel = 2;
-    mockSelection = { type: 'cell', cellId: 'cell-1' };
-    mockPublishedCellsById = new Map([
-      [
-        'cell-1',
-        {
-          id: 'cell-1',
-          layoutVersionId: 'lv-1',
-          rackId,
-          rackFaceId: 'face-a',
-          rackSectionId: 'section-a',
-          rackLevelId: 'level-1',
-          slotNo: 1,
-          address: {
-            raw: '01-A.01.01.01',
-            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
-            sortKey: '0001-A-01-01-01'
-          },
-          cellCode: 'CELL-1',
-          status: 'active'
-        } satisfies Cell
-      ]
-    ]);
-
-    renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
-
-    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
-  });
-
-  it('passes selected rack id from shared resolver for storage rack selection', () => {
-    const draft = createLayoutDraftFixture();
-    const rackId = draft.rackIds[0] as string;
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelectedRackId = 'legacy-rack-id';
-    mockSelectedRackActiveLevel = 2;
-    mockSelection = { type: 'rack', rackIds: [rackId] };
-    mockPublishedCellsById = new Map();
-
-    renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
-
-    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
   it('keeps selectedRackId semantics in non-storage mode', () => {
@@ -356,89 +294,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
-  it('preserves current contract: storage unresolved selected cell does not produce primarySelectedRackId', () => {
-    const draft = createLayoutDraftFixture();
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelectedRackId = 'rack-stale';
-    mockSelectedRackActiveLevel = 2;
-    mockSelection = { type: 'cell', cellId: 'missing-cell' };
-    mockPublishedCellsById = new Map();
-
-    renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
-
-    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
-  });
-
-  it('sets primarySelectedRackId for resolved storage container selection', () => {
-    const draft = createLayoutDraftFixture();
-    const rackId = draft.rackIds[0] as string;
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelectedRackId = 'rack-stale';
-    mockSelectedRackActiveLevel = 2;
-    mockSelection = {
-      type: 'container',
-      containerId: 'container-1',
-      sourceCellId: 'cell-1'
-    };
-    mockPublishedCellsById = new Map([
-      [
-        'cell-1',
-        {
-          id: 'cell-1',
-          layoutVersionId: 'lv-1',
-          rackId,
-          rackFaceId: 'face-a',
-          rackSectionId: 'section-a',
-          rackLevelId: 'level-1',
-          slotNo: 1,
-          address: {
-            raw: '01-A.01.01.01',
-            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
-            sortKey: '0001-A-01-01-01'
-          },
-          cellCode: 'CELL-1',
-          status: 'active'
-        } satisfies Cell
-      ]
-    ]);
-
-    renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
-
-    expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
-  });
-
-  it('keeps explicit unresolved container fallback: no primarySelectedRackId without source-cell context', () => {
-    const draft = createLayoutDraftFixture();
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelectedRackId = 'rack-stale';
-    mockSelectedRackActiveLevel = 2;
-    mockSelection = {
-      type: 'container',
-      containerId: 'container-1',
-      sourceCellId: 'cell-1'
-    };
-    mockPublishedCellsById = new Map();
-
-    renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
-
-    expect(rackLayerLastProps?.primarySelectedRackId).toBeNull();
-  });
-
   it('storage V2 canvas cell callback writes selectCell with cell/rack/level', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
@@ -474,7 +329,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
         activeDraft: draft,
         latestPublished: draft
       },
-      { isStorageV2: true }
     );
 
     const onV2StorageCellSelect =
@@ -550,7 +404,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
         activeDraft: draft,
         latestPublished: draft
       },
-      { isStorageV2: true }
     );
 
     const onV2StorageRackSelect =
@@ -585,7 +438,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
         activeDraft: draft,
         latestPublished: draft
       },
-      { isStorageV2: true }
     );
 
     expect(rackLayerLastProps?.selectedRackActiveLevel).toBeNull();
@@ -625,7 +477,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
         activeDraft: draft,
         latestPublished: draft
       },
-      { isStorageV2: true }
     );
 
     expect(rackLayerLastProps?.selectedRackActiveLevel).toBe(0);
@@ -644,7 +495,6 @@ describe('EditorCanvas storage active-rack wiring', () => {
         activeDraft: draft,
         latestPublished: draft
       },
-      { isStorageV2: true }
     );
 
     expect(canvasHudLastProps?.shouldShowStorageCellBar).toBe(false);

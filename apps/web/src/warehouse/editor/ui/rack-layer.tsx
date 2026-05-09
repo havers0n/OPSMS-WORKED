@@ -233,12 +233,6 @@ type RackLayerProps = {
   setSnapGuides: (guides: SnapGuide[]) => void;
   toggleRackSelection: (rackId: string) => void;
   updateRackPosition: (rackId: string, x: number, y: number) => void;
-  /**
-   * V2 Storage focus callbacks — when provided, these replace legacy
-   * setSelectedCellId / setSelectedRackIds in storage mode so that the
-   * V2 StorageFocusStore becomes the sole writer.
-   * Not passed in the legacy/layout path — undefined means use legacy behaviour.
-   */
   onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
   onV2StorageRackSelect?: (params: { rackId: string }) => void;
 };
@@ -443,21 +437,10 @@ export function RackLayer({
             setPlacementMoveTargetCellId(resolvedCellId);
             return;
           }
-          if (onV2StorageCellSelect) {
-            onV2StorageCellSelect({ cellId: resolvedCellId, rackId: rack.id });
-          } else {
-            setSelectedCellId(resolvedCellId);
-          }
+          onV2StorageCellSelect?.({ cellId: resolvedCellId, rackId: rack.id });
           return;
         }
-        if (onV2StorageRackSelect) {
-          // V2: single writer — focus store handles clearing the selected cell
-          onV2StorageRackSelect({ rackId: rack.id });
-        } else {
-          // Legacy: dual-write to editor store
-          setSelectedCellId(null);
-          setSelectedRackIds([rack.id]);
-        }
+        onV2StorageRackSelect?.({ rackId: rack.id });
       } else {
         setSelectedRackIds([rack.id]);
       }
@@ -511,13 +494,7 @@ export function RackLayer({
               setPlacementMoveTargetCellId(cellId);
               return;
             }
-            if (onV2StorageCellSelect) {
-              // V2: single writer — caller (EditorCanvas) resolves level from publishedCellsById
-              onV2StorageCellSelect({ cellId, rackId: rack.id });
-            } else {
-              // Legacy: write to editor store
-              setSelectedCellId(cellId);
-            }
+            onV2StorageCellSelect?.({ cellId, rackId: rack.id });
             return;
           }
           if (isViewMode) {

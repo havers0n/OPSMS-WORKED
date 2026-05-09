@@ -128,7 +128,6 @@ export function PublishedViewer() {
                 <InspectorRouter
                   workspace={workspace ?? null}
                   onClose={handleCloseInspector}
-                  enableLegacyStorageRouting
                 />
               </div>
             </div>

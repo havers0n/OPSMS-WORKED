@@ -37,43 +37,12 @@ describe('resolveInspectorKind - layout mode', () => {
 });
 
 describe('resolveInspectorKind - storage mode', () => {
-  it('disables legacy storage routing by default', () => {
+  it('returns null for all storage selections (handled by StorageWorkspaceV2)', () => {
     expect(resolveInspectorKind('storage', noSelection)).toBeNull();
     expect(resolveInspectorKind('storage', rackSelection(['r1']))).toBeNull();
     expect(resolveInspectorKind('storage', cellSelection('cell-1'))).toBeNull();
-  });
-
-  it('routes resolved storage container selection to storage-shell when explicitly enabled', () => {
-    expect(
-      resolveInspectorKind('storage', containerSelection('container-1', 'cell-1'), {
-        hasResolvedStorageContainerRackContext: true,
-        enableLegacyStorageRouting: true
-      })
-    ).toBe('storage-shell');
-  });
-
-  it('keeps explicit unresolved/no-source container fallback on placement-container when enabled', () => {
-    expect(
-      resolveInspectorKind('storage', containerSelection('container-1', 'cell-1'), {
-        hasResolvedStorageContainerRackContext: false,
-        enableLegacyStorageRouting: true
-      })
-    ).toBe('placement-container');
-    expect(
-      resolveInspectorKind('storage', containerSelection('container-1'), {
-        hasResolvedStorageContainerRackContext: false,
-        enableLegacyStorageRouting: true
-      })
-    ).toBe('placement-container');
-  });
-
-  it('routes storage zone selection to zone-readonly only when explicitly enabled', () => {
-    expect(
-      resolveInspectorKind('storage', zoneSelection('zone-1'), {
-        hasResolvedStorageContainerRackContext: false,
-        enableLegacyStorageRouting: true
-      })
-    ).toBe('zone-readonly');
+    expect(resolveInspectorKind('storage', zoneSelection('zone-1'))).toBeNull();
+    expect(resolveInspectorKind('storage', containerSelection('container-1', 'cell-1'))).toBeNull();
   });
 });
 
