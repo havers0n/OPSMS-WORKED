@@ -131,8 +131,7 @@ function FaceCells({
   const isInteractionLight = renderMode === 'interaction-light';
   const isInteractionSkeleton = renderMode === 'interaction-skeleton';
   const isRestoreBase = renderMode === 'restore-base';
-  const labelsEnabled =
-    renderMode === 'full' || renderMode === 'restore-labels';
+  const labelsEnabled = renderMode === 'full';
   const detailsEnabled = !isInteractionLight && !isRestoreBase;
   const metricSourceId = `${rackId}:${face.id}`;
   if (isInteractionSkeleton) {
@@ -160,9 +159,8 @@ function FaceCells({
   const cullingEnabled =
     diagnosticsFlags.cells !== 'unculled' &&
     diagnosticsFlags.enableProductionCellCulling;
-  const cellOverlaysMode = isInteractionLight || isRestoreBase
-    ? 'off'
-    : diagnosticsFlags.cellOverlays;
+  const cellOverlaysMode =
+    isInteractionLight || isRestoreBase ? 'off' : diagnosticsFlags.cellOverlays;
   const cellOverlaysOff = cellOverlaysMode === 'off';
 
   const faceCellGeometries = collectRenderedFaceCellGeometries({
@@ -197,23 +195,20 @@ function FaceCells({
         isHighlighted: isSearchHit,
         isWorkflowSource
       });
-      if (
-        cullingEnabled &&
-        !shouldRenderCanvasCell({
-          cellGeometry,
-          canvasOffset: diagnosticsViewport.canvasOffset,
-          forceVisible:
-            forceRenderAllCells ||
-            isLocateTarget ||
-            isWorkflowSource,
-          rackGeometry,
-          rackRotationDeg,
-          viewport: diagnosticsViewport.viewport,
-          zoom: diagnosticsViewport.zoom
-        })
-      ) {
-        return null;
-      }
+    if (
+      cullingEnabled &&
+      !shouldRenderCanvasCell({
+        cellGeometry,
+        canvasOffset: diagnosticsViewport.canvasOffset,
+        forceVisible: forceRenderAllCells || isLocateTarget || isWorkflowSource,
+        rackGeometry,
+        rackRotationDeg,
+        viewport: diagnosticsViewport.viewport,
+        zoom: diagnosticsViewport.zoom
+      })
+    ) {
+      return null;
+    }
 
     cellsRendered += 1;
     const addressText = cell?.address?.raw ?? null;
@@ -373,6 +368,7 @@ type DiagnosticsViewport = {
 
 const DEFAULT_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   labels: 'normal',
+  grid: 'normal',
   hitTest: 'normal',
   cells: 'normal',
   cellOverlays: 'normal',
@@ -430,7 +426,10 @@ export function RackCells({
       : faceB;
   const normalizedSemanticLevels =
     semanticLevels ??
-    collectFaceSemanticLevels([faceA, ...(effectiveFaceB ? [effectiveFaceB] : [])]);
+    collectFaceSemanticLevels([
+      faceA,
+      ...(effectiveFaceB ? [effectiveFaceB] : [])
+    ]);
   const firstHighlightedCellId = getFirstCellId(highlightedCellIds);
 
   recordCanvasComponentRender({

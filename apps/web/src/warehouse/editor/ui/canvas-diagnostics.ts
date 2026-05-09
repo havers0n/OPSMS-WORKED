@@ -6,18 +6,22 @@ import {
 
 export type CanvasDiagnosticsFlags = {
   labels: 'normal' | 'off';
+  grid: 'normal' | 'off-during-pan';
   hitTest: 'normal' | 'off';
   cells: 'normal' | 'off' | 'visible-only' | 'unculled';
   cellOverlays: 'normal' | 'surface-only' | 'off';
+  storageOccupancyOverlay?: 'on' | 'off' | 'summary-only';
   enableProductionCellCulling: boolean;
   rackLayerRenderer: 'layer' | 'fast-layer';
 };
 
 export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   labels: 'normal',
+  grid: 'normal',
   hitTest: 'normal',
   cells: 'normal',
   cellOverlays: 'normal',
+  storageOccupancyOverlay: 'on',
   enableProductionCellCulling: true,
   rackLayerRenderer: 'layer'
 };
@@ -168,6 +172,11 @@ export function getCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {
       ['normal', 'off'] as const,
       DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.labels
     ),
+    grid: resolveOption(
+      raw.grid,
+      ['normal', 'off-during-pan'] as const,
+      DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.grid
+    ),
     hitTest: resolveOption(
       raw.hitTest,
       ['normal', 'off'] as const,
@@ -182,6 +191,11 @@ export function getCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {
       raw.cellOverlays,
       ['normal', 'surface-only', 'off'] as const,
       DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.cellOverlays
+    ),
+    storageOccupancyOverlay: resolveOption(
+      raw.storageOccupancyOverlay,
+      ['on', 'off', 'summary-only'] as const,
+      DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.storageOccupancyOverlay ?? 'on'
     ),
     enableProductionCellCulling:
       typeof raw.enableProductionCellCulling === 'boolean'
@@ -329,9 +343,7 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
   };
 }
 
-function getActiveRenderPipelineDiagnostics():
-  | CanvasRenderPipelineDiagnostics
-  | null {
+function getActiveRenderPipelineDiagnostics(): CanvasRenderPipelineDiagnostics | null {
   if (typeof window === 'undefined') return null;
   const diagnostics = window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
   return diagnostics?.enabled ? diagnostics : null;

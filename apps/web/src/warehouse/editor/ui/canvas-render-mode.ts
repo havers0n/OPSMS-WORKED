@@ -19,5 +19,5 @@ export function isCanvasRestoreRenderMode(mode: CanvasRenderMode) {
 }
 
 export function isCanvasFullDetailRenderMode(mode: CanvasRenderMode) {
-  return mode === 'full' || mode === 'restore-labels';
+  return mode === 'full';
 }

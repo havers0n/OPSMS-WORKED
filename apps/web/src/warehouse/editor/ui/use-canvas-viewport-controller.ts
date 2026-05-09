@@ -45,6 +45,8 @@ type CanvasOffset = {
 
 type UseCanvasViewportControllerParams = {
   autoFitRacks: Rack[];
+  disableGridDuringPan?: boolean;
+  hasStorageFocus?: boolean;
   setCanvasZoom: (zoom: number) => void;
   stageRef: MutableRefObject<Konva.Stage | null>;
   viewMode: ViewMode;
@@ -59,6 +61,13 @@ type StageOffset = {
 type ScreenPoint = {
   x: number;
   y: number;
+};
+
+type PendingModeEntryAutoFit = {
+  viewMode: 'view' | 'storage';
+  zoom: number;
+  offsetX: number;
+  offsetY: number;
 };
 
 export type TransformOnlyPanState = {
@@ -281,8 +290,84 @@ export function getModeEntryMinZoom(viewMode: ViewMode): number {
   return viewMode === 'view' ? LOD_CELL_ENTRY : 0;
 }
 
+export function shouldQueueModeEntryAutoFit({
+  hasStorageFocus,
+  previousViewMode,
+  viewMode
+}: {
+  hasStorageFocus: boolean;
+  previousViewMode: ViewMode | null;
+  viewMode: ViewMode;
+}) {
+  if (viewMode !== 'view' && viewMode !== 'storage') return false;
+  if (viewMode === 'storage' && hasStorageFocus) return false;
+  if (previousViewMode === 'layout') return true;
+  return previousViewMode === null && viewMode === 'storage';
+}
+
+export function getModeEntryCamera({
+  currentOffset,
+  racks,
+  viewMode,
+  viewport,
+  zoom,
+  zoomBounds
+}: {
+  currentOffset: CanvasOffset;
+  racks: Rack[];
+  viewMode: ViewMode;
+  viewport: CanvasViewport;
+  zoom: number;
+  zoomBounds: CanvasZoomBounds;
+}): CanvasCamera | null {
+  if (viewMode !== 'view' && viewMode !== 'storage') return null;
+  if (viewport.width === 0 || viewport.height === 0 || racks.length === 0) {
+    return null;
+  }
+
+  const minEntryZoom = getModeEntryMinZoom(viewMode);
+  const boxes = racks.map(getRackBoundingBox);
+  const minXm = Math.min(...boxes.map((b) => b.minX));
+  const maxXm = Math.max(...boxes.map((b) => b.maxX));
+  const minYm = Math.min(...boxes.map((b) => b.minY));
+  const maxYm = Math.max(...boxes.map((b) => b.maxY));
+
+  const PADDING = 80; // px on each side
+  const bboxWPx = (maxXm - minXm) * WORLD_SCALE;
+  const bboxHPx = (maxYm - minYm) * WORLD_SCALE;
+
+  const scaleX =
+    bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : minEntryZoom;
+  const scaleY =
+    bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : minEntryZoom;
+
+  const targetZoom = clampCanvasZoom(
+    Math.max(Math.min(scaleX, scaleY), minEntryZoom),
+    zoomBounds
+  );
+
+  if (bboxWPx <= 0 || bboxHPx <= 0) {
+    return {
+      zoom: clampCanvasZoom(Math.max(zoom, minEntryZoom), zoomBounds),
+      offsetX: currentOffset.x,
+      offsetY: currentOffset.y
+    };
+  }
+
+  return {
+    zoom: targetZoom,
+    offsetX:
+      (viewport.width - bboxWPx * targetZoom) / 2 -
+      minXm * WORLD_SCALE * targetZoom,
+    offsetY:
+      (viewport.height - bboxHPx * targetZoom) / 2 -
+      minYm * WORLD_SCALE * targetZoom
+  };
+}
+
 export function useCanvasViewportController({
   autoFitRacks,
+  hasStorageFocus = false,
   setCanvasZoom,
   stageRef,
   viewMode,
@@ -324,8 +409,18 @@ export function useCanvasViewportController({
   const touchPanActiveRef = useRef(false);
   const pinchStartDistRef = useRef<number | null>(null);
 
-  // Track previous viewMode so we can detect the transition TO placement.
-  const prevViewModeRef = useRef(viewMode);
+  // Track previous viewMode so we can detect mode-entry auto-fit.
+  const prevViewModeRef = useRef<ViewMode | null>(null);
+  const pendingModeEntryAutoFitRef = useRef<PendingModeEntryAutoFit | null>(
+    viewMode === 'storage' && !hasStorageFocus
+      ? {
+          viewMode,
+          zoom,
+          offsetX,
+          offsetY
+        }
+      : null
+  );
 
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
@@ -363,48 +458,67 @@ export function useCanvasViewportController({
     const prevMode = prevViewModeRef.current;
     prevViewModeRef.current = viewMode;
 
-    // Only fire on the transition from Layout to View/Storage, not on every render.
-    if ((viewMode !== 'view' && viewMode !== 'storage') || prevMode !== 'layout') return;
-    if (viewport.width === 0) return;
+    // Queue entry fit once, then wait for viewport and rack bounds to be ready.
+    if (viewMode === 'layout') {
+      pendingModeEntryAutoFitRef.current = null;
+      return;
+    }
+    if (
+      shouldQueueModeEntryAutoFit({
+        hasStorageFocus,
+        previousViewMode: prevMode,
+        viewMode
+      })
+    ) {
+      pendingModeEntryAutoFitRef.current = {
+        viewMode,
+        zoom,
+        offsetX,
+        offsetY
+      };
+    }
 
-    // Selection is already cleared by setViewMode() in the store.
-    // This effect only handles mode-entry auto-fit.
-    const racks = autoFitRacks;
-    const minEntryZoom = getModeEntryMinZoom(viewMode);
-
-    if (racks.length === 0) {
-      setCanvasZoom(clampCanvasZoom(Math.max(zoom, minEntryZoom), zoomBoundsRef.current));
+    const pending = pendingModeEntryAutoFitRef.current;
+    if (!pending || pending.viewMode !== viewMode) return;
+    if (viewMode === 'storage' && hasStorageFocus) {
+      pendingModeEntryAutoFitRef.current = null;
+      return;
+    }
+    if (
+      pending.zoom !== zoom ||
+      pending.offsetX !== offsetX ||
+      pending.offsetY !== offsetY
+    ) {
+      pendingModeEntryAutoFitRef.current = null;
       return;
     }
 
-    // getRackBoundingBox returns metres; convert to pixels for viewport math
-    const boxes = racks.map(getRackBoundingBox);
-    const minXm = Math.min(...boxes.map((b) => b.minX));
-    const maxXm = Math.max(...boxes.map((b) => b.maxX));
-    const minYm = Math.min(...boxes.map((b) => b.minY));
-    const maxYm = Math.max(...boxes.map((b) => b.maxY));
+    const camera = getModeEntryCamera({
+      currentOffset: canvasOffset,
+      racks: autoFitRacks,
+      viewMode,
+      viewport,
+      zoom,
+      zoomBounds: zoomBoundsRef.current
+    });
+    if (!camera) return;
 
-    const PADDING = 80; // px on each side
-    const bboxWPx = (maxXm - minXm) * WORLD_SCALE;
-    const bboxHPx = (maxYm - minYm) * WORLD_SCALE;
-
-    const scaleX = bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : minEntryZoom;
-    const scaleY = bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : minEntryZoom;
-
-    const targetZoom = clampCanvasZoom(
-      Math.max(Math.min(scaleX, scaleY), minEntryZoom),
-      zoomBoundsRef.current
-    );
-
-    const newOffsetX = (viewport.width - bboxWPx * targetZoom) / 2 - minXm * WORLD_SCALE * targetZoom;
-    const newOffsetY = (viewport.height - bboxHPx * targetZoom) / 2 - minYm * WORLD_SCALE * targetZoom;
-
-    // Atomic camera update — zoom and offset written in a single store transaction.
-    useCameraStore.getState().setCamera(targetZoom, newOffsetX, newOffsetY);
+    // Atomic camera update: zoom and offset written in a single store transaction.
+    pendingModeEntryAutoFitRef.current = null;
+    useCameraStore
+      .getState()
+      .setCamera(camera.zoom, camera.offsetX, camera.offsetY);
     recordCanvasCameraStoreUpdate('camera');
-  }, [viewMode]);
-  // Intentionally reads viewport/autoFitRacks/zoom via closure at transition time —
-  // re-running on their changes would fight the user's manual zoom adjustments.
+  }, [
+    autoFitRacks,
+    canvasOffset,
+    hasStorageFocus,
+    offsetX,
+    offsetY,
+    viewport,
+    viewMode,
+    zoom
+  ]);
 
   // Wheel/pinch zoom is transform-only while active. The camera store is updated
   // once on idle so RackLayer culling and full render mode catch up after the burst.

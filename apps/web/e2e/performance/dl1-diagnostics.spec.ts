@@ -27,8 +27,7 @@ const SAMPLE_DURATION_MS = Number(
     2000
 );
 const RESTORE_STAGE_DIAGNOSTIC_DELAY_MS = 500;
-const ENABLE_PHASE_DIAGNOSTICS =
-  process.env.DL1_PHASE_DIAGNOSTICS === '1';
+const ENABLE_PHASE_DIAGNOSTICS = process.env.DL1_PHASE_DIAGNOSTICS === '1';
 const INCLUDE_LOW_END_PROFILE =
   process.env.DL1_DIAGNOSTICS_INCLUDE_LOW_END === '1';
 const DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
@@ -46,6 +45,7 @@ type DeviceProfile = {
 
 type DiagnosticsFlags = {
   labels: 'normal' | 'off';
+  grid: 'normal' | 'off-during-pan';
   hitTest: 'normal' | 'off';
   cells: 'normal' | 'off' | 'visible-only' | 'unculled';
   cellOverlays: 'normal' | 'surface-only' | 'off';
@@ -401,6 +401,7 @@ async function getBuildIdentity(): Promise<BuildIdentity> {
 
 const NORMAL_FLAGS: DiagnosticsFlags = {
   labels: 'normal',
+  grid: 'normal',
   hitTest: 'normal',
   cells: 'normal',
   cellOverlays: 'normal',
@@ -436,6 +437,10 @@ const VARIANTS: Variant[] = [
     name: 'manual-pan-batchdraw-off',
     flags: null,
     runtimeOptions: { disableManualPanBatchDraw: true }
+  },
+  {
+    name: 'no-grid-during-pan',
+    flags: { ...NORMAL_FLAGS, grid: 'off-during-pan' }
   },
   {
     name: 'rack-layer-listening-off-during-pan',
@@ -1026,8 +1031,7 @@ async function getRenderModeDebugState(page: Page) {
     return {
       currentRenderMode: diagnostics?.currentRenderMode ?? null,
       currentPhase: diagnostics?.currentPhase ?? null,
-      renderModeTransitionCounts:
-        diagnostics?.renderModeTransitionCounts ?? {},
+      renderModeTransitionCounts: diagnostics?.renderModeTransitionCounts ?? {},
       renderModeCounts: diagnostics?.renderModeCounts ?? {},
       phaseCounts: diagnostics?.phaseCounts ?? {},
       diagnosticsRestoreStageDelayMs:
@@ -1055,9 +1059,7 @@ async function waitForFullRenderModeAfterInteraction(
       { timeout: 10000 }
     );
   } catch (error) {
-    const debugState = await getRenderModeDebugState(page).catch(
-      () => null
-    );
+    const debugState = await getRenderModeDebugState(page).catch(() => null);
     const wrappedError = new Error(
       `Timed out waiting for full render mode during ${label}. ` +
         `Render mode debug state: ${JSON.stringify(debugState)}`
@@ -1078,8 +1080,8 @@ async function waitForRenderMode(
         __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnostics;
       };
       return (
-        global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__
-          ?.currentRenderMode === expectedRenderMode
+        global.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?.currentRenderMode ===
+        expectedRenderMode
       );
     },
     renderMode,
@@ -1159,10 +1161,13 @@ async function startKonvaPipelineProbe(page: Page) {
 
     const stage = global.__WOS_CANVAS_STAGE__;
     if (!stage) {
-      throw new Error('DL1 Konva probe could not find window.__WOS_CANVAS_STAGE__.');
+      throw new Error(
+        'DL1 Konva probe could not find window.__WOS_CANVAS_STAGE__.'
+      );
     }
 
-    const layers = typeof stage.getLayers === 'function' ? stage.getLayers() : [];
+    const layers =
+      typeof stage.getLayers === 'function' ? stage.getLayers() : [];
     const firstLayer = layers[0];
     if (!firstLayer) {
       throw new Error('DL1 Konva probe could not find Stage layers.');
@@ -1241,20 +1246,23 @@ async function startKonvaPipelineProbe(page: Page) {
 
     const getRectRole = (node: any) => {
       const rawRole =
-        typeof node?.getAttr === 'function' ? node.getAttr('wosRectRole') : null;
+        typeof node?.getAttr === 'function'
+          ? node.getAttr('wosRectRole')
+          : null;
       return typeof rawRole === 'string' && rawRole.length > 0
         ? rawRole
         : 'unknown';
     };
     const getShapeRole = (node: any) => {
       const rawRole =
-        typeof node?.getAttr === 'function' ? node.getAttr('wosShapeRole') : null;
+        typeof node?.getAttr === 'function'
+          ? node.getAttr('wosShapeRole')
+          : null;
       return typeof rawRole === 'string' && rawRole.length > 0
         ? rawRole
         : 'unknown';
     };
-    const readSource = () =>
-      global.__WOS_CANVAS_KONVA_SOURCE__ ?? 'unknown';
+    const readSource = () => global.__WOS_CANVAS_KONVA_SOURCE__ ?? 'unknown';
 
     const ensureTrace = () => {
       if (currentTraceId !== null) return currentTraceId;
@@ -1292,7 +1300,11 @@ async function startKonvaPipelineProbe(page: Page) {
     const wrapProto = (
       proto: any,
       methodName: string,
-      wrapper: (original: (...args: any[]) => any, self: any, args: any[]) => any
+      wrapper: (
+        original: (...args: any[]) => any,
+        self: any,
+        args: any[]
+      ) => any
     ) => {
       if (!proto) return;
       const original = proto[methodName];
@@ -1322,7 +1334,10 @@ async function startKonvaPipelineProbe(page: Page) {
       durationMs: number,
       role?: string
     ) => {
-      const update = (target: Record<string, KonvaNodeDrawCost>, key: string) => {
+      const update = (
+        target: Record<string, KonvaNodeDrawCost>,
+        key: string
+      ) => {
         const metric = (target[key] ?? {
           calls: 0,
           totalMs: 0,
@@ -1392,24 +1407,34 @@ async function startKonvaPipelineProbe(page: Page) {
       ...new Set(
         rackNodesForNodeProbe
           .filter((node) =>
-            ['Text', 'Rect', 'Line', 'Circle', 'Ellipse', 'Path', 'Shape'].includes(
-              getNodeType(node)
-            )
+            [
+              'Text',
+              'Rect',
+              'Line',
+              'Circle',
+              'Ellipse',
+              'Path',
+              'Shape'
+            ].includes(getNodeType(node))
           )
           .map((node) => findProtoWith(node, 'drawScene'))
           .filter(Boolean)
       )
     ];
 
-    wrapProto(findProtoWith(firstGroupNode, 'drawScene'), 'drawScene', (original, self, args) => {
-      const nodeType = getNodeType(self);
-      if (nodeType !== 'Group') {
-        return original.apply(self, args);
+    wrapProto(
+      findProtoWith(firstGroupNode, 'drawScene'),
+      'drawScene',
+      (original, self, args) => {
+        const nodeType = getNodeType(self);
+        if (nodeType !== 'Group') {
+          return original.apply(self, args);
+        }
+        return measureNodeSceneDraw(nodeType, undefined, () =>
+          original.apply(self, args)
+        );
       }
-      return measureNodeSceneDraw(nodeType, undefined, () =>
-        original.apply(self, args)
-      );
-    });
+    );
 
     for (const proto of shapeDrawSceneProtos) {
       wrapProto(proto, 'drawScene', (original, self, args) => {
@@ -1426,101 +1451,138 @@ async function startKonvaPipelineProbe(page: Page) {
       });
     }
 
-    wrapProto(findProtoWith(stage, 'position'), 'position', (original, self, args) => {
-      if (args.length > 0) {
-        currentTraceId = nextTraceId;
-        nextTraceId += 1;
-        if (probe.traces.length < maxTraces) {
-          probe.traces.push({ traceId: currentTraceId, events: [] });
+    wrapProto(
+      findProtoWith(stage, 'position'),
+      'position',
+      (original, self, args) => {
+        if (args.length > 0) {
+          currentTraceId = nextTraceId;
+          nextTraceId += 1;
+          if (probe.traces.length < maxTraces) {
+            probe.traces.push({ traceId: currentTraceId, events: [] });
+          }
+          probe.stagePositionCalls += 1;
+          record('stage.position', {
+            nodeType: self.getType?.() ?? self.nodeType ?? 'Stage',
+            detail: JSON.stringify(args[0] ?? null)
+          });
         }
-        probe.stagePositionCalls += 1;
-        record('stage.position', {
-          nodeType: self.getType?.() ?? self.nodeType ?? 'Stage',
-          detail: JSON.stringify(args[0] ?? null)
-        });
+        return original.apply(self, args);
       }
-      return original.apply(self, args);
-    });
+    );
 
-    wrapProto(findProtoWith(stage, '_requestDraw'), '_requestDraw', (original, self, args) => {
-      ensureTrace();
-      probe.nodeRequestDrawCalls += 1;
-      record('Node._requestDraw', {
-        nodeType: self.getType?.() ?? self.nodeType ?? self.className,
-        layerName: getLayerName(typeof self.getLayer === 'function' ? self.getLayer() : null)
-      });
-      return original.apply(self, args);
-    });
+    wrapProto(
+      findProtoWith(stage, '_requestDraw'),
+      '_requestDraw',
+      (original, self, args) => {
+        ensureTrace();
+        probe.nodeRequestDrawCalls += 1;
+        record('Node._requestDraw', {
+          nodeType: self.getType?.() ?? self.nodeType ?? self.className,
+          layerName: getLayerName(
+            typeof self.getLayer === 'function' ? self.getLayer() : null
+          )
+        });
+        return original.apply(self, args);
+      }
+    );
 
-    wrapProto(findProtoWith(stage, 'batchDraw'), 'batchDraw', (original, self, args) => {
-      ensureTrace();
-      probe.stageBatchDrawCalls += 1;
-      record('Stage.batchDraw', {
-        nodeType: self.getType?.() ?? 'Stage'
-      });
-      return original.apply(self, args);
-    });
+    wrapProto(
+      findProtoWith(stage, 'batchDraw'),
+      'batchDraw',
+      (original, self, args) => {
+        ensureTrace();
+        probe.stageBatchDrawCalls += 1;
+        record('Stage.batchDraw', {
+          nodeType: self.getType?.() ?? 'Stage'
+        });
+        return original.apply(self, args);
+      }
+    );
 
-    wrapProto(findProtoWith(firstLayer, 'batchDraw'), 'batchDraw', (original, self, args) => {
-      ensureTrace();
-      probe.layerBatchDrawCalls += 1;
-      record('Layer.batchDraw', {
-        layerName: getLayerName(self),
-        nodeType: self.getType?.() ?? 'Layer',
-        detail: `_waitingForDraw=${String(self._waitingForDraw)}`
-      });
-      return original.apply(self, args);
-    });
+    wrapProto(
+      findProtoWith(firstLayer, 'batchDraw'),
+      'batchDraw',
+      (original, self, args) => {
+        ensureTrace();
+        probe.layerBatchDrawCalls += 1;
+        record('Layer.batchDraw', {
+          layerName: getLayerName(self),
+          nodeType: self.getType?.() ?? 'Layer',
+          detail: `_waitingForDraw=${String(self._waitingForDraw)}`
+        });
+        return original.apply(self, args);
+      }
+    );
 
-    wrapProto(findProtoWith(firstLayer, 'draw'), 'draw', (original, self, args) => {
-      ensureTrace();
-      probe.layerDrawCalls += 1;
-      record('Layer.draw', {
-        source: readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
-        layerName: getLayerName(self),
-        nodeType: self.getType?.() ?? 'Layer'
-      });
-      return original.apply(self, args);
-    });
+    wrapProto(
+      findProtoWith(firstLayer, 'draw'),
+      'draw',
+      (original, self, args) => {
+        ensureTrace();
+        probe.layerDrawCalls += 1;
+        record('Layer.draw', {
+          source:
+            readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
+          layerName: getLayerName(self),
+          nodeType: self.getType?.() ?? 'Layer'
+        });
+        return original.apply(self, args);
+      }
+    );
 
-    wrapProto(findProtoWith(firstLayer, 'drawScene'), 'drawScene', (original, self, args) => {
-      ensureTrace();
-      probe.drawSceneCalls += 1;
-      record('drawScene', {
-        source: readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
-        layerName: getLayerName(self),
-        nodeType: self.getType?.() ?? 'Layer'
-      });
-      const start = performance.now();
-      const result = original.apply(self, args);
-      probe.drawSceneTotalMs += performance.now() - start;
-      return result;
-    });
+    wrapProto(
+      findProtoWith(firstLayer, 'drawScene'),
+      'drawScene',
+      (original, self, args) => {
+        ensureTrace();
+        probe.drawSceneCalls += 1;
+        record('drawScene', {
+          source:
+            readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
+          layerName: getLayerName(self),
+          nodeType: self.getType?.() ?? 'Layer'
+        });
+        const start = performance.now();
+        const result = original.apply(self, args);
+        probe.drawSceneTotalMs += performance.now() - start;
+        return result;
+      }
+    );
 
-    wrapProto(findProtoWith(firstLayer, 'drawHit'), 'drawHit', (original, self, args) => {
-      ensureTrace();
-      probe.drawHitCalls += 1;
-      record('drawHit', {
-        source: readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
-        layerName: getLayerName(self),
-        nodeType: self.getType?.() ?? 'Layer'
-      });
-      const start = performance.now();
-      const result = original.apply(self, args);
-      probe.drawHitTotalMs += performance.now() - start;
-      return result;
-    });
+    wrapProto(
+      findProtoWith(firstLayer, 'drawHit'),
+      'drawHit',
+      (original, self, args) => {
+        ensureTrace();
+        probe.drawHitCalls += 1;
+        record('drawHit', {
+          source:
+            readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
+          layerName: getLayerName(self),
+          nodeType: self.getType?.() ?? 'Layer'
+        });
+        const start = performance.now();
+        const result = original.apply(self, args);
+        probe.drawHitTotalMs += performance.now() - start;
+        return result;
+      }
+    );
 
-    wrapProto(findProtoWith(firstLayer, 'getIntersection'), 'getIntersection', (original, self, args) => {
-      ensureTrace();
-      probe.getIntersectionCalls += 1;
-      record('Layer.getIntersection', {
-        source: 'interaction-hit-test',
-        layerName: getLayerName(self),
-        nodeType: self.getType?.() ?? 'Layer'
-      });
-      return original.apply(self, args);
-    });
+    wrapProto(
+      findProtoWith(firstLayer, 'getIntersection'),
+      'getIntersection',
+      (original, self, args) => {
+        ensureTrace();
+        probe.getIntersectionCalls += 1;
+        record('Layer.getIntersection', {
+          source: 'interaction-hit-test',
+          layerName: getLayerName(self),
+          nodeType: self.getType?.() ?? 'Layer'
+        });
+        return original.apply(self, args);
+      }
+    );
 
     for (const layer of layers) {
       if (Object.prototype.hasOwnProperty.call(layer, 'batchDraw')) {
@@ -1552,30 +1614,43 @@ async function startKonvaPipelineProbe(page: Page) {
       }
     }
 
-    wrapProto(findProtoWith(stage, 'getIntersection'), 'getIntersection', (original, self, args) => {
-      ensureTrace();
-      probe.getIntersectionCalls += 1;
-      record('Stage.getIntersection', {
-        source: 'interaction-hit-test',
-        nodeType: self.getType?.() ?? 'Stage'
-      });
-      return original.apply(self, args);
-    });
-
-    for (const methodName of ['_pointermove', '_pointerover', '_pointerenter', '_pointerleave']) {
-      wrapProto(findProtoWith(stage, methodName), methodName, (original, self, args) => {
+    wrapProto(
+      findProtoWith(stage, 'getIntersection'),
+      'getIntersection',
+      (original, self, args) => {
         ensureTrace();
-        if (methodName === '_pointermove') {
-          probe.pointerMoveCalls += 1;
-        } else {
-          probe.pointerEnterLeaveCalls += 1;
-        }
-        record(`Stage.${methodName}`, {
-          source: 'interaction-pointer',
+        probe.getIntersectionCalls += 1;
+        record('Stage.getIntersection', {
+          source: 'interaction-hit-test',
           nodeType: self.getType?.() ?? 'Stage'
         });
         return original.apply(self, args);
-      });
+      }
+    );
+
+    for (const methodName of [
+      '_pointermove',
+      '_pointerover',
+      '_pointerenter',
+      '_pointerleave'
+    ]) {
+      wrapProto(
+        findProtoWith(stage, methodName),
+        methodName,
+        (original, self, args) => {
+          ensureTrace();
+          if (methodName === '_pointermove') {
+            probe.pointerMoveCalls += 1;
+          } else {
+            probe.pointerEnterLeaveCalls += 1;
+          }
+          record(`Stage.${methodName}`, {
+            source: 'interaction-pointer',
+            nodeType: self.getType?.() ?? 'Stage'
+          });
+          return original.apply(self, args);
+        }
+      );
     }
 
     global.__dl1KonvaProbe = probe;
@@ -1602,7 +1677,8 @@ async function stopKonvaPipelineProbe(
       throw new Error('DL1 Konva pipeline probe was not started.');
     }
 
-    const layers = typeof stage.getLayers === 'function' ? stage.getLayers() : [];
+    const layers =
+      typeof stage.getLayers === 'function' ? stage.getLayers() : [];
     const getLayerName = (layer: any) => {
       const name =
         typeof layer.name === 'function'
@@ -1617,14 +1693,18 @@ async function stopKonvaPipelineProbe(
       node?.className ?? node?.nodeType ?? node?.getType?.() ?? 'Unknown';
     const getRectRole = (node: any) => {
       const rawRole =
-        typeof node?.getAttr === 'function' ? node.getAttr('wosRectRole') : null;
+        typeof node?.getAttr === 'function'
+          ? node.getAttr('wosRectRole')
+          : null;
       return typeof rawRole === 'string' && rawRole.length > 0
         ? rawRole
         : 'unknown';
     };
     const getShapeRole = (node: any) => {
       const rawRole =
-        typeof node?.getAttr === 'function' ? node.getAttr('wosShapeRole') : null;
+        typeof node?.getAttr === 'function'
+          ? node.getAttr('wosShapeRole')
+          : null;
       return typeof rawRole === 'string' && rawRole.length > 0
         ? rawRole
         : 'unknown';
@@ -1639,7 +1719,11 @@ async function stopKonvaPipelineProbe(
       }
       return true;
     };
-    const readNumberAttr = (node: any, methodName: string, attrName: string) => {
+    const readNumberAttr = (
+      node: any,
+      methodName: string,
+      attrName: string
+    ) => {
       const raw =
         typeof node?.[methodName] === 'function'
           ? node[methodName]()
@@ -1666,7 +1750,11 @@ async function stopKonvaPipelineProbe(
         strokeWidths: {}
       };
       const fillEnabled = readBoolAttr(node, 'fillEnabled', 'fillEnabled');
-      const strokeEnabled = readBoolAttr(node, 'strokeEnabled', 'strokeEnabled');
+      const strokeEnabled = readBoolAttr(
+        node,
+        'strokeEnabled',
+        'strokeEnabled'
+      );
       const fillPaint =
         typeof node?.fill === 'function'
           ? node.fill()
@@ -1758,22 +1846,27 @@ async function stopKonvaPipelineProbe(
           ? node.isListening()
           : parentListening;
       const isVisible =
-        typeof node.isVisible === 'function'
-          ? node.isVisible()
-          : parentVisible;
+        typeof node.isVisible === 'function' ? node.isVisible() : parentVisible;
       composition.total += 1;
       composition.byType[nodeType] = (composition.byType[nodeType] ?? 0) + 1;
       if (isListening) composition.listeningTrue += 1;
       if (isListening && isVisible) composition.hitGraphEligible += 1;
       if (nodeType === 'Rect') {
-        recordRectStyleCounters(node, getRectRole(node), isListening, isVisible);
+        recordRectStyleCounters(
+          node,
+          getRectRole(node),
+          isListening,
+          isVisible
+        );
       }
       if (nodeType === 'Shape') {
         recordShapeCounters(getShapeRole(node), isListening, isVisible);
       }
       const children =
         typeof node.getChildren === 'function' ? node.getChildren() : [];
-      children.forEach((child: any) => visit(child, composition, isListening, isVisible));
+      children.forEach((child: any) =>
+        visit(child, composition, isListening, isVisible)
+      );
     };
 
     const rackLayer =
@@ -1973,7 +2066,11 @@ async function startFrameProbe(page: Page) {
       if (previousFrameTime !== null) {
         frameTimes.push(time - previousFrameTime);
       }
-      for (let index = pendingPanTransitionMarks.length - 1; index >= 0; index -= 1) {
+      for (
+        let index = pendingPanTransitionMarks.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
         const mark = pendingPanTransitionMarks[index] as {
           kind: 'start' | 'end';
           time: number;
@@ -2081,7 +2178,7 @@ async function stopFrameProbe(
       }
       if (probe.id !== expectedId) {
         throw new Error(
-        `DL1 frame probe was replaced before stop. expected=${expectedId}, actual=${probe.id}, currentUrl=${window.location.href}, reason=${guardReason ?? 'none'}`
+          `DL1 frame probe was replaced before stop. expected=${expectedId}, actual=${probe.id}, currentUrl=${window.location.href}, reason=${guardReason ?? 'none'}`
         );
       }
       const result = probe.stop();
@@ -2356,11 +2453,9 @@ async function startAndSampleActivePan(
   let direction = 1;
   while (Date.now() < deadline) {
     await assertFrameProbeAlive(page, probeId, guard);
-    await page.mouse.move(
-      centerX + 220 * direction,
-      centerY + 55 * direction,
-      { steps: 20 }
-    );
+    await page.mouse.move(centerX + 220 * direction, centerY + 55 * direction, {
+      steps: 20
+    });
     direction *= -1;
   }
   await assertFrameProbeAlive(page, probeId, guard);
@@ -2866,8 +2961,7 @@ function findEntry(
 ) {
   return (
     entries.find(
-      (entry) =>
-        entry.variant === variant && entry.profile.name === profileName
+      (entry) => entry.variant === variant && entry.profile.name === profileName
     ) ??
     entries.find((entry) => entry.variant === variant) ??
     null
@@ -3134,9 +3228,7 @@ function summarizeRectCategories(probe: KonvaPipelineProbeResult) {
     }
   >;
 
-  for (const [role, style] of Object.entries(
-    probe.rectNodeCompositionByRole
-  )) {
+  for (const [role, style] of Object.entries(probe.rectNodeCompositionByRole)) {
     const category = categorizeRectRole(role);
     result[category].count += style.nodes;
     mergeRectStyleCounters(result[category].style, style);
@@ -3181,7 +3273,10 @@ function formatRectCategoryBreakdown(probe: KonvaPipelineProbeResult) {
       .join(', ');
     const roles = Object.entries(item.roles)
       .sort((a, b) => b[1].totalMs - a[1].totalMs)
-      .map(([role, roleSummary]) => `${role}=${roleSummary.count} nodes/${roleSummary.totalMs}ms`)
+      .map(
+        ([role, roleSummary]) =>
+          `${role}=${roleSummary.count} nodes/${roleSummary.totalMs}ms`
+      )
       .join('; ');
     return `| ${category} | ${item.count} | ${item.totalMs} | ${item.avgMsPerNode} | ${item.avgMsPerCall} | fill=${item.style.fillEnabled}, stroke=${item.style.strokeEnabled}, opacity<1=${item.style.opacityLt1}, shadow=${item.style.shadowEnabled}, dash=${item.style.dashEnabled}, listening=${item.style.listeningTrue}, hit=${item.style.hitGraphEligible}, strokeWidths={${strokeWidths || 'none'}} | ${roles || '-'} |`;
   }).join('\n');
@@ -3231,7 +3326,10 @@ function formatRectVariantComparison(entries: ReportEntry[]) {
       const categorySummary = Object.entries(categories)
         .filter(([, value]) => value.count > 0 || value.totalMs > 0)
         .sort((a, b) => b[1].totalMs - a[1].totalMs)
-        .map(([category, value]) => `${category}: ${value.count}/${value.totalMs}ms`)
+        .map(
+          ([category, value]) =>
+            `${category}: ${value.count}/${value.totalMs}ms`
+        )
         .join('; ');
       return `- ${entry.variant}: Rect nodes=${entry.konvaPipeline.rackLayerComposition.byType.Rect ?? 0}, Rect draw=${rectTotal}ms, drawScene=${entry.konvaPipeline.drawSceneTotalMs}ms, drawHit=${entry.konvaPipeline.drawHitTotalMs}ms; ${categorySummary}`;
     })
@@ -3248,7 +3346,8 @@ function recommendedRectFix(entries: ReportEntry[], baseline: ReportEntry) {
     noOverlays && baseline
       ? round(
           (baseline.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ?? 0) -
-            (noOverlays.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ?? 0)
+            (noOverlays.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ??
+              0)
         )
       : 0;
 
@@ -3285,11 +3384,20 @@ function formatExperimentLine(
   return `- ${label}: p95FrameMs=${entry.metrics.p95FrameMs}, longTaskCount=${entry.metrics.longTaskCount}, drawSceneCost=${entry.konvaPipeline.drawSceneTotalMs}, drawHit=${entry.konvaPipeline.drawHitCalls}${p95Delta}${transitionFrames}${hitGraphNote}`;
 }
 
-function recommendHighestImpactFix(entries: ReportEntry[], baseline: ReportEntry) {
+function recommendHighestImpactFix(
+  entries: ReportEntry[],
+  baseline: ReportEntry
+) {
   const candidates = [
     ['labels-off', 'Reduce or virtualize Konva Text rendering first.'],
-    ['no-overlays', 'Collapse overlay/highlight/stroke rendering into fewer rack/cell primitives first.'],
-    ['no-hit-graph', 'Keep the rack layer non-listening during pan and use geometric hit resolution outside the hot draw path.'],
+    [
+      'no-overlays',
+      'Collapse overlay/highlight/stroke rendering into fewer rack/cell primitives first.'
+    ],
+    [
+      'no-hit-graph',
+      'Keep the rack layer non-listening during pan and use geometric hit resolution outside the hot draw path.'
+    ],
     [
       'fast-layer',
       'Split the rack visuals into a non-interactive visual layer and keep only minimal interaction geometry on a normal Layer.'
@@ -3366,6 +3474,7 @@ function buildRenderPipelineMarkdown(
 ) {
   const production = findEntry(entries, 'production-culling');
   const manualOff = findEntry(entries, 'manual-pan-batchdraw-off');
+  const noGridDuringPan = findEntry(entries, 'no-grid-during-pan');
   const rackListeningOff = findEntry(
     entries,
     'rack-layer-listening-off-during-pan'
@@ -3424,6 +3533,9 @@ function buildRenderPipelineMarkdown(
     manualOff
       ? `Manual batchDraw-off changed layer batchDraw by ${formatDelta(manualOff.konvaPipeline.layerBatchDrawCalls - konvaProbe.layerBatchDrawCalls)} and p95FrameMs by ${formatDelta(manualOff.metrics.p95FrameMs - production.metrics.p95FrameMs)}.`
       : 'Manual batchDraw-off A/B variant was not recorded.',
+    noGridDuringPan
+      ? `No-grid-during-pan changed grid draw cost by ${formatDelta(noGridDuringPan.konvaPipeline.layerDrawCalls - konvaProbe.layerDrawCalls)} layer draw calls and p95FrameMs by ${formatDelta(noGridDuringPan.metrics.p95FrameMs - production.metrics.p95FrameMs)}.`
+      : 'No-grid-during-pan A/B variant was not recorded.',
     production.metrics.longTaskCount > 0
       ? `Main thread long tasks were present: ${production.metrics.longTaskCount} tasks totaling ${production.metrics.longTaskTotalMs}ms.`
       : 'No main-thread long tasks were recorded.'
@@ -3451,10 +3563,9 @@ function buildRenderPipelineMarkdown(
   const overlayP95Drop = noOverlays
     ? round(production.metrics.p95FrameMs - noOverlays.metrics.p95FrameMs)
     : 0;
-  const fastLayerDiagnosticNote =
-    fastLayer
-      ? 'FastLayer is diagnostic-only; do not keep it as production behavior unless interaction tradeoffs are explicitly handled.'
-      : 'FastLayer diagnostic was not recorded.';
+  const fastLayerDiagnosticNote = fastLayer
+    ? 'FastLayer is diagnostic-only; do not keep it as production behavior unless interaction tradeoffs are explicitly handled.'
+    : 'FastLayer diagnostic was not recorded.';
   const topRectCategory = Object.entries(
     summarizeRectCategories(konvaProbe)
   ).sort((a, b) => b[1].totalMs - a[1].totalMs)[0];
@@ -3627,20 +3738,16 @@ test.describe('DL1 diagnostics harness', () => {
   const aggregateEntryCount = selectedProfiles.length * selectedVariants.length;
   const phaseEntryCount = ENABLE_PHASE_DIAGNOSTICS
     ? selectedProfiles.length *
-      selectedVariants.filter((variant) => variant.name === 'production-culling')
-        .length
+      selectedVariants.filter(
+        (variant) => variant.name === 'production-culling'
+      ).length
     : 0;
   const aggregateTimeoutMs = SAMPLE_DURATION_MS * aggregateEntryCount * 12;
   const phaseTimeoutMs =
     phaseEntryCount *
     (SAMPLE_DURATION_MS * 2 + RESTORE_STAGE_DIAGNOSTIC_DELAY_MS * 8 + 15000);
 
-  test.setTimeout(
-    Math.max(
-      600000,
-      aggregateTimeoutMs + phaseTimeoutMs
-    )
-  );
+  test.setTimeout(Math.max(600000, aggregateTimeoutMs + phaseTimeoutMs));
 
   test.beforeEach(async () => {
     await resetWarehouseData();
@@ -3676,10 +3783,7 @@ test.describe('DL1 diagnostics harness', () => {
               const result = await runMeasuredScenario({
                 floorId: floor.id,
                 flags: variant.flags,
-                measurePhases: shouldMeasurePhaseDiagnostics(
-                  scenario,
-                  variant
-                ),
+                measurePhases: shouldMeasurePhaseDiagnostics(scenario, variant),
                 page,
                 profile,
                 runtimeOptions: variant.runtimeOptions,
@@ -3772,17 +3876,12 @@ test.describe('DL1 diagnostics harness', () => {
           zoomDurableCommits: entry.renderPipeline.zoomDurableCommits,
           zoomCameraUpdates: entry.renderPipeline.zoomCameraUpdates,
           renderMode: entry.renderPipeline.currentRenderMode,
-          renderTransitions: formatRenderModeTransitions(
-            entry.renderPipeline
-          ),
+          renderTransitions: formatRenderModeTransitions(entry.renderPipeline),
           skeletonRenders:
             entry.renderPipeline.renderModeCounts['interaction-skeleton'],
-          editorRenders:
-            entry.renderPipeline.components.EditorCanvas.renders,
-          rackLayerRenders:
-            entry.renderPipeline.components.RackLayer.renders,
-          rackCellsRenders:
-            entry.renderPipeline.components.RackCells.renders,
+          editorRenders: entry.renderPipeline.components.EditorCanvas.renders,
+          rackLayerRenders: entry.renderPipeline.components.RackLayer.renders,
+          rackCellsRenders: entry.renderPipeline.components.RackCells.renders,
           selectionOverlayRenders:
             entry.renderPipeline.components.SelectionOverlayLayer.renders,
           rackCellsHighlightedChanges:
@@ -3799,8 +3898,7 @@ test.describe('DL1 diagnostics harness', () => {
           forceSelection:
             entry.renderPipeline.forceRenderReasons?.selection ?? 0,
           forceLocate: entry.renderPipeline.forceRenderReasons?.locate ?? 0,
-          forceWorkflow:
-            entry.renderPipeline.forceRenderReasons?.workflow ?? 0,
+          forceWorkflow: entry.renderPipeline.forceRenderReasons?.workflow ?? 0,
           drawCalls:
             entry.renderPipeline.konva.layerDrawCalls +
             entry.renderPipeline.konva.layerBatchDrawCalls,
@@ -3812,8 +3910,7 @@ test.describe('DL1 diagnostics harness', () => {
           drawHitMs: entry.konvaPipeline.drawHitTotalMs,
           textDrawMs:
             entry.konvaPipeline.nodeSceneDrawCostBuckets.Text?.totalMs ?? 0,
-          rectCount:
-            entry.konvaPipeline.rackLayerComposition.byType.Rect ?? 0,
+          rectCount: entry.konvaPipeline.rackLayerComposition.byType.Rect ?? 0,
           rectDrawMs:
             entry.konvaPipeline.nodeSceneDrawCostBuckets.Rect?.totalMs ?? 0,
           shapeCount:
@@ -3855,9 +3952,9 @@ test.describe('DL1 diagnostics harness', () => {
         const entriesWithPhaseDiagnostics = entries.filter(
           (entry) => entry.variant === 'production-culling'
         );
-        expect(
-          entriesWithPhaseDiagnostics.length
-        ).toBe(selectedProfiles.length);
+        expect(entriesWithPhaseDiagnostics.length).toBe(
+          selectedProfiles.length
+        );
         expect(
           entriesWithPhaseDiagnostics.every(
             (entry) =>
@@ -3869,8 +3966,9 @@ test.describe('DL1 diagnostics harness', () => {
           )
         ).toBe(true);
       } else if (scenario === 'pan' || scenario === 'zoom') {
-        expect(entries.every((entry) => Object.keys(entry.phases).length === 0))
-          .toBe(true);
+        expect(
+          entries.every((entry) => Object.keys(entry.phases).length === 0)
+        ).toBe(true);
       }
       expect(
         entries.every(

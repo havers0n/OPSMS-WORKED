@@ -165,6 +165,7 @@ type RackLayerProps = {
     zoom: number;
   };
   isActivelyPanning?: boolean;
+  labelsDeferred?: boolean;
   renderMode?: CanvasRenderMode;
   renderSelectionOverlay?: boolean;
   canvasSelectedCellId: string | null;
@@ -213,6 +214,7 @@ export const RackLayer = memo(function RackLayer({
   diagnosticsFlags,
   diagnosticsViewport,
   isActivelyPanning = false,
+  labelsDeferred = false,
   renderMode = 'full',
   renderSelectionOverlay = true,
   canvasSelectedCellId,
@@ -260,6 +262,7 @@ export const RackLayer = memo(function RackLayer({
     renderMode === 'restore-overlays' || renderMode === 'restore-labels';
   const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
   const labelsEnabled =
+    !labelsDeferred &&
     isCanvasFullDetailRenderMode(renderMode) &&
     diagnosticsFlags.labels === 'normal';
   const hitTestEnabled =
@@ -352,6 +355,7 @@ export const RackLayer = memo(function RackLayer({
       'diagnosticsCulling',
       'diagnosticsRackLayerRenderer',
       'isActivelyPanning',
+      'labelsDeferred',
       'renderMode',
       'renderSelectionOverlay',
       'canvasOffsetX',
@@ -386,6 +390,7 @@ export const RackLayer = memo(function RackLayer({
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
       isActivelyPanning,
+      labelsDeferred,
       renderMode,
       renderSelectionOverlay,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,

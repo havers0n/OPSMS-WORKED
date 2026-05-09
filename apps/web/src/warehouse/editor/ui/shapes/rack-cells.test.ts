@@ -282,6 +282,7 @@ const TEST_DIAGNOSTICS_VIEWPORT = {
 
 const UNCLIPPED_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   labels: 'normal',
+  grid: 'normal',
   hitTest: 'normal',
   cells: 'unculled',
   cellOverlays: 'normal',
@@ -440,9 +441,9 @@ describe('RackCells', () => {
     );
     expect(countInteractionRects(renderer)).toBe(0);
     expect(getTextValues(renderer)).toEqual([]);
-    expect(clickCellIdsWithCollector(0, ['level-only'], 'restore-base')).toEqual(
-      []
-    );
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'restore-base')
+    ).toEqual([]);
     expect(
       getRects(renderer).some((rect) =>
         [
@@ -476,7 +477,7 @@ describe('RackCells', () => {
     ).toEqual(['cell-level-only-1', 'cell-level-only-2']);
   });
 
-  it('uses restore-labels mode to restore labels before final full mode', () => {
+  it('keeps restore-labels mode label-free while retaining click targets', () => {
     const renderer = renderRackCellsWithProps({
       levelIds: ['level-only'],
       slotCount: 2,
@@ -490,7 +491,7 @@ describe('RackCells', () => {
       getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
         /^\d+$/.test(value)
       )
-    ).toEqual(['1', '2']);
+    ).toEqual([]);
     expect(
       clickCellIdsWithCollector(0, ['level-only'], 'restore-labels')
     ).toEqual(['cell-level-only-1', 'cell-level-only-2']);
@@ -541,6 +542,7 @@ describe('RackCells', () => {
       slotCount: 2,
       diagnosticsFlags: {
         labels: 'normal',
+        grid: 'normal',
         hitTest: 'normal',
         cells: 'normal',
         cellOverlays: 'off',
@@ -1367,9 +1369,9 @@ describe('RackCells layered paint ownership', () => {
     expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_RESERVED
     );
-    expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).not.toContain(
-      'selected-fill'
-    );
+    expect(
+      surfaceCells.map((cell) => cell.visualState.surface.fill)
+    ).not.toContain('selected-fill');
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(outlineRects.map((rect) => rect.props.stroke)).toContain(
       CELL_STROKE_SELECTED
@@ -1450,9 +1452,9 @@ describe('RackCells layered paint ownership', () => {
     expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_STOCKED
     );
-    expect(surfaceCells.map((cell) => cell.visualState.surface.stroke)).toContain(
-      CELL_STROKE_STOCKED
-    );
+    expect(
+      surfaceCells.map((cell) => cell.visualState.surface.stroke)
+    ).toContain(CELL_STROKE_STOCKED);
     expect(badgeRects.map((rect) => rect.props.fill)).toContain(
       CELL_FILL_LOCKED
     );
@@ -1521,9 +1523,9 @@ describe('RackCells layered paint ownership', () => {
     expect(surfaceCells.map((cell) => cell.visualState.surface.fill)).toContain(
       CELL_FILL_RESERVED
     );
-    expect(surfaceCells.map((cell) => cell.visualState.surface.stroke)).toContain(
-      CELL_STROKE_RESERVED
-    );
+    expect(
+      surfaceCells.map((cell) => cell.visualState.surface.stroke)
+    ).toContain(CELL_STROKE_RESERVED);
     expect(getDotCircles(renderer).length).toBeGreaterThan(0);
     expect(getHaloRects(renderer)).toHaveLength(0);
     expect(getBadgeRects(renderer)).toHaveLength(0);

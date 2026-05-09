@@ -83,6 +83,7 @@ import { RackLayer } from './rack-layer';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
 import { CellStateOverlayLayer } from './shapes/selection-overlay-layer';
 import { SnapGuides } from './shapes/snap-guides';
+import { StorageOccupancyOverlay } from './shapes/storage-occupancy-overlay';
 import { useCanvasSceneModel } from './use-canvas-scene-model';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
@@ -258,6 +259,10 @@ export function EditorCanvas({
     useCanvasViewportController({
       autoFitRacks: racks,
       disableGridDuringPan: diagnosticsFlags.grid === 'off-during-pan',
+      hasStorageFocus:
+        isStorageV2Active &&
+        (storageFocusSelectedRackId !== null ||
+          storageFocusSelectedCellId !== null),
       setCanvasZoom,
       stageRef,
       viewMode,
@@ -297,11 +302,14 @@ export function EditorCanvas({
   const isInteractingWithCamera = isPanning || isZooming;
   const wasInteractingWithCameraRef = useRef(isInteractingWithCamera);
   const [restoreMode, setRestoreMode] = useState<CanvasRenderMode>('full');
+  const [arePostInteractionLabelsReady, setArePostInteractionLabelsReady] =
+    useState(true);
   const renderMode: CanvasRenderMode = isInteractingWithCamera
     ? 'interaction-skeleton'
     : wasInteractingWithCameraRef.current
       ? 'restore-base'
       : restoreMode;
+  const labelsDeferredAfterInteraction = !arePostInteractionLabelsReady;
   const restoreFrameHandlesRef = useRef<RestoreFrameHandle[]>([]);
 
   useEffect(() => {
@@ -354,6 +362,7 @@ export function EditorCanvas({
 
     if (isInteractingWithCamera) {
       wasInteractingWithCameraRef.current = true;
+      setArePostInteractionLabelsReady(false);
       cancelRestoreFrames();
       return cancelRestoreFrames;
     }
@@ -364,6 +373,7 @@ export function EditorCanvas({
 
     wasInteractingWithCameraRef.current = false;
     cancelRestoreFrames();
+    setArePostInteractionLabelsReady(false);
     setRestoreMode('restore-base');
     scheduleRestoreBoundary(() => {
       setRestoreMode('restore-overlays');
@@ -371,6 +381,9 @@ export function EditorCanvas({
         setRestoreMode('restore-labels');
         scheduleRestoreBoundary(() => {
           setRestoreMode('full');
+          scheduleRestoreBoundary(() => {
+            setArePostInteractionLabelsReady(true);
+          });
         });
       });
     });
@@ -624,6 +637,7 @@ export function EditorCanvas({
   });
   const showCellStateOverlayFocusedFullAddress =
     isCanvasFullDetailRenderMode(renderMode) &&
+    !labelsDeferredAfterInteraction &&
     diagnosticsFlags.labels === 'normal' &&
     cellStateOverlayLabelRevealPolicy.showFocusedFullAddress;
   const rackLayerSelectedCellId = cellStateOverlaysEnabled
@@ -690,6 +704,7 @@ export function EditorCanvas({
       'diagnosticsRackLayerRenderer',
       'isActivelyPanning',
       'isZooming',
+      'labelsDeferredAfterInteraction',
       'renderMode'
     ],
     snapshot: {
@@ -716,6 +731,7 @@ export function EditorCanvas({
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
       isActivelyPanning: isPanning,
       isZooming,
+      labelsDeferredAfterInteraction,
       renderMode
     }
   });
@@ -1093,6 +1109,7 @@ export function EditorCanvas({
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
                 isActivelyPanning={isPanning}
+                labelsDeferred={labelsDeferredAfterInteraction}
                 renderMode={renderMode}
                 renderSelectionOverlay={false}
                 canvasSelectedCellId={rackLayerSelectedCellId}
@@ -1136,6 +1153,20 @@ export function EditorCanvas({
                 updateRackPosition={updateRackPosition}
                 onV2StorageCellSelect={onV2StorageCellSelect}
                 onV2StorageRackSelect={onV2StorageRackSelect}
+              />
+
+              <StorageOccupancyOverlay
+                isStorageMode={isStorageMode}
+                racks={visibleRacks}
+                primarySelectedRackId={primarySelectedRackId}
+                selectedRackActiveLevel={selectedRackActiveLevelIndex}
+                publishedCellsByStructure={publishedCellsByStructure}
+                occupiedCellIds={occupiedCellIds}
+                cellRuntimeById={floorOperationsCellsById}
+                diagnosticsFlags={diagnosticsFlags}
+                diagnosticsViewport={diagnosticsViewport}
+                renderMode={renderMode}
+                zoom={zoom}
               />
 
               {cellStateOverlaysEnabled && (

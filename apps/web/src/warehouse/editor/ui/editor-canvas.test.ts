@@ -27,9 +27,12 @@ let mockHandleZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
 let rackLayerRenderSnapshots: Array<Record<string, unknown>> = [];
 let cellStateOverlayLastProps: Record<string, unknown> | null = null;
+let storageOccupancyOverlayLastProps: Record<string, unknown> | null = null;
+let viewportControllerLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
+let mockSceneLod: 0 | 1 | 2 = 2;
 
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -128,6 +131,7 @@ vi.mock('./rack-layer', () => ({
     rackLayerLastProps = props;
     rackLayerRenderSnapshots.push({
       isActivelyPanning: props.isActivelyPanning,
+      labelsDeferred: props.labelsDeferred,
       renderMode: props.renderMode
     });
     return createElement('RackLayer', props);
@@ -138,6 +142,13 @@ vi.mock('./shapes/selection-overlay-layer', () => ({
   CellStateOverlayLayer: (props: Record<string, unknown>) => {
     cellStateOverlayLastProps = props;
     return createElement('CellStateOverlayLayer', props);
+  }
+}));
+
+vi.mock('./shapes/storage-occupancy-overlay', () => ({
+  StorageOccupancyOverlay: (props: Record<string, unknown>) => {
+    storageOccupancyOverlayLastProps = props;
+    return createElement('StorageOccupancyOverlay', props);
   }
 }));
 
@@ -171,13 +182,16 @@ vi.mock('./use-canvas-stage-interactions', () => ({
 }));
 
 vi.mock('./use-canvas-viewport-controller', () => ({
-  useCanvasViewportController: () => ({
-    containerRef: { current: null },
-    viewport: { width: 1000, height: 800, x: 0, y: 0 },
-    canvasOffset: { x: 0, y: 0 },
-    isPanning: mockIsPanning,
-    handleZoom: mockHandleZoom
-  })
+  useCanvasViewportController: (props: Record<string, unknown>) => {
+    viewportControllerLastProps = props;
+    return {
+      containerRef: { current: null },
+      viewport: { width: 1000, height: 800, x: 0, y: 0 },
+      canvasOffset: { x: 0, y: 0 },
+      isPanning: mockIsPanning,
+      handleZoom: mockHandleZoom
+    };
+  }
 }));
 
 vi.mock('./use-canvas-scene-model', () => ({
@@ -220,7 +234,7 @@ vi.mock('./use-canvas-scene-model', () => ({
         isPlacing: false,
         isStorageMode: true,
         isViewMode: false,
-        lod: 2 as const
+        lod: mockSceneLod
       },
       layers: {
         placementLayout: mockLayoutDraft,
@@ -281,13 +295,18 @@ describe('EditorCanvas storage active-rack wiring', () => {
     rackLayerLastProps = null;
     rackLayerRenderSnapshots = [];
     cellStateOverlayLastProps = null;
+    storageOccupancyOverlayLastProps = null;
+    viewportControllerLastProps = null;
     canvasHudLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
+    mockSceneLod = 2;
     mockIsPanning = false;
     mockHighlightedCellIds = [];
     mockHandleZoom = vi.fn();
+    mockSelectedRackId = null;
+    mockSelection = { type: 'none' };
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
   });
@@ -811,6 +830,68 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.renderMode).toBe('full');
   });
 
+  it('mounts the storage occupancy overlay at overview LOD independently of RackCells gating', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSceneLod = 0;
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.lod).toBe(0);
+    expect(storageOccupancyOverlayLastProps?.isStorageMode).toBe(true);
+    expect(storageOccupancyOverlayLastProps?.racks).toBe(
+      rackLayerLastProps?.racks
+    );
+    expect(storageOccupancyOverlayLastProps?.renderMode).toBe('full');
+    expect(storageOccupancyOverlayLastProps?.occupiedCellIds).toBe(
+      rackLayerLastProps?.occupiedCellIds
+    );
+    expect(storageOccupancyOverlayLastProps?.cellRuntimeById).toBe(
+      rackLayerLastProps?.cellRuntimeById
+    );
+  });
+
+  it('allows storage entry overview fit when no V2 focus exists', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = null;
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(viewportControllerLastProps?.hasStorageFocus).toBe(false);
+  });
+
+  it('makes focused storage entry explicit so overview fit is not applied blindly', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = draft.rackIds[0] ?? 'rack-1';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(viewportControllerLastProps?.hasStorageFocus).toBe(true);
+  });
+
   it('forwards active pan skeleton mode and stages restore back to full', () => {
     vi.useFakeTimers();
     try {
@@ -855,6 +936,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
       expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
       expect(rackLayerLastProps?.renderMode).toBe('restore-base');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
       expect(
         rackLayerRenderSnapshots
           .slice(rendersBeforePanEnd)
@@ -863,12 +945,19 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
       advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('restore-overlays');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
 
       advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('restore-labels');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
 
       advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('full');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('full');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(false);
     } finally {
       vi.useRealTimers();
     }
@@ -919,6 +1008,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
       });
 
       expect(rackLayerLastProps?.renderMode).toBe('restore-base');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
       expect(
         rackLayerRenderSnapshots
           .slice(rendersBeforeZoom)
@@ -927,12 +1017,19 @@ describe('EditorCanvas storage active-rack wiring', () => {
 
       advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('restore-overlays');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
 
       advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('restore-labels');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
 
       advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('full');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(true);
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('full');
+      expect(rackLayerLastProps?.labelsDeferred).toBe(false);
     } finally {
       vi.useRealTimers();
     }

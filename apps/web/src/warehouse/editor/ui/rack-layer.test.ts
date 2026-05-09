@@ -161,6 +161,7 @@ function renderRackLayer(params: {
   isStorageMode?: boolean;
   isViewMode?: boolean;
   isActivelyPanning?: boolean;
+  labelsDeferred?: boolean;
   canSelectCells?: boolean;
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
@@ -216,6 +217,7 @@ function renderRackLayer(params: {
           zoom: params.zoom ?? 1.5
         },
         isActivelyPanning: params.isActivelyPanning ?? false,
+        labelsDeferred: params.labelsDeferred ?? false,
         renderMode: params.renderMode,
         renderSelectionOverlay: params.renderSelectionOverlay,
         highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
@@ -894,7 +896,7 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
     ).toHaveLength(2);
   });
 
-  it('uses restore-labels to restore label policy before final full mode', () => {
+  it('keeps labels deferred during restore-labels before final full mode', () => {
     const renderer = renderRackLayer({
       selectedRackIds: ['rack-1'],
       primarySelectedRackId: 'rack-1',
@@ -917,11 +919,48 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
 
     expect(layer?.props.listening).toBe(true);
     expect(rackBody?.props.isSelected).toBe(true);
-    expect(rackBody?.props.showRackCode).toBe(true);
-    expect(rackSections?.props.showFaceToken).toBe(true);
+    expect(rackBody?.props.showRackCode).toBe(false);
+    expect(rackSections?.props.showFaceToken).toBe(false);
     expect(rackCells?.props.renderMode).toBe('restore-labels');
     expect(rackCells?.props.isInteractive).toBe(true);
-    expect(rackCells?.props.showCellNumbers).toBe(true);
+    expect(rackCells?.props.showCellNumbers).toBe(false);
+  });
+
+  it('restores labels in full mode after label deferral clears', () => {
+    const deferredRenderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canSelectCells: true,
+      labelsDeferred: true,
+      renderMode: 'full'
+    });
+    const readyRenderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canSelectCells: true,
+      labelsDeferred: false,
+      renderMode: 'full'
+    });
+
+    const deferredBody = deferredRenderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const readyBody = readyRenderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    )[0];
+    const deferredCells = deferredRenderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+    const readyCells = readyRenderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    )[0];
+
+    expect(deferredBody?.props.showRackCode).toBe(false);
+    expect(deferredCells?.props.showCellNumbers).toBe(false);
+    expect(deferredCells?.props.showFocusedFullAddress).toBe(false);
+    expect(readyBody?.props.showRackCode).toBe(true);
+    expect(readyCells?.props.showCellNumbers).toBe(true);
+    expect(readyCells?.props.showFocusedFullAddress).toBe(true);
   });
 });
 

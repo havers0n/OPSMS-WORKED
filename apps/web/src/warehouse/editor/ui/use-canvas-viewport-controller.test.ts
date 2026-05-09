@@ -1,15 +1,23 @@
 import type Konva from 'konva';
+import type { Rack } from '@wos/domain';
 import { describe, expect, it, vi } from 'vitest';
-import { LOD_CELL_ENTRY } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  getCanvasLOD,
+  isRackInViewport,
+  LOD_CELL_ENTRY
+} from '@/entities/layout-version/lib/canvas-geometry';
+import { getStorageOccupancyOverlayLod } from './shapes/storage-occupancy-overlay';
 import {
   batchDrawStageLayers,
   createTransformOnlyZoomState,
   createTransformOnlyPanState,
   finishTransformOnlyPan,
   finishTransformOnlyZoom,
+  getModeEntryCamera,
   getModeEntryMinZoom,
   isStageCameraOffsetSynced,
   moveTransformOnlyPan,
+  shouldQueueModeEntryAutoFit,
   startTransformOnlyPan,
   updateTransformOnlyZoom
 } from './use-canvas-viewport-controller';
@@ -58,6 +66,23 @@ function createFakeStage(initial = { x: 0, y: 0 }) {
   return stage;
 }
 
+function createDl1LikeRack(index: number): Rack {
+  return {
+    id: `rack-${index}`,
+    code: `R${String(index + 1).padStart(2, '0')}`,
+    x: index * 4,
+    y: 0,
+    width: 3,
+    depth: 1.2,
+    rotation: 0,
+    rotationDeg: 0,
+    kind: 'single',
+    totalLength: 3,
+    faces: [],
+    status: 'active'
+  } as unknown as Rack;
+}
+
 describe('getModeEntryMinZoom', () => {
   it('keeps cell-visible floor for view mode', () => {
     expect(getModeEntryMinZoom('view')).toBe(LOD_CELL_ENTRY);
@@ -69,6 +94,81 @@ describe('getModeEntryMinZoom', () => {
 
   it('does not apply entry floor in layout mode', () => {
     expect(getModeEntryMinZoom('layout')).toBe(0);
+  });
+});
+
+describe('storage mode entry auto-fit policy', () => {
+  it('queues overview fit when storage mounts without focused location', () => {
+    expect(
+      shouldQueueModeEntryAutoFit({
+        previousViewMode: null,
+        viewMode: 'storage',
+        hasStorageFocus: false
+      })
+    ).toBe(true);
+  });
+
+  it('queues overview fit when entering storage from layout without focus', () => {
+    expect(
+      shouldQueueModeEntryAutoFit({
+        previousViewMode: 'layout',
+        viewMode: 'storage',
+        hasStorageFocus: false
+      })
+    ).toBe(true);
+  });
+
+  it('does not queue storage overview fit when an explicit focus exists', () => {
+    expect(
+      shouldQueueModeEntryAutoFit({
+        previousViewMode: 'layout',
+        viewMode: 'storage',
+        hasStorageFocus: true
+      })
+    ).toBe(false);
+  });
+
+  it('fits a DL1-like storage overview below the default zoom and keeps overlay visible', () => {
+    const racks = Array.from({ length: 10 }, (_, index) =>
+      createDl1LikeRack(index)
+    );
+    const viewport = { width: 1000, height: 800 };
+    const camera = getModeEntryCamera({
+      currentOffset: { x: 0, y: 0 },
+      racks,
+      viewMode: 'storage',
+      viewport,
+      zoom: 1,
+      zoomBounds: { minZoom: 0.1, maxZoom: 3 }
+    });
+
+    expect(camera).not.toBeNull();
+    expect(camera!.zoom).toBeCloseTo(0.54, 2);
+    expect(camera!.zoom).toBeLessThan(1);
+    expect(getCanvasLOD(camera!.zoom)).toBe(0);
+    expect(
+      getStorageOccupancyOverlayLod({
+        isStorageMode: true,
+        renderMode: 'full',
+        zoom: camera!.zoom
+      })
+    ).toBe('cell-compact');
+
+    const visibleRackCount = racks.filter((rack) =>
+      isRackInViewport(
+        rack,
+        viewport,
+        {
+          x: camera!.offsetX,
+          y: camera!.offsetY
+        },
+        camera!.zoom,
+        0
+      )
+    ).length;
+
+    expect(visibleRackCount).toBeGreaterThanOrEqual(8);
+    expect(visibleRackCount).toBeLessThanOrEqual(10);
   });
 });
 
