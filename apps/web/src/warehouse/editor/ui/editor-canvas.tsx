@@ -216,8 +216,6 @@ export function EditorCanvas({
     useStorageFocusHandleEmptyCanvasClick();
 
   const isViewMode = viewMode === 'view';
-  const shouldShowPickingPlanningOverlay =
-    isViewMode && viewStage === 'picking-plan';
   // In View and Storage mode the published rack tree must be
   // used as the source for RackCells so that rackId/faceId/sectionId/levelId
   // in the lookup key match the keys in publishedCellsByStructure.
@@ -230,6 +228,15 @@ export function EditorCanvas({
     isViewMode || viewMode === 'storage'
       ? (workspace?.latestPublished ?? workspace?.activeDraft ?? null)
       : null;
+  // True when view/storage mode is forced to show a draft because no published
+  // version exists yet. Cell-based features (published cells, picking plan) will
+  // be non-functional in this state — the banner and overlay guards rely on this.
+  const isDraftFallback =
+    (isViewMode || viewMode === 'storage') &&
+    placementLayout !== null &&
+    workspace?.latestPublished == null;
+  const shouldShowPickingPlanningOverlay =
+    isViewMode && viewStage === 'picking-plan' && !isDraftFallback;
   const racks = useMemo(() => {
     const layout = placementLayout ?? layoutDraft;
     return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
@@ -840,6 +847,18 @@ export function EditorCanvas({
 
       {layoutDraft && (
         <>
+          {isDraftFallback && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center px-3 py-1.5 text-xs font-medium"
+              style={{
+                background: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent)',
+                color: 'var(--color-warning-foreground, #78350f)'
+              }}
+            >
+              No published version — showing unpublished draft. Publish the layout to enable storage features.
+            </div>
+          )}
+
           <CanvasHud
             viewport={viewport}
             zoom={zoom}
@@ -1012,7 +1031,7 @@ export function EditorCanvas({
                 selectedZoneId={selectedZoneId}
                 setSelectedZoneId={setSelectedZoneId}
                 updateZoneRect={updateZoneRect}
-                zoneLookup={layoutDraft.zones}
+                zoneLookup={(placementLayout ?? layoutDraft).zones}
                 zones={zones}
               />
 
@@ -1026,7 +1045,7 @@ export function EditorCanvas({
                 selectedWallId={selectedWallId}
                 setSelectedWallId={setSelectedWallId}
                 updateWallGeometry={updateWallGeometry}
-                wallLookup={layoutDraft.walls}
+                wallLookup={(placementLayout ?? layoutDraft).walls}
                 walls={walls}
               />
 
@@ -1067,7 +1086,7 @@ export function EditorCanvas({
                 publishedCellsById={publishedCellsById}
                 publishedCellsByStructure={publishedCellsByStructure}
                 primarySelectedRackId={primarySelectedRackId}
-                rackLookup={layoutDraft.racks}
+                rackLookup={(placementLayout ?? layoutDraft).racks}
                 racks={visibleRacks}
                 selectedRackActiveLevel={selectedRackActiveLevelIndex}
                 selectedRackIds={effectiveSelectedRackIds}
