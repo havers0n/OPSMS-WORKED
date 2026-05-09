@@ -45,6 +45,13 @@ export type CanvasRenderComponentMetrics = {
   changedKeys: Record<string, number>;
 };
 
+export type CanvasForceRenderReason =
+  | 'none'
+  | 'selection'
+  | 'locate'
+  | 'workflow'
+  | 'debug';
+
 export type CanvasDiagnosticsPhase =
   | 'idle'
   | 'active-skeleton'
@@ -98,6 +105,7 @@ export type CanvasRenderPipelineDiagnostics = {
     resolvedCount: number;
     unresolvedCount: number;
   };
+  forceRenderReasons: Record<CanvasForceRenderReason, number>;
 };
 
 export type CanvasCullingMetrics = {
@@ -310,6 +318,13 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
       highlightedCellCount: 0,
       resolvedCount: 0,
       unresolvedCount: 0
+    },
+    forceRenderReasons: {
+      none: 0,
+      selection: 0,
+      locate: 0,
+      workflow: 0,
+      debug: 0
     }
   };
 }
@@ -542,6 +557,15 @@ export function recordCanvasSelectionOverlayMetrics({
   } else {
     diagnostics.selectionOverlay.unresolvedCount += 1;
   }
+}
+
+export function recordCanvasForceRenderReasons(
+  counts: Record<CanvasForceRenderReason, number>
+) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.forceRenderReasons = counts;
 }
 
 export function recordCanvasComponentRender({

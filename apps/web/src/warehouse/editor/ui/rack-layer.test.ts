@@ -164,6 +164,7 @@ function renderRackLayer(params: {
   canSelectCells?: boolean;
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
+  activeCellRackId?: string | null;
   renderMode?: CanvasRenderMode;
   renderSelectionOverlay?: boolean;
   canvasSelectedCellId?: string | null;
@@ -193,7 +194,7 @@ function renderRackLayer(params: {
   act(() => {
     renderer = TestRenderer.create(
       createElement(RackLayer, {
-        activeCellRackId: null,
+        activeCellRackId: params.activeCellRackId ?? null,
         canSelectCells: params.canSelectCells ?? false,
         canSelectRack: params.canSelectRack ?? true,
         canvasSelectedCellId: params.canvasSelectedCellId ?? null,
@@ -338,10 +339,66 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
   });
 
-  it('force-renders all cells for the primary rack even when it is not selected', () => {
+  it('does not force-render all cells for the ordinary primary selected rack', () => {
     const renderer = renderRackLayer({
       selectedRackIds: [],
       primarySelectedRackId: 'rack-1'
+    });
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+
+    expect(rackCells).toHaveLength(2);
+    expect(rackCells[0]?.props.rackId).toBe('rack-1');
+    expect(rackCells[0]?.props.forceRenderAllCells).toBe(false);
+    expect(rackCells[1]?.props.rackId).toBe('rack-2');
+    expect(rackCells[1]?.props.forceRenderAllCells).toBe(false);
+  });
+
+  it('does not force-render all cells for the ordinary active selected cell rack', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      activeCellRackId: 'rack-1'
+    });
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+
+    expect(rackCells).toHaveLength(2);
+    expect(rackCells[0]?.props.rackId).toBe('rack-1');
+    expect(rackCells[0]?.props.forceRenderAllCells).toBe(false);
+    expect(rackCells[1]?.props.rackId).toBe('rack-2');
+    expect(rackCells[1]?.props.forceRenderAllCells).toBe(false);
+  });
+
+  it('force-renders all cells for the locate target rack', () => {
+    const racks = [createRack('rack-1', 0), createRack('rack-2', 10)];
+    const cells = indexCells([createPublishedCell(racks[0]!, 1)]);
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      racks,
+      publishedCellsById: cells.byId,
+      publishedCellsByStructure: cells.byStructure,
+      temporaryLocateTargetCellId: 'rack-1-cell-1'
+    });
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+
+    expect(rackCells).toHaveLength(2);
+    expect(rackCells[0]?.props.rackId).toBe('rack-1');
+    expect(rackCells[0]?.props.forceRenderAllCells).toBe(true);
+    expect(rackCells[1]?.props.rackId).toBe('rack-2');
+    expect(rackCells[1]?.props.forceRenderAllCells).toBe(false);
+  });
+
+  it('force-renders all cells for the workflow source rack', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      moveSourceRackId: 'rack-1'
     });
     const rackCells = renderer.root.findAll(
       (node) => String(node.type) === 'RackCells'

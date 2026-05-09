@@ -612,6 +612,30 @@ describe('RackCells', () => {
     expect(getBatchedCellBaseCells(selectedRenderer)).toHaveLength(4);
   });
 
+  it('does not mount a culling-clipped ordinary selected cell without an explicit force flag', () => {
+    const cullingViewport = {
+      canvasOffset: { x: 0, y: 0 },
+      viewport: { width: 100, height: 100 },
+      zoom: 1
+    };
+    const wideGeometry = {
+      ...geometry,
+      width: 1000,
+      faceAWidth: 1000,
+      faceBWidth: 1000,
+      centerX: 500
+    };
+    const renderer = renderRackCellsWithProps({
+      geometryOverride: wideGeometry,
+      slotCount: 4,
+      diagnosticsViewport: cullingViewport,
+      selectedCellId: 'cell-level-only-4'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(getCellOutlineRoleRects(renderer)).toHaveLength(0);
+  });
+
   it('uses equal displayed-band bounds for activeLevelIndex 0 and 1 on same multi-level rack', () => {
     const level0Bounds = getCellBounds(0, threeLevelIds);
     const level1Bounds = getCellBounds(1, threeLevelIds);
@@ -948,9 +972,8 @@ describe('RackCells', () => {
     ).toEqual(['1', '2']);
   });
 
-  it('force-renders selected, locate-target, and workflow-source cells outside the viewport', () => {
+  it('force-renders locate-target and workflow-source cells outside the viewport', () => {
     for (const forcedProps of [
-      { selectedCellId: 'cell-level-only-1' },
       { locateTargetCellId: 'cell-level-only-1' },
       { workflowSourceCellId: 'cell-level-only-1' }
     ]) {
@@ -987,9 +1010,9 @@ describe('RackCells', () => {
 
     expect(window.__WOS_CANVAS_CULLING_METRICS__).toEqual({
       cellsTotal: 2,
-      cellsRendered: 1,
-      cellsCulled: 1,
-      cullingRatio: 0.5
+      cellsRendered: 0,
+      cellsCulled: 2,
+      cullingRatio: 0
     });
   });
 

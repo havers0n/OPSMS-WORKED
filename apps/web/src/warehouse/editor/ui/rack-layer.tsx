@@ -23,10 +23,12 @@ import {
 import { SelectionOverlayLayer } from './shapes/selection-overlay-layer';
 import { RackSections } from './shapes/rack-sections';
 import {
+  recordCanvasForceRenderReasons,
   recordCanvasComponentRender,
   recordCanvasKonvaLayerDraw,
   recordCanvasRackLayerNodeCount,
-  type CanvasDiagnosticsFlags
+  type CanvasDiagnosticsFlags,
+  type CanvasForceRenderReason
 } from './canvas-diagnostics';
 import {
   isCanvasFullDetailRenderMode,
@@ -46,6 +48,16 @@ function getFirstCellId(cellIds: Set<string>): string | null {
     return cellId;
   }
   return null;
+}
+
+function createForceRenderReasonCounts(): Record<CanvasForceRenderReason, number> {
+  return {
+    none: 0,
+    selection: 0,
+    locate: 0,
+    workflow: 0,
+    debug: 0
+  };
 }
 
 type LocalPoint = { x: number; y: number };
@@ -278,9 +290,24 @@ export function RackLayer({
       ? EMPTY_CELL_IDS
       : highlightedCellIds;
   const highlightedCellFirstId = getFirstCellId(highlightedCellIds);
+  const locateTargetRackId =
+    temporaryLocateTargetCellId !== null
+      ? (publishedCellsById.get(temporaryLocateTargetCellId)?.rackId ?? null)
+      : null;
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
+  const forceRenderReasonCounts = createForceRenderReasonCounts();
+  for (const rack of racks) {
+    if (locateTargetRackId === rack.id) {
+      forceRenderReasonCounts.locate += 1;
+    } else if (moveSourceRackId === rack.id) {
+      forceRenderReasonCounts.workflow += 1;
+    } else {
+      forceRenderReasonCounts.none += 1;
+    }
+  }
+  recordCanvasForceRenderReasons(forceRenderReasonCounts);
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -476,10 +503,13 @@ export function RackLayer({
       {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
         const isSelected = overlaysEnabled && selectedRackIds.includes(rack.id);
-        const shouldForceRenderAllCells =
-          rack.id === primarySelectedRackId ||
-          activeCellRackId === rack.id ||
-          moveSourceRackId === rack.id;
+        const forceRenderReason: CanvasForceRenderReason =
+          locateTargetRackId === rack.id
+            ? 'locate'
+            : moveSourceRackId === rack.id
+              ? 'workflow'
+              : 'none';
+        const shouldForceRenderAllCells = forceRenderReason !== 'none';
         const isHovered = overlaysEnabled && hoveredRackId === rack.id;
         const isRackPassive =
           overlaysEnabled &&

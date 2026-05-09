@@ -204,7 +204,6 @@ function FaceCells({
           canvasOffset: diagnosticsViewport.canvasOffset,
           forceVisible:
             forceRenderAllCells ||
-            isSelected ||
             isLocateTarget ||
             isWorkflowSource,
           rackGeometry,
@@ -460,6 +459,7 @@ export function RackCells({
       'diagnosticsCulling',
       'isActivelyPanning',
       'renderMode',
+      'forceRenderAllCells',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
@@ -491,6 +491,7 @@ export function RackCells({
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       isActivelyPanning,
       renderMode,
+      forceRenderAllCells,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,

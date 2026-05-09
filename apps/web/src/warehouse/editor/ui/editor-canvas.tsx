@@ -539,19 +539,9 @@ export function EditorCanvas({
       : null;
   const forcedVisibleRackIds = useMemo(() => {
     const rackIds = new Set<string>();
-    for (const rackId of effectiveSelectedRackIds) {
-      rackIds.add(rackId);
-    }
-    if (primarySelectedRackId) rackIds.add(primarySelectedRackId);
-    if (activeCellRackId) rackIds.add(activeCellRackId);
     if (moveSourceRackId) rackIds.add(moveSourceRackId);
 
-    for (const cellId of [
-      effectiveSelectedCellId,
-      canvasSelectedCellId,
-      temporaryLocateTargetCellId,
-      moveSourceCellId
-    ]) {
+    for (const cellId of [temporaryLocateTargetCellId, moveSourceCellId]) {
       if (!cellId) continue;
       const rackId = publishedCellsById.get(cellId)?.rackId ?? null;
       if (rackId) rackIds.add(rackId);
@@ -559,13 +549,8 @@ export function EditorCanvas({
 
     return rackIds;
   }, [
-    activeCellRackId,
-    canvasSelectedCellId,
-    effectiveSelectedCellId,
-    effectiveSelectedRackIds,
     moveSourceCellId,
     moveSourceRackId,
-    primarySelectedRackId,
     publishedCellsById,
     temporaryLocateTargetCellId
   ]);

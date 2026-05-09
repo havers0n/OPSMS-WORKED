@@ -674,7 +674,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(canvasHudLastProps?.shouldShowStorageCellBar).toBe(false);
   });
 
-  it('keeps an offscreen selected cell parent rack in the RackLayer input', () => {
+  it('does not keep an offscreen ordinary selected cell parent rack in the RackLayer input', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
     mockIsRackInViewport.mockReturnValue(false);
@@ -712,7 +712,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     const racks = rackLayerLastProps?.racks as Array<{ id: string }>;
-    expect(racks.map((rack) => rack.id)).toContain(rackId);
+    expect(racks.map((rack) => rack.id)).not.toContain(rackId);
   });
 
   it('renders selected cell state in a separate overlay layer and disables the base rack overlay', () => {

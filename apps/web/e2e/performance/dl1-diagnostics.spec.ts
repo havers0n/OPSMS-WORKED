@@ -116,6 +116,8 @@ type RenderComponentMetrics = {
   changedKeys: Record<string, number>;
 };
 
+type ForceRenderReason = 'none' | 'selection' | 'locate' | 'workflow' | 'debug';
+
 type DiagnosticsPhase =
   | 'idle'
   | 'active-skeleton'
@@ -183,6 +185,7 @@ type RenderPipelineDiagnostics = {
     resolvedCount: number;
     unresolvedCount: number;
   };
+  forceRenderReasons: Record<ForceRenderReason, number>;
 };
 
 type KonvaCallEvent = {
@@ -967,6 +970,13 @@ async function startRenderPipelineProbe(
         highlightedCellCount: 0,
         resolvedCount: 0,
         unresolvedCount: 0
+      },
+      forceRenderReasons: {
+        none: 0,
+        selection: 0,
+        locate: 0,
+        workflow: 0,
+        debug: 0
       }
     };
     global.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
@@ -3568,6 +3578,7 @@ Layer batchDraw calls by name: ${JSON.stringify(diagnostics.konva.layerBatchDraw
 Layer node counts by name: ${JSON.stringify(diagnostics.konva.layerNodeCountsByName ?? {})}
 rack-base-layer node count: ${diagnostics.konva.rackLayerNodeCount}
 cell-state-overlay-layer node count: ${diagnostics.konva.cellStateOverlayLayerNodeCount ?? 0}
+forceRenderReasons: ${JSON.stringify(diagnostics.forceRenderReasons ?? {})}
 
 ## Pan Architecture
 ${panClassification}
@@ -3785,6 +3796,11 @@ test.describe('DL1 diagnostics harness', () => {
               .selectedCellId ?? 0,
           overlayHighlightedCellCount:
             entry.renderPipeline.selectionOverlay.highlightedCellCount,
+          forceSelection:
+            entry.renderPipeline.forceRenderReasons?.selection ?? 0,
+          forceLocate: entry.renderPipeline.forceRenderReasons?.locate ?? 0,
+          forceWorkflow:
+            entry.renderPipeline.forceRenderReasons?.workflow ?? 0,
           drawCalls:
             entry.renderPipeline.konva.layerDrawCalls +
             entry.renderPipeline.konva.layerBatchDrawCalls,
