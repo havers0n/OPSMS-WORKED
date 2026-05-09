@@ -159,6 +159,7 @@ function renderRackLayer(params: {
   zoom?: number;
   isLayoutMode?: boolean;
   isStorageMode?: boolean;
+  isViewMode?: boolean;
   isActivelyPanning?: boolean;
   canSelectCells?: boolean;
   canSelectRack?: boolean;
@@ -171,6 +172,8 @@ function renderRackLayer(params: {
   setSelectedCellId?: (cellId: string | null) => void;
   setSelectedRackIds?: (rackIds: string[]) => void;
   clearHighlightedCellIds?: () => void;
+  highlightedCellIds?: Set<string>;
+  setHighlightedCellIds?: (cellIds: string[]) => void;
   setPlacementMoveTargetCellId?: (cellId: string | null) => void;
   racks?: Rack[];
   publishedCellsById?: Map<string, Cell>;
@@ -211,14 +214,14 @@ function renderRackLayer(params: {
         },
         isActivelyPanning: params.isActivelyPanning ?? false,
         renderMode: params.renderMode,
-        highlightedCellIds: new Set<string>(),
+        highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
         hoveredRackId: null,
         isLayoutEditable: true,
         isLayoutMode: params.isLayoutMode ?? true,
         isPlacing: false,
         isRackPassiveScopeActive: false,
         isStorageMode: params.isStorageMode ?? false,
-        isViewMode: false,
+        isViewMode: params.isViewMode ?? false,
         isWorkflowScope: params.isWorkflowScope ?? false,
         lod: params.lod ?? 2,
         zoom: params.zoom ?? 1.5,
@@ -235,7 +238,8 @@ function renderRackLayer(params: {
         racks,
         selectedRackActiveLevel: params.selectedRackActiveLevel ?? 0,
         selectedRackIds: params.selectedRackIds,
-        setHighlightedCellIds: () => undefined,
+        setHighlightedCellIds:
+          params.setHighlightedCellIds ?? (() => undefined),
         setHoveredRackId: () => undefined,
         setPlacementMoveTargetCellId:
           params.setPlacementMoveTargetCellId ?? (() => undefined),
@@ -434,6 +438,91 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[0]?.props.selectedCellId).toBeNull();
     expect(overlayOutlines).toHaveLength(1);
     expect(overlayOutlines[0]?.props.listening).toBe(false);
+  });
+
+  it('routes single selected highlight visuals through the sparse overlay layer', () => {
+    const rack = createRack('rack-1', 0);
+    const selectedCell = createPublishedCell(rack, 1);
+    const cells = indexCells([selectedCell]);
+
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canvasSelectedCellId: selectedCell.id,
+      highlightedCellIds: new Set([selectedCell.id]),
+      racks: [rack],
+      publishedCellsById: cells.byId,
+      publishedCellsByStructure: cells.byStructure
+    });
+
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+    const overlayHalos = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Rect' &&
+        node.props.wosRectRole === 'cell-halo-overlay'
+    );
+
+    expect(rackCells[0]?.props.highlightedCellIds).toBeInstanceOf(Set);
+    expect(rackCells[0]?.props.highlightedCellIds.size).toBe(0);
+    expect(overlayHalos).toHaveLength(1);
+    expect(overlayHalos[0]?.props.listening).toBe(false);
+  });
+
+  it('keeps multi-cell highlighted search sets in base RackCells', () => {
+    const rack = createRack('rack-1', 0);
+    const selectedCell = createPublishedCell(rack, 1);
+    const otherCell = createPublishedCell(rack, 2);
+    const highlightedCellIds = new Set([selectedCell.id, otherCell.id]);
+    const cells = indexCells([selectedCell, otherCell]);
+
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      canvasSelectedCellId: selectedCell.id,
+      highlightedCellIds,
+      racks: [rack],
+      publishedCellsById: cells.byId,
+      publishedCellsByStructure: cells.byStructure
+    });
+
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+    const overlayHalos = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Rect' &&
+        node.props.wosRectRole === 'cell-halo-overlay'
+    );
+
+    expect(rackCells[0]?.props.highlightedCellIds).toBe(highlightedCellIds);
+    expect(overlayHalos).toHaveLength(0);
+  });
+
+  it('keeps view-mode cell click selection and highlight writes unchanged', () => {
+    const setSelectedCellId = vi.fn();
+    const setHighlightedCellIds = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      isLayoutMode: false,
+      isViewMode: true,
+      canSelectCells: true,
+      setSelectedCellId,
+      setHighlightedCellIds
+    });
+
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+    act(() => {
+      rackCells[0].props.onCellClick('cell-1', { x: 10, y: 20 });
+    });
+
+    expect(setSelectedCellId).toHaveBeenCalledWith('cell-1');
+    expect(setHighlightedCellIds).toHaveBeenCalledWith(['cell-1']);
   });
 });
 

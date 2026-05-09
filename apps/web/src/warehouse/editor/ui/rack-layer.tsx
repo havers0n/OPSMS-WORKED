@@ -41,6 +41,13 @@ type SnapGuide = {
 
 const EMPTY_CELL_IDS = new Set<string>();
 
+function getFirstCellId(cellIds: Set<string>): string | null {
+  for (const cellId of cellIds) {
+    return cellId;
+  }
+  return null;
+}
+
 type LocalPoint = { x: number; y: number };
 
 function countKonvaNodeTree(node: Konva.Node): number {
@@ -257,6 +264,18 @@ export function RackLayer({
     diagnosticsFlags.cellOverlays !== 'off';
   const selectionOverlayEnabled =
     overlaysEnabled && diagnosticsFlags.cellOverlays === 'normal';
+  const singleOverlayHighlightedCellId =
+    selectionOverlayEnabled &&
+    canvasSelectedCellId !== null &&
+    highlightedCellIds.size === 1 &&
+    highlightedCellIds.has(canvasSelectedCellId)
+      ? canvasSelectedCellId
+      : null;
+  const baseHighlightedCellIds =
+    singleOverlayHighlightedCellId !== null
+      ? EMPTY_CELL_IDS
+      : highlightedCellIds;
+  const highlightedCellFirstId = getFirstCellId(highlightedCellIds);
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
@@ -311,7 +330,11 @@ export function RackLayer({
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
-      'viewportHeight'
+      'viewportHeight',
+      'highlightedCellCount',
+      'highlightedCellFirstId',
+      'overlayHighlightedCellCount',
+      'baseHighlightedCellCount'
     ],
     snapshot: {
       rackIds: racks.map((rack) => rack.id).join('|'),
@@ -337,7 +360,11 @@ export function RackLayer({
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
-      viewportHeight: diagnosticsViewport.viewport.height
+      viewportHeight: diagnosticsViewport.viewport.height,
+      highlightedCellCount: highlightedCellIds.size,
+      highlightedCellFirstId,
+      overlayHighlightedCellCount: singleOverlayHighlightedCellId ? 1 : 0,
+      baseHighlightedCellCount: baseHighlightedCellIds.size
     }
   });
 
@@ -588,7 +615,7 @@ export function RackLayer({
                 occupiedCellIds={occupiedCellIds}
                 cellRuntimeById={cellRuntimeById}
                 highlightedCellIds={
-                  overlaysEnabled ? highlightedCellIds : EMPTY_CELL_IDS
+                  overlaysEnabled ? baseHighlightedCellIds : EMPTY_CELL_IDS
                 }
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
@@ -622,6 +649,7 @@ export function RackLayer({
       {selectionOverlayEnabled && (
         <SelectionOverlayLayer
           selectedCellId={canvasSelectedCellId}
+          highlightedCellId={singleOverlayHighlightedCellId}
           racks={racks}
           primarySelectedRackId={primarySelectedRackId}
           selectedRackActiveLevel={selectedRackActiveLevel}

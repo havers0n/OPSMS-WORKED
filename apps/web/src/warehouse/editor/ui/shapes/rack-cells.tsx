@@ -387,6 +387,13 @@ const DEFAULT_DIAGNOSTICS_VIEWPORT: DiagnosticsViewport = {
   zoom: 1
 };
 
+function getFirstCellId(cellIds: Set<string>): string | null {
+  for (const cellId of cellIds) {
+    return cellId;
+  }
+  return null;
+}
+
 export function RackCells({
   geometry,
   rackId,
@@ -425,6 +432,7 @@ export function RackCells({
   const normalizedSemanticLevels =
     semanticLevels ??
     collectFaceSemanticLevels([faceA, ...(effectiveFaceB ? [effectiveFaceB] : [])]);
+  const firstHighlightedCellId = getFirstCellId(highlightedCellIds);
 
   recordCanvasComponentRender({
     component: 'RackCells',
@@ -457,7 +465,8 @@ export function RackCells({
       'viewportWidth',
       'viewportHeight',
       'zoom',
-      'highlightedCellCount'
+      'highlightedCellCount',
+      'firstHighlightedCellId'
     ],
     snapshot: {
       geometryX: geometry.x,
@@ -487,7 +496,8 @@ export function RackCells({
       viewportWidth: diagnosticsViewport.viewport.width,
       viewportHeight: diagnosticsViewport.viewport.height,
       zoom: diagnosticsViewport.zoom,
-      highlightedCellCount: highlightedCellIds.size
+      highlightedCellCount: highlightedCellIds.size,
+      firstHighlightedCellId
     }
   });
 

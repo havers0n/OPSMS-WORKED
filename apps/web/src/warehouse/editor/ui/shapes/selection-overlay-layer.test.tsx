@@ -106,6 +106,7 @@ function indexCells(cells: Cell[]) {
 
 function renderSelectionOverlay(params: {
   selectedCellId: string | null;
+  highlightedCellId?: string | null;
   showFocusedFullAddress?: boolean;
 }) {
   const rack = createRack();
@@ -116,6 +117,7 @@ function renderSelectionOverlay(params: {
     renderer = TestRenderer.create(
       createElement(SelectionOverlayLayer, {
         selectedCellId: params.selectedCellId,
+        highlightedCellId: params.highlightedCellId ?? null,
         racks: [rack],
         primarySelectedRackId: rack.id,
         selectedRackActiveLevel: 0,
@@ -146,6 +148,14 @@ function getFocusedAddressLabels(renderer: TestRenderer.ReactTestRenderer) {
   );
 }
 
+function getHaloRects(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) =>
+      String(node.type) === 'Rect' &&
+      node.props.wosRectRole === 'cell-halo-overlay'
+  );
+}
+
 describe('SelectionOverlayLayer', () => {
   it('renders one selected outline for a selected cell id', () => {
     const renderer = renderSelectionOverlay({ selectedCellId: 'cell-1' });
@@ -162,10 +172,29 @@ describe('SelectionOverlayLayer', () => {
     const renderer = renderSelectionOverlay({ selectedCellId: null });
 
     expect(getOutlineRects(renderer)).toHaveLength(0);
+    expect(getHaloRects(renderer)).toHaveLength(0);
+  });
+
+  it('renders one highlighted halo for a highlighted cell id', () => {
+    const renderer = renderSelectionOverlay({
+      selectedCellId: 'cell-1',
+      highlightedCellId: 'cell-1'
+    });
+
+    const halos = getHaloRects(renderer);
+    expect(halos).toHaveLength(1);
+    expect(halos[0]?.props.x).toBe(-0.5);
+    expect(halos[0]?.props.y).toBe(3.5);
+    expect(halos[0]?.props.width).toBe(101);
+    expect(halos[0]?.props.height).toBe(73);
+    expect(halos[0]?.props.listening).toBe(false);
   });
 
   it('keeps overlay groups and nodes non-listening', () => {
-    const renderer = renderSelectionOverlay({ selectedCellId: 'cell-1' });
+    const renderer = renderSelectionOverlay({
+      selectedCellId: 'cell-1',
+      highlightedCellId: 'cell-1'
+    });
 
     const groups = renderer.root.findAll(
       (node) =>
@@ -173,10 +202,12 @@ describe('SelectionOverlayLayer', () => {
         String(node.props.name).startsWith('selection-overlay')
     );
     const outlines = getOutlineRects(renderer);
+    const halos = getHaloRects(renderer);
 
     expect(groups.length).toBeGreaterThan(0);
     expect(groups.every((group) => group.props.listening === false)).toBe(true);
     expect(outlines[0]?.props.listening).toBe(false);
+    expect(halos[0]?.props.listening).toBe(false);
   });
 
   it('renders the focused address label only when reveal policy allows it', () => {

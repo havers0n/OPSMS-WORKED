@@ -89,6 +89,7 @@ export type CanvasRenderPipelineDiagnostics = {
   };
   selectionOverlay: {
     affectedCellCount: number;
+    highlightedCellCount: number;
     resolvedCount: number;
     unresolvedCount: number;
   };
@@ -296,6 +297,7 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     },
     selectionOverlay: {
       affectedCellCount: 0,
+      highlightedCellCount: 0,
       resolvedCount: 0,
       unresolvedCount: 0
     }
@@ -483,9 +485,11 @@ export function recordCanvasRackLayerNodeCount(nodeCount: number) {
 
 export function recordCanvasSelectionOverlayMetrics({
   affectedCellCount,
+  highlightedCellCount = 0,
   resolved
 }: {
   affectedCellCount: number;
+  highlightedCellCount?: number;
   resolved: boolean;
 }) {
   const diagnostics = getActiveRenderPipelineDiagnostics();
@@ -493,10 +497,12 @@ export function recordCanvasSelectionOverlayMetrics({
 
   diagnostics.selectionOverlay ??= {
     affectedCellCount: 0,
+    highlightedCellCount: 0,
     resolvedCount: 0,
     unresolvedCount: 0
   };
   diagnostics.selectionOverlay.affectedCellCount = affectedCellCount;
+  diagnostics.selectionOverlay.highlightedCellCount = highlightedCellCount;
   if (resolved) {
     diagnostics.selectionOverlay.resolvedCount += 1;
   } else {

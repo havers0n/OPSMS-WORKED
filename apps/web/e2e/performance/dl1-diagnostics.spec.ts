@@ -165,11 +165,18 @@ type RenderPipelineDiagnostics = {
     EditorCanvas: RenderComponentMetrics;
     RackLayer: RenderComponentMetrics;
     RackCells: RenderComponentMetrics;
+    SelectionOverlayLayer: RenderComponentMetrics;
   };
   konva: {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
     rackLayerNodeCount: number;
+  };
+  selectionOverlay: {
+    affectedCellCount: number;
+    highlightedCellCount: number;
+    resolvedCount: number;
+    unresolvedCount: number;
   };
 };
 
@@ -937,12 +944,19 @@ async function startRenderPipelineProbe(
       components: {
         EditorCanvas: createComponentMetrics(),
         RackLayer: createComponentMetrics(),
-        RackCells: createComponentMetrics()
+        RackCells: createComponentMetrics(),
+        SelectionOverlayLayer: createComponentMetrics()
       },
       konva: {
         layerDrawCalls: 0,
         layerBatchDrawCalls: 0,
         rackLayerNodeCount: 0
+      },
+      selectionOverlay: {
+        affectedCellCount: 0,
+        highlightedCellCount: 0,
+        resolvedCount: 0,
+        unresolvedCount: 0
       }
     };
     global.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
@@ -3517,6 +3531,7 @@ Conclusion: ${manualOff ? 'Measured by direct A/B comparison.' : 'manual-pan-bat
 ${componentRenderLine('EditorCanvas', diagnostics)}
 ${componentRenderLine('RackLayer', diagnostics)}
 ${componentRenderLine('RackCells', diagnostics)}
+${componentRenderLine('SelectionOverlayLayer', diagnostics)}
 
 ## Existing Konva Rendering Counters
 Layer draw calls: ${diagnostics.konva.layerDrawCalls}
@@ -3726,6 +3741,19 @@ test.describe('DL1 diagnostics harness', () => {
             entry.renderPipeline.components.RackLayer.renders,
           rackCellsRenders:
             entry.renderPipeline.components.RackCells.renders,
+          selectionOverlayRenders:
+            entry.renderPipeline.components.SelectionOverlayLayer.renders,
+          rackCellsHighlightedChanges:
+            entry.renderPipeline.components.RackCells.changedKeys
+              .highlightedCellCount ?? 0,
+          rackCellsFirstHighlightedChanges:
+            entry.renderPipeline.components.RackCells.changedKeys
+              .firstHighlightedCellId ?? 0,
+          rackCellsSelectedChanges:
+            entry.renderPipeline.components.RackCells.changedKeys
+              .selectedCellId ?? 0,
+          overlayHighlightedCellCount:
+            entry.renderPipeline.selectionOverlay.highlightedCellCount,
           drawCalls:
             entry.renderPipeline.konva.layerDrawCalls +
             entry.renderPipeline.konva.layerBatchDrawCalls,

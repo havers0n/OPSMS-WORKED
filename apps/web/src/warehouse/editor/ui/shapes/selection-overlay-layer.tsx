@@ -3,7 +3,7 @@ import { Group } from 'react-konva';
 import type { Cell, Rack } from '@wos/domain';
 import { shouldShowFocusedFullAddress } from './rack-label-reveal-policy';
 import { FocusedCellAddressOverlay } from './rack-label-overlays';
-import { CellOutlineOverlay } from './rack-cell-overlays';
+import { CellHaloOverlay, CellOutlineOverlay } from './rack-cell-overlays';
 import { resolveCellVisualState } from './rack-cells-visual-state';
 import { getWarehouseSemanticCellPalette } from './warehouse-semantic-canvas-palette';
 import {
@@ -17,6 +17,7 @@ import {
 
 type Props = {
   selectedCellId: string | null;
+  highlightedCellId?: string | null;
   racks: Rack[];
   primarySelectedRackId: string | null;
   selectedRackActiveLevel: number | null;
@@ -28,6 +29,7 @@ type Props = {
 
 export function SelectionOverlayLayer({
   selectedCellId,
+  highlightedCellId = null,
   racks,
   primarySelectedRackId,
   selectedRackActiveLevel,
@@ -36,7 +38,7 @@ export function SelectionOverlayLayer({
   showFocusedFullAddress,
   isActivelyPanning = false
 }: Props) {
-  const overlayGeometry = useMemo(
+  const selectedOverlayGeometry = useMemo(
     () =>
       resolveSelectedCellOverlayGeometryForRacks({
         primarySelectedRackId,
@@ -55,12 +57,37 @@ export function SelectionOverlayLayer({
       selectedRackActiveLevel
     ]
   );
-  const affectedCellCount = overlayGeometry ? 1 : 0;
+  const highlightedOverlayGeometry = useMemo(
+    () =>
+      resolveSelectedCellOverlayGeometryForRacks({
+        primarySelectedRackId,
+        publishedCellsById,
+        publishedCellsByStructure,
+        racks,
+        selectedCellId: highlightedCellId,
+        selectedRackActiveLevel
+      }),
+    [
+      highlightedCellId,
+      primarySelectedRackId,
+      publishedCellsById,
+      publishedCellsByStructure,
+      racks,
+      selectedRackActiveLevel
+    ]
+  );
+  const affectedCellIds = new Set<string>();
+  if (selectedOverlayGeometry) affectedCellIds.add(selectedOverlayGeometry.cellId);
+  if (highlightedOverlayGeometry) {
+    affectedCellIds.add(highlightedOverlayGeometry.cellId);
+  }
+  const affectedCellCount = affectedCellIds.size;
 
   recordCanvasComponentRender({
     component: 'SelectionOverlayLayer',
     propsKeys: [
       'selectedCellId',
+      'highlightedCellId',
       'visibleRackIds',
       'primarySelectedRackId',
       'selectedRackActiveLevel',
@@ -69,25 +96,30 @@ export function SelectionOverlayLayer({
     ],
     snapshot: {
       selectedCellId,
+      highlightedCellId,
       visibleRackIds: racks.map((rack) => rack.id).join('|'),
       primarySelectedRackId,
       selectedRackActiveLevel,
       showFocusedFullAddress,
       isActivelyPanning,
       affectedCellCount,
-      resolved: overlayGeometry !== null
+      selectedResolved: selectedOverlayGeometry !== null,
+      highlightedResolved: highlightedOverlayGeometry !== null
     }
   });
   recordCanvasSelectionOverlayMetrics({
     affectedCellCount,
-    resolved: overlayGeometry !== null
+    highlightedCellCount: highlightedOverlayGeometry ? 1 : 0,
+    resolved:
+      selectedOverlayGeometry !== null || highlightedOverlayGeometry !== null
   });
 
-  if (!overlayGeometry) return null;
+  if (!selectedOverlayGeometry && !highlightedOverlayGeometry) return null;
 
   return (
     <SelectionOverlayGeometry
-      geometry={overlayGeometry}
+      selectedGeometry={selectedOverlayGeometry}
+      highlightedGeometry={highlightedOverlayGeometry}
       showFocusedFullAddress={showFocusedFullAddress}
       isActivelyPanning={isActivelyPanning}
     />
@@ -95,20 +127,16 @@ export function SelectionOverlayLayer({
 }
 
 function SelectionOverlayGeometry({
-  geometry,
+  selectedGeometry,
+  highlightedGeometry,
   showFocusedFullAddress,
   isActivelyPanning
 }: {
-  geometry: ResolvedCellOverlayGeometry;
+  selectedGeometry: ResolvedCellOverlayGeometry | null;
+  highlightedGeometry: ResolvedCellOverlayGeometry | null;
   showFocusedFullAddress: boolean;
   isActivelyPanning: boolean;
 }) {
-  const cellGeometry = {
-    x: geometry.x,
-    y: geometry.y,
-    width: geometry.width,
-    height: geometry.height
-  };
   const selectedVisualState = resolveCellVisualState(
     {
       isInteractive: false,
@@ -126,6 +154,23 @@ function SelectionOverlayGeometry({
     },
     getWarehouseSemanticCellPalette()
   );
+  const highlightedVisualState = resolveCellVisualState(
+    {
+      isInteractive: false,
+      isWorkflowScope: false,
+      isRackPassive: false,
+      isRackSelected: false,
+      hasCellIdentity: true,
+      isSelected: false,
+      isFocused: false,
+      isLocateTarget: false,
+      isWorkflowSource: false,
+      isSearchHit: true,
+      isOccupiedByFallback: false,
+      runtimeStatus: null
+    },
+    getWarehouseSemanticCellPalette()
+  );
   const shouldRevealAddress =
     showFocusedFullAddress &&
     shouldShowFocusedFullAddress({
@@ -136,24 +181,47 @@ function SelectionOverlayGeometry({
 
   return (
     <Group listening={false} name="selection-overlay-layer">
-      <Group
-        {...geometry.rackTransform}
-        listening={false}
-        name="selection-overlay-rack-group"
-      >
-        <CellOutlineOverlay
-          geometry={cellGeometry}
-          visualState={selectedVisualState}
-          isActivelyPanning={isActivelyPanning}
-        />
-        {shouldRevealAddress && geometry.addressText && (
-          <FocusedCellAddressOverlay
-            addressText={geometry.addressText}
-            geometry={cellGeometry}
-            rackRotationDeg={geometry.rackTransform.rotation}
+      {highlightedGeometry && (
+        <Group
+          {...highlightedGeometry.rackTransform}
+          listening={false}
+          name="selection-overlay-highlight-rack-group"
+        >
+          <CellHaloOverlay
+            geometry={toCellGeometry(highlightedGeometry)}
+            visualState={highlightedVisualState}
           />
-        )}
-      </Group>
+        </Group>
+      )}
+      {selectedGeometry && (
+        <Group
+          {...selectedGeometry.rackTransform}
+          listening={false}
+          name="selection-overlay-rack-group"
+        >
+          <CellOutlineOverlay
+            geometry={toCellGeometry(selectedGeometry)}
+            visualState={selectedVisualState}
+            isActivelyPanning={isActivelyPanning}
+          />
+          {shouldRevealAddress && selectedGeometry.addressText && (
+            <FocusedCellAddressOverlay
+              addressText={selectedGeometry.addressText}
+              geometry={toCellGeometry(selectedGeometry)}
+              rackRotationDeg={selectedGeometry.rackTransform.rotation}
+            />
+          )}
+        </Group>
+      )}
     </Group>
   );
+}
+
+function toCellGeometry(geometry: ResolvedCellOverlayGeometry) {
+  return {
+    x: geometry.x,
+    y: geometry.y,
+    width: geometry.width,
+    height: geometry.height
+  };
 }
