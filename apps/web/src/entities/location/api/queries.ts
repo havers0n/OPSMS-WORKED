@@ -23,7 +23,9 @@ export const locationKeys = {
   operationsCellsByFloor: (floorId: string | null) =>
     [...locationKeys.all, 'operations-cells-by-floor', floorId ?? 'none'] as const,
   nonRackByFloor: (floorId: string | null) =>
-    [...locationKeys.all, 'non-rack-by-floor', floorId ?? 'none'] as const
+    [...locationKeys.all, 'non-rack-by-floor', floorId ?? 'none'] as const,
+  cellsByProduct: (floorId: string | null, productId: string | null) =>
+    [...locationKeys.all, 'cells-by-product', floorId ?? 'none', productId ?? 'none'] as const
 };
 
 async function fetchLocationByCell(cellId: string): Promise<LocationReference> {
@@ -88,6 +90,20 @@ export function floorOperationsCellsQueryOptions(floorId: string | null) {
 
 async function fetchFloorNonRackLocations(floorId: string): Promise<NonRackLocationRef[]> {
   return bffRequest<NonRackLocationRef[]>(`/api/floors/${floorId}/non-rack-locations`);
+}
+
+async function fetchFloorCellsByProduct(floorId: string, productId: string): Promise<string[]> {
+  return bffRequest<string[]>(
+    `/api/floors/${floorId}/cells-by-product?productId=${encodeURIComponent(productId)}`
+  );
+}
+
+export function floorCellsByProductQueryOptions(floorId: string | null, productId: string | null) {
+  return queryOptions({
+    queryKey: locationKeys.cellsByProduct(floorId, productId),
+    queryFn: () => fetchFloorCellsByProduct(floorId as string, productId as string),
+    enabled: Boolean(floorId) && Boolean(productId)
+  });
 }
 
 export function floorNonRackLocationsQueryOptions(floorId: string | null) {
