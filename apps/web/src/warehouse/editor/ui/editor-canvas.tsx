@@ -80,6 +80,8 @@ import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
 import { RackLayer } from './rack-layer';
+import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
+import { CellStateOverlayLayer } from './shapes/selection-overlay-layer';
 import { SnapGuides } from './shapes/snap-guides';
 import { useCanvasSceneModel } from './use-canvas-scene-model';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
@@ -94,11 +96,13 @@ import {
   useCanvasDiagnosticsFlags
 } from './canvas-diagnostics';
 import type { CanvasRenderMode } from './canvas-render-mode';
+import { isCanvasFullDetailRenderMode } from './canvas-render-mode';
 
 const EMPTY_RACK_IDS: string[] = [];
+const EMPTY_CELL_ID_SET = new Set<string>();
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
-const ZOOM_INTERACTION_IDLE_MS = 200;
+const ZOOM_INTERACTION_IDLE_MS = 500;
 
 export function EditorCanvas({
   workspace,
@@ -205,8 +209,6 @@ export function EditorCanvas({
     useStorageFocusHandleEmptyCanvasClick();
 
   const isViewMode = viewMode === 'view';
-  const shouldShowPickingPlanningOverlay =
-    isViewMode && viewStage === 'picking-plan';
   // In View and Storage mode the published rack tree must be
   // used as the source for RackCells so that rackId/faceId/sectionId/levelId
   // in the lookup key match the keys in publishedCellsByStructure.
@@ -219,6 +221,15 @@ export function EditorCanvas({
     isViewMode || viewMode === 'storage'
       ? (workspace?.latestPublished ?? workspace?.activeDraft ?? null)
       : null;
+  // True when view/storage mode is forced to show a draft because no published
+  // version exists yet. Cell-based features (published cells, picking plan) will
+  // be non-functional in this state — the banner and overlay guards rely on this.
+  const isDraftFallback =
+    (isViewMode || viewMode === 'storage') &&
+    placementLayout !== null &&
+    workspace?.latestPublished == null;
+  const shouldShowPickingPlanningOverlay =
+    isViewMode && viewStage === 'picking-plan' && !isDraftFallback;
   const racks = useMemo(() => {
     const layout = placementLayout ?? layoutDraft;
     return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
@@ -274,8 +285,93 @@ export function EditorCanvas({
     },
     []
   );
-  const renderMode: CanvasRenderMode =
-    isPanning || isZooming ? 'interaction-light' : 'full';
+  type RestoreFrameHandle = {
+    id: number | ReturnType<typeof globalThis.setTimeout>;
+    kind: 'raf' | 'timeout';
+  };
+  const isInteractingWithCamera = isPanning || isZooming;
+  const wasInteractingWithCameraRef = useRef(isInteractingWithCamera);
+  const [restoreMode, setRestoreMode] = useState<CanvasRenderMode>('full');
+  const renderMode: CanvasRenderMode = isInteractingWithCamera
+    ? 'interaction-skeleton'
+    : wasInteractingWithCameraRef.current
+      ? 'restore-base'
+    : restoreMode;
+  const restoreFrameHandlesRef = useRef<RestoreFrameHandle[]>([]);
+
+  useEffect(() => {
+    const cancelRestoreFrames = () => {
+      for (const handle of restoreFrameHandlesRef.current) {
+        if (
+          handle.kind === 'raf' &&
+          typeof globalThis.cancelAnimationFrame === 'function'
+        ) {
+          globalThis.cancelAnimationFrame(handle.id as number);
+        } else {
+          globalThis.clearTimeout(handle.id);
+        }
+      }
+      restoreFrameHandlesRef.current = [];
+    };
+    const scheduleRestoreFrame = (callback: () => void) => {
+      if (typeof globalThis.requestAnimationFrame === 'function') {
+        const id = globalThis.requestAnimationFrame(callback);
+        restoreFrameHandlesRef.current.push({ id, kind: 'raf' });
+        return;
+      }
+      const id = globalThis.setTimeout(callback, 0);
+      restoreFrameHandlesRef.current.push({ id, kind: 'timeout' });
+    };
+    const getDiagnosticsRestoreStageDelayMs = () => {
+      if (typeof window === 'undefined') return 0;
+      const value = (
+        window as unknown as {
+          __WOS_CANVAS_RESTORE_STAGE_DELAY_MS__?: unknown;
+        }
+      ).__WOS_CANVAS_RESTORE_STAGE_DELAY_MS__;
+      return typeof value === 'number' && Number.isFinite(value) && value > 0
+        ? value
+        : 0;
+    };
+    const scheduleRestoreBoundary = (callback: () => void) => {
+      scheduleRestoreFrame(() => {
+        scheduleRestoreFrame(() => {
+          const delayMs = getDiagnosticsRestoreStageDelayMs();
+          if (delayMs > 0) {
+            const id = globalThis.setTimeout(callback, delayMs);
+            restoreFrameHandlesRef.current.push({ id, kind: 'timeout' });
+            return;
+          }
+          callback();
+        });
+      });
+    };
+
+    if (isInteractingWithCamera) {
+      wasInteractingWithCameraRef.current = true;
+      cancelRestoreFrames();
+      return cancelRestoreFrames;
+    }
+
+    if (!wasInteractingWithCameraRef.current) {
+      return cancelRestoreFrames;
+    }
+
+    wasInteractingWithCameraRef.current = false;
+    cancelRestoreFrames();
+    setRestoreMode('restore-base');
+    scheduleRestoreBoundary(() => {
+      setRestoreMode('restore-overlays');
+      scheduleRestoreBoundary(() => {
+        setRestoreMode('restore-labels');
+        scheduleRestoreBoundary(() => {
+          setRestoreMode('full');
+        });
+      });
+    });
+
+    return cancelRestoreFrames;
+  }, [isInteractingWithCamera]);
   recordCanvasRenderMode(renderMode);
 
   const effectiveSelectedCellId = isStorageV2Active
@@ -433,19 +529,9 @@ export function EditorCanvas({
       : null;
   const forcedVisibleRackIds = useMemo(() => {
     const rackIds = new Set<string>();
-    for (const rackId of effectiveSelectedRackIds) {
-      rackIds.add(rackId);
-    }
-    if (primarySelectedRackId) rackIds.add(primarySelectedRackId);
-    if (activeCellRackId) rackIds.add(activeCellRackId);
     if (moveSourceRackId) rackIds.add(moveSourceRackId);
 
-    for (const cellId of [
-      effectiveSelectedCellId,
-      canvasSelectedCellId,
-      temporaryLocateTargetCellId,
-      moveSourceCellId
-    ]) {
+    for (const cellId of [temporaryLocateTargetCellId, moveSourceCellId]) {
       if (!cellId) continue;
       const rackId = publishedCellsById.get(cellId)?.rackId ?? null;
       if (rackId) rackIds.add(rackId);
@@ -453,13 +539,8 @@ export function EditorCanvas({
 
     return rackIds;
   }, [
-    activeCellRackId,
-    canvasSelectedCellId,
-    effectiveSelectedCellId,
-    effectiveSelectedRackIds,
     moveSourceCellId,
     moveSourceRackId,
-    primarySelectedRackId,
     publishedCellsById,
     temporaryLocateTargetCellId
   ]);
@@ -512,6 +593,33 @@ export function EditorCanvas({
     () => indexRouteAnchorStatus(pickingPlanningRouteAnchors),
     [pickingPlanningRouteAnchors]
   );
+  const cellStateOverlaysEnabled =
+    (renderMode === 'full' ||
+      renderMode === 'restore-overlays' ||
+      renderMode === 'restore-labels') &&
+    diagnosticsFlags.cellOverlays === 'normal';
+  const cellStateOverlayHighlightedCellId =
+    cellStateOverlaysEnabled &&
+    canvasSelectedCellId !== null &&
+    highlightedCellIdSet.size === 1 &&
+    highlightedCellIdSet.has(canvasSelectedCellId)
+      ? canvasSelectedCellId
+      : null;
+  const cellStateOverlayLabelRevealPolicy = getRackLabelRevealPolicy({
+    lod,
+    zoom
+  });
+  const showCellStateOverlayFocusedFullAddress =
+    isCanvasFullDetailRenderMode(renderMode) &&
+    diagnosticsFlags.labels === 'normal' &&
+    cellStateOverlayLabelRevealPolicy.showFocusedFullAddress;
+  const rackLayerSelectedCellId = cellStateOverlaysEnabled
+    ? null
+    : canvasSelectedCellId;
+  const rackLayerHighlightedCellIds =
+    cellStateOverlayHighlightedCellId !== null
+      ? EMPTY_CELL_ID_SET
+      : highlightedCellIdSet;
 
   recordCanvasComponentRender({
     component: 'EditorCanvas',
@@ -722,6 +830,18 @@ export function EditorCanvas({
 
       {layoutDraft && (
         <>
+          {isDraftFallback && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center px-3 py-1.5 text-xs font-medium"
+              style={{
+                background: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent)',
+                color: 'var(--color-warning-foreground, #78350f)'
+              }}
+            >
+              No published version — showing unpublished draft. Publish the layout to enable storage features.
+            </div>
+          )}
+
           <CanvasHud
             viewport={viewport}
             zoom={zoom}
@@ -894,7 +1014,7 @@ export function EditorCanvas({
                 selectedZoneId={selectedZoneId}
                 setSelectedZoneId={setSelectedZoneId}
                 updateZoneRect={updateZoneRect}
-                zoneLookup={layoutDraft.zones}
+                zoneLookup={(placementLayout ?? layoutDraft).zones}
                 zones={zones}
               />
 
@@ -908,7 +1028,7 @@ export function EditorCanvas({
                 selectedWallId={selectedWallId}
                 setSelectedWallId={setSelectedWallId}
                 updateWallGeometry={updateWallGeometry}
-                wallLookup={layoutDraft.walls}
+                wallLookup={(placementLayout ?? layoutDraft).walls}
                 walls={walls}
               />
 
@@ -926,10 +1046,11 @@ export function EditorCanvas({
                 }}
                 isActivelyPanning={isPanning}
                 renderMode={renderMode}
-                canvasSelectedCellId={canvasSelectedCellId}
+                renderSelectionOverlay={false}
+                canvasSelectedCellId={rackLayerSelectedCellId}
                 cellRuntimeById={floorOperationsCellsById}
                 clearHighlightedCellIds={clearHighlightedCellIds}
-                highlightedCellIds={highlightedCellIdSet}
+                highlightedCellIds={rackLayerHighlightedCellIds}
                 hoveredRackId={hoveredRackId}
                 isLayoutEditable={isLayoutEditable}
                 isLayoutMode={isLayoutMode}
@@ -945,9 +1066,10 @@ export function EditorCanvas({
                 moveSourceRackId={moveSourceRackId}
                 temporaryLocateTargetCellId={temporaryLocateTargetCellId}
                 occupiedCellIds={occupiedCellIds}
+                publishedCellsById={publishedCellsById}
                 publishedCellsByStructure={publishedCellsByStructure}
                 primarySelectedRackId={primarySelectedRackId}
-                rackLookup={layoutDraft.racks}
+                rackLookup={(placementLayout ?? layoutDraft).racks}
                 racks={visibleRacks}
                 selectedRackActiveLevel={selectedRackActiveLevelIndex}
                 selectedRackIds={effectiveSelectedRackIds}
@@ -967,6 +1089,22 @@ export function EditorCanvas({
                 onV2StorageCellSelect={onV2StorageCellSelect}
                 onV2StorageRackSelect={onV2StorageRackSelect}
               />
+
+              {cellStateOverlaysEnabled && (
+                <CellStateOverlayLayer
+                  selectedCellId={canvasSelectedCellId}
+                  highlightedCellId={cellStateOverlayHighlightedCellId}
+                  racks={visibleRacks}
+                  primarySelectedRackId={primarySelectedRackId}
+                  selectedRackActiveLevel={selectedRackActiveLevelIndex}
+                  publishedCellsById={publishedCellsById}
+                  publishedCellsByStructure={publishedCellsByStructure}
+                  showFocusedFullAddress={
+                    showCellStateOverlayFocusedFullAddress
+                  }
+                  isActivelyPanning={isPanning}
+                />
+              )}
 
               {shouldShowPickingPlanningOverlay && (
                 <PickingRouteOverlayLayer

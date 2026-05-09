@@ -31,6 +31,8 @@ import {
   recordCanvasZoomTransientUpdate
 } from './canvas-diagnostics';
 
+const TRANSFORM_ONLY_ZOOM_IDLE_MS = 500;
+
 type CanvasViewport = {
   width: number;
   height: number;
@@ -451,7 +453,7 @@ export function useCanvasViewportController({
     zoomIdleTimerRef.current = globalThis.setTimeout(() => {
       zoomIdleTimerRef.current = null;
       commitTransformOnlyZoom();
-    }, 180);
+    }, TRANSFORM_ONLY_ZOOM_IDLE_MS);
   }, [commitTransformOnlyZoom]);
 
   const handleZoom = useCallback(

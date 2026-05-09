@@ -7,6 +7,8 @@ import {
   recordCanvasCullingMetrics,
   recordCanvasCameraStoreUpdate,
   recordCanvasRenderMode,
+  recordCanvasFullRestoreComplete,
+  recordCanvasSettledFull,
   recordCanvasZoomDurableCommit,
   recordCanvasZoomTransientUpdate,
   resetCanvasRenderPipelineDiagnostics,
@@ -138,11 +140,76 @@ describe('canvas render pipeline diagnostics', () => {
     vi.stubGlobal('window', {});
 
     resetCanvasRenderPipelineDiagnostics();
-    recordCanvasRenderMode('interaction-light');
+    recordCanvasRenderMode('interaction-skeleton');
 
     expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
-      currentRenderMode: 'interaction-light'
+      currentRenderMode: 'interaction-skeleton',
+      renderModeCounts: {
+        'interaction-skeleton': 1
+      },
+      renderModeTransitionCounts: {
+        'full->interaction-skeleton': 1
+      },
+      currentPhase: 'active-skeleton',
+      phaseCounts: {
+        'active-skeleton': 1
+      }
     });
+  });
+
+  it('records render mode transitions separately from render observations', () => {
+    vi.stubGlobal('window', {});
+
+    resetCanvasRenderPipelineDiagnostics();
+    recordCanvasRenderMode('full');
+    recordCanvasRenderMode('interaction-skeleton');
+    recordCanvasRenderMode('interaction-skeleton');
+    recordCanvasRenderMode('restore-base');
+    recordCanvasRenderMode('restore-overlays');
+    recordCanvasRenderMode('restore-labels');
+    recordCanvasRenderMode('full');
+    recordCanvasFullRestoreComplete();
+    recordCanvasSettledFull();
+
+    expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
+      currentRenderMode: 'full',
+      currentPhase: 'settled-full',
+      renderModeCounts: {
+        full: 2,
+        'interaction-skeleton': 2,
+        'restore-base': 1,
+        'restore-overlays': 1,
+        'restore-labels': 1
+      },
+      renderModeTransitionCounts: {
+        'full->interaction-skeleton': 1,
+        'interaction-skeleton->restore-base': 1,
+        'restore-base->restore-overlays': 1,
+        'restore-overlays->restore-labels': 1,
+        'restore-labels->full': 1
+      },
+      phaseCounts: {
+        'active-skeleton': 2,
+        'restore-base': 1,
+        'restore-overlays': 1,
+        'restore-labels': 1,
+        'settled-full': 3
+      }
+    });
+    expect(
+      window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?.phaseMarks.map(
+        (mark) => mark.kind
+      )
+    ).toEqual([
+      'active-start',
+      'active-end',
+      'restore-base',
+      'restore-overlays',
+      'restore-labels',
+      'restore-complete',
+      'restore-complete',
+      'settled'
+    ]);
   });
 
   it('separates transient zoom updates from durable camera commits', () => {

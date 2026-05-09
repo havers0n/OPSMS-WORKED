@@ -9,6 +9,7 @@ import {
 } from '@wos/domain';
 import { CellSurfaceVisual } from './rack-cell-overlays';
 import { RackCells } from './rack-cells';
+import type { CanvasRenderMode } from '../canvas-render-mode';
 import {
   resolveCellVisualState,
   type CellVisualPalette
@@ -161,7 +162,7 @@ function renderRackCellsWithProps(params: {
   showCellNumbers?: boolean;
   showFocusedFullAddress?: boolean;
   isSelected?: boolean;
-  renderMode?: 'full' | 'interaction-light';
+  renderMode?: CanvasRenderMode;
 }) {
   const levelIds = params.levelIds ?? ['level-only'];
   const slotCount = params.slotCount ?? 2;
@@ -199,7 +200,7 @@ function renderRackCellsWithProps(params: {
 function clickCellIdsWithCollector(
   activeLevelIndex: number | null,
   levelIds: string[],
-  renderMode: 'full' | 'interaction-light' = 'full'
+  renderMode: CanvasRenderMode = 'full'
 ) {
   const selected: string[] = [];
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -401,9 +402,113 @@ describe('RackCells', () => {
     ).toBe(false);
   });
 
+  it('uses interaction-skeleton mode to skip cell base surfaces and overlays', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'interaction-skeleton'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(0);
+    expect(getBatchedCellBaseShapes(renderer)).toHaveLength(0);
+    expect(countInteractionRects(renderer)).toBe(0);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(
+      getRects(renderer).some((rect) =>
+        [
+          'cell-truth-overlay',
+          'cell-outline-overlay',
+          'cell-halo-overlay',
+          'cell-badge'
+        ].includes(String(rect.props.wosRectRole))
+      )
+    ).toBe(false);
+  });
+
+  it('uses restore-base mode for cell base surfaces without labels, overlays, or click targets', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'restore-base'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(getBatchedCellBaseShapes(renderer)[0]?.props.disableStroke).toBe(
+      true
+    );
+    expect(countInteractionRects(renderer)).toBe(0);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(clickCellIdsWithCollector(0, ['level-only'], 'restore-base')).toEqual(
+      []
+    );
+    expect(
+      getRects(renderer).some((rect) =>
+        [
+          'cell-truth-overlay',
+          'cell-outline-overlay',
+          'cell-halo-overlay',
+          'cell-badge'
+        ].includes(String(rect.props.wosRectRole))
+      )
+    ).toBe(false);
+  });
+
+  it('uses restore-overlays mode to restore click targets and overlays before labels', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'restore-overlays'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(getTextValues(renderer)).toEqual([]);
+    expect(
+      getRects(renderer).some(
+        (rect) => rect.props.wosRectRole === 'cell-outline-overlay'
+      )
+    ).toBe(true);
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'restore-overlays')
+    ).toEqual(['cell-level-only-1', 'cell-level-only-2']);
+  });
+
+  it('uses restore-labels mode to restore labels before final full mode', () => {
+    const renderer = renderRackCellsWithProps({
+      levelIds: ['level-only'],
+      slotCount: 2,
+      selectedCellId: 'cell-level-only-1',
+      renderMode: 'restore-labels'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(countInteractionRects(renderer)).toBe(2);
+    expect(
+      getTextValuesByOwner(renderer, 'slot-label').filter((value) =>
+        /^\d+$/.test(value)
+      )
+    ).toEqual(['1', '2']);
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'restore-labels')
+    ).toEqual(['cell-level-only-1', 'cell-level-only-2']);
+  });
+
   it('restores cell click behavior when interaction-light returns to full', () => {
     expect(
       clickCellIdsWithCollector(0, ['level-only'], 'interaction-light')
+    ).toEqual([]);
+    expect(clickCellIdsWithCollector(0, ['level-only'], 'full')).toEqual([
+      'cell-level-only-1',
+      'cell-level-only-2'
+    ]);
+  });
+
+  it('restores cell click behavior when interaction-skeleton returns to full', () => {
+    expect(
+      clickCellIdsWithCollector(0, ['level-only'], 'interaction-skeleton')
     ).toEqual([]);
     expect(clickCellIdsWithCollector(0, ['level-only'], 'full')).toEqual([
       'cell-level-only-1',
@@ -505,6 +610,30 @@ describe('RackCells', () => {
 
     expect(getBatchedCellBaseCells(unselectedRenderer)).toHaveLength(2);
     expect(getBatchedCellBaseCells(selectedRenderer)).toHaveLength(4);
+  });
+
+  it('does not mount a culling-clipped ordinary selected cell without an explicit force flag', () => {
+    const cullingViewport = {
+      canvasOffset: { x: 0, y: 0 },
+      viewport: { width: 100, height: 100 },
+      zoom: 1
+    };
+    const wideGeometry = {
+      ...geometry,
+      width: 1000,
+      faceAWidth: 1000,
+      faceBWidth: 1000,
+      centerX: 500
+    };
+    const renderer = renderRackCellsWithProps({
+      geometryOverride: wideGeometry,
+      slotCount: 4,
+      diagnosticsViewport: cullingViewport,
+      selectedCellId: 'cell-level-only-4'
+    });
+
+    expect(getBatchedCellBaseCells(renderer)).toHaveLength(2);
+    expect(getCellOutlineRoleRects(renderer)).toHaveLength(0);
   });
 
   it('uses equal displayed-band bounds for activeLevelIndex 0 and 1 on same multi-level rack', () => {
@@ -843,9 +972,8 @@ describe('RackCells', () => {
     ).toEqual(['1', '2']);
   });
 
-  it('force-renders selected, locate-target, and workflow-source cells outside the viewport', () => {
+  it('force-renders locate-target and workflow-source cells outside the viewport', () => {
     for (const forcedProps of [
-      { selectedCellId: 'cell-level-only-1' },
       { locateTargetCellId: 'cell-level-only-1' },
       { workflowSourceCellId: 'cell-level-only-1' }
     ]) {
@@ -882,9 +1010,9 @@ describe('RackCells', () => {
 
     expect(window.__WOS_CANVAS_CULLING_METRICS__).toEqual({
       cellsTotal: 2,
-      cellsRendered: 1,
-      cellsCulled: 1,
-      cullingRatio: 0.5
+      cellsRendered: 0,
+      cellsCulled: 2,
+      cullingRatio: 0
     });
   });
 

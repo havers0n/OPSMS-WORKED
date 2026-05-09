@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { CanvasRenderMode } from './canvas-render-mode';
+import {
+  isCanvasRestoreRenderMode,
+  type CanvasRenderMode
+} from './canvas-render-mode';
 
 export type CanvasDiagnosticsFlags = {
   labels: 'normal' | 'off';
@@ -25,8 +28,10 @@ export const CANVAS_DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 
 export type CanvasRenderComponentName =
   | 'EditorCanvas'
+  | 'CellStateOverlayLayer'
   | 'RackLayer'
-  | 'RackCells';
+  | 'RackCells'
+  | 'SelectionOverlayLayer';
 
 export type CanvasRenderCauseCounts = {
   stateUpdates: number;
@@ -40,9 +45,45 @@ export type CanvasRenderComponentMetrics = {
   changedKeys: Record<string, number>;
 };
 
+export type CanvasForceRenderReason =
+  | 'none'
+  | 'selection'
+  | 'locate'
+  | 'workflow'
+  | 'debug';
+
+export type CanvasDiagnosticsPhase =
+  | 'idle'
+  | 'active-skeleton'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels'
+  | 'settled-full';
+
+export type CanvasDiagnosticsPhaseMarkKind =
+  | 'active-start'
+  | 'active-end'
+  | 'restore-base'
+  | 'restore-overlays'
+  | 'restore-labels'
+  | 'restore-complete'
+  | 'settled';
+
+export type CanvasDiagnosticsPhaseMark = {
+  kind: CanvasDiagnosticsPhaseMarkKind;
+  phase: CanvasDiagnosticsPhase;
+  renderMode: CanvasRenderMode;
+  timeMs: number;
+};
+
 export type CanvasRenderPipelineDiagnostics = {
   enabled: boolean;
   currentRenderMode: CanvasRenderMode;
+  renderModeCounts: Record<CanvasRenderMode, number>;
+  renderModeTransitionCounts: Record<string, number>;
+  currentPhase: CanvasDiagnosticsPhase;
+  phaseCounts: Record<CanvasDiagnosticsPhase, number>;
+  phaseMarks: CanvasDiagnosticsPhaseMark[];
   cameraStoreUpdates: number;
   offsetUpdates: number;
   zoomCameraUpdates: number;
@@ -52,8 +93,19 @@ export type CanvasRenderPipelineDiagnostics = {
   konva: {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
+    layerDrawCallsByName: Record<string, number>;
+    layerBatchDrawCallsByName: Record<string, number>;
+    layerNodeCountsByName: Record<string, number>;
     rackLayerNodeCount: number;
+    cellStateOverlayLayerNodeCount: number;
   };
+  selectionOverlay: {
+    affectedCellCount: number;
+    highlightedCellCount: number;
+    resolvedCount: number;
+    unresolvedCount: number;
+  };
+  forceRenderReasons: Record<CanvasForceRenderReason, number>;
 };
 
 export type CanvasCullingMetrics = {
@@ -221,6 +273,25 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
   return {
     enabled: true,
     currentRenderMode: 'full',
+    renderModeCounts: {
+      full: 0,
+      'interaction-light': 0,
+      'interaction-skeleton': 0,
+      'restore-base': 0,
+      'restore-overlays': 0,
+      'restore-labels': 0
+    },
+    renderModeTransitionCounts: {},
+    currentPhase: 'idle',
+    phaseCounts: {
+      idle: 0,
+      'active-skeleton': 0,
+      'restore-base': 0,
+      'restore-overlays': 0,
+      'restore-labels': 0,
+      'settled-full': 0
+    },
+    phaseMarks: [],
     cameraStoreUpdates: 0,
     offsetUpdates: 0,
     zoomCameraUpdates: 0,
@@ -228,13 +299,32 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     zoomDurableCommits: 0,
     components: {
       EditorCanvas: createComponentMetrics(),
+      CellStateOverlayLayer: createComponentMetrics(),
       RackLayer: createComponentMetrics(),
-      RackCells: createComponentMetrics()
+      RackCells: createComponentMetrics(),
+      SelectionOverlayLayer: createComponentMetrics()
     },
     konva: {
       layerDrawCalls: 0,
       layerBatchDrawCalls: 0,
-      rackLayerNodeCount: 0
+      layerDrawCallsByName: {},
+      layerBatchDrawCallsByName: {},
+      layerNodeCountsByName: {},
+      rackLayerNodeCount: 0,
+      cellStateOverlayLayerNodeCount: 0
+    },
+    selectionOverlay: {
+      affectedCellCount: 0,
+      highlightedCellCount: 0,
+      resolvedCount: 0,
+      unresolvedCount: 0
+    },
+    forceRenderReasons: {
+      none: 0,
+      selection: 0,
+      locate: 0,
+      workflow: 0,
+      debug: 0
     }
   };
 }
@@ -293,25 +383,189 @@ export function recordCanvasRenderMode(renderMode: CanvasRenderMode) {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
-  diagnostics.currentRenderMode = renderMode;
+  const previousRenderMode = diagnostics.currentRenderMode;
+  if (previousRenderMode !== renderMode) {
+    const transitionKey = `${previousRenderMode}->${renderMode}`;
+    diagnostics.renderModeTransitionCounts[transitionKey] =
+      (diagnostics.renderModeTransitionCounts[transitionKey] ?? 0) + 1;
+    diagnostics.currentRenderMode = renderMode;
+
+    if (renderMode === 'interaction-skeleton') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-start');
+    } else if (
+      previousRenderMode === 'interaction-skeleton' &&
+      renderMode === 'restore-base'
+    ) {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-base');
+    } else if (
+      previousRenderMode === 'interaction-skeleton' &&
+      renderMode === 'full'
+    ) {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-complete');
+    } else if (renderMode === 'restore-base') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-base');
+    } else if (renderMode === 'restore-overlays') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-overlays');
+    } else if (renderMode === 'restore-labels') {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-labels');
+    } else if (
+      renderMode === 'full' &&
+      isCanvasRestoreRenderMode(previousRenderMode)
+    ) {
+      recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-complete');
+    }
+  } else {
+    diagnostics.currentRenderMode = renderMode;
+  }
+
+  diagnostics.renderModeCounts[renderMode] += 1;
 }
 
-export function recordCanvasKonvaLayerDraw(kind: 'draw' | 'batchDraw') {
+function nowMs() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function phaseForMark(
+  kind: CanvasDiagnosticsPhaseMarkKind
+): CanvasDiagnosticsPhase {
+  if (kind === 'active-start' || kind === 'active-end') {
+    return 'active-skeleton';
+  }
+  if (kind === 'restore-base') {
+    return 'restore-base';
+  }
+  if (kind === 'restore-overlays') {
+    return 'restore-overlays';
+  }
+  if (kind === 'restore-labels') {
+    return 'restore-labels';
+  }
+  return 'settled-full';
+}
+
+function recordCanvasDiagnosticsPhaseMark(
+  diagnostics: CanvasRenderPipelineDiagnostics,
+  kind: CanvasDiagnosticsPhaseMarkKind
+) {
+  const phase = phaseForMark(kind);
+  diagnostics.currentPhase = phase;
+  diagnostics.phaseCounts[phase] += 1;
+  diagnostics.phaseMarks.push({
+    kind,
+    phase,
+    renderMode: diagnostics.currentRenderMode,
+    timeMs: nowMs()
+  });
+}
+
+export function recordCanvasActiveInteractionStart() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-start');
+}
+
+export function recordCanvasActiveInteractionEnd() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'active-end');
+}
+
+export function recordCanvasFullRestoreStart() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-base');
+}
+
+export function recordCanvasFullRestoreComplete() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'restore-complete');
+}
+
+export function recordCanvasSettledFull() {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  recordCanvasDiagnosticsPhaseMark(diagnostics, 'settled');
+}
+
+export function recordCanvasKonvaLayerDraw(
+  kind: 'draw' | 'batchDraw',
+  layerName = 'unknown-layer'
+) {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
+  diagnostics.konva.layerDrawCallsByName ??= {};
+  diagnostics.konva.layerBatchDrawCallsByName ??= {};
+
   if (kind === 'draw') {
     diagnostics.konva.layerDrawCalls += 1;
+    diagnostics.konva.layerDrawCallsByName[layerName] =
+      (diagnostics.konva.layerDrawCallsByName[layerName] ?? 0) + 1;
   } else {
     diagnostics.konva.layerBatchDrawCalls += 1;
+    diagnostics.konva.layerBatchDrawCallsByName[layerName] =
+      (diagnostics.konva.layerBatchDrawCallsByName[layerName] ?? 0) + 1;
+  }
+}
+
+export function recordCanvasLayerNodeCount(
+  layerName: string,
+  nodeCount: number
+) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.konva.layerNodeCountsByName ??= {};
+  diagnostics.konva.layerNodeCountsByName[layerName] = nodeCount;
+  if (layerName === 'rack-base-layer') {
+    diagnostics.konva.rackLayerNodeCount = nodeCount;
+  }
+  if (layerName === 'cell-state-overlay-layer') {
+    diagnostics.konva.cellStateOverlayLayerNodeCount = nodeCount;
   }
 }
 
 export function recordCanvasRackLayerNodeCount(nodeCount: number) {
+  recordCanvasLayerNodeCount('rack-base-layer', nodeCount);
+}
+
+export function recordCanvasSelectionOverlayMetrics({
+  affectedCellCount,
+  highlightedCellCount = 0,
+  resolved
+}: {
+  affectedCellCount: number;
+  highlightedCellCount?: number;
+  resolved: boolean;
+}) {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
-  diagnostics.konva.rackLayerNodeCount = nodeCount;
+  diagnostics.selectionOverlay ??= {
+    affectedCellCount: 0,
+    highlightedCellCount: 0,
+    resolvedCount: 0,
+    unresolvedCount: 0
+  };
+  diagnostics.selectionOverlay.affectedCellCount = affectedCellCount;
+  diagnostics.selectionOverlay.highlightedCellCount = highlightedCellCount;
+  if (resolved) {
+    diagnostics.selectionOverlay.resolvedCount += 1;
+  } else {
+    diagnostics.selectionOverlay.unresolvedCount += 1;
+  }
+}
+
+export function recordCanvasForceRenderReasons(
+  counts: Record<CanvasForceRenderReason, number>
+) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+
+  diagnostics.forceRenderReasons = counts;
 }
 
 export function recordCanvasComponentRender({
@@ -330,7 +584,9 @@ export function recordCanvasComponentRender({
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;
 
-  const metrics = diagnostics.components[component];
+  const metrics =
+    diagnostics.components[component] ??
+    (diagnostics.components[component] = createComponentMetrics());
   const snapshotKey = `${component}:${instanceId}`;
   const prevSnapshots =
     window.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ ?? {};

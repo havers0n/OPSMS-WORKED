@@ -24,6 +24,8 @@ let mockPublishedCellsById = new Map<string, Cell>();
 let mockIsPanning = false;
 let mockHandleZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
+let rackLayerRenderSnapshots: Array<Record<string, unknown>> = [];
+let cellStateOverlayLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
@@ -41,6 +43,8 @@ vi.mock('react-konva', () => ({
 
 vi.mock('@/entities/layout-version/lib/canvas-geometry', () => ({
   GRID_SIZE: 1,
+  LOD_CELL_THRESHOLD: 1.3,
+  LOD_SECTION_THRESHOLD: 0.9,
   MAJOR_GRID_SIZE: 5,
   MINOR_GRID_ZOOM_THRESHOLD: 999,
   isRackInViewport: mockIsRackInViewport
@@ -121,7 +125,18 @@ vi.mock('./canvas-hud', () => ({
 vi.mock('./rack-layer', () => ({
   RackLayer: (props: Record<string, unknown>) => {
     rackLayerLastProps = props;
+    rackLayerRenderSnapshots.push({
+      isActivelyPanning: props.isActivelyPanning,
+      renderMode: props.renderMode
+    });
     return createElement('RackLayer', props);
+  }
+}));
+
+vi.mock('./shapes/selection-overlay-layer', () => ({
+  CellStateOverlayLayer: (props: Record<string, unknown>) => {
+    cellStateOverlayLastProps = props;
+    return createElement('CellStateOverlayLayer', props);
   }
 }));
 
@@ -242,9 +257,18 @@ function renderCanvas(workspace: FloorWorkspace) {
   return renderer;
 }
 
+function advanceRestoreBoundary() {
+  act(() => {
+    vi.advanceTimersToNextTimer();
+    vi.advanceTimersToNextTimer();
+  });
+}
+
 describe('EditorCanvas storage active-rack wiring', () => {
   beforeEach(() => {
     rackLayerLastProps = null;
+    rackLayerRenderSnapshots = [];
+    cellStateOverlayLastProps = null;
     canvasHudLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
@@ -500,7 +524,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(canvasHudLastProps?.shouldShowStorageCellBar).toBe(false);
   });
 
-  it('keeps an offscreen selected cell parent rack in the RackLayer input', () => {
+  it('does not keep an offscreen ordinary selected cell parent rack in the RackLayer input', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;
     mockIsRackInViewport.mockReturnValue(false);
@@ -538,7 +562,53 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     const racks = rackLayerLastProps?.racks as Array<{ id: string }>;
-    expect(racks.map((rack) => rack.id)).toContain(rackId);
+    expect(racks.map((rack) => rack.id)).not.toContain(rackId);
+  });
+
+  it('renders selected cell state in a separate overlay layer and disables the base rack overlay', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0] as string;
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelectedRackId = null;
+    mockSelectedRackActiveLevel = 2;
+    mockSelection = { type: 'cell', cellId: 'cell-1' };
+    mockPublishedCellsById = new Map([
+      [
+        'cell-1',
+        {
+          id: 'cell-1',
+          layoutVersionId: 'lv-1',
+          rackId,
+          rackFaceId: 'face-a',
+          rackSectionId: 'section-a',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: {
+            raw: '01-A.01.01.01',
+            parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 },
+            sortKey: '0001-A-01-01-01'
+          },
+          cellCode: 'CELL-1',
+          status: 'active'
+        } satisfies Cell
+      ]
+    ]);
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(rackLayerLastProps?.renderSelectionOverlay).toBe(false);
+    expect(rackLayerLastProps?.canvasSelectedCellId).toBeNull();
+    const overlay = renderer.root.findAll(
+      (node) => String(node.type) === 'CellStateOverlayLayer'
+    )[0];
+    expect(overlay).toBeTruthy();
+    expect(cellStateOverlayLastProps?.selectedCellId).toBe('cell-1');
+    expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
   it('defaults the canvas render mode to full', () => {
@@ -557,43 +627,70 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(rackLayerLastProps?.renderMode).toBe('full');
   });
 
-  it('forwards active pan visual mode to RackLayer and restores idle mode', () => {
-    const draft = createLayoutDraftFixture();
-    mockLayoutDraft = draft;
-    mockViewMode = 'storage';
-    mockSelection = { type: 'none' };
-    mockPublishedCellsById = new Map();
-    mockIsPanning = true;
+  it('forwards active pan skeleton mode and stages restore back to full', () => {
+    vi.useFakeTimers();
+    try {
+      const draft = createLayoutDraftFixture();
+      mockLayoutDraft = draft;
+      mockViewMode = 'storage';
+      mockSelection = { type: 'none' };
+      mockPublishedCellsById = new Map();
+      mockIsPanning = true;
 
-    const renderer = renderCanvas({
-      floorId: draft.floorId,
-      activeDraft: draft,
-      latestPublished: draft
-    });
+      const renderer = renderCanvas({
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      });
 
-    expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
-    expect(rackLayerLastProps?.renderMode).toBe('interaction-light');
+      expect(rackLayerLastProps?.isActivelyPanning).toBe(true);
+      expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
+      expect(
+        rackLayerRenderSnapshots.some(
+          (snapshot) =>
+            snapshot.isActivelyPanning === true &&
+            snapshot.renderMode === 'full'
+        )
+      ).toBe(false);
+      const rendersBeforePanEnd = rackLayerRenderSnapshots.length;
 
-    act(() => {
-      mockIsPanning = false;
-      renderer.update(
-        createElement(EditorCanvas, {
-          workspace: {
-            floorId: draft.floorId,
-            activeDraft: draft,
-            latestPublished: draft
-          },
-          onAddRack: () => undefined,
-          onOpenInspector: () => undefined
-        })
-      );
-    });
+      act(() => {
+        mockIsPanning = false;
+        renderer.update(
+          createElement(EditorCanvas, {
+            workspace: {
+              floorId: draft.floorId,
+              activeDraft: draft,
+              latestPublished: draft
+            },
+            onAddRack: () => undefined,
+            onOpenInspector: () => undefined
+          })
+        );
+      });
 
-    expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
-    expect(rackLayerLastProps?.renderMode).toBe('full');
+      expect(rackLayerLastProps?.isActivelyPanning).toBe(false);
+      expect(rackLayerLastProps?.renderMode).toBe('restore-base');
+      expect(
+        rackLayerRenderSnapshots
+          .slice(rendersBeforePanEnd)
+          .map((snapshot) => snapshot.renderMode)
+      ).not.toContain('full');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-overlays');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-labels');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('full');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('uses interaction-light render mode during wheel zoom and restores after idle debounce', () => {
+  it('uses interaction-skeleton during wheel zoom and stages restore after idle debounce', () => {
     vi.useFakeTimers();
     try {
       const draft = createLayoutDraftFixture();
@@ -612,6 +709,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
       )[0];
 
       expect(rackLayerLastProps?.renderMode).toBe('full');
+      const rendersBeforeZoom = rackLayerRenderSnapshots.length;
 
       act(() => {
         stage?.props.onWheel({
@@ -625,12 +723,31 @@ describe('EditorCanvas storage active-rack wiring', () => {
       });
 
       expect(mockHandleZoom).toHaveBeenCalledWith(0.1, { x: 25, y: 30 });
-      expect(rackLayerLastProps?.renderMode).toBe('interaction-light');
+      const zoomStartModes = rackLayerRenderSnapshots
+        .slice(rendersBeforeZoom)
+        .map((snapshot) => snapshot.renderMode);
+      expect(zoomStartModes[0]).toBe('interaction-skeleton');
+      expect(zoomStartModes).not.toContain('full');
+      expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
 
       act(() => {
-        vi.advanceTimersByTime(200);
+        vi.advanceTimersByTime(500);
       });
 
+      expect(rackLayerLastProps?.renderMode).toBe('restore-base');
+      expect(
+        rackLayerRenderSnapshots
+          .slice(rendersBeforeZoom)
+          .map((snapshot) => snapshot.renderMode)
+      ).not.toContain('full');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-overlays');
+
+      advanceRestoreBoundary();
+      expect(rackLayerLastProps?.renderMode).toBe('restore-labels');
+
+      advanceRestoreBoundary();
       expect(rackLayerLastProps?.renderMode).toBe('full');
     } finally {
       vi.useRealTimers();

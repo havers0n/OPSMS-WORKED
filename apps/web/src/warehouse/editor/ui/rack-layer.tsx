@@ -1,45 +1,64 @@
-import {
-  buildCellStructureKey,
-  resolveRackFaceSections,
-  type Cell,
-  type OperationsCellRuntime,
-  type Rack,
-  type RackFace
+import type {
+  Cell,
+  OperationsCellRuntime,
+  Rack,
+  RackFace
 } from '@wos/domain';
 import { useEffect, useRef } from 'react';
 import type Konva from 'konva';
 import { FastLayer, Group, Layer, Rect } from 'react-konva';
 import {
   getRackGeometry,
-  getSectionWidths,
   WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
 import { getSnapPosition } from '@/entities/layout-version/lib/rack-spacing';
-import {
-  collectRackSemanticLevels,
-  resolveSemanticLevelForIndex
-} from '@/warehouse/editor/model/storage-level-mapping';
+import { collectRackSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
 import { RackBody } from './shapes/rack-body';
 import { RackCells } from './shapes/rack-cells';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
+import {
+  getEffectiveRackFaceB,
+  resolveCellIdFromFacePoint
+} from './shapes/rack-cell-geometry';
+import { SelectionOverlayLayer } from './shapes/selection-overlay-layer';
 import { RackSections } from './shapes/rack-sections';
 import {
+  recordCanvasForceRenderReasons,
   recordCanvasComponentRender,
   recordCanvasKonvaLayerDraw,
   recordCanvasRackLayerNodeCount,
-  type CanvasDiagnosticsFlags
+  type CanvasDiagnosticsFlags,
+  type CanvasForceRenderReason
 } from './canvas-diagnostics';
-import type { CanvasRenderMode } from './canvas-render-mode';
+import {
+  isCanvasFullDetailRenderMode,
+  isCanvasInteractionRenderMode,
+  type CanvasRenderMode
+} from './canvas-render-mode';
 
 type SnapGuide = {
   type: 'x' | 'y';
   position: number;
 };
 
-const MIN_CELL_W = 5;
-const MIN_CELL_H = 4;
-const CELL_INSET = 4;
 const EMPTY_CELL_IDS = new Set<string>();
+
+function getFirstCellId(cellIds: Set<string>): string | null {
+  for (const cellId of cellIds) {
+    return cellId;
+  }
+  return null;
+}
+
+function createForceRenderReasonCounts(): Record<CanvasForceRenderReason, number> {
+  return {
+    none: 0,
+    selection: 0,
+    locate: 0,
+    workflow: 0,
+    debug: 0
+  };
+}
 
 type LocalPoint = { x: number; y: number };
 
@@ -75,66 +94,17 @@ function resolveCellIdFromFaceAtPoint({
   point: LocalPoint;
   publishedCellsByStructure: Map<string, Cell>;
 }): string | null {
-  if (!face.enabled || face.sections.length === 0) return null;
-
-  const inset = CELL_INSET;
-  const cellH = bandH - inset * 2;
-  if (cellH < MIN_CELL_H) return null;
-
-  const isRtl = face.slotNumberingDirection === 'rtl';
-  const orderedSections = isRtl ? [...face.sections].reverse() : face.sections;
-  const sectionOffsets = getSectionWidths(totalWidth, orderedSections);
-  const semanticLevel = resolveSemanticLevelForIndex(semanticLevels, activeLevelIndex);
-  if (semanticLevel === null) return null;
-
-  for (let si = 0; si < orderedSections.length; si += 1) {
-    const sec = orderedSections[si];
-    const secX = sectionOffsets[si] ?? 0;
-    const secW = (sectionOffsets[si + 1] ?? 0) - secX;
-    if (secW < MIN_CELL_W * 2) continue;
-
-    const level = sec.levels.find((sectionLevel) => sectionLevel.ordinal === semanticLevel) ?? null;
-    if (!level) continue;
-    const slotCount = level.slotCount;
-    if (!slotCount) continue;
-
-    const slotW = secW / slotCount;
-    if (slotW < MIN_CELL_W) continue;
-    if (cellH < MIN_CELL_H) continue;
-
-    for (let slotIndex = 0; slotIndex < slotCount; slotIndex += 1) {
-      const slotLabel = isRtl ? slotCount - slotIndex : slotIndex + 1;
-      const cellX = secX + slotIndex * slotW;
-      const cellY = bandY + inset;
-      const cellW = slotW - 1;
-      const rect = {
-        x: cellX + 0.5,
-        y: cellY + 0.5,
-        width: Math.max(1, cellW),
-        height: Math.max(1, cellH - 1)
-      };
-
-      if (
-        point.x >= rect.x &&
-        point.x <= rect.x + rect.width &&
-        point.y >= rect.y &&
-        point.y <= rect.y + rect.height
-      ) {
-        const cell = publishedCellsByStructure.get(
-          buildCellStructureKey({
-            rackId,
-            rackFaceId: face.id,
-            rackSectionId: sec.id,
-            rackLevelId: level.id,
-            slotNo: slotLabel
-          })
-        );
-        return cell?.id ?? null;
-      }
-    }
-  }
-
-  return null;
+  return resolveCellIdFromFacePoint({
+    activeLevelIndex,
+    bandH,
+    bandY,
+    face,
+    point,
+    publishedCellsByStructure,
+    rackId,
+    semanticLevels,
+    totalWidth
+  });
 }
 
 function resolveCellIdFromRackPoint({
@@ -150,11 +120,8 @@ function resolveCellIdFromRackPoint({
 }): string | null {
   const geometry = getRackGeometry(rack);
   const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
-  const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
   if (!faceA) return null;
-  const effectiveFaceB = faceB
-    ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
-    : null;
+  const effectiveFaceB = getEffectiveRackFaceB(rack);
   const semanticLevels = collectRackSemanticLevels(rack);
 
   const cellIdInFaceA = resolveCellIdFromFaceAtPoint({
@@ -199,6 +166,7 @@ type RackLayerProps = {
   };
   isActivelyPanning?: boolean;
   renderMode?: CanvasRenderMode;
+  renderSelectionOverlay?: boolean;
   canvasSelectedCellId: string | null;
   cellRuntimeById: Map<string, OperationsCellRuntime>;
   clearHighlightedCellIds: () => void;
@@ -218,6 +186,7 @@ type RackLayerProps = {
   moveSourceRackId: string | null;
   temporaryLocateTargetCellId: string | null;
   occupiedCellIds: Set<string>;
+  publishedCellsById: Map<string, Cell>;
   publishedCellsByStructure: Map<string, Cell>;
   primarySelectedRackId: string | null;
   rackLookup: Record<string, Rack>;
@@ -245,6 +214,7 @@ export function RackLayer({
   diagnosticsViewport,
   isActivelyPanning = false,
   renderMode = 'full',
+  renderSelectionOverlay = true,
   canvasSelectedCellId,
   cellRuntimeById,
   clearHighlightedCellIds,
@@ -264,6 +234,7 @@ export function RackLayer({
   moveSourceRackId,
   temporaryLocateTargetCellId,
   occupiedCellIds,
+  publishedCellsById,
   publishedCellsByStructure,
   primarySelectedRackId,
   rackLookup,
@@ -282,18 +253,55 @@ export function RackLayer({
   onV2StorageCellSelect,
   onV2StorageRackSelect,
 }: RackLayerProps) {
-  const isInteractionLight = renderMode === 'interaction-light';
+  const isInteractionMode = isCanvasInteractionRenderMode(renderMode);
+  const isInteractionSkeleton = renderMode === 'interaction-skeleton';
+  const isRestoreBase = renderMode === 'restore-base';
+  const isRestoreOverlays =
+    renderMode === 'restore-overlays' || renderMode === 'restore-labels';
   const labelRevealPolicy = getRackLabelRevealPolicy({ lod, zoom });
   const labelsEnabled =
-    !isInteractionLight && diagnosticsFlags.labels === 'normal';
+    isCanvasFullDetailRenderMode(renderMode) &&
+    diagnosticsFlags.labels === 'normal';
   const hitTestEnabled =
-    !isInteractionLight && diagnosticsFlags.hitTest === 'normal';
-  const renderCells = diagnosticsFlags.cells !== 'off';
+    (renderMode === 'full' || isRestoreOverlays) &&
+    diagnosticsFlags.hitTest === 'normal';
+  const renderCells =
+    !isInteractionSkeleton && diagnosticsFlags.cells !== 'off';
   const overlaysEnabled =
-    !isInteractionLight && diagnosticsFlags.cellOverlays !== 'off';
+    (renderMode === 'full' || isRestoreOverlays) &&
+    diagnosticsFlags.cellOverlays !== 'off';
+  const selectionOverlayEnabled =
+    overlaysEnabled && diagnosticsFlags.cellOverlays === 'normal';
+  const singleOverlayHighlightedCellId =
+    selectionOverlayEnabled &&
+    canvasSelectedCellId !== null &&
+    highlightedCellIds.size === 1 &&
+    highlightedCellIds.has(canvasSelectedCellId)
+      ? canvasSelectedCellId
+      : null;
+  const baseHighlightedCellIds =
+    singleOverlayHighlightedCellId !== null
+      ? EMPTY_CELL_IDS
+      : highlightedCellIds;
+  const highlightedCellFirstId = getFirstCellId(highlightedCellIds);
+  const locateTargetRackId =
+    temporaryLocateTargetCellId !== null
+      ? (publishedCellsById.get(temporaryLocateTargetCellId)?.rackId ?? null)
+      : null;
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
+  const forceRenderReasonCounts = createForceRenderReasonCounts();
+  for (const rack of racks) {
+    if (locateTargetRackId === rack.id) {
+      forceRenderReasonCounts.locate += 1;
+    } else if (moveSourceRackId === rack.id) {
+      forceRenderReasonCounts.workflow += 1;
+    } else {
+      forceRenderReasonCounts.none += 1;
+    }
+  }
+  recordCanvasForceRenderReasons(forceRenderReasonCounts);
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -306,11 +314,11 @@ export function RackLayer({
       const originalDraw = layer.draw.bind(layer);
       const originalBatchDraw = layer.batchDraw.bind(layer);
       layer.draw = (...args: Parameters<Konva.Layer['draw']>) => {
-        recordCanvasKonvaLayerDraw('draw');
+        recordCanvasKonvaLayerDraw('draw', 'rack-base-layer');
         return originalDraw(...args);
       };
       layer.batchDraw = (...args: Parameters<Konva.Layer['batchDraw']>) => {
-        recordCanvasKonvaLayerDraw('batchDraw');
+        recordCanvasKonvaLayerDraw('batchDraw', 'rack-base-layer');
         return originalBatchDraw(...args);
       };
       diagnosticLayer.__wosDrawDiagnosticsWrapped = true;
@@ -342,10 +350,15 @@ export function RackLayer({
       'diagnosticsRackLayerRenderer',
       'isActivelyPanning',
       'renderMode',
+      'renderSelectionOverlay',
       'canvasOffsetX',
       'canvasOffsetY',
       'viewportWidth',
-      'viewportHeight'
+      'viewportHeight',
+      'highlightedCellCount',
+      'highlightedCellFirstId',
+      'overlayHighlightedCellCount',
+      'baseHighlightedCellCount'
     ],
     snapshot: {
       rackIds: racks.map((rack) => rack.id).join('|'),
@@ -368,10 +381,15 @@ export function RackLayer({
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
       isActivelyPanning,
       renderMode,
+      renderSelectionOverlay,
       canvasOffsetX: diagnosticsViewport.canvasOffset.x,
       canvasOffsetY: diagnosticsViewport.canvasOffset.y,
       viewportWidth: diagnosticsViewport.viewport.width,
-      viewportHeight: diagnosticsViewport.viewport.height
+      viewportHeight: diagnosticsViewport.viewport.height,
+      highlightedCellCount: highlightedCellIds.size,
+      highlightedCellFirstId,
+      overlayHighlightedCellCount: singleOverlayHighlightedCellId ? 1 : 0,
+      baseHighlightedCellCount: baseHighlightedCellIds.size
     }
   });
 
@@ -462,16 +480,19 @@ export function RackLayer({
   return (
     <RackLayerComponent
       ref={layerRef}
-      name="rack-layer"
+      name="rack-base-layer"
       listening={hitTestEnabled}
     >
       {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
         const isSelected = overlaysEnabled && selectedRackIds.includes(rack.id);
-        const shouldForceRenderAllCells =
-          rack.id === primarySelectedRackId ||
-          activeCellRackId === rack.id ||
-          moveSourceRackId === rack.id;
+        const forceRenderReason: CanvasForceRenderReason =
+          locateTargetRackId === rack.id
+            ? 'locate'
+            : moveSourceRackId === rack.id
+              ? 'workflow'
+              : 'none';
+        const shouldForceRenderAllCells = forceRenderReason !== 'none';
         const isHovered = overlaysEnabled && hoveredRackId === rack.id;
         const isRackPassive =
           overlaysEnabled &&
@@ -480,10 +501,7 @@ export function RackLayer({
           activeCellRackId !== rack.id &&
           moveSourceRackId !== rack.id;
         const faceA = rack.faces.find((face) => face.side === 'A') ?? null;
-        const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
-        const effectiveFaceB = faceB
-          ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
-          : null;
+        const effectiveFaceB = getEffectiveRackFaceB(rack);
         const semanticLevels = collectRackSemanticLevels(rack);
 
         // Per-rack cell click handler: closure captures rack.id for V2 focus store call.
@@ -511,10 +529,20 @@ export function RackLayer({
             offsetX={geometry.centerX}
             offsetY={geometry.centerY}
             rotation={rack.rotationDeg}
-            draggable={isLayoutEditable && !isPlacing}
+            draggable={
+              renderMode === 'full' && isLayoutEditable && !isPlacing
+            }
             onMouseDown={(event) => {
               // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
               event.cancelBubble = true;
+            }}
+            onTouchStart={(event) => {
+              // Mirror onMouseDown: stop native DOM propagation so the viewport
+              // controller's container-level touchstart listener doesn't start a pan
+              // when the user touches a rack. Also cancel Konva bubble to match
+              // the mouse path (prevents any stage-level touchstart handler).
+              event.cancelBubble = true;
+              event.evt.stopPropagation();
             }}
             onClick={(event) => handleRackPress(rack, event)}
             onTap={(event) => handleRackPress(rack, event)}
@@ -543,7 +571,7 @@ export function RackLayer({
               }
             }}
           >
-            {!isInteractionLight && (
+            {!isInteractionMode && !isRestoreBase && (
               <Rect
                 x={0}
                 y={0}
@@ -565,7 +593,7 @@ export function RackLayer({
               rackCodeProminence={labelRevealPolicy.rackCodeProminence}
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
               disableStrokes={!overlaysEnabled}
-              isActivelyPanning={isActivelyPanning}
+              isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
             />
 
             {lod >= 1 && faceA && (
@@ -581,7 +609,7 @@ export function RackLayer({
                 sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
                 rackRotationDeg={rack.rotationDeg}
                 disableStrokes={!overlaysEnabled}
-                isActivelyPanning={isActivelyPanning}
+                isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
               />
             )}
 
@@ -598,7 +626,7 @@ export function RackLayer({
                 occupiedCellIds={occupiedCellIds}
                 cellRuntimeById={cellRuntimeById}
                 highlightedCellIds={
-                  overlaysEnabled ? highlightedCellIds : EMPTY_CELL_IDS
+                  overlaysEnabled ? baseHighlightedCellIds : EMPTY_CELL_IDS
                 }
                 diagnosticsFlags={diagnosticsFlags}
                 diagnosticsViewport={diagnosticsViewport}
@@ -608,7 +636,13 @@ export function RackLayer({
                 isInteractive={hitTestEnabled && canSelectCells}
                 isWorkflowScope={isWorkflowScope}
                 isPassive={isRackPassive}
-                selectedCellId={overlaysEnabled ? canvasSelectedCellId : null}
+                selectedCellId={
+                  selectionOverlayEnabled
+                    ? null
+                    : overlaysEnabled
+                      ? canvasSelectedCellId
+                      : null
+                }
                 locateTargetCellId={
                   overlaysEnabled ? temporaryLocateTargetCellId : null
                 }
@@ -623,6 +657,21 @@ export function RackLayer({
           </Group>
         );
       })}
+      {selectionOverlayEnabled && renderSelectionOverlay && (
+        <SelectionOverlayLayer
+          selectedCellId={canvasSelectedCellId}
+          highlightedCellId={singleOverlayHighlightedCellId}
+          racks={racks}
+          primarySelectedRackId={primarySelectedRackId}
+          selectedRackActiveLevel={selectedRackActiveLevel}
+          publishedCellsById={publishedCellsById}
+          publishedCellsByStructure={publishedCellsByStructure}
+          showFocusedFullAddress={
+            labelsEnabled && labelRevealPolicy.showFocusedFullAddress
+          }
+          isActivelyPanning={isActivelyPanning}
+        />
+      )}
     </RackLayerComponent>
   );
 }

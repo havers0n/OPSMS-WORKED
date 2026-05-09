@@ -130,21 +130,20 @@ export function useCanvasSceneModel({
     zoom
   });
 
-  // — Layer lists (from layoutDraft, not server state) —
-  const zones = useMemo(
-    () =>
-      layoutDraft
-        ? layoutDraft.zoneIds.map((id) => layoutDraft.zones[id]).filter((zone) => Boolean(zone))
-        : [],
-    [layoutDraft]
-  );
-  const walls = useMemo(
-    () =>
-      layoutDraft
-        ? layoutDraft.wallIds.map((id) => layoutDraft.walls[id]).filter((wall) => Boolean(wall))
-        : [],
-    [layoutDraft]
-  );
+  // — Layer lists — use placementLayout when present (view/storage mode) so zones and walls
+  // come from the same version as racks; fall back to layoutDraft in layout/edit mode.
+  const zones = useMemo(() => {
+    const layout = placementLayout ?? layoutDraft;
+    return layout
+      ? layout.zoneIds.map((id) => layout.zones[id]).filter((zone) => Boolean(zone))
+      : [];
+  }, [placementLayout, layoutDraft]);
+  const walls = useMemo(() => {
+    const layout = placementLayout ?? layoutDraft;
+    return layout
+      ? layout.wallIds.map((id) => layout.walls[id]).filter((wall) => Boolean(wall))
+      : [];
+  }, [placementLayout, layoutDraft]);
   const highlightedCellIdSet = useMemo(() => new Set(highlightedCellIds), [highlightedCellIds]);
 
   return useMemo(
