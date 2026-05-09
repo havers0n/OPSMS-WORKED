@@ -764,7 +764,18 @@ describe('EditorCanvas storage active-rack wiring', () => {
     const overlay = renderer.root.findAll(
       (node) => String(node.type) === 'CellStateOverlayLayer'
     )[0];
+    const overlayOrder = renderer.root
+      .findAll(
+        (node) =>
+          String(node.type) === 'StorageOccupancyOverlay' ||
+          String(node.type) === 'CellStateOverlayLayer'
+      )
+      .map((node) => String(node.type));
     expect(overlay).toBeTruthy();
+    expect(overlayOrder).toEqual([
+      'StorageOccupancyOverlay',
+      'CellStateOverlayLayer'
+    ]);
     expect(cellStateOverlayLastProps?.selectedCellId).toBe('cell-1');
     expect(cellStateOverlayLastProps?.highlightedCellId).toBe('cell-1');
     expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
