@@ -763,10 +763,10 @@ describe('StorageInspectorV2 panel modes', () => {
     mockRackInspectorLoading = false;
   });
 
-  it('shows empty state when neither cellId nor rackId is set', () => {
+  it('does not render an inspector panel when neither cellId nor rackId is set', () => {
     const renderer = renderInspector(createWorkspace());
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('No location selected');
+    expect(text).toBe('');
   });
 
   it('shows rack-overview when rackId is set but cellId is null', () => {
