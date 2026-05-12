@@ -65,8 +65,16 @@ export async function installSupabaseAuthRoutes(page: Page) {
 }
 
 export async function fillCredentials(page: Page) {
-  await page.getByLabel('Email').fill(credentials.email);
-  await page.getByLabel('Password').fill(credentials.password);
+  try {
+    await page.getByLabel('Email').fill(credentials.email, { timeout: 5000 });
+    await page.getByLabel('Password').fill(credentials.password, { timeout: 5000 });
+  } catch (error) {
+    if (isWarehouseUrl(page)) {
+      await expectAuthenticatedWarehouseApp(page);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function submitLoginForm(page: Page) {
@@ -74,11 +82,40 @@ async function submitLoginForm(page: Page) {
   await form.getByRole('button', { name: /Sign In|Create Account/ }).click();
 }
 
+function isWarehouseUrl(page: Page) {
+  return /\/warehouse(?:$|[/?#])/.test(page.url());
+}
+
+async function expectAuthenticatedWarehouseApp(page: Page) {
+  await expect(page).toHaveURL(/\/warehouse(?:$|[/?#])/, { timeout: 10000 });
+  await expect(page.getByLabel('Account menu')).toBeVisible({ timeout: 10000 });
+}
+
 export async function signInToWarehouse(page: Page) {
   await installSupabaseAuthRoutes(page);
   await page.goto('/login');
 
+  if (isWarehouseUrl(page)) {
+    await expectAuthenticatedWarehouseApp(page);
+    return;
+  }
+
+  try {
+    await page.getByLabel('Email').waitFor({ state: 'visible', timeout: 10000 });
+  } catch (error) {
+    if (isWarehouseUrl(page)) {
+      await expectAuthenticatedWarehouseApp(page);
+      return;
+    }
+    throw error;
+  }
+
   await fillCredentials(page);
+  if (isWarehouseUrl(page)) {
+    await expectAuthenticatedWarehouseApp(page);
+    return;
+  }
+
   await submitLoginForm(page);
-  await expect(page).toHaveURL(/\/warehouse$/);
+  await expectAuthenticatedWarehouseApp(page);
 }

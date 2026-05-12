@@ -1,11 +1,34 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RackBody } from './rack-body';
 
+const rackBodyKonvaMocks = vi.hoisted(() => ({
+  groupNodes: [] as Array<{
+    clearCache: ReturnType<typeof vi.fn>;
+    cache: ReturnType<typeof vi.fn>;
+    batchDraw: ReturnType<typeof vi.fn>;
+    getLayer: () => { batchDraw: ReturnType<typeof vi.fn> };
+  }>
+}));
+
 vi.mock('react-konva', () => ({
-  Group: ({ children, ...props }: { children?: React.ReactNode }) =>
-    createElement('Group', props, children),
+  Group: class MockGroup extends React.Component<{ children?: React.ReactNode }> {
+    clearCache = vi.fn();
+    cache = vi.fn();
+    batchDraw = vi.fn();
+    getLayer = () => ({ batchDraw: this.batchDraw });
+
+    constructor(props: { children?: React.ReactNode }) {
+      super(props);
+      rackBodyKonvaMocks.groupNodes.push(this);
+    }
+
+    render() {
+      const { children, ...props } = this.props;
+      return createElement('Group', props, children);
+    }
+  },
   Line: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Line', props, children),
   Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -15,6 +38,10 @@ vi.mock('react-konva', () => ({
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => {
+  rackBodyKonvaMocks.groupNodes.length = 0;
+});
 
 const singleGeometry = {
   x: 0,
@@ -34,31 +61,90 @@ const pairedGeometry = {
   isPaired: true
 };
 
+const asymmetricGeometry = {
+  ...pairedGeometry,
+  width: 220,
+  faceAWidth: 220,
+  faceBWidth: 200,
+  centerX: 110
+};
+
 function renderRackBody(params?: {
+  displayCode?: string;
+  geometry?: typeof singleGeometry;
   prominence?: 'dominant' | 'secondary' | 'background';
   placement?: 'header-left' | 'lower-left-mid';
   rotationDeg?: 0 | 90 | 180 | 270;
   isPaired?: boolean;
+  isAsymmetric?: boolean;
   isSelected?: boolean;
+  isHovered?: boolean;
+  isPassive?: boolean;
+  showRackCode?: boolean;
+  disableStrokes?: boolean;
   isActivelyPanning?: boolean;
+  shellRendering?: 'normal' | 'cached';
 }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
       createElement(RackBody, {
-        geometry: params?.isPaired ? pairedGeometry : singleGeometry,
-        displayCode: 'R-01',
+        geometry: params?.geometry ?? (params?.isAsymmetric
+          ? asymmetricGeometry
+          : params?.isPaired
+            ? pairedGeometry
+            : singleGeometry),
+        displayCode: params?.displayCode ?? 'R-01',
         rotationDeg: params?.rotationDeg ?? 0,
         isSelected: params?.isSelected ?? false,
-        isHovered: false,
-        showRackCode: true,
+        isHovered: params?.isHovered ?? false,
+        isPassive: params?.isPassive,
+        showRackCode: params?.showRackCode ?? true,
         rackCodeProminence: params?.prominence ?? 'dominant',
         rackCodePlacement: params?.placement ?? 'lower-left-mid',
-        isActivelyPanning: params?.isActivelyPanning
+        disableStrokes: params?.disableStrokes,
+        isActivelyPanning: params?.isActivelyPanning,
+        shellRendering: params?.shellRendering
       })
     );
   });
   return renderer;
+}
+
+function updateRackBody(
+  renderer: TestRenderer.ReactTestRenderer,
+  params?: Parameters<typeof renderRackBody>[0]
+) {
+  act(() => {
+    renderer.update(
+      createElement(RackBody, {
+        geometry: params?.geometry ?? (params?.isAsymmetric
+          ? asymmetricGeometry
+          : params?.isPaired
+            ? pairedGeometry
+            : singleGeometry),
+        displayCode: params?.displayCode ?? 'R-01',
+        rotationDeg: params?.rotationDeg ?? 0,
+        isSelected: params?.isSelected ?? false,
+        isHovered: params?.isHovered ?? false,
+        isPassive: params?.isPassive,
+        showRackCode: params?.showRackCode ?? true,
+        rackCodeProminence: params?.prominence ?? 'dominant',
+        rackCodePlacement: params?.placement ?? 'lower-left-mid',
+        disableStrokes: params?.disableStrokes,
+        isActivelyPanning: params?.isActivelyPanning,
+        shellRendering: params?.shellRendering
+      })
+    );
+  });
+}
+
+function getCachedShellNode() {
+  const shell = rackBodyKonvaMocks.groupNodes.find(
+    (node) => node.cache.mock.calls.length > 0
+  );
+  expect(shell).toBeDefined();
+  return shell!;
 }
 
 function getIdentityGroup(renderer: TestRenderer.ReactTestRenderer) {
@@ -74,7 +160,77 @@ function getRects(renderer: TestRenderer.ReactTestRenderer) {
   return renderer.root.findAll((node) => String(node.type) === 'Rect');
 }
 
+function countRectsByRole(renderer: TestRenderer.ReactTestRenderer) {
+  return getRects(renderer).reduce<Record<string, number>>((counts, rect) => {
+    const role = String(rect.props.wosRectRole ?? 'unknown');
+    counts[role] = (counts[role] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function getShellGroup(renderer: TestRenderer.ReactTestRenderer) {
+  return renderer.root.findAll((node) => String(node.type) === 'Group')[0]!;
+}
+
+function serializeVisualShell(renderer: TestRenderer.ReactTestRenderer) {
+  return {
+    shell: {
+      listening: getShellGroup(renderer).props.listening,
+      opacity: getShellGroup(renderer).props.opacity
+    },
+    rects: getRects(renderer).map((rect) => ({
+      role: rect.props.wosRectRole ?? null,
+      x: rect.props.x ?? null,
+      y: rect.props.y ?? null,
+      width: rect.props.width ?? null,
+      height: rect.props.height ?? null,
+      fill: rect.props.fill ?? null,
+      stroke: rect.props.stroke ?? null,
+      strokeEnabled: rect.props.strokeEnabled ?? null,
+      strokeWidth: rect.props.strokeWidth ?? null,
+      opacity: rect.props.opacity ?? null,
+      visible: rect.props.visible ?? null,
+      dash: rect.props.dash ?? null
+    })),
+    labels: renderer.root.findAll((node) => String(node.type) === 'Text').map((text) => ({
+      text: text.props.text,
+      fontSize: text.props.fontSize,
+      fontStyle: text.props.fontStyle,
+      opacity: text.props.opacity
+    })),
+    labelGroups: renderer.root
+      .findAll(
+        (node) =>
+          String(node.type) === 'Group' &&
+          typeof node.props.rotation === 'number'
+      )
+      .map((group) => ({
+        x: group.props.x,
+        y: group.props.y,
+        rotation: group.props.rotation
+      }))
+  };
+}
+
 describe('RackBody identity label ownership', () => {
+  it('splits rack shell diagnostics into stable body sub-roles', () => {
+    expect(countRectsByRole(renderRackBody())).toMatchObject({
+      'rack-body-main': 1,
+      'rack-body-stripe': 1
+    });
+    expect(countRectsByRole(renderRackBody({ isPaired: true }))).toMatchObject({
+      'rack-body-main': 1,
+      'rack-body-stripe': 2
+    });
+    expect(
+      countRectsByRole(renderRackBody({ isAsymmetric: true }))
+    ).toMatchObject({
+      'rack-body-main': 1,
+      'rack-body-overhang': 1,
+      'rack-body-stripe': 2
+    });
+  });
+
   it('renders paired face B stripe on the outer edge, not the internal seam', () => {
     const renderer = renderRackBody({ isPaired: true });
     const faceBStripe = renderer.root.find(
@@ -171,7 +327,9 @@ describe('RackBody identity label ownership', () => {
   it('keeps full rack body visual effects while idle', () => {
     const renderer = renderRackBody({ isSelected: true });
     const rects = getRects(renderer);
-    const body = rects.find((rect) => rect.props.wosRectRole === 'rack-body');
+    const body = rects.find(
+      (rect) => rect.props.wosRectRole === 'rack-body-main'
+    );
     const selection = rects.find(
       (rect) => rect.props.wosRectRole === 'selection-highlight'
     );
@@ -192,7 +350,9 @@ describe('RackBody identity label ownership', () => {
       isActivelyPanning: true
     });
     const rects = getRects(renderer);
-    const body = rects.find((rect) => rect.props.wosRectRole === 'rack-body');
+    const body = rects.find(
+      (rect) => rect.props.wosRectRole === 'rack-body-main'
+    );
     const selection = rects.find(
       (rect) => rect.props.wosRectRole === 'selection-highlight'
     );
@@ -205,5 +365,104 @@ describe('RackBody identity label ownership', () => {
     expect(selection).toBeDefined();
     expect(selection?.props.visible).toBe(false);
     expect(badgeStroke?.props.strokeEnabled).toBe(false);
+  });
+
+  it('keeps cached and normal shell output visually equivalent across rack states', () => {
+    const states: Array<Parameters<typeof renderRackBody>[0]> = [
+      {},
+      { isSelected: true },
+      { isHovered: true },
+      { isPassive: true },
+      { isSelected: true, isPassive: true },
+      { rotationDeg: 0 },
+      { rotationDeg: 90 },
+      { rotationDeg: 180 },
+      { rotationDeg: 270 },
+      { isPaired: true },
+      { isAsymmetric: true },
+      { showRackCode: true, displayCode: 'R-77' },
+      { showRackCode: false },
+      { isSelected: true, isActivelyPanning: true },
+      { isSelected: true, isActivelyPanning: false },
+      { prominence: 'secondary', placement: 'header-left' },
+      { prominence: 'background', placement: 'lower-left-mid' }
+    ];
+
+    for (const state of states) {
+      const normal = serializeVisualShell(
+        renderRackBody({ ...state, shellRendering: 'normal' })
+      );
+      const cached = serializeVisualShell(
+        renderRackBody({ ...state, shellRendering: 'cached' })
+      );
+
+      expect(cached).toEqual(normal);
+    }
+  });
+
+  it('keeps the cached shell non-listening so it cannot cover cell overlays or hit targets', () => {
+    const renderer = renderRackBody({ shellRendering: 'cached' });
+
+    expect(getShellGroup(renderer).props.listening).toBe(false);
+  });
+
+  it('keeps passive opacity out of selected and active-pan visuals', () => {
+    expect(getShellGroup(renderRackBody({ isPassive: true })).props.opacity).toBe(0.5);
+    expect(
+      getShellGroup(renderRackBody({ isPassive: true, isSelected: true })).props.opacity
+    ).toBe(1);
+    expect(
+      getShellGroup(renderRackBody({ isPassive: true, isActivelyPanning: true })).props.opacity
+    ).toBe(1);
+  });
+
+  it('does not enable the shell cache unless the diagnostics flag opts in', () => {
+    const normal = renderRackBody();
+    const normalShell = rackBodyKonvaMocks.groupNodes[0];
+
+    expect(normalShell?.cache).not.toHaveBeenCalled();
+    expect(normalShell?.clearCache).toHaveBeenCalledTimes(1);
+
+    renderRackBody({ shellRendering: 'cached' });
+    expect(getCachedShellNode().cache).toHaveBeenCalledTimes(1);
+    void normal;
+  });
+
+  it.each([
+    ['geometry width/height', { geometry: { ...singleGeometry, width: 240, height: 90, centerX: 120, centerY: 45 } }],
+    ['rotationDeg', { rotationDeg: 90 }],
+    ['isSelected', { isSelected: true }],
+    ['isHovered', { isHovered: true }],
+    ['isPassive', { isPassive: true }],
+    ['showRackCode', { showRackCode: false }],
+    ['displayCode', { displayCode: 'R-99' }],
+    ['rackCodeProminence', { prominence: 'background' }],
+    ['rackCodePlacement', { placement: 'header-left' }],
+    ['disableStrokes', { disableStrokes: true }],
+    ['isActivelyPanning', { isActivelyPanning: true }]
+  ] as const)('refreshes the cached shell when %s changes', (_name, changedProps) => {
+    const renderer = renderRackBody({ shellRendering: 'cached' });
+    const shell = getCachedShellNode();
+
+    expect(shell.cache).toHaveBeenCalledTimes(1);
+
+    updateRackBody(renderer, {
+      shellRendering: 'cached',
+      ...changedProps
+    });
+
+    expect(shell.clearCache).toHaveBeenCalledTimes(2);
+    expect(shell.cache).toHaveBeenCalledTimes(2);
+    expect(shell.batchDraw).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears a cached shell when diagnostics switch back to normal rendering', () => {
+    const renderer = renderRackBody({ shellRendering: 'cached' });
+    const shell = getCachedShellNode();
+
+    updateRackBody(renderer, { shellRendering: 'normal' });
+
+    expect(shell.cache).toHaveBeenCalledTimes(1);
+    expect(shell.clearCache).toHaveBeenCalledTimes(2);
   });
 });

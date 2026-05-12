@@ -166,6 +166,8 @@ function renderRackLayer(params: {
   canSelectRack?: boolean;
   isWorkflowScope?: boolean;
   activeCellRackId?: string | null;
+  hoveredRackId?: string | null;
+  isRackPassiveScopeActive?: boolean;
   renderMode?: CanvasRenderMode;
   renderSelectionOverlay?: boolean;
   canvasSelectedCellId?: string | null;
@@ -183,6 +185,7 @@ function renderRackLayer(params: {
   publishedCellsByStructure?: Map<string, Cell>;
   onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
   onV2StorageRackSelect?: (params: { rackId: string }) => void;
+  rackBodyShell?: 'normal' | 'cached';
 }) {
   const racks = params.racks ?? [
     createRack('rack-1', 0),
@@ -209,7 +212,8 @@ function renderRackLayer(params: {
           cells: 'normal',
           cellOverlays: 'normal',
           enableProductionCellCulling: true,
-          rackLayerRenderer: 'layer'
+          rackLayerRenderer: 'layer',
+          rackBodyShell: params.rackBodyShell ?? 'normal'
         },
         diagnosticsViewport: {
           canvasOffset: { x: 0, y: 0 },
@@ -221,11 +225,11 @@ function renderRackLayer(params: {
         renderMode: params.renderMode,
         renderSelectionOverlay: params.renderSelectionOverlay,
         highlightedCellIds: params.highlightedCellIds ?? new Set<string>(),
-        hoveredRackId: null,
+        hoveredRackId: params.hoveredRackId ?? null,
         isLayoutEditable: true,
         isLayoutMode: params.isLayoutMode ?? true,
         isPlacing: false,
-        isRackPassiveScopeActive: false,
+        isRackPassiveScopeActive: params.isRackPassiveScopeActive ?? false,
         isStorageMode: params.isStorageMode ?? false,
         isViewMode: params.isViewMode ?? false,
         isWorkflowScope: params.isWorkflowScope ?? false,
@@ -736,6 +740,58 @@ describe('RackLayer reveal hierarchy policy wiring', () => {
     expect(rackCells?.props.renderMode).toBe('full');
     expect(rackCells?.props.isInteractive).toBe(false);
     expect(rackCells?.props.showCellNumbers).toBe(true);
+  });
+
+  it('keeps rack body shell rendering normal unless diagnostics opt into the cache', () => {
+    const defaultRenderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null
+    });
+    const cachedRenderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      rackBodyShell: 'cached'
+    });
+
+    const defaultBodies = defaultRenderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+    const cachedBodies = cachedRenderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+
+    expect(defaultBodies.map((body) => body.props.shellRendering)).toEqual([
+      'normal',
+      'normal'
+    ]);
+    expect(cachedBodies.map((body) => body.props.shellRendering)).toEqual([
+      'cached',
+      'cached'
+    ]);
+  });
+
+  it('passes hover, passive, selected, and selected-passive state into the cached RackBody shell', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      hoveredRackId: 'rack-2',
+      isRackPassiveScopeActive: true,
+      activeCellRackId: null,
+      rackBodyShell: 'cached'
+    });
+
+    const rackBodies = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+
+    expect(rackBodies[0]?.props.shellRendering).toBe('cached');
+    expect(rackBodies[0]?.props.isSelected).toBe(true);
+    expect(rackBodies[0]?.props.isHovered).toBe(false);
+    expect(rackBodies[0]?.props.isPassive).toBe(false);
+    expect(rackBodies[1]?.props.shellRendering).toBe('cached');
+    expect(rackBodies[1]?.props.isSelected).toBe(false);
+    expect(rackBodies[1]?.props.isHovered).toBe(true);
+    expect(rackBodies[1]?.props.isPassive).toBe(true);
   });
 
   it('passes active pan lightweight visual mode without unmounting rack/cell subtrees', () => {

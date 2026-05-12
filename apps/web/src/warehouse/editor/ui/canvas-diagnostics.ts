@@ -13,6 +13,7 @@ export type CanvasDiagnosticsFlags = {
   storageOccupancyOverlay?: 'on' | 'off' | 'summary-only';
   enableProductionCellCulling: boolean;
   rackLayerRenderer: 'layer' | 'fast-layer';
+  rackBodyShell?: 'normal' | 'cached';
 };
 
 export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
@@ -23,7 +24,8 @@ export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   cellOverlays: 'normal',
   storageOccupancyOverlay: 'on',
   enableProductionCellCulling: true,
-  rackLayerRenderer: 'layer'
+  rackLayerRenderer: 'layer',
+  rackBodyShell: 'normal'
 };
 
 export const CANVAS_DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
@@ -33,6 +35,7 @@ export const CANVAS_DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 export type CanvasRenderComponentName =
   | 'EditorCanvas'
   | 'CellStateOverlayLayer'
+  | 'RackBody'
   | 'RackLayer'
   | 'RackCells'
   | 'SelectionOverlayLayer';
@@ -205,6 +208,11 @@ export function getCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {
       raw.rackLayerRenderer,
       ['layer', 'fast-layer'] as const,
       DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.rackLayerRenderer
+    ),
+    rackBodyShell: resolveOption(
+      raw.rackBodyShell,
+      ['normal', 'cached'] as const,
+      DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.rackBodyShell ?? 'normal'
     )
   };
 }
@@ -314,6 +322,7 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
     components: {
       EditorCanvas: createComponentMetrics(),
       CellStateOverlayLayer: createComponentMetrics(),
+      RackBody: createComponentMetrics(),
       RackLayer: createComponentMetrics(),
       RackCells: createComponentMetrics(),
       SelectionOverlayLayer: createComponentMetrics()

@@ -51,6 +51,7 @@ type DiagnosticsFlags = {
   cellOverlays: 'normal' | 'surface-only' | 'off';
   enableProductionCellCulling: boolean;
   rackLayerRenderer: 'layer' | 'fast-layer';
+  rackBodyShell?: 'normal' | 'cached';
 };
 
 type VariantRuntimeOptions = {
@@ -166,6 +167,7 @@ type RenderPipelineDiagnostics = {
   components: {
     EditorCanvas: RenderComponentMetrics;
     CellStateOverlayLayer: RenderComponentMetrics;
+    RackBody: RenderComponentMetrics;
     RackLayer: RenderComponentMetrics;
     RackCells: RenderComponentMetrics;
     SelectionOverlayLayer: RenderComponentMetrics;
@@ -406,7 +408,8 @@ const NORMAL_FLAGS: DiagnosticsFlags = {
   cells: 'normal',
   cellOverlays: 'normal',
   enableProductionCellCulling: true,
-  rackLayerRenderer: 'layer'
+  rackLayerRenderer: 'layer',
+  rackBodyShell: 'normal'
 };
 
 const DEVICE_PROFILES: DeviceProfile[] = [
@@ -477,6 +480,10 @@ const VARIANTS: Variant[] = [
   {
     name: 'surface-only',
     flags: { ...NORMAL_FLAGS, cellOverlays: 'surface-only' }
+  },
+  {
+    name: 'rack-body-cache',
+    flags: { ...NORMAL_FLAGS, rackBodyShell: 'cached' }
   },
   { name: 'rack-shell-only', flags: { ...NORMAL_FLAGS, cells: 'off' } }
 ];
@@ -957,6 +964,7 @@ async function startRenderPipelineProbe(
       components: {
         EditorCanvas: createComponentMetrics(),
         CellStateOverlayLayer: createComponentMetrics(),
+        RackBody: createComponentMetrics(),
         RackLayer: createComponentMetrics(),
         RackCells: createComponentMetrics(),
         SelectionOverlayLayer: createComponentMetrics()
@@ -2987,7 +2995,8 @@ function shouldMeasurePhaseDiagnostics(
   return (
     ENABLE_PHASE_DIAGNOSTICS &&
     (scenario === 'pan' || scenario === 'zoom') &&
-    variant.name === 'production-culling'
+    (variant.name === 'production-culling' ||
+      variant.name === 'rack-body-cache')
   );
 }
 
@@ -3140,7 +3149,9 @@ const RECT_CATEGORY_LABELS = [
 type RectCategoryLabel = (typeof RECT_CATEGORY_LABELS)[number];
 
 function categorizeRectRole(role: string): RectCategoryLabel {
-  if (role === 'rack-body') return 'rack background / body';
+  if (role === 'rack-body' || role.startsWith('rack-body-')) {
+    return 'rack background / body';
+  }
   if (role === 'rack-section') return 'rack sections';
   if (role === 'cell-base') return 'cell base rectangles';
   if (
@@ -3677,6 +3688,7 @@ Conclusion: ${manualOff ? 'Measured by direct A/B comparison.' : 'manual-pan-bat
 ## React Rendering Context
 ${componentRenderLine('EditorCanvas', diagnostics)}
 ${componentRenderLine('CellStateOverlayLayer', diagnostics)}
+${componentRenderLine('RackBody', diagnostics)}
 ${componentRenderLine('RackLayer', diagnostics)}
 ${componentRenderLine('RackCells', diagnostics)}
 ${componentRenderLine('SelectionOverlayLayer', diagnostics)}
@@ -3880,6 +3892,7 @@ test.describe('DL1 diagnostics harness', () => {
           skeletonRenders:
             entry.renderPipeline.renderModeCounts['interaction-skeleton'],
           editorRenders: entry.renderPipeline.components.EditorCanvas.renders,
+          rackBodyRenders: entry.renderPipeline.components.RackBody.renders,
           rackLayerRenders: entry.renderPipeline.components.RackLayer.renders,
           rackCellsRenders: entry.renderPipeline.components.RackCells.renders,
           selectionOverlayRenders:

@@ -354,6 +354,7 @@ export const RackLayer = memo(function RackLayer({
       'diagnosticsCellOverlays',
       'diagnosticsCulling',
       'diagnosticsRackLayerRenderer',
+      'diagnosticsRackBodyShell',
       'isActivelyPanning',
       'labelsDeferred',
       'renderMode',
@@ -389,6 +390,7 @@ export const RackLayer = memo(function RackLayer({
       diagnosticsCellOverlays: diagnosticsFlags.cellOverlays,
       diagnosticsCulling: diagnosticsFlags.enableProductionCellCulling,
       diagnosticsRackLayerRenderer: diagnosticsFlags.rackLayerRenderer,
+      diagnosticsRackBodyShell: diagnosticsFlags.rackBodyShell ?? 'normal',
       isActivelyPanning,
       labelsDeferred,
       renderMode,
@@ -605,6 +607,7 @@ export const RackLayer = memo(function RackLayer({
               rackCodePlacement={labelRevealPolicy.rackCodePlacement}
               disableStrokes={!overlaysEnabled}
               isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
+              shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
             />
 
             {lod >= 1 && faceA && (

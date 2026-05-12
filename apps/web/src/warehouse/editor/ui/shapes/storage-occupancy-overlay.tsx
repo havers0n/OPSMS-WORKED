@@ -55,6 +55,7 @@ type DiagnosticsViewport = {
 
 const FAR_ZOOM_THRESHOLD = 0.18;
 const OVERVIEW_ZOOM_THRESHOLD = 0.9;
+const CELL_SURFACE_INSET_SCREEN_PX = 1.5;
 
 // Storage overview visibility lives outside RackCells because RackCells is
 // intentionally gated until deeper cell LOD in storage mode.
@@ -351,60 +352,98 @@ function drawRoundedRect(
   context.closePath();
 }
 
-function getCompactRect(geometry: RackCellRectGeometry): RackCellRectGeometry {
-  const size = Math.max(4, Math.min(geometry.width, geometry.height) * 0.42);
+export function getStorageOccupancyOverlaySurfaceRect({
+  geometry,
+  zoom
+}: {
+  geometry: RackCellRectGeometry;
+  zoom: number;
+}): RackCellRectGeometry {
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  const screenInset = CELL_SURFACE_INSET_SCREEN_PX / safeZoom;
+  const maxInset = Math.max(0, Math.min(geometry.width, geometry.height) * 0.25);
+  const inset = Math.min(screenInset, maxInset);
+
   return {
-    x: geometry.x + geometry.width / 2 - size / 2,
-    y: geometry.y + geometry.height / 2 - size / 2,
-    width: size,
-    height: size
+    x: geometry.x + inset,
+    y: geometry.y + inset,
+    width: Math.max(0, geometry.width - inset * 2),
+    height: Math.max(0, geometry.height - inset * 2)
   };
+}
+
+function drawStatusAccent({
+  cell,
+  context,
+  paint,
+  rect,
+  zoom
+}: {
+  context: CanvasRenderingContext2D;
+  cell: StorageOccupancyOverlayCell;
+  paint: ReturnType<typeof getStatusPaint>;
+  rect: RackCellRectGeometry;
+  zoom: number;
+}) {
+  if (
+    cell.status !== 'pick_active' &&
+    cell.status !== 'quarantined' &&
+    cell.status !== 'reserved'
+  ) {
+    return;
+  }
+
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  const minSide = Math.min(rect.width, rect.height);
+  const inset = Math.min(minSide * 0.28, Math.max(2 / safeZoom, minSide * 0.16));
+
+  context.strokeStyle = paint.stroke;
+  context.lineWidth = Math.max(1 / safeZoom, Math.min(2.5 / safeZoom, minSide * 0.08));
+
+  if (cell.status === 'pick_active') {
+    context.beginPath();
+    context.moveTo(rect.x + inset, rect.y + rect.height - inset);
+    context.lineTo(rect.x + rect.width - inset, rect.y + inset);
+    context.stroke();
+  } else if (cell.status === 'quarantined') {
+    context.beginPath();
+    context.moveTo(rect.x + inset, rect.y + inset);
+    context.lineTo(rect.x + rect.width - inset, rect.y + rect.height - inset);
+    context.moveTo(rect.x + rect.width - inset, rect.y + inset);
+    context.lineTo(rect.x + inset, rect.y + rect.height - inset);
+    context.stroke();
+  } else if (cell.status === 'reserved') {
+    context.setLineDash([3 / safeZoom, 3 / safeZoom]);
+    context.strokeRect(
+      rect.x + inset,
+      rect.y + inset,
+      Math.max(1, rect.width - inset * 2),
+      Math.max(1, rect.height - inset * 2)
+    );
+  }
 }
 
 function drawStatusMark(
   context: CanvasRenderingContext2D,
   cell: StorageOccupancyOverlayCell,
-  lod: Extract<StorageOccupancyOverlayLod, 'cell-status' | 'cell-compact'>
+  lod: Extract<StorageOccupancyOverlayLod, 'cell-status' | 'cell-compact'>,
+  zoom: number
 ) {
   const paint = getStatusPaint(cell.status);
-  const rect = lod === 'cell-compact' ? getCompactRect(cell.geometry) : cell.geometry;
+  const rect = getStorageOccupancyOverlaySurfaceRect({
+    geometry: cell.geometry,
+    zoom
+  });
   context.save();
-  context.globalAlpha *= lod === 'cell-compact' ? 0.95 : 0.82;
-  drawRoundedRect(context, rect, lod === 'cell-compact' ? 2 : 1.5);
+  context.globalAlpha *= lod === 'cell-compact' ? 0.88 : 0.82;
+  drawRoundedRect(context, rect, 2);
   context.fillStyle = paint.fill;
   context.fill();
   context.strokeStyle = paint.stroke;
   context.lineWidth = lod === 'cell-compact' ? 1.4 : 1;
   context.stroke();
 
-  if (lod === 'cell-status') {
-    const inset = Math.max(2, Math.min(rect.width, rect.height) * 0.18);
-    context.strokeStyle = paint.stroke;
-    context.lineWidth = Math.max(1.5, Math.min(rect.width, rect.height) * 0.08);
-    if (cell.status === 'pick_active') {
-      context.beginPath();
-      context.moveTo(rect.x + inset, rect.y + rect.height - inset);
-      context.lineTo(rect.x + rect.width / 2, rect.y + inset);
-      context.lineTo(rect.x + rect.width - inset, rect.y + rect.height - inset);
-      context.closePath();
-      context.stroke();
-    } else if (cell.status === 'quarantined') {
-      context.beginPath();
-      context.moveTo(rect.x + inset, rect.y + inset);
-      context.lineTo(rect.x + rect.width - inset, rect.y + rect.height - inset);
-      context.moveTo(rect.x + rect.width - inset, rect.y + inset);
-      context.lineTo(rect.x + inset, rect.y + rect.height - inset);
-      context.stroke();
-    } else if (cell.status === 'reserved') {
-      context.setLineDash([3, 3]);
-      context.strokeRect(
-        rect.x + inset,
-        rect.y + inset,
-        Math.max(1, rect.width - inset * 2),
-        Math.max(1, rect.height - inset * 2)
-      );
-    }
-  }
+  drawStatusAccent({ cell, context, paint, rect, zoom });
 
   context.restore();
 }
@@ -556,7 +595,7 @@ export const StorageOccupancyOverlay = memo(function StorageOccupancyOverlay({
                 }
 
                 for (const cell of model.cells) {
-                  drawStatusMark(canvasContext, cell, overlayLod);
+                  drawStatusMark(canvasContext, cell, overlayLod, zoom);
                 }
               }}
             />
