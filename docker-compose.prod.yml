@@ -1,0 +1,45 @@
+services:
+  bff:
+    build:
+      context: .
+      dockerfile: apps/bff/Dockerfile
+    env_file:
+      - ${BFF_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      BFF_HOST: 0.0.0.0
+      BFF_PORT: 8787
+    expose:
+      - "8787"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8787/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_BFF_URL: ${VITE_BFF_URL:-/api}
+        VITE_ENABLE_DEV_AUTO_LOGIN: "false"
+    depends_on:
+      - bff
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
