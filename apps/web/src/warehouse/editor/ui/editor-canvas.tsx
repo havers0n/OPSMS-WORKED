@@ -1076,7 +1076,6 @@ export function EditorCanvas({
                 getRelativePointerPosition={() =>
                   stageRef.current?.getRelativePointerPosition() ?? null
                 }
-                isActivelyPanning={isPanning}
                 isLayoutEditable={isLayoutEditable}
                 selectedZoneId={selectedZoneId}
                 setSelectedZoneId={setSelectedZoneId}
@@ -1091,7 +1090,6 @@ export function EditorCanvas({
                 getRelativePointerPosition={() =>
                   stageRef.current?.getRelativePointerPosition() ?? null
                 }
-                isActivelyPanning={isPanning}
                 isLayoutEditable={isLayoutEditable}
                 selectedWallId={selectedWallId}
                 setSelectedWallId={setSelectedWallId}

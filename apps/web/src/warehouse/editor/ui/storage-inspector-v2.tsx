@@ -59,7 +59,6 @@ import {
   type SwapTaskState,
   type TaskKind
 } from './storage-inspector-v2/mode';
-import { EmptyState } from './storage-inspector-v2/empty-state';
 import { LoadingErrorState, LoadingState } from './storage-inspector-v2/loading-state';
 import { RackOverviewPanel } from './storage-inspector-v2/rack-overview-panel';
 import { ContainerDetailPanel } from './storage-inspector-v2/container-detail-panel';

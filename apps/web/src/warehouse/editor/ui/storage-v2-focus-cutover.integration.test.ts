@@ -255,9 +255,8 @@ describe('Storage V2 focus cutover integration', () => {
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
     tree = JSON.stringify(renderer.toJSON());
-    expect(
-      tree.includes('No rack context available') || tree.includes('No location selected')
-    ).toBe(true);
+    expect(tree).toContain('Select a rack on the map to browse locations.');
+    expect(tree).not.toContain('No location selected');
   });
 
   it('StorageWorkspaceV2 keeps compact V2 shell mounted across rackless and focused states', async () => {
@@ -282,7 +281,7 @@ describe('Storage V2 focus cutover integration', () => {
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
     expect(tree).toContain('Select a rack on the map to browse locations.');
-    expect(tree).toContain('No location selected');
+    expect(tree).not.toContain('No location selected');
 
     await act(async () => {
       useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
@@ -321,7 +320,7 @@ describe('Storage V2 focus cutover integration', () => {
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
     expect(tree).toContain('Select a rack on the map to browse locations.');
-    expect(tree).toContain('No location selected');
+    expect(tree).not.toContain('No location selected');
   });
 });
 

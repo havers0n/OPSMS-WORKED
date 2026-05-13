@@ -60,7 +60,9 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       const storage = getBrowserStorage();
       try {
         storage?.setItem(COLLAPSED_KEY, String(next));
-      } catch {}
+      } catch {
+        // Ignore unavailable storage; collapse state can remain session-local.
+      }
       return next;
     });
   }, []);
