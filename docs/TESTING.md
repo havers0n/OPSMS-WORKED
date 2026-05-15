@@ -52,6 +52,30 @@ Known noisy output is non-blocking when the command exits with code 0:
 
 Local E2E runs require `apps/bff/.env.local`; create it from `apps/bff/.env.example` before running the web E2E suites.
 
+### E2E database safety
+
+Playwright E2E helpers reset warehouse layout data before several scenarios. That reset deletes
+`locations`, `cells`, layout versions, floors, and sites, and it first clears
+`containers.current_location_id` so location deletes can proceed.
+
+Do not run E2E against a local database that contains manual storage placements you want to keep.
+Use a disposable Supabase database for E2E, or explicitly opt in only when destructive cleanup is
+acceptable:
+
+```bash
+E2E_ALLOW_WAREHOUSE_RESET=true npm run test:e2e:smoke --workspace @wos/web
+```
+
+PowerShell equivalent:
+
+```powershell
+$env:E2E_ALLOW_WAREHOUSE_RESET='true'; npm run test:e2e:smoke --workspace @wos/web
+```
+
+The reset is refused for non-local Supabase URLs unless both `E2E_ALLOW_WAREHOUSE_RESET=true` and
+`E2E_ALLOW_NON_LOCAL_WAREHOUSE_RESET=true` are set. Never use those flags against production or
+staging data.
+
 ## Workspace commands
 
 ```bash
