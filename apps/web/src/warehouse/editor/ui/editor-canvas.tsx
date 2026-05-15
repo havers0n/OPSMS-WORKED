@@ -103,7 +103,7 @@ const EMPTY_RACK_IDS: string[] = [];
 const EMPTY_CELL_ID_SET = new Set<string>();
 const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
-const ZOOM_INTERACTION_IDLE_MS = 500;
+const ZOOM_INTERACTION_IDLE_MS = 550;
 const noopSetHoveredRackId = () => undefined;
 
 export function EditorCanvas({
@@ -255,7 +255,7 @@ export function EditorCanvas({
     Array<{ type: 'x' | 'y'; position: number }>
   >([]);
 
-  const { containerRef, viewport, canvasOffset, isPanning, handleZoom } =
+  const { containerRef, viewport, canvasOffset, isPanning, handleZoom, handleWheelZoom } =
     useCanvasViewportController({
       autoFitRacks: racks,
       disableGridDuringPan: diagnosticsFlags.grid === 'off-during-pan',
@@ -270,7 +270,7 @@ export function EditorCanvas({
     });
   const [isZooming, setIsZooming] = useState(false);
   const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startZoomInteraction = () => {
+  const startZoomInteraction = useCallback(() => {
     setIsZooming(true);
     if (zoomIdleTimerRef.current !== null) {
       globalThis.clearTimeout(zoomIdleTimerRef.current);
@@ -279,7 +279,7 @@ export function EditorCanvas({
       zoomIdleTimerRef.current = null;
       setIsZooming(false);
     }, ZOOM_INTERACTION_IDLE_MS);
-  };
+  }, []);
   const handleInteractionZoom = (
     delta: number,
     cursor?: { x: number; y: number }
@@ -287,6 +287,21 @@ export function EditorCanvas({
     startZoomInteraction();
     handleZoom(delta, cursor);
   };
+  const handleInteractionWheelZoom = useCallback(
+    (rawDeltaY: number, cursor?: { x: number; y: number }) => {
+      startZoomInteraction();
+      handleWheelZoom(rawDeltaY, cursor);
+    },
+    [handleWheelZoom, startZoomInteraction]
+  );
+  const onWheelHandler = useCallback(
+    (event: Konva.KonvaEventObject<WheelEvent>) => {
+      event.evt.preventDefault();
+      const pointer = event.target.getStage()?.getPointerPosition();
+      handleInteractionWheelZoom(event.evt.deltaY, pointer ?? undefined);
+    },
+    [handleInteractionWheelZoom]
+  );
   useEffect(
     () => () => {
       if (zoomIdleTimerRef.current !== null) {
@@ -348,15 +363,13 @@ export function EditorCanvas({
     };
     const scheduleRestoreBoundary = (callback: () => void) => {
       scheduleRestoreFrame(() => {
-        scheduleRestoreFrame(() => {
-          const delayMs = getDiagnosticsRestoreStageDelayMs();
-          if (delayMs > 0) {
-            const id = globalThis.setTimeout(callback, delayMs);
-            restoreFrameHandlesRef.current.push({ id, kind: 'timeout' });
-            return;
-          }
-          callback();
-        });
+        const delayMs = getDiagnosticsRestoreStageDelayMs();
+        if (delayMs > 0) {
+          const id = globalThis.setTimeout(callback, delayMs);
+          restoreFrameHandlesRef.current.push({ id, kind: 'timeout' });
+          return;
+        }
+        callback();
       });
     };
 
@@ -957,15 +970,11 @@ export function EditorCanvas({
               ref={stageRef}
               width={viewport.width}
               height={viewport.height}
+              pixelRatio={typeof window !== 'undefined' ? window.devicePixelRatio : 1}
               x={canvasOffset.x}
               y={canvasOffset.y}
               scale={{ x: zoom, y: zoom }}
-              onWheel={(event) => {
-                event.evt.preventDefault();
-                const delta = event.evt.deltaY > 0 ? -0.1 : 0.1;
-                const pointer = event.target.getStage()?.getPointerPosition();
-                handleInteractionZoom(delta, pointer ?? undefined);
-              }}
+              onWheel={onWheelHandler}
               onMouseDown={onMouseDown}
               onMouseMove={onMouseMove}
               onMouseUp={onMouseUp}
