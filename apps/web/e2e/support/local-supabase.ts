@@ -17,6 +17,9 @@ const SERVICE_ROLE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 const DEV_AUTH_EMAIL = process.env.E2E_DEV_AUTH_EMAIL ?? process.env.VITE_DEV_AUTH_EMAIL ?? 'admin@wos.local';
 const DEV_AUTH_PASSWORD = process.env.E2E_DEV_AUTH_PASSWORD ?? process.env.VITE_DEV_AUTH_PASSWORD ?? 'warehouse123';
+const E2E_ALLOW_WAREHOUSE_RESET = process.env.E2E_ALLOW_WAREHOUSE_RESET === 'true';
+const E2E_ALLOW_NON_LOCAL_WAREHOUSE_RESET = process.env.E2E_ALLOW_NON_LOCAL_WAREHOUSE_RESET === 'true';
+const OPERATIONAL_RESET_GUARD_TABLES = ['containers', 'container_lines', 'inventory_unit'] as const;
 
 export const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -144,7 +147,73 @@ async function ensureManagerClient() {
   return managerClientPromise;
 }
 
+function isLoopbackSupabaseUrl() {
+  try {
+    const url = new URL(SUPABASE_URL);
+    return (
+      url.hostname === '127.0.0.1' ||
+      url.hostname === 'localhost' ||
+      url.hostname === '[::1]' ||
+      url.hostname === '::1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function countRows(table: typeof OPERATIONAL_RESET_GUARD_TABLES[number]) {
+  const { count, error } = await adminClient
+    .from(table)
+    .select('id', { count: 'exact', head: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
+async function assertWarehouseResetAllowed() {
+  if (!isLoopbackSupabaseUrl() && !(E2E_ALLOW_WAREHOUSE_RESET && E2E_ALLOW_NON_LOCAL_WAREHOUSE_RESET)) {
+    throw new Error(
+      [
+        `Refusing to reset warehouse data for non-local Supabase URL: ${SUPABASE_URL}.`,
+        'E2E reset uses a service-role client and deletes warehouse layout/location data.',
+        'Use a dedicated local E2E database, or set both E2E_ALLOW_WAREHOUSE_RESET=true and ' +
+          'E2E_ALLOW_NON_LOCAL_WAREHOUSE_RESET=true only for a disposable database.'
+      ].join(' ')
+    );
+  }
+
+  if (E2E_ALLOW_WAREHOUSE_RESET) {
+    return;
+  }
+
+  const counts = await Promise.all(
+    OPERATIONAL_RESET_GUARD_TABLES.map(async (table) => ({
+      table,
+      count: await countRows(table)
+    }))
+  );
+  const populatedOperationalTables = counts.filter((item) => item.count > 0);
+
+  if (populatedOperationalTables.length > 0) {
+    throw new Error(
+      [
+        'Refusing to reset warehouse data because operational storage data already exists:',
+        populatedOperationalTables.map((item) => `${item.table}=${item.count}`).join(', '),
+        'This reset clears container placements by nulling containers.current_location_id and ' +
+          'deleting locations/cells/layout versions.',
+        'Run E2E against a disposable database, or set E2E_ALLOW_WAREHOUSE_RESET=true only when ' +
+          'losing local placements is acceptable.'
+      ].join(' ')
+    );
+  }
+}
+
 export async function resetWarehouseData() {
+  await assertWarehouseResetAllowed();
+
   const { error: containerLocationError } = await adminClient
     .from('containers')
     .update({ current_location_id: null })
