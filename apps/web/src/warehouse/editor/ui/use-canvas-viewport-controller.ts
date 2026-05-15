@@ -32,6 +32,8 @@ import {
 } from './canvas-diagnostics';
 
 const TRANSFORM_ONLY_ZOOM_IDLE_MS = 500;
+const WHEEL_ZOOM_BASE = 0.999;
+const WHEEL_DELTA_CAP = 200;
 
 type CanvasViewport = {
   width: number;
@@ -570,17 +572,10 @@ export function useCanvasViewportController({
     }, TRANSFORM_ONLY_ZOOM_IDLE_MS);
   }, [commitTransformOnlyZoom]);
 
-  const handleZoom = useCallback(
-    (delta: number, cursor?: CanvasPoint) => {
+  const applyNextZoom = useCallback(
+    (nextZoom: number, cursor?: CanvasPoint) => {
       const stage = stageRef.current;
       const activeZoomState = zoomStateRef.current;
-      const currentZoom = activeZoomState.isZooming
-        ? activeZoomState.liveCamera.zoom
-        : zoomRef.current;
-      const nextZoom = clampCanvasZoom(
-        Number((currentZoom + delta).toFixed(2)),
-        zoomBoundsRef.current
-      );
 
       if (!cursor || !stage) {
         commitTransformOnlyZoom();
@@ -607,6 +602,38 @@ export function useCanvasViewportController({
     [commitTransformOnlyZoom, scheduleZoomCommit, scheduleZoomDraw, stageRef]
   );
 
+  const handleZoom = useCallback(
+    (delta: number, cursor?: CanvasPoint) => {
+      const activeZoomState = zoomStateRef.current;
+      const currentZoom = activeZoomState.isZooming
+        ? activeZoomState.liveCamera.zoom
+        : zoomRef.current;
+      const nextZoom = clampCanvasZoom(
+        Number((currentZoom + delta).toFixed(2)),
+        zoomBoundsRef.current
+      );
+      applyNextZoom(nextZoom, cursor);
+    },
+    [applyNextZoom]
+  );
+
+  const handleWheelZoom = useCallback(
+    (rawDeltaY: number, cursor?: CanvasPoint) => {
+      const activeZoomState = zoomStateRef.current;
+      const currentZoom = activeZoomState.isZooming
+        ? activeZoomState.liveCamera.zoom
+        : zoomRef.current;
+      const cappedDelta =
+        Math.sign(rawDeltaY) * Math.min(Math.abs(rawDeltaY), WHEEL_DELTA_CAP);
+      const nextZoom = clampCanvasZoom(
+        currentZoom * Math.pow(WHEEL_ZOOM_BASE, cappedDelta),
+        zoomBoundsRef.current
+      );
+      applyNextZoom(nextZoom, cursor);
+    },
+    [applyNextZoom]
+  );
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -627,10 +654,61 @@ export function useCanvasViewportController({
       });
     };
 
+    // Pan inertia: track pointer velocity, apply exponential decay after pan ends.
+    // Runs imperatively (stage.position only) and commits offset to store once stopped
+    // to avoid one React re-render per frame.
+    const INERTIA_DECAY = 0.88;
+    const INERTIA_MIN_SPEED = 0.5;
+    let inertiaRafId: number | null = null;
+    let panVelX = 0;
+    let panVelY = 0;
+    let prevMoveX = 0;
+    let prevMoveY = 0;
+    let prevMoveTime = 0;
+
+    const cancelInertia = () => {
+      if (inertiaRafId !== null) {
+        window.cancelAnimationFrame(inertiaRafId);
+        inertiaRafId = null;
+      }
+    };
+
+    const startInertia = (initVelX: number, initVelY: number) => {
+      cancelInertia();
+      if (Math.hypot(initVelX, initVelY) < 1.5) return;
+      const stage = stageRef.current;
+      if (!stage) return;
+      let velX = initVelX;
+      let velY = initVelY;
+      let curX = stage.x();
+      let curY = stage.y();
+      const tick = () => {
+        velX *= INERTIA_DECAY;
+        velY *= INERTIA_DECAY;
+        if (Math.hypot(velX, velY) < INERTIA_MIN_SPEED) {
+          useCameraStore.getState().setOffset(curX, curY);
+          recordCanvasCameraStoreUpdate('offset');
+          inertiaRafId = null;
+          return;
+        }
+        curX += velX;
+        curY += velY;
+        const s = stageRef.current;
+        if (!s) { inertiaRafId = null; return; }
+        withKonvaDiagnosticsSource('inertia-pan', () => {
+          s.position({ x: curX, y: curY });
+        });
+        batchDrawStageLayersWithSource(s, 'inertia-pan');
+        inertiaRafId = window.requestAnimationFrame(tick);
+      };
+      inertiaRafId = window.requestAnimationFrame(tick);
+    };
+
     const onMouseDown = (event: MouseEvent) => {
       if (event.button !== 1) return;
       const stage = stageRef.current;
       if (!stage) return;
+      cancelInertia();
       commitTransformOnlyZoom();
       isPanningRef.current = true;
       // Snapshot current offset at pan start via getState() — avoids stale closures
@@ -642,6 +720,11 @@ export function useCanvasViewportController({
         stage,
         state: panStateRef.current
       });
+      prevMoveX = event.clientX;
+      prevMoveY = event.clientY;
+      prevMoveTime = performance.now();
+      panVelX = 0;
+      panVelY = 0;
       setIsPanning(true);
       event.preventDefault();
     };
@@ -650,6 +733,15 @@ export function useCanvasViewportController({
       if (!isPanningRef.current) return;
       const stage = stageRef.current;
       if (!stage) return;
+      const now = performance.now();
+      const dt = now - prevMoveTime;
+      if (dt > 0 && dt < 80) {
+        panVelX = (event.clientX - prevMoveX) * (16 / dt);
+        panVelY = (event.clientY - prevMoveY) * (16 / dt);
+      }
+      prevMoveTime = now;
+      prevMoveX = event.clientX;
+      prevMoveY = event.clientY;
       moveTransformOnlyPan({
         pointer: { x: event.clientX, y: event.clientY },
         scheduleDraw: schedulePanDraw,
@@ -672,6 +764,7 @@ export function useCanvasViewportController({
         state: panStateRef.current
       });
       setIsPanning(false);
+      startInertia(panVelX, panVelY);
     };
 
     const onTouchStart = (event: TouchEvent) => {
@@ -680,6 +773,7 @@ export function useCanvasViewportController({
 
       if (event.touches.length === 2) {
         // Cancel any in-progress 1-finger pan
+        cancelInertia();
         if (isPanningRef.current) {
           isPanningRef.current = false;
           touchPanActiveRef.current = false;
@@ -700,6 +794,7 @@ export function useCanvasViewportController({
       const hit = stage.getIntersection({ x: touch.clientX - box.left, y: touch.clientY - box.top });
       if (hit) return;
 
+      cancelInertia();
       touchPanActiveRef.current = true;
       isPanningRef.current = true;
       commitTransformOnlyZoom();
@@ -710,6 +805,11 @@ export function useCanvasViewportController({
         stage,
         state: panStateRef.current
       });
+      prevMoveX = touch.clientX;
+      prevMoveY = touch.clientY;
+      prevMoveTime = performance.now();
+      panVelX = 0;
+      panVelY = 0;
       setIsPanning(true);
       event.preventDefault();
     };
@@ -739,8 +839,18 @@ export function useCanvasViewportController({
 
       if (!touchPanActiveRef.current || !isPanningRef.current) return;
       if (event.touches.length !== 1) return;
+      const touch1 = event.touches[0];
+      const now = performance.now();
+      const dt = now - prevMoveTime;
+      if (dt > 0 && dt < 80) {
+        panVelX = (touch1.clientX - prevMoveX) * (16 / dt);
+        panVelY = (touch1.clientY - prevMoveY) * (16 / dt);
+      }
+      prevMoveTime = now;
+      prevMoveX = touch1.clientX;
+      prevMoveY = touch1.clientY;
       moveTransformOnlyPan({
-        pointer: { x: event.touches[0].clientX, y: event.touches[0].clientY },
+        pointer: { x: touch1.clientX, y: touch1.clientY },
         scheduleDraw: schedulePanDraw,
         stage,
         state: panStateRef.current
@@ -764,6 +874,7 @@ export function useCanvasViewportController({
         state: panStateRef.current
       });
       setIsPanning(false);
+      startInertia(panVelX, panVelY);
     };
 
     container.addEventListener('mousedown', onMouseDown);
@@ -775,6 +886,7 @@ export function useCanvasViewportController({
 
     return () => {
       cancelScheduledPanDraw();
+      cancelInertia();
       if (zoomIdleTimerRef.current !== null) {
         globalThis.clearTimeout(zoomIdleTimerRef.current);
         zoomIdleTimerRef.current = null;
@@ -799,6 +911,7 @@ export function useCanvasViewportController({
     viewport,
     canvasOffset,
     isPanning,
-    handleZoom
+    handleZoom,
+    handleWheelZoom
   };
 }
