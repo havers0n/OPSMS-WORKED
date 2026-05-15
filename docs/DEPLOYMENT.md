@@ -1,116 +1,330 @@
 # Deployment
 
-This repo is prepared for a manual, production-like Docker Compose deployment on a single server. It does not include continuous deployment, automatic database migrations, image registry publishing, or infrastructure provisioning.
+This document defines the first manual production deployment model for WOS. It is intentionally limited to a single VPS and Docker Compose. It does not add continuous deployment, SSH deploy workflows, image registry publishing, automatic migrations, Kubernetes, Terraform, blue/green deploys, or zero-downtime deployment.
 
-## Prerequisites
+Use [SERVER_RUNBOOK.md](./SERVER_RUNBOOK.md) for the step-by-step VPS rehearsal.
 
-- Docker Engine and Docker Compose v2.
-- A server-local `.env.production` file created from `.env.production.example`.
-- A reachable Supabase project or local Supabase-compatible service with the required schema already migrated.
-- No real secrets committed to the repository.
+## 1. Deployment Model
 
-## Create `.env.production`
+The first production model is:
 
-Copy the example and replace placeholders on the server:
+- single Ubuntu/Debian VPS
+- Docker Compose running from a repo clone on the server
+- expected app directory: `/opt/wos/app`
+- server-only `.env.production` created from `.env.production.example`
+- `web` container serves the Vite static build through Nginx
+- `web` publishes `${WEB_PORT:-8080}:80` by default
+- safer final shape behind system Nginx/Caddy is `127.0.0.1:${WEB_PORT:-8080}:80`
+- `bff` listens only inside the Compose network on `BFF_HOST=0.0.0.0`, `BFF_PORT=8787`
+- `/api/*` is proxied by the web container to the internal BFF
+- Supabase/Postgres is external or already provisioned before deploy
+- no automatic migrations in the first deployment version
+
+Current production Docker files:
+
+- `docker-compose.prod.yml`
+- `apps/web/Dockerfile`
+- `apps/web/nginx.conf`
+- `apps/bff/Dockerfile`
+
+## 2. Server Prerequisites
+
+Assumptions:
+
+- Ubuntu or Debian server
+- non-root deploy user, for example `deploy`
+- SSH key access for the deploy user
+- Git
+- curl
+- Docker Engine
+- Docker Compose plugin, available as `docker compose`
+- optional system Nginx or Caddy for domain/TLS
+
+Baseline packages:
 
 ```bash
-cp .env.production.example .env.production
+sudo apt update
+sudo apt install git curl ca-certificates
 ```
 
-Set the public Vite values used during the frontend image build:
+Install Docker from the official Docker instructions for the server OS, then verify:
+
+```bash
+docker --version
+docker compose version
+```
+
+Create the deploy user deliberately and review SSH/sudo policy before using these commands on a real server:
+
+```bash
+sudo adduser deploy
+sudo usermod -aG docker deploy
+sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+sudoedit /home/deploy/.ssh/authorized_keys
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
+sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
+```
+
+Log out and back in after adding the user to the `docker` group.
+
+## 3. Server Directory Layout
+
+Recommended first git-based layout:
+
+```text
+/opt/wos/
+  app/       cloned repository
+  backups/   DB backup receipts, restore notes, migration evidence
+  logs/      copied incident logs or deployment notes; live logs remain in Docker
+```
+
+Create it with narrow ownership:
+
+```bash
+sudo mkdir -p /opt/wos/app /opt/wos/backups /opt/wos/logs
+sudo chown -R deploy:deploy /opt/wos
+```
+
+The repo lives in `/opt/wos/app`. The server-only env file lives at `/opt/wos/app/.env.production`.
+
+## 4. Environment Handling
+
+Create production env on the server only:
+
+```bash
+cd /opt/wos/app
+cp .env.production.example .env.production
+$EDITOR .env.production
+chmod 600 .env.production
+```
+
+Required values:
 
 ```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=replace-me
+WEB_PORT=8080
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
 VITE_BFF_URL=/api
 VITE_ENABLE_DEV_AUTO_LOGIN=false
-```
-
-Set the BFF runtime values:
-
-```env
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
 BFF_HOST=0.0.0.0
 BFF_PORT=8787
-BFF_LOG_LEVEL=info
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=replace-me
-BFF_CORS_ORIGIN=https://your-public-hostname.example
-WEB_PORT=8080
+BFF_CORS_ORIGIN=https://YOUR_DOMAIN
 ```
 
-## Build Images
+Rules:
+
+- never commit `.env.production`
+- never use a production service-role key in frontend `VITE_*` variables
+- `VITE_BFF_URL=/api` assumes the web container proxies `/api/*` to BFF
+- `BFF_CORS_ORIGIN` must match the final public origin exactly, including scheme
+- BFF port `8787` must not be published directly to the host
+- `/api/ready` requires Supabase connectivity and the `public.healthcheck()` RPC from migration `0109_ready_healthcheck_rpc.sql`
+
+## 5. Build And Run Commands
+
+From `/opt/wos/app`:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production build
-```
-
-## Start Containers
-
-```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
-docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml --env-file .env.production ps
 ```
 
-The `web` service publishes `${WEB_PORT:-8080}:80`. The `bff` service is only exposed on the internal Compose network.
-
-## Logs
+Logs:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs -f web
-docker compose -f docker-compose.prod.yml logs -f bff
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f web
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f bff
 ```
 
-## Verify Frontend
+Restart and stop:
 
 ```bash
-curl http://localhost:8080
+docker compose -f docker-compose.prod.yml --env-file .env.production restart
+docker compose -f docker-compose.prod.yml --env-file .env.production stop
+docker compose -f docker-compose.prod.yml --env-file .env.production down
 ```
 
-This should return the static Vite app served by Nginx. React Router refreshes are handled by the Nginx `try_files` fallback to `index.html`.
+Use `down` only when removing the running containers/network is acceptable.
 
-## Verify BFF Health
+## 6. Verification Checklist
+
+Local checks from the VPS:
 
 ```bash
-curl http://localhost:8080/api/health
+curl -i http://localhost:8080
+curl -i http://localhost:8080/api/health
+curl -i http://localhost:8080/api/ready
 ```
 
-Nginx forwards this to the internal BFF `/health` route. It should return a basic service health response if the BFF process is running.
+Expected results:
 
-## Verify BFF Readiness
+- `/` returns frontend HTML
+- `/api/health` returns OK when the BFF process is alive
+- `/api/ready` returns ready only when Supabase/DB is reachable and migrated
+- `/api/ready` can return HTTP 503 when Supabase env is placeholder, connectivity fails, or `public.healthcheck()` is missing
+
+If using system Nginx/Caddy and TLS:
 
 ```bash
-curl http://localhost:8080/api/ready
+curl -i https://YOUR_DOMAIN/
+curl -i https://YOUR_DOMAIN/api/health
+curl -i https://YOUR_DOMAIN/api/ready
 ```
 
-Nginx forwards this to the internal BFF `/ready` route. This check requires Supabase connectivity and the `healthcheck` RPC to be present. If Supabase is unavailable or placeholders are used, this can return `503` while `/api/health` still succeeds.
+The BFF internal routes are `/health` and `/ready`; production traffic should use `/api/health` and `/api/ready` through the web proxy.
 
-## Stop And Restart
+## 7. Firewall And Ports
+
+Recommended first setup:
+
+- SSH open only as required, preferably restricted by provider firewall or UFW rules
+- HTTP `80/tcp` open when serving HTTP or issuing certificates
+- HTTPS `443/tcp` open for the final public site
+- BFF `8787/tcp` closed publicly
+- Docker web port `8080/tcp` either temporarily public for testing or bound to loopback behind system Nginx/Caddy
+
+Example UFW shape:
 
 ```bash
-docker compose -f docker-compose.prod.yml down
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d
-docker compose -f docker-compose.prod.yml restart bff
-docker compose -f docker-compose.prod.yml restart web
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status verbose
 ```
 
-## Manual Rollback
+Safer final Compose port binding behind system Nginx/Caddy:
 
-For a manual rollback, keep the previous checked-out commit or release artifact available on the server. Stop the current stack, check out the previous known-good revision, rebuild, and start again:
+```yaml
+ports:
+  - "127.0.0.1:${WEB_PORT:-8080}:80"
+```
+
+Do not change Compose during production deployment unless the change has already been reviewed and validated.
+
+## 8. TLS And Domain Plan
+
+Simple path:
+
+1. Point DNS `A` record for `YOUR_DOMAIN` to the VPS public IP.
+2. Bind the Compose web service to `127.0.0.1:8080` when a system reverse proxy is used.
+3. Terminate TLS in system Nginx or Caddy.
+4. Proxy public traffic to `http://127.0.0.1:8080`.
+5. Keep the app container responsible for SPA serving and `/api/*` proxying to BFF.
+
+Caddy example:
+
+```text
+YOUR_DOMAIN {
+  reverse_proxy 127.0.0.1:8080
+}
+```
+
+Nginx plus Certbot is also acceptable. Commands are server-specific, but the high-level flow is:
 
 ```bash
-docker compose -f docker-compose.prod.yml down
-git checkout <previous-known-good-commit>
+sudo apt install nginx certbot python3-certbot-nginx
+sudoedit /etc/nginx/sites-available/wos
+sudo ln -s /etc/nginx/sites-available/wos /etc/nginx/sites-enabled/wos
+sudo nginx -t
+sudo systemctl reload nginx
+sudo certbot --nginx -d YOUR_DOMAIN
+```
+
+Before pointing real DNS to the server:
+
+- [ ] intended commit is checked out
+- [ ] `.env.production` points to the intended Supabase project
+- [ ] `BFF_CORS_ORIGIN` matches the final origin
+- [ ] firewall exposes only intended ports
+- [ ] TLS certificate path is understood
+- [ ] `/api/health` passes through the public origin
+- [ ] `/api/ready` is expected to pass after migrations are confirmed
+- [ ] rollback commit SHA is recorded
+
+## 9. Backup And Migration Policy
+
+First-version policy:
+
+- no automatic migrations during deploy
+- confirm migration status manually before deploy
+- create a database backup before any production migration
+- never run seed/reset scripts against production
+- `/api/ready` depends on required DB objects, including `public.healthcheck()`
+- schema rollback is handled separately from app rollback
+
+Before deploy:
+
+- [ ] DB backup exists or backup receipt is recorded in `/opt/wos/backups`
+- [ ] migrations reviewed
+- [ ] no reset or seed scripts will run against production
+- [ ] env points to the intended Supabase project
+- [ ] `public.healthcheck()` exists and returns `ok`
+- [ ] `/api/ready` is expected to pass after deploy
+
+## 10. Manual Rollback
+
+Record the current known-good commit before deploying:
+
+```bash
+cd /opt/wos/app
+git rev-parse HEAD | tee /opt/wos/last-known-good.txt
+```
+
+Deploy a target commit:
+
+```bash
+git fetch origin
+git checkout <target-sha>
 docker compose -f docker-compose.prod.yml --env-file .env.production build
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+curl -i http://localhost:8080/api/health
+curl -i http://localhost:8080/api/ready
 ```
 
-## Intentionally Not Automated Yet
+Rollback if health or readiness fails and the issue is app/container related:
 
-- No GitHub Actions CD.
-- No SSH deployment workflow.
-- No image registry publishing.
-- No Kubernetes, Terraform, or VPS provisioning.
-- No automatic database migrations.
-- No Supabase SQL test harness in Docker validation.
-- No Playwright/E2E tests in Docker validation.
-- No zero-downtime deployment strategy.
+```bash
+previous_good_sha="$(cat /opt/wos/last-known-good.txt)"
+git checkout "$previous_good_sha"
+docker compose -f docker-compose.prod.yml --env-file .env.production build
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+curl -i http://localhost:8080/api/health
+curl -i http://localhost:8080/api/ready
+```
+
+DB migrations may not be rollback-safe. If a deploy included manual schema changes, decide the DB recovery path separately before rolling the application back.
+
+## 11. First Manual Deploy Rehearsal
+
+Dry run:
+
+1. Create deploy user.
+2. Clone repo into `/opt/wos/app`.
+3. Check out target commit.
+4. Create `.env.production`.
+5. Confirm DB backup/migration status.
+6. Build images.
+7. Start Compose.
+8. Check `web` and `bff` logs.
+9. Curl frontend.
+10. Curl `/api/health`.
+11. Curl `/api/ready`.
+12. Test one browser login flow.
+13. Test one read-only warehouse/product/operations flow.
+14. Record issues, target commit, rollback commit, and final health status.
+
+## 12. What Is Intentionally Postponed
+
+- GitHub Actions CD
+- SSH deploy workflow
+- image registry publishing
+- automatic migrations
+- E2E deployment gate
+- SQL test harness in CI
+- zero-downtime deployment
+- monitoring and alerting
+- automated backups
