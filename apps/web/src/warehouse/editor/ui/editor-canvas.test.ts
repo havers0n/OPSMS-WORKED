@@ -24,6 +24,7 @@ let mockPublishedCellsById = new Map<string, Cell>();
 let mockHighlightedCellIds: string[] = [];
 let mockIsPanning = false;
 let mockHandleZoom = vi.fn();
+let mockHandleWheelZoom = vi.fn();
 let rackLayerLastProps: Record<string, unknown> | null = null;
 let rackLayerRenderSnapshots: Array<Record<string, unknown>> = [];
 let cellStateOverlayLastProps: Record<string, unknown> | null = null;
@@ -189,7 +190,8 @@ vi.mock('./use-canvas-viewport-controller', () => ({
       viewport: { width: 1000, height: 800, x: 0, y: 0 },
       canvasOffset: { x: 0, y: 0 },
       isPanning: mockIsPanning,
-      handleZoom: mockHandleZoom
+      handleZoom: mockHandleZoom,
+      handleWheelZoom: mockHandleWheelZoom
     };
   }
 }));
@@ -286,7 +288,6 @@ function renderCanvas(workspace: FloorWorkspace) {
 function advanceRestoreBoundary() {
   act(() => {
     vi.advanceTimersToNextTimer();
-    vi.advanceTimersToNextTimer();
   });
 }
 
@@ -305,6 +306,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockIsPanning = false;
     mockHighlightedCellIds = [];
     mockHandleZoom = vi.fn();
+    mockHandleWheelZoom = vi.fn();
     mockSelectedRackId = null;
     mockSelection = { type: 'none' };
     mockIsRackInViewport.mockReset();
@@ -1006,7 +1008,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
         });
       });
 
-      expect(mockHandleZoom).toHaveBeenCalledWith(0.1, { x: 25, y: 30 });
+      expect(mockHandleWheelZoom).toHaveBeenCalledWith(-100, { x: 25, y: 30 });
       const zoomStartModes = rackLayerRenderSnapshots
         .slice(rendersBeforeZoom)
         .map((snapshot) => snapshot.renderMode);
@@ -1015,7 +1017,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
       expect(rackLayerLastProps?.renderMode).toBe('interaction-skeleton');
 
       act(() => {
-        vi.advanceTimersByTime(500);
+        vi.advanceTimersByTime(550);
       });
 
       expect(rackLayerLastProps?.renderMode).toBe('restore-base');
