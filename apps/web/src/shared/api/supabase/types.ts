@@ -1506,6 +1506,7 @@ export type Database = {
           depth: number
           display_code: string
           id: string
+          is_locked: boolean
           kind: string
           layout_version_id: string
           rotation_deg: number
@@ -1521,6 +1522,7 @@ export type Database = {
           depth: number
           display_code: string
           id?: string
+          is_locked?: boolean
           kind: string
           layout_version_id: string
           rotation_deg: number
@@ -1536,6 +1538,7 @@ export type Database = {
           depth?: number
           display_code?: string
           id?: string
+          is_locked?: boolean
           kind?: string
           layout_version_id?: string
           rotation_deg?: number

@@ -61,7 +61,7 @@ export function GeneralTab({ rack, readOnly = false }: { rack: Rack; readOnly?: 
 
       <div className="rounded-[18px] border border-[var(--border-muted)] bg-white p-4 text-sm text-slate-700 shadow-sm">
         {readOnly
-          ? 'Published layouts are read-only here. Create a draft to edit geometry.'
+          ? 'Rack geometry is read-only here while the layout or rack is locked.'
           : 'Geometry edits live here in the inspector. Structure edits live in Structure, and addressing edits live in Addressing.'}
       </div>
     </section>

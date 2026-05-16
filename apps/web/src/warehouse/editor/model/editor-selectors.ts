@@ -93,6 +93,7 @@ export const useDeleteRack = () => useEditorStore((state) => state.deleteRack);
 export const useDeleteZone = () => useEditorStore((state) => state.deleteZone);
 export const useDeleteWall = () => useEditorStore((state) => state.deleteWall);
 export const useDuplicateRack = () => useEditorStore((state) => state.duplicateRack);
+export const useSetRackLock = () => useEditorStore((state) => state.setRackLock);
 export const useSetSelectedRackId = () => useEditorStore((state) => state.setSelectedRackId);
 export const useSetSelectedZoneId = () => useEditorStore((state) => state.setSelectedZoneId);
 export const useSetSelectedWallId = () => useEditorStore((state) => state.setSelectedWallId);

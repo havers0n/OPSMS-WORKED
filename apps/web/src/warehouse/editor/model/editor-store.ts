@@ -144,6 +144,7 @@ type EditorStore = {
   deleteZone: (zoneId: string) => void;
   deleteWall: (wallId: string) => void;
   duplicateRack: (rackId: string) => void;
+  setRackLock: (rackId: string, isLocked: boolean) => void;
   updateRackPosition: (rackId: string, x: number, y: number) => void;
   updateZoneRect: (zoneId: string, rect: { x: number; y: number; width: number; height: number }) => void;
   updateZoneDetails: (zoneId: string, patch: Partial<Pick<Zone, 'name' | 'category' | 'color'>>) => void;
@@ -212,6 +213,10 @@ function shouldResetObjectWorkContext(prevSelection: EditorSelection, nextSelect
 
 function getPrimarySelectedRackId(selection: EditorSelection): string | null {
   return selection.type === 'rack' ? (selection.rackIds[0] ?? null) : null;
+}
+
+function isDraftRackLocked(draft: LayoutDraft, rackId: string) {
+  return draft.racks[rackId]?.isLocked === true;
 }
 
 function shouldPreserveSelectedRackActiveLevel(
@@ -688,6 +693,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteRack: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       const nextDraft = cloneDraft(state.draft);
       delete nextDraft.racks[rackId];
@@ -751,7 +757,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (!canEditDraft(state.draft)) return state;
 
       const source = state.draft.racks[rackId];
-      if (!source) return state;
+      if (!source || source.isLocked) return state;
 
       const newRackId = newEntityId();
       const nextDraft = cloneDraft(state.draft);
@@ -762,6 +768,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...structuredClone(source),
         id: newRackId,
         displayCode,
+        isLocked: false,
         x: source.x,
         y: source.y,
         faces: source.faces.map((face) => ({
@@ -792,12 +799,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...selectedRackActiveLevelResetPatch(prevSelection, nextSelection)
       });
     }),
+  setRackLock: (rackId, isLocked) =>
+    set((state) => {
+      if (!canEditDraft(state.draft)) return state;
+
+      const rack = state.draft.racks[rackId];
+      if (!rack || rack.isLocked === isLocked) return state;
+
+      return markDraftChanged(state, {
+        draft: updateRackInDraft(state.draft, rackId, (rack) => ({ ...rack, isLocked }))
+      });
+    }),
   updateRackPosition: (rackId, x, y) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
       const rack = state.draft.racks[rackId];
-      if (!rack) return state;
+      if (!rack || rack.isLocked) return state;
 
       // Validate position with minimum distance constraint
       const otherRacks = Object.values(state.draft.racks).filter(r => r.id !== rackId);
@@ -881,6 +899,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   rotateRack: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
@@ -896,6 +915,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateRackGeneral: (rackId, patch) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => normalizeRack({ ...rack, ...patch })),
@@ -904,6 +924,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateFaceConfig: (rackId, side, patch) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -915,6 +936,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateSectionLength: (rackId, side, sectionId, length) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -933,6 +955,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateSectionSlots: (rackId, side, sectionId, slotCount) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -955,6 +978,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateLevelCount: (rackId, side, sectionId, count) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -986,6 +1010,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateRackLevelStructuralDefaultRole: (rackId: string, ordinal: number, role: 'primary_pick' | 'reserve' | 'none') =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
@@ -1018,6 +1043,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateLevelStructuralDefaultRole: (rackId: string, side: 'A' | 'B', ordinal: number, role: 'primary_pick' | 'reserve' | 'none') =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -1041,6 +1067,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addSection: (rackId, side) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -1062,6 +1089,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteSection: (rackId, side, sectionId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -1077,6 +1105,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addLevel: (rackId, side, sectionId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -1109,6 +1138,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   applyFacePreset: (rackId, side, sectionCount, levelCount, slotCount) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
@@ -1148,6 +1178,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   resetFaceB: (rackId) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
@@ -1172,6 +1203,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setFaceLength: (rackId, side, length) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) =>
@@ -1195,6 +1227,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setFaceBRelationship: (rackId, mode, options) =>
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
+      if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => {
@@ -1281,7 +1314,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
 
-      const racks = rackIds.map(id => state.draft!.racks[id]).filter(Boolean);
+      const racks = rackIds.map(id => state.draft!.racks[id]).filter((rack): rack is Rack => Boolean(rack && !rack.isLocked));
       if (racks.length < 2) return state;
 
       // Use first rack's Y as reference
@@ -1301,7 +1334,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
 
-      const racks = rackIds.map(id => state.draft!.racks[id]).filter(Boolean);
+      const racks = rackIds.map(id => state.draft!.racks[id]).filter((rack): rack is Rack => Boolean(rack && !rack.isLocked));
       if (racks.length < 2) return state;
 
       // Use first rack's X as reference
@@ -1321,7 +1354,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
 
-      const racks = rackIds.map(id => state.draft!.racks[id]).filter(Boolean);
+      const racks = rackIds.map(id => state.draft!.racks[id]).filter((rack): rack is Rack => Boolean(rack && !rack.isLocked));
       if (racks.length < 2) return state;
 
       const updates = distributeRacksEqually(racks, axis, state.minRackDistance);

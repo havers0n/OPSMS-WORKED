@@ -38,6 +38,7 @@ type SaveRackPayload = {
   displayCode: string;
   kind: string;
   axis: string;
+  isLocked: boolean;
   x: number;
   y: number;
   totalLength: number;
@@ -84,6 +85,7 @@ function serializeRackSavePayload(id: string, geometry: RackGeometry, structure:
     displayCode: structure.displayCode,
     kind: structure.kind,
     axis: structure.axis,
+    isLocked: structure.isLocked ?? false,
     x: geometry.x,
     y: geometry.y,
     totalLength: geometry.totalLength,

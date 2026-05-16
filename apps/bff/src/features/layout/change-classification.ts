@@ -21,7 +21,13 @@ function normalizeDraftLayers(layoutDraft: LayoutDraft) {
     rackStructure: splitDraft.racks
       .map((rack) => ({
         id: rack.id,
-        structure: rack.structure
+        structure: {
+          displayCode: rack.structure.displayCode,
+          kind: rack.structure.kind,
+          axis: rack.structure.axis,
+          isLocked: rack.structure.isLocked ?? false,
+          faces: rack.structure.faces
+        }
       }))
       .sort((left, right) => left.id.localeCompare(right.id)),
     overlays: {
@@ -111,6 +117,7 @@ export function buildNormalizedDraftFromSavePayload(
         displayCode: rack.displayCode,
         kind: rack.kind,
         axis: rack.axis,
+        isLocked: rack.isLocked ?? false,
         faces: rack.faces.map((face) => ({
           id: face.id,
           side: face.side,

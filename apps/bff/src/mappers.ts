@@ -77,6 +77,7 @@ type RackRow = {
   display_code: string;
   kind: 'single' | 'paired';
   axis: 'NS' | 'WE';
+  is_locked?: boolean | null;
   x: number;
   y: number;
   total_length: number;
@@ -696,6 +697,7 @@ function buildRackStructure(
     displayCode: row.display_code,
     kind: row.kind,
     axis: row.axis,
+    isLocked: row.is_locked ?? false,
     faces: allFaces
       .filter((face) => face.rack_id === row.id)
       .sort((a, b) => a.side.localeCompare(b.side))
@@ -793,6 +795,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
       totalLength: number;
       depth: number;
       rotationDeg: number;
+      isLocked?: boolean;
       faces: Array<{
         id: string;
         side: string;
@@ -860,6 +863,7 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
       displayCode: rack.displayCode,
       kind: rack.kind,
       axis: rack.axis,
+      isLocked: rack.isLocked ?? false,
       faces: rack.faces.map((face) => ({
         id: face.id,
         side: face.side,

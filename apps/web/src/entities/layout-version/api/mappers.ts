@@ -77,6 +77,7 @@ function buildRackStructure(
     displayCode: row.display_code,
     kind: row.kind,
     axis: row.axis,
+    isLocked: row.is_locked ?? false,
     faces: allFaces
       .filter((face) => face.rack_id === row.id)
       .sort((a, b) => a.side.localeCompare(b.side))

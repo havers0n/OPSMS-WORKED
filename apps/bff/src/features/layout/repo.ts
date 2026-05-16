@@ -43,6 +43,7 @@ type RackRow = {
   display_code: string;
   kind: 'single' | 'double';
   axis: 'NS' | 'WE';
+  is_locked: boolean;
   x: number;
   y: number;
   total_length: number;
@@ -190,7 +191,7 @@ async function fetchLayoutVersionBundleFromTables(
 ) {
   const { data: racksData, error: racksError } = await supabase
     .from('racks')
-    .select('id,layout_version_id,display_code,kind,axis,x,y,total_length,depth,rotation_deg')
+    .select('id,layout_version_id,display_code,kind,axis,is_locked,x,y,total_length,depth,rotation_deg')
     .eq('layout_version_id', layoutVersion.id);
 
   if (racksError) {

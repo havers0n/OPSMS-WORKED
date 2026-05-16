@@ -1,6 +1,6 @@
 import { generatePreviewCells, resolveRackFaceRelationshipMode, validateLayoutDraft } from '@wos/domain';
 import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
-import { AlertTriangle, ChevronLeft, ChevronRight, Copy, RotateCcw, Trash2, X, XCircle } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Lock, LockOpen, RotateCcw, Trash2, X, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import {
@@ -12,6 +12,7 @@ import {
   useRotateRack,
   useSelectedRackId,
   useSetObjectWorkContext,
+  useSetRackLock,
   useUpdateRackGeneral,
   useViewMode
 } from '@/warehouse/editor/model/editor-selectors';
@@ -276,10 +277,12 @@ function RackQuickActions({ rack }: { rack: Rack }) {
   const rotateRack = useRotateRack();
   const duplicateRack = useDuplicateRack();
   const deleteRack = useDeleteRack();
+  const setRackLock = useSetRackLock();
+  const isLocked = rack.isLocked === true;
 
   useEffect(() => {
     setConfirmingDelete(false);
-  }, [rack.id]);
+  }, [rack.id, isLocked]);
 
   if (!confirmingDelete) {
     return (
@@ -289,7 +292,8 @@ function RackQuickActions({ rack }: { rack: Rack }) {
           title="Rotate"
           aria-label="Rotate rack"
           data-testid="rack-inspector-action-rotate"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-muted)] bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
+          disabled={isLocked}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-muted)] bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
           onClick={() => rotateRack(rack.id)}
         >
           <RotateCcw className="h-3.5 w-3.5" />
@@ -300,7 +304,8 @@ function RackQuickActions({ rack }: { rack: Rack }) {
           title="Duplicate"
           aria-label="Duplicate rack"
           data-testid="rack-inspector-action-duplicate"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-muted)] bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
+          disabled={isLocked}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-muted)] bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
           onClick={() => duplicateRack(rack.id)}
         >
           <Copy className="h-3.5 w-3.5" />
@@ -311,11 +316,29 @@ function RackQuickActions({ rack }: { rack: Rack }) {
           title="Delete"
           aria-label="Delete rack"
           data-testid="rack-inspector-action-delete"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:bg-red-100 hover:text-red-700"
+          disabled={isLocked}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 shadow-sm transition-colors hover:bg-red-100 hover:text-red-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
           onClick={() => setConfirmingDelete(true)}
         >
           <Trash2 className="h-3.5 w-3.5" />
           <span className="sr-only">Delete</span>
+        </button>
+        <button
+          type="button"
+          title={isLocked ? 'Unlock rack' : 'Lock rack'}
+          aria-label={isLocked ? 'Unlock rack' : 'Lock rack'}
+          aria-pressed={isLocked}
+          data-testid="rack-inspector-action-lock"
+          className={cn(
+            'inline-flex h-7 w-7 items-center justify-center rounded-lg border shadow-sm transition-colors',
+            isLocked
+              ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800'
+              : 'border-[var(--border-muted)] bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800'
+          )}
+          onClick={() => setRackLock(rack.id, !isLocked)}
+        >
+          {isLocked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
+          <span className="sr-only">{isLocked ? 'Unlock' : 'Lock'}</span>
         </button>
       </div>
     );
@@ -416,18 +439,21 @@ export function RackInspector({
   // selected and is not in creation mode. This guard is a defensive fallback.
   if (!rack) return null;
 
+  const isRackLocked = rack.isLocked === true;
+  const isRackReadOnly = !isLayoutEditable || isRackLocked;
+
   const renderTaskBody = () => {
     if (!showTaskNav) {
       // Storage/view: no task nav; stack geometry + structure (read-only by the
       // isLayoutEditable flag) so rack context is still fully inspectable.
       return (
         <>
-          <GeometryTask rack={rack} readOnly={!isLayoutEditable} />
+          <GeometryTask rack={rack} readOnly={isRackReadOnly} />
           <StructureTask
             rack={rack}
             faceA={faceA}
             faceB={faceB}
-            readOnly={!isLayoutEditable}
+            readOnly={isRackReadOnly}
           />
         </>
       );
@@ -435,14 +461,14 @@ export function RackInspector({
 
     switch (objectWorkContext) {
       case 'geometry':
-        return <GeometryTask rack={rack} readOnly={!isLayoutEditable} />;
+        return <GeometryTask rack={rack} readOnly={isRackReadOnly} />;
       case 'structure':
         return (
           <StructureTask
             rack={rack}
             faceA={faceA}
             faceB={faceB}
-            readOnly={!isLayoutEditable}
+            readOnly={isRackReadOnly}
           />
         );
       case 'addressing':
@@ -452,7 +478,7 @@ export function RackInspector({
             faceA={faceA}
             faceB={faceB}
             rackCells={rackCells}
-            readOnly={!isLayoutEditable}
+            readOnly={isRackReadOnly}
           />
         );
       case 'face-mode':
@@ -462,7 +488,7 @@ export function RackInspector({
             rack={rack}
             faceA={faceA}
             faceB={faceB}
-            readOnly={!isLayoutEditable}
+            readOnly={isRackReadOnly}
           />
         );
     }
@@ -473,7 +499,7 @@ export function RackInspector({
       <div className="shrink-0 border-b border-[var(--border-muted)] bg-[var(--surface-secondary)]">
         <div className="flex items-center justify-between gap-3 px-5 pt-2 pb-1">
           <div className="flex min-w-0 items-center gap-2">
-            <RackHeaderDisplayCode rack={rack} editable={isLayoutEditable} />
+            <RackHeaderDisplayCode rack={rack} editable={isLayoutEditable && !isRackLocked} />
             {showTaskNav && isLayoutEditable && <RackQuickActions rack={rack} />}
           </div>
           <button

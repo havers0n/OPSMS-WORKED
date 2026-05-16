@@ -87,6 +87,7 @@ export const rackStructureSchema = z.object({
   displayCode: z.string(),
   kind: rackKindSchema,
   axis: rackAxisSchema,
+  isLocked: z.boolean().optional(),
   faces: z.array(rackFaceSchema)
 });
 export type RackStructure = z.infer<typeof rackStructureSchema>;
@@ -112,6 +113,7 @@ export function splitRack(rack: Rack) {
       displayCode: rack.displayCode,
       kind: rack.kind,
       axis: rack.axis,
+      ...(rack.isLocked !== undefined ? { isLocked: rack.isLocked } : {}),
       faces: rack.faces
     })
   };

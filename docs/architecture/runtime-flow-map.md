@@ -197,10 +197,11 @@ Failure points:
 1. The selected rack is read from the local Zustand draft.
 2. Canvas actions update spatial fields such as `x`, `y`, and `rotationDeg`.
 3. Inspector actions update structural fields such as `displayCode`, `kind`, sections, levels, slots, and Face B mode.
-4. Each store action clones the local `draft`, writes the change, and flips `isDraftDirty = true`.
-5. `RackInspector` computes local cell previews with `generatePreviewCells()` for the selected rack.
-6. `RackInspector` computes local validation with `validateLayoutDraft()` and prefers cached server validation only when the draft is clean.
-7. No server write happens here; persistence is deferred to `Save Draft Flow`.
+4. Per-rack `isLocked` blocks inspector edits and canvas movement for that rack while still allowing the user to select it and unlock it.
+5. Each store action clones the local `draft`, writes the change, and flips `isDraftDirty = true`.
+6. `RackInspector` computes local cell previews with `generatePreviewCells()` for the selected rack.
+7. `RackInspector` computes local validation with `validateLayoutDraft()` and prefers cached server validation only when the draft is clean.
+8. No server write happens here; persistence is deferred to `Save Draft Flow`.
 
 Failure points:
 

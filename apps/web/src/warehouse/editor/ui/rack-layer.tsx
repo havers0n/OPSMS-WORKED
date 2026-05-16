@@ -410,11 +410,15 @@ export const RackLayer = memo(function RackLayer({
     if (!isLayoutEditable) return;
 
     const node = event.target;
+    const rack = rackLookup[rackId];
+    if (!rack || rack.isLocked) {
+      return;
+    }
+
     // node.x() / node.offsetX() are canvas pixels; convert to metres
     const xM = (node.x() - node.offsetX()) / WORLD_SCALE;
     const yM = (node.y() - node.offsetY()) / WORLD_SCALE;
 
-    const rack = rackLookup[rackId];
     const otherRacks = Object.values(rackLookup).filter((item) => item.id !== rackId);
     // getSnapPosition operates in metres; threshold 0.1 m
     const snapInfo = getSnapPosition(rack, xM, yM, otherRacks, minRackDistance);
@@ -543,7 +547,7 @@ export const RackLayer = memo(function RackLayer({
             offsetY={geometry.centerY}
             rotation={rack.rotationDeg}
             draggable={
-              renderMode === 'full' && isLayoutEditable && !isPlacing
+              renderMode === 'full' && isLayoutEditable && !isPlacing && !rack.isLocked
             }
             onMouseDown={(event) => {
               // Prevent Stage onMouseDown from starting a marquee when clicking a rack.
@@ -566,7 +570,7 @@ export const RackLayer = memo(function RackLayer({
               if (hitTestEnabled && canSelectRack) setHoveredRackId(null);
             }}
             onDragStart={() => {
-              if (isLayoutEditable && !selectedRackIds.includes(rack.id)) {
+              if (isLayoutEditable && !rack.isLocked && !selectedRackIds.includes(rack.id)) {
                 setSelectedRackIds([rack.id]);
               }
             }}

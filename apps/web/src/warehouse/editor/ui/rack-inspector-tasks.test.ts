@@ -679,6 +679,48 @@ describe('RackInspector tasks', () => {
     expect(faceA()?.slotNumberingDirection).toBe('ltr');
   });
 
+  it('locks a rack from the header and blocks geometry, structure, addressing, and movement edits', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+    const lockButton = renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-lock' });
+    act(() => {
+      lockButton.props.onClick();
+    });
+
+    expect(useEditorStore.getState().draft?.racks[rackId].isLocked).toBe(true);
+    expect(renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-rotate' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-duplicate' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-delete' }).props.disabled).toBe(true);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(0);
+
+    const lengthAction = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-length-action' });
+    act(() => {
+      lengthAction.props.onClick();
+    });
+    expect(renderer.root.findAllByProps({ 'data-testid': 'geometry-blueprint-inline-editor' })).toHaveLength(0);
+
+    const before = useEditorStore.getState().draft?.racks[rackId];
+    act(() => {
+      useEditorStore.getState().updateRackPosition(rackId, 500, 600);
+      useEditorStore.getState().updateRackGeneral(rackId, { totalLength: 12 });
+      useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
+      useEditorStore.getState().updateFaceConfig(rackId, 'A', { slotNumberingDirection: 'rtl' });
+    });
+    const after = useEditorStore.getState().draft?.racks[rackId];
+
+    expect(after?.x).toBe(before?.x);
+    expect(after?.y).toBe(before?.y);
+    expect(after?.totalLength).toBe(before?.totalLength);
+    expect(after?.kind).toBe(before?.kind);
+    expect(after?.faces.find((face) => face.side === 'A')?.slotNumberingDirection).toBe('ltr');
+  });
+
   it('falls back to Structure task when objectWorkContext is face-mode', () => {
     const draft = createLayoutDraftFixture();
     act(() => {

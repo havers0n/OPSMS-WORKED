@@ -28,6 +28,7 @@ describe('mapLayoutDraftToSavePayload', () => {
           display_code: '03',
           kind: 'paired',
           axis: 'NS',
+          is_locked: true,
           x: 10,
           y: 20,
           total_length: 5,
@@ -115,6 +116,8 @@ describe('mapLayoutDraftToSavePayload', () => {
       })
     );
     expect(payload.draftVersion).toBe(1);
+    expect(draft.racks['33333333-3333-3333-3333-333333333333']?.isLocked).toBe(true);
+    expect(payload.racks[0]?.isLocked).toBe(true);
     expect(payload.racks[0]?.faces[0]).not.toHaveProperty('anchor');
     expect(payload.zones[0]).toEqual({
       id: '99999999-9999-9999-9999-999999999999',

@@ -314,6 +314,23 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
   });
 
+  it('does not make locked racks draggable in editable layout mode', () => {
+    const lockedRack = { ...createRack('rack-1', 0), isLocked: true };
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      racks: [lockedRack]
+    });
+
+    const rackGroup = renderer.root.find(
+      (node) =>
+        String(node.type) === 'Group' &&
+        node.props['data-testid'] !== 'selection-overlay-group'
+    );
+
+    expect(rackGroup.props.draggable).toBe(false);
+  });
+
   it('uses rackIds[0] as primary in multi-select and keeps non-primary racks at level 0', () => {
     const renderer = renderRackLayer({
       selectedRackIds: ['rack-1', 'rack-2'],

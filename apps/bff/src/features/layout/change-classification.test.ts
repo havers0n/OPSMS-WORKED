@@ -107,6 +107,16 @@ describe('layout save change classification', () => {
     expect(classifyLayoutDraftChange(persistedDraft, incomingDraft)).toBe('no_changes');
   });
 
+  it('treats missing rack lock state as unlocked', () => {
+    const persistedDraft = createBaseDraft();
+    const incomingDraft = cloneDraft(persistedDraft);
+
+    incomingDraft.racks[incomingDraft.rackIds[0] as string]!.isLocked = false;
+
+    expect(areRackStructureLayersEqual(persistedDraft, incomingDraft)).toBe(true);
+    expect(classifyLayoutDraftChange(persistedDraft, incomingDraft)).toBe('no_changes');
+  });
+
   it('classifies rack geometry-only edits as geometry_only', () => {
     const persistedDraft = createBaseDraft();
     const incomingDraft = cloneDraft(persistedDraft);
@@ -122,6 +132,15 @@ describe('layout save change classification', () => {
     const incomingDraft = cloneDraft(persistedDraft);
 
     incomingDraft.racks[incomingDraft.rackIds[0] as string]!.faces[0]!.slotNumberingDirection = 'rtl';
+
+    expect(classifyLayoutDraftChange(persistedDraft, incomingDraft)).toBe('structure_changed');
+  });
+
+  it('classifies rack lock changes as structure_changed', () => {
+    const persistedDraft = createBaseDraft();
+    const incomingDraft = cloneDraft(persistedDraft);
+
+    incomingDraft.racks[incomingDraft.rackIds[0] as string]!.isLocked = true;
 
     expect(classifyLayoutDraftChange(persistedDraft, incomingDraft)).toBe('structure_changed');
   });

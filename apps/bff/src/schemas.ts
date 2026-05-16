@@ -150,6 +150,7 @@ const saveRackPayloadSchema = z.object({
   displayCode: z.string().trim().min(1),
   kind: rackKindSchema,
   axis: rackAxisSchema,
+  isLocked: z.boolean().optional().default(false),
   x: z.number(),
   y: z.number(),
   totalLength: z.number().positive(),
