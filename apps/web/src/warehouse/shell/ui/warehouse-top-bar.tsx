@@ -1,4 +1,4 @@
-import { Menu } from 'lucide-react';
+import { CornerDownLeft, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Product } from '@wos/domain';
@@ -52,6 +52,7 @@ function WarehouseViewLocateInline() {
   const [debouncedProductInput, setDebouncedProductInput] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [productFeedback, setProductFeedback] = useState<LocateFeedback>({ kind: 'idle', message: null });
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -168,19 +169,20 @@ function WarehouseViewLocateInline() {
     });
   }, [locateDataGapReason, publishedCellsQuery.isLoading]);
 
-  const handleLocateSubmit = () => {
+  const handleLocateSubmit = (queryOverride?: string) => {
     if (locateDataGapReason) {
       setLocateFeedback({ kind: 'error', message: locateDataGapReason });
       return;
     }
-    const normalizedQuery = normalizeLocateToken(locateQuery);
+    const queryText = queryOverride ?? locateQuery;
+    const normalizedQuery = normalizeLocateToken(queryText);
     if (!normalizedQuery) {
       setLocateFeedback({ kind: 'invalid', message: 'Enter a cell address.' });
       return;
     }
     const matchedCellId = locateLookupByAddress.get(normalizedQuery);
     if (!matchedCellId) {
-      setLocateFeedback({ kind: 'not-found', message: `Cell "${locateQuery.trim()}" not found.` });
+      setLocateFeedback({ kind: 'not-found', message: `Cell "${queryText.trim()}" not found.` });
       return;
     }
     const matchedCell = publishedCells.find((cell) => cell.id === matchedCellId);
@@ -193,7 +195,7 @@ function WarehouseViewLocateInline() {
         level: matchedCell.address.parts.level
       });
     }
-    setLocateFeedback({ kind: 'found', message: `Located ${locateQuery.trim()}.` });
+    setLocateFeedback({ kind: 'found', message: `Located ${queryText.trim()}.` });
   };
 
   // ── Product mode handlers ─────────────────────────────────────────────────
@@ -206,17 +208,61 @@ function WarehouseViewLocateInline() {
   };
 
   const handleProductSelect = (product: Product) => {
+    setMode('product');
     setSelectedProduct(product);
     setProductInput(product.sku ? `${product.sku} — ${product.name}` : product.name);
     setIsDropdownOpen(false);
     setProductFeedback({ kind: 'idle', message: null });
   };
 
-  const handleProductClear = () => {
-    setProductInput('');
-    setSelectedProduct(null);
-    setProductFeedback({ kind: 'idle', message: null });
-    clearHighlightedCellIds();
+  const products = productsQuery.data ?? [];
+  const searchInputValue = mode === 'product' ? productInput : locateQuery;
+  const primaryFeedback = productFeedback.message ? productFeedback : locateFeedback;
+  const isLocatingSelectedProduct = Boolean(selectedProduct) && cellsByProductQuery.isFetching;
+  const isExpanded =
+    isFocused ||
+    searchInputValue.trim().length > 0 ||
+    Boolean(primaryFeedback.message) ||
+    isLocatingSelectedProduct ||
+    isDropdownOpen;
+
+  const handleUnifiedInputChange = (value: string) => {
+    setMode('address');
+    setLocateQuery(value);
+    setLocateFeedback({ kind: 'idle', message: null });
+    handleProductInputChange(value);
+  };
+
+  const handleUnifiedClear = () => {
+    handleSwitchMode('address');
+  };
+
+  const handleUnifiedSubmit = () => {
+    const value = searchInputValue.trim();
+    if (!value) {
+      setLocateFeedback({ kind: 'invalid', message: 'Enter an address, SKU, or item.' });
+      return;
+    }
+
+    const matchedCellId = locateLookupByAddress.get(normalizeLocateToken(value));
+    if (matchedCellId) {
+      setMode('address');
+      setLocateQuery(value);
+      handleLocateSubmit(value);
+      return;
+    }
+
+    if (products.length > 0) {
+      handleProductSelect(products[0]);
+      return;
+    }
+
+    if (productsQuery.isLoading) {
+      setProductFeedback({ kind: 'idle', message: 'Searching...' });
+      return;
+    }
+
+    setLocateFeedback({ kind: 'not-found', message: `No address or item found for "${value}".` });
   };
 
   // ── Feedback colors ──────────────────────────────────────────────────────
@@ -229,139 +275,104 @@ function WarehouseViewLocateInline() {
           ? 'text-emerald-600'
           : 'text-slate-500';
 
-  const products = productsQuery.data ?? [];
-  const showDropdown = isDropdownOpen && products.length > 0;
+  const showDropdown = isDropdownOpen && (products.length > 0 || productsQuery.isLoading);
 
   return (
-    <div className="flex h-8 items-center gap-2">
-      {/* Mode tabs */}
-      <div
-        className="flex rounded-full p-0.5 text-xs"
-        style={{ background: 'rgba(0,0,0,0.07)' }}
+    <div
+      ref={dropdownRef}
+      className={`relative flex h-8 items-center gap-2 transition-[width] duration-200 ease-out ${
+        isExpanded ? 'w-[min(32rem,calc(100vw-3rem))]' : 'w-36'
+      }`}
+    >
+      <form
+        className="relative flex h-8 min-w-0 flex-1 items-center"
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleUnifiedSubmit();
+        }}
       >
-        {(['address', 'product'] as LocateMode[]).map((m) => (
+        <Search className="pointer-events-none absolute left-2.5 h-4 w-4 text-slate-500" />
+        <input
+          aria-label="Search warehouse address or item"
+          autoComplete="off"
+          placeholder={isExpanded ? 'Address, SKU, item...' : 'Search'}
+          value={searchInputValue}
+          onChange={(event) => handleUnifiedInputChange(event.target.value)}
+          onFocus={() => {
+            setIsFocused(true);
+            if (searchInputValue.trim().length >= 2) setIsDropdownOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            handleUnifiedSubmit();
+          }}
+          onBlur={() => setIsFocused(false)}
+          disabled={publishedCellsQuery.isLoading}
+          className="h-8 min-w-0 flex-1 rounded-full border-0 bg-transparent pl-8 pr-9 text-sm text-slate-700 outline-none placeholder:text-slate-500 focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400"
+        />
+        {searchInputValue.trim() ? (
           <button
-            key={m}
             type="button"
-            onClick={() => handleSwitchMode(m)}
-            className="rounded-full px-2.5 py-0.5 font-medium capitalize transition-colors"
-            style={
-              mode === m
-                ? { background: 'white', color: 'var(--text-primary)', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
-                : { color: 'var(--text-muted)' }
-            }
+            onClick={handleUnifiedClear}
+            className="absolute right-2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/70 hover:text-slate-700"
+            aria-label="Clear search"
           >
-            {m === 'address' ? 'Address' : 'Item'}
+            <X className="h-3.5 w-3.5" />
           </button>
-        ))}
-      </div>
-
-      {/* Address mode */}
-      {mode === 'address' && (
-        <form
-          className="flex items-center gap-1.5"
-          onSubmit={(e) => { e.preventDefault(); handleLocateSubmit(); }}
-        >
-          <input
-            aria-label="Locate cell address"
-            placeholder="Cell address…"
-            value={locateQuery}
-            onChange={(e) => {
-              setLocateQuery(e.target.value);
-              setLocateFeedback({ kind: 'idle', message: null });
-            }}
-            disabled={publishedCellsQuery.isLoading}
-            className="h-6 w-48 rounded-full border-0 bg-transparent px-3 text-sm text-slate-700 outline-none placeholder:text-slate-500 focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400"
-          />
+        ) : (
           <button
             type="submit"
-            disabled={publishedCellsQuery.isLoading}
-            className="flex h-6 items-center rounded-full border px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-white/40 disabled:cursor-not-allowed disabled:text-slate-400"
-            style={{
-              borderColor: 'rgba(37, 99, 235, 0.45)',
-              background: 'color-mix(in srgb, var(--surface-primary) 55%, transparent)'
-            }}
+            className="absolute right-2 hidden h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/70 hover:text-slate-700 sm:flex"
+            aria-label="Run search"
           >
-            Locate
+            <CornerDownLeft className="h-3.5 w-3.5" />
           </button>
-          {locateFeedback.message && (
-            <span className={`text-xs ${feedbackColor(locateFeedback.kind)}`}>
-              {locateFeedback.message}
-            </span>
-          )}
+        )}
         </form>
-      )}
 
-      {/* Product mode */}
-      {mode === 'product' && (
-        <div ref={dropdownRef} className="relative flex items-center gap-1.5">
-          <div className="relative">
-            <input
-              aria-label="Search by product name or SKU"
-              placeholder="Name or SKU…"
-              value={productInput}
-              onChange={(e) => handleProductInputChange(e.target.value)}
-              onFocus={() => {
-                if (productInput.trim().length >= 2 && products.length > 0 && !selectedProduct) {
-                  setIsDropdownOpen(true);
-                }
-              }}
-              className="h-6 w-52 rounded-full border-0 bg-transparent px-3 text-sm text-slate-700 outline-none placeholder:text-slate-500 focus:ring-0"
-            />
-            {productInput && (
-              <button
-                type="button"
-                onClick={handleProductClear}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                aria-label="Clear"
-              >
-                ×
-              </button>
-            )}
-
-            {/* Dropdown */}
-            {showDropdown && (
-              <div
-                className="absolute left-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-xl shadow-lg"
-                style={{
-                  background: 'var(--surface-strong)',
-                  border: '1px solid var(--border-muted)'
-                }}
-              >
-                {products.slice(0, 8).map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onMouseDown={(e) => { e.preventDefault(); handleProductSelect(product); }}
-                    className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-slate-100"
-                  >
-                    <span className="text-sm font-medium leading-tight text-slate-800 line-clamp-1">
-                      {product.name}
-                    </span>
-                    {product.sku && (
-                      <span className="font-mono text-[11px] text-slate-500">{product.sku}</span>
-                    )}
-                  </button>
-                ))}
-                {productsQuery.isLoading && (
-                  <div className="px-3 py-2 text-xs text-slate-400">Searching…</div>
-                )}
+      {showDropdown && (
+        <div
+          className="absolute left-0 top-full z-50 mt-2 max-h-80 w-full overflow-y-auto rounded-lg py-1 shadow-[0_12px_28px_rgba(15,23,42,0.16)]"
+          style={{
+            background: 'var(--surface-strong)',
+            border: '1px solid var(--border-muted)'
+          }}
+        >
+          {products.length > 0 && (
+            <div className="py-1">
+              <div className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase text-slate-400">
+                Items
               </div>
-            )}
-          </div>
-
-          {/* Feedback */}
-          {productFeedback.message && (
-            <span className={`text-xs ${feedbackColor(productFeedback.kind)}`}>
-              {productFeedback.kind === 'found' && cellsByProductQuery.isFetching
-                ? 'Searching…'
-                : productFeedback.message}
-            </span>
+              {products.slice(0, 8).map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    handleProductSelect(product);
+                  }}
+                  className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-slate-100"
+                >
+                  <span className="text-sm font-medium leading-tight text-slate-800 line-clamp-1">
+                    {product.name}
+                  </span>
+                  {product.sku && (
+                    <span className="font-mono text-[11px] text-slate-500">{product.sku}</span>
+                  )}
+                </button>
+              ))}
+            </div>
           )}
-          {selectedProduct && cellsByProductQuery.isFetching && !productFeedback.message && (
-            <span className="text-xs text-slate-400">Searching…</span>
+          {productsQuery.isLoading && (
+            <div className="px-3 py-2 text-xs text-slate-400">Searching...</div>
           )}
         </div>
+      )}
+      {(primaryFeedback.message || isLocatingSelectedProduct) && isExpanded && (
+        <span className={`max-w-44 truncate text-xs ${feedbackColor(primaryFeedback.kind)}`}>
+          {isLocatingSelectedProduct ? 'Searching...' : primaryFeedback.message}
+        </span>
       )}
     </div>
   );
@@ -506,10 +517,10 @@ export function WarehouseTopBar() {
       {shouldShowLocateInline && (
         <div className="pointer-events-none absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2">
           <div
-            className="pointer-events-auto rounded-full border px-3 py-1.5 shadow-[0_2px_10px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+            className="pointer-events-auto rounded-full border px-2 py-1 opacity-85 shadow-[0_2px_10px_rgba(15,23,42,0.08)] backdrop-blur-md transition-opacity hover:opacity-100 focus-within:opacity-100"
             style={{
-              borderColor: 'rgba(37, 99, 235, 0.85)',
-              background: 'color-mix(in srgb, #d1d5db 72%, transparent)'
+              borderColor: 'rgba(100, 116, 139, 0.38)',
+              background: 'color-mix(in srgb, var(--surface-primary) 68%, transparent)'
             }}
           >
             <WarehouseViewLocateInline />
