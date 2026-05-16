@@ -8,17 +8,18 @@ import {
   isTerminalStep
 } from './pick-task-actions';
 import type { PickStepStatus, PickTaskStatus } from '@wos/domain';
+import { translate } from '@/shared/i18n';
 
 // ── getPickStepStatusLabel ────────────────────────────────────────────────────
 
 describe('getPickStepStatusLabel', () => {
   const cases: [PickStepStatus, string][] = [
-    ['pending',             'Pending'],
-    ['picked',              'Picked'],
-    ['partial',             'Partial'],
-    ['skipped',             'Skipped'],
-    ['exception',           'Exception'],
-    ['needs_replenishment', 'Needs replenishment']
+    ['pending',             translate('operations.pick.step.status.pending')],
+    ['picked',              translate('operations.pick.step.status.picked')],
+    ['partial',             translate('operations.pick.step.status.partial')],
+    ['skipped',             translate('operations.pick.step.status.skipped')],
+    ['exception',           translate('operations.pick.step.status.exception')],
+    ['needs_replenishment', translate('operations.pick.step.status.needsReplenishment')]
   ];
 
   it.each(cases)('labels %s as "%s"', (status, expected) => {
@@ -54,11 +55,11 @@ describe('getPickStepStatusColor', () => {
 
 describe('getPickTaskStatusLabel', () => {
   const cases: [PickTaskStatus, string][] = [
-    ['ready',                     'Ready'],
-    ['assigned',                  'Assigned'],
-    ['in_progress',               'In progress'],
-    ['completed',                 'Completed'],
-    ['completed_with_exceptions', 'Completed with exceptions']
+    ['ready',                     translate('operations.pick.task.status.ready')],
+    ['assigned',                  translate('operations.pick.task.status.assigned')],
+    ['in_progress',               translate('operations.pick.task.status.inProgress')],
+    ['completed',                 translate('operations.pick.task.status.completed')],
+    ['completed_with_exceptions', translate('operations.pick.task.status.completedWithExceptions')]
   ];
 
   it.each(cases)('labels %s correctly', (status, expected) => {

@@ -6,6 +6,7 @@ import { useSaveLayoutDraft } from '@/features/layout-draft-save/model/use-save-
 import { usePublishLayout } from '@/features/layout-publish/model/use-publish-layout';
 import { useLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import { BffRequestError } from '@/shared/api/bff/client';
+import { translateBffError, useT } from '@/shared/i18n';
 import { Button } from '@/shared/ui/button';
 import { Divider } from '@/shared/ui/divider';
 import { IconButton } from '@/shared/ui/icon-button';
@@ -24,6 +25,7 @@ type WorkspaceActionsProps = {
 };
 
 export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProps) {
+  const t = useT();
   const activeFloorId = useActiveFloorId();
   const viewMode = useWarehouseViewMode();
   const layoutDraft = useWarehouseLayoutDraft();
@@ -62,9 +64,9 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     if (!activeFloorId) return;
     try {
       await createDraft.mutateAsync(activeFloorId);
-      onStatusMessageChange('Draft ready');
+      onStatusMessageChange(t('warehouse.action.draftReady'));
     } catch (error) {
-      onStatusMessageChange(error instanceof Error ? error.message : 'Failed');
+      onStatusMessageChange(error instanceof BffRequestError ? translateBffError(error) : t('warehouse.action.failed'));
     }
   };
 
@@ -84,9 +86,9 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await validateLayout.mutateAsync(latestDraft.layoutVersionId);
-      onStatusMessageChange(result.isValid ? 'Valid' : `${result.issues.length} issue(s)`);
+      onStatusMessageChange(result.isValid ? t('warehouse.status.valid') : t('warehouse.status.issueCount', { count: result.issues.length }));
     } catch (error) {
-      onStatusMessageChange(error instanceof Error ? error.message : 'Validation failed');
+      onStatusMessageChange(error instanceof BffRequestError ? translateBffError(error) : t('warehouse.action.validationFailed'));
     }
   };
 
@@ -95,7 +97,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     if (!latestDraft || latestDraft.state !== 'draft' || !activeFloorId) return;
     try {
       const result = await publishLayout.mutateAsync();
-      onStatusMessageChange(`Published - ${result.generatedCells} cells - new draft ready`);
+      onStatusMessageChange(t('warehouse.action.publishedCells', { count: result.generatedCells }));
     } catch (error) {
       if (error instanceof BffRequestError && error.code === 'LAYOUT_VALIDATION_FAILED') {
         try {
@@ -109,14 +111,14 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
           onStatusMessageChange(
             firstError
               ? firstError.message
-              : `${persistedDraftValidationAfterPublishGateFailure.issues.length} issue(s)`
+              : t('warehouse.status.issueCount', { count: persistedDraftValidationAfterPublishGateFailure.issues.length })
           );
           return;
         } catch {
           // Fall through to the original publish error if validation lookup fails.
         }
       }
-      onStatusMessageChange(error instanceof Error ? error.message : 'Publish failed');
+      onStatusMessageChange(error instanceof BffRequestError ? translateBffError(error) : t('warehouse.action.publishFailed'));
     }
   };
 
@@ -135,7 +137,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         style={{ background: 'var(--accent)' }}
       >
         <FilePlus2 className="h-3.5 w-3.5" />
-        {createDraft.isPending ? 'Creating...' : 'Create Draft'}
+        {createDraft.isPending ? t('warehouse.action.creating') : t('warehouse.action.createDraft')}
       </Button>
     );
   }
@@ -144,20 +146,20 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     <ToolRail
       orientation="horizontal"
       className="gap-1 border-0 bg-transparent p-0"
-      aria-label="Workspace actions"
+      aria-label={t('warehouse.action.workspaceActions')}
     >
       <IconButton
         icon={<Undo2 className="h-3.5 w-3.5" />}
         variant="ghost"
         disabled
-        title="Undo (coming soon)"
+        title={t('warehouse.action.undoSoon')}
         className="h-8 w-8 rounded-md text-slate-300"
       />
       <IconButton
         icon={<Redo2 className="h-3.5 w-3.5" />}
         variant="ghost"
         disabled
-        title="Redo (coming soon)"
+        title={t('warehouse.action.redoSoon')}
         className="h-8 w-8 rounded-md text-slate-300"
       />
 
@@ -168,7 +170,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         variant="ghost"
         disabled={!actions.canValidateDraft || isBusy}
         onClick={handleValidate}
-        title="Validate layout"
+        title={t('warehouse.action.validateLayout')}
         className="h-8 w-8 rounded-md disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
       />
@@ -178,12 +180,12 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         size="sm"
         disabled={!actions.canSaveDraft || isBusy || persistenceStatus === 'conflict'}
         onClick={handleSaveDraft}
-        title="Save draft"
+        title={t('warehouse.action.saveDraft')}
         className="h-8 gap-1.5 rounded-md px-2.5 text-sm font-medium disabled:opacity-30"
         style={{ color: 'var(--text-muted)' }}
       >
         <Save className="h-3.5 w-3.5" />
-        Save
+        {t('warehouse.action.save')}
       </Button>
 
       <Button
@@ -195,7 +197,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
         style={{ background: 'var(--accent)' }}
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Publish
+        {t('warehouse.action.publish')}
       </Button>
     </ToolRail>
   );

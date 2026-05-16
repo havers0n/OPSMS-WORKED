@@ -4,15 +4,17 @@ import {
   type WarehouseViewMode
 } from '@/warehouse/state/view-mode';
 import { Button } from '@/shared/ui/button';
+import { useT } from '@/shared/i18n';
 import { ViewStageSwitcher } from './view-stage-switcher';
 
-const VIEW_MODES: { id: WarehouseViewMode; label: string }[] = [
-  { id: 'view', label: 'View' },
-  { id: 'storage', label: 'Storage' },
-  { id: 'layout', label: 'Layout' },
+const VIEW_MODES: { id: WarehouseViewMode; labelKey: 'warehouse.view.mode.view' | 'warehouse.view.mode.storage' | 'warehouse.view.mode.layout' }[] = [
+  { id: 'view', labelKey: 'warehouse.view.mode.view' },
+  { id: 'storage', labelKey: 'warehouse.view.mode.storage' },
+  { id: 'layout', labelKey: 'warehouse.view.mode.layout' },
 ];
 
 export function ViewModeSwitcher() {
+  const t = useT();
   const viewMode = useWarehouseViewMode();
   const setViewMode = useSetWarehouseViewMode();
 
@@ -42,7 +44,7 @@ export function ViewModeSwitcher() {
                   : { color: 'var(--text-muted)', cursor: 'pointer' }
               }
             >
-              {mode.label}
+              {t(mode.labelKey)}
             </Button>
           );
         })}

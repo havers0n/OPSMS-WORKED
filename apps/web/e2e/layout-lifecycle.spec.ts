@@ -41,7 +41,7 @@ async function selectFirstRack(page: Page) {
 }
 
 async function openFirstRackGeometry(page: Page) {
-  await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
+  await expect(page.getByRole('region', { name: /^(Warehouse editor|עורך המחסן)$/ })).toBeVisible();
   await selectFirstRack(page);
   await page.getByTestId('geometry-advanced-toggle').click();
   const totalLengthInput = page.getByLabel('Total Length');
@@ -66,23 +66,23 @@ test.describe('live draft lifecycle', () => {
     });
 
     await signInToWarehouse(page);
-    await page.getByLabel('Floor').selectOption(floor.id);
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(floor.id);
     const totalLengthInput = await openFirstRackGeometry(page);
 
     const saveResponse = waitForLayoutDraftSave(page);
     await totalLengthInput.fill('5.7');
     await totalLengthInput.fill('5.8');
-    await expect(page.getByText('Unsaved')).toBeVisible();
+    await expect(page.getByText(/^(Unsaved|לא נשמר)$/)).toBeVisible();
     await saveResponse;
-    await expect(page.getByText('Saved')).toBeVisible();
+    await expect(page.getByText(/^(Saved|נשמר)$/)).toBeVisible();
     await expect(totalLengthInput).toHaveValue('5.8');
     expect(saveRequestCount).toBe(1);
 
-    await page.getByRole('button', { name: /Validate/i }).click();
-    await expect(page.getByText('Valid')).toBeVisible();
+    await page.getByRole('button', { name: /^(Validate|אמת פריסה)$/i }).click();
+    await expect(page.getByText(/^(Valid|תקין)$/)).toBeVisible();
 
-    await page.getByRole('button', { name: /Publish/i }).click();
-    await expect(page.getByText(/Published/i)).toBeVisible();
+    await page.getByRole('button', { name: /^(Publish|פרסם)$/i }).click();
+    await expect(page.getByText(/(Published|פורסם)/i)).toBeVisible();
   });
 
   test('dirty draft floor switch is guarded and only switches after confirmation', async ({ page }) => {
@@ -90,26 +90,26 @@ test.describe('live draft lifecycle', () => {
     const second = await seedAdditionalFloorDraft(first.site.id, { floorCode: 'F2', floorName: 'Overflow Floor', sortOrder: 1, rackDisplayCode: '09' });
 
     await signInToWarehouse(page);
-    await page.getByLabel('Floor').selectOption(first.floor.id);
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(first.floor.id);
     const firstFloorTotalLengthInput = await openFirstRackGeometry(page);
 
     await firstFloorTotalLengthInput.fill('6.1');
-    await expect(page.getByText('Unsaved')).toBeVisible();
+    await expect(page.getByText(/^(Unsaved|לא נשמר)$/)).toBeVisible();
 
     page.once('dialog', async (dialog) => {
       await dialog.dismiss();
     });
-    await page.getByLabel('Floor').selectOption(second.floor.id);
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(second.floor.id);
 
-    await expect(page.getByLabel('Floor')).toHaveValue(first.floor.id);
+    await expect(page.getByLabel(/^(Floor|רצפה)$/)).toHaveValue(first.floor.id);
     await expect(firstFloorTotalLengthInput).toHaveValue('6.1');
 
     page.once('dialog', async (dialog) => {
       await dialog.accept();
     });
-    await page.getByLabel('Floor').selectOption(second.floor.id);
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(second.floor.id);
 
-    await expect(page.getByLabel('Floor')).toHaveValue(second.floor.id);
+    await expect(page.getByLabel(/^(Floor|רצפה)$/)).toHaveValue(second.floor.id);
     const secondFloorTotalLengthInput = await openFirstRackGeometry(page);
     await expect(secondFloorTotalLengthInput).toHaveValue('5');
   });
@@ -131,13 +131,13 @@ test.describe('live draft lifecycle', () => {
     });
 
     await signInToWarehouse(page);
-    await page.getByLabel('Floor').selectOption(floor.id);
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(floor.id);
     const totalLengthInput = await openFirstRackGeometry(page);
 
     const conflictResponse = waitForLayoutDraftSave(page);
     await totalLengthInput.fill('5.7');
     await conflictResponse;
-    await expect(page.getByText('Conflict')).toBeVisible();
+    await expect(page.getByText(/^(Conflict|התנגשות)$/)).toBeVisible();
 
     const secondSaveAttempt = page
       .waitForResponse(isLayoutDraftSaveResponse, { timeout: 2500 })
@@ -174,12 +174,12 @@ test.describe('live draft lifecycle', () => {
     });
 
     await signInToWarehouse(page);
-    await page.getByLabel('Floor').selectOption(floor.id);
-    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
-    await expect(page.getByText('Saved')).toBeVisible();
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(floor.id);
+    await expect(page.getByRole('region', { name: /^(Warehouse editor|עורך המחסן)$/ })).toBeVisible();
+    await expect(page.getByText(/^(Saved|נשמר)$/)).toBeVisible();
 
-    await page.getByRole('button', { name: /Publish/i }).click();
+    await page.getByRole('button', { name: /^(Publish|פרסם)$/i }).click();
     await expect(page.getByText('Rack R-03 has overlapping cells.')).toBeVisible();
-    await expect(page.getByText('Save failed')).not.toBeVisible();
+    await expect(page.getByText(/^(Save failed|השמירה נכשלה)$/)).not.toBeVisible();
   });
 });

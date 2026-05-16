@@ -21,11 +21,12 @@ import {
 } from '@/warehouse/state/view-mode';
 import { useSites } from '@/entities/site/api/use-sites';
 import { routes } from '@/shared/config/routes';
+import { useT, type TranslationKey } from '@/shared/i18n';
 import { ViewStageSwitcher } from '@/warehouse/shell/ui/view-stage-switcher';
 
-const VIEW_MODES: { id: WarehouseViewMode; label: string }[] = [
-  { id: 'view', label: 'View' },
-  { id: 'storage', label: 'Storage' }
+const VIEW_MODES: { id: WarehouseViewMode; labelKey: TranslationKey }[] = [
+  { id: 'view', labelKey: 'warehouse.view.mode.view' },
+  { id: 'storage', labelKey: 'warehouse.view.mode.storage' }
 ];
 
 type LocateFeedback = {
@@ -47,6 +48,7 @@ export function ViewTopBar({
   const toggle = useToggleDrawer();
   const isCollapsed = useIsDrawerCollapsed();
   const navigate = useNavigate();
+  const t = useT();
   const { user, signOut } = useAuth();
   const [locateQuery, setLocateQuery] = useState('');
 
@@ -91,13 +93,13 @@ export function ViewTopBar({
       {/* ── Left: nav toggle + branding + site/floor ─────────────────── */}
       <div className="flex h-full items-center">
         <div
-          className="flex h-full items-center gap-2 border-r px-3"
+          className="flex h-full items-center gap-2 border-e px-3"
           style={{ borderColor: 'var(--border-muted)' }}
         >
           <button
             type="button"
             onClick={toggle}
-            title={isCollapsed ? 'Open navigation' : 'Close navigation'}
+            title={isCollapsed ? t('app.navigation.open') : t('app.navigation.close')}
             className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
             <Menu className="h-4 w-4" />
@@ -105,41 +107,41 @@ export function ViewTopBar({
           <span className="text-[11px] font-black tracking-widest" style={{ color: 'var(--accent)' }}>
             W
           </span>
-          <span className="text-sm font-semibold text-slate-700">Warehouse Ops</span>
+          <span className="text-sm font-semibold text-slate-700">{t('app.brand.name')}</span>
         </div>
 
         <div
-          className="flex h-full items-center gap-1 border-r px-3"
+          className="flex h-full items-center gap-1 border-e px-3"
           style={{ borderColor: 'var(--border-muted)' }}
         >
           <select
-            aria-label="Site"
+            aria-label={t('warehouse.field.site')}
             value={activeSiteId ?? ''}
             onChange={(e) => handleSiteChange(e.target.value)}
             className="h-7 rounded-md border-0 bg-transparent px-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400/40"
             style={{ maxWidth: '120px' }}
           >
-            <option value="">Site…</option>
+            <option value="">{t('warehouse.context.sitePlaceholder')}</option>
             {sites.map((site) => (
-              <option key={site.id} value={site.id}>
+              <option key={site.id} value={site.id} dir="ltr">
                 {site.code}
               </option>
             ))}
           </select>
 
-          <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" />
+          <ChevronRight className="h-3 w-3 shrink-0 rotate-180 text-slate-300" />
 
           <select
-            aria-label="Floor"
+            aria-label={t('warehouse.field.floor')}
             value={activeFloorId ?? ''}
             onChange={(e) => handleFloorChange(e.target.value)}
             disabled={!activeSiteId}
             className="h-7 rounded-md border-0 bg-transparent px-1 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:text-slate-400"
             style={{ maxWidth: '100px' }}
           >
-            <option value="">Floor…</option>
+            <option value="">{t('warehouse.context.floorPlaceholder')}</option>
             {floors.map((floor) => (
-              <option key={floor.id} value={floor.id}>
+              <option key={floor.id} value={floor.id} dir="ltr">
                 {floor.code}
               </option>
             ))}
@@ -172,7 +174,7 @@ export function ViewTopBar({
                     : { color: 'var(--text-muted)', cursor: 'pointer' }
                 }
               >
-                {mode.label}
+                {t(mode.labelKey)}
               </button>
             );
           })}
@@ -186,12 +188,13 @@ export function ViewTopBar({
           }}
         >
           <input
-            aria-label="Locate cell address"
-            placeholder="Locate cell address"
+            aria-label={t('warehouse.locate.cellAddressLabel')}
+            placeholder={t('warehouse.locate.cellAddressLabel')}
             value={locateQuery}
             onChange={(event) => setLocateQuery(event.target.value)}
             disabled={locateDisabled}
-            className="h-7 w-48 rounded-md border px-2 text-xs text-slate-700 outline-none focus:ring-1 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:text-slate-400"
+            dir="ltr"
+            className="h-7 w-48 rounded-md border px-2 text-start text-xs text-slate-700 outline-none focus:ring-1 focus:ring-blue-400/40 disabled:cursor-not-allowed disabled:text-slate-400"
             style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
           />
           <button
@@ -200,10 +203,12 @@ export function ViewTopBar({
             className="flex h-7 items-center rounded-md border px-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
             style={{ borderColor: 'var(--border-muted)', background: 'var(--surface-primary)' }}
           >
-            Locate
+            {t('warehouse.locate.locate')}
           </button>
           {locateFeedback.message && (
-            <span className={`text-xs ${feedbackColor}`}>{locateFeedback.message}</span>
+            <span className={`text-xs ${feedbackColor}`} dir="auto">
+              {locateFeedback.message}
+            </span>
           )}
         </form>
       </div>
@@ -211,7 +216,7 @@ export function ViewTopBar({
       {/* ── Right: Open Editor + user ─────────────────────────────────── */}
       <div className="flex h-full items-center">
         <div
-          className="flex h-full items-center gap-2 border-l px-3"
+          className="flex h-full items-center gap-2 border-s px-3"
           style={{ borderColor: 'var(--border-muted)' }}
         >
           <button
@@ -221,15 +226,15 @@ export function ViewTopBar({
             style={{ background: 'var(--accent)' }}
           >
             <Pencil className="h-3.5 w-3.5" />
-            Open Editor
+            {t('warehouse.action.openEditor')}
           </button>
         </div>
 
         <div
-          className="flex h-full items-center gap-3 border-l px-3"
+          className="flex h-full items-center gap-3 border-s px-3"
           style={{ borderColor: 'var(--border-muted)' }}
         >
-          <div className="hidden flex-col items-end xl:flex">
+          <div className="hidden flex-col items-end xl:flex" dir="auto">
             <div className="text-xs text-slate-700">{user?.email ?? ''}</div>
           </div>
           <button
@@ -238,7 +243,7 @@ export function ViewTopBar({
             className="flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-muted)] bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50"
           >
             <LogOut className="h-3.5 w-3.5" />
-            Sign Out
+            {t('auth.signOut.button')}
           </button>
         </div>
       </div>

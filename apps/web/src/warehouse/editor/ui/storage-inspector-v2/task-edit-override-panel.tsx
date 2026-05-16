@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ActiveContainerProduct } from './helpers';
 import type { ProductLocationRoleValue } from '@wos/domain';
+import { useT } from '@/shared/i18n';
 import {
+  TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
   inspectorHeaderClassName,
   inspectorShellClassName
@@ -40,6 +42,7 @@ export function EditOverrideTaskPanel({
   onSave,
   onClear
 }: EditOverrideTaskPanelProps) {
+  const t = useT();
   const [selectedRole, setSelectedRole] = useState<ProductLocationRoleValue>(defaultRole);
 
   useEffect(() => {
@@ -50,7 +53,7 @@ export function EditOverrideTaskPanel({
     <div
       className={inspectorShellClassName}
       role="complementary"
-      aria-label="Edit override for location"
+      aria-label={t('storage.action.editOverride')}
       data-testid="task-edit-override-panel"
     >
       <div className={inspectorHeaderClassName}>
@@ -58,38 +61,32 @@ export function EditOverrideTaskPanel({
           onClick={onCancel}
           disabled={isSubmitting}
           className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
-          aria-label="Cancel edit override"
+          aria-label={t('storage.action.cancelEditOverride')}
         >
-          Cancel
+          {t('storage.action.cancel')}
         </button>
-        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap leading-relaxed">
-          <span>{rackDisplayCode}</span>
-          <span className="text-gray-300">/</span>
-          <span>Level {activeLevel}</span>
-          <span className="text-gray-300">/</span>
-          <span className="font-mono text-gray-900 font-medium">{locationCode}</span>
-        </div>
-        <p className="text-sm font-semibold text-gray-900 mt-1">Edit explicit override</p>
+        <TaskPanelBreadcrumb rackDisplayCode={rackDisplayCode} activeLevel={activeLevel} locationCode={locationCode} />
+        <p className="text-sm font-semibold text-gray-900 mt-1">{t('storage.action.editOverride')}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs space-y-1">
-          <p className="font-medium text-gray-700">Product + location context</p>
-          <p className="font-mono text-gray-900">{product.sku ?? product.name}</p>
+          <p className="font-medium text-gray-700">{t('storage.field.productLocationContext')}</p>
+          <p className="font-mono text-gray-900" dir="ltr">{product.sku ?? product.name}</p>
           <p className="text-gray-600">{product.name}</p>
           <p className="text-gray-600">
-            Structural default: <span className="font-medium">{structuralDefaultText}</span>
+            {t('storage.field.structuralDefault')}: <span className="font-medium">{structuralDefaultText}</span>
           </p>
           <p className="text-gray-600">
-            Effective role: <span className="font-medium">{effectiveRoleText}</span>
+            {t('storage.field.effectiveRole')}: <span className="font-medium">{effectiveRoleText}</span>
           </p>
           <p className="text-gray-600">
-            Source: <span className="font-medium">{sourceText}</span>
+            {t('storage.field.source')}: <span className="font-medium">{sourceText}</span>
           </p>
         </div>
 
         <fieldset className="space-y-2" data-testid="override-role-selector">
-          <legend className="text-xs font-medium text-gray-700">Explicit override</legend>
+          <legend className="text-xs font-medium text-gray-700">{t('storage.field.explicitOverride')}</legend>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="radio"
@@ -98,7 +95,7 @@ export function EditOverrideTaskPanel({
               onChange={() => setSelectedRole('primary_pick')}
               disabled={isSubmitting}
             />
-            Primary pick
+            {t('storage.role.primaryPickSentence')}
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
@@ -108,7 +105,7 @@ export function EditOverrideTaskPanel({
               onChange={() => setSelectedRole('reserve')}
               disabled={isSubmitting}
             />
-            Reserve
+            {t('storage.role.reserve')}
           </label>
         </fieldset>
 
@@ -124,9 +121,9 @@ export function EditOverrideTaskPanel({
           onClick={() => void onSave(selectedRole)}
           disabled={isSubmitting}
           className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Save override for location"
+          aria-label={t('storage.action.saveOverride')}
         >
-          {isSubmitting ? 'Saving...' : 'Save override'}
+          {isSubmitting ? t('storage.action.saving') : t('storage.action.saveOverride')}
         </button>
         {hasExplicitOverride && (
           <button
@@ -135,7 +132,7 @@ export function EditOverrideTaskPanel({
             className="px-3 py-2 text-sm border border-red-300 text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
             data-testid="clear-override-action"
           >
-            Clear override
+            {t('storage.action.clearOverride')}
           </button>
         )}
         <button
@@ -143,7 +140,7 @@ export function EditOverrideTaskPanel({
           disabled={isSubmitting}
           className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
         >
-          Cancel
+          {t('storage.action.cancel')}
         </button>
       </div>
     </div>

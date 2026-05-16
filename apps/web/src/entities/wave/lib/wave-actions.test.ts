@@ -6,17 +6,18 @@ import {
   getWaveSecondaryAction
 } from './wave-actions';
 import type { WaveSummary } from '@wos/domain';
+import { translate } from '@/shared/i18n';
 
 describe('Wave Workflow Actions', () => {
   describe('getWaveStatusLabel', () => {
     it('returns correct status labels for all wave statuses', () => {
-      expect(getWaveStatusLabel('draft')).toBe('Draft');
-      expect(getWaveStatusLabel('ready')).toBe('Ready');
-      expect(getWaveStatusLabel('released')).toBe('Released');
-      expect(getWaveStatusLabel('in_progress')).toBe('In progress');
-      expect(getWaveStatusLabel('completed')).toBe('Completed');
-      expect(getWaveStatusLabel('partial')).toBe('Partial');
-      expect(getWaveStatusLabel('closed')).toBe('Closed');
+      expect(getWaveStatusLabel('draft')).toBe(translate('operations.wave.status.draft'));
+      expect(getWaveStatusLabel('ready')).toBe(translate('operations.wave.status.ready'));
+      expect(getWaveStatusLabel('released')).toBe(translate('operations.wave.status.released'));
+      expect(getWaveStatusLabel('in_progress')).toBe(translate('operations.wave.status.inProgress'));
+      expect(getWaveStatusLabel('completed')).toBe(translate('operations.wave.status.completed'));
+      expect(getWaveStatusLabel('partial')).toBe(translate('operations.wave.status.partial'));
+      expect(getWaveStatusLabel('closed')).toBe(translate('operations.wave.status.closed'));
     });
   });
 
@@ -49,8 +50,8 @@ describe('Wave Workflow Actions', () => {
 
       const action = getWavePrimaryAction(draftEmptyWave);
       expect(action.target).toBe('ready');
-      expect(action.label).toBe('Mark ready');
-      expect(action.reason).toBe('Add at least one order first.');
+      expect(action.label).toBe(translate('operations.wave.action.markReady'));
+      expect(action.reason).toBe(translate('operations.wave.reason.addOrderFirst'));
     });
 
     it('allows marking ready when orders exist', () => {
@@ -62,7 +63,7 @@ describe('Wave Workflow Actions', () => {
 
       const action = getWavePrimaryAction(draftWaveWithOrders);
       expect(action.target).toBe('ready');
-      expect(action.label).toBe('Mark ready');
+      expect(action.label).toBe(translate('operations.wave.action.markReady'));
       expect(action.reason).toBeNull();
     });
   });
@@ -77,8 +78,8 @@ describe('Wave Workflow Actions', () => {
 
       const action = getWavePrimaryAction(readyWaveWithBlockers);
       expect(action.target).toBe('released');
-      expect(action.label).toBe('Release wave');
-      expect(action.reason).toBe('Not all orders are ready.');
+      expect(action.label).toBe(translate('operations.wave.action.releaseWave'));
+      expect(action.reason).toBe(translate('operations.wave.reason.ordersNotReady'));
     });
 
     it('allows release when all orders are ready', () => {
@@ -90,7 +91,7 @@ describe('Wave Workflow Actions', () => {
 
       const action = getWavePrimaryAction(readyWaveNoBlockers);
       expect(action.target).toBe('released');
-      expect(action.label).toBe('Release wave');
+      expect(action.label).toBe(translate('operations.wave.action.releaseWave'));
       expect(action.reason).toBeNull();
     });
   });
@@ -105,7 +106,7 @@ describe('Wave Workflow Actions', () => {
 
       const action = getWavePrimaryAction(releasedWave);
       expect(action.target).toBe('closed');
-      expect(action.label).toBe('Close wave');
+      expect(action.label).toBe(translate('operations.wave.action.closeWave'));
       expect(action.reason).toBeNull();
     });
   });
@@ -157,7 +158,7 @@ describe('Wave Workflow Actions', () => {
       const readyWave: Pick<WaveSummary, 'status'> = { status: 'ready' };
       const action = getWaveSecondaryAction(readyWave);
       expect(action.target).toBe('draft');
-      expect(action.label).toBe('Rollback to draft');
+      expect(action.label).toBe(translate('operations.wave.action.rollbackToDraft'));
     });
 
     it('blocks rollback for all other statuses', () => {
@@ -181,7 +182,7 @@ describe('Wave Workflow Actions', () => {
 
       it('label is wave-owned action', () => {
         const action = getWavePrimaryAction(draftWave);
-        expect(action.label).toBe('Mark ready');
+        expect(action.label).toBe(translate('operations.wave.action.markReady'));
         // NOT "Commit and reserve" (that's order's wording)
         expect(action.label).not.toBe('Commit and reserve');
       });
@@ -193,7 +194,7 @@ describe('Wave Workflow Actions', () => {
           blockingOrderCount: 0
         };
         const action = getWavePrimaryAction(emptyWave);
-        expect(action.reason).toContain('order');
+        expect(action.reason).toBe(translate('operations.wave.reason.addOrderFirst'));
       });
     });
 
@@ -205,8 +206,7 @@ describe('Wave Workflow Actions', () => {
           blockingOrderCount: 2
         };
         const action = getWavePrimaryAction(readyWaveWithBlockers);
-        expect(action.reason).toContain('orders');
-        expect(action.reason).toContain('ready');
+        expect(action.reason).toBe(translate('operations.wave.reason.ordersNotReady'));
         // NOT about individual order's release readiness
         expect(action.reason).not.toContain('Release is controlled');
       });
@@ -237,7 +237,7 @@ describe('Wave Workflow Actions', () => {
       const label1 = getWaveStatusLabel('released');
       const label2 = getWaveStatusLabel('released');
       expect(label1).toBe(label2);
-      expect(label1).toBe('Released');
+      expect(label1).toBe(translate('operations.wave.status.released'));
     });
   });
 

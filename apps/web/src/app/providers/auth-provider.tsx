@@ -4,6 +4,7 @@ import { resetLocalWorkspaceState } from '@/app/session/reset-local-workspace-st
 import { resolveAuthenticatedUser, signInWithPassword, signOutSession, signUpWithPassword } from '@/shared/api/supabase/auth';
 import { useSupabaseAuthState } from '@/shared/api/supabase/use-supabase-auth-state';
 import { resolveWorkspaceSession, useWorkspaceSession, type TenantMembership } from '@/shared/api/bff/use-workspace-session';
+import { useT } from '@/shared/i18n';
 
 type AuthContextValue = {
   isReady: boolean;
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const t = useT();
   const supabaseAuth = useSupabaseAuthState();
   const workspaceSession = useWorkspaceSession(supabaseAuth.user);
   const [state, setState] = useState<AuthContextValue>({
@@ -87,8 +89,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6">
         <div className="w-full max-w-lg rounded-[22px] border border-red-200 bg-white p-8 text-center shadow-[var(--shadow-soft)]">
-          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Authentication</div>
-          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">Failed to start authenticated workspace.</div>
+          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">{t('auth.startup.eyebrow')}</div>
+          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{t('auth.startup.errorTitle')}</div>
           <div className="mt-2 text-sm text-[var(--text-muted)]">{startupError}</div>
         </div>
       </div>
@@ -99,9 +101,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)] px-6">
         <div className="w-full max-w-lg rounded-[22px] border border-[var(--border-muted)] bg-white p-8 text-center shadow-[var(--shadow-soft)]">
-          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">Authentication</div>
-          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">Signing in to the warehouse workspace...</div>
-          <div className="mt-2 text-sm text-[var(--text-muted)]">Initializing the local Supabase session and resolving the active tenant workspace.</div>
+          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">{t('auth.startup.eyebrow')}</div>
+          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{t('auth.startup.loadingTitle')}</div>
+          <div className="mt-2 text-sm text-[var(--text-muted)]">{t('auth.startup.loadingDescription')}</div>
         </div>
       </div>
     );
@@ -118,7 +120,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const user = result.data.user ?? (await resolveAuthenticatedUser());
     if (!user) {
-      throw new Error('Authenticated user session was not established.');
+      throw new Error(t('auth.error.sessionMissing'));
     }
 
     await resolveWorkspaceSession();
@@ -135,7 +137,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const user = result.data.user ?? (await resolveAuthenticatedUser());
     if (!user) {
-      throw new Error('Authenticated user session was not established.');
+      throw new Error(t('auth.error.sessionMissing'));
     }
 
     await resolveWorkspaceSession();

@@ -4,17 +4,19 @@ import {
   useWarehouseViewStage,
   type WarehouseViewStage
 } from '@/warehouse/state/view-mode';
+import { useT } from '@/shared/i18n';
 
 const VIEW_STAGES: Array<{
   id: WarehouseViewStage;
-  label: string;
+  labelKey: 'warehouse.view.stage.map' | 'warehouse.view.stage.pickingPlan';
   icon: typeof Map;
 }> = [
-  { id: 'map', label: 'Map', icon: Map },
-  { id: 'picking-plan', label: 'Picking plan', icon: Route }
+  { id: 'map', labelKey: 'warehouse.view.stage.map', icon: Map },
+  { id: 'picking-plan', labelKey: 'warehouse.view.stage.pickingPlan', icon: Route }
 ];
 
 export function ViewStageSwitcher() {
+  const t = useT();
   const viewStage = useWarehouseViewStage();
   const setViewStage = useSetWarehouseViewStage();
 
@@ -36,7 +38,7 @@ export function ViewStageSwitcher() {
             type="button"
             onClick={() => setViewStage(stage.id)}
             aria-pressed={isActive}
-            title={stage.label}
+            title={t(stage.labelKey)}
             className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors"
             style={
               isActive
@@ -49,7 +51,7 @@ export function ViewStageSwitcher() {
             }
           >
             <Icon className="h-3.5 w-3.5" />
-            {stage.label}
+            {t(stage.labelKey)}
           </button>
         );
       })}

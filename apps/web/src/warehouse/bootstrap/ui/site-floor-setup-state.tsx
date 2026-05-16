@@ -6,8 +6,10 @@ import { useSites } from '@/entities/site/api/use-sites';
 import { useCreateFloor } from '@/features/floor-create/model/use-create-floor';
 import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useCreateSite } from '@/features/site-create/model/use-create-site';
+import { formatDateTime, useT } from '@/shared/i18n';
 
 export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
+  const t = useT();
   const [newSiteCode, setNewSiteCode] = useState('');
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteTimezone, setNewSiteTimezone] = useState('Asia/Jerusalem');
@@ -55,53 +57,53 @@ export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
   return (
     <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
       <section className="rounded-[24px] border border-[var(--border-muted)] bg-[var(--surface-primary)] p-8 shadow-[var(--shadow-panel)]">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">Select or Create Site and Floor</div>
-        <h2 className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">Use a live site and floor context before entering the editor.</h2>
-        <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">Use the top bar to switch existing site and floor context. Create missing records here, then create a draft explicitly for the selected floor.</p>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">{t('warehouse.select.eyebrow')}</div>
+        <h2 className="mt-3 text-3xl font-semibold text-[var(--text-primary)]">{t('warehouse.select.title')}</h2>
+        <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{t('warehouse.select.description')}</p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-4">
           <div className="rounded-[18px] border border-[var(--border-muted)] bg-white p-5 shadow-sm">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Current Selection</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{t('warehouse.selection.current')}</div>
             <div className="mt-4 space-y-2 text-sm text-slate-600">
-              <div>Sites: {sites.length}</div>
-              <div>Floors in selected site: {floors.length}</div>
-              <div>Active floor: {activeFloorId ? 'selected' : 'missing'}</div>
-              <div>Draft: {hasDraft ? 'ready' : 'missing'}</div>
+              <div>{t('warehouse.selection.sites', { count: sites.length })}</div>
+              <div>{t('warehouse.selection.floors', { count: floors.length })}</div>
+              <div>{t('warehouse.selection.activeFloor', { state: activeFloorId ? t('warehouse.state.selected') : t('warehouse.state.missing') })}</div>
+              <div>{t('warehouse.selection.draft', { state: hasDraft ? t('warehouse.state.ready') : t('warehouse.state.missing') })}</div>
             </div>
             {!hasDraft && activeFloorId && (
               <button type="button" disabled={createDraft.isPending} onClick={() => void createDraft.mutateAsync(activeFloorId)} className="mt-5 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
-                Create First Draft for Selected Floor
+                {t('warehouse.action.createFirstDraft')}
               </button>
             )}
           </div>
 
           <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Why this gate exists</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{t('warehouse.gate.why.title')}</div>
             <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
-              The editor only opens against a real floor-scoped draft. This keeps layout truth explicit and prevents phantom canvas state outside the draft lifecycle.
+              {t('warehouse.gate.why.description')}
             </div>
           </div>
 
           <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Workflow</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{t('warehouse.gate.workflow.title')}</div>
             <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
-              Pick or create site and floor, then create the draft intentionally. Save, validate, and publish stay in the top bar once the editor opens.
+              {t('warehouse.gate.workflow.description')}
             </div>
           </div>
 
           <div className="rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Published Layout</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{t('warehouse.published.title')}</div>
             {!activeFloorId ? (
-              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">Select a floor to inspect the latest published layout snapshot.</div>
+              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{t('warehouse.published.selectFloor')}</div>
             ) : publishedLayoutSummary.isLoading ? (
-              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">Loading latest published layout snapshot...</div>
+              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{t('warehouse.published.loading')}</div>
             ) : publishedLayoutSummary.data ? (
               <div className="mt-3 space-y-2 text-sm text-[var(--text-muted)]">
-                <div>Version: {publishedLayoutSummary.data.versionNo}</div>
-                <div>Generated cells: {publishedLayoutSummary.data.cellCount}</div>
-                <div>Published at: {new Date(publishedLayoutSummary.data.publishedAt).toLocaleString()}</div>
-                <div className="pt-1 text-xs uppercase tracking-[0.18em] text-slate-500">Sample addresses</div>
-                <div className="flex flex-wrap gap-2">
+                <div>{t('warehouse.published.version', { version: publishedLayoutSummary.data.versionNo })}</div>
+                <div>{t('warehouse.published.generatedCells', { count: publishedLayoutSummary.data.cellCount })}</div>
+                <div>{t('warehouse.published.publishedAt', { value: formatDateTime(publishedLayoutSummary.data.publishedAt) })}</div>
+                <div className="pt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{t('warehouse.published.sampleAddresses')}</div>
+                <div className="flex flex-wrap gap-2" dir="ltr">
                   {publishedLayoutSummary.data.sampleAddresses.map((address) => (
                     <span key={address} className="rounded-full border border-[var(--border-muted)] bg-white px-2.5 py-1 font-mono text-xs text-slate-700 shadow-sm">
                       {address}
@@ -110,7 +112,7 @@ export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
                 </div>
               </div>
             ) : (
-              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">No published layout exists for the selected floor yet.</div>
+              <div className="mt-3 text-sm leading-6 text-[var(--text-muted)]">{t('warehouse.published.empty')}</div>
             )}
           </div>
         </div>
@@ -118,24 +120,24 @@ export function SiteFloorSetupState({ hasDraft }: { hasDraft: boolean }) {
 
       <section className="grid gap-4 rounded-[24px] border border-[var(--border-muted)] bg-white p-8 shadow-[var(--shadow-soft)]">
         <div className="grid gap-4 rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
-          <div className="text-sm font-medium text-slate-900">Create Site</div>
+          <div className="text-sm font-medium text-slate-900">{t('warehouse.action.createSite')}</div>
           <div className="grid gap-3">
-            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder="Site code" value={newSiteCode} onChange={(event) => setNewSiteCode(event.target.value)} />
-            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder="Site name" value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} />
-            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder="Timezone" value={newSiteTimezone} onChange={(event) => setNewSiteTimezone(event.target.value)} />
+            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder={t('warehouse.placeholder.siteCode')} value={newSiteCode} onChange={(event) => setNewSiteCode(event.target.value)} dir="ltr" />
+            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder={t('warehouse.placeholder.siteName')} value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} dir="auto" />
+            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder={t('warehouse.placeholder.timezone')} value={newSiteTimezone} onChange={(event) => setNewSiteTimezone(event.target.value)} dir="ltr" />
             <button type="button" disabled={isBusy || !newSiteCode.trim() || !newSiteName.trim() || !newSiteTimezone.trim()} onClick={() => void handleCreateSite()} className="rounded-xl border border-[var(--border-muted)] bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
-              Create Site
+              {t('warehouse.action.createSite')}
             </button>
           </div>
         </div>
 
         <div className="grid gap-4 rounded-[18px] border border-[var(--border-muted)] bg-[var(--surface-secondary)] p-5">
-          <div className="text-sm font-medium text-slate-900">Create Floor</div>
+          <div className="text-sm font-medium text-slate-900">{t('warehouse.action.createFloor')}</div>
           <div className="grid gap-3">
-            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder="Floor code" value={newFloorCode} onChange={(event) => setNewFloorCode(event.target.value)} />
-            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder="Floor name" value={newFloorName} onChange={(event) => setNewFloorName(event.target.value)} />
+            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder={t('warehouse.placeholder.floorCode')} value={newFloorCode} onChange={(event) => setNewFloorCode(event.target.value)} dir="ltr" />
+            <input className="rounded-xl border border-[var(--border-muted)] bg-white px-3 py-2.5 text-sm shadow-sm" placeholder={t('warehouse.placeholder.floorName')} value={newFloorName} onChange={(event) => setNewFloorName(event.target.value)} dir="auto" />
             <button type="button" disabled={isBusy || !activeSiteId || !newFloorCode.trim() || !newFloorName.trim()} onClick={() => void handleCreateFloor()} className="rounded-xl border border-[var(--border-muted)] bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50">
-              Create Floor in Active Site
+              {t('warehouse.action.createFloorInActiveSite')}
             </button>
           </div>
         </div>

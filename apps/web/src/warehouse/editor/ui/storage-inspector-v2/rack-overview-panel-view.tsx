@@ -1,4 +1,5 @@
 import { RackStatusSummary, type RackStatusSummaryProps } from '@/entities/rack/ui/rack-status-summary';
+import { useT } from '@/shared/i18n';
 import {
   inspectorBodyPaddingClassName,
   inspectorScrollBodyClassName,
@@ -25,11 +26,13 @@ export type RackOverviewPanelViewProps =
     };
 
 export function RackOverviewPanelView(props: RackOverviewPanelViewProps) {
+  const t = useT();
+
   if (props.status === 'loading') {
     return (
       <div className={inspectorShellClassName}>
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <p className="text-sm text-gray-400">{props.loadingText ?? 'Loading rack...'}</p>
+          <p className="text-sm text-gray-400">{props.loadingText ?? t('storage.state.loadingRack')}</p>
         </div>
         <InspectorFooter />
       </div>
@@ -40,7 +43,7 @@ export function RackOverviewPanelView(props: RackOverviewPanelViewProps) {
     return (
       <div className={inspectorShellClassName}>
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <p className="text-sm text-red-500">{props.errorText ?? 'Failed to load rack data'}</p>
+          <p className="text-sm text-red-500">{props.errorText ?? t('storage.state.failedRack')}</p>
         </div>
         <InspectorFooter />
       </div>
@@ -51,7 +54,7 @@ export function RackOverviewPanelView(props: RackOverviewPanelViewProps) {
     return (
       <div className={inspectorShellClassName}>
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <p className="text-sm text-gray-400">{props.emptyText ?? 'Select a rack to inspect.'}</p>
+          <p className="text-sm text-gray-400">{props.emptyText ?? t('storage.state.selectRack')}</p>
         </div>
         <InspectorFooter />
       </div>

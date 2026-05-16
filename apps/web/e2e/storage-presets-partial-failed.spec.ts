@@ -8,6 +8,7 @@ import { seedStoragePresetPartialFailedScenario } from './support/local-supabase
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const artifactDir = path.resolve(__dirname, '../../../output/playwright/storage-presets-p1');
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test.describe('storage preset partial materialization', () => {
   test('selects the shell and shows backend reason after partial_failed', async ({ page }) => {
@@ -17,16 +18,22 @@ test.describe('storage preset partial materialization', () => {
 
     await signInToWarehouse(page);
     await page.goto(`/warehouse/view?floor=${encodeURIComponent(seed.floor.id)}`);
-    await page.getByLabel('Site').selectOption(seed.site.id);
-    await page.getByLabel('Floor').selectOption(seed.floor.id);
-    await expect(page.getByRole('region', { name: 'Published warehouse layout' })).toBeVisible();
+    await page.getByLabel(/^(Site|אתר)$/).selectOption(seed.site.id);
+    await page.getByLabel(/^(Floor|רצפה)$/).selectOption(seed.floor.id);
+    await expect(
+      page.getByRole('region', { name: /^(Published warehouse layout|פריסת מחסן שפורסמה)$/ })
+    ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Storage' }).click();
-    await expect(page.getByRole('region', { name: 'Storage workspace' })).toBeVisible();
+    await page.getByRole('button', { name: /^(Storage|אחסון)$/ }).click();
+    await expect(page.getByRole('region', { name: /^(Storage workspace|סביבת אחסון)$/ })).toBeVisible();
 
-    await page.getByLabel('Locate cell address').fill(seed.publishedLocation.cellAddress);
-    await page.getByRole('button', { name: 'Locate' }).click();
-    await expect(page.getByText(`Located ${seed.publishedLocation.cellAddress}.`)).toBeVisible();
+    await page.getByLabel(/^(Locate cell address|איתור כתובת תא)$/).fill(seed.publishedLocation.cellAddress);
+    await page.getByRole('button', { name: /^(Locate|אתר)$/ }).click();
+    await expect(
+      page.getByText(
+        new RegExp(`^(Located ${escapeRegExp(seed.publishedLocation.cellAddress)}\\.|אותר ${escapeRegExp(seed.publishedLocation.cellAddress)}\\.)$`)
+      )
+    ).toBeVisible();
 
     await page.getByTestId('create-from-preset-action').click();
     await expect(page.getByRole('complementary', { name: 'Create container from preset' })).toBeVisible();

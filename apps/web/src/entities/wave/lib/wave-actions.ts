@@ -1,17 +1,18 @@
 import type { WaveStatus, WaveSummary } from '@wos/domain';
+import { translate } from '@/shared/i18n';
 
-const waveStatusLabel: Record<WaveStatus, string> = {
-  draft: 'Draft',
-  ready: 'Ready',
-  released: 'Released',
-  in_progress: 'In progress',
-  completed: 'Completed',
-  partial: 'Partial',
-  closed: 'Closed'
+const waveStatusLabelKey: Record<WaveStatus, Parameters<typeof translate>[0]> = {
+  draft: 'operations.wave.status.draft',
+  ready: 'operations.wave.status.ready',
+  released: 'operations.wave.status.released',
+  in_progress: 'operations.wave.status.inProgress',
+  completed: 'operations.wave.status.completed',
+  partial: 'operations.wave.status.partial',
+  closed: 'operations.wave.status.closed'
 };
 
 export function getWaveStatusLabel(status: WaveStatus): string {
-  return waveStatusLabel[status];
+  return translate(waveStatusLabelKey[status]);
 }
 
 export function getWaveStatusColor(status: WaveStatus): string {
@@ -43,21 +44,21 @@ export function getWavePrimaryAction(
     case 'draft':
       return {
         target: 'ready',
-        label: 'Mark ready',
-        reason: wave.totalOrders === 0 ? 'Add at least one order first.' : null
+        label: translate('operations.wave.action.markReady'),
+        reason: wave.totalOrders === 0 ? translate('operations.wave.reason.addOrderFirst') : null
       };
 
     case 'ready':
       return {
         target: 'released',
-        label: 'Release wave',
-        reason: wave.blockingOrderCount > 0 ? 'Not all orders are ready.' : null
+        label: translate('operations.wave.action.releaseWave'),
+        reason: wave.blockingOrderCount > 0 ? translate('operations.wave.reason.ordersNotReady') : null
       };
 
     case 'released':
       return {
         target: 'closed',
-        label: 'Close wave',
+        label: translate('operations.wave.action.closeWave'),
         reason: null
       };
 
@@ -79,7 +80,7 @@ export function getWaveSecondaryAction(wave: Pick<WaveSummary, 'status'>): {
   label: string | null;
 } {
   if (wave.status === 'ready') {
-    return { target: 'draft', label: 'Rollback to draft' };
+    return { target: 'draft', label: translate('operations.wave.action.rollbackToDraft') };
   }
   return { target: null, label: null };
 }

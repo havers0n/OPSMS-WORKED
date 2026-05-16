@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/app/providers/auth-provider';
 import { routes } from '@/shared/config/routes';
+import { useT } from '@/shared/i18n';
 
 type AuthMode = 'signin' | 'signup';
 
 export function LoginPage() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const { isReady, user, workspaceError, signIn, signUp } = useAuth();
@@ -41,7 +43,7 @@ export function LoginPage() {
 
       navigate(nextPath, { replace: true });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Authentication failed.');
+      setFormError(error instanceof Error ? error.message : t('login.error.authenticationFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -52,16 +54,16 @@ export function LoginPage() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(15,23,42,0.14),_transparent_30%)]" />
       <div className="relative grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <section className="rounded-[28px] border border-slate-900/10 bg-slate-950 p-8 text-slate-100 shadow-[var(--shadow-panel)]">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">Warehouse Ops</div>
-          <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-tight">Sign in to the active warehouse workspace.</h1>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">{t('login.hero.eyebrow')}</div>
+          <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-tight">{t('login.hero.title')}</h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-slate-400">
-            Authentication is handled by Supabase Auth. Workspace access is resolved after sign in through the tenant-aware BFF session contract.
+            {t('login.hero.description')}
           </p>
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {[
-              ['Auth', 'Email and password sessions managed by Supabase Auth.'],
-              ['Workspace', 'Tenant membership is resolved only after the session is established.'],
-              ['Access', 'If your account has no workspace membership, the app stops before warehouse data is loaded.']
+              [t('login.hero.auth.title'), t('login.hero.auth.description')],
+              [t('login.hero.workspace.title'), t('login.hero.workspace.description')],
+              [t('login.hero.access.title'), t('login.hero.access.description')]
             ].map(([label, text]) => (
               <div key={label} className="rounded-[18px] border border-white/10 bg-white/5 p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-200/80">{label}</div>
@@ -81,7 +83,7 @@ export function LoginPage() {
                 mode === 'signin' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500'
               ].join(' ')}
             >
-              Sign In
+              {t('login.mode.signIn')}
             </button>
             <button
               type="button"
@@ -91,16 +93,16 @@ export function LoginPage() {
                 mode === 'signup' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500'
               ].join(' ')}
             >
-              Create Account
+              {t('login.mode.createAccount')}
             </button>
           </div>
 
           <div className="mt-6">
-            <div className="text-2xl font-semibold text-[var(--text-primary)]">{mode === 'signin' ? 'Sign in' : 'Create your account'}</div>
+            <div className="text-2xl font-semibold text-[var(--text-primary)]">{mode === 'signin' ? t('login.title.signIn') : t('login.title.createAccount')}</div>
             <div className="mt-2 text-sm text-[var(--text-muted)]">
               {mode === 'signin'
-                ? 'Use your email and password to open the warehouse workspace.'
-                : 'The first authenticated user becomes tenant admin for the default local tenant.'}
+                ? t('login.description.signIn')
+                : t('login.description.createAccount')}
             </div>
           </div>
 
@@ -117,7 +119,7 @@ export function LoginPage() {
             }}
           >
             <label className="grid gap-1 text-sm text-slate-700">
-              Email
+              {t('login.email')}
               <input
                 name="email"
                 type="email"
@@ -129,7 +131,7 @@ export function LoginPage() {
               />
             </label>
             <label className="grid gap-1 text-sm text-slate-700">
-              Password
+              {t('login.password')}
               <input
                 name="password"
                 type="password"
@@ -152,12 +154,12 @@ export function LoginPage() {
               disabled={isSubmitting}
               className="mt-2 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-medium text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSubmitting ? 'Working...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+              {isSubmitting ? t('login.submit.working') : mode === 'signin' ? t('login.mode.signIn') : t('login.mode.createAccount')}
             </button>
           </form>
 
           <div className="mt-6 text-xs uppercase tracking-[0.18em] text-slate-400">
-            After authentication you will be redirected to <Link to={routes.warehouse} className="text-slate-700 underline underline-offset-4">{routes.warehouse}</Link>.
+            {t('login.footer.prefix')} <Link to={routes.warehouse} className="text-slate-700 underline underline-offset-4" dir="ltr">{routes.warehouse}</Link>.
           </div>
         </section>
       </div>

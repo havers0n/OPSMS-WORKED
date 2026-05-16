@@ -1,5 +1,6 @@
 import type { Cell, LocationStorageSnapshotRow, Rack } from '@wos/domain';
 import type { LocationProductAssignment } from '@/entities/product-location-role/api/queries';
+import { translate } from '@/shared/i18n';
 
 export const INVENTORY_PREVIEW_LIMIT = 3;
 
@@ -74,7 +75,9 @@ export function getActiveProducts(rows: LocationStorageSnapshotRow[]): ActiveCon
 }
 
 function roleLabel(role: PolicyRole): string {
-  return role === 'primary_pick' ? 'Primary pick' : 'Reserve';
+  return role === 'primary_pick'
+    ? translate('storage.role.primaryPickSentence')
+    : translate('storage.role.reserve');
 }
 
 export function resolvePolicySummaryState(
@@ -96,17 +99,17 @@ export function resolvePolicySummaryState(
 }
 
 export function policySummaryText(state: ContainerPolicySummaryState): string {
-  if (state.kind === 'no-policy') return 'No policy';
+  if (state.kind === 'no-policy') return translate('storage.policy.noPolicy');
   if (state.kind === 'single-role') return roleLabel(state.role);
-  return `Legacy conflict: ${state.roles.map(roleLabel).join(' + ')}`;
+  return translate('storage.policy.legacyConflict', { roles: state.roles.map(roleLabel).join(' + ') });
 }
 
 export function getPolicyEditGuardReason(activeProducts: ActiveContainerProduct[]): string | null {
   if (activeProducts.length === 1) return null;
   if (activeProducts.length === 0) {
-    return 'Policy editing is unavailable because this container does not resolve to one active SKU.';
+    return translate('storage.policy.editUnavailableNoSku');
   }
-  return 'Policy editing is unavailable because this container resolves to multiple active SKUs.';
+  return translate('storage.policy.editUnavailableMultipleSkus');
 }
 
 export function hasInventoryRows(
@@ -116,16 +119,16 @@ export function hasInventoryRows(
 }
 
 export function semanticRoleLabel(role: SemanticRole): string {
-  if (role === 'primary_pick') return 'Primary Pick';
-  if (role === 'reserve') return 'Reserve';
-  return 'None';
+  if (role === 'primary_pick') return translate('storage.role.primaryPick');
+  if (role === 'reserve') return translate('storage.role.reserve');
+  return translate('storage.role.none');
 }
 
 export function effectiveRoleSourceLabel(source: EffectiveRoleSource): string {
-  if (source === 'explicit_override') return 'Explicit override';
-  if (source === 'structural_default') return 'Structural default';
-  if (source === 'conflict') return 'Conflict';
-  return 'None';
+  if (source === 'explicit_override') return translate('storage.roleSource.explicitOverride');
+  if (source === 'structural_default') return translate('storage.roleSource.structuralDefault');
+  if (source === 'conflict') return translate('storage.roleSource.conflict');
+  return translate('storage.role.none');
 }
 
 export function resolveStructuralDefaultFromPublishedLayout(

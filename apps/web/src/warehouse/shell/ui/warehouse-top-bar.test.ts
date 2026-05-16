@@ -8,6 +8,7 @@ import {
 import { warehouseInteractionActions } from '@/warehouse/state/interaction';
 import { warehouseViewModeActions } from '@/warehouse/state/view-mode';
 import { BffRequestError } from '@/shared/api/bff/client';
+import { translate } from '@/shared/i18n';
 import { WarehouseTopBar } from './warehouse-top-bar';
 
 (
@@ -147,9 +148,9 @@ describe('TopBar lifecycle wording', () => {
     });
     const text = collectText(renderer.toJSON());
 
-    expect(text).toContain('Unsaved');
-    expect(text).toContain('Draft changed');
-    expect(text).not.toContain('Valid');
+    expect(text).toContain(translate('warehouse.status.unsaved'));
+    expect(text).toContain(translate('warehouse.status.draftChanged'));
+    expect(text).not.toContain(translate('warehouse.status.valid'));
   });
 
   it('clears stale validate success copy after a new edit makes the draft dirty', async () => {
@@ -170,14 +171,16 @@ describe('TopBar lifecycle wording', () => {
     });
 
     const validateButton = renderer.root.find(
-      (instance) => instance.type === 'button' && instance.props.title === 'Validate layout'
+      (instance) =>
+        instance.type === 'button' &&
+        instance.props.title === translate('warehouse.action.validateLayout')
     );
 
     await act(async () => {
       await validateButton.props.onClick();
     });
 
-    expect(collectText(renderer.toJSON())).toContain('Valid');
+    expect(collectText(renderer.toJSON())).toContain(translate('warehouse.status.valid'));
 
     await act(async () => {
       warehouseLayoutDraftActions.updateRackPosition(draft.rackIds[0], 220, 340);
@@ -185,9 +188,9 @@ describe('TopBar lifecycle wording', () => {
 
     const textAfterEdit = collectText(renderer.toJSON());
 
-    expect(textAfterEdit).toContain('Unsaved');
-    expect(textAfterEdit).toContain('Draft changed');
-    expect(textAfterEdit).not.toContain('Valid');
+    expect(textAfterEdit).toContain(translate('warehouse.status.unsaved'));
+    expect(textAfterEdit).toContain(translate('warehouse.status.draftChanged'));
+    expect(textAfterEdit).not.toContain(translate('warehouse.status.valid'));
   });
 
   it('shows persisted validation follow-up after publish gate failure instead of a generic save error', async () => {
@@ -221,7 +224,7 @@ describe('TopBar lifecycle wording', () => {
       (instance) =>
         instance.type === 'button' &&
         Array.isArray(instance.props.children) &&
-        instance.props.children.includes('Publish')
+        instance.props.children.includes(translate('warehouse.action.publish'))
     );
 
     await act(async () => {
@@ -231,6 +234,6 @@ describe('TopBar lifecycle wording', () => {
     const text = collectText(renderer.toJSON());
 
     expect(text).toContain('Rack R-01 has overlapping cells.');
-    expect(text).not.toContain('Save failed');
+    expect(text).not.toContain(translate('warehouse.status.saveFailed'));
   });
 });

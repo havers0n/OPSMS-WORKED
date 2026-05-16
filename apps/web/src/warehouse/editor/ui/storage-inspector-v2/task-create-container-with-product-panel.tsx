@@ -1,4 +1,5 @@
 import type { ContainerType, Product } from '@wos/domain';
+import { useT } from '@/shared/i18n';
 import {
   ContainerTypeSelect,
   TaskPanelBreadcrumb,
@@ -56,6 +57,7 @@ export function CreateContainerWithProductTaskPanel({
   onConfirm,
   onCancel
 }: CreateContainerWithProductTaskPanelProps) {
+  const t = useT();
   const showResults = productSearch.trim().length > 0 && !selectedProduct;
   const canSubmit =
     Boolean(containerTypeId) &&
@@ -70,23 +72,23 @@ export function CreateContainerWithProductTaskPanel({
     <div
       className={inspectorShellClassName}
       role="complementary"
-      aria-label="Create container with product"
+      aria-label={t('storage.action.createContainerWithProduct')}
     >
       <div className={inspectorHeaderClassName}>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 mb-2 disabled:opacity-50"
-          aria-label="Cancel create container with product"
+          aria-label={t('storage.action.cancelCreateContainerWithProduct')}
         >
-          Cancel
+          {t('storage.action.cancel')}
         </button>
         <TaskPanelBreadcrumb
           rackDisplayCode={rackDisplayCode}
           activeLevel={activeLevel}
           locationCode={locationCode}
         />
-        <p className="text-sm font-semibold text-gray-900 mt-1">Create container with product</p>
+        <p className="text-sm font-semibold text-gray-900 mt-1">{t('storage.action.createContainerWithProduct')}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -98,34 +100,35 @@ export function CreateContainerWithProductTaskPanel({
         />
         <div className="space-y-1">
           <label className="block text-xs font-medium text-gray-700">
-            External code <span className="text-gray-400">(optional)</span>
+            {t('storage.field.externalCode')} <span className="text-gray-400">({t('storage.field.optional')})</span>
           </label>
           <input
             type="text"
             value={externalCode}
             onChange={(event) => onExternalCodeChange(event.target.value)}
             disabled={isSubmitting}
-            placeholder="e.g. PLT-0042"
+            placeholder={t('storage.placeholder.externalCodeExample')}
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            aria-label="External code"
+            aria-label={t('storage.field.externalCode')}
+            dir="ltr"
           />
         </div>
 
         <div className="space-y-1">
           <label className="block text-xs font-medium text-gray-700">
-            Product <span className="text-red-500">*</span>
+            {t('storage.field.product')} <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={productSearch}
             onChange={(event) => onProductSearchChange(event.target.value)}
             disabled={isSubmitting}
-            placeholder="Search by name or SKU..."
+            placeholder={t('storage.placeholder.searchNameOrSku')}
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            aria-label="Product search"
+            aria-label={t('storage.field.product')}
           />
           {showResults && searchResults.length > 0 && (
-            <ul className="border border-gray-200 rounded bg-white shadow-sm max-h-36 overflow-y-auto" role="listbox" aria-label="Product search results">
+            <ul className="border border-gray-200 rounded bg-white shadow-sm max-h-36 overflow-y-auto" role="listbox" aria-label={t('storage.field.product')}>
               {searchResults.slice(0, 10).map((product) => (
                 <li
                   key={product.id}
@@ -134,7 +137,7 @@ export function CreateContainerWithProductTaskPanel({
                   onClick={() => onProductSelect(product)}
                   className="px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 flex items-baseline gap-2"
                 >
-                  <span className="font-mono text-gray-500">{product.sku}</span>
+                  <span className="font-mono text-gray-500" dir="ltr">{product.sku}</span>
                   <span className="text-gray-700 truncate">{product.name}</span>
                 </li>
               ))}
@@ -142,8 +145,8 @@ export function CreateContainerWithProductTaskPanel({
           )}
           {selectedProduct && (
             <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">
-              <span className="font-mono">{selectedProduct.sku}</span>
-              {selectedProduct.name && <span className="ml-1.5">{selectedProduct.name}</span>}
+              <span className="font-mono" dir="ltr">{selectedProduct.sku}</span>
+              {selectedProduct.name && <span className="ms-1.5">{selectedProduct.name}</span>}
             </div>
           )}
         </div>
@@ -151,7 +154,7 @@ export function CreateContainerWithProductTaskPanel({
         <div className="flex gap-2">
           <div className="flex-1 space-y-1">
             <label className="block text-xs font-medium text-gray-700">
-              Quantity <span className="text-red-500">*</span>
+              {t('storage.field.quantity')} <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -160,14 +163,14 @@ export function CreateContainerWithProductTaskPanel({
               value={quantity}
               onChange={(event) => onQuantityChange(event.target.value)}
               disabled={isSubmitting}
-              placeholder="0"
+              placeholder={t('storage.placeholder.zero')}
               className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-              aria-label="Quantity"
+              aria-label={t('storage.field.quantity')}
             />
           </div>
           <div className="w-24 space-y-1">
             <label className="block text-xs font-medium text-gray-700">
-              UOM <span className="text-red-500">*</span>
+              {t('storage.field.uom')} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -176,12 +179,12 @@ export function CreateContainerWithProductTaskPanel({
               disabled={isSubmitting}
               placeholder="EA"
               className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-              aria-label="Unit of measure"
+              aria-label={t('storage.field.uom')}
             />
           </div>
         </div>
 
-        {!locationId && <p className="text-xs text-gray-400">Resolving location...</p>}
+        {!locationId && <p className="text-xs text-gray-400">{t('storage.state.resolvingLocation')}</p>}
 
         {errorMessage && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
@@ -195,16 +198,16 @@ export function CreateContainerWithProductTaskPanel({
           onClick={onConfirm}
           disabled={!canSubmit}
           className="flex-1 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Confirm create container with product"
+          aria-label={t('storage.action.confirmCreateContainerWithProduct')}
         >
-          {isSubmitting ? 'Creating...' : 'Create container'}
+          {isSubmitting ? t('storage.action.creating') : t('storage.action.createContainer')}
         </button>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
         >
-          Cancel
+          {t('storage.action.cancel')}
         </button>
       </div>
     </div>

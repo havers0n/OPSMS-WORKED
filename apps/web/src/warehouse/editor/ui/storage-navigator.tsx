@@ -4,6 +4,7 @@ import { PanelLeft } from 'lucide-react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { collectRackPublishedSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
+import { useT } from '@/shared/i18n';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -39,6 +40,7 @@ interface StorageNavigatorProps {
 }
 
 export function StorageNavigator({ workspace }: StorageNavigatorProps) {
+  const t = useT();
   const floorId = workspace?.floorId ?? null;
   const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
 
@@ -130,11 +132,11 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   if (isCollapsed) {
     return (
-      <div className="flex h-full w-10 flex-shrink-0 flex-col items-center border-r border-gray-200 bg-white pt-2.5">
+      <div className="flex h-full w-10 flex-shrink-0 flex-col items-center border-e border-gray-200 bg-white pt-2.5">
         <button
           type="button"
           onClick={toggle}
-          title="Show navigator (`)"
+          title={t('storage.navigator.show')}
           className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
         >
           <PanelLeft className="h-4 w-4" />
@@ -144,18 +146,18 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   }
 
   return (
-    <div className="flex h-full w-72 flex-shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white">
+    <div className="flex h-full w-72 flex-shrink-0 flex-col overflow-hidden border-e border-gray-200 bg-white">
       <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Rack</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{t('storage.field.rack')}</span>
           <div className="flex items-center gap-1.5">
-            <span className="rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-800">
+            <span className="rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-xs font-medium text-gray-800" dir="ltr">
               {isLoading ? '...' : rackDisplayCode}
             </span>
             <button
               type="button"
               onClick={toggle}
-              title="Hide navigator (`)"
+              title={t('storage.navigator.hide')}
               className="flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
             >
               <PanelLeft className="h-3.5 w-3.5" />
@@ -166,8 +168,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
       <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2">
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Level</span>
-          <div className="ml-auto flex gap-1">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{t('storage.field.level')}</span>
+          <div className="ms-auto flex gap-1">
             {levelButtons.map((level) => (
               <button
                 key={level}
@@ -189,7 +191,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
         <div className="flex items-center gap-1.5">
           <input
             type="text"
-            placeholder="Search location"
+            placeholder={t('storage.placeholder.searchLocation')}
             className="h-8 min-w-0 flex-1 rounded-md border border-gray-300 px-2.5 text-sm outline-none transition-colors placeholder:text-gray-400 focus:border-blue-300"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -202,7 +204,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
             }`}
             onClick={() => setOccupancyFilter('all')}
           >
-            All
+            {t('storage.filter.all')}
           </button>
           <button
             className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
@@ -212,7 +214,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
             }`}
             onClick={() => setOccupancyFilter('empty-only')}
           >
-            Empty
+            {t('storage.filter.empty')}
           </button>
         </div>
       </div>
@@ -220,19 +222,19 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       <div className="flex-1 overflow-y-auto">
         {noRackContext ? (
           <div className="px-3 py-6 text-sm text-gray-500">
-            Select a rack on the map to browse locations.
+            {t('storage.state.selectRackOnMap')}
           </div>
         ) : isLoading ? (
-          <div className="px-3 py-6 text-sm text-gray-400">Loading locations...</div>
+          <div className="px-3 py-6 text-sm text-gray-400">{t('storage.state.loadingLocations')}</div>
         ) : cellsForLevel.length === 0 ? (
-          <div className="px-3 py-6 text-sm text-gray-500">No locations for level {activeLevel}</div>
+          <div className="px-3 py-6 text-sm text-gray-500">{t('storage.state.noLocationsForLevel', { level: activeLevel })}</div>
         ) : visibleCells.length === 0 && filtersActive ? (
-          <div className="px-3 py-6 text-sm text-gray-500">No locations match current filters</div>
+          <div className="px-3 py-6 text-sm text-gray-500">{t('storage.state.noLocationsMatchFilters')}</div>
         ) : (
           <div>
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-1.5">
               <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
-                Level {activeLevel}
+                {t('storage.field.levelWithNumber', { level: activeLevel })}
               </h3>
               <span className="text-xs text-gray-500">{visibleCells.length}</span>
             </div>
@@ -254,8 +256,11 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                     }`}
                     title={
                       isSelected
-                        ? `Selected: ${cell.address.raw}`
-                        : `Location ${cell.address.raw} - ${isOccupied ? 'occupied' : 'empty'}`
+                        ? `${t('storage.status.selected')}: ${cell.address.raw}`
+                        : t('storage.navigator.locationTitle', {
+                            address: cell.address.raw,
+                            state: isOccupied ? t('storage.status.occupied') : t('storage.status.empty')
+                          })
                     }
                     onClick={() => {
                       selectCell({
@@ -272,7 +277,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                       aria-hidden
                     />
 
-                    <span className="flex-1 font-mono text-[13px] font-medium text-gray-900">
+                    <span className="flex-1 font-mono text-[13px] font-medium text-gray-900" dir="ltr">
                       {cell.address.raw}
                     </span>
 
@@ -281,13 +286,14 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                         className={`max-w-24 truncate rounded px-1.5 py-0.5 text-[11px] ${
                           isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
                         }`}
+                        dir="ltr"
                       >
                         {containerCode}
                       </span>
                     )}
 
                     {isSelected && (
-                      <span className="flex-shrink-0 text-xs font-semibold text-blue-600">Selected</span>
+                      <span className="flex-shrink-0 text-xs font-semibold text-blue-600">{t('storage.status.selected')}</span>
                     )}
                   </div>
                 );
