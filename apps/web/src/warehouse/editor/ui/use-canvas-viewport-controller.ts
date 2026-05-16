@@ -705,9 +705,18 @@ export function useCanvasViewportController({
     };
 
     const onMouseDown = (event: MouseEvent) => {
-      if (event.button !== 1) return;
+      if (event.button !== 0) return;
       const stage = stageRef.current;
       if (!stage) return;
+      // Only pan on empty canvas — let clicks on shapes reach Konva normally.
+      const box = stage.container().getBoundingClientRect();
+      const hit = stage.getIntersection({
+        x: event.clientX - box.left,
+        y: event.clientY - box.top
+      });
+      if (hit) return;
+      // Prevent Konva from seeing this mousedown (stops marquee selection start).
+      event.stopPropagation();
       cancelInertia();
       commitTransformOnlyZoom();
       isPanningRef.current = true;
@@ -751,7 +760,7 @@ export function useCanvasViewportController({
     };
 
     const onMouseUp = (event: MouseEvent) => {
-      if (event.button !== 1) return;
+      if (event.button !== 0) return;
       if (!isPanningRef.current) return;
       isPanningRef.current = false;
       finishTransformOnlyPan({
@@ -877,7 +886,7 @@ export function useCanvasViewportController({
       startInertia(panVelX, panVelY);
     };
 
-    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mousedown', onMouseDown, { capture: true });
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     container.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -892,7 +901,7 @@ export function useCanvasViewportController({
         zoomIdleTimerRef.current = null;
       }
       cancelScheduledZoomDraw();
-      container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('mousedown', onMouseDown, { capture: true });
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       container.removeEventListener('touchstart', onTouchStart);
