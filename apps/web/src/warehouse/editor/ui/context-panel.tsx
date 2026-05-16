@@ -173,7 +173,7 @@ export function ContextPanel({
           intent={intent}
           viewMode={viewMode}
         />
-        {shouldRenderFallback(intent, viewMode) && (
+        {shouldRenderFallback(intent, viewMode) && import.meta.env.DEV && (
           <PlaceholderContent description={config.description} />
         )}
       </div>

@@ -1,5 +1,5 @@
-export const defaultLocale = 'he';
-export const fallbackLocale = 'en';
+export const defaultLocale = 'en';
+export const fallbackLocale = 'he';
 
 export type Locale = typeof defaultLocale | typeof fallbackLocale;
 export type TranslationParams = Record<string, string | number | null | undefined>;
@@ -490,7 +490,42 @@ export const en = {
   'error.PACKAGING_PROFILE_PRIORITY_OVERLAP': 'Storage preset priority was already allocated. Please retry.',
   'error.PLACEMENT_CONFLICT': 'Placement action failed.',
   'error.INVALID_TARGET_CELL': 'Target cell is not available.',
-  'error.VALIDATION_ERROR': 'Some fields are invalid. Please review the form.'
+  'error.VALIDATION_ERROR': 'Some fields are invalid. Please review the form.',
+  'products.title': 'Product Catalog',
+  'products.subtitle': 'Search products by SKU, name, or external product ID.',
+  'products.stats.total': 'Total',
+  'products.stats.active': 'Active',
+  'products.search.placeholder': 'Search by SKU, name, or ID',
+  'products.action.refresh': 'Refresh',
+  'products.empty': 'No products match this query.',
+  'products.table.name': 'Name',
+  'products.table.sku': 'SKU',
+  'products.table.externalId': 'External ID',
+  'products.table.source': 'Source',
+  'products.table.status': 'Status',
+  'products.table.updated': 'Updated',
+  'products.table.open': 'Open',
+  'products.status.active': 'Active',
+  'products.status.inactive': 'Inactive',
+  'products.pagination.showing': 'Showing {start}–{end} of {total}',
+  'products.pagination.showingQuery': 'Showing {start}–{end} of {total} for "{query}"',
+  'products.pagination.page': 'Page {current} / {total}',
+  'products.pagination.previous': 'Previous',
+  'products.pagination.next': 'Next',
+  'warehouse.editor.hint.placeRack': 'Click canvas to place rack',
+  'warehouse.editor.hint.drawZone': 'Drag on canvas to draw zone',
+  'warehouse.editor.hint.moveTarget': 'Move mode — click a destination cell',
+  'warehouse.editor.hint.pressEscToCancel': 'Press Esc to cancel',
+  'warehouse.editor.action.inspect': 'Inspect',
+  'warehouse.editor.action.focusFace': 'Focus Face {face}',
+  'warehouse.editor.hud.viewL3': 'View · Click cell to inspect · Esc · MMB pan · Scroll zoom',
+  'warehouse.editor.hud.viewL1': 'View · Click rack to inspect · Esc · MMB pan · Scroll zoom',
+  'warehouse.editor.hud.workflowMove': 'Workflow · Click valid empty target cell · Esc cancel · MMB pan · Scroll zoom',
+  'warehouse.editor.hud.storageL3': 'Storage · Click cell to inspect · Esc · MMB pan · Scroll zoom',
+  'warehouse.editor.hud.storageL1': 'Storage · Click rack to inspect · Esc · MMB pan · Scroll zoom',
+  'warehouse.editor.hud.layoutDrawWall': 'Click and drag to draw a wall · Esc to cancel',
+  'warehouse.editor.hud.layoutEditable': 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del',
+  'warehouse.editor.hud.layoutReadOnly': 'Read-only · MMB pan · Scroll zoom'
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -979,7 +1014,42 @@ export const he: Partial<Record<TranslationKey, string>> = {
   'error.PACKAGING_PROFILE_PRIORITY_OVERLAP': 'עדיפות תבנית האחסון כבר הוקצתה. נסה שוב.',
   'error.PLACEMENT_CONFLICT': 'פעולת ההצבה נכשלה.',
   'error.INVALID_TARGET_CELL': 'תא היעד אינו זמין.',
-  'error.VALIDATION_ERROR': 'חלק מהשדות אינם תקינים. בדוק את הטופס.'
+  'error.VALIDATION_ERROR': 'חלק מהשדות אינם תקינים. בדוק את הטופס.',
+  'products.title': 'קטלוג מוצרים',
+  'products.subtitle': 'חפש מוצרים לפי מק"ט, שם או מזהה מוצר חיצוני.',
+  'products.stats.total': 'סה"כ',
+  'products.stats.active': 'פעיל',
+  'products.search.placeholder': 'חיפוש לפי מק"ט, שם או מזהה',
+  'products.action.refresh': 'רענן',
+  'products.empty': 'לא נמצאו מוצרים התואמים את החיפוש.',
+  'products.table.name': 'שם',
+  'products.table.sku': 'מק"ט',
+  'products.table.externalId': 'מזהה חיצוני',
+  'products.table.source': 'מקור',
+  'products.table.status': 'סטטוס',
+  'products.table.updated': 'עודכן',
+  'products.table.open': 'פתח',
+  'products.status.active': 'פעיל',
+  'products.status.inactive': 'לא פעיל',
+  'products.pagination.showing': 'מציג {start}–{end} מתוך {total}',
+  'products.pagination.showingQuery': 'מציג {start}–{end} מתוך {total} עבור "{query}"',
+  'products.pagination.page': 'עמוד {current} / {total}',
+  'products.pagination.previous': 'הקודם',
+  'products.pagination.next': 'הבא',
+  'warehouse.editor.hint.placeRack': 'לחץ על הקנבס למיקום מדף',
+  'warehouse.editor.hint.drawZone': 'גרור על הקנבס לשרטוט אזור',
+  'warehouse.editor.hint.moveTarget': 'מצב העברה — בחר תא יעד',
+  'warehouse.editor.hint.pressEscToCancel': 'Esc לביטול',
+  'warehouse.editor.action.inspect': 'בדיקה',
+  'warehouse.editor.action.focusFace': 'פנים {face}',
+  'warehouse.editor.hud.viewL3': 'תצוגה · לחץ על תא לבדיקה · Esc · MMB להזזה · גלגל לזום',
+  'warehouse.editor.hud.viewL1': 'תצוגה · לחץ על מדף לבדיקה · Esc · MMB להזזה · גלגל לזום',
+  'warehouse.editor.hud.workflowMove': 'תהליך · לחץ על תא יעד פנוי · Esc ביטול · MMB להזזה · גלגל לזום',
+  'warehouse.editor.hud.storageL3': 'אחסון · לחץ על תא לבדיקה · Esc · MMB להזזה · גלגל לזום',
+  'warehouse.editor.hud.storageL1': 'אחסון · לחץ על מדף לבדיקה · Esc · MMB להזזה · גלגל לזום',
+  'warehouse.editor.hud.layoutDrawWall': 'לחץ וגרור לשרטוט קיר · Esc לביטול',
+  'warehouse.editor.hud.layoutEditable': 'גרור · Ctrl+לחץ · גרור לבחירה · MMB להזזה · גלגל לזום · Del',
+  'warehouse.editor.hud.layoutReadOnly': 'לקריאה בלבד · MMB להזזה · גלגל לזום'
 };
 
 export const dictionaries: Record<Locale, Partial<Record<TranslationKey, string>>> = {

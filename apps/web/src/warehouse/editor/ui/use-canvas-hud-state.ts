@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Cell, LayoutDraft } from '@wos/domain';
+import { useT } from '@/shared/i18n';
 import type {
   ActiveLayoutTask,
   ActiveStorageWorkflow,
@@ -69,6 +70,7 @@ export function useCanvasHudState({
   selection,
   zoom
 }: UseCanvasHudStateParams) {
+  const t = useT();
   const {
     interactionLevel,
     isDrawingWall,
@@ -168,19 +170,19 @@ export function useCanvasHudState({
   // — Context-sensitive hint text —
   const hintText = isViewMode
     ? interactionLevel === 'L3'
-      ? 'View L3 · Click cell to inspect · Esc clear · MMB pan · Scroll zoom'
-      : 'View L1 · Click rack to inspect · Esc clear · MMB pan · Scroll zoom'
+      ? t('warehouse.editor.hud.viewL3')
+      : t('warehouse.editor.hud.viewL1')
     : isStorageMode
     ? isPlacementMoveMode
-      ? 'Workflow · Click valid empty target cell · Esc cancel move · MMB pan · Scroll zoom'
+      ? t('warehouse.editor.hud.workflowMove')
       : interactionLevel === 'L3'
-        ? 'Storage L3 · Click cell to inspect · Esc clear · MMB pan · Scroll zoom'
-        : 'Storage L1 · Click rack to inspect · Esc clear · MMB pan · Scroll zoom'
+        ? t('warehouse.editor.hud.storageL3')
+        : t('warehouse.editor.hud.storageL1')
     : isLayoutEditable
       ? isDrawingWall
-        ? 'Click and drag to draw a wall · Esc to cancel'
-        : 'Drag · Ctrl+click · Drag to select · MMB pan · Scroll zoom · Del'
-      : 'Read-only · MMB pan · Scroll zoom';
+        ? t('warehouse.editor.hud.layoutDrawWall')
+        : t('warehouse.editor.hud.layoutEditable')
+      : t('warehouse.editor.hud.layoutReadOnly');
 
   return useMemo(
     () => ({

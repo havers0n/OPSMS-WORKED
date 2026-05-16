@@ -3,6 +3,7 @@ import { Minus, Plus, SlidersHorizontal } from 'lucide-react';
 import type { RackSideFocus } from '@/warehouse/editor/model/editor-types';
 import { faceAtViewportEdge } from '@/shared/lib/rack-face-labels';
 import type { CanvasRect } from '@/entities/layout-version/lib/canvas-geometry';
+import { useT } from '@/shared/i18n';
 import {
   ObjectLocalAffordanceBar,
   ObjectLocalAffordanceButton
@@ -93,6 +94,7 @@ function RackSideFocusHandles({
   rotationDeg: number;
   onSelectSide: (side: RackSideFocus) => void;
 }) {
+  const t = useT();
   return (
     <>
       {(['north', 'east', 'south', 'west'] as RackSideFocus[]).map((side) => {
@@ -103,7 +105,7 @@ function RackSideFocusHandles({
           <button
             key={side}
             type="button"
-            title={`Focus Face ${face}`}
+            title={t('warehouse.editor.action.focusFace', { face })}
             onClick={() => onSelectSide(side)}
             className="pointer-events-auto absolute z-20 flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold shadow-md transition-colors"
             style={{
@@ -134,6 +136,7 @@ function StorageCellAffordanceBar({
   viewport,
   onOpenInspector
 }: StorageCellAffordanceBarProps) {
+  const t = useT();
   return (
     <ObjectLocalAffordanceBar
       anchorRect={anchorRect}
@@ -143,7 +146,7 @@ function StorageCellAffordanceBar({
       {onOpenInspector && (
         <ObjectLocalAffordanceButton
           icon={SlidersHorizontal}
-          label="Inspect"
+          label={t('warehouse.editor.action.inspect')}
           variant="accent"
           onClick={onOpenInspector}
         />
@@ -165,6 +168,7 @@ function LayoutZoneAffordanceBar({
   viewport,
   onOpenInspector
 }: LayoutZoneAffordanceBarProps) {
+  const t = useT();
   return (
     <ObjectLocalAffordanceBar
       anchorRect={anchorRect}
@@ -174,7 +178,7 @@ function LayoutZoneAffordanceBar({
       {onOpenInspector && (
         <ObjectLocalAffordanceButton
           icon={SlidersHorizontal}
-          label="Inspect"
+          label={t('warehouse.editor.action.inspect')}
           variant="accent"
           onClick={onOpenInspector}
         />
@@ -196,6 +200,7 @@ function LayoutWallAffordanceBar({
   viewport,
   onOpenInspector
 }: LayoutWallAffordanceBarProps) {
+  const t = useT();
   return (
     <ObjectLocalAffordanceBar
       anchorRect={anchorRect}
@@ -205,7 +210,7 @@ function LayoutWallAffordanceBar({
       {onOpenInspector && (
         <ObjectLocalAffordanceButton
           icon={SlidersHorizontal}
-          label="Inspect"
+          label={t('warehouse.editor.action.inspect')}
           variant="accent"
           onClick={onOpenInspector}
         />
@@ -242,23 +247,21 @@ export function CanvasHud({
   onZoomReset,
   onZoomIn
 }: CanvasHudProps) {
+  const t = useT();
   return (
     <>
       {isPlacing && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex items-center justify-center">
           <div
-            className="rounded-xl px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+            className="rounded-xl px-4 py-2 text-center text-xs font-medium shadow-lg backdrop-blur"
             style={{
               background: 'rgba(15,24,42,0.88)',
               color: '#e2e8f0',
               border: '1px solid rgba(6,182,212,0.4)'
             }}
           >
-            Click canvas to place rack · Press{' '}
-            <kbd className="mx-1 rounded bg-slate-700 px-1.5 py-0.5 font-mono text-[10px]">
-              Esc
-            </kbd>{' '}
-            to cancel
+            <div>{t('warehouse.editor.hint.placeRack')}</div>
+            <div className="mt-0.5 opacity-60">{t('warehouse.editor.hint.pressEscToCancel')}</div>
           </div>
         </div>
       )}
@@ -266,18 +269,15 @@ export function CanvasHud({
       {isDrawingZone && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex items-center justify-center">
           <div
-            className="rounded-xl px-4 py-2 text-xs font-medium shadow-lg backdrop-blur"
+            className="rounded-xl px-4 py-2 text-center text-xs font-medium shadow-lg backdrop-blur"
             style={{
               background: 'rgba(15,24,42,0.88)',
               color: '#e2e8f0',
               border: '1px solid rgba(34,197,94,0.4)'
             }}
           >
-            Drag on empty canvas to draw zone · Press{' '}
-            <kbd className="mx-1 rounded bg-slate-700 px-1.5 py-0.5 font-mono text-[10px]">
-              Esc
-            </kbd>{' '}
-            to cancel
+            <div>{t('warehouse.editor.hint.drawZone')}</div>
+            <div className="mt-0.5 opacity-60">{t('warehouse.editor.hint.pressEscToCancel')}</div>
           </div>
         </div>
       )}
@@ -292,7 +292,7 @@ export function CanvasHud({
               border: '1px solid rgba(14,165,233,0.4)'
             }}
           >
-            Move target selection active · Click a destination cell
+            {t('warehouse.editor.hint.moveTarget')}
           </div>
         </div>
       )}

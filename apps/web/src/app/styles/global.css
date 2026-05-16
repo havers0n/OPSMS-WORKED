@@ -27,13 +27,13 @@
   /* Warehouse semantic baseline: foundational tokens only. */
   --wh-surface: rgba(255, 255, 255, 0.92);
   --wh-surface-subtle: rgba(244, 248, 251, 0.92);
-  --wh-border: rgba(148, 163, 184, 0.28);
-  --wh-border-strong: rgba(71, 85, 105, 0.2);
+  --wh-border: rgba(100, 120, 148, 0.45);
+  --wh-border-strong: rgba(71, 85, 105, 0.38);
   --wh-text-primary: #10243e;
   --wh-text-secondary: #41556d;
   --wh-text-muted: #687789;
 
-  --wh-selected-fill: rgba(15, 106, 142, 0.18);
+  --wh-selected-fill: rgba(15, 106, 142, 0.28);
   --wh-selected-border: #0f6a8e;
   --wh-selected-text: #0c4f69;
 
@@ -49,12 +49,12 @@
   --wh-search-hit-border: #b7791f;
   --wh-search-hit-text: #86580d;
 
-  --wh-empty-fill: rgba(98, 108, 125, 0.1);
-  --wh-empty-border: #728197;
+  --wh-empty-fill: rgba(98, 108, 125, 0.18);
+  --wh-empty-border: #5a6b80;
   --wh-empty-text: #516173;
 
-  --wh-occupied-fill: rgba(0, 122, 92, 0.14);
-  --wh-occupied-border: #218367;
+  --wh-occupied-fill: rgba(0, 122, 92, 0.22);
+  --wh-occupied-border: #1a7055;
   --wh-occupied-text: #14654e;
 
   --wh-blocked-fill: rgba(120, 61, 18, 0.16);
