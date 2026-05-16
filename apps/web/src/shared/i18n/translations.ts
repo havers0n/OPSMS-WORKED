@@ -1,5 +1,5 @@
-export const defaultLocale = 'en';
-export const fallbackLocale = 'he';
+export const defaultLocale = 'he';
+export const fallbackLocale = 'en';
 
 export type Locale = typeof defaultLocale | typeof fallbackLocale;
 export type TranslationParams = Record<string, string | number | null | undefined>;

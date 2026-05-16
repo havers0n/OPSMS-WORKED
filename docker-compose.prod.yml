@@ -1,8 +1,6 @@
 services:
   bff:
-    build:
-      context: .
-      dockerfile: apps/bff/Dockerfile
+    image: ${BFF_IMAGE:-ghcr.io/havers0n/abctestsforwos/bff:latest}
     env_file:
       - ${BFF_ENV_FILE:-.env.production}
     environment:
@@ -24,14 +22,7 @@ services:
       start_period: 10s
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
-        VITE_BFF_URL: ${VITE_BFF_URL:-/api}
-        VITE_ENABLE_DEV_AUTO_LOGIN: "false"
+    image: ${WEB_IMAGE:-ghcr.io/havers0n/abctestsforwos/web:latest}
     depends_on:
       - bff
     ports:
