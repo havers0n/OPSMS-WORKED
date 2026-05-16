@@ -1,4 +1,5 @@
 import type { Container, LocationStorageSnapshotRow } from '@wos/domain';
+import { translate, useT } from '@/shared/i18n';
 import {
   TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
@@ -31,7 +32,7 @@ export interface TransferToContainerTaskPanelProps {
 }
 
 function sourceLineLabel(sourceLine: TransferSourceLine) {
-  return sourceLine.product?.name ?? sourceLine.product?.sku ?? sourceLine.itemRef ?? 'Inventory line';
+  return sourceLine.product?.name ?? sourceLine.product?.sku ?? sourceLine.itemRef ?? translate('storage.state.inventoryLine');
 }
 
 function containerLabel(container: Container) {
@@ -56,46 +57,51 @@ export function TransferToContainerTaskPanel({
   onConfirm,
   onCancel
 }: TransferToContainerTaskPanelProps) {
+  const t = useT();
   const availableContainers = containers.filter(
     (container) => container.status === 'active' && container.id !== sourceLine.containerId
   );
   const canSubmit = !isSubmitting && !validationMessage;
 
   return (
-    <div className={inspectorShellClassName} role="complementary" aria-label="Transfer inventory to container">
+    <div className={inspectorShellClassName} role="complementary" aria-label={t('storage.transfer.panelLabel')}>
       <div className={inspectorHeaderClassName}>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="mb-2 flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
-          aria-label="Cancel transfer to container"
+          aria-label={t('storage.action.cancelTransferToContainer')}
         >
-          Cancel
+          {t('storage.action.cancel')}
         </button>
         <TaskPanelBreadcrumb rackDisplayCode={rackDisplayCode} activeLevel={activeLevel} locationCode={locationCode} />
-        <p className="mt-1 text-sm font-semibold text-gray-900">Transfer to container</p>
+        <p className="mt-1 text-sm font-semibold text-gray-900">{t('storage.action.transferToContainer')}</p>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
           <div className="font-medium text-gray-900">{sourceLineLabel(sourceLine)}</div>
           <div className="mt-1 font-mono text-[11px] text-gray-500">
-            From {sourceContainerDisplayCode} / {sourceLine.quantity ?? 'unknown'} {sourceLine.uom ?? ''}
+            {t('storage.transfer.sourceSummary', {
+              containerCode: sourceContainerDisplayCode,
+              quantity: sourceLine.quantity ?? t('storage.transfer.unknownQuantity'),
+              uom: sourceLine.uom ?? ''
+            })}
           </div>
         </div>
 
         <div className="space-y-1">
           <label className="block text-xs font-medium text-gray-700">
-            Target container <span className="text-red-500">*</span>
+            {t('storage.field.targetContainer')} <span className="text-red-500">*</span>
           </label>
           <select
             value={selectedTargetContainerId}
             onChange={(event) => onTargetContainerChange(event.target.value)}
             disabled={isSubmitting || isLoadingContainers || availableContainers.length === 0}
             className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            aria-label="Target container"
+            aria-label={t('storage.field.targetContainer')}
           >
-            <option value="">{isLoadingContainers ? 'Loading containers...' : 'Select container...'}</option>
+            <option value="">{isLoadingContainers ? t('storage.placeholder.loadingContainers') : t('storage.placeholder.selectContainer')}</option>
             {availableContainers.map((container) => (
               <option key={container.id} value={container.id}>
                 {containerLabel(container)}
@@ -106,7 +112,7 @@ export function TransferToContainerTaskPanel({
 
         <div className="space-y-1">
           <label className="block text-xs font-medium text-gray-700">
-            Quantity <span className="text-red-500">*</span>
+            {t('storage.field.quantity')} <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -116,7 +122,7 @@ export function TransferToContainerTaskPanel({
             onChange={(event) => onQuantityChange(event.target.value)}
             disabled={isSubmitting}
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            aria-label="Transfer quantity"
+            aria-label={t('storage.field.quantity')}
           />
         </div>
 
@@ -140,14 +146,14 @@ export function TransferToContainerTaskPanel({
           className="flex-1 rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           data-testid="transfer-confirm-button"
         >
-          {isSubmitting ? 'Transferring...' : 'Transfer'}
+          {isSubmitting ? t('storage.action.transferring') : t('storage.action.transfer')}
         </button>
         <button
           onClick={onCancel}
           disabled={isSubmitting}
           className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
         >
-          Cancel
+          {t('storage.action.cancel')}
         </button>
       </div>
     </div>

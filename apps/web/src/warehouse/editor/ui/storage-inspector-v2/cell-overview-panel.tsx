@@ -1,6 +1,7 @@
 import type { LocationStorageSnapshotRow } from '@wos/domain';
 import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
 import { LocationAddress } from '@/entities/location/ui/location-address';
+import { useT } from '@/shared/i18n';
 import {
   InspectorFooter,
   inspectorRowCardClassName,
@@ -53,16 +54,18 @@ export function CellOverviewPanel({
   onOpenCreateFromPresetTask,
   onOpenCreateWithProductTask
 }: CellOverviewPanelProps) {
+  const t = useT();
+
   return (
     <div
       className={inspectorShellClassName}
       role="complementary"
-      aria-label={`Location inspector: ${locationCode}`}
+      aria-label={t('storage.inspector.locationLabel', { locationCode })}
     >
       <div className={inspectorSectionClassName}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-mono text-sm font-semibold text-gray-900">{locationCode}</div>
+            <div className="font-mono text-sm font-semibold text-gray-900" dir="ltr">{locationCode}</div>
             <div className="mt-1">
               <LocationAddress
                 rackDisplayCode={rackDisplayCode}
@@ -84,9 +87,9 @@ export function CellOverviewPanel({
 
       <div className={inspectorScrollBodyClassName}>
         <div className={inspectorSectionClassName}>
-          <div className={inspectorSectionTitleClassName}>Current Contents</div>
+          <div className={inspectorSectionTitleClassName}>{t('storage.field.currentContents')}</div>
           {!isOccupied ? (
-            <div className="mt-2 text-xs text-gray-400">Empty</div>
+            <div className="mt-2 text-xs text-gray-400">{t('storage.status.empty')}</div>
           ) : (
             <div className="mt-2 space-y-1.5">
               {containers.map(({ containerId, rows }) => {
@@ -98,14 +101,14 @@ export function CellOverviewPanel({
                     key={containerId}
                     onClick={() => onSelectContainer(containerId)}
                     className={`${inspectorRowCardClassName} w-full transition-colors hover:bg-blue-50`}
-                    aria-label={`View container ${displayCode}`}
+                    aria-label={t('storage.inspector.viewContainer', { containerCode: displayCode })}
                   >
                     <div className="min-w-0">
-                      <div className="font-mono text-[12px] font-semibold text-gray-900">{displayCode}</div>
+                      <div className="font-mono text-[12px] font-semibold text-gray-900" dir="ltr">{displayCode}</div>
                       <div className="mt-0.5 text-[11px] text-gray-500 capitalize">{first.containerStatus}</div>
                     </div>
                     <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400">
-                      Open
+                      {t('storage.action.open')}
                     </div>
                   </button>
                 );
@@ -115,9 +118,9 @@ export function CellOverviewPanel({
         </div>
 
         <div className={inspectorSectionClassName}>
-          <div className={inspectorSectionTitleClassName}>Inventory Preview</div>
+          <div className={inspectorSectionTitleClassName}>{t('storage.field.inventoryPreview')}</div>
           {inventoryPreviewRows.length === 0 ? (
-            <div className="mt-2 text-xs text-gray-400">0 items</div>
+            <div className="mt-2 text-xs text-gray-400">{t('storage.state.zeroItems')}</div>
           ) : (
             <div className="mt-2 space-y-1.5">
               {inventoryPreviewRows.map((row, idx) => {
@@ -126,9 +129,9 @@ export function CellOverviewPanel({
                   <div key={item.key} className="flex items-start justify-between gap-2 text-xs">
                     <div className="min-w-0 flex-1 text-gray-600">
                       {row.product?.sku ? (
-                        <span className="font-mono text-[11px] text-gray-500">{row.product.sku}</span>
+                        <span className="font-mono text-[11px] text-gray-500" dir="ltr">{row.product.sku}</span>
                       ) : null}
-                      <span className="ml-1.5 truncate">{item.label}</span>
+                      <span className="ms-1.5 truncate">{item.label}</span>
                     </div>
                     <span className="font-mono text-[11px] text-gray-700">
                       {item.qty} {item.uom}
@@ -138,7 +141,7 @@ export function CellOverviewPanel({
               })}
               {inventoryOverflow > 0 ? (
                 <div className="text-[11px] text-gray-400">
-                  +{inventoryOverflow} more item{inventoryOverflow > 1 ? 's' : ''}
+                  {t('storage.state.moreItems', { count: inventoryOverflow })}
                 </div>
               ) : null}
             </div>
@@ -146,9 +149,9 @@ export function CellOverviewPanel({
         </div>
 
         <div className="border-b border-gray-200 px-4 py-2.5" data-testid="cell-override-hint">
-          <div className={inspectorSectionTitleClassName}>Role Context</div>
+          <div className={inspectorSectionTitleClassName}>{t('storage.field.roleContext')}</div>
           <div className="mt-1.5 text-[11px] leading-5 text-gray-500">
-            Location role context is shown for container detail. Select a container with one active SKU to resolve the effective role.
+            {t('storage.inspector.roleContextHint')}
           </div>
         </div>
 
@@ -157,24 +160,24 @@ export function CellOverviewPanel({
             <button
               onClick={onOpenCreateTask}
               className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-              aria-label="Create container at this location"
+              aria-label={t('storage.action.createContainerAtLocation')}
             >
-              Create container
+              {t('storage.action.createContainer')}
             </button>
             <button
               onClick={onOpenCreateWithProductTask}
               className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-              aria-label="Create container with product at this location"
+              aria-label={t('storage.action.createContainerWithProductAtLocation')}
             >
-              Create container with product
+              {t('storage.action.createContainerWithProduct')}
             </button>
             <button
               onClick={onOpenCreateFromPresetTask}
               className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-              aria-label="Create container from storage preset at this location"
+              aria-label={t('storage.action.createFromPresetAtLocation')}
               data-testid="create-from-preset-action"
             >
-              Create from preset
+              {t('storage.action.createFromPreset')}
             </button>
           </div>
         </div>

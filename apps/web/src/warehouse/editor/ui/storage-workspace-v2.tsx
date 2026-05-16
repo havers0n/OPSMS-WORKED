@@ -1,4 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
+import { useT } from '@/shared/i18n';
 import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
@@ -39,10 +40,12 @@ export function StorageWorkspaceV2({
   onOpenInspector,
   onCloseInspector
 }: StorageWorkspaceV2Props) {
+  const t = useT();
+
   return (
     <div
       role="region"
-      aria-label="Storage workspace"
+      aria-label={t('warehouse.storage.region')}
       className="flex h-full w-full overflow-hidden"
     >
       <StorageNavigator workspace={workspace} />

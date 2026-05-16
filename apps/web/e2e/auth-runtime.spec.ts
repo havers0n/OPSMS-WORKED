@@ -3,7 +3,7 @@ import { fillCredentials, installSupabaseAuthRoutes, signInToWarehouse } from '.
 import { resetWarehouseData } from './support/local-supabase';
 
 async function openAccountMenu(page: Page) {
-  await page.getByLabel('Account menu').click();
+  await page.getByLabel(/Account menu|תפריט חשבון/).click();
 }
 
 test.describe('auth runtime smoke', () => {
@@ -11,7 +11,7 @@ test.describe('auth runtime smoke', () => {
     await page.goto('/operations');
 
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('heading', { name: 'Sign in to the active warehouse workspace.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Sign in to the active warehouse workspace\.|התחברות לסביבת העבודה הפעילה של המחסן\./ })).toBeVisible();
     await expect(page.getByText('Signing in to the warehouse workspace...')).toHaveCount(0);
   });
 
@@ -28,20 +28,20 @@ test.describe('auth runtime smoke', () => {
     await signInToWarehouse(page);
 
     expect(meStatuses).toContain(200);
-    await expect(page.getByText('Bootstrap Warehouse Setup')).toBeVisible();
+    await expect(page.getByText(/Bootstrap Warehouse Setup|אתחול הגדרת מחסן/)).toBeVisible();
 
     await page.goto('/operations');
     await openAccountMenu(page);
-    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Sign Out|התנתקות/ })).toBeVisible();
 
     await page.reload();
     await expect(page).toHaveURL(/\/operations$/);
     await openAccountMenu(page);
-    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Sign Out|התנתקות/ })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Sign Out' }).click();
+    await page.getByRole('button', { name: /Sign Out|התנתקות/ }).click();
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('heading', { name: 'Sign in to the active warehouse workspace.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Sign in to the active warehouse workspace\.|התחברות לסביבת העבודה הפעילה של המחסן\./ })).toBeVisible();
   });
 
   test('workspace-unavailable session shows access screen and still signs out', async ({ page }) => {
@@ -62,14 +62,14 @@ test.describe('auth runtime smoke', () => {
     await expect(page).toHaveURL(/\/login$/);
 
     await fillCredentials(page);
-    await page.locator('form').filter({ has: page.getByLabel('Email') }).getByRole('button', { name: 'Sign In' }).click();
+    await page.locator('form').filter({ has: page.getByLabel(/Email|אימייל/) }).getByRole('button', { name: /Sign In|התחברות/ }).click();
 
-    await expect(page.getByText('Workspace Access', { exact: true })).toBeVisible();
-    await expect(page.getByText('Your account is authenticated, but no warehouse workspace is assigned yet.')).toBeVisible();
+    await expect(page.getByText(/Workspace Access|גישה לסביבת עבודה/)).toBeVisible();
+    await expect(page.getByText(/Your account is authenticated, but no warehouse workspace is assigned yet\.|החשבון מאומת, אבל עדיין לא הוקצתה לו סביבת עבודה במחסן\./)).toBeVisible();
     await expect(page.getByText('No workspace assigned', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.getByRole('button', { name: /Sign out|התנתק/ }).click();
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('heading', { name: 'Sign in to the active warehouse workspace.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Sign in to the active warehouse workspace\.|התחברות לסביבת העבודה הפעילה של המחסן\./ })).toBeVisible();
   });
 });

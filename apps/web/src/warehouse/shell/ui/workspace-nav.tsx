@@ -9,6 +9,7 @@ import {
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useSites } from '@/entities/site/api/use-sites';
+import { useT } from '@/shared/i18n';
 import { Divider } from '@/shared/ui/divider';
 import {
   useIsWarehouseDraftDirty,
@@ -23,6 +24,7 @@ type WorkspaceNavProps = {
 };
 
 export function WorkspaceNav({ statusBadge, onContextSwitched }: WorkspaceNavProps) {
+  const t = useT();
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
@@ -41,7 +43,7 @@ export function WorkspaceNav({ statusBadge, onContextSwitched }: WorkspaceNavPro
 
   const handleSiteChange = (nextSiteId: string) => {
     if (nextSiteId === activeSiteId) return;
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?')))
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm(t('warehouse.context.unsavedDiscard'))))
       return;
     resetDraft();
     setActiveSiteId(nextSiteId || null);
@@ -50,7 +52,7 @@ export function WorkspaceNav({ statusBadge, onContextSwitched }: WorkspaceNavPro
 
   const handleFloorChange = (nextFloorId: string) => {
     if (nextFloorId === activeFloorId) return;
-    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm('Unsaved changes. Discard?')))
+    if (!shouldProceedWithContextSwitch(isDraftDirty, () => window.confirm(t('warehouse.context.unsavedDiscard'))))
       return;
     resetDraft();
     setActiveFloorId(nextFloorId || null);
@@ -60,42 +62,42 @@ export function WorkspaceNav({ statusBadge, onContextSwitched }: WorkspaceNavPro
   return (
     <div className="flex h-full min-w-0 items-center gap-2">
       <label className="group relative flex h-8 min-w-0 items-center rounded-md px-2 transition-colors hover:bg-slate-100">
-        <span className="sr-only">Site</span>
+        <span className="sr-only">{t('warehouse.field.site')}</span>
         <select
-          aria-label="Site"
+          aria-label={t('warehouse.field.site')}
           value={activeSiteId ?? ''}
           onChange={(event) => handleSiteChange(event.target.value)}
-          className="h-8 max-w-40 appearance-none truncate border-0 bg-transparent pr-5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
+          className="h-8 max-w-40 appearance-none truncate border-0 bg-transparent pe-5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0"
         >
-          <option value="">Site...</option>
+          <option value="">{t('warehouse.context.sitePlaceholder')}</option>
           {sites.map((site) => (
             <option key={site.id} value={site.id}>
               {site.code}
             </option>
           ))}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-slate-400" />
+        <ChevronDown className="pointer-events-none absolute end-2 h-3.5 w-3.5 text-slate-400" />
       </label>
 
       <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" />
 
       <label className="group relative flex h-8 min-w-0 items-center rounded-md px-2 transition-colors hover:bg-slate-100">
-        <span className="sr-only">Floor</span>
+        <span className="sr-only">{t('warehouse.field.floor')}</span>
         <select
-          aria-label="Floor"
+          aria-label={t('warehouse.field.floor')}
           value={activeFloorId ?? ''}
           onChange={(event) => handleFloorChange(event.target.value)}
           disabled={!activeSiteId}
-          className="h-8 max-w-28 appearance-none truncate border-0 bg-transparent pr-5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400"
+          className="h-8 max-w-28 appearance-none truncate border-0 bg-transparent pe-5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:text-slate-400"
         >
-          <option value="">Floor...</option>
+          <option value="">{t('warehouse.context.floorPlaceholder')}</option>
           {floors.map((floor) => (
             <option key={floor.id} value={floor.id}>
               {floor.code}
             </option>
           ))}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-slate-400" />
+        <ChevronDown className="pointer-events-none absolute end-2 h-3.5 w-3.5 text-slate-400" />
       </label>
 
       {activeSite && activeFloor && (

@@ -9,6 +9,7 @@ import {
   warehouseLayoutDraftActions
 } from '@/warehouse/state/layout-draft';
 import { BffRequestError } from '@/shared/api/bff/client';
+import { translate, translateBffError } from '@/shared/i18n';
 import { saveLayoutDraft } from '../api/mutations';
 
 type SaveLayoutDraftResult = Awaited<ReturnType<typeof saveLayoutDraft>>;
@@ -67,7 +68,7 @@ async function runSaveLayoutDraft(queryClient: QueryClient, floorId: string | nu
       if (error instanceof BffRequestError && (error.code === 'DRAFT_NOT_ACTIVE' || error.code === 'DRAFT_CONFLICT')) {
         warehouseLayoutDraftActions.markDraftSaveConflict({
           layoutVersionId: draftSnapshot.layoutVersionId,
-          message: error.message
+          message: translateBffError(error)
         });
         await invalidateDraftWorkspace(queryClient, floorId);
         throw error;
@@ -75,7 +76,7 @@ async function runSaveLayoutDraft(queryClient: QueryClient, floorId: string | nu
 
       warehouseLayoutDraftActions.markDraftSaveError({
         layoutVersionId: draftSnapshot.layoutVersionId,
-        message: error instanceof Error ? error.message : 'Save failed',
+        message: error instanceof BffRequestError ? translateBffError(error) : translate('warehouse.status.saveFailed'),
         keepDirty
       });
       throw error;

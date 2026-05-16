@@ -4,6 +4,7 @@ import TestRenderer, { act, type ReactTestInstance } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContainerType, LocationStorageSnapshotRow, Product } from '@wos/domain';
 import type { LocationProductAssignment } from '@/entities/product-location-role/api/queries';
+import { translate } from '@/shared/i18n';
 import { CellPlacementInspector } from './cell-placement-inspector';
 import {
   filterStorableTypes,
@@ -270,9 +271,9 @@ describe('CellPlacementInspector render hierarchy', () => {
 
     const markup = renderInspector();
 
-    expectTextOrder(markup, 'Current containers', 'Location Policy');
-    expectTextOrder(markup, 'Current inventory', 'Location Policy');
-    expect(markup).toContain('No SKU policies are assigned to this location.');
+    expectTextOrder(markup, translate('storage.field.currentContainers'), translate('storage.field.locationPolicy'));
+    expectTextOrder(markup, translate('storage.field.currentInventory'), translate('storage.field.locationPolicy'));
+    expect(markup).toContain(translate('storage.policy.noSkuPolicies'));
   });
 });
 
@@ -339,14 +340,14 @@ describe('CellPlacementInspector placement mode transitions', () => {
 
     expect(view.findByTestId('cell-placement-details-view')).not.toBeNull();
     expect(view.findByTestId('cell-placement-task-view')).toBeNull();
-    expect(view.text()).toContain('Current containers');
-    expect(view.text()).toContain('Current inventory');
-    expect(view.text()).toContain('Location Policy');
-    expect(view.text()).toContain('No SKU policies are assigned to this location.');
+    expect(view.text()).toContain(translate('storage.field.currentContainers'));
+    expect(view.text()).toContain(translate('storage.field.currentInventory'));
+    expect(view.text()).toContain(translate('storage.field.locationPolicy'));
+    expect(view.text()).toContain(translate('storage.policy.noSkuPolicies'));
     expect(view.text()).not.toContain('Placement actions');
     expect(view.text()).not.toContain('Place existing');
     expect(view.text()).not.toContain('Create + place');
-    expect(view.text()).not.toContain('Edit policy');
+    expect(view.text()).not.toContain(translate('storage.action.editPolicy'));
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
     expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
@@ -367,7 +368,7 @@ describe('CellPlacementInspector placement mode transitions', () => {
     view.rerender();
 
     expect(view.text()).toContain('A-01-02');
-    expect(view.text()).toContain('Current containers');
+    expect(view.text()).toContain(translate('storage.field.currentContainers'));
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
 
     view.unmount();
@@ -391,10 +392,10 @@ describe('CellPlacementInspector placement mode transitions', () => {
 
     expect(view.findByTestId('cell-placement-policy-summary')).not.toBeNull();
     expect(view.findByTestId('cell-placement-policy-editor')).toBeNull();
-    expect(view.text()).toContain('policy assignment');
+    expect(view.text()).toContain(translate('storage.policy.assignmentCount', { count: 1 }));
     expect(view.text()).toContain('Widget');
-    expect(view.text()).toContain('Primary pick');
-    expect(view.text()).not.toContain('Edit policy');
+    expect(view.text()).toContain(translate('storage.role.primaryPickSentence'));
+    expect(view.text()).not.toContain(translate('storage.action.editPolicy'));
     expect(view.text()).not.toContain('+ Add SKU policy');
     expect(view.text()).not.toContain('Search by name or SKU');
     expect(view.text()).not.toContain('Save policy');
@@ -418,7 +419,7 @@ describe('CellPlacementInspector placement mode transitions', () => {
 
     const view = renderInteractiveInspector();
 
-    expect(view.findButtonByText('Edit policy')).toBeNull();
+    expect(view.findButtonByText(translate('storage.action.editPolicy'))).toBeNull();
     expect(view.findByTestId('cell-placement-task-header')).toBeNull();
     expect(view.findByTestId('cell-placement-task-body')).toBeNull();
     expect(view.text()).not.toContain('Policy editor');
@@ -428,9 +429,9 @@ describe('CellPlacementInspector placement mode transitions', () => {
     expect(view.findByTestId('cell-placement-task-place-existing')).toBeNull();
     expect(view.findByTestId('cell-placement-task-create-and-place')).toBeNull();
     expect(view.text()).not.toContain('+ Add SKU policy');
-    expect(view.text()).toContain('Current containers');
-    expect(view.text()).toContain('Location Policy');
-    expect(view.text()).toContain('Reserve');
+    expect(view.text()).toContain(translate('storage.field.currentContainers'));
+    expect(view.text()).toContain(translate('storage.field.locationPolicy'));
+    expect(view.text()).toContain(translate('storage.role.reserve'));
 
     view.unmount();
   });
@@ -442,7 +443,7 @@ describe('CellPlacementInspector placement mode transitions', () => {
     expect(view.findButtonByText('Back')).toBeNull();
     expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
     expect(view.findByTestId('cell-placement-policy-summary')).not.toBeNull();
-    expect(view.text()).toContain('Current containers');
+    expect(view.text()).toContain(translate('storage.field.currentContainers'));
 
     view.unmount();
   });
@@ -471,8 +472,8 @@ describe('CellPlacementInspector placement mode transitions', () => {
     expect(view.findByTestId('cell-placement-task-edit-policy')).toBeNull();
     expect(view.findByTestId('cell-placement-task-header')).toBeNull();
     expect(view.findByTestId('cell-placement-policy-summary')).not.toBeNull();
-    expect(view.text()).toContain('Current containers');
-    expect(view.text()).toContain('Current inventory');
+    expect(view.text()).toContain(translate('storage.field.currentContainers'));
+    expect(view.text()).toContain(translate('storage.field.currentInventory'));
 
     view.unmount();
   });
@@ -508,13 +509,13 @@ describe('CellPlacementInspector view mode read-only gating', () => {
     const view = renderInteractiveInspector();
 
     expect(view.text()).toContain('View');
-    expect(view.text()).toContain('Current containers');
-    expect(view.text()).toContain('Current inventory');
-    expect(view.text()).toContain('Location Policy');
+    expect(view.text()).toContain(translate('storage.field.currentContainers'));
+    expect(view.text()).toContain(translate('storage.field.currentInventory'));
+    expect(view.text()).toContain(translate('storage.field.locationPolicy'));
     expect(view.text()).not.toContain('Placement actions');
     expect(view.text()).not.toContain('Place existing');
     expect(view.text()).not.toContain('Create + place');
-    expect(view.text()).not.toContain('Edit policy');
+    expect(view.text()).not.toContain(translate('storage.action.editPolicy'));
     expect(view.findByTestId('cell-placement-task-view')).toBeNull();
 
     view.unmount();

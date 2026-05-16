@@ -5,6 +5,10 @@ const credentials = {
   email: 'admin@wos.local',
   password: 'warehouse123'
 };
+const emailLabel = /Email|אימייל/;
+const passwordLabel = /Password|סיסמה/;
+const accountMenuLabel = /Account menu|תפריט חשבון/;
+const submitAuthButton = /Sign In|Create Account|התחברות|יצירת חשבון/;
 
 const authCorsHeaders = {
   'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
@@ -66,8 +70,8 @@ export async function installSupabaseAuthRoutes(page: Page) {
 
 export async function fillCredentials(page: Page) {
   try {
-    await page.getByLabel('Email').fill(credentials.email, { timeout: 5000 });
-    await page.getByLabel('Password').fill(credentials.password, { timeout: 5000 });
+    await page.getByLabel(emailLabel).fill(credentials.email, { timeout: 5000 });
+    await page.getByLabel(passwordLabel).fill(credentials.password, { timeout: 5000 });
   } catch (error) {
     if (isWarehouseUrl(page)) {
       await expectAuthenticatedWarehouseApp(page);
@@ -78,8 +82,8 @@ export async function fillCredentials(page: Page) {
 }
 
 async function submitLoginForm(page: Page) {
-  const form = page.locator('form').filter({ has: page.getByLabel('Email') });
-  await form.getByRole('button', { name: /Sign In|Create Account/ }).click();
+  const form = page.locator('form').filter({ has: page.getByLabel(emailLabel) });
+  await form.getByRole('button', { name: submitAuthButton }).click();
 }
 
 function isWarehouseUrl(page: Page) {
@@ -88,7 +92,7 @@ function isWarehouseUrl(page: Page) {
 
 async function expectAuthenticatedWarehouseApp(page: Page) {
   await expect(page).toHaveURL(/\/warehouse(?:$|[/?#])/, { timeout: 10000 });
-  await expect(page.getByLabel('Account menu')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByLabel(accountMenuLabel)).toBeVisible({ timeout: 10000 });
 }
 
 export async function signInToWarehouse(page: Page) {
@@ -101,7 +105,7 @@ export async function signInToWarehouse(page: Page) {
   }
 
   try {
-    await page.getByLabel('Email').waitFor({ state: 'visible', timeout: 10000 });
+    await page.getByLabel(emailLabel).waitFor({ state: 'visible', timeout: 10000 });
   } catch (error) {
     if (isWarehouseUrl(page)) {
       await expectAuthenticatedWarehouseApp(page);

@@ -84,6 +84,12 @@ docs/
 - `seed.sql`
 - SQL tests for layout lifecycle
 
+## Localization and RTL
+
+The frontend defaults to Hebrew through `apps/web/src/shared/i18n` with English fallback keys. The normal application shell runs RTL at runtime by setting `<html lang="he" dir="rtl">`; navigation, top bars, forms, tables, drawers, and page copy should use translation keys and logical CSS utilities (`start/end`, `ps/pe`, `ms/me`, `border-s/e`) when direction matters.
+
+Warehouse canvas and physical geometry are stable LTR islands. Canvas/stage wrappers are marked `dir="ltr"` and layout math, rack coordinates, drag/drop behavior, cell addresses, e2e geometry checks, and `slotNumberingDirection` semantics must not be mirrored by localization work. BFF/API response shapes remain contract-stable; frontend error copy is localized by stable `BffRequestError.code` values.
+
 ## Requirements
 
 - `Node.js 20+` recommended

@@ -1,15 +1,16 @@
 import type { PickStepStatus, PickTaskStatus } from '@wos/domain';
+import { translate } from '@/shared/i18n';
 
 // ── Step status ───────────────────────────────────────────────────────────────
 
 export function getPickStepStatusLabel(status: PickStepStatus): string {
   switch (status) {
-    case 'pending':             return 'Pending';
-    case 'picked':              return 'Picked';
-    case 'partial':             return 'Partial';
-    case 'skipped':             return 'Skipped';
-    case 'exception':           return 'Exception';
-    case 'needs_replenishment': return 'Needs replenishment';
+    case 'pending':             return translate('operations.pick.step.status.pending');
+    case 'picked':              return translate('operations.pick.step.status.picked');
+    case 'partial':             return translate('operations.pick.step.status.partial');
+    case 'skipped':             return translate('operations.pick.step.status.skipped');
+    case 'exception':           return translate('operations.pick.step.status.exception');
+    case 'needs_replenishment': return translate('operations.pick.step.status.needsReplenishment');
   }
 }
 
@@ -28,11 +29,11 @@ export function getPickStepStatusColor(status: PickStepStatus): string {
 
 export function getPickTaskStatusLabel(status: PickTaskStatus): string {
   switch (status) {
-    case 'ready':                    return 'Ready';
-    case 'assigned':                 return 'Assigned';
-    case 'in_progress':              return 'In progress';
-    case 'completed':                return 'Completed';
-    case 'completed_with_exceptions': return 'Completed with exceptions';
+    case 'ready':                    return translate('operations.pick.task.status.ready');
+    case 'assigned':                 return translate('operations.pick.task.status.assigned');
+    case 'in_progress':              return translate('operations.pick.task.status.inProgress');
+    case 'completed':                return translate('operations.pick.task.status.completed');
+    case 'completed_with_exceptions': return translate('operations.pick.task.status.completedWithExceptions');
   }
 }
 

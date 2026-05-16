@@ -20,23 +20,23 @@ test.describe('warehouse bootstrap flow', () => {
 
   test('empty DB opens bootstrap wizard and can enter editor after first draft', async ({ page }) => {
     await signInToWarehouse(page);
-    await expect(page.getByText('Bootstrap Warehouse Setup')).toBeVisible();
+    await expect(page.getByText(/Bootstrap Warehouse Setup|אתחול הגדרת מחסן/)).toBeVisible();
 
-    await page.getByLabel('Site Code').fill('MAIN');
-    await page.getByLabel('Site Name').fill('Main Site');
-    await page.getByLabel('Timezone').fill('Asia/Jerusalem');
-    await page.getByLabel('Floor Code').fill('F1');
-    await page.getByLabel('Floor Name').fill('Main Floor');
+    await page.getByLabel(/Site Code|קוד אתר/).fill('MAIN');
+    await page.getByLabel(/Site Name|שם אתר/).fill('Main Site');
+    await page.getByLabel(/Timezone|אזור זמן/).fill('Asia/Jerusalem');
+    await page.getByLabel(/Floor Code|קוד רצפה/).fill('F1');
+    await page.getByLabel(/Floor Name|שם רצפה/).fill('Main Floor');
 
     const createSiteResponse = waitForSuccessfulPost(page, '/sites');
     const createFloorResponse = waitForSuccessfulPost(page, '/floors');
     const createDraftResponse = waitForSuccessfulPost(page, '/layout-drafts');
-    await page.getByRole('button', { name: 'Create Site, Floor, and First Draft' }).click();
+    await page.getByRole('button', { name: /Create Site, Floor, and First Draft|צור אתר, רצפה וטיוטה ראשונה/ }).click();
     await createSiteResponse;
     await createFloorResponse;
     await createDraftResponse;
 
-    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /Warehouse editor|עורך המחסן/ })).toBeVisible();
   });
 
   test('existing floor without draft requires explicit draft creation', async ({ page }) => {
@@ -48,16 +48,16 @@ test.describe('warehouse bootstrap flow', () => {
     });
 
     await signInToWarehouse(page);
-    await expect(page.getByText('Select or Create Site and Floor')).toBeVisible();
-    await page.getByLabel('Floor').selectOption(floor.id);
-    await expect(page.getByLabel('Floor')).toHaveValue(floor.id);
+    await expect(page.getByText(/Select or Create Site and Floor|בחירה או יצירה של אתר ורצפה/)).toBeVisible();
+    await page.getByLabel(/Floor|רצפה/).selectOption(floor.id);
+    await expect(page.getByLabel(/Floor|רצפה/)).toHaveValue(floor.id);
 
-    const createDraftButton = page.getByRole('button', { name: 'Create First Draft for Selected Floor' });
+    const createDraftButton = page.getByRole('button', { name: /Create First Draft for Selected Floor|צור טיוטה ראשונה לרצפה שנבחרה/ });
     await expect(createDraftButton).toBeVisible();
     const createDraftResponse = waitForSuccessfulPost(page, '/layout-drafts');
     await createDraftButton.click();
     await createDraftResponse;
 
-    await expect(page.getByRole('region', { name: 'Warehouse editor' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /Warehouse editor|עורך המחסן/ })).toBeVisible();
   });
 });

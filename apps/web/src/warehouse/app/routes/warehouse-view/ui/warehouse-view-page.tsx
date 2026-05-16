@@ -24,6 +24,7 @@ import {
 import { warehouseStorageFocusActions } from '@/warehouse/state/storage-focus';
 import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
+import { useT } from '@/shared/i18n';
 import { PublishedViewer } from '@/warehouse/editor/ui/published-viewer';
 import { ViewTopBar } from '@/warehouse/viewer/ui/view-top-bar';
 import {
@@ -41,6 +42,7 @@ function normalizeLocateToken(value: string): string {
 }
 
 export function WarehouseViewPage() {
+  const t = useT();
   const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
   const setActiveSiteId = useSetActiveSiteId();
@@ -155,29 +157,29 @@ export function WarehouseViewPage() {
   }, [targetCellId, viewMode, setHighlightedCellIds, setSelectedCellId]);
 
   const locateDataGapReason = useMemo(() => {
-    if (!activeFloorId) return 'Select a floor to use locate.';
-    if (publishedCellsQuery.isError) return 'Locate is unavailable: failed to load published cells.';
-    if (publishedCells.length === 0) return 'Locate is unavailable: no published cells found for this floor.';
+    if (!activeFloorId) return t('warehouse.locate.selectFloor');
+    if (publishedCellsQuery.isError) return t('warehouse.locate.failedToLoad');
+    if (publishedCells.length === 0) return t('warehouse.locate.noCells');
 
     const byNormalizedAddress = new Map<string, string>();
     for (const cell of publishedCells) {
       const rawAddress = cell.address?.raw;
       if (typeof rawAddress !== 'string' || rawAddress.trim() === '') {
-        return 'Locate is unavailable: some published cells are missing stable address.raw.';
+        return t('warehouse.locate.missingAddress');
       }
       const normalizedAddress = normalizeLocateToken(rawAddress);
       if (!normalizedAddress) {
-        return 'Locate is unavailable: some published cells have invalid address.raw.';
+        return t('warehouse.locate.invalidAddress');
       }
       const existingCellId = byNormalizedAddress.get(normalizedAddress);
       if (existingCellId && existingCellId !== cell.id) {
-        return 'Locate is unavailable: duplicate normalized address.raw detected.';
+        return t('warehouse.locate.duplicateAddress');
       }
       byNormalizedAddress.set(normalizedAddress, cell.id);
     }
 
     return null;
-  }, [activeFloorId, publishedCellsQuery.isError, publishedCells]);
+  }, [activeFloorId, publishedCellsQuery.isError, publishedCells, t]);
 
   const locateLookupByAddress = useMemo(() => {
     if (locateDataGapReason) return new Map<string, string>();
@@ -215,7 +217,7 @@ export function WarehouseViewPage() {
     if (!normalizedQuery) {
       setLocateFeedback({
         kind: 'invalid',
-        message: 'Enter a cell address.'
+        message: t('warehouse.locate.enterAddress')
       });
       return;
     }
@@ -224,7 +226,7 @@ export function WarehouseViewPage() {
     if (!matchedCellId) {
       setLocateFeedback({
         kind: 'not-found',
-        message: `Cell "${query.trim()}" not found.`
+        message: t('warehouse.locate.notFound', { query: query.trim() })
       });
       return;
     }
@@ -241,7 +243,7 @@ export function WarehouseViewPage() {
     }
     setLocateFeedback({
       kind: 'found',
-      message: `Located ${query.trim()}.`
+      message: t('warehouse.locate.found', { query: query.trim() })
     });
   }, [
     locateDataGapReason,
@@ -249,6 +251,7 @@ export function WarehouseViewPage() {
     publishedCells,
     setHighlightedCellIds,
     setSelectedCellId,
+    t,
     viewMode
   ]);
 
@@ -274,7 +277,7 @@ export function WarehouseViewPage() {
         />
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Loading warehouse…
+            {t('warehouse.view.loading')}
           </p>
         </div>
       </div>
@@ -290,7 +293,7 @@ export function WarehouseViewPage() {
           locateDisabled
         />
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-red-500">Failed to load warehouse data.</p>
+          <p className="text-sm text-red-500">{t('warehouse.view.loadError')}</p>
         </div>
       </div>
     );
@@ -307,14 +310,14 @@ export function WarehouseViewPage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              No warehouse layout is available for this floor.
+              {t('warehouse.view.noLayout')}
             </p>
             <Link
               to={routes.warehouse}
               className="mt-2 block text-xs hover:underline"
               style={{ color: 'var(--accent)' }}
             >
-              Open the editor to create and publish one
+              {t('warehouse.view.openEditor')}
             </Link>
           </div>
         </div>
@@ -343,7 +346,7 @@ export function WarehouseViewPage() {
             style={{ color: 'var(--accent)' }}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Task {returnTaskNumber}
+            {t('warehouse.view.backToTask', { taskNumber: returnTaskNumber })}
           </Link>
         </div>
       )}

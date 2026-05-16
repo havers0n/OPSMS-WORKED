@@ -9,6 +9,7 @@ import { SiteFloorSetupState } from '@/warehouse/bootstrap/ui/site-floor-setup-s
 import { WarehouseTopBar } from '@/warehouse/shell/ui/warehouse-top-bar';
 import { PublishedViewer } from '@/warehouse/editor/ui/published-viewer';
 import { WarehouseEditor } from '@/warehouse/editor/ui/warehouse-editor';
+import { useT } from '@/shared/i18n';
 
 function WarehouseContent({
   setupState,
@@ -19,14 +20,16 @@ function WarehouseContent({
   hasDraft: boolean;
   hasPublished: boolean;
 }) {
+  const t = useT();
+
   if (setupState === 'workspace_loading') {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <div className="w-full max-w-lg rounded-[22px] border border-[var(--border-muted)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
           <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-[var(--accent-soft)]" />
-          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">Warehouse Setup</div>
-          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">Loading warehouse setup...</div>
-          <div className="mt-2 text-sm text-[var(--text-muted)]">Resolving current site, floor, and workspace state from the live layout lifecycle.</div>
+          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">{t('warehouse.setup.eyebrow')}</div>
+          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{t('warehouse.setup.loading.title')}</div>
+          <div className="mt-2 text-sm text-[var(--text-muted)]">{t('warehouse.setup.loading.description')}</div>
         </div>
       </div>
     );
@@ -36,9 +39,9 @@ function WarehouseContent({
     return (
       <div className="flex h-full w-full items-center justify-center">
         <div className="w-full max-w-lg rounded-[22px] border border-red-200 bg-white p-8 text-center shadow-[var(--shadow-soft)]">
-          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">Warehouse Setup</div>
-          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">Failed to load warehouse setup state.</div>
-          <div className="mt-2 text-sm text-[var(--text-muted)]">Check local Supabase connectivity and reload the page. The editor will not render until live context is available.</div>
+          <div className="text-sm font-semibold uppercase tracking-[0.24em] text-red-600">{t('warehouse.setup.eyebrow')}</div>
+          <div className="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{t('warehouse.setup.error.title')}</div>
+          <div className="mt-2 text-sm text-[var(--text-muted)]">{t('warehouse.setup.error.description')}</div>
         </div>
       </div>
     );

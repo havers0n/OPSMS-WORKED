@@ -1,5 +1,6 @@
 import type { Order, OrderStatus, OrderSummary } from '@wos/domain';
 import { BffRequestError } from '@/shared/api/bff/client';
+import { translate } from '@/shared/i18n';
 
 export type OrderAction =
   | 'edit'
@@ -54,14 +55,14 @@ export function isProblematicOrder(status: OrderStatus): boolean {
 /** UI badge label */
 export function getOrderStatusLabel(status: OrderStatus): string {
   switch (status) {
-    case 'draft':     return 'Draft';
-    case 'ready':     return 'Ready';
-    case 'released':  return 'Released';
-    case 'picking':   return 'In progress';
-    case 'picked':    return 'Picked';
-    case 'partial':   return 'Partial';
-    case 'closed':    return 'Closed';
-    case 'cancelled': return 'Cancelled';
+    case 'draft':     return translate('operations.order.status.draft');
+    case 'ready':     return translate('operations.order.status.ready');
+    case 'released':  return translate('operations.order.status.released');
+    case 'picking':   return translate('operations.order.status.picking');
+    case 'picked':    return translate('operations.order.status.picked');
+    case 'partial':   return translate('operations.order.status.partial');
+    case 'closed':    return translate('operations.order.status.closed');
+    case 'cancelled': return translate('operations.order.status.cancelled');
   }
 }
 
@@ -121,7 +122,7 @@ export function getPrimaryOrderAction(
   if (target === 'ready' && order.lines.length === 0) {
     return {
       target,
-      reason: 'Add at least one line before marking ready.'
+      reason: translate('operations.order.reason.addLineBeforeReady')
     };
   }
 
@@ -129,7 +130,7 @@ export function getPrimaryOrderAction(
   if (target === 'released' && order.waveId) {
     return {
       target,
-      reason: `Release is controlled by wave ${order.waveName ?? order.waveId}.`
+      reason: translate('operations.order.reason.releaseControlledByWave', { wave: order.waveName ?? order.waveId })
     };
   }
 
@@ -143,7 +144,7 @@ export function getPrimaryOrderAction(
 export function getPrimaryActionLabel(status: OrderStatus, target: OrderStatus): string {
   // Custom label for draft -> ready transition
   if (status === 'draft' && target === 'ready') {
-    return 'Commit and reserve';
+    return translate('operations.order.action.commitAndReserve');
   }
 
   // Default: use status label
@@ -168,7 +169,13 @@ export function getTransitionErrorMessage(error: unknown): string | null {
 
     const shortage = details?.shortage;
     if (shortage) {
-      return `Insufficient stock for ${shortage.sku ?? 'this SKU'}: required ${shortage.required ?? '-'}, physical ${shortage.physical ?? '-'}, already reserved ${shortage.reserved ?? '-'}, ATP ${shortage.atp ?? '-'}.`;
+      return translate('operations.order.error.insufficientStock', {
+        sku: shortage.sku ?? translate('operations.order.error.thisSku'),
+        required: shortage.required ?? '-',
+        physical: shortage.physical ?? '-',
+        reserved: shortage.reserved ?? '-',
+        atp: shortage.atp ?? '-'
+      });
     }
   }
 

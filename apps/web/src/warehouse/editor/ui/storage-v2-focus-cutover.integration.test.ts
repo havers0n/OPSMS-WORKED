@@ -7,6 +7,7 @@ import { StorageNavigator } from './storage-navigator';
 import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
+import { translate } from '@/shared/i18n';
 
 type MockCell = {
   id: string;
@@ -153,7 +154,7 @@ function clickLocationByAddress(renderer: TestRenderer.ReactTestRenderer, addres
   const row = renderer.root.findAll((node) =>
     node.type === 'div' &&
     typeof node.props?.title === 'string' &&
-    node.props.title.includes(`Location ${addressRaw}`)
+    node.props.title.includes(addressRaw)
   )[0];
   expect(row).toBeDefined();
   act(() => {
@@ -237,7 +238,8 @@ describe('Storage V2 focus cutover integration', () => {
     expect(s.activeLevel).toBe(2);
     tree = JSON.stringify(renderer.toJSON());
     expect(
-      tree.includes('No location selected') || tree.includes('Loading rack...')
+      tree.includes(translate('storage.state.noLocation')) ||
+        tree.includes(translate('storage.state.loadingRack'))
     ).toBe(true);
 
     // 3) empty-canvas collapse semantics from focus-store, then navigator must not reanimate rack
@@ -255,8 +257,8 @@ describe('Storage V2 focus cutover integration', () => {
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
     tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain('Select a rack on the map to browse locations.');
-    expect(tree).not.toContain('No location selected');
+    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).not.toContain(translate('storage.state.noLocation'));
   });
 
   it('StorageWorkspaceV2 keeps compact V2 shell mounted across rackless and focused states', async () => {
@@ -276,12 +278,12 @@ describe('Storage V2 focus cutover integration', () => {
     );
     let tree = JSON.stringify(renderer.toJSON());
     let buttonLabels = getButtonLabels(renderer);
-    expect(tree).toContain('Search location');
+    expect(tree).toContain(translate('storage.placeholder.searchLocation'));
     expect(buttonLabels).toContain('L1');
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
-    expect(tree).toContain('Select a rack on the map to browse locations.');
-    expect(tree).not.toContain('No location selected');
+    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).not.toContain(translate('storage.state.noLocation'));
 
     await act(async () => {
       useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
@@ -289,15 +291,15 @@ describe('Storage V2 focus cutover integration', () => {
     });
 
     tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain('Search location');
+    expect(tree).toContain(translate('storage.placeholder.searchLocation'));
     expect(tree).toContain('R-01');
 
     clickLocationByAddress(renderer, '01-A.01.01');
     tree = JSON.stringify(renderer.toJSON());
     expect(tree).toContain('LOC-01');
-    expect(tree).toContain('Current containers');
-    expect(tree).toContain('Current inventory');
-    expect(tree).toContain('Location Policy');
+    expect(tree).toContain(translate('storage.field.currentContainers'));
+    expect(tree).toContain(translate('storage.field.currentInventory'));
+    expect(tree).toContain(translate('storage.field.locationPolicy'));
     expect(tree).not.toContain('Current Contents');
     expect(tree).not.toContain('Inventory Preview');
 
@@ -306,7 +308,7 @@ describe('Storage V2 focus cutover integration', () => {
       await Promise.resolve();
     });
     tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain('Search location');
+    expect(tree).toContain(translate('storage.placeholder.searchLocation'));
     expect(tree).toContain('R-01');
 
     await act(async () => {
@@ -315,12 +317,12 @@ describe('Storage V2 focus cutover integration', () => {
     });
     tree = JSON.stringify(renderer.toJSON());
     buttonLabels = getButtonLabels(renderer);
-    expect(tree).toContain('Search location');
+    expect(tree).toContain(translate('storage.placeholder.searchLocation'));
     expect(buttonLabels).toContain('L1');
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
-    expect(tree).toContain('Select a rack on the map to browse locations.');
-    expect(tree).not.toContain('No location selected');
+    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).not.toContain(translate('storage.state.noLocation'));
   });
 });
 

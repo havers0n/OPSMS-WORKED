@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveWaveBlockers, getBlockerReasonLabel } from './wave-blockers';
 import type { Wave } from '@wos/domain';
+import { translate } from '@/shared/i18n';
 
 describe('Wave Blockers', () => {
   describe('deriveWaveBlockers', () => {
@@ -226,10 +227,12 @@ describe('Wave Blockers', () => {
 
   describe('getBlockerReasonLabel', () => {
     it('returns correct labels for all reason codes', () => {
-      expect(getBlockerReasonLabel('draft')).toBe('Not committed');
-      expect(getBlockerReasonLabel('empty_order')).toBe('No lines');
-      expect(getBlockerReasonLabel('not_ready')).toBe('Not ready');
-      expect(getBlockerReasonLabel('unknown_release_blocker')).toBe('Unknown issue');
+      expect(getBlockerReasonLabel('draft')).toBe(translate('operations.wave.blocker.reason.notCommitted'));
+      expect(getBlockerReasonLabel('empty_order')).toBe(translate('operations.wave.blocker.reason.noLines'));
+      expect(getBlockerReasonLabel('not_ready')).toBe(translate('operations.wave.blocker.reason.notReady'));
+      expect(getBlockerReasonLabel('unknown_release_blocker')).toBe(
+        translate('operations.wave.blocker.reason.unknownIssue')
+      );
     });
   });
 });

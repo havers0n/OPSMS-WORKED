@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
+import { useT } from '@/shared/i18n';
 import {
   useClearSelection,
   useInitializeDraft,
@@ -28,6 +29,7 @@ import { ToolRail } from './tool-rail';
  * WarehouseEditor — no manual navigation needed.
  */
 export function PublishedViewer() {
+  const t = useT();
   const activeFloorId = useActiveFloorId();
   const { data: workspace } = useFloorWorkspace(activeFloorId);
   const clearSelection = useClearSelection();
@@ -78,7 +80,7 @@ export function PublishedViewer() {
   return (
     <div
       role="region"
-      aria-label="Published warehouse layout"
+      aria-label={t('warehouse.published.region')}
       className="flex h-full w-full flex-col overflow-hidden"
     >
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -104,8 +106,8 @@ export function PublishedViewer() {
                 <button
                   type="button"
                   onClick={() => setInspectorOpen(true)}
-                  title="Open inspector"
-                  className="pointer-events-auto absolute bottom-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl shadow-md transition-colors hover:opacity-90"
+                  title={t('warehouse.inspector.open')}
+                  className="pointer-events-auto absolute bottom-4 end-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl shadow-md transition-colors hover:opacity-90"
                   style={{ background: 'var(--accent)', color: '#fff' }}
                 >
                   <PanelRight className="h-4 w-4" />

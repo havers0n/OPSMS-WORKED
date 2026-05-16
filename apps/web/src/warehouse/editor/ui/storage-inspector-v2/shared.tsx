@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { ContainerType } from '@wos/domain';
+import { useT } from '@/shared/i18n';
 
 export const inspectorShellClassName =
-  'flex h-full w-[18.75rem] min-w-0 flex-col overflow-hidden border-l border-gray-200 bg-white';
+  'flex h-full w-[18.75rem] min-w-0 flex-col overflow-hidden border-s border-gray-200 bg-white';
 
 export const inspectorScrollBodyClassName = 'flex-1 overflow-y-auto';
 
@@ -58,11 +59,13 @@ export function SectionHeader({ title }: { title: string }) {
 }
 
 export function StatusBadge({ occupied }: { occupied: boolean }) {
+  const t = useT();
+
   if (occupied) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
         <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
-        Occupied
+        {t('storage.status.occupied')}
       </span>
     );
   }
@@ -70,18 +73,17 @@ export function StatusBadge({ occupied }: { occupied: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
       <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-500" />
-      Empty
+      {t('storage.status.empty')}
     </span>
   );
 }
 
 export function InspectorFooter() {
+  const t = useT();
+
   return (
     <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-2 text-[11px] text-gray-500">
-      <p>
-        <span className="font-medium">PR3:</span> Create container / Create container with product.{' '}
-        <span className="font-medium">PR4:</span> Move container.
-      </p>
+      <p>{t('storage.footer.capabilities')}</p>
     </div>
   );
 }
@@ -95,13 +97,15 @@ export function TaskPanelBreadcrumb({
   activeLevel: number;
   locationCode: string;
 }) {
+  const t = useT();
+
   return (
     <div className="flex flex-wrap items-center gap-1 text-xs leading-relaxed text-gray-500">
-      <span>{rackDisplayCode}</span>
+      <span dir="ltr">{rackDisplayCode}</span>
       <span className="text-gray-300">/</span>
-      <span>Level {activeLevel}</span>
+      <span>{t('storage.breadcrumb.level', { level: activeLevel })}</span>
       <span className="text-gray-300">/</span>
-      <span className="font-mono font-medium text-gray-900">{locationCode}</span>
+      <span className="font-mono font-medium text-gray-900" dir="ltr">{locationCode}</span>
     </div>
   );
 }
@@ -117,21 +121,22 @@ export function ContainerTypeSelect({
   onChange: (id: string) => void;
   disabled: boolean;
 }) {
+  const t = useT();
   const storableTypes = containerTypes.filter((containerType) => containerType.supportsStorage);
 
   return (
     <div className="space-y-1">
       <label className="block text-xs font-medium text-gray-700">
-        Container type <span className="text-red-500">*</span>
+        {t('storage.field.containerType')} <span className="text-red-500">*</span>
       </label>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled || storableTypes.length === 0}
         className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-        aria-label="Container type"
+        aria-label={t('storage.field.containerType')}
       >
-        <option value="">Select type...</option>
+        <option value="">{t('storage.placeholder.selectType')}</option>
         {storableTypes.map((containerType) => (
           <option key={containerType.id} value={containerType.id}>
             {containerType.description} ({containerType.code})

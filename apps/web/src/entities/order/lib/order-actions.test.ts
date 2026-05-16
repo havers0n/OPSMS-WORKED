@@ -14,6 +14,7 @@ import {
 } from './order-actions';
 import type { Order } from '@wos/domain';
 import { BffRequestError } from '@/shared/api/bff/client';
+import { translate } from '@/shared/i18n';
 
 const orderLine: Order['lines'][number] = {
   id: 'line-1',
@@ -83,14 +84,14 @@ describe('Order Workflow Actions', () => {
 
   describe('getOrderStatusLabel', () => {
     it('returns correct status labels for all statuses', () => {
-      expect(getOrderStatusLabel('draft')).toBe('Draft');
-      expect(getOrderStatusLabel('ready')).toBe('Ready');
-      expect(getOrderStatusLabel('released')).toBe('Released');
-      expect(getOrderStatusLabel('picking')).toBe('In progress');
-      expect(getOrderStatusLabel('picked')).toBe('Picked');
-      expect(getOrderStatusLabel('partial')).toBe('Partial');
-      expect(getOrderStatusLabel('closed')).toBe('Closed');
-      expect(getOrderStatusLabel('cancelled')).toBe('Cancelled');
+      expect(getOrderStatusLabel('draft')).toBe(translate('operations.order.status.draft'));
+      expect(getOrderStatusLabel('ready')).toBe(translate('operations.order.status.ready'));
+      expect(getOrderStatusLabel('released')).toBe(translate('operations.order.status.released'));
+      expect(getOrderStatusLabel('picking')).toBe(translate('operations.order.status.picking'));
+      expect(getOrderStatusLabel('picked')).toBe(translate('operations.order.status.picked'));
+      expect(getOrderStatusLabel('partial')).toBe(translate('operations.order.status.partial'));
+      expect(getOrderStatusLabel('closed')).toBe(translate('operations.order.status.closed'));
+      expect(getOrderStatusLabel('cancelled')).toBe(translate('operations.order.status.cancelled'));
     });
   });
 
@@ -143,7 +144,7 @@ describe('Order Workflow Actions', () => {
     it('blocks marking ready when no lines', () => {
       const action = getPrimaryOrderAction({ ...draftOrder, lines: [] });
       expect(action.target).toBe('ready');
-      expect(action.reason).toBe('Add at least one line before marking ready.');
+      expect(action.reason).toBe(translate('operations.order.reason.addLineBeforeReady'));
     });
   });
 
@@ -173,7 +174,7 @@ describe('Order Workflow Actions', () => {
     it('blocks release when order is attached to wave', () => {
       const action = getPrimaryOrderAction(waveAttachedReady);
       expect(action.target).toBe('released');
-      expect(action.reason).toBe('Release is controlled by wave Morning Run.');
+      expect(action.reason).toBe(translate('operations.order.reason.releaseControlledByWave', { wave: 'Morning Run' }));
     });
 
     it('uses waveId in message when waveName unavailable', () => {
@@ -181,7 +182,7 @@ describe('Order Workflow Actions', () => {
         ...waveAttachedReady,
         waveName: null
       });
-      expect(action.reason).toBe('Release is controlled by wave wave-123.');
+      expect(action.reason).toBe(translate('operations.order.reason.releaseControlledByWave', { wave: 'wave-123' }));
     });
   });
 
@@ -212,13 +213,13 @@ describe('Order Workflow Actions', () => {
 
   describe('getPrimaryActionLabel - Correct Wording', () => {
     it('uses custom "Commit and reserve" for draft → ready', () => {
-      expect(getPrimaryActionLabel('draft', 'ready')).toBe('Commit and reserve');
+      expect(getPrimaryActionLabel('draft', 'ready')).toBe(translate('operations.order.action.commitAndReserve'));
     });
 
     it('uses status label for other transitions', () => {
-      expect(getPrimaryActionLabel('ready', 'released')).toBe('Released');
-      expect(getPrimaryActionLabel('picking', 'closed')).toBe('Closed');
-      expect(getPrimaryActionLabel('partial', 'closed')).toBe('Closed');
+      expect(getPrimaryActionLabel('ready', 'released')).toBe(translate('operations.order.status.released'));
+      expect(getPrimaryActionLabel('picking', 'closed')).toBe(translate('operations.order.status.closed'));
+      expect(getPrimaryActionLabel('partial', 'closed')).toBe(translate('operations.order.status.closed'));
     });
   });
 
@@ -242,10 +243,14 @@ describe('Order Workflow Actions', () => {
       );
 
       const message = getTransitionErrorMessage(error);
-      expect(message).toContain('Insufficient stock');
+      expect(message).toBe(translate('operations.order.error.insufficientStock', {
+        sku: 'SKU-123',
+        required: 100,
+        physical: 50,
+        reserved: 30,
+        atp: 20
+      }));
       expect(message).toContain('SKU-123');
-      expect(message).toContain('required 100');
-      expect(message).toContain('ATP 20');
     });
 
     it('falls back to error message if no shortage details found', () => {

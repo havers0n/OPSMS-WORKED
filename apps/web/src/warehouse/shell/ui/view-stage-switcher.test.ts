@@ -5,6 +5,7 @@ import {
   getWarehouseViewModeSnapshot,
   warehouseViewModeActions
 } from '@/warehouse/state/view-mode';
+import { translate } from '@/shared/i18n';
 import { ViewModeSwitcher } from './view-mode-switcher';
 
 (
@@ -46,8 +47,9 @@ describe('ViewModeSwitcher view stages', () => {
       renderer = TestRenderer.create(createElement(ViewModeSwitcher));
     });
 
+    const pickingPlanLabel = translate('warehouse.view.stage.pickingPlan');
     let text = collectText(renderer!.toJSON());
-    expect(text).not.toContain('Picking plan');
+    expect(text).not.toContain(pickingPlanLabel);
     expect(text).not.toContain('Plan picking');
     expect(text).not.toContain('Plan wave');
 
@@ -56,7 +58,7 @@ describe('ViewModeSwitcher view stages', () => {
     });
 
     text = collectText(renderer!.toJSON());
-    expect(text).toContain('Picking plan');
+    expect(text).toContain(pickingPlanLabel);
     expect(text).not.toContain('Plan picking');
     expect(text).not.toContain('Plan wave');
   });
@@ -71,9 +73,10 @@ describe('ViewModeSwitcher view stages', () => {
       renderer = TestRenderer.create(createElement(ViewModeSwitcher));
     });
 
+    const pickingPlanLabel = translate('warehouse.view.stage.pickingPlan');
     const pickingPlanButton = renderer!.root.find(
       (instance) =>
-        instance.type === 'button' && instance.props.title === 'Picking plan'
+        instance.type === 'button' && instance.props.title === pickingPlanLabel
     );
 
     act(() => {
@@ -95,9 +98,10 @@ describe('ViewModeSwitcher view stages', () => {
       renderer = TestRenderer.create(createElement(ViewModeSwitcher));
     });
 
+    const storageLabel = translate('warehouse.view.mode.storage');
     const storageButton = renderer!.root.find(
       (instance) =>
-        instance.type === 'button' && instance.children.includes('Storage')
+        instance.type === 'button' && instance.children.includes(storageLabel)
     );
 
     act(() => {

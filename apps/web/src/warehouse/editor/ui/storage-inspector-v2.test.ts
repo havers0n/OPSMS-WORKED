@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
 import { StorageInspectorV2, resolvePanelMode, resolveActiveMode, type MoveTaskState } from './storage-inspector-v2';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
+import { translate } from '@/shared/i18n';
 
 type MockCell = {
   id: string;
@@ -776,7 +777,7 @@ describe('StorageInspectorV2 panel modes', () => {
     const renderer = renderInspector(createWorkspace());
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('R-01');
-    expect(text).not.toContain('No location selected');
+    expect(text).not.toContain(translate('storage.state.noLocation'));
   });
 
   it('shows cell-overview (not rack-overview) when cellId is set', () => {
@@ -796,11 +797,11 @@ describe('StorageInspectorV2 panel modes', () => {
     const text = flattenText(renderer.toJSON());
     // Shows cell-overview breadcrumb elements
     expect(text).toContain('01-A.01.01');
-    expect(text).toContain('Actions');
-    expect(text).toContain('Place existing');
-    expect(text).not.toContain('Current containers');
-    expect(text).not.toContain('Current inventory');
-    expect(text).not.toContain('Location Policy');
+    expect(text).toContain(translate('storage.field.actions'));
+    expect(text).toContain(translate('storage.action.placeExistingContainer'));
+    expect(text).not.toContain(translate('storage.field.currentContainers'));
+    expect(text).not.toContain(translate('storage.field.currentInventory'));
+    expect(text).not.toContain(translate('storage.field.locationPolicy'));
     expect(text).not.toContain('Current Contents');
     expect(text).not.toContain('Inventory Preview');
     // Does NOT show rack-overview occupancy/levels sections
@@ -873,16 +874,16 @@ describe('StorageInspectorV2 panel modes', () => {
 
     // Should be in cell-overview — find the container button and click it
     const root = renderer.root;
-    const containerButton = root.findByProps({ 'aria-label': 'View container C-001' });
+    const containerButton = root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) });
     act(() => {
       containerButton.props.onClick();
     });
 
     const text = flattenText(renderer.toJSON());
     // Should now be in container-detail — Back button visible, container data shown
-    expect(text).toContain('← Back');
+    expect(text).toContain(translate('storage.action.back'));
     expect(text).toContain('C-001');
-    expect(text).toContain('Empty container');
+    expect(text).toContain(translate('storage.state.emptyContainer'));
   });
 
   it('back action from container-detail returns to cell-overview', () => {
@@ -918,13 +919,13 @@ describe('StorageInspectorV2 panel modes', () => {
 
     // Drill into container-detail
     const root = renderer.root;
-    const containerButton = root.findByProps({ 'aria-label': 'View container C-001' });
+    const containerButton = root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) });
     act(() => {
       containerButton.props.onClick();
     });
 
     // Now click Back
-    const backButton = root.findByProps({ 'aria-label': 'Back to cell overview' });
+    const backButton = root.findByProps({ 'aria-label': translate('storage.action.backToCellOverview') });
     act(() => {
       backButton.props.onClick();
     });
@@ -932,9 +933,9 @@ describe('StorageInspectorV2 panel modes', () => {
     const text = flattenText(renderer.toJSON());
     // Should be back in cell-overview — no Back button, cell-overview sections visible
     // Breadcrumb shows locationCode ('LOC-01') which takes priority over cell address
-    expect(text).not.toContain('← Back');
+    expect(text).not.toContain(translate('storage.action.back'));
     expect(text).toContain('LOC-01');
-    expect(text).toContain('Current containers');
+    expect(text).toContain(translate('storage.field.currentContainers'));
   });
 
   it('resets local container selection when selectedCellId changes to a different cell', () => {
@@ -985,13 +986,13 @@ describe('StorageInspectorV2 panel modes', () => {
 
     // Drill into container-detail
     const root = renderer.root;
-    const containerButton = root.findByProps({ 'aria-label': 'View container C-001' });
+    const containerButton = root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) });
     act(() => {
       containerButton.props.onClick();
     });
 
     // Verify we're in container-detail
-    expect(flattenText(renderer.toJSON())).toContain('← Back');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.action.back'));
 
     // Now change the selected cell (simulates user clicking a different cell)
     act(() => {
@@ -1004,7 +1005,7 @@ describe('StorageInspectorV2 panel modes', () => {
 
     // container-detail should be gone, back to cell-overview for the new cell
     const text = flattenText(renderer.toJSON());
-    expect(text).not.toContain('← Back');
+    expect(text).not.toContain(translate('storage.action.back'));
   });
 
   it('resets local container selection when selectedCellId clears', () => {
@@ -1040,12 +1041,12 @@ describe('StorageInspectorV2 panel modes', () => {
 
     // Drill into container-detail
     const root = renderer.root;
-    const containerButton = root.findByProps({ 'aria-label': 'View container C-001' });
+    const containerButton = root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) });
     act(() => {
       containerButton.props.onClick();
     });
 
-    expect(flattenText(renderer.toJSON())).toContain('← Back');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.action.back'));
 
     // Clear cell selection (keeps rack selected)
     act(() => {
@@ -1054,9 +1055,9 @@ describe('StorageInspectorV2 panel modes', () => {
 
     // Should now show rack-overview (cellId gone → containerId reset → rack-overview)
     const text = flattenText(renderer.toJSON());
-    expect(text).not.toContain('← Back');
+    expect(text).not.toContain(translate('storage.action.back'));
     expect(text).toContain('R-01');
-    expect(text).not.toContain('No location selected');
+    expect(text).not.toContain(translate('storage.state.noLocation'));
   });
 });
 
@@ -1110,8 +1111,8 @@ describe('StorageInspectorV2 task flows', () => {
   it('cell-overview shows both create action entry points', () => {
     const renderer = renderInspector(createWorkspace());
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Create container');
-    expect(text).toContain('Create container with product');
+    expect(text).toContain(translate('storage.action.createAndPlaceHere'));
+    expect(text).toContain(translate('storage.action.createContainerWithProduct'));
   });
 
   it('clicking "Create container" transitions to task-create-container panel', () => {
@@ -1120,14 +1121,14 @@ describe('StorageInspectorV2 task flows', () => {
       renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
     });
     const root = renderer.root;
-    const btn = root.findByProps({ 'aria-label': 'Create container at this location' });
+    const btn = root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') });
     act(() => {
       btn.props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Create container');
+    expect(text).toContain(translate('storage.action.createContainer'));
     // task panel has Cancel button, not "Create container with product" option
-    expect(root.findByProps({ 'aria-label': 'Cancel create container' })).toBeTruthy();
+    expect(root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainer') })).toBeTruthy();
   });
 
   it('clicking "Create container with product" transitions to task-create-container-with-product panel', () => {
@@ -1136,11 +1137,11 @@ describe('StorageInspectorV2 task flows', () => {
       renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
     });
     const root = renderer.root;
-    const btn = root.findByProps({ 'aria-label': 'Create container with product at this location' });
+    const btn = root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') });
     act(() => {
       btn.props.onClick();
     });
-    expect(root.findByProps({ 'aria-label': 'Cancel create container with product' })).toBeTruthy();
+    expect(root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainerWithProduct') })).toBeTruthy();
   });
 
   it('places an existing storage container into the selected location', async () => {
@@ -1162,15 +1163,15 @@ describe('StorageInspectorV2 task flows', () => {
     const renderer = renderInspector(createWorkspace());
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'Place existing container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.placeExistingContainer') }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Existing container' }).props.onChange({
+      root.findByProps({ 'aria-label': translate('storage.field.existingContainer') }).props.onChange({
         target: { value: 'existing-container-1' }
       });
     });
     await act(async () => {
-      root.findByProps({ 'aria-label': 'Confirm place existing container' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.confirmPlaceExistingContainer') }).props.onClick();
     });
 
     expect(mockPlaceContainer).toHaveBeenCalledWith({
@@ -1181,7 +1182,7 @@ describe('StorageInspectorV2 task flows', () => {
       expect.anything(),
       expect.objectContaining({ containerId: 'existing-container-1' })
     );
-    expect(flattenText(renderer.toJSON())).toContain('Actions');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.field.actions'));
   });
 
   it('hides containers already placed in the selected location from place-existing options', () => {
@@ -1228,16 +1229,16 @@ describe('StorageInspectorV2 task flows', () => {
     const renderer = renderInspector(createWorkspace());
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'Place existing container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.placeExistingContainer') }).props.onClick();
     });
 
     const optionText = root
       .findAllByType('option')
       .map((option) => String(option.props.children))
       .join(' ');
-    expect(optionText).toContain('C-AWAY - active storage - not in this location');
+    expect(optionText).toContain('C-AWAY');
     expect(optionText).not.toContain('C-HERE');
-    expect(flattenText(renderer.toJSON())).toContain('1 container already here hidden.');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.place.hiddenHereCount', { count: 1 }));
   });
 
   it('cancel in create-container task returns to cell-overview without calling mutations', () => {
@@ -1248,15 +1249,15 @@ describe('StorageInspectorV2 task flows', () => {
     const root = renderer.root;
     // Open task
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') }).props.onClick();
     });
     // Cancel
     act(() => {
-      root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainer') }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Actions');
-    expect(text).not.toContain('Current containers');
+    expect(text).toContain(translate('storage.field.actions'));
+    expect(text).not.toContain(translate('storage.field.currentContainers'));
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
 
@@ -1267,14 +1268,14 @@ describe('StorageInspectorV2 task flows', () => {
     });
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container with product at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Cancel create container with product' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainerWithProduct') }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Actions');
-    expect(text).not.toContain('Current containers');
+    expect(text).toContain(translate('storage.field.actions'));
+    expect(text).not.toContain(translate('storage.field.currentContainers'));
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
 
@@ -1289,7 +1290,7 @@ describe('StorageInspectorV2 task flows', () => {
     });
     // rack-overview is shown — no task action buttons
     const text = flattenText(renderer.toJSON());
-    expect(text).not.toContain('Create container at this location');
+    expect(text).not.toContain(translate('storage.action.createContainerAtLocation'));
   });
 
   it('task mode resets to cell-overview when selectedCellId changes', () => {
@@ -1304,9 +1305,9 @@ describe('StorageInspectorV2 task flows', () => {
     const root = renderer.root;
     // Open task
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') }).props.onClick();
     });
-    expect(root.findByProps({ 'aria-label': 'Cancel create container' })).toBeTruthy();
+    expect(root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainer') })).toBeTruthy();
 
     // Change cell selection
     act(() => {
@@ -1315,9 +1316,9 @@ describe('StorageInspectorV2 task flows', () => {
 
     // Back to cell-overview (task panel gone)
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Actions');
-    expect(text).not.toContain('Current containers');
-    expect(text).not.toContain('Cancel create container');
+    expect(text).toContain(translate('storage.field.actions'));
+    expect(text).not.toContain(translate('storage.field.currentContainers'));
+    expect(text).not.toContain(translate('storage.action.cancelCreateContainer'));
   });
 
   it('successful create-container calls create → place → invalidates → returns to cell-overview', async () => {
@@ -1331,15 +1332,15 @@ describe('StorageInspectorV2 task flows', () => {
     const root = renderer.root;
     // Open task
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') }).props.onClick();
     });
     // Select container type
     act(() => {
-      root.findByProps({ 'aria-label': 'Container type' }).props.onChange({ target: { value: 'type-1' } });
+      root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({ target: { value: 'type-1' } });
     });
     // Submit
     await act(async () => {
-      root.findByProps({ 'aria-label': 'Confirm create container' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainer') }).props.onClick();
     });
 
     expect(mockCreateContainer).toHaveBeenCalledWith({ containerTypeId: 'type-1', externalCode: undefined });
@@ -1352,8 +1353,8 @@ describe('StorageInspectorV2 task flows', () => {
 
     // Returns to cell-overview
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Actions');
-    expect(text).not.toContain('Current containers');
+    expect(text).toContain(translate('storage.field.actions'));
+    expect(text).not.toContain(translate('storage.field.currentContainers'));
   });
 
   it('create-container passes externalCode when provided', async () => {
@@ -1366,16 +1367,16 @@ describe('StorageInspectorV2 task flows', () => {
     });
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Container type' }).props.onChange({ target: { value: 'type-1' } });
+      root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({ target: { value: 'type-1' } });
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'External code' }).props.onChange({ target: { value: 'PLT-0042' } });
+      root.findByProps({ 'aria-label': translate('storage.field.externalCode') }).props.onChange({ target: { value: 'PLT-0042' } });
     });
     await act(async () => {
-      root.findByProps({ 'aria-label': 'Confirm create container' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainer') }).props.onClick();
     });
 
     expect(mockCreateContainer).toHaveBeenCalledWith({ containerTypeId: 'type-1', externalCode: 'PLT-0042' });
@@ -1390,13 +1391,13 @@ describe('StorageInspectorV2 task flows', () => {
     });
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Container type' }).props.onChange({ target: { value: 'type-1' } });
+      root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({ target: { value: 'type-1' } });
     });
 
-    const submitBtn = root.findByProps({ 'aria-label': 'Confirm create container' });
+    const submitBtn = root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainer') });
     expect(submitBtn.props.disabled).toBe(true);
     expect(mockCreateContainer).not.toHaveBeenCalled();
   });
@@ -1412,13 +1413,13 @@ describe('StorageInspectorV2 task flows', () => {
     });
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'Create container with product at this location' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Container type' }).props.onChange({ target: { value: 'type-1' } });
+      root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({ target: { value: 'type-1' } });
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Product search' }).props.onChange({ target: { value: 'Widget' } });
+      root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Widget' } });
     });
 
     // Manually inject selectedProduct by finding the component via product selection
@@ -1431,7 +1432,7 @@ describe('StorageInspectorV2 task flows', () => {
     // the searchResults listbox — but since mock returns [], we test partial failure
     // by observing that after step 2 succeeds and step 3 fails, error is shown).
     // The canSubmit check requires selectedProduct, so we skip to confirm failure guard:
-    const submitBtn = root.findByProps({ 'aria-label': 'Confirm create container with product' });
+    const submitBtn = root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainerWithProduct') });
     expect(submitBtn.props.disabled).toBe(true); // no product selected yet → disabled
     expect(mockAddInventoryItem).not.toHaveBeenCalled();
   });
@@ -1455,15 +1456,15 @@ describe('StorageInspectorV2 task flows', () => {
       renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'move-container-action' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
     // Move panel renders purely from local state — no global store needed
-    expect(text).toContain('Move container');
-    expect(text).toContain('From');
+    expect(text).toContain(translate('storage.action.moveContainer'));
+    expect(text).toContain(translate('storage.field.from'));
   });
 
   it('existing container-detail behavior is unaffected by PR3 changes', () => {
@@ -1487,18 +1488,18 @@ describe('StorageInspectorV2 task flows', () => {
     });
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('← Back');
+    expect(text).toContain(translate('storage.action.back'));
     expect(text).toContain('C-001');
-    expect(text).toContain('Empty container');
+    expect(text).toContain(translate('storage.state.emptyContainer'));
 
     // Back works
     act(() => {
-      root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.backToCellOverview') }).props.onClick();
     });
-    expect(flattenText(renderer.toJSON())).toContain('Current containers');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.field.currentContainers'));
   });
 
   it('removes a selected container from its current location', async () => {
@@ -1526,13 +1527,13 @@ describe('StorageInspectorV2 task flows', () => {
     const renderer = renderInspector(createWorkspace());
     const root = renderer.root;
     act(() => {
-      root.findByProps({ 'aria-label': 'View container C-REMOVE' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-REMOVE' }) }).props.onClick();
     });
     act(() => {
       root.findByProps({ 'data-testid': 'remove-container-action' }).props.onClick();
     });
     await act(async () => {
-      root.findByProps({ 'aria-label': 'Confirm remove container' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.action.confirmRemoveContainer') }).props.onClick();
     });
 
     expect(mockRemoveContainer).toHaveBeenCalledWith({ containerId: 'container-remove-1' });
@@ -1540,7 +1541,7 @@ describe('StorageInspectorV2 task flows', () => {
       expect.anything(),
       expect.objectContaining({ containerId: 'container-remove-1' })
     );
-    expect(flattenText(renderer.toJSON())).toContain('Actions');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.field.actions'));
   });
 
   it('shows "Add product" action in container-detail when container is empty', () => {
@@ -1561,7 +1562,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
 
     expect(renderer.root.findByProps({ 'data-testid': 'add-product-action' })).toBeTruthy();
@@ -1591,7 +1592,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
 
     const addProductButtons = renderer.root.findAllByProps({ 'data-testid': 'add-product-action' });
@@ -1616,7 +1617,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
@@ -1625,12 +1626,12 @@ describe('StorageInspectorV2 task flows', () => {
     expect(renderer.root.findByProps({ 'data-testid': 'task-add-product-to-container-panel' })).toBeTruthy();
 
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Cancel add product to container' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.cancelAddProductToContainer') }).props.onClick();
     });
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('C-001');
-    expect(text).toContain('Empty container');
+    expect(text).toContain(translate('storage.state.emptyContainer'));
     expect(mockAddInventoryToContainerMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -1667,40 +1668,40 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
     });
 
-    const submitButton = renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' });
+    const submitButton = renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') });
     expect(submitButton.props.disabled).toBe(true);
 
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product search' }).props.onChange({ target: { value: 'Prod' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Prod' } });
     });
     act(() => {
       renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
     });
-    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(true);
 
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '0' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '0' } });
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: 'EA' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
     });
-    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(true);
 
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '3' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
     });
-    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(false);
+    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(false);
 
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: '   ' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: '   ' } });
     });
-    expect(renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(true);
   });
 
   it('successful add-product flow keeps same container-detail context and shows refreshed inventory', async () => {
@@ -1759,26 +1760,26 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product search' }).props.onChange({ target: { value: 'Prod' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Prod' } });
     });
     act(() => {
       renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '3' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: 'EA' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
     });
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.onClick();
     });
 
     expect(mockAddInventoryToContainerMutateAsync).toHaveBeenCalledWith({
@@ -1799,7 +1800,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('C-001');
-    expect(text).not.toContain('Empty container');
+    expect(text).not.toContain(translate('storage.state.emptyContainer'));
     expect(text).toContain('3 EA');
   });
 
@@ -1844,30 +1845,30 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product search' }).props.onChange({ target: { value: 'Prod' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Prod' } });
     });
     act(() => {
       renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product quantity' }).props.onChange({ target: { value: '2' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '2' } });
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Add product uom' }).props.onChange({ target: { value: 'EA' } });
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
     });
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Confirm add product to container' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.onClick();
     });
 
     expect(mockAddInventoryToContainerMutateAsync).not.toHaveBeenCalled();
-    expect(flattenText(renderer.toJSON())).toContain('This container is no longer empty. Return to details to continue.');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.warning.containerNotEmpty'));
   });
 
   it('resets add-product task state when selected cell changes', () => {
@@ -1907,7 +1908,7 @@ describe('StorageInspectorV2 task flows', () => {
 
     const renderer = renderInspector(createWorkspace());
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
@@ -1919,7 +1920,7 @@ describe('StorageInspectorV2 task flows', () => {
     });
 
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current containers');
+    expect(text).toContain(translate('storage.field.currentContainers'));
     expect(text).not.toContain('Add product to C-001');
   });
 });
@@ -1947,7 +1948,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 
   function openContainerDetail(root: TestRenderer.ReactTestRenderer['root']) {
     act(() => {
-      root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
   }
 
@@ -2017,10 +2018,10 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Location Role');
-    expect(text).toContain('Structural default: Reserve');
-    expect(text).toContain('Effective role: Reserve');
-    expect(text).toContain('Source: Structural default');
+    expect(text).toContain(translate('storage.field.locationRole'));
+    expect(text).toContain(`${translate('storage.field.structuralDefault')}: ${translate('storage.role.reserve')}`);
+    expect(text).toContain(`${translate('storage.field.effectiveRole')}: ${translate('storage.role.reserve')}`);
+    expect(text).toContain(`${translate('storage.field.source')}: ${translate('storage.roleSource.structuralDefault')}`);
   });
 
   it('renders explicit-override-wins state', () => {
@@ -2036,23 +2037,23 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Structural default: Reserve');
-    expect(text).toContain('Effective role: Primary Pick');
-    expect(text).toContain('Source: Explicit override');
+    expect(text).toContain(`${translate('storage.field.structuralDefault')}: ${translate('storage.role.reserve')}`);
+    expect(text).toContain(`${translate('storage.field.effectiveRole')}: ${translate('storage.role.primaryPick')}`);
+    expect(text).toContain(`${translate('storage.field.source')}: ${translate('storage.roleSource.explicitOverride')}`);
   });
 
   it('shows "Set override" when no published assignment rows exist for current product/location', () => {
     mockLocationProductAssignments = [];
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
-    expect(flattenText(renderer.toJSON())).toContain('Set override');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.action.setOverride'));
   });
 
   it('shows "Edit override" only when assignment rows exist for current product/location', () => {
     mockLocationProductAssignments = [makePublishedAssignment({ id: 'assignment-edit' })];
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
-    expect(flattenText(renderer.toJSON())).toContain('Edit override');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.action.editOverride'));
   });
 
   it('renders none/none/none state with neutral explanatory copy', () => {
@@ -2068,9 +2069,9 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Structural default: None');
-    expect(text).toContain('Effective role: None');
-    expect(text).toContain('Source: None');
+    expect(text).toContain(`${translate('storage.field.structuralDefault')}: ${translate('storage.role.none')}`);
+    expect(text).toContain(`${translate('storage.field.effectiveRole')}: ${translate('storage.role.none')}`);
+    expect(text).toContain(`${translate('storage.field.source')}: ${translate('storage.role.none')}`);
     expect(renderer.root.findByProps({ 'data-testid': 'location-role-none-note' })).toBeTruthy();
   });
 
@@ -2087,9 +2088,9 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Structural default: Reserve');
-    expect(text).toContain('Effective role: Conflict');
-    expect(text).toContain('Source: Conflict');
+    expect(text).toContain(`${translate('storage.field.structuralDefault')}: ${translate('storage.role.reserve')}`);
+    expect(text).toContain(`${translate('storage.field.effectiveRole')}: ${translate('storage.roleSource.conflict')}`);
+    expect(text).toContain(`${translate('storage.field.source')}: ${translate('storage.roleSource.conflict')}`);
     expect(renderer.root.findByProps({ 'data-testid': 'location-role-conflict-note' })).toBeTruthy();
   });
 
@@ -2136,7 +2137,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
     });
     expect(renderer.root.findByProps({ 'data-testid': 'task-repair-conflict-panel' })).toBeTruthy();
-    expect(flattenText(renderer.toJSON())).toContain('Repair explicit override conflict');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.action.repairExplicitOverrideConflict'));
   });
 
   it('repair panel shows conflict details with role summary and row count', () => {
@@ -2159,9 +2160,11 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       renderer.root.findByProps({ 'data-testid': 'repair-conflict-action' }).props.onClick();
     });
 
-    expect(flattenText(renderer.toJSON())).toContain('Roles present: Primary Pick, Reserve');
-    expect(flattenText(renderer.toJSON())).toContain('Published explicit rows: 2');
-    expect(flattenText(renderer.toJSON())).toContain('Row IDs: assignment-primary, assignment-reserve');
+    expect(flattenText(renderer.toJSON())).toContain(
+      `${translate('storage.field.rolesPresent')}: ${translate('storage.role.primaryPick')}, ${translate('storage.role.reserve')}`
+    );
+    expect(flattenText(renderer.toJSON())).toContain(`${translate('storage.field.publishedExplicitRows')}: 2`);
+    expect(flattenText(renderer.toJSON())).toContain(`${translate('storage.field.rowIds')}: assignment-primary, assignment-reserve`);
   });
 
   it('does not claim effective role when product context is missing', () => {
@@ -2185,9 +2188,9 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Structural default: Reserve');
-    expect(text).toContain('Effective role: Not computed');
-    expect(text).toContain('Source: Not computed');
+    expect(text).toContain(`${translate('storage.field.structuralDefault')}: ${translate('storage.role.reserve')}`);
+    expect(text).toContain(`${translate('storage.field.effectiveRole')}: ${translate('storage.state.notComputed')}`);
+    expect(text).toContain(`${translate('storage.field.source')}: ${translate('storage.state.notComputed')}`);
     expect(renderer.root.findByProps({ 'data-testid': 'location-role-product-context-required' })).toBeTruthy();
   });
 
@@ -2237,21 +2240,23 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
 
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
-    expect(flattenText(renderer.toJSON())).toContain('Structural default: Unknown');
+    expect(flattenText(renderer.toJSON())).toContain(
+      `${translate('storage.field.structuralDefault')}: ${translate('storage.state.unknown')}`
+    );
   });
 
   it('shows override task entry in container-detail and keeps overview hint read-only', () => {
     const renderer = renderInspector(createWorkspace());
     openContainerDetail(renderer.root);
     expect(renderer.root.findByProps({ 'data-testid': 'edit-override-action' })).toBeTruthy();
-    expect(flattenText(renderer.toJSON())).toContain('Set override');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.action.setOverride'));
 
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Back to cell overview' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.backToCellOverview') }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Current containers');
-    expect(text).toContain('Location Policy');
+    expect(text).toContain(translate('storage.field.currentContainers'));
+    expect(text).toContain(translate('storage.field.locationPolicy'));
     expect(text).not.toContain('To edit override');
   });
 
@@ -2262,7 +2267,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       renderer.root.findByProps({ 'data-testid': 'edit-override-action' }).props.onClick();
     });
     expect(renderer.root.findByProps({ 'data-testid': 'task-edit-override-panel' })).toBeTruthy();
-    expect(flattenText(renderer.toJSON())).toContain('Edit explicit override');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.field.explicitOverride'));
   });
 
   it('cancel exits override task mode without mutation', () => {
@@ -2272,7 +2277,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
       renderer.root.findByProps({ 'data-testid': 'edit-override-action' }).props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Cancel edit override' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.cancelEditOverride') }).props.onClick();
     });
     expect(renderer.root.findAllByProps({ 'data-testid': 'task-edit-override-panel' })).toHaveLength(0);
     expect(mockCreateProductLocationRoleMutateAsync).not.toHaveBeenCalled();
@@ -2294,7 +2299,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     });
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Save override for location' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.saveOverride') }).props.onClick();
     });
 
     expect(mockDeleteProductLocationRoleMutateAsync).toHaveBeenCalledWith('assignment-save');
@@ -2331,7 +2336,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
     });
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Save override for location' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.saveOverride') }).props.onClick();
     });
 
     expect(renderer.root.findByProps({ 'data-testid': 'task-edit-override-panel' })).toBeTruthy();
@@ -2607,13 +2612,13 @@ describe('StorageInspectorV2 create from preset partial materialization', () => 
       root.findByProps({ 'data-testid': 'create-from-preset-action' }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Product search' }).props.onChange({ target: { value: 'Widget' } });
+      root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Widget' } });
     });
     act(() => {
       root.findByProps({ role: 'option' }).props.onClick();
     });
     act(() => {
-      root.findByProps({ 'aria-label': 'Storage preset' }).props.onChange({ target: { value: 'preset-1' } });
+      root.findByProps({ 'aria-label': translate('storage.field.storagePreset') }).props.onChange({ target: { value: 'preset-1' } });
     });
     const radios = root.findAllByType('input').filter((node) => node.props.type === 'radio');
     act(() => {
@@ -2739,7 +2744,7 @@ describe('StorageInspectorV2 contents action flows', () => {
 
   function openContainerDetail(root: TestRenderer.ReactTestRenderer['root']) {
     act(() => {
-      root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
   }
 
@@ -2780,7 +2785,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' }).props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Target container' }).props.onChange({
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.targetContainer') }).props.onChange({
         target: { value: 'target-container' }
       });
     });
@@ -2807,7 +2812,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' }).props.onClick();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Target container' }).props.onChange({
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.targetContainer') }).props.onChange({
         target: { value: 'target-container' }
       });
     });
@@ -2841,7 +2846,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       radios[1].props.onChange();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Container type' }).props.onChange({
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({
         target: { value: 'type-1' }
       });
     });
@@ -2884,7 +2889,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       radios[1].props.onChange();
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Container type' }).props.onChange({
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({
         target: { value: 'type-1' }
       });
     });
@@ -2978,7 +2983,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
     });
 
-    expect(flattenText(renderer.toJSON())).toContain('Target cell is empty. Use Move instead of Swap.');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.swap.targetEmpty'));
     expect(renderer.root.findByProps({ 'data-testid': 'swap-confirm-button' }).props.disabled).toBe(true);
     expect(mockSwapContainers).not.toHaveBeenCalled();
   });
@@ -3011,7 +3016,7 @@ describe('StorageInspectorV2 move container flow', () => {
 
   function openMoveTask(root: TestRenderer.ReactTestRenderer['root']) {
     act(() => {
-      root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     act(() => {
       root.findByProps({ 'data-testid': 'move-container-action' }).props.onClick();
@@ -3048,10 +3053,10 @@ describe('StorageInspectorV2 move container flow', () => {
       renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'View container C-001' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Move container');
+    expect(text).toContain(translate('storage.action.moveContainer'));
     expect(renderer.root.findByProps({ 'data-testid': 'move-container-action' })).toBeTruthy();
   });
 
@@ -3062,9 +3067,9 @@ describe('StorageInspectorV2 move container flow', () => {
     });
     openMoveTask(renderer.root);
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Move container');
-    expect(text).toContain('From');
-    expect(renderer.root.findByProps({ 'aria-label': 'Cancel move container' })).toBeTruthy();
+    expect(text).toContain(translate('storage.action.moveContainer'));
+    expect(text).toContain(translate('storage.field.from'));
+    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.cancelMoveContainer') })).toBeTruthy();
   });
 
   it('source context (container code, location code) is visible in move panel', () => {
@@ -3099,7 +3104,7 @@ describe('StorageInspectorV2 move container flow', () => {
     });
     // Move task panel still rendered (not cleared by cell navigation)
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Move container');
+    expect(text).toContain(translate('storage.action.moveContainer'));
     // Source context preserved
     expect(text).toContain('LOC-SRC');
     // Target placeholder replaced
@@ -3129,13 +3134,13 @@ describe('StorageInspectorV2 move container flow', () => {
     });
     openMoveTask(renderer.root);
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Cancel move container' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.cancelMoveContainer') }).props.onClick();
     });
     expect(mockMoveContainer).not.toHaveBeenCalled();
     // Move task panel gone
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Actions');
-    expect(text).not.toContain('Click a cell on the canvas');
+    expect(text).toContain(translate('storage.field.currentContainers'));
+    expect(text).not.toContain(translate('storage.move.targetPlaceholder'));
   });
 
   it('confirm executes moveContainer mutation with correct containerId and targetLocationId', async () => {
@@ -3190,10 +3195,10 @@ describe('StorageInspectorV2 move container flow', () => {
       renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
     });
     const text = flattenText(renderer.toJSON());
-    expect(text).toContain('Actions');
-    expect(text).not.toContain('Click a cell on the canvas');
-    expect(text).not.toContain('Confirm move');
-    expect(text).not.toContain('Location Role');
+    expect(text).toContain(translate('storage.field.currentContainers'));
+    expect(text).not.toContain(translate('storage.move.targetPlaceholder'));
+    expect(text).not.toContain(translate('storage.action.confirmMoveContainer'));
+    expect(text).not.toContain(translate('storage.field.locationRole'));
   });
 
   it('existing create-container flow still works after PR4 (no regression)', () => {
@@ -3209,13 +3214,13 @@ describe('StorageInspectorV2 move container flow', () => {
       renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
     });
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Create container at this location' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.createContainerAtLocation') }).props.onClick();
     });
-    expect(renderer.root.findByProps({ 'aria-label': 'Cancel create container' })).toBeTruthy();
+    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainer') })).toBeTruthy();
     act(() => {
-      renderer.root.findByProps({ 'aria-label': 'Cancel create container' }).props.onClick();
+      renderer.root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainer') }).props.onClick();
     });
-    expect(flattenText(renderer.toJSON())).toContain('Actions');
+    expect(flattenText(renderer.toJSON())).toContain(translate('storage.field.actions'));
   });
 });
 

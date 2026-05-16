@@ -356,6 +356,25 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(cellStateOverlayLastProps?.primarySelectedRackId).toBe(rackId);
   });
 
+  it('keeps the canvas DOM island LTR under the RTL app shell', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    const canvasRoot = renderer.root.findByProps({
+      'data-testid': 'warehouse-canvas-stable-ltr'
+    });
+    expect(canvasRoot.props.dir).toBe('ltr');
+  });
+
   it('keeps selectedRackId semantics in non-storage mode', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0] as string;

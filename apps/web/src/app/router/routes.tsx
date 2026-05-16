@@ -11,10 +11,13 @@ import { ProductsPage } from '@/pages/products/ui/products-page';
 import { SettingsPage } from '@/pages/settings/ui/settings-page';
 import { WaveDetailPage } from '@/pages/wave-detail/ui/wave-detail-page';
 import { routes } from '@/shared/config/routes';
+import { useT } from '@/shared/i18n';
 
 const WarehouseApp = lazy(() => import('@/warehouse/app/warehouse-app'));
 
 export function AppRouter() {
+  const t = useT();
+
   return (
     <BrowserRouter>
       <Routes>
@@ -32,7 +35,7 @@ export function AppRouter() {
               <Suspense
                 fallback={
                   <div className="flex h-full w-full items-center justify-center text-sm text-[var(--text-muted)]">
-                    Loading warehouse workspace...
+                    {t('app.loading.warehouseWorkspace')}
                   </div>
                 }
               >

@@ -877,6 +877,8 @@ export function EditorCanvas({
   return (
     <div
       ref={containerRef}
+      dir="ltr"
+      data-testid="warehouse-canvas-stable-ltr"
       className="relative h-full overflow-hidden"
       style={{
         touchAction: 'none',

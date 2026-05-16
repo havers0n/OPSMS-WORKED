@@ -10,11 +10,13 @@ import {
   useSetEditorMode
 } from '@/warehouse/editor/model/editor-selectors';
 import { useModeStore } from '@/warehouse/editor/model/mode-store';
+import { useT } from '@/shared/i18n';
 import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 
 export function WarehouseEditor() {
+  const t = useT();
   const activeFloorId = useActiveFloorId();
   const { data: workspace } = useFloorWorkspace(activeFloorId);
   const viewMode = useModeStore((s) => s.viewMode);
@@ -50,7 +52,7 @@ export function WarehouseEditor() {
             boxShadow: 'var(--shadow-soft)'
           }}
         >
-          Select a site and floor from the top bar to load the editor.
+          {t('warehouse.editor.selectContext')}
         </div>
       </div>
     );
@@ -68,7 +70,7 @@ export function WarehouseEditor() {
             boxShadow: 'var(--shadow-soft)'
           }}
         >
-          Loading workspace...
+          {t('warehouse.editor.loadingWorkspace')}
         </div>
       </div>
     );
@@ -97,7 +99,7 @@ export function WarehouseEditor() {
   return (
     <div
       role="region"
-      aria-label="Warehouse editor"
+      aria-label={t('warehouse.editor.region')}
       className="flex h-full w-full overflow-hidden"
     >
       <ToolRail />

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
 import { StorageNavigator } from './storage-navigator';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
+import { translate } from '@/shared/i18n';
 
 type MockCell = {
   id: string;
@@ -106,7 +107,7 @@ function clickLocationByAddress(renderer: TestRenderer.ReactTestRenderer, addres
   const row = renderer.root.findAll((node) =>
     node.type === 'div' &&
     typeof node.props?.title === 'string' &&
-    node.props.title.includes(`Location ${addressRaw}`)
+    node.props.title.includes(addressRaw)
   )[0];
   expect(row).toBeDefined();
   act(() => {
@@ -153,11 +154,11 @@ describe('StorageNavigator PR7 focus ownership', () => {
     );
 
     expect(useStorageFocusStore.getState().selectedRackId).toBeNull();
-    expect(tree).toContain('Rack');
+    expect(tree).toContain(translate('storage.field.rack'));
     expect(buttonLabels).toContain('L1');
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
-    expect(tree).toContain('Select a rack on the map to browse locations.');
+    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
   });
 
   it('clicking a location writes focus transition to storage-focus-store', () => {
@@ -216,7 +217,7 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(s.selectedCellId).toBeNull();
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
-    expect(tree).toContain('Select a rack on the map to browse locations.');
+    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
     expect(buttonLabels).toContain('L1');
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
@@ -251,7 +252,7 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(buttonLabels).toContain('L3');
     expect(buttonLabels).toContain('L5');
     expect(buttonLabels).not.toContain('L1');
-    expect(tree).not.toContain('No locations for level 1');
+    expect(tree).not.toContain(translate('storage.state.noLocationsForLevel', { level: 1 }));
   });
 
   it('shows fallback level buttons for empty racks', () => {
@@ -270,6 +271,6 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(buttonLabels).toContain('L1');
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
-    expect(tree).toContain('No locations for level');
+    expect(tree).toContain(translate('storage.state.noLocationsForLevel', { level: 1 }));
   });
 });

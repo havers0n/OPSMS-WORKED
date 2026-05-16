@@ -1,4 +1,5 @@
 import type { OrderStatus, Wave } from '@wos/domain';
+import { translate } from '@/shared/i18n';
 
 /**
  * Reason categories for wave release blockers
@@ -50,12 +51,12 @@ export function deriveWaveBlockers(
     // Draft orders block wave release
     if (order.status === 'draft') {
       reason = 'draft';
-      message = 'Order not yet committed to ready state.';
+      message = translate('operations.wave.blocker.message.draft');
     }
     // Empty orders block wave release
     else if (order.lineCount === 0 && order.status !== 'closed' && order.status !== 'cancelled') {
       reason = 'empty_order';
-      message = 'Order has no lines to pick.';
+      message = translate('operations.wave.blocker.message.emptyOrder');
     }
     // Terminal statuses don't block
     // closed, cancelled - these are fine
@@ -63,7 +64,7 @@ export function deriveWaveBlockers(
     // partial - check if this blocks (likely yes for wave release)
     else if (order.status === 'partial') {
       reason = 'not_ready';
-      message = 'Order partially fulfilled. Resolve partial picks before wave release.';
+      message = translate('operations.wave.blocker.message.notReady');
     }
 
     if (reason) {
@@ -88,13 +89,13 @@ export function deriveWaveBlockers(
  * Get human-readable label for blocker reason
  */
 export function getBlockerReasonLabel(reason: BlockerReasonCode): string {
-  const labels: Record<BlockerReasonCode, string> = {
-    draft: 'Not committed',
-    empty_order: 'No lines',
-    not_ready: 'Not ready',
-    unknown_release_blocker: 'Unknown issue'
+  const labels: Record<BlockerReasonCode, Parameters<typeof translate>[0]> = {
+    draft: 'operations.wave.blocker.reason.notCommitted',
+    empty_order: 'operations.wave.blocker.reason.noLines',
+    not_ready: 'operations.wave.blocker.reason.notReady',
+    unknown_release_blocker: 'operations.wave.blocker.reason.unknownIssue'
   };
-  return labels[reason];
+  return translate(labels[reason]);
 }
 
 /**
