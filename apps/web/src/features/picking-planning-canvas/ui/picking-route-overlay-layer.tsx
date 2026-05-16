@@ -1,4 +1,4 @@
-import { Arrow, Circle, Layer, Text } from 'react-konva';
+import { Arrow, Circle, Text } from 'react-konva';
 import type { PickingRouteAnchor } from '../model/route-step-geometry';
 
 type PickingRouteOverlayLayerProps = {
@@ -9,7 +9,7 @@ export function PickingRouteOverlayLayer({
   anchors
 }: PickingRouteOverlayLayerProps) {
   return (
-    <Layer listening={false}>
+    <>
       {anchors.slice(1).map((anchor, index) => {
         const previous = anchors[index];
         if (anchor.status !== 'resolved' || previous?.status !== 'resolved') {
@@ -67,6 +67,6 @@ export function PickingRouteOverlayLayer({
           />
         );
       })}
-    </Layer>
+    </>
   );
 }

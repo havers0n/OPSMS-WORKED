@@ -81,7 +81,7 @@ import { CanvasHud } from './canvas-hud';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
 import { RackLayer } from './rack-layer';
 import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
-import { CellStateOverlayLayer } from './shapes/selection-overlay-layer';
+import { SelectionOverlayLayer } from './shapes/selection-overlay-layer';
 import { SnapGuides } from './shapes/snap-guides';
 import { StorageOccupancyOverlay } from './shapes/storage-occupancy-overlay';
 import { useCanvasSceneModel } from './use-canvas-scene-model';
@@ -1081,35 +1081,37 @@ export function EditorCanvas({
                 </Layer>
               )}
 
-              <ZoneLayer
-                canSelectZone={canSelectZone}
-                draftZoneRect={draftZoneRect}
-                getRelativePointerPosition={() =>
-                  stageRef.current?.getRelativePointerPosition() ?? null
-                }
-                isLayoutEditable={isLayoutEditable}
-                selectedZoneId={selectedZoneId}
-                setSelectedZoneId={setSelectedZoneId}
-                updateZoneRect={updateZoneRect}
-                zoneLookup={(placementLayout ?? layoutDraft).zones}
-                zones={zones}
-              />
+              <Layer name="floor-objects-layer">
+                <ZoneLayer
+                  canSelectZone={canSelectZone}
+                  draftZoneRect={draftZoneRect}
+                  getRelativePointerPosition={() =>
+                    stageRef.current?.getRelativePointerPosition() ?? null
+                  }
+                  isLayoutEditable={isLayoutEditable}
+                  selectedZoneId={selectedZoneId}
+                  setSelectedZoneId={setSelectedZoneId}
+                  updateZoneRect={updateZoneRect}
+                  zoneLookup={(placementLayout ?? layoutDraft).zones}
+                  zones={zones}
+                />
 
-              <WallLayer
-                canSelectWall={canSelectWall}
-                draftWallLine={draftWallLine}
-                getRelativePointerPosition={() =>
-                  stageRef.current?.getRelativePointerPosition() ?? null
-                }
-                isLayoutEditable={isLayoutEditable}
-                selectedWallId={selectedWallId}
-                setSelectedWallId={setSelectedWallId}
-                updateWallGeometry={updateWallGeometry}
-                wallLookup={(placementLayout ?? layoutDraft).walls}
-                walls={walls}
-              />
+                <WallLayer
+                  canSelectWall={canSelectWall}
+                  draftWallLine={draftWallLine}
+                  getRelativePointerPosition={() =>
+                    stageRef.current?.getRelativePointerPosition() ?? null
+                  }
+                  isLayoutEditable={isLayoutEditable}
+                  selectedWallId={selectedWallId}
+                  setSelectedWallId={setSelectedWallId}
+                  updateWallGeometry={updateWallGeometry}
+                  wallLookup={(placementLayout ?? layoutDraft).walls}
+                  walls={walls}
+                />
 
-              <SnapGuides guides={snapGuides} gridLines={gridLines} />
+                <SnapGuides guides={snapGuides} gridLines={gridLines} />
+              </Layer>
 
               <RackLayer
                 activeCellRackId={rackLayerActiveCellRackId}
@@ -1164,41 +1166,43 @@ export function EditorCanvas({
                 onV2StorageRackSelect={onV2StorageRackSelect}
               />
 
-              <StorageOccupancyOverlay
-                isStorageMode={isStorageMode}
-                racks={visibleRacks}
-                primarySelectedRackId={primarySelectedRackId}
-                selectedRackActiveLevel={selectedRackActiveLevelIndex}
-                publishedCellsByStructure={publishedCellsByStructure}
-                occupiedCellIds={occupiedCellIds}
-                cellRuntimeById={floorOperationsCellsById}
-                diagnosticsFlags={diagnosticsFlags}
-                diagnosticsViewport={diagnosticsViewport}
-                renderMode={renderMode}
-                zoom={zoom}
-              />
-
-              {cellStateOverlaysEnabled && (
-                <CellStateOverlayLayer
-                  selectedCellId={canvasSelectedCellId}
-                  highlightedCellId={cellStateOverlayHighlightedCellId}
+              <Layer name="overlay-layer" listening={false}>
+                <StorageOccupancyOverlay
+                  isStorageMode={isStorageMode}
                   racks={visibleRacks}
-                  primarySelectedRackId={cellStateOverlayPrimarySelectedRackId}
+                  primarySelectedRackId={primarySelectedRackId}
                   selectedRackActiveLevel={selectedRackActiveLevelIndex}
-                  publishedCellsById={publishedCellsById}
                   publishedCellsByStructure={publishedCellsByStructure}
-                  showFocusedFullAddress={
-                    showCellStateOverlayFocusedFullAddress
-                  }
-                  isActivelyPanning={isPanning}
+                  occupiedCellIds={occupiedCellIds}
+                  cellRuntimeById={floorOperationsCellsById}
+                  diagnosticsFlags={diagnosticsFlags}
+                  diagnosticsViewport={diagnosticsViewport}
+                  renderMode={renderMode}
+                  zoom={zoom}
                 />
-              )}
 
-              {shouldShowPickingPlanningOverlay && (
-                <PickingRouteOverlayLayer
-                  anchors={pickingPlanningRouteAnchors}
-                />
-              )}
+                {cellStateOverlaysEnabled && (
+                  <SelectionOverlayLayer
+                    selectedCellId={canvasSelectedCellId}
+                    highlightedCellId={cellStateOverlayHighlightedCellId}
+                    racks={visibleRacks}
+                    primarySelectedRackId={cellStateOverlayPrimarySelectedRackId}
+                    selectedRackActiveLevel={selectedRackActiveLevelIndex}
+                    publishedCellsById={publishedCellsById}
+                    publishedCellsByStructure={publishedCellsByStructure}
+                    showFocusedFullAddress={
+                      showCellStateOverlayFocusedFullAddress
+                    }
+                    isActivelyPanning={isPanning}
+                  />
+                )}
+
+                {shouldShowPickingPlanningOverlay && (
+                  <PickingRouteOverlayLayer
+                    anchors={pickingPlanningRouteAnchors}
+                  />
+                )}
+              </Layer>
 
               {/* ── Marquee selection overlay (topmost, non-interactive) ── */}
               <Layer name="marquee-layer" listening={false}>

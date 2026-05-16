@@ -107,7 +107,7 @@ function RackSideFocusHandles({
             type="button"
             title={t('warehouse.editor.action.focusFace', { face })}
             onClick={() => onSelectSide(side)}
-            className="pointer-events-auto absolute z-20 flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold shadow-md transition-colors"
+            className="pointer-events-auto absolute z-20 flex h-11 w-11 items-center justify-center rounded-full border text-[11px] font-semibold shadow-md transition-colors"
             style={{
               ...getRackSideHandleStyle({ side, anchorRect, viewport }),
               background: isActive ? 'var(--accent)' : 'var(--surface-strong)',
@@ -358,10 +358,10 @@ export function CanvasHud({
           <button
             type="button"
             onClick={onZoomOut}
-            className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
+            className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
             style={{ color: 'var(--text-muted)' }}
           >
-            <Minus className="h-3 w-3" />
+            <Minus className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -374,10 +374,10 @@ export function CanvasHud({
           <button
             type="button"
             onClick={onZoomIn}
-            className="flex h-6 w-6 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
+            className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-slate-100"
             style={{ color: 'var(--text-muted)' }}
           >
-            <Plus className="h-3 w-3" />
+            <Plus className="h-4 w-4" />
           </button>
         </div>
       </div>

@@ -25,14 +25,14 @@ export function RightSidePanelSlot({ workspace, onCloseInspector }: RightSidePan
   return (
     <div
       className="shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out"
-      style={{ width: isOpen ? '560px' : '0px' }}
+      style={{ width: isOpen ? 'min(560px, 100vw)' : '0px' }}
     >
       <Panel
         padding="none"
         tone="default"
         className="h-full overflow-hidden rounded-none border-y-0 border-r-0 transition-transform duration-300 ease-in-out"
         style={{
-          width: '560px',
+          width: 'min(560px, 100vw)',
           borderColor: 'var(--border-muted)',
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)'
         }}

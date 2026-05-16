@@ -1,6 +1,6 @@
 import type { Cell, OperationsCellRuntime, Rack, RackFace } from '@wos/domain';
 import { memo, useMemo } from 'react';
-import { Group, Layer, Shape } from 'react-konva';
+import { Group, Shape } from 'react-konva';
 import {
   getRackGeometry,
   shouldRenderCanvasCell,
@@ -553,11 +553,7 @@ export const StorageOccupancyOverlay = memo(function StorageOccupancyOverlay({
   if (overlayLod === 'hidden' || rackModels.length === 0) return null;
 
   return (
-    <Layer
-      name="storage-occupancy-overlay-layer"
-      listening={false}
-      wosOverlayLod={overlayLod}
-    >
+    <>
       {rackModels.map((model) => {
         const transform = getRackGroupTransform(
           model.geometry,
@@ -602,6 +598,6 @@ export const StorageOccupancyOverlay = memo(function StorageOccupancyOverlay({
           </Group>
         );
       })}
-    </Layer>
+    </>
   );
 });

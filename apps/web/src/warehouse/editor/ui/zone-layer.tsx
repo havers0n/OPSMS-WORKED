@@ -1,6 +1,6 @@
 import type { Zone } from '@wos/domain';
 import type Konva from 'konva';
-import { Group, Layer, Rect, Text } from 'react-konva';
+import { Group, Rect, Text } from 'react-konva';
 import { type CanvasRect, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 
 type ZoneLayerProps = {
@@ -139,7 +139,7 @@ export function ZoneLayer({
   };
 
   return (
-    <Layer>
+    <>
       {zones.map((zone) => {
         const isSelectedZone = selectedZoneId === zone.id;
         const widthPx = zone.width * WORLD_SCALE;
@@ -280,6 +280,6 @@ export function ZoneLayer({
           cornerRadius={8}
         />
       )}
-    </Layer>
+    </>
   );
 }

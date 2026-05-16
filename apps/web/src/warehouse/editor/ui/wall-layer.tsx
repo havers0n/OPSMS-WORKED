@@ -1,6 +1,6 @@
 import type { Wall } from '@wos/domain';
 import type Konva from 'konva';
-import { Circle, Group, Layer, Line } from 'react-konva';
+import { Circle, Group, Line } from 'react-konva';
 import { WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 
 type DraftWallLine = {
@@ -111,7 +111,7 @@ export function WallLayer({
   };
 
   return (
-    <Layer>
+    <>
       {draftWallLine && (
         <Line
           points={[
@@ -231,6 +231,6 @@ export function WallLayer({
           </Group>
         );
       })}
-    </Layer>
+    </>
   );
 }

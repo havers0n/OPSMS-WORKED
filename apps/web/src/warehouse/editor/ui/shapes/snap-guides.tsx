@@ -1,4 +1,4 @@
-import { Layer, Line } from 'react-konva';
+import { Line } from 'react-konva';
 
 type SnapGuide = { type: 'x' | 'y'; position: number };
 type GridLines = { v: number[]; h: number[]; startX: number; endX: number; startY: number; endY: number };
@@ -11,7 +11,7 @@ export function SnapGuides({
   gridLines: GridLines;
 }) {
   return (
-    <Layer listening={false}>
+    <>
       {guides.map((guide, idx) => {
         if (guide.type === 'x') {
           // Vertical snap guide (X-axis alignment)
@@ -41,6 +41,6 @@ export function SnapGuides({
           );
         }
       })}
-    </Layer>
+    </>
   );
 }
