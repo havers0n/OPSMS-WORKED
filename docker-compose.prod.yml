@@ -1,6 +1,6 @@
 services:
   bff:
-    image: ${BFF_IMAGE:-ghcr.io/havers0n/abctestsforwos/bff:latest}
+    image: ${BFF_IMAGE:-ghcr.io/havers0n/opsms-worked/bff:latest}
     env_file:
       - ${BFF_ENV_FILE:-.env.production}
     environment:
@@ -22,7 +22,7 @@ services:
       start_period: 10s
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/havers0n/abctestsforwos/web:latest}
+    image: ${WEB_IMAGE:-ghcr.io/havers0n/opsms-worked/web:latest}
     depends_on:
       - bff
     ports:
