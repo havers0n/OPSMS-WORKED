@@ -117,11 +117,13 @@ export function CellPlacementInspector({ workspace }: { workspace: FloorWorkspac
             <p className="mt-0.5 text-[11px] text-slate-400">
               {locationBffError?.message ?? bffError?.message ?? 'Check your connection and try again.'}
             </p>
-            <div className="mt-2 space-y-0.5 font-mono text-[10px] text-slate-400">
-              <p>cellId: {cellId}</p>
-              {(locationBffError ?? bffError) && <p>status: {(locationBffError ?? bffError)!.status}</p>}
-              {(locationBffError?.code ?? bffError?.code) && <p>code: {locationBffError?.code ?? bffError?.code}</p>}
-            </div>
+            {import.meta.env.DEV && (
+              <div className="mt-2 space-y-0.5 font-mono text-[10px] text-slate-400">
+                <p>cellId: {cellId}</p>
+                {(locationBffError ?? bffError) && <p>status: {(locationBffError ?? bffError)!.status}</p>}
+                {(locationBffError?.code ?? bffError?.code) && <p>code: {locationBffError?.code ?? bffError?.code}</p>}
+              </div>
+            )}
           </div>
         )}
 

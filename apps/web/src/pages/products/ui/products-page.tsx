@@ -4,10 +4,12 @@ import { ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { productCatalogQueryOptions } from '@/entities/product/api/queries';
 import { productDetailPath } from '@/shared/config/routes';
+import { useT } from '@/shared/i18n';
 
 const pageSize = 50;
 
 export function ProductsPage() {
+  const t = useT();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const navigate = useNavigate();
@@ -38,16 +40,14 @@ export function ProductsPage() {
         <header className="border-b border-slate-200 px-5 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-lg font-semibold text-slate-900">Product Catalog</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Search products by SKU, name, or external product ID.
-              </p>
+              <h1 className="text-lg font-semibold text-slate-900">{t('products.title')}</h1>
+              <p className="mt-1 text-sm text-slate-500">{t('products.subtitle')}</p>
             </div>
             <div className="flex items-center gap-2 text-sm text-slate-600">
-              <span className="text-slate-500">Total</span>
+              <span className="text-slate-500">{t('products.stats.total')}</span>
               <span className="font-semibold text-slate-900">{total}</span>
               <span className="text-slate-300">|</span>
-              <span className="text-slate-500">Active</span>
+              <span className="text-slate-500">{t('products.stats.active')}</span>
               <span className="font-semibold text-emerald-700">{activeTotal}</span>
             </div>
           </div>
@@ -62,7 +62,7 @@ export function ProductsPage() {
                 setSearch(event.target.value);
                 setPage(0);
               }}
-              placeholder="Search by SKU, name, or external product id"
+              placeholder={t('products.search.placeholder')}
               className="h-9 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-sm outline-none transition focus:border-cyan-500"
             />
           </label>
@@ -72,7 +72,7 @@ export function ProductsPage() {
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
             <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
+            {t('products.action.refresh')}
           </button>
         </div>
 
@@ -83,20 +83,20 @@ export function ProductsPage() {
             </div>
           ) : products.length === 0 ? (
             <div className="flex h-40 items-center justify-center px-6 text-center text-sm text-slate-500">
-              No products match this query.
+              {t('products.empty')}
             </div>
           ) : (
             <>
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="w-[32%] px-5 py-2.5">Name</th>
-                    <th className="w-[14%] px-4 py-2.5">SKU</th>
-                    <th className="w-[18%] px-4 py-2.5">External id</th>
-                    <th className="w-[14%] px-4 py-2.5">Source</th>
-                    <th className="w-[10%] px-4 py-2.5">Status</th>
-                    <th className="w-[11%] px-4 py-2.5">Updated</th>
-                    <th className="w-[1%] px-4 py-2.5 text-right">Open</th>
+                    <th className="w-[32%] px-5 py-2.5">{t('products.table.name')}</th>
+                    <th className="w-[14%] px-4 py-2.5">{t('products.table.sku')}</th>
+                    <th className="w-[18%] px-4 py-2.5">{t('products.table.externalId')}</th>
+                    <th className="w-[14%] px-4 py-2.5">{t('products.table.source')}</th>
+                    <th className="w-[10%] px-4 py-2.5">{t('products.table.status')}</th>
+                    <th className="w-[11%] px-4 py-2.5">{t('products.table.updated')}</th>
+                    <th className="w-[1%] px-4 py-2.5 text-right">{t('products.table.open')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -121,7 +121,7 @@ export function ProductsPage() {
                             product.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
                           ].join(' ')}
                         >
-                          {product.isActive ? 'active' : 'inactive'}
+                          {product.isActive ? t('products.status.active') : t('products.status.inactive')}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-xs text-slate-500">
@@ -134,7 +134,7 @@ export function ProductsPage() {
                           onClick={(event) => event.stopPropagation()}
                           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-50"
                         >
-                          Open
+                          {t('products.table.open')}
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Link>
                       </td>
@@ -145,8 +145,9 @@ export function ProductsPage() {
 
               <div className="flex items-center justify-between border-t border-slate-200 px-5 py-3 text-sm text-slate-600">
                 <div>
-                  Showing {pageStart}-{pageEnd} of {total}
-                  {search.trim().length > 0 ? ` for "${search.trim()}"` : ''}
+                  {search.trim().length > 0
+                    ? t('products.pagination.showingQuery', { start: pageStart, end: pageEnd, total, query: search.trim() })
+                    : t('products.pagination.showing', { start: pageStart, end: pageEnd, total })}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -155,10 +156,10 @@ export function ProductsPage() {
                     disabled={page === 0 || isFetching}
                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >
-                    Previous
+                    {t('products.pagination.previous')}
                   </button>
                   <span className="text-xs text-slate-500">
-                    Page {Math.min(page + 1, totalPages)} / {totalPages}
+                    {t('products.pagination.page', { current: Math.min(page + 1, totalPages), total: totalPages })}
                   </span>
                   <button
                     type="button"
@@ -166,7 +167,7 @@ export function ProductsPage() {
                     disabled={pageEnd >= total || isFetching}
                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >
-                    Next
+                    {t('products.pagination.next')}
                   </button>
                 </div>
               </div>

@@ -45,7 +45,7 @@ function writeStoredLocale(locale: Locale) {
 const defaultContextValue: I18nContextValue = {
   locale: defaultLocale,
   fallbackLocale,
-  dir: 'rtl',
+  dir: 'ltr',
   t: createTranslator(defaultLocale),
   setLocale: () => undefined
 };
