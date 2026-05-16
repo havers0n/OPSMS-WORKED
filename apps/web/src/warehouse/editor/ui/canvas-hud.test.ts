@@ -68,6 +68,26 @@ function collectText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 }
 
 describe('CanvasHud rack geometry affordance', () => {
+  it('keeps the hint bar on the left and zoom controls on the right', () => {
+    const renderer = renderHud(createRack());
+
+    const hintBar = renderer.root.findByProps({
+      'data-testid': 'canvas-hud-hint-bar'
+    });
+    const zoomControls = renderer.root.findByProps({
+      'data-testid': 'canvas-hud-zoom-controls'
+    });
+    const hintContainer = hintBar.parent!;
+    const zoomContainer = zoomControls.parent!;
+
+    expect(hintContainer.props.className).toContain('left-4');
+    expect(hintContainer.props.className).toContain('hidden');
+    expect(hintContainer.props.className).toContain('sm:block');
+    expect(hintContainer.props.className).not.toContain('right-4');
+    expect(zoomContainer.props.className).toContain('right-4');
+    expect(zoomContainer.props.className).not.toContain('left-4');
+  });
+
   it('does not render rack geometry strip even when rack geometry flag is enabled', () => {
     const renderer = renderHud(
       createRack({

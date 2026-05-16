@@ -334,9 +334,10 @@ export function CanvasHud({
         />
       )}
 
-      <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
-        {!isLayoutDrawToolActive && (
+      {!isLayoutDrawToolActive && (
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 hidden sm:block">
           <div
+            data-testid="canvas-hud-hint-bar"
             className="rounded-xl px-3 py-2 text-[11px]"
             style={{
               background: 'rgba(15,24,42,0.72)',
@@ -346,9 +347,12 @@ export function CanvasHud({
           >
             {hintText}
           </div>
-        )}
+        </div>
+      )}
 
+      <div className="pointer-events-none absolute bottom-4 right-4 z-10">
         <div
+          data-testid="canvas-hud-zoom-controls"
           className="pointer-events-auto flex items-center gap-1 rounded-xl px-2 py-1.5 shadow-md"
           style={{
             background: 'var(--surface-strong)',
