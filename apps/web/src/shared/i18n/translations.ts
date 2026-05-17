@@ -845,6 +845,7 @@ export const he: Partial<Record<TranslationKey, string>> = {
   'storage.action.back': 'חזרה',
   'storage.action.backToCellOverview': 'חזרה לסקירת התא',
   'storage.action.createContainerAtLocation': 'צור מכולה במיקום זה',
+  'storage.action.createAndPlaceHere': 'צור ומקם כאן',
   'storage.action.createContainerWithProductAtLocation': 'צור מכולה עם מוצר במיקום זה',
   'storage.action.createFromPresetAtLocation': 'צור מכולה מתבנית אחסון במיקום זה',
   'storage.action.editOverride': 'ערוך דריסה',

@@ -87,7 +87,7 @@ export function StorageWorkspaceV2({
     <div
       role="region"
       aria-label={t('warehouse.storage.region')}
-      className="flex h-full w-full overflow-hidden"
+      className="relative flex h-full w-full overflow-hidden"
     >
       <StorageNavigator workspace={workspace} />
 
@@ -101,7 +101,9 @@ export function StorageWorkspaceV2({
       />
 
       {hasSelection && (
-        <>
+        /* On mobile: absolute overlay so the canvas stays visible.
+           On sm+: transparent wrapper — children are direct flex items. */
+        <div className="max-sm:absolute max-sm:inset-y-0 max-sm:right-0 max-sm:z-10 max-sm:flex sm:contents">
           {/* Persistent toggle strip — always visible when there's a selection */}
           <button
             type="button"
@@ -118,7 +120,7 @@ export function StorageWorkspaceV2({
 
           {/* Inspector panel — hidden when collapsed */}
           {!inspectorCollapsed && <StorageInspectorV2 workspace={workspace} />}
-        </>
+        </div>
       )}
 
       {/* No selection: inspector returns null, render nothing */}
