@@ -2,7 +2,7 @@ import { CornerDownLeft, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Product } from '@wos/domain';
-import { useActiveFloorId, useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
+import { useActiveFloorId, useIsDrawerCollapsed, useIsNavigatorCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { floorCellsByProductQueryOptions } from '@/entities/location/api/queries';
 import { productsSearchQueryOptions } from '@/entities/product/api/queries';
@@ -385,6 +385,7 @@ export function WarehouseTopBar() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const toggle = useToggleDrawer();
   const isCollapsed = useIsDrawerCollapsed();
+  const isNavigatorCollapsed = useIsNavigatorCollapsed();
   const pathname = typeof window === 'undefined' ? '' : window.location.pathname;
   const isWarehouseViewRoute = pathname.includes(routes.warehouseView);
 
@@ -518,7 +519,7 @@ export function WarehouseTopBar() {
         }
       />
       {shouldShowLocateInline && (
-        <div className={`pointer-events-none absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2${!isCollapsed ? ' hidden sm:block' : ''}`}>
+        <div className={`pointer-events-none absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2${(!isCollapsed || !isNavigatorCollapsed) ? ' hidden sm:block' : ''}`}>
           <div
             className="pointer-events-auto rounded-full border px-2 py-1 opacity-85 shadow-[0_2px_10px_rgba(15,23,42,0.08)] backdrop-blur-md transition-opacity hover:opacity-100 focus-within:opacity-100"
             style={{

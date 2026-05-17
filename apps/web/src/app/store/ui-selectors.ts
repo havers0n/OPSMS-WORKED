@@ -6,3 +6,5 @@ export const useSetActiveSiteId = () => useUiStore((state) => state.setActiveSit
 export const useSetActiveFloorId = () => useUiStore((state) => state.setActiveFloorId);
 export const useIsDrawerCollapsed = () => useUiStore((state) => state.isDrawerCollapsed);
 export const useToggleDrawer = () => useUiStore((state) => state.toggleDrawer);
+export const useIsNavigatorCollapsed = () => useUiStore((state) => state.isNavigatorCollapsed);
+export const useToggleNavigator = () => useUiStore((state) => state.toggleNavigator);

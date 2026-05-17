@@ -1,10 +1,11 @@
 import type { FloorWorkspace, Rack } from '@wos/domain';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { collectRackPublishedSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
 import { useT } from '@/shared/i18n';
+import { useIsNavigatorCollapsed, useToggleNavigator } from '@/app/store/ui-selectors';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -12,28 +13,6 @@ import {
   useStorageFocusSelectCell,
   useStorageFocusSetActiveLevel,
 } from '../model/v2/v2-selectors';
-
-const COLLAPSED_KEY = 'wos:storage-navigator-collapsed';
-
-function getBrowserStorage(): Storage | null {
-  if (
-    typeof window === 'undefined' ||
-    typeof window.localStorage === 'undefined'
-  ) {
-    return null;
-  }
-  return window.localStorage;
-}
-
-function readCollapsed(): boolean {
-  const storage = getBrowserStorage();
-  if (!storage) return false;
-  try {
-    return storage.getItem(COLLAPSED_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
 
 interface StorageNavigatorProps {
   workspace: FloorWorkspace | null;
@@ -54,20 +33,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(floorId);
   const { data: occupancyRows = [], isLoading: occupancyLoading } = useFloorLocationOccupancy(floorId);
 
-  const [isCollapsed, setIsCollapsed] = useState(readCollapsed);
-
-  const toggle = useCallback(() => {
-    setIsCollapsed((prev) => {
-      const next = !prev;
-      const storage = getBrowserStorage();
-      try {
-        storage?.setItem(COLLAPSED_KEY, String(next));
-      } catch {
-        // Ignore unavailable storage; collapse state can remain session-local.
-      }
-      return next;
-    });
-  }, []);
+  const isCollapsed = useIsNavigatorCollapsed();
+  const toggle = useToggleNavigator();
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
