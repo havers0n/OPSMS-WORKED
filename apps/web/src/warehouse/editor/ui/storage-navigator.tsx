@@ -5,7 +5,7 @@ import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
 import { collectRackPublishedSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
 import { useT } from '@/shared/i18n';
-import { useIsNavigatorCollapsed, useSetNavigatorCollapsed, useToggleNavigator } from '@/app/store/ui-selectors';
+import { useIsNavigatorCollapsed, useToggleNavigator } from '@/app/store/ui-selectors';
 import {
   useStorageFocusSelectedCellId,
   useStorageFocusSelectedRackId,
@@ -35,15 +35,6 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const isCollapsed = useIsNavigatorCollapsed();
   const toggle = useToggleNavigator();
-  const setNavigatorCollapsed = useSetNavigatorCollapsed();
-
-  // Auto-collapse on mobile screens so the canvas gets full width by default.
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 640) {
-      setNavigatorCollapsed(true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
