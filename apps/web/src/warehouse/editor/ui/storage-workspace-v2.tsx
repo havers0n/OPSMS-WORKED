@@ -1,6 +1,6 @@
 import type { FloorWorkspace } from '@wos/domain';
 import { useEffect, useRef, useState } from 'react';
-import { PanelRight } from 'lucide-react';
+import { PanelRight, X } from 'lucide-react';
 import { useT } from '@/shared/i18n';
 import {
   useStorageFocusSelectedCellId,
@@ -162,19 +162,34 @@ export function StorageWorkspaceV2({
             mobileSheetClass
           ].join(' ')}
         >
-          {/* Drag handle: mobile only. Tapping cycles peek ↔ expanded. */}
-          <button
-            type="button"
-            className="sm:hidden flex w-full flex-col items-center py-2 flex-shrink-0 focus-visible:outline-none"
-            onClick={toggleMobilePeek}
-            aria-label={
-              inspectorMode === 'peek'
-                ? t('storage.inspector.expand')
-                : t('storage.inspector.hide')
-            }
-          >
-            <span className="h-1 w-10 rounded-full bg-gray-300" />
-          </button>
+          {/* Mobile sheet header: centered drag handle (peek ↔ expanded) + close button. */}
+          <div className="sm:hidden flex items-center justify-between px-3 pt-2 pb-1 flex-shrink-0">
+            {/* Balancing spacer so handle stays visually centered */}
+            <div className="w-6" />
+            <button
+              type="button"
+              className="flex flex-1 items-center justify-center focus-visible:outline-none"
+              onClick={toggleMobilePeek}
+              aria-label={
+                inspectorMode === 'peek'
+                  ? t('storage.inspector.expand')
+                  : t('storage.inspector.hide')
+              }
+            >
+              <span className="h-1 w-10 rounded-full bg-gray-300" />
+            </button>
+            <button
+              type="button"
+              className="flex h-6 w-6 items-center justify-center text-gray-400 hover:text-gray-600"
+              onClick={() => {
+                setInspectorMode('hidden');
+                persistMode('hidden');
+              }}
+              aria-label={t('storage.inspector.hide')}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
           {/* Desktop toggle strip — always visible when there's a selection. */}
           <button
