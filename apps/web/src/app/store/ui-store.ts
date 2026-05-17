@@ -18,6 +18,7 @@ type UiState = {
   activeFloorId: string | null;
   toggleDrawer: () => void;
   toggleNavigator: () => void;
+  setNavigatorCollapsed: (value: boolean) => void;
   setActiveSiteId: (siteId: string | null) => void;
   setActiveFloorId: (floorId: string | null) => void;
 };
@@ -36,6 +37,11 @@ export const useUiStore = create<UiState>((set) => ({
     const next = !state.isNavigatorCollapsed;
     try { window.localStorage.setItem(NAVIGATOR_COLLAPSED_KEY, String(next)); } catch { /* ignore */ }
     return { isNavigatorCollapsed: next };
+  }),
+  setNavigatorCollapsed: (value) => set((state) => {
+    if (state.isNavigatorCollapsed === value) return state;
+    try { window.localStorage.setItem(NAVIGATOR_COLLAPSED_KEY, String(value)); } catch { /* ignore */ }
+    return { isNavigatorCollapsed: value };
   }),
   setActiveSiteId: (activeSiteId) => set({ activeSiteId, activeFloorId: null }),
   setActiveFloorId: (activeFloorId) => set({ activeFloorId })

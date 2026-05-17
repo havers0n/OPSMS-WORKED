@@ -350,7 +350,7 @@ export function CanvasHud({
         </div>
       )}
 
-      <div className="pointer-events-none absolute bottom-4 right-4 z-10">
+      <div className="pointer-events-none absolute bottom-4 max-sm:bottom-16 right-4 z-10">
         <div
           data-testid="canvas-hud-zoom-controls"
           className="pointer-events-auto flex items-center gap-1 rounded-xl px-2 py-1.5 shadow-md"
