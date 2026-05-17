@@ -780,6 +780,9 @@ export function useCanvasViewportController({
       const stage = stageRef.current;
       if (!stage) return;
 
+      // Don't intercept touches on interactive HTML elements overlaid on the canvas (e.g. zoom buttons)
+      if ((event.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"]')) return;
+
       if (event.touches.length === 2) {
         // Cancel any in-progress 1-finger pan
         cancelInertia();
