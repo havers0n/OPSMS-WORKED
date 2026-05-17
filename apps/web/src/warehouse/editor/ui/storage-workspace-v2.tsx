@@ -1,8 +1,16 @@
 import type { FloorWorkspace } from '@wos/domain';
+import { useEffect, useRef, useState } from 'react';
+import { PanelRight } from 'lucide-react';
 import { useT } from '@/shared/i18n';
+import {
+  useStorageFocusSelectedCellId,
+  useStorageFocusSelectedRackId
+} from '../model/v2/v2-selectors';
 import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
+
+const INSPECTOR_COLLAPSED_KEY = 'wos:storage-inspector-collapsed';
 
 interface StorageWorkspaceV2Props {
   workspace: FloorWorkspace | null;
@@ -42,6 +50,39 @@ export function StorageWorkspaceV2({
 }: StorageWorkspaceV2Props) {
   const t = useT();
 
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(INSPECTOR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const selectedRackId = useStorageFocusSelectedRackId();
+  const selectedCellId = useStorageFocusSelectedCellId();
+  const hasSelection = Boolean(selectedRackId || selectedCellId);
+
+  // Auto-expand only when transitioning from no-selection → selection
+  const prevHasSelectionRef = useRef(false);
+  useEffect(() => {
+    if (hasSelection && !prevHasSelectionRef.current) {
+      setInspectorCollapsed(false);
+    }
+    prevHasSelectionRef.current = hasSelection;
+  }, [hasSelection]);
+
+  const toggleInspector = () => {
+    setInspectorCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(INSPECTOR_COLLAPSED_KEY, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   return (
     <div
       role="region"
@@ -59,7 +100,29 @@ export function StorageWorkspaceV2({
         hideContextPanel
       />
 
-      <StorageInspectorV2 workspace={workspace} />
+      {hasSelection && (
+        <>
+          {/* Persistent toggle strip — always visible when there's a selection */}
+          <button
+            type="button"
+            onClick={toggleInspector}
+            title={inspectorCollapsed ? t('storage.inspector.show') : t('storage.inspector.hide')}
+            aria-expanded={!inspectorCollapsed}
+            className="flex h-full w-8 flex-shrink-0 flex-col items-center border-s border-gray-200 bg-white pt-2.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+          >
+            <PanelRight
+              className="h-4 w-4 transition-transform"
+              style={{ transform: inspectorCollapsed ? undefined : 'scaleX(-1)' }}
+            />
+          </button>
+
+          {/* Inspector panel — hidden when collapsed */}
+          {!inspectorCollapsed && <StorageInspectorV2 workspace={workspace} />}
+        </>
+      )}
+
+      {/* No selection: inspector returns null, render nothing */}
+      {!hasSelection && <StorageInspectorV2 workspace={workspace} />}
     </div>
   );
 }
