@@ -5,7 +5,11 @@ const NAVIGATOR_COLLAPSED_KEY = 'wos:storage-navigator-collapsed';
 function readNavigatorCollapsed(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    return window.localStorage.getItem(NAVIGATOR_COLLAPSED_KEY) === 'true';
+    const stored = window.localStorage.getItem(NAVIGATOR_COLLAPSED_KEY);
+    if (stored !== null) return stored === 'true';
+    // Auto-collapse on first load for mobile viewports.
+    // innerWidth === 0 indicates jsdom/test env — leave expanded.
+    return window.innerWidth > 0 && window.innerWidth < 640;
   } catch {
     return false;
   }
