@@ -92,7 +92,9 @@ import {
   inspectorSectionTitleClassName,
   inspectorShellClassName
 } from './storage-inspector-v2/shared';
-import { translate } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
+
+type Translator = ReturnType<typeof useT>;
 
 export { resolvePanelMode, resolveActiveMode } from './storage-inspector-v2/mode';
 export type { MoveTaskState } from './storage-inspector-v2/mode';
@@ -118,7 +120,7 @@ function containerDisplayCode(row: LocationStorageSnapshotRow | undefined, fallb
   return row ? (row.externalCode ?? row.systemCode ?? fallback) : fallback;
 }
 
-function buildCurrentContainerCards(containers: GroupedContainer[]): CurrentContainerCardViewModel[] {
+function buildCurrentContainerCards(containers: GroupedContainer[], t: Translator): CurrentContainerCardViewModel[] {
   return containers.map(({ containerId, rows }) => {
     const first = rows[0];
     const displayCode = containerDisplayCode(first, containerId);
@@ -131,8 +133,9 @@ function buildCurrentContainerCards(containers: GroupedContainer[]): CurrentCont
       title: displayCode,
       secondaryText: `${containerType} / ${status}`,
       status,
-      presetUsageText: `${presetUsageLabel(first?.presetUsageStatus)} / ${presetMaterializationLabel(
-        first?.presetMaterializationStatus
+      presetUsageText: `${presetUsageLabel(first?.presetUsageStatus, t)} / ${presetMaterializationLabel(
+        first?.presetMaterializationStatus,
+        t
       )}`,
       inventoryEntryCount
     };
@@ -237,29 +240,29 @@ function validateTargetContainer(
   return null;
 }
 
-function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'] | undefined) {
+function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'] | undefined, t: Translator) {
   switch (status) {
     case 'preferred_match':
-      return translate('storage.preset.preferredPreset');
+      return t('storage.preset.preferredPreset');
     case 'standard_non_preferred':
-      return translate('storage.preset.standardPreset');
+      return t('storage.preset.standardPreset');
     case 'manual':
-      return translate('storage.preset.manual');
+      return t('storage.preset.manual');
     default:
-      return translate('storage.preset.unknown');
+      return t('storage.preset.unknown');
   }
 }
 
-function presetMaterializationLabel(status: LocationStorageSnapshotRow['presetMaterializationStatus'] | undefined) {
+function presetMaterializationLabel(status: LocationStorageSnapshotRow['presetMaterializationStatus'] | undefined, t: Translator) {
   switch (status) {
     case 'shell':
-      return translate('storage.preset.shell');
+      return t('storage.preset.shell');
     case 'materialized':
-      return translate('storage.preset.materialized');
+      return t('storage.preset.materialized');
     case 'manual':
-      return translate('storage.preset.manualContents');
+      return t('storage.preset.manualContents');
     default:
-      return translate('storage.preset.materializationUnknown');
+      return t('storage.preset.materializationUnknown');
   }
 }
 
@@ -296,6 +299,7 @@ function CellSectionOverviewPanel({
   onOpenCreateFromPresetTask: () => void;
   onOpenCreateWithProductTask: () => void;
 }) {
+  const t = useT();
   const hasContainers = containers.length > 0;
   const hasInventory = inventoryItems.length > 0;
 
@@ -303,7 +307,7 @@ function CellSectionOverviewPanel({
     <div
       className={inspectorShellClassName}
       role="complementary"
-      aria-label={translate('storage.inspector.locationLabel', { locationCode })}
+      aria-label={t('storage.inspector.locationLabel', { locationCode })}
     >
       <div className={inspectorSectionClassName}>
         <div className="flex items-start justify-between gap-3">
@@ -348,37 +352,37 @@ function CellSectionOverviewPanel({
             style={{ border: '1px solid var(--border-muted)', background: 'var(--surface-subtle)' }}
           >
             <div className="px-3 py-2.5">
-              <div className={inspectorSectionTitleClassName}>{translate('storage.field.actions')}</div>
+              <div className={inspectorSectionTitleClassName}>{t('storage.field.actions')}</div>
             </div>
             <div className="grid gap-2 border-t border-[var(--border-muted)] px-3 py-3">
               <button
                 onClick={onOpenPlaceExistingTask}
                 className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-                aria-label={translate('storage.action.placeExistingContainer')}
+                aria-label={t('storage.action.placeExistingContainer')}
               >
-                {translate('storage.action.placeExistingContainer')}
+                {t('storage.action.placeExistingContainer')}
               </button>
               <button
                 onClick={onOpenCreateTask}
                 className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-                aria-label={translate('storage.action.createContainerAtLocation')}
+                aria-label={t('storage.action.createContainerAtLocation')}
               >
-                {translate('storage.action.createAndPlaceHere')}
+                {t('storage.action.createAndPlaceHere')}
               </button>
               <button
                 onClick={onOpenCreateWithProductTask}
                 className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-                aria-label={translate('storage.action.createContainerWithProductAtLocation')}
+                aria-label={t('storage.action.createContainerWithProductAtLocation')}
               >
-                {translate('storage.action.createContainerWithProduct')}
+                {t('storage.action.createContainerWithProduct')}
               </button>
               <button
                 onClick={onOpenCreateFromPresetTask}
                 className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
-                aria-label={translate('storage.action.createFromPresetAtLocation')}
+                aria-label={t('storage.action.createFromPresetAtLocation')}
                 data-testid="create-from-preset-action"
               >
-                {translate('storage.action.createFromPreset')}
+                {t('storage.action.createFromPreset')}
               </button>
             </div>
           </div>
@@ -397,6 +401,7 @@ function CellSectionOverviewPanel({
 }
 
 export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
+  const t = useT();
   const queryClient = useQueryClient();
   const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
   const floorId = workspace?.floorId ?? null;
@@ -1667,14 +1672,14 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       setAddProductErrorMessage(null);
 
       if (!isContainerEmpty) {
-        setAddProductErrorMessage(translate('storage.warning.containerNotEmpty'));
+        setAddProductErrorMessage(t('storage.warning.containerNotEmpty'));
         return;
       }
 
       try {
         const latestRows = await queryClient.fetchQuery(containerStorageQueryOptions(addProductContainerId));
         if (hasInventoryRows(latestRows)) {
-          setAddProductErrorMessage(translate('storage.warning.containerNotEmpty'));
+          setAddProductErrorMessage(t('storage.warning.containerNotEmpty'));
           return;
         }
 
@@ -1698,7 +1703,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
         closeAddProductTask();
       } catch (error) {
-        setAddProductErrorMessage(error instanceof Error ? error.message : translate('error.generic'));
+        setAddProductErrorMessage(error instanceof Error ? error.message : t('error.generic'));
       }
     };
 
@@ -1769,13 +1774,13 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none');
     const effectiveRoleText =
       effectiveRoleContext == null
-        ? translate('storage.state.unknown')
+        ? t('storage.state.unknown')
         : effectiveRoleContext.effectiveRoleSource === 'conflict'
-          ? translate('storage.roleSource.conflict')
+          ? t('storage.roleSource.conflict')
           : semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none');
     const sourceText =
       effectiveRoleContext == null
-        ? translate('storage.state.unknown')
+        ? t('storage.state.unknown')
         : effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource);
     const defaultRole = firstExplicitRole ?? 'primary_pick';
 
@@ -1873,8 +1878,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     const conflictingRowCount = targetAssignments.length;
     const conflictingRowIds = targetAssignments.map((assignment) => assignment.id);
     const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none');
-    const effectiveRoleText = translate('storage.roleSource.conflict');
-    const sourceText = translate('storage.roleSource.conflict');
+    const effectiveRoleText = t('storage.roleSource.conflict');
+    const sourceText = t('storage.roleSource.conflict');
     const canRepair = targetAssignments.length > 0;
 
     const resolveConflict = async (role: 'primary_pick' | 'reserve') => {
@@ -1983,7 +1988,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
     const structuralDefaultRole = effectiveRoleContext?.structuralDefaultRole ?? structuralDefaultFromLayout;
     const structuralDefaultText =
-      structuralDefaultRole === null ? translate('storage.state.unknown') : semanticRoleLabel(structuralDefaultRole);
+      structuralDefaultRole === null ? t('storage.state.unknown') : semanticRoleLabel(structuralDefaultRole);
     const hasProductContext = selectedProduct !== null;
     const selectedProductId = selectedProduct?.id ?? null;
     const isEffectiveRoleLoading = hasProductContext && effectiveRoleLoading;
@@ -2002,21 +2007,21 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
     const effectiveRoleText = hasProductContext
       ? isEffectiveRoleLoading
-        ? translate('storage.state.loading')
+        ? t('storage.state.loading')
         : isConflict
-          ? translate('storage.roleSource.conflict')
+          ? t('storage.roleSource.conflict')
           : effectiveRoleContext
             ? semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none')
-            : translate('storage.state.unknown')
-      : translate('storage.state.notComputed');
+            : t('storage.state.unknown')
+      : t('storage.state.notComputed');
 
     const sourceText = hasProductContext
       ? isEffectiveRoleLoading
-        ? translate('storage.state.loading')
+        ? t('storage.state.loading')
         : effectiveRoleContext
           ? effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource)
-          : translate('storage.state.unknown')
-      : translate('storage.state.notComputed');
+          : t('storage.state.unknown')
+      : t('storage.state.notComputed');
 
     const showNoneExplanation =
       effectiveRoleContext?.structuralDefaultRole === 'none' &&
@@ -2086,7 +2091,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
   }
 
-  const cellOverviewContainers = buildCurrentContainerCards(containers);
+  const cellOverviewContainers = buildCurrentContainerCards(containers, t);
   const cellOverviewInventoryItems = buildCurrentInventoryItems(storageRows);
   const cellOverviewPolicyAssignments = buildPolicyAssignments(locationProductAssignments);
 
