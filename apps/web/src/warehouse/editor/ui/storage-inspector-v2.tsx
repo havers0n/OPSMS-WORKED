@@ -321,14 +321,14 @@ function CellSectionOverviewPanel({
               />
             </div>
           </div>
-          {locationType ? (
-            <span className="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500">
-              {locationType.replace('_', ' ')}
-            </span>
-          ) : null}
-        </div>
-        <div className="mt-2">
-          <CellStatusChip occupied={isOccupied} />
+          <div className="flex flex-shrink-0 flex-col items-end gap-1">
+            {locationType ? (
+              <span className="rounded-sm bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500">
+                {locationType.replace('_', ' ')}
+              </span>
+            ) : null}
+            <CellStatusChip occupied={isOccupied} />
+          </div>
         </div>
       </div>
 
