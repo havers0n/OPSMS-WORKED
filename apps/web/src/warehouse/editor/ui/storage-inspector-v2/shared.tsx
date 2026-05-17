@@ -79,13 +79,7 @@ export function StatusBadge({ occupied }: { occupied: boolean }) {
 }
 
 export function InspectorFooter() {
-  const t = useT();
-
-  return (
-    <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-2 text-[11px] text-gray-500">
-      <p>{t('storage.footer.capabilities')}</p>
-    </div>
-  );
+  return null;
 }
 
 export function TaskPanelBreadcrumb({
