@@ -1,5 +1,5 @@
 import type { FloorWorkspace, Rack } from '@wos/domain';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
