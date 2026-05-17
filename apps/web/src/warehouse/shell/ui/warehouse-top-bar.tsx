@@ -518,7 +518,7 @@ export function WarehouseTopBar() {
         }
       />
       {shouldShowLocateInline && (
-        <div className="pointer-events-none absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2">
+        <div className={`pointer-events-none absolute left-1/2 top-full z-20 -translate-x-1/2 pt-2${!isCollapsed ? ' hidden sm:block' : ''}`}>
           <div
             className="pointer-events-auto rounded-full border px-2 py-1 opacity-85 shadow-[0_2px_10px_rgba(15,23,42,0.08)] backdrop-blur-md transition-opacity hover:opacity-100 focus-within:opacity-100"
             style={{
