@@ -313,7 +313,8 @@ export function getModeEntryCamera({
   viewMode,
   viewport,
   zoom,
-  zoomBounds
+  zoomBounds,
+  bottomInset = 0
 }: {
   currentOffset: CanvasOffset;
   racks: Rack[];
@@ -321,11 +322,15 @@ export function getModeEntryCamera({
   viewport: CanvasViewport;
   zoom: number;
   zoomBounds: CanvasZoomBounds;
+  /** Pixels reserved at the bottom (e.g. a mobile sheet in peek state). */
+  bottomInset?: number;
 }): CanvasCamera | null {
   if (viewMode !== 'view' && viewMode !== 'storage') return null;
   if (viewport.width === 0 || viewport.height === 0 || racks.length === 0) {
     return null;
   }
+
+  const effectiveHeight = viewport.height - bottomInset;
 
   const minEntryZoom = getModeEntryMinZoom(viewMode);
   const boxes = racks.map(getRackBoundingBox);
@@ -341,7 +346,7 @@ export function getModeEntryCamera({
   const scaleX =
     bboxWPx > 0 ? (viewport.width - PADDING * 2) / bboxWPx : minEntryZoom;
   const scaleY =
-    bboxHPx > 0 ? (viewport.height - PADDING * 2) / bboxHPx : minEntryZoom;
+    bboxHPx > 0 ? (effectiveHeight - PADDING * 2) / bboxHPx : minEntryZoom;
 
   const targetZoom = clampCanvasZoom(
     Math.max(Math.min(scaleX, scaleY), minEntryZoom),
@@ -362,7 +367,7 @@ export function getModeEntryCamera({
       (viewport.width - bboxWPx * targetZoom) / 2 -
       minXm * WORLD_SCALE * targetZoom,
     offsetY:
-      (viewport.height - bboxHPx * targetZoom) / 2 -
+      (effectiveHeight - bboxHPx * targetZoom) / 2 -
       minYm * WORLD_SCALE * targetZoom
   };
 }
@@ -495,13 +500,23 @@ export function useCanvasViewportController({
       return;
     }
 
+    // On mobile in storage mode reserve the peek-sheet height so racks
+    // stay visible when the inspector sheet opens at 40 vh.
+    const mobileBottomInset =
+      viewMode === 'storage' &&
+      typeof window !== 'undefined' &&
+      window.innerWidth < 640
+        ? window.innerHeight * 0.4
+        : 0;
+
     const camera = getModeEntryCamera({
       currentOffset: canvasOffset,
       racks: autoFitRacks,
       viewMode,
       viewport,
       zoom,
-      zoomBounds: zoomBoundsRef.current
+      zoomBounds: zoomBoundsRef.current,
+      bottomInset: mobileBottomInset
     });
     if (!camera) return;
 

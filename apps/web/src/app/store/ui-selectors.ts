@@ -8,3 +8,4 @@ export const useIsDrawerCollapsed = () => useUiStore((state) => state.isDrawerCo
 export const useToggleDrawer = () => useUiStore((state) => state.toggleDrawer);
 export const useIsNavigatorCollapsed = () => useUiStore((state) => state.isNavigatorCollapsed);
 export const useToggleNavigator = () => useUiStore((state) => state.toggleNavigator);
+export const useSetNavigatorCollapsed = () => useUiStore((state) => state.setNavigatorCollapsed);

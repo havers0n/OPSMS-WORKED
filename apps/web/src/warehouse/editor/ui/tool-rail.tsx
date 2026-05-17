@@ -64,35 +64,40 @@ export function ToolRail() {
           ? 'wall'
           : 'select';
 
+  const toolButtons = tools.map((tool) => {
+    const Icon = tool.icon;
+    const isActive = tool.id === activeToolId;
+    const isDisabled =
+      !hasLayout ||
+      tool.disabled ||
+      (tool.editorMode !== 'select' && !isLayoutEditable);
+
+    return { tool, Icon, isActive, isDisabled };
+  });
+
   return (
-    <ShellToolRail
-      orientation="vertical"
-      className="h-full w-12 shrink-0 rounded-none border-y-0 border-l-0 bg-transparent p-2"
-      style={{
-        background: 'var(--surface-primary)',
-        borderColor: 'var(--border-muted)'
-      }}
-    >
-      <div className="flex flex-col items-center gap-1">
-        <IconButton
-          icon={<Menu className="h-4 w-4" />}
-          title="Navigation menu"
-          onClick={toggleDrawer}
-          className="group relative h-9 w-9 rounded-lg transition-all"
-          style={{ color: 'var(--text-muted)' }}
-        />
+    <>
+      {/* Desktop: vertical left rail */}
+      <ShellToolRail
+        orientation="vertical"
+        className="hidden sm:flex h-full w-12 shrink-0 rounded-none border-y-0 border-l-0 bg-transparent p-2"
+        style={{
+          background: 'var(--surface-primary)',
+          borderColor: 'var(--border-muted)'
+        }}
+      >
+        <div className="flex flex-col items-center gap-1">
+          <IconButton
+            icon={<Menu className="h-4 w-4" />}
+            title="Navigation menu"
+            onClick={toggleDrawer}
+            className="group relative h-9 w-9 rounded-lg transition-all"
+            style={{ color: 'var(--text-muted)' }}
+          />
 
-        <Divider className="my-1 w-5" style={{ background: 'var(--border-muted)' }} />
+          <Divider className="my-1 w-5" style={{ background: 'var(--border-muted)' }} />
 
-        {tools.map((tool) => {
-          const Icon = tool.icon;
-          const isActive = tool.id === activeToolId;
-          const isDisabled =
-            !hasLayout ||
-            tool.disabled ||
-            (tool.editorMode !== 'select' && !isLayoutEditable);
-
-          return (
+          {toolButtons.map(({ tool, Icon, isActive, isDisabled }) => (
             <IconButton
               key={tool.id}
               icon={<Icon className="h-4 w-4" />}
@@ -100,35 +105,22 @@ export function ToolRail() {
               disabled={isDisabled}
               onClick={() => {
                 if (!tool.editorMode) return;
-                if (tool.editorMode !== 'select') {
-                  clearSelection();
-                }
+                if (tool.editorMode !== 'select') clearSelection();
                 setEditorMode(tool.editorMode);
               }}
               className="group relative h-9 w-9 rounded-lg transition-all disabled:opacity-30"
               style={
                 isActive
-                  ? {
-                      background: 'var(--accent-soft)',
-                      color: 'var(--accent)'
-                    }
-                  : {
-                      color: 'var(--text-muted)'
-                    }
+                  ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
+                  : { color: 'var(--text-muted)' }
               }
             >
-              {/* Tooltip */}
               <span
                 className="pointer-events-none absolute left-full ml-2 z-50 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-md transition-opacity group-hover:opacity-100"
-                style={{
-                  background: 'var(--text-primary)',
-                  color: '#fff'
-                }}
+                style={{ background: 'var(--text-primary)', color: '#fff' }}
               >
                 {tool.label}
               </span>
-
-              {/* Active indicator */}
               {isActive && (
                 <span
                   className="absolute -right-px top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full"
@@ -136,19 +128,60 @@ export function ToolRail() {
                 />
               )}
             </IconButton>
-          );
-        })}
-      </div>
+          ))}
+        </div>
 
-      {/* View mode label at bottom */}
-      <div className="mt-auto pb-1">
-        <span
-          className="block text-center text-[9px] font-semibold uppercase tracking-widest"
-          style={{ color: 'var(--border-strong)', writingMode: 'vertical-rl' }}
-        >
-          {MODE_LABELS[viewMode]}
-        </span>
+        <div className="mt-auto pb-1">
+          <span
+            className="block text-center text-[9px] font-semibold uppercase tracking-widest"
+            style={{ color: 'var(--border-strong)', writingMode: 'vertical-rl' }}
+          >
+            {MODE_LABELS[viewMode]}
+          </span>
+        </div>
+      </ShellToolRail>
+
+      {/* Mobile: fixed horizontal bottom bar */}
+      <div
+        className="sm:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-center gap-1 border-t px-4 py-2"
+        style={{ background: 'var(--surface-primary)', borderColor: 'var(--border-muted)' }}
+      >
+        <IconButton
+          icon={<Menu className="h-4 w-4" />}
+          title="Navigation menu"
+          onClick={toggleDrawer}
+          className="h-10 w-10 rounded-lg transition-all"
+          style={{ color: 'var(--text-muted)' }}
+        />
+
+        {viewMode === 'layout' && (
+          <>
+            <div
+              className="mx-1 h-5 w-px flex-shrink-0"
+              style={{ background: 'var(--border-muted)' }}
+            />
+            {toolButtons.map(({ tool, Icon, isActive, isDisabled }) => (
+              <IconButton
+                key={tool.id}
+                icon={<Icon className="h-4 w-4" />}
+                title={tool.label}
+                disabled={isDisabled}
+                onClick={() => {
+                  if (!tool.editorMode) return;
+                  if (tool.editorMode !== 'select') clearSelection();
+                  setEditorMode(tool.editorMode);
+                }}
+                className="h-10 w-10 rounded-lg transition-all disabled:opacity-30"
+                style={
+                  isActive
+                    ? { background: 'var(--accent-soft)', color: 'var(--accent)' }
+                    : { color: 'var(--text-muted)' }
+                }
+              />
+            ))}
+          </>
+        )}
       </div>
-    </ShellToolRail>
+    </>
   );
 }
