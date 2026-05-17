@@ -10,7 +10,9 @@ import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 
-const INSPECTOR_COLLAPSED_KEY = 'wos:storage-inspector-collapsed';
+const INSPECTOR_MODE_KEY = 'wos:storage-inspector-mode';
+
+type InspectorMode = 'hidden' | 'peek' | 'expanded';
 
 interface StorageWorkspaceV2Props {
   workspace: FloorWorkspace | null;
@@ -50,38 +52,68 @@ export function StorageWorkspaceV2({
 }: StorageWorkspaceV2Props) {
   const t = useT();
 
-  const [inspectorCollapsed, setInspectorCollapsed] = useState(() => {
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => {
     try {
-      return localStorage.getItem(INSPECTOR_COLLAPSED_KEY) === 'true';
+      const stored = localStorage.getItem(INSPECTOR_MODE_KEY);
+      if (stored === 'hidden' || stored === 'peek' || stored === 'expanded') return stored;
     } catch {
-      return false;
+      // ignore
     }
+    return 'hidden';
   });
 
   const selectedRackId = useStorageFocusSelectedRackId();
   const selectedCellId = useStorageFocusSelectedCellId();
   const hasSelection = Boolean(selectedRackId || selectedCellId);
 
-  // Auto-expand only when transitioning from no-selection → selection
+  // On new selection: open to peek if currently hidden.
+  // On selection clear: collapse to hidden.
   const prevHasSelectionRef = useRef(false);
   useEffect(() => {
     if (hasSelection && !prevHasSelectionRef.current) {
-      setInspectorCollapsed(false);
+      setInspectorMode((prev) => (prev === 'hidden' ? 'peek' : prev));
+    }
+    if (!hasSelection) {
+      setInspectorMode('hidden');
     }
     prevHasSelectionRef.current = hasSelection;
   }, [hasSelection]);
 
-  const toggleInspector = () => {
-    setInspectorCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(INSPECTOR_COLLAPSED_KEY, String(next));
-      } catch {
-        // ignore
-      }
+  const persistMode = (mode: InspectorMode) => {
+    try {
+      localStorage.setItem(INSPECTOR_MODE_KEY, mode);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Desktop: toggle strip cycles hidden ↔ expanded (peek is a mobile-only concept).
+  const toggleDesktop = () => {
+    setInspectorMode((prev) => {
+      const next = prev === 'hidden' ? 'expanded' : 'hidden';
+      persistMode(next);
       return next;
     });
   };
+
+  // Mobile: drag handle tap cycles peek ↔ expanded.
+  const toggleMobilePeek = () => {
+    setInspectorMode((prev) => {
+      const next = prev === 'peek' ? 'expanded' : 'peek';
+      persistMode(next);
+      return next;
+    });
+  };
+
+  const inspectorVisible = inspectorMode !== 'hidden';
+
+  // Mobile sheet height class per mode.
+  const mobileSheetClass =
+    inspectorMode === 'expanded'
+      ? 'max-sm:h-[90vh]'
+      : inspectorMode === 'peek'
+        ? 'max-sm:h-[40vh]'
+        : 'max-sm:h-0 max-sm:overflow-hidden';
 
   return (
     <div
@@ -100,30 +132,69 @@ export function StorageWorkspaceV2({
         hideContextPanel
       />
 
+      {/* Semi-transparent backdrop behind expanded sheet (mobile only). */}
+      {hasSelection && inspectorMode === 'expanded' && (
+        <div
+          className="fixed inset-0 z-10 bg-black/20 sm:hidden"
+          aria-hidden="true"
+          onClick={() => {
+            setInspectorMode('peek');
+            persistMode('peek');
+          }}
+        />
+      )}
+
       {hasSelection && (
-        /* On mobile: absolute overlay so the canvas stays visible.
-           On sm+: transparent wrapper — children are direct flex items. */
-        <div className="max-sm:absolute max-sm:inset-y-0 max-sm:right-0 max-sm:z-10 max-sm:flex sm:contents">
-          {/* Persistent toggle strip — always visible when there's a selection */}
+        /*
+         * On mobile (max-sm): fixed bottom sheet — canvas stays at least 60% visible
+         *   in peek (40 vh sheet) and has a backdrop in expanded (90 vh).
+         * On sm+: sm:contents makes this div layout-transparent so the toggle strip
+         *   and inspector panel are direct flex siblings of the root row.
+         */
+        <div
+          className={[
+            'sm:contents',
+            'max-sm:fixed max-sm:bottom-0 max-sm:inset-x-0 max-sm:z-20',
+            'max-sm:flex max-sm:flex-col',
+            'max-sm:rounded-t-2xl max-sm:bg-white',
+            'max-sm:shadow-[0_-4px_20px_rgba(0,0,0,0.10)]',
+            'max-sm:transition-[height] max-sm:duration-300 max-sm:ease-in-out',
+            mobileSheetClass
+          ].join(' ')}
+        >
+          {/* Drag handle: mobile only. Tapping cycles peek ↔ expanded. */}
           <button
             type="button"
-            onClick={toggleInspector}
-            title={inspectorCollapsed ? t('storage.inspector.show') : t('storage.inspector.hide')}
-            aria-expanded={!inspectorCollapsed}
-            className="flex h-full w-8 flex-shrink-0 flex-col items-center border-s border-gray-200 bg-white pt-2.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+            className="sm:hidden flex w-full flex-col items-center py-2 flex-shrink-0 focus-visible:outline-none"
+            onClick={toggleMobilePeek}
+            aria-label={
+              inspectorMode === 'peek'
+                ? t('storage.inspector.expand')
+                : t('storage.inspector.hide')
+            }
+          >
+            <span className="h-1 w-10 rounded-full bg-gray-300" />
+          </button>
+
+          {/* Desktop toggle strip — always visible when there's a selection. */}
+          <button
+            type="button"
+            onClick={toggleDesktop}
+            title={inspectorVisible ? t('storage.inspector.hide') : t('storage.inspector.show')}
+            aria-expanded={inspectorVisible}
+            className="max-sm:hidden flex h-full w-8 flex-shrink-0 flex-col items-center border-s border-gray-200 bg-white pt-2.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
           >
             <PanelRight
               className="h-4 w-4 transition-transform"
-              style={{ transform: inspectorCollapsed ? undefined : 'scaleX(-1)' }}
+              style={{ transform: inspectorVisible ? 'scaleX(-1)' : undefined }}
             />
           </button>
 
-          {/* Inspector panel — hidden when collapsed */}
-          {!inspectorCollapsed && <StorageInspectorV2 workspace={workspace} />}
+          {inspectorVisible && <StorageInspectorV2 workspace={workspace} />}
         </div>
       )}
 
-      {/* No selection: inspector returns null, render nothing */}
+      {/* No selection: render inspector so its hooks keep running (returns null internally). */}
       {!hasSelection && <StorageInspectorV2 workspace={workspace} />}
     </div>
   );

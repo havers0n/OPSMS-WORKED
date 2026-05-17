@@ -3,7 +3,7 @@ import type { ContainerType } from '@wos/domain';
 import { useT } from '@/shared/i18n';
 
 export const inspectorShellClassName =
-  'flex h-full w-[18.75rem] min-w-0 flex-col overflow-hidden border-s border-gray-200 bg-white';
+  'flex sm:h-full max-sm:flex-1 max-sm:min-h-0 w-[18.75rem] max-sm:w-full min-w-0 flex-col overflow-hidden border-s max-sm:border-s-0 border-gray-200 bg-white';
 
 export const inspectorScrollBodyClassName = 'flex-1 overflow-y-auto';
 
