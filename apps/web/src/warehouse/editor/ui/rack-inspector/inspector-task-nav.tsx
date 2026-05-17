@@ -29,11 +29,14 @@ export function InspectorTaskNav({
           data-testid={`rack-inspector-task-${option.value}`}
           onClick={() => onChange(option.value)}
           className={cn(
-            'flex-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+            'flex-1 rounded-md px-2.5 py-2.5 text-xs font-medium transition-colors',
+            'select-none',
+            'active:opacity-70',
             value === option.value
               ? 'bg-slate-900 text-white shadow-sm'
               : 'text-slate-500 hover:text-slate-700'
           )}
+          style={{ touchAction: 'manipulation' }}
         >
           {option.label}
         </button>
