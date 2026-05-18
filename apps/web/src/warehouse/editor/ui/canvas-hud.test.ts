@@ -70,7 +70,7 @@ function collectText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 }
 
 describe('CanvasHud rack geometry affordance', () => {
-  it('keeps the hint bar on the left and zoom controls on the right', () => {
+  it('keeps the desktop hint bar on the left, hides it on mobile, and keeps zoom controls on the right', () => {
     const renderer = renderHud(createRack());
 
     const hintBar = renderer.root.findByProps({
@@ -83,7 +83,7 @@ describe('CanvasHud rack geometry affordance', () => {
     const zoomContainer = zoomControls.parent!;
 
     expect(hintContainer.props.className).toContain('left-4');
-    expect(hintContainer.props.className).not.toContain('hidden');
+    expect(hintContainer.props.className).toContain('max-sm:hidden');
     expect(hintContainer.props.className).not.toContain('right-4');
     expect(zoomContainer.props.className).toContain('right-4');
     expect(zoomContainer.props.className).not.toContain('left-4');

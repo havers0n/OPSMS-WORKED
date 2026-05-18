@@ -339,7 +339,7 @@ export function CanvasHud({
       )}
 
       {!isLayoutDrawToolActive && (
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10">
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-sm:hidden">
           <div
             data-testid="canvas-hud-hint-bar"
             className="rounded-xl px-3 py-2 text-[11px]"
@@ -350,9 +350,6 @@ export function CanvasHud({
             }}
           >
             <div>{hintText}</div>
-            <div className="sm:hidden opacity-80">
-              {isMobileNavigateMode ? 'Navigate: drag anywhere' : 'Edit: tap to select'}
-            </div>
           </div>
         </div>
       )}

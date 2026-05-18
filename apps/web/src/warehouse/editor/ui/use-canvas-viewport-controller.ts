@@ -37,7 +37,6 @@ const WHEEL_DELTA_CAP = 200;
 const TOUCH_PAN_THRESHOLD_PX = 6;
 const DOUBLE_TAP_MAX_DELAY_MS = 280;
 const DOUBLE_TAP_MAX_DISTANCE_PX = 24;
-const LONG_PRESS_DELAY_MS = 450;
 
 type CanvasViewport = {
   width: number;
@@ -423,8 +422,6 @@ export function useCanvasViewportController({
   const touchPanStartRef = useRef<ScreenPoint | null>(null);
   const pinchStartDistRef = useRef<number | null>(null);
   const lastTapRef = useRef<{ time: number; point: ScreenPoint } | null>(null);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTriggeredRef = useRef(false);
 
   // Track previous viewMode so we can detect mode-entry auto-fit.
   const prevViewModeRef = useRef<ViewMode | null>(null);
@@ -809,10 +806,6 @@ export function useCanvasViewportController({
       if ((event.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"]')) return;
 
       if (event.touches.length === 2) {
-        if (longPressTimerRef.current !== null) {
-          globalThis.clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
         // Cancel any in-progress 1-finger pan
         cancelInertia();
         if (isPanningRef.current) {
@@ -842,7 +835,6 @@ export function useCanvasViewportController({
 
       cancelInertia();
       touchPanStartRef.current = { x: touch.clientX, y: touch.clientY };
-      longPressTriggeredRef.current = false;
       touchPanActiveRef.current = true;
       prevMoveX = touch.clientX;
       prevMoveY = touch.clientY;
@@ -850,21 +842,6 @@ export function useCanvasViewportController({
       panVelX = 0;
       panVelY = 0;
       setIsPanning(false);
-      if (!isMobileNavigateMode) {
-        if (longPressTimerRef.current !== null) {
-          globalThis.clearTimeout(longPressTimerRef.current);
-        }
-        longPressTimerRef.current = globalThis.setTimeout(() => {
-          longPressTimerRef.current = null;
-          if (!touchPanActiveRef.current || isPanningRef.current) return;
-          longPressTriggeredRef.current = true;
-          const boxNow = stage.container().getBoundingClientRect();
-          handleZoom(0.15, {
-            x: touch.clientX - boxNow.left,
-            y: touch.clientY - boxNow.top
-          });
-        }, LONG_PRESS_DELAY_MS);
-      }
       event.preventDefault();
     };
 
@@ -873,10 +850,6 @@ export function useCanvasViewportController({
       if (!stage) return;
 
       if (event.touches.length === 2 && pinchStartDistRef.current !== null) {
-        if (longPressTimerRef.current !== null) {
-          globalThis.clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
-        }
         if (isPanningRef.current) {
           isPanningRef.current = false;
           touchPanActiveRef.current = false;
@@ -903,10 +876,6 @@ export function useCanvasViewportController({
         const dy = touch1.clientY - touchPanStartRef.current.y;
         if (Math.hypot(dx, dy) < TOUCH_PAN_THRESHOLD_PX) {
           return;
-        }
-        if (longPressTimerRef.current !== null) {
-          globalThis.clearTimeout(longPressTimerRef.current);
-          longPressTimerRef.current = null;
         }
         isPanningRef.current = true;
         commitTransformOnlyZoom();
@@ -940,35 +909,28 @@ export function useCanvasViewportController({
 
     const onTouchEnd = () => {
       pinchStartDistRef.current = null;
-      if (longPressTimerRef.current !== null) {
-        globalThis.clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
       touchPanStartRef.current = null;
       if (!touchPanActiveRef.current) return;
       touchPanActiveRef.current = false;
       if (!isPanningRef.current) {
-        if (!longPressTriggeredRef.current) {
-          const now = performance.now();
-          const tapPoint = { x: prevMoveX, y: prevMoveY };
-          const prevTap = lastTapRef.current;
-          if (
-            prevTap &&
-            now - prevTap.time <= DOUBLE_TAP_MAX_DELAY_MS &&
-            Math.hypot(tapPoint.x - prevTap.point.x, tapPoint.y - prevTap.point.y) <=
-              DOUBLE_TAP_MAX_DISTANCE_PX
-          ) {
-            const stage = stageRef.current;
-            if (stage) {
-              const box = stage.container().getBoundingClientRect();
-              handleZoom(0.2, { x: tapPoint.x - box.left, y: tapPoint.y - box.top });
-            }
-            lastTapRef.current = null;
-          } else {
-            lastTapRef.current = { time: now, point: tapPoint };
+        const now = performance.now();
+        const tapPoint = { x: prevMoveX, y: prevMoveY };
+        const prevTap = lastTapRef.current;
+        if (
+          prevTap &&
+          now - prevTap.time <= DOUBLE_TAP_MAX_DELAY_MS &&
+          Math.hypot(tapPoint.x - prevTap.point.x, tapPoint.y - prevTap.point.y) <=
+            DOUBLE_TAP_MAX_DISTANCE_PX
+        ) {
+          const stage = stageRef.current;
+          if (stage) {
+            const box = stage.container().getBoundingClientRect();
+            handleZoom(0.2, { x: tapPoint.x - box.left, y: tapPoint.y - box.top });
           }
+          lastTapRef.current = null;
+        } else {
+          lastTapRef.current = { time: now, point: tapPoint };
         }
-        longPressTriggeredRef.current = false;
         return;
       }
       isPanningRef.current = false;
@@ -983,17 +945,12 @@ export function useCanvasViewportController({
       });
       setIsPanning(false);
       startInertia(panVelX, panVelY);
-      longPressTriggeredRef.current = false;
     };
 
     const onTouchCancel = () => {
       pinchStartDistRef.current = null;
       touchPanStartRef.current = null;
       touchPanActiveRef.current = false;
-      if (longPressTimerRef.current !== null) {
-        globalThis.clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
       if (isPanningRef.current) {
         isPanningRef.current = false;
         finishTransformOnlyPan({
@@ -1007,7 +964,6 @@ export function useCanvasViewportController({
         });
       }
       setIsPanning(false);
-      longPressTriggeredRef.current = false;
     };
 
     container.addEventListener('mousedown', onMouseDown, { capture: true });

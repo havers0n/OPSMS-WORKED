@@ -238,7 +238,7 @@ export function EditorCanvas({
   }, [placementLayout, layoutDraft]);
 
   const stageRef = useRef<Konva.Stage | null>(null);
-  const [isMobileNavigateMode, setIsMobileNavigateMode] = useState(false);
+  const [isMobileNavigateMode, setIsMobileNavigateMode] = useState(true);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
