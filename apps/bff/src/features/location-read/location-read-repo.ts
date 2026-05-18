@@ -67,6 +67,7 @@ export type LocationReadRepo = {
   listLocationStorage(locationId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorage(cellId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   listCellStorageByIds(cellIds: string[]): Promise<LocationStorageSnapshotRowRecord[]>;
+  listFloorCellStorage(floorId: string): Promise<LocationStorageSnapshotRowRecord[]>;
   getContainerCurrentLocation(containerId: string): Promise<ContainerCurrentLocationRecord | null>;
   containerExists(containerId: string): Promise<boolean>;
   updateLocationGeometry(locationId: string, floorX: number | null, floorY: number | null): Promise<NonRackLocationRefRecord | null>;
@@ -245,6 +246,21 @@ export function createLocationReadRepo(supabase: SupabaseClient): LocationReadRe
         .from('location_storage_canonical_v')
         .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,inventory_unit_id,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count,container_packaging_profile_id,container_is_standard_pack,preferred_packaging_profile_id,preset_usage_status,preset_materialization_status')
         .in('cell_id', cellIds)
+        .order('placed_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as LocationStorageSnapshotRowRecord[];
+    },
+
+    async listFloorCellStorage(floorId) {
+      const { data, error } = await supabase
+        .from('location_storage_canonical_v')
+        .select('tenant_id,floor_id,location_id,location_code,location_type,cell_id,container_id,system_code,external_code,container_type,container_status,placed_at,inventory_unit_id,item_ref,product_id,quantity,uom,inventory_status,packaging_state,product_packaging_level_id,pack_count,container_packaging_profile_id,container_is_standard_pack,preferred_packaging_profile_id,preset_usage_status,preset_materialization_status')
+        .eq('floor_id', floorId)
+        .not('cell_id', 'is', null)
         .order('placed_at', { ascending: true });
 
       if (error) {

@@ -43,52 +43,53 @@ export type RackInspectorRepo = {
 export function createRackInspectorRepo(supabase: SupabaseClient): RackInspectorRepo {
   return {
     async getRackInspector(rackId) {
-      // Q1: rack identity
-      const { data: rackData, error: rackError } = await supabase
-        .from('racks')
-        .select('id,display_code,kind,axis')
-        .eq('id', rackId)
-        .maybeSingle();
+      // Phase 1: fetch rack identity, faces, and cells in parallel
+      const [rackResult, facesResult, cellsResult] = await Promise.all([
+        supabase.from('racks').select('id,display_code,kind,axis').eq('id', rackId).maybeSingle(),
+        supabase.from('rack_faces').select('id,side,face_mode,is_mirrored').eq('rack_id', rackId),
+        supabase.from('cells').select('id,rack_level_id').eq('rack_id', rackId).eq('status', 'active')
+      ]);
 
-      if (rackError) throw rackError;
-      if (!rackData) return null;
+      if (rackResult.error) throw rackResult.error;
+      if (facesResult.error) throw facesResult.error;
+      if (cellsResult.error) throw cellsResult.error;
 
-      const rack = rackData as RackIdentityRow;
+      if (!rackResult.data) return null;
 
-      // Q1b: face relationship semantics (additive inspector contract)
-      const { data: facesData, error: facesError } = await supabase
-        .from('rack_faces')
-        .select('id,side,face_mode,is_mirrored')
-        .eq('rack_id', rackId);
+      const rack = rackResult.data as RackIdentityRow;
+      const faces = (facesResult.data ?? []) as RackFaceRow[];
+      const cells = (cellsResult.data ?? []) as CellRow[];
 
-      if (facesError) throw facesError;
-      const faces = (facesData ?? []) as RackFaceRow[];
-
-      // Q2: all active cells for this rack (gives us cell IDs + level IDs)
-      const { data: cellsData, error: cellsError } = await supabase
-        .from('cells')
-        .select('id,rack_level_id')
-        .eq('rack_id', rackId)
-        .eq('status', 'active');
-
-      if (cellsError) throw cellsError;
-
-      const cells = (cellsData ?? []) as CellRow[];
+      const faceIds = faces.map((face) => face.id);
       const cellIds = cells.map((c) => c.id);
       const distinctLevelIds = [...new Set(cells.map((c) => c.rack_level_id))];
 
-      // Q2b: fetch all levels for this rack to expose per-level structural defaults.
-      const faceIds = faces.map((face) => face.id);
-      const { data: sectionsData, error: sectionsError } = faceIds.length === 0
-        ? { data: [] as RackSectionRow[], error: null }
-        : await supabase
-          .from('rack_sections')
-          .select('id')
-          .in('rack_face_id', faceIds);
+      // Phase 2: fetch sections (needs face IDs) in parallel with level ordinals + occupancy (need cell IDs)
+      const sectionsPromise = faceIds.length === 0
+        ? Promise.resolve({ data: [] as RackSectionRow[], error: null })
+        : supabase.from('rack_sections').select('id').in('rack_face_id', faceIds);
 
-      if (sectionsError) throw sectionsError;
-      const sectionIds = ((sectionsData ?? []) as RackSectionRow[]).map((section) => section.id);
+      const levelOrdinalsPromise = cells.length === 0
+        ? Promise.resolve({ data: [] as RackLevelRow[], error: null })
+        : supabase.from('rack_levels').select('id,ordinal,structural_default_role').in('id', distinctLevelIds);
 
+      const occupancyPromise = cells.length === 0
+        ? Promise.resolve({ data: [] as OccupancyRow[], error: null })
+        : supabase.from('location_occupancy_v').select('cell_id').in('cell_id', cellIds);
+
+      const [sectionsResult, levelOrdinalsResult, occupancyResult] = await Promise.all([
+        sectionsPromise,
+        levelOrdinalsPromise,
+        occupancyPromise
+      ]);
+
+      if (sectionsResult.error) throw sectionsResult.error;
+      if (levelOrdinalsResult.error) throw levelOrdinalsResult.error;
+      if (occupancyResult.error) throw occupancyResult.error;
+
+      const sectionIds = ((sectionsResult.data ?? []) as RackSectionRow[]).map((s) => s.id);
+
+      // Phase 3: all levels for structural defaults (needs section IDs from phase 2)
       const { data: allLevelsData, error: allLevelsError } = sectionIds.length === 0
         ? { data: [] as RackLevelRow[], error: null }
         : await supabase
@@ -113,8 +114,18 @@ export function createRackInspectorRepo(supabase: SupabaseClient): RackInspector
           structuralDefaultRole: level.structural_default_role ?? 'none'
         }));
 
+      const rackLevels = (levelOrdinalsResult.data ?? []) as RackLevelRow[];
+      const levelOrdinalById = new Map<string, number>(
+        rackLevels.map((rl) => [rl.id, rl.ordinal])
+      );
+
+      const occupiedCellIds = new Set(
+        ((occupancyResult.data ?? []) as OccupancyRow[])
+          .map((row) => row.cell_id)
+          .filter((id): id is string => id !== null)
+      );
+
       if (cells.length === 0) {
-        // Rack exists but has no active cells — return empty but valid payload
         return {
           rackId: rack.id,
           displayCode: rack.display_code,
@@ -133,34 +144,6 @@ export function createRackInspectorRepo(supabase: SupabaseClient): RackInspector
           },
         };
       }
-
-      // Q3: ordinals for the level IDs we found
-      const { data: levelsData, error: levelsError } = await supabase
-        .from('rack_levels')
-        .select('id,ordinal,structural_default_role')
-        .in('id', distinctLevelIds);
-
-      if (levelsError) throw levelsError;
-
-      const rackLevels = (levelsData ?? []) as RackLevelRow[];
-      // Build a map: rack_level_id → ordinal
-      const levelOrdinalById = new Map<string, number>(
-        rackLevels.map((rl) => [rl.id, rl.ordinal])
-      );
-
-      // Q4: occupied cells (only rack_slot locations have cell_id set)
-      const { data: occupancyData, error: occupancyError } = await supabase
-        .from('location_occupancy_v')
-        .select('cell_id')
-        .in('cell_id', cellIds);
-
-      if (occupancyError) throw occupancyError;
-
-      const occupiedCellIds = new Set(
-        ((occupancyData ?? []) as OccupancyRow[])
-          .map((row) => row.cell_id)
-          .filter((id): id is string => id !== null)
-      );
 
       // Compute per-level summary: group cells by ordinal
       const levelMap = new Map<number, { total: number; occupied: number }>();

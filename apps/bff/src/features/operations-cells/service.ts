@@ -35,7 +35,7 @@ export async function listOperationsCellsRuntime({ supabase }: OperationsCellsSe
   const cellIds = cells.map((cell) => cell.id);
   const [occupancyRows, storageRowsRaw, pickStepsResult] = await Promise.all([
     locationReadRepo.listFloorLocationOccupancy(floorId),
-    locationReadRepo.listCellStorageByIds(cellIds),
+    locationReadRepo.listFloorCellStorage(floorId),
     supabase
       .from('pick_steps')
       .select('source_cell_id,status')
