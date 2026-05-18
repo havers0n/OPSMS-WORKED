@@ -44,17 +44,15 @@ describe('resolveRightSideRoute', () => {
     );
   });
 
-  it('keeps view mode selection-based and disables storage ownership in the legacy slot', () => {
+  it('keeps view and storage ownership out of the layout right-side slot', () => {
     expect(resolveRightSideRoute('view', noSelection, null)).toBe('closed');
+    expect(resolveRightSideRoute('view', cellSelection('cell-1'), null)).toBe('closed');
+    expect(resolveRightSideRoute('view', containerSelection('container-1'), null)).toBe('closed');
+    expect(resolveRightSideRoute('view', rackSelection(['rack-1']), rackCreationTask('rack-1'))).toBe(
+      'closed'
+    );
     expect(resolveRightSideRoute('storage', noSelection, null)).toBe('closed');
     expect(resolveRightSideRoute('storage', cellSelection('cell-1'), null)).toBe('closed');
     expect(resolveRightSideRoute('storage', containerSelection('container-1'), null)).toBe('closed');
-    expect(resolveRightSideRoute('view', cellSelection('cell-1'), null)).toBe('inspector-surface');
-    expect(resolveRightSideRoute('view', containerSelection('container-1'), null)).toBe(
-      'inspector-surface'
-    );
-    expect(resolveRightSideRoute('view', rackSelection(['rack-1']), rackCreationTask('rack-1'))).toBe(
-      'inspector-surface'
-    );
   });
 });

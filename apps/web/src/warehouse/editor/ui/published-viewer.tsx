@@ -15,6 +15,7 @@ import { EditorCanvas } from './editor-canvas';
 import { InspectorRouter } from './inspector-router';
 import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
+import { ViewWorkspace } from './view-workspace';
 
 /**
  * PublishedViewer — read-only shell for floors that have a published layout
@@ -89,6 +90,12 @@ export function PublishedViewer() {
             workspace={workspace ?? null}
             onAddRack={handleAddRack}
             onOpenInspector={() => undefined}
+            onCloseInspector={handleCloseInspector}
+          />
+        ) : viewMode === 'view' ? (
+          <ViewWorkspace
+            workspace={workspace ?? null}
+            onAddRack={handleAddRack}
             onCloseInspector={handleCloseInspector}
           />
         ) : (

@@ -13,6 +13,7 @@ import { ZoneInspector } from './zone-inspector';
 import { PlacementModePanel } from './mode-panels/placement-mode-panel';
 import { CellPlacementInspector } from './mode-panels/cell-placement-inspector';
 import { ContainerPlacementInspector } from './mode-panels/container-placement-inspector';
+import { RackViewInspector } from './rack-view-inspector';
 
 // Pure routing logic lives in inspector-router-logic.ts (no React, testable in isolation).
 import { resolveInspectorKind } from './inspector-router-logic';
@@ -178,6 +179,9 @@ export function InspectorRouter({ workspace, onClose }: InspectorRouterProps) {
   switch (kind) {
     case 'rack-structure':
       return <RackInspector workspace={workspace} onClose={onClose} />;
+
+    case 'rack-view':
+      return <RackViewInspector workspace={workspace} onClose={onClose} />;
 
     case 'rack-multi':
       return <RackMultiInspector onClose={onClose} />;

@@ -199,6 +199,27 @@ describe('RightSidePanelSlot', () => {
     expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
   });
 
+  it('keeps view mode rack selection out of the layout right-side slot', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useModeStore.setState({
+        viewMode: 'view',
+        editorMode: 'select'
+      });
+      useInteractionStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderSlot({
+      ...createWorkspace(),
+      activeDraft: draft
+    });
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'task-surface' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'inspector-surface' })).toHaveLength(0);
+  });
+
   it('keeps storage workflow ownership out of task surface and does not open legacy inspector slot', () => {
     act(() => {
       useModeStore.setState({

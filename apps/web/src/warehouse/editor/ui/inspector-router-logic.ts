@@ -8,7 +8,8 @@ import type {
 } from '@/warehouse/editor/model/editor-types';
 
 export type InspectorKind =
-  | 'rack-structure'         // layout/view + single rack selected (existing)
+  | 'rack-structure'         // layout + single rack selected
+  | 'rack-view'              // view + single rack selected
   | 'rack-multi'             // layout + 2+ racks selected → spacing/alignment
   | 'zone-detail'            // layout + single zone selected → editable inspector
   | 'zone-readonly'          // view + zone selected → context-only, no actions
@@ -58,7 +59,7 @@ export function resolveInspectorKind(
   }
 
   if (viewMode === 'view' && selection.type === 'rack') {
-    return selection.rackIds[0] ? 'rack-structure' : 'placement-placeholder';
+    return selection.rackIds[0] ? 'rack-view' : 'placement-placeholder';
   }
   if (viewMode === 'storage') return null;
 

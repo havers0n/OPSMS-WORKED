@@ -47,8 +47,8 @@ describe('resolveInspectorKind - storage mode', () => {
 });
 
 describe('resolveInspectorKind - view mode', () => {
-  it('routes rack selection to rack-structure', () => {
-    expect(resolveInspectorKind('view', rackSelection(['r1']))).toBe('rack-structure');
+  it('routes rack selection to the view-specific rack inspector', () => {
+    expect(resolveInspectorKind('view', rackSelection(['r1']))).toBe('rack-view');
   });
 
   it('routes cell and container selection to placement inspectors', () => {
