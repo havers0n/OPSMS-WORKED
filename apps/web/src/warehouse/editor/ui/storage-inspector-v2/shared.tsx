@@ -21,6 +21,9 @@ export const inspectorMutedSectionClassName = 'border-b border-gray-200 px-4 py-
 export const inspectorSectionTitleClassName =
   'text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500';
 
+export const inspectorActionButtonClassName =
+  'min-h-8 rounded-sm border border-gray-300 bg-white px-3 py-1.5 text-start text-sm leading-snug text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50';
+
 export const inspectorKvGridClassName = 'mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs';
 
 export const inspectorRowCardClassName =

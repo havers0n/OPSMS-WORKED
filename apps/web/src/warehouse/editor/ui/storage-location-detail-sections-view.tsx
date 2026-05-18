@@ -79,16 +79,12 @@ export function CurrentContainersSectionView({
       </div>
 
       <div className="border-t border-[var(--border-muted)]">
-        <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
-          {t('storage.field.currentContainers')}
-        </div>
-
         {containers.length === 0 ? (
-          <div className="border-t border-[var(--border-muted)] px-3 py-3 text-[11px] text-[var(--text-muted)]">
+          <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
             {t('storage.status.empty')}
           </div>
         ) : (
-          <div className="border-t border-[var(--border-muted)] flex flex-col gap-2 px-3 py-3">
+          <div className="flex flex-col gap-2 px-3 py-3">
             {containers.map((container) => (
               <button
                 key={container.containerId}
@@ -160,12 +156,8 @@ export function CurrentInventorySectionView({
       </div>
 
       <div className="border-t border-[var(--border-muted)]">
-        <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
-          {t('storage.field.currentInventory')}
-        </div>
-
         {inventoryItems.length === 0 ? (
-          <div className="border-t border-[var(--border-muted)] px-3 py-3 text-[11px] text-[var(--text-muted)]">
+          <div className="px-3 py-3 text-[11px] text-[var(--text-muted)]">
             {hasContainers
               ? t('storage.inventory.noInventoryInContainers')
               : t('storage.inventory.noContainersInventory')}

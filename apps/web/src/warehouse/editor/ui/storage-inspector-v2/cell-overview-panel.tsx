@@ -4,6 +4,7 @@ import { LocationAddress } from '@/entities/location/ui/location-address';
 import { useT } from '@/shared/i18n';
 import {
   InspectorFooter,
+  inspectorActionButtonClassName,
   inspectorRowCardClassName,
   inspectorScrollBodyClassName,
   inspectorSectionClassName,
@@ -159,21 +160,21 @@ export function CellOverviewPanel({
           <div className="grid gap-2">
             <button
               onClick={onOpenCreateTask}
-              className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              className={inspectorActionButtonClassName}
               aria-label={t('storage.action.createContainerAtLocation')}
             >
               {t('storage.action.createContainer')}
             </button>
             <button
               onClick={onOpenCreateWithProductTask}
-              className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              className={inspectorActionButtonClassName}
               aria-label={t('storage.action.createContainerWithProductAtLocation')}
             >
               {t('storage.action.createContainerWithProduct')}
             </button>
             <button
               onClick={onOpenCreateFromPresetTask}
-              className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-left text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              className={inspectorActionButtonClassName}
               aria-label={t('storage.action.createFromPresetAtLocation')}
               data-testid="create-from-preset-action"
             >

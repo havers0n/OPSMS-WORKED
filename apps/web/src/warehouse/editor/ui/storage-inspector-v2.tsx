@@ -87,6 +87,7 @@ import {
 } from './storage-location-detail-sections-view';
 import {
   InspectorFooter,
+  inspectorActionButtonClassName,
   inspectorScrollBodyClassName,
   inspectorSectionClassName,
   inspectorSectionTitleClassName,
@@ -357,28 +358,28 @@ function CellSectionOverviewPanel({
             <div className="grid gap-2 border-t border-[var(--border-muted)] px-3 py-3">
               <button
                 onClick={onOpenPlaceExistingTask}
-                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                className={inspectorActionButtonClassName}
                 aria-label={t('storage.action.placeExistingContainer')}
               >
                 {t('storage.action.placeExistingContainer')}
               </button>
               <button
                 onClick={onOpenCreateTask}
-                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                className={inspectorActionButtonClassName}
                 aria-label={t('storage.action.createContainerAtLocation')}
               >
                 {t('storage.action.createAndPlaceHere')}
               </button>
               <button
                 onClick={onOpenCreateWithProductTask}
-                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                className={inspectorActionButtonClassName}
                 aria-label={t('storage.action.createContainerWithProductAtLocation')}
               >
                 {t('storage.action.createContainerWithProduct')}
               </button>
               <button
                 onClick={onOpenCreateFromPresetTask}
-                className="h-8 rounded-sm border border-gray-300 bg-white px-3 text-start text-sm text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                className={inspectorActionButtonClassName}
                 aria-label={t('storage.action.createFromPresetAtLocation')}
                 data-testid="create-from-preset-action"
               >
