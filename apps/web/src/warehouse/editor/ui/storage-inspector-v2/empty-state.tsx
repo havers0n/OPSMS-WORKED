@@ -1,13 +1,15 @@
 import { EmptyState as SharedEmptyState } from '@/shared/ui/empty-state';
-import { translate } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
 import { InspectorFooter, inspectorShellClassName } from './shared';
 
 export function EmptyState() {
+  const t = useT();
+
   return (
     <div className={inspectorShellClassName}>
       <SharedEmptyState
-        title={translate('storage.state.noLocation')}
-        description={translate('storage.state.selectLocationFromNavigator')}
+        title={t('storage.state.noLocation')}
+        description={t('storage.state.selectLocationFromNavigator')}
         icon={
           <svg
             className="h-6 w-6 text-gray-400"

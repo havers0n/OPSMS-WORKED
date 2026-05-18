@@ -1,5 +1,5 @@
 import type { LocationStorageSnapshotRow, StoragePreset } from '@wos/domain';
-import { translate, useT } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
 import {
   InspectorFooter,
   inspectorRowCardClassName,
@@ -43,29 +43,34 @@ type ContainerDetailPanelProps = {
   onOpenRemoveContainerTask: () => void;
 };
 
-function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'] | undefined) {
+type Translator = ReturnType<typeof useT>;
+
+function presetUsageLabel(status: LocationStorageSnapshotRow['presetUsageStatus'] | undefined, t: Translator) {
   switch (status) {
     case 'preferred_match':
-      return translate('storage.preset.preferredPreset');
+      return t('storage.preset.preferredPreset');
     case 'standard_non_preferred':
-      return translate('storage.preset.standardPreset');
+      return t('storage.preset.standardPreset');
     case 'manual':
-      return translate('storage.preset.manual');
+      return t('storage.preset.manual');
     default:
-      return translate('storage.preset.unknown');
+      return t('storage.preset.unknown');
   }
 }
 
-function presetMaterializationLabel(status: LocationStorageSnapshotRow['presetMaterializationStatus'] | undefined) {
+function presetMaterializationLabel(
+  status: LocationStorageSnapshotRow['presetMaterializationStatus'] | undefined,
+  t: Translator
+) {
   switch (status) {
     case 'shell':
-      return translate('storage.preset.shell');
+      return t('storage.preset.shell');
     case 'materialized':
-      return translate('storage.preset.materialized');
+      return t('storage.preset.materialized');
     case 'manual':
-      return translate('storage.preset.manualContents');
+      return t('storage.preset.manualContents');
     default:
-      return translate('storage.preset.materializationUnknown');
+      return t('storage.preset.materializationUnknown');
   }
 }
 
@@ -133,8 +138,8 @@ export function ContainerDetailPanel({
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
             <span className="capitalize">{t('storage.field.type')}: {firstRow.containerType}</span>
             <span className="capitalize">{t('storage.field.status')}: {firstRow.containerStatus}</span>
-            <span>{presetUsageLabel(firstRow.presetUsageStatus)}</span>
-            <span>{presetMaterializationLabel(firstRow.presetMaterializationStatus)}</span>
+            <span>{presetUsageLabel(firstRow.presetUsageStatus, t)}</span>
+            <span>{presetMaterializationLabel(firstRow.presetMaterializationStatus, t)}</span>
           </div>
         ) : null}
         {materializationWarning ? (

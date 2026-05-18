@@ -1,5 +1,5 @@
 import type { Container } from '@wos/domain';
-import { translate, useT } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
 import {
   TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
@@ -23,9 +23,11 @@ export interface PlaceExistingContainerTaskPanelProps {
   onCancel: () => void;
 }
 
-function containerLabel(container: Container) {
+type Translator = ReturnType<typeof useT>;
+
+function containerLabel(container: Container, t: Translator) {
   const code = container.externalCode ?? container.systemCode;
-  return translate('storage.place.containerLabel', { code });
+  return t('storage.place.containerLabel', { code });
 }
 
 export function PlaceExistingContainerTaskPanel({
@@ -84,7 +86,7 @@ export function PlaceExistingContainerTaskPanel({
             <option value="">{isLoading ? t('storage.placeholder.loadingContainers') : t('storage.placeholder.selectContainer')}</option>
             {availableContainers.map((container) => (
               <option key={container.id} value={container.id}>
-                {containerLabel(container)}
+                {containerLabel(container, t)}
               </option>
             ))}
           </select>

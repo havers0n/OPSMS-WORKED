@@ -1,5 +1,5 @@
 import type { Container, ContainerType } from '@wos/domain';
-import { translate, useT } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
 import {
   ContainerTypeSelect,
   TaskPanelBreadcrumb,
@@ -37,8 +37,10 @@ export interface ExtractQuantityTaskPanelProps {
   onCancel: () => void;
 }
 
-function sourceLineLabel(sourceLine: TransferSourceLine) {
-  return sourceLine.product?.name ?? sourceLine.product?.sku ?? sourceLine.itemRef ?? translate('storage.state.inventoryLine');
+type Translator = ReturnType<typeof useT>;
+
+function sourceLineLabel(sourceLine: TransferSourceLine, t: Translator) {
+  return sourceLine.product?.name ?? sourceLine.product?.sku ?? sourceLine.itemRef ?? t('storage.state.inventoryLine');
 }
 
 function containerLabel(container: Container) {
@@ -93,7 +95,7 @@ export function ExtractQuantityTaskPanel({
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-          <div className="font-medium text-gray-900">{sourceLineLabel(sourceLine)}</div>
+          <div className="font-medium text-gray-900">{sourceLineLabel(sourceLine, t)}</div>
           <div className="mt-1 font-mono text-[11px] text-gray-500">
             {t('storage.transfer.sourceSummary', {
               containerCode: sourceContainerDisplayCode,

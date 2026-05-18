@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
 import { StorageInspectorV2, resolvePanelMode, resolveActiveMode, type MoveTaskState } from './storage-inspector-v2';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
-import { translate } from '@/shared/i18n';
+import { I18nProvider, translate, type Locale } from '@/shared/i18n';
 
 type MockCell = {
   id: string;
@@ -343,6 +343,30 @@ function renderInspector(workspace: FloorWorkspace) {
   act(() => {
     renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace }));
   });
+  mountedRenderers.add(renderer);
+  return renderer;
+}
+
+function renderInspectorWithLocale(workspace: FloorWorkspace, locale: Locale) {
+  const removeDocumentStub = typeof document === 'undefined';
+  if (removeDocumentStub) {
+    Object.defineProperty(globalThis, 'document', {
+      value: { documentElement: { lang: '', dir: '' } },
+      configurable: true
+    });
+  }
+  let renderer!: TestRenderer.ReactTestRenderer;
+  try {
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(I18nProvider, { locale }, createElement(StorageInspectorV2, { workspace }))
+      );
+    });
+  } finally {
+    if (removeDocumentStub) {
+      Reflect.deleteProperty(globalThis, 'document');
+    }
+  }
   mountedRenderers.add(renderer);
   return renderer;
 }
@@ -806,6 +830,46 @@ describe('StorageInspectorV2 panel modes', () => {
     expect(text).not.toContain('Inventory Preview');
     // Does NOT show rack-overview occupancy/levels sections
     expect(text).not.toContain('1 / 4 cells occupied');
+  });
+
+  it('uses the selected English locale for occupied storage section copy', () => {
+    act(() => {
+      useStorageFocusStore.getState().selectCell({
+        cellId: 'cell-1',
+        rackId: 'rack-1',
+        level: 1,
+      });
+    });
+    mockPublishedCells = [
+      { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
+    ];
+    mockLocationRef = { locationId: 'loc-1' };
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-001',
+        locationType: 'rack_slot',
+        containerId: 'container-1',
+        containerStatus: 'active',
+        systemCode: 'CNT-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: 'ITEM-1',
+        quantity: 11,
+        uom: 'pcs',
+        product: { id: 'product-1', sku: 'SKU-1', name: 'English item', isActive: true },
+      }
+    ];
+
+    const renderer = renderInspectorWithLocale(createWorkspace(), 'en');
+    const text = flattenText(renderer.toJSON());
+
+    expect(text).toContain('Current containers');
+    expect(text).toContain('Current inventory');
+    expect(text).toContain('Active');
+    expect(text).toContain('1 inventory entries recorded inside');
+    expect(text).not.toContain('מכולות');
+    expect(text).not.toContain('מלאי נוכחי');
+    expect(text).not.toContain('פעיל');
   });
 
   it('rack-overview and cell-overview do not render simultaneously', () => {

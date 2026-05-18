@@ -1,6 +1,6 @@
 import type { Cell, LocationStorageSnapshotRow, Rack } from '@wos/domain';
 import type { LocationProductAssignment } from '@/entities/product-location-role/api/queries';
-import { translate } from '@/shared/i18n';
+import type { TranslationKey, TranslationParams } from '@/shared/i18n';
 
 export const INVENTORY_PREVIEW_LIMIT = 3;
 
@@ -8,6 +8,7 @@ export type PolicyRoleChoice = 'primary_pick' | 'reserve' | 'none';
 export type PolicyRole = 'primary_pick' | 'reserve';
 export type SemanticRole = 'primary_pick' | 'reserve' | 'none';
 export type EffectiveRoleSource = 'explicit_override' | 'structural_default' | 'none' | 'conflict';
+export type Translator = (key: TranslationKey, params?: TranslationParams) => string;
 
 export type ActiveContainerProduct = {
   id: string;
@@ -74,10 +75,10 @@ export function getActiveProducts(rows: LocationStorageSnapshotRow[]): ActiveCon
   return Array.from(products.values());
 }
 
-function roleLabel(role: PolicyRole): string {
+function roleLabel(role: PolicyRole, t: Translator): string {
   return role === 'primary_pick'
-    ? translate('storage.role.primaryPickSentence')
-    : translate('storage.role.reserve');
+    ? t('storage.role.primaryPickSentence')
+    : t('storage.role.reserve');
 }
 
 export function resolvePolicySummaryState(
@@ -98,18 +99,18 @@ export function resolvePolicySummaryState(
   return { kind: 'no-policy' };
 }
 
-export function policySummaryText(state: ContainerPolicySummaryState): string {
-  if (state.kind === 'no-policy') return translate('storage.policy.noPolicy');
-  if (state.kind === 'single-role') return roleLabel(state.role);
-  return translate('storage.policy.legacyConflict', { roles: state.roles.map(roleLabel).join(' + ') });
+export function policySummaryText(state: ContainerPolicySummaryState, t: Translator): string {
+  if (state.kind === 'no-policy') return t('storage.policy.noPolicy');
+  if (state.kind === 'single-role') return roleLabel(state.role, t);
+  return t('storage.policy.legacyConflict', { roles: state.roles.map((role) => roleLabel(role, t)).join(' + ') });
 }
 
-export function getPolicyEditGuardReason(activeProducts: ActiveContainerProduct[]): string | null {
+export function getPolicyEditGuardReason(activeProducts: ActiveContainerProduct[], t: Translator): string | null {
   if (activeProducts.length === 1) return null;
   if (activeProducts.length === 0) {
-    return translate('storage.policy.editUnavailableNoSku');
+    return t('storage.policy.editUnavailableNoSku');
   }
-  return translate('storage.policy.editUnavailableMultipleSkus');
+  return t('storage.policy.editUnavailableMultipleSkus');
 }
 
 export function hasInventoryRows(
@@ -118,17 +119,17 @@ export function hasInventoryRows(
   return rows.some((row) => row.itemRef !== null || row.quantity !== null);
 }
 
-export function semanticRoleLabel(role: SemanticRole): string {
-  if (role === 'primary_pick') return translate('storage.role.primaryPick');
-  if (role === 'reserve') return translate('storage.role.reserve');
-  return translate('storage.role.none');
+export function semanticRoleLabel(role: SemanticRole, t: Translator): string {
+  if (role === 'primary_pick') return t('storage.role.primaryPick');
+  if (role === 'reserve') return t('storage.role.reserve');
+  return t('storage.role.none');
 }
 
-export function effectiveRoleSourceLabel(source: EffectiveRoleSource): string {
-  if (source === 'explicit_override') return translate('storage.roleSource.explicitOverride');
-  if (source === 'structural_default') return translate('storage.roleSource.structuralDefault');
-  if (source === 'conflict') return translate('storage.roleSource.conflict');
-  return translate('storage.role.none');
+export function effectiveRoleSourceLabel(source: EffectiveRoleSource, t: Translator): string {
+  if (source === 'explicit_override') return t('storage.roleSource.explicitOverride');
+  if (source === 'structural_default') return t('storage.roleSource.structuralDefault');
+  if (source === 'conflict') return t('storage.roleSource.conflict');
+  return t('storage.role.none');
 }
 
 export function resolveStructuralDefaultFromPublishedLayout(

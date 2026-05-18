@@ -1,6 +1,6 @@
 import type { ProductLocationRoleValue } from '@wos/domain';
 import type { ActiveContainerProduct } from './helpers';
-import { translate, useT } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
 import {
   TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
@@ -46,7 +46,7 @@ export function RepairConflictTaskPanel({
   const t = useT();
   const rolesSummary = conflictingRoles.length > 0
     ? conflictingRoles
-        .map((role) => (role === 'primary_pick' ? translate('storage.role.primaryPick') : translate('storage.role.reserve')))
+        .map((role) => (role === 'primary_pick' ? t('storage.role.primaryPick') : t('storage.role.reserve')))
         .join(', ')
     : t('storage.state.unknown');
 

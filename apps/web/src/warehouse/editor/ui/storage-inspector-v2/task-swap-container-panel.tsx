@@ -1,5 +1,5 @@
 import type { SwapTaskState } from './mode';
-import { translate, useT } from '@/shared/i18n';
+import { useT } from '@/shared/i18n';
 import {
   TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
@@ -49,7 +49,7 @@ export function SwapContainerTaskPanel({
             : targetContainerCount > 1
               ? t('storage.swap.targetMultiple')
               : targetContainerDisplayCode
-                ? translate('storage.swap.targetWithCode', { containerCode: targetContainerDisplayCode })
+                ? t('storage.swap.targetWithCode', { containerCode: targetContainerDisplayCode })
                 : t('storage.swap.targetSelected');
 
   return (

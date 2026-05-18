@@ -1771,17 +1771,17 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     const firstExplicitRole = explicitAssignments.find(
       (assignment) => assignment.role === 'primary_pick' || assignment.role === 'reserve'
     )?.role;
-    const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none');
+    const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none', t);
     const effectiveRoleText =
       effectiveRoleContext == null
         ? t('storage.state.unknown')
         : effectiveRoleContext.effectiveRoleSource === 'conflict'
           ? t('storage.roleSource.conflict')
-          : semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none');
+          : semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none', t);
     const sourceText =
       effectiveRoleContext == null
         ? t('storage.state.unknown')
-        : effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource);
+        : effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource, t);
     const defaultRole = firstExplicitRole ?? 'primary_pick';
 
     const handleSaveOverride = async (role: 'primary_pick' | 'reserve') => {
@@ -1877,7 +1877,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         : (effectiveRoleContext?.conflictingPublishedRoles ?? []);
     const conflictingRowCount = targetAssignments.length;
     const conflictingRowIds = targetAssignments.map((assignment) => assignment.id);
-    const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none');
+    const structuralDefaultText = semanticRoleLabel(effectiveRoleContext?.structuralDefaultRole ?? 'none', t);
     const effectiveRoleText = t('storage.roleSource.conflict');
     const sourceText = t('storage.roleSource.conflict');
     const canRepair = targetAssignments.length > 0;
@@ -1988,7 +1988,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     );
     const structuralDefaultRole = effectiveRoleContext?.structuralDefaultRole ?? structuralDefaultFromLayout;
     const structuralDefaultText =
-      structuralDefaultRole === null ? t('storage.state.unknown') : semanticRoleLabel(structuralDefaultRole);
+      structuralDefaultRole === null ? t('storage.state.unknown') : semanticRoleLabel(structuralDefaultRole, t);
     const hasProductContext = selectedProduct !== null;
     const selectedProductId = selectedProduct?.id ?? null;
     const isEffectiveRoleLoading = hasProductContext && effectiveRoleLoading;
@@ -2011,7 +2011,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         : isConflict
           ? t('storage.roleSource.conflict')
           : effectiveRoleContext
-            ? semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none')
+            ? semanticRoleLabel(effectiveRoleContext.effectiveRole ?? 'none', t)
             : t('storage.state.unknown')
       : t('storage.state.notComputed');
 
@@ -2019,7 +2019,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       ? isEffectiveRoleLoading
         ? t('storage.state.loading')
         : effectiveRoleContext
-          ? effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource)
+          ? effectiveRoleSourceLabel(effectiveRoleContext.effectiveRoleSource, t)
           : t('storage.state.unknown')
       : t('storage.state.notComputed');
 
