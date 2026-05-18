@@ -4,6 +4,7 @@ export interface RackStatusSummaryProps {
   displayCode: string;
   kind: string;
   axis: string;
+  activeLevel?: number | null;
   occupancySummary: {
     occupancyRate: number;
     occupiedCells: number;
@@ -14,14 +15,17 @@ export interface RackStatusSummaryProps {
     occupiedCells: number;
     totalCells: number;
   }>;
+  onLevelSelect?: (level: number) => void;
 }
 
 export function RackStatusSummary({
   displayCode,
   kind,
   axis,
+  activeLevel = null,
   occupancySummary,
-  levels
+  levels,
+  onLevelSelect
 }: RackStatusSummaryProps) {
   return (
     <div role="complementary" aria-label={`Rack overview: ${displayCode}`}>
@@ -50,17 +54,43 @@ export function RackStatusSummary({
       <div className="px-4 py-3">
         <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Levels</h3>
         <div className="space-y-1">
-          {levels.map((level) => (
-            <div
-              key={level.levelOrdinal}
-              className="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
-            >
-              <span className="font-medium">L{level.levelOrdinal}:</span>
-              <span className="font-mono text-[11px] text-gray-500">
-                {level.occupiedCells}/{level.totalCells}
-              </span>
-            </div>
-          ))}
+          {levels.map((level) => {
+            const isActive = activeLevel === level.levelOrdinal;
+            const interactiveClassName = `flex w-full items-center justify-between rounded-sm px-2.5 py-1.5 text-xs transition-colors ${
+              isActive
+                ? 'bg-blue-50 text-blue-900 ring-1 ring-blue-200'
+                : 'bg-gray-50 text-gray-700'
+            }`;
+
+            const content = (
+              <>
+                <span className="font-medium">L{level.levelOrdinal}:</span>
+                <span className={`font-mono text-[11px] ${isActive ? 'text-blue-700' : 'text-gray-500'}`}>
+                  {level.occupiedCells}/{level.totalCells}
+                </span>
+              </>
+            );
+
+            return onLevelSelect ? (
+              <button
+                key={level.levelOrdinal}
+                type="button"
+                className={`${interactiveClassName} hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-300`}
+                aria-label={`Open level ${level.levelOrdinal}`}
+                aria-pressed={isActive}
+                onClick={() => onLevelSelect(level.levelOrdinal)}
+              >
+                {content}
+              </button>
+            ) : (
+              <div
+                key={level.levelOrdinal}
+                className="flex items-center justify-between rounded-sm bg-gray-50 px-2.5 py-1.5 text-xs text-gray-700"
+              >
+                {content}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

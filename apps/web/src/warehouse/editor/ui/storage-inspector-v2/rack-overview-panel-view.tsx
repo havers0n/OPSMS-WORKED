@@ -23,6 +23,8 @@ export type RackOverviewPanelViewProps =
   | {
       status: 'ready';
       summary: RackStatusSummaryProps;
+      activeLevel?: number | null;
+      onLevelSelect?: (level: number) => void;
     };
 
 export function RackOverviewPanelView(props: RackOverviewPanelViewProps) {
@@ -69,8 +71,10 @@ export function RackOverviewPanelView(props: RackOverviewPanelViewProps) {
             displayCode={props.summary.displayCode}
             kind={props.summary.kind}
             axis={props.summary.axis}
+            activeLevel={props.activeLevel}
             occupancySummary={props.summary.occupancySummary}
             levels={props.summary.levels}
+            onLevelSelect={props.onLevelSelect}
           />
         </div>
       </div>

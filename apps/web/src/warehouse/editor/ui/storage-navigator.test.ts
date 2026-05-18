@@ -12,7 +12,7 @@ type MockCell = {
   status: 'active' | 'disabled';
   address: {
     raw: string;
-    parts: { level: number };
+    parts: { face: 'A' | 'B'; level: number };
   };
 };
 
@@ -123,19 +123,19 @@ describe('StorageNavigator PR7 focus ownership', () => {
         id: 'cell-1',
         rackId: 'rack-1',
         status: 'active',
-        address: { raw: '01-A.01.01', parts: { level: 1 } }
+        address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } }
       },
       {
         id: 'cell-2',
         rackId: 'rack-1',
         status: 'active',
-        address: { raw: '01-A.02.01', parts: { level: 2 } }
+        address: { raw: '01-A.02.01', parts: { face: 'A', level: 2 } }
       },
       {
         id: 'cell-3',
         rackId: 'rack-2',
         status: 'active',
-        address: { raw: '02-A.01.01', parts: { level: 1 } }
+        address: { raw: '02-A.01.01', parts: { face: 'A', level: 1 } }
       }
     ];
     mockOccupancyRows = [];
@@ -230,13 +230,13 @@ describe('StorageNavigator PR7 focus ownership', () => {
         id: 'cell-3',
         rackId: 'rack-1',
         status: 'active',
-        address: { raw: '01-A.01.03', parts: { level: 3 } }
+        address: { raw: '01-A.01.03', parts: { face: 'A', level: 3 } }
       },
       {
         id: 'cell-5',
         rackId: 'rack-1',
         status: 'active',
-        address: { raw: '01-A.01.05', parts: { level: 5 } }
+        address: { raw: '01-A.01.05', parts: { face: 'A', level: 5 } }
       }
     ];
     act(() => {
@@ -272,5 +272,51 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(buttonLabels).toContain('L2');
     expect(buttonLabels).toContain('L3');
     expect(tree).toContain(translate('storage.state.noLocationsForLevel', { level: 1 }));
+  });
+
+  it('shows a face filter only when the active level contains multiple faces', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [
+      {
+        id: 'cell-a',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } }
+      },
+      {
+        id: 'cell-b',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-B.01.01', parts: { face: 'B', level: 1 } }
+      },
+      {
+        id: 'cell-a-l2',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.02', parts: { face: 'A', level: 2 } }
+      }
+    ];
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+    });
+
+    const renderer = renderNavigator(workspace);
+    let tree = JSON.stringify(renderer.toJSON());
+
+    expect(tree).toContain(translate('storage.field.face'));
+    expect(tree).toContain('01-A.01.01');
+    expect(tree).toContain('01-B.01.01');
+
+    clickButtonByLabel(renderer, 'B');
+    tree = JSON.stringify(renderer.toJSON());
+
+    expect(tree).not.toContain('01-A.01.01');
+    expect(tree).toContain('01-B.01.01');
+
+    clickButtonByLabel(renderer, '2');
+    tree = JSON.stringify(renderer.toJSON());
+
+    expect(tree).not.toContain(translate('storage.field.face'));
+    expect(tree).toContain('01-A.01.02');
   });
 });

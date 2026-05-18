@@ -905,6 +905,23 @@ describe('StorageInspectorV2 panel modes', () => {
     expect(text).toContain('0/2');
   });
 
+  it('clicking a rack-overview level enters that level without selecting a cell', () => {
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+    });
+    const renderer = renderInspector(createWorkspace());
+    const levelButton = renderer.root.findByProps({ 'aria-label': 'Open level 2' });
+
+    act(() => {
+      levelButton.props.onClick();
+    });
+
+    const s = useStorageFocusStore.getState();
+    expect(s.selectedRackId).toBe('rack-1');
+    expect(s.selectedCellId).toBeNull();
+    expect(s.activeLevel).toBe(2);
+  });
+
   it('opens container-detail when a container is clicked from cell-overview', () => {
     act(() => {
       useStorageFocusStore.getState().selectCell({

@@ -397,6 +397,7 @@ export const en = {
   'storage.field.rack': 'Rack',
   'storage.field.level': 'Level',
   'storage.field.levelWithNumber': 'Level {level}',
+  'storage.field.face': 'Face',
   'storage.placeholder.externalCodeExample': 'e.g. PLT-0042',
   'storage.placeholder.searchNameOrSku': 'Search by name or SKU...',
   'storage.placeholder.searchLocation': 'Search location',
