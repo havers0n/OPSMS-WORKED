@@ -48,12 +48,12 @@ describe('useCanvasCapabilities storage rack-first gating', () => {
     expect(result.canSelectCells).toBe(true);
   });
 
-  it('keeps view mode rack selection gated to L1', () => {
+  it('keeps view mode rack selection available at L3 for rack-body fallback', () => {
     mockLod = 2;
     mockInteractionLevel = 'L3';
 
     const result = renderCapabilities({ viewMode: 'view' });
-    expect(result.canSelectRack).toBe(false);
+    expect(result.canSelectRack).toBe(true);
     expect(result.canSelectCells).toBe(true);
   });
 });

@@ -635,6 +635,36 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(setSelectedCellId).toHaveBeenCalledWith('cell-1');
     expect(setHighlightedCellIds).toHaveBeenCalledWith(['cell-1']);
   });
+
+  it('keeps view-mode rack body clicks selectable at cell depth', () => {
+    const setSelectedRackIds = vi.fn();
+
+    const renderer = renderRackLayer({
+      selectedRackIds: [],
+      primarySelectedRackId: null,
+      isLayoutMode: false,
+      isViewMode: true,
+      canSelectCells: true,
+      canSelectRack: true,
+      setSelectedRackIds
+    });
+
+    const rackGroups = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Group' &&
+        typeof node.props.onClick === 'function'
+    );
+
+    act(() => {
+      rackGroups[0].props.onClick({
+        evt: {},
+        cancelBubble: false,
+        currentTarget: { getRelativePointerPosition: () => ({ x: 5, y: 5 }) }
+      });
+    });
+
+    expect(setSelectedRackIds).toHaveBeenCalledWith(['rack-1']);
+  });
 });
 
 describe('RackLayer reveal hierarchy policy wiring', () => {
