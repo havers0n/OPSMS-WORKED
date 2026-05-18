@@ -1,5 +1,5 @@
 import type { Cell, Rack, Wall, Zone } from '@wos/domain';
-import { Minus, Plus, SlidersHorizontal } from 'lucide-react';
+import { Hand, Minus, Pencil, Plus, SlidersHorizontal } from 'lucide-react';
 import type { RackSideFocus } from '@/warehouse/editor/model/editor-types';
 import { faceAtViewportEdge } from '@/shared/lib/rack-face-labels';
 import type { CanvasRect } from '@/entities/layout-version/lib/canvas-geometry';
@@ -36,6 +36,8 @@ type CanvasHudProps = {
   onZoomOut: () => void;
   onZoomReset: () => void;
   onZoomIn: () => void;
+  isMobileNavigateMode: boolean;
+  onToggleMobileNavigateMode: () => void;
 };
 
 function getRackSideHandleStyle({
@@ -245,7 +247,9 @@ export function CanvasHud({
   onSelectRackSide,
   onZoomOut,
   onZoomReset,
-  onZoomIn
+  onZoomIn,
+  isMobileNavigateMode,
+  onToggleMobileNavigateMode
 }: CanvasHudProps) {
   const t = useT();
   return (
@@ -335,7 +339,7 @@ export function CanvasHud({
       )}
 
       {!isLayoutDrawToolActive && (
-        <div className="pointer-events-none absolute bottom-4 left-4 z-10 hidden sm:block">
+        <div className="pointer-events-none absolute bottom-4 left-4 z-10">
           <div
             data-testid="canvas-hud-hint-bar"
             className="rounded-xl px-3 py-2 text-[11px]"
@@ -345,7 +349,10 @@ export function CanvasHud({
               backdropFilter: 'blur(4px)'
             }}
           >
-            {hintText}
+            <div>{hintText}</div>
+            <div className="sm:hidden opacity-80">
+              {isMobileNavigateMode ? 'Navigate: drag anywhere' : 'Edit: tap to select'}
+            </div>
           </div>
         </div>
       )}
@@ -359,6 +366,19 @@ export function CanvasHud({
             border: '1px solid var(--border-muted)'
           }}
         >
+          <button
+            type="button"
+            onClick={onToggleMobileNavigateMode}
+            className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-slate-100 sm:hidden"
+            style={{ color: isMobileNavigateMode ? 'var(--accent)' : 'var(--text-muted)' }}
+            aria-label={isMobileNavigateMode ? 'Switch to edit mode' : 'Switch to navigate mode'}
+          >
+            {isMobileNavigateMode ? (
+              <Hand className="h-4 w-4" />
+            ) : (
+              <Pencil className="h-4 w-4" />
+            )}
+          </button>
           <button
             type="button"
             onClick={onZoomOut}

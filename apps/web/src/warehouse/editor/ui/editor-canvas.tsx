@@ -238,6 +238,7 @@ export function EditorCanvas({
   }, [placementLayout, layoutDraft]);
 
   const stageRef = useRef<Konva.Stage | null>(null);
+  const [isMobileNavigateMode, setIsMobileNavigateMode] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -263,6 +264,7 @@ export function EditorCanvas({
         isStorageV2Active &&
         (storageFocusSelectedRackId !== null ||
           storageFocusSelectedCellId !== null),
+      isMobileNavigateMode,
       setCanvasZoom,
       stageRef,
       viewMode,
@@ -959,6 +961,10 @@ export function EditorCanvas({
               setCanvasZoom(1);
             }}
             onZoomIn={() => handleInteractionZoom(0.1)}
+            isMobileNavigateMode={isMobileNavigateMode}
+            onToggleMobileNavigateMode={() =>
+              setIsMobileNavigateMode((prev) => !prev)
+            }
           />
 
           {shouldShowPickingPlanningOverlay && (
