@@ -48,7 +48,9 @@ function renderHud(rack: Rack) {
         onSelectRackSide: () => undefined,
         onZoomOut: () => undefined,
         onZoomReset: () => undefined,
-        onZoomIn: () => undefined
+        onZoomIn: () => undefined,
+        isMobileNavigateMode: false,
+        onToggleMobileNavigateMode: () => undefined
       })
     );
   });
@@ -81,8 +83,7 @@ describe('CanvasHud rack geometry affordance', () => {
     const zoomContainer = zoomControls.parent!;
 
     expect(hintContainer.props.className).toContain('left-4');
-    expect(hintContainer.props.className).toContain('hidden');
-    expect(hintContainer.props.className).toContain('sm:block');
+    expect(hintContainer.props.className).not.toContain('hidden');
     expect(hintContainer.props.className).not.toContain('right-4');
     expect(zoomContainer.props.className).toContain('right-4');
     expect(zoomContainer.props.className).not.toContain('left-4');
