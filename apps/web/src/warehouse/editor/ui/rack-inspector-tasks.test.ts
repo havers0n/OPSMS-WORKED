@@ -641,7 +641,7 @@ describe('RackInspector tasks', () => {
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-A' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-B' })).toHaveLength(1);
-    expect(hasText(renderer, 'Face B mirrors Face A and uses reversed numbering automatically.')).toBe(false);
+    expect(hasText(renderer, 'Face B mirrors Face A and inherits its numbering direction.')).toBe(false);
 
     act(() => {
       useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
@@ -649,7 +649,7 @@ describe('RackInspector tasks', () => {
 
     expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-A' })).toHaveLength(1);
     expect(renderer.root.findAllByProps({ 'data-testid': 'addressing-direction-control-B' })).toHaveLength(0);
-    expect(hasText(renderer, 'Face B mirrors Face A and uses reversed numbering automatically.')).toBe(true);
+    expect(hasText(renderer, 'Face B mirrors Face A and inherits its numbering direction.')).toBe(true);
   });
 
   it('renders read-only SVG state but blocks direction writes when layout is not editable', () => {
@@ -950,6 +950,7 @@ describe('RackInspector tasks', () => {
     expect(updatedFaceB.isMirrored).toBe(false);
     expect(updatedFaceB.mirrorSourceFaceId).toBeNull();
     expect(updatedFaceB.sections).not.toEqual(updatedFaceA.sections);
+    expect(updatedFaceB.sections).toHaveLength(updatedFaceA.sections.length);
     const faceASectionIds = new Set(updatedFaceA.sections.map((section) => section.id));
     expect(updatedFaceB.sections.every((section) => !faceASectionIds.has(section.id))).toBe(true);
     expect(renderer.root.findAllByProps({ 'data-testid': 'structure-face-switcher' })).toHaveLength(1);

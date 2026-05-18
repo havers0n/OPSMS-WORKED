@@ -82,7 +82,7 @@ export function FaceModeTask({
         </div>
         <p className="mt-3 text-xs text-slate-500">
           {isMirrored
-            ? 'Face B mirrors Face A structurally. Numbering reverses automatically.'
+            ? 'Face B mirrors Face A structurally and inherits its numbering direction.'
             : 'Face B has its own independent sections, numbering, and structure.'}
         </p>
       </div>

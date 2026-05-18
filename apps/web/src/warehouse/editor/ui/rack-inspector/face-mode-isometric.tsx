@@ -23,6 +23,11 @@ export function FaceModeIsometric({
     : isMirrored
       ? 'mirrored'
       : 'independent';
+  const currentIndicatorX: Record<TopologyChoice, number> = {
+    single: 35,
+    mirrored: 140,
+    independent: 245
+  };
 
   const handleSelect = (topology: TopologyChoice) => {
     if (readOnly) return;
@@ -149,10 +154,12 @@ export function FaceModeIsometric({
         </g>
 
         {/* Current state indicator */}
-        <circle cx="280" cy="20" r="3" fill="#10b981" />
-        <text x="270" y="24" className="text-[9px] fill-slate-600" textAnchor="end">
-          Current
-        </text>
+        <g transform={`translate(${currentIndicatorX[currentTopology] - 24} 8)`}>
+          <circle cx="0" cy="0" r="3" fill="#10b981" />
+          <text x="7" y="3" className="text-[8px] fill-slate-600">
+            Current
+          </text>
+        </g>
       </svg>
     </div>
   );

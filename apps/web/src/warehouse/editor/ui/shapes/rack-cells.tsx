@@ -422,7 +422,11 @@ export function RackCells({
   const faceABandH = isPaired ? spineY : height;
   const effectiveFaceB =
     faceB && isRackFaceMirrored(faceB) && faceB.mirrorSourceFaceId === faceA.id
-      ? { ...faceB, sections: faceA.sections }
+      ? {
+          ...faceB,
+          slotNumberingDirection: faceA.slotNumberingDirection,
+          sections: faceA.sections
+        }
       : faceB;
   const normalizedSemanticLevels =
     semanticLevels ??

@@ -150,6 +150,10 @@ export function normalizeRack(rack: Rack): Rack {
       }
 
       if (face.side === 'B' && resolveRackFaceRelationshipMode(face) === 'mirrored') {
+        const sourceFace = face.mirrorSourceFaceId
+          ? rack.faces.find((candidate) => candidate.id === face.mirrorSourceFaceId)
+          : rack.faces.find((candidate) => candidate.side === 'A');
+
         return {
           ...synchronizeRackFaceRelationship({
             ...face,
@@ -157,6 +161,7 @@ export function normalizeRack(rack: Rack): Rack {
           }),
           enabled: true,
           faceLength: undefined,
+          slotNumberingDirection: sourceFace?.slotNumberingDirection ?? face.slotNumberingDirection,
           sections: []
         };
       }

@@ -1013,7 +1013,25 @@ describe('editor-store', () => {
     expect(faceB?.isMirrored).toBe(true);
     expect(faceB?.mirrorSourceFaceId).toBe(faceA?.id);
     expect(faceB?.enabled).toBe(true);
+    expect(faceB?.slotNumberingDirection).toBe(faceA?.slotNumberingDirection);
     expect(faceB?.sections).toEqual([]);
+  });
+
+  it('keeps mirrored Face B numbering aligned with Face A numbering edits', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored');
+    useEditorStore.getState().updateFaceConfig(rackId, 'A', { slotNumberingDirection: 'rtl' });
+
+    const rack = useEditorStore.getState().draft?.racks[rackId];
+    const faceA = rack?.faces.find((face) => face.side === 'A');
+    const faceB = rack?.faces.find((face) => face.side === 'B');
+
+    expect(faceA?.slotNumberingDirection).toBe('rtl');
+    expect(faceB?.relationshipMode).toBe('mirrored');
+    expect(faceB?.slotNumberingDirection).toBe('rtl');
   });
 
   it('setFaceBRelationship(..., mirrored) creates missing Face B for single-face racks', () => {

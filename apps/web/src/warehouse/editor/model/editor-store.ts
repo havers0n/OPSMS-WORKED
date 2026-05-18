@@ -5,7 +5,6 @@ import type {
   RackFace,
   RackFaceRelationshipMode,
   RackKind,
-  SlotNumberingDirection,
   Wall,
   Zone
 } from '@wos/domain';
@@ -929,7 +928,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return markDraftChanged(state, {
         draft: updateRackInDraft(state.draft, rackId, (rack) => ({
           ...rack,
-          faces: rack.faces.map((face) => (face.side === side ? { ...face, ...patch } : face))
+          faces: rack.faces.map((face) => {
+            if (face.side === side) return { ...face, ...patch };
+
+            if (
+              side === 'A' &&
+              face.side === 'B' &&
+              patch.slotNumberingDirection &&
+              resolveRackFaceRelationshipMode(face) === 'mirrored'
+            ) {
+              return { ...face, slotNumberingDirection: patch.slotNumberingDirection };
+            }
+
+            return face;
+          })
         })),
       });
     }),
@@ -1268,7 +1280,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               }),
               enabled: true,
               faceLength: undefined,
-              slotNumberingDirection: 'rtl' as SlotNumberingDirection,
+              slotNumberingDirection: faceA.slotNumberingDirection,
               sections: []
             };
           } else {

@@ -61,8 +61,19 @@ export type ResolvedCellOverlayGeometry = {
 
 export function getEffectiveRackFaceB(rack: Rack) {
   const faceB = rack.faces.find((face) => face.side === 'B') ?? null;
+  const sourceFace = faceB?.mirrorSourceFaceId
+    ? rack.faces.find((face) => face.id === faceB.mirrorSourceFaceId)
+    : null;
+
   return faceB
-    ? { ...faceB, sections: resolveRackFaceSections(faceB, rack) }
+    ? {
+        ...faceB,
+        slotNumberingDirection:
+          isRackFaceMirrored(faceB) && sourceFace
+            ? sourceFace.slotNumberingDirection
+            : faceB.slotNumberingDirection,
+        sections: resolveRackFaceSections(faceB, rack)
+      }
     : null;
 }
 
