@@ -79,6 +79,15 @@ export function StorageWorkspaceV2({
     prevHasSelectionRef.current = hasSelection;
   }, [hasSelection]);
 
+  // Reopen sheet when a cell is explicitly (re-)selected even if hasSelection was already
+  // true (e.g. rack remained focused after cell was cleared, or the sheet was manually
+  // closed while the cell was still selected and the user selects a cell again).
+  useEffect(() => {
+    if (selectedCellId !== null) {
+      setInspectorMode((prev) => (prev === 'hidden' ? 'peek' : prev));
+    }
+  }, [selectedCellId]);
+
   const persistMode = (mode: InspectorMode) => {
     try {
       localStorage.setItem(INSPECTOR_MODE_KEY, mode);
