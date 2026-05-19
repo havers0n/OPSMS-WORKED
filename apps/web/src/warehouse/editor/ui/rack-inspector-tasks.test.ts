@@ -8,8 +8,17 @@ import { useInteractionStore } from '@/warehouse/editor/model/interaction-store'
 import { useModeStore } from '@/warehouse/editor/model/mode-store';
 import { RackInspector } from './rack-inspector';
 
+const createDraftMutationMock = vi.hoisted(() => ({
+  isPending: false,
+  mutateAsync: vi.fn()
+}));
+
 vi.mock('@/features/layout-validate/model/use-layout-validation', () => ({
   useCachedLayoutValidation: () => ({ data: null })
+}));
+
+vi.mock('@/features/layout-draft-save/model/use-create-layout-draft', () => ({
+  useCreateLayoutDraft: () => createDraftMutationMock
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,6 +57,14 @@ function createWorkspace(draft?: LayoutDraft): FloorWorkspace {
     floorId: d.floorId,
     activeDraft: d,
     latestPublished: null
+  };
+}
+
+function createPublishedWorkspace(published: LayoutDraft): FloorWorkspace {
+  return {
+    floorId: published.floorId,
+    activeDraft: null,
+    latestPublished: published
   };
 }
 
@@ -181,6 +198,7 @@ function isRoleButtonActive(button: TestRenderer.ReactTestInstance) {
 
 afterEach(() => {
   resetStores();
+  createDraftMutationMock.isPending = false;
   vi.clearAllMocks();
 });
 
@@ -234,6 +252,26 @@ describe('RackInspector tasks', () => {
     expect(summaryText(renderer)).not.toContain('Face Config');
     expect(summaryText(renderer)).not.toContain('rotation');
     expect(summaryText(renderer)).not.toContain('Default roles');
+  });
+
+  it('keeps unlocked draft inspector controls visibly editable', () => {
+    const draft = createLayoutDraftFixture();
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(draft.rackIds[0]);
+    });
+
+    const renderer = renderInspector(createWorkspace(draft));
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-readonly-strip' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-create-draft' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-quick-actions' })).toHaveLength(1);
+
+    clickTab(renderer, 'structure');
+    const mirroredOption = renderer.root.findByProps({ 'data-testid': 'structure-topology-option-mirrored' });
+    expect(mirroredOption.props['aria-disabled']).toBe(false);
+    expect(mirroredOption.props['data-disabled']).toBe(false);
+    expect(mirroredOption.props.className).toContain('cursor-pointer');
   });
 
   it('renders truthful geometry preview rotation, in-SVG labels, and arrow ownership', () => {
@@ -679,6 +717,40 @@ describe('RackInspector tasks', () => {
     expect(faceA()?.slotNumberingDirection).toBe('ltr');
   });
 
+  it('shows published readonly reason and create draft action beside rack controls', async () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    draft.state = 'published';
+    createDraftMutationMock.mutateAsync.mockResolvedValue('draft-created');
+    act(() => {
+      useEditorStore.getState().initializeDraft(draft);
+      useEditorStore.getState().setSelectedRackId(rackId);
+    });
+
+    const renderer = renderInspector(createPublishedWorkspace(draft));
+
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-quick-actions' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-create-draft' })).toHaveLength(1);
+    expect(nodeText(renderer.root.findByProps({ 'data-testid': 'rack-inspector-readonly-strip' }))).toContain(
+      'Published layout'
+    );
+
+    clickTab(renderer, 'structure');
+    const mirroredOption = renderer.root.findByProps({ 'data-testid': 'structure-topology-option-mirrored' });
+    expect(mirroredOption.props['aria-disabled']).toBe(true);
+    expect(mirroredOption.props['data-disabled']).toBe(true);
+    expect(mirroredOption.props.className).toContain('cursor-not-allowed');
+    expect(mirroredOption.props['aria-label']).toContain('Create a draft');
+
+    clickTopologyOption(renderer, 'mirrored');
+    expect(useEditorStore.getState().draft?.racks[rackId].kind).toBe('single');
+
+    await act(async () => {
+      await renderer.root.findByProps({ 'data-testid': 'rack-inspector-create-draft' }).props.onClick();
+    });
+    expect(createDraftMutationMock.mutateAsync).toHaveBeenCalledWith(draft.floorId);
+  });
+
   it('locks a rack from the header and blocks geometry, structure, addressing, and movement edits', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0];
@@ -698,6 +770,9 @@ describe('RackInspector tasks', () => {
     expect(renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-duplicate' }).props.disabled).toBe(true);
     expect(renderer.root.findByProps({ 'data-testid': 'rack-inspector-action-delete' }).props.disabled).toBe(true);
     expect(renderer.root.findAllByProps({ 'data-testid': 'rack-inspector-header-display-code-button' })).toHaveLength(0);
+    expect(nodeText(renderer.root.findByProps({ 'data-testid': 'rack-inspector-readonly-strip' }))).toContain(
+      'Rack locked'
+    );
 
     const lengthAction = renderer.root.findByProps({ 'data-testid': 'geometry-blueprint-length-action' });
     act(() => {
@@ -719,6 +794,13 @@ describe('RackInspector tasks', () => {
     expect(after?.totalLength).toBe(before?.totalLength);
     expect(after?.kind).toBe(before?.kind);
     expect(after?.faces.find((face) => face.side === 'A')?.slotNumberingDirection).toBe('ltr');
+
+    clickTab(renderer, 'structure');
+    const mirroredOption = renderer.root.findByProps({ 'data-testid': 'structure-topology-option-mirrored' });
+    expect(mirroredOption.props['aria-disabled']).toBe(true);
+    expect(mirroredOption.props['data-disabled']).toBe(true);
+    expect(mirroredOption.props.className).toContain('cursor-not-allowed');
+    expect(mirroredOption.props['aria-label']).toContain('Unlock this rack');
   });
 
   it('falls back to Structure task when objectWorkContext is face-mode', () => {

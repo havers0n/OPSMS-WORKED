@@ -1,17 +1,27 @@
 import type { Rack, RackFace } from '@wos/domain';
 import { resolveRackFaceRelationshipMode } from '@wos/domain';
+import type { RackReadOnlyReason } from '../../model/layout-edit-mode';
 
 export type TopologyChoice = 'single' | 'mirrored' | 'independent';
+
+const readOnlyReasonLabel: Record<RackReadOnlyReason, string> = {
+  'published-readonly': 'Create a draft to edit face configuration.',
+  'non-layout-readonly': 'Switch to Layout mode to edit face configuration.',
+  'no-layout': 'Load a layout draft to edit face configuration.',
+  'rack-locked': 'Unlock this rack to edit face configuration.'
+};
 
 export function FaceModeIsometric({
   rack: _rack,
   faceB,
   readOnly,
+  readOnlyReason,
   onSelectTopology
 }: {
   rack: Rack;
   faceB: RackFace | null;
   readOnly: boolean;
+  readOnlyReason?: RackReadOnlyReason | null;
   onSelectTopology: (topology: TopologyChoice) => void;
 }) {
   const faceBRelationshipMode = faceB ? resolveRackFaceRelationshipMode(faceB) : null;
@@ -33,10 +43,14 @@ export function FaceModeIsometric({
     if (readOnly) return;
     onSelectTopology(topology);
   };
+  const disabledTitle = readOnlyReason ? readOnlyReasonLabel[readOnlyReason] : 'Face configuration is read-only.';
+  const optionClassName = readOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer';
 
   return (
     <div
       data-testid="structure-topology-face-configuration"
+      aria-disabled={readOnly}
+      title={readOnly ? disabledTitle : undefined}
       className="rounded-[14px] border border-[var(--border-muted)] bg-white p-4 shadow-sm"
     >
       <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -47,9 +61,13 @@ export function FaceModeIsometric({
         {/* Single Face */}
         <g
           data-testid="structure-topology-option-single"
+          aria-disabled={readOnly}
+          aria-label={readOnly ? disabledTitle : undefined}
+          data-disabled={readOnly}
           onClick={() => handleSelect('single')}
-          className={readOnly ? undefined : 'cursor-pointer'}
+          className={optionClassName}
         >
+          {readOnly && <title>{disabledTitle}</title>}
           <text x="35" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
             Single
           </text>
@@ -74,9 +92,13 @@ export function FaceModeIsometric({
         {/* Mirrored */}
         <g
           data-testid="structure-topology-option-mirrored"
+          aria-disabled={readOnly}
+          aria-label={readOnly ? disabledTitle : undefined}
+          data-disabled={readOnly}
           onClick={() => handleSelect('mirrored')}
-          className={readOnly ? undefined : 'cursor-pointer'}
+          className={optionClassName}
         >
+          {readOnly && <title>{disabledTitle}</title>}
           <text x="140" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
             Mirrored
           </text>
@@ -116,9 +138,13 @@ export function FaceModeIsometric({
         {/* Independent */}
         <g
           data-testid="structure-topology-option-independent"
+          aria-disabled={readOnly}
+          aria-label={readOnly ? disabledTitle : undefined}
+          data-disabled={readOnly}
           onClick={() => handleSelect('independent')}
-          className={readOnly ? undefined : 'cursor-pointer'}
+          className={optionClassName}
         >
+          {readOnly && <title>{disabledTitle}</title>}
           <text x="245" y="20" className="text-[11px] font-semibold fill-slate-700" textAnchor="middle">
             Independent
           </text>

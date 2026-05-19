@@ -1,14 +1,17 @@
 import { generatePreviewCells, resolveRackFaceRelationshipMode, validateLayoutDraft } from '@wos/domain';
 import type { FloorWorkspace, LayoutValidationIssue, Rack, RackFace } from '@wos/domain';
-import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Lock, LockOpen, RotateCcw, Trash2, X, XCircle } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Copy, FilePlus2, Lock, LockOpen, RotateCcw, Trash2, X, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCreateLayoutDraft } from '@/features/layout-draft-save/model/use-create-layout-draft';
 import { useCachedLayoutValidation } from '@/features/layout-validate/model/use-layout-validation';
 import {
   useDeleteRack,
   useDraftDirtyState,
   useDuplicateRack,
+  useInitializeDraft,
   useIsLayoutEditable,
   useObjectWorkContext,
+  useRackReadOnlyReason,
   useRotateRack,
   useSelectedRackId,
   useSetObjectWorkContext,
@@ -16,6 +19,7 @@ import {
   useUpdateRackGeneral,
   useViewMode
 } from '@/warehouse/editor/model/editor-selectors';
+import type { RackReadOnlyReason } from '@/warehouse/editor/model/layout-edit-mode';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { AddressingTask } from './rack-inspector/addressing-task';
 import { GeometryTask } from './rack-inspector/geometry-task';
@@ -272,6 +276,91 @@ function ValidationStrip({ issues }: { issues: LayoutValidationIssue[] }) {
   );
 }
 
+const readOnlyReasonCopy: Record<RackReadOnlyReason, { title: string; body: string }> = {
+  'published-readonly': {
+    title: 'Published layout',
+    body: 'This rack is read-only until a draft is created for the floor.'
+  },
+  'non-layout-readonly': {
+    title: 'Read-only view',
+    body: 'Switch to Layout mode to edit rack geometry, structure, and addressing.'
+  },
+  'no-layout': {
+    title: 'No editable layout',
+    body: 'Load or create a layout draft before editing racks.'
+  },
+  'rack-locked': {
+    title: 'Rack locked',
+    body: 'Unlock this rack to edit geometry, structure, and addressing.'
+  }
+};
+
+function ReadOnlyStrip({ reason }: { reason: RackReadOnlyReason | null }) {
+  if (!reason) return null;
+
+  const copy = readOnlyReasonCopy[reason];
+  return (
+    <div
+      data-testid="rack-inspector-readonly-strip"
+      className="flex items-start gap-2 border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-xs text-slate-600"
+    >
+      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+      <div>
+        <span data-testid="rack-inspector-readonly-reason" className="font-semibold text-slate-800">
+          {copy.title}
+        </span>{' '}
+        <span>{copy.body}</span>
+      </div>
+    </div>
+  );
+}
+
+function PublishedDraftAction({ workspace }: { workspace: FloorWorkspace | null }) {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const floorId = workspace?.floorId ?? null;
+  const activeDraft = workspace?.activeDraft ?? null;
+  const initializeDraft = useInitializeDraft();
+  const createDraft = useCreateLayoutDraft(floorId);
+  const hasActiveDraft = activeDraft !== null;
+  const buttonLabel = hasActiveDraft ? 'Edit Draft' : 'Create Draft';
+
+  const handleClick = async () => {
+    if (activeDraft) {
+      initializeDraft(activeDraft);
+      return;
+    }
+
+    if (!floorId) return;
+    setErrorMessage(null);
+    try {
+      await createDraft.mutateAsync(floorId);
+    } catch {
+      setErrorMessage('Could not create draft.');
+    }
+  };
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        data-testid="rack-inspector-create-draft"
+        disabled={(!floorId && !activeDraft) || createDraft.isPending}
+        onClick={handleClick}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ background: 'var(--accent)' }}
+      >
+        <FilePlus2 className="h-3.5 w-3.5" />
+        {createDraft.isPending ? 'Creating...' : buttonLabel}
+      </button>
+      {errorMessage && (
+        <span data-testid="rack-inspector-create-draft-error" className="text-[11px] text-red-600">
+          {errorMessage}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RackQuickActions({ rack }: { rack: Rack }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const rotateRack = useRotateRack();
@@ -406,6 +495,7 @@ export function RackInspector({
   const rack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
   const faceA = rack?.faces.find((f) => f.side === 'A') ?? null;
   const faceB = rack?.faces.find((f) => f.side === 'B') ?? null;
+  const rackReadOnlyReason = useRackReadOnlyReason(rack);
 
   const rackCells = useMemo(() => {
     if (!layoutDraft || !rack) return [];
@@ -440,7 +530,7 @@ export function RackInspector({
   if (!rack) return null;
 
   const isRackLocked = rack.isLocked === true;
-  const isRackReadOnly = !isLayoutEditable || isRackLocked;
+  const isRackReadOnly = rackReadOnlyReason !== null;
 
   const renderTaskBody = () => {
     if (!showTaskNav) {
@@ -454,6 +544,7 @@ export function RackInspector({
             faceA={faceA}
             faceB={faceB}
             readOnly={isRackReadOnly}
+            readOnlyReason={rackReadOnlyReason}
           />
         </>
       );
@@ -469,6 +560,7 @@ export function RackInspector({
             faceA={faceA}
             faceB={faceB}
             readOnly={isRackReadOnly}
+            readOnlyReason={rackReadOnlyReason}
           />
         );
       case 'addressing':
@@ -489,6 +581,7 @@ export function RackInspector({
             faceA={faceA}
             faceB={faceB}
             readOnly={isRackReadOnly}
+            readOnlyReason={rackReadOnlyReason}
           />
         );
     }
@@ -501,6 +594,9 @@ export function RackInspector({
           <div className="flex min-w-0 items-center gap-2">
             <RackHeaderDisplayCode rack={rack} editable={isLayoutEditable && !isRackLocked} />
             {showTaskNav && isLayoutEditable && <RackQuickActions rack={rack} />}
+            {rackReadOnlyReason === 'published-readonly' && (
+              <PublishedDraftAction workspace={workspace} />
+            )}
           </div>
           <button
             type="button"
@@ -519,6 +615,7 @@ export function RackInspector({
         )}
       </div>
 
+      <ReadOnlyStrip reason={rackReadOnlyReason} />
       <ValidationStrip issues={rackIssues} />
 
       <div className="flex flex-1 overflow-hidden">
