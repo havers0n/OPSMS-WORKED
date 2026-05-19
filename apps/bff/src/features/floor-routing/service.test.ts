@@ -15,11 +15,42 @@ const ids = {
 
 function createRepo(overrides: Partial<FloorRoutingRepo> = {}): FloorRoutingRepo {
   return {
+    listGraph: vi.fn(async () => ({ nodes: [graphNode], edges: [graphEdge] })),
+    createNode: vi.fn(async () => graphNode),
+    patchNode: vi.fn(async () => graphNode),
+    deleteNode: vi.fn(async () => true),
+    createEdge: vi.fn(async () => graphEdge),
+    findEdge: vi.fn(async () => graphEdge),
+    patchEdge: vi.fn(async () => graphEdge),
+    deleteEdge: vi.fn(async () => true),
     listExistingNodeIds: vi.fn(async () => [ids.startNode, ids.endNode]),
     getShortestFloorPath: vi.fn(async () => []),
     ...overrides
   };
 }
+
+const graphNode = {
+  id: ids.startNode,
+  floorId: ids.floor,
+  x: 1,
+  y: 2,
+  kind: 'walkway' as const,
+  label: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z'
+};
+
+const graphEdge = {
+  id: ids.edgeA,
+  floorId: ids.floor,
+  sourceNodeId: ids.startNode,
+  targetNodeId: ids.endNode,
+  cost: 4,
+  reverseCost: -1 as const,
+  points: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z'
+};
 
 const input = {
   tenantId: ids.tenant,
@@ -52,6 +83,131 @@ const validRows = [
 ];
 
 describe('floor routing service', () => {
+  it('returns graph DTOs from the repo', async () => {
+    const repo = createRepo();
+    const service = createFloorRoutingService(repo);
+
+    await expect(service.getGraph({ tenantId: ids.tenant, floorId: ids.floor })).resolves.toEqual({
+      nodes: [graphNode],
+      edges: [graphEdge]
+    });
+    expect(repo.listGraph).toHaveBeenCalledWith(ids.tenant, ids.floor);
+  });
+
+  it('rejects empty node patch', async () => {
+    const repo = createRepo();
+    const service = createFloorRoutingService(repo);
+
+    await expect(
+      service.patchNode({
+        tenantId: ids.tenant,
+        floorId: ids.floor,
+        nodeId: ids.startNode,
+        body: {}
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(repo.patchNode).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty edge patch', async () => {
+    const repo = createRepo();
+    const service = createFloorRoutingService(repo);
+
+    await expect(
+      service.patchEdge({
+        tenantId: ids.tenant,
+        floorId: ids.floor,
+        edgeId: ids.edgeA,
+        body: {}
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(repo.patchEdge).not.toHaveBeenCalled();
+  });
+
+  it('rejects self-edge on create', async () => {
+    const repo = createRepo();
+    const service = createFloorRoutingService(repo);
+
+    await expect(
+      service.createEdge({
+        tenantId: ids.tenant,
+        floorId: ids.floor,
+        body: {
+          sourceNodeId: ids.startNode,
+          targetNodeId: ids.startNode,
+          cost: 1
+        }
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(repo.createEdge).not.toHaveBeenCalled();
+  });
+
+  it('rejects an edge patch that would result in a self-edge', async () => {
+    const repo = createRepo({
+      findEdge: vi.fn(async () => graphEdge)
+    });
+    const service = createFloorRoutingService(repo);
+
+    await expect(
+      service.patchEdge({
+        tenantId: ids.tenant,
+        floorId: ids.floor,
+        edgeId: ids.edgeA,
+        body: {
+          targetNodeId: ids.startNode
+        }
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'VALIDATION_ERROR' });
+    expect(repo.findEdge).toHaveBeenCalledWith(ids.tenant, ids.floor, ids.edgeA);
+    expect(repo.patchEdge).not.toHaveBeenCalled();
+  });
+
+  it('returns not found for missing update and delete targets', async () => {
+    const repo = createRepo({
+      patchNode: vi.fn(async () => null),
+      patchEdge: vi.fn(async () => null),
+      deleteNode: vi.fn(async () => false),
+      deleteEdge: vi.fn(async () => false)
+    });
+    const service = createFloorRoutingService(repo);
+
+    await expect(
+      service.patchNode({
+        tenantId: ids.tenant,
+        floorId: ids.floor,
+        nodeId: ids.startNode,
+        body: { label: 'A' }
+      })
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+
+    await expect(
+      service.patchEdge({
+        tenantId: ids.tenant,
+        floorId: ids.floor,
+        edgeId: ids.edgeA,
+        body: { cost: 5 }
+      })
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+
+    await expect(
+      service.deleteNode({ tenantId: ids.tenant, floorId: ids.floor, nodeId: ids.startNode })
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+
+    await expect(
+      service.deleteEdge({ tenantId: ids.tenant, floorId: ids.floor, edgeId: ids.edgeA })
+    ).rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+  });
+
+  it('delete node delegates to the repo without manually deleting connected edges', async () => {
+    const repo = createRepo();
+    const service = createFloorRoutingService(repo);
+
+    await service.deleteNode({ tenantId: ids.tenant, floorId: ids.floor, nodeId: ids.startNode });
+
+    expect(repo.deleteNode).toHaveBeenCalledWith(ids.tenant, ids.floor, ids.startNode);
+    expect(repo.deleteEdge).not.toHaveBeenCalled();
+  });
+
   it('returns ok with zero cost for matching start and end without checking nodes or RPC', async () => {
     const repo = createRepo();
     const service = createFloorRoutingService(repo);
