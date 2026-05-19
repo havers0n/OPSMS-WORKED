@@ -15,7 +15,7 @@ vi.mock('../layout/repo.js', () => ({
 vi.mock('../location-read/location-read-repo.js', () => ({
   createLocationReadRepo: () => ({
     listFloorLocationOccupancy: mockListFloorLocationOccupancy,
-    listCellStorageByIds: mockListCellStorageByIds
+    listFloorCellStorage: mockListCellStorageByIds
   })
 }));
 
