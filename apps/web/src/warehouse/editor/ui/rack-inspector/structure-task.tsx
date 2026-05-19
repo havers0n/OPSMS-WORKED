@@ -9,6 +9,7 @@ import {
   useResetFaceB,
   useSetFaceBRelationship
 } from '@/warehouse/editor/model/editor-selectors';
+import type { RackReadOnlyReason } from '../../model/layout-edit-mode';
 import { LevelDefaultsPanel } from './level-defaults-panel';
 import { RackLevelDefaultsPanel } from './rack-level-defaults-panel';
 import { FaceModeIsometric, type TopologyChoice } from './face-mode-isometric';
@@ -102,12 +103,14 @@ export function StructureTask({
   rack,
   faceA,
   faceB,
-  readOnly
+  readOnly,
+  readOnlyReason
 }: {
   rack: Rack;
   faceA: RackFace | null;
   faceB: RackFace | null;
   readOnly: boolean;
+  readOnlyReason?: RackReadOnlyReason | null;
 }) {
   const [activeFaceSide, setActiveFaceSide] = useState<'A' | 'B'>('A');
   const resetFaceB = useResetFaceB();
@@ -150,6 +153,7 @@ export function StructureTask({
           rack={rack}
           faceB={faceB}
           readOnly={readOnly}
+          readOnlyReason={readOnlyReason}
           onSelectTopology={handleTopologySelect}
         />
       </StructureSection>
