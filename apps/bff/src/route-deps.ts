@@ -15,6 +15,7 @@ import { createProductLocationRolesService } from './features/product-location-r
 import { createStoragePresetsService } from './features/storage-presets/service.js';
 import { createPickingPlanningPreviewService } from './features/picking-planning/service.js';
 import { createPickingPlanningOrderInputReadRepo, createPickingPlanningWaveReadRepo } from './features/picking-planning/repo.js';
+import { createFloorRoutingService } from './features/floor-routing/service.js';
 import type { BuildAppOptions } from './app-options.js';
 import { ApiError } from './errors.js';
 
@@ -56,6 +57,8 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
         createPickingPlanningWaveReadRepo(getUserSupabase(context), context.currentTenant.tenantId)
       );
     });
+  const getFloorRoutingService =
+    options.getFloorRoutingService ?? ((context) => createFloorRoutingService(getUserSupabase(context)));
 
   return {
     getAuthContext,
@@ -73,6 +76,7 @@ export function createRouteDeps(options: BuildAppOptions = {}): RouteDeps {
     getProductsService,
     getProductLocationRolesService,
     getStoragePresetsService,
-    getPickingPlanningPreviewService
+    getPickingPlanningPreviewService,
+    getFloorRoutingService
   };
 }

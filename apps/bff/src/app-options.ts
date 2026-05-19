@@ -11,6 +11,7 @@ import type { FloorsService } from './features/floors/service.js';
 import type { ProductsService } from './features/products/service.js';
 import type { PickingService } from './features/picking/service.js';
 import type { PickingPlanningPreviewService } from './features/picking-planning/service.js';
+import type { FloorRoutingService } from './features/floor-routing/service.js';
 import type { ProductLocationRolesService } from './features/product-location-roles/service.js';
 import type { StoragePresetsService } from './features/storage-presets/service.js';
 import type { requireAuth } from './auth.js';
@@ -29,6 +30,7 @@ export type PickingServiceFactory = (context: AuthenticatedRequestContext) => Pi
 export type PickingPlanningPreviewServiceFactory = (
   context: AuthenticatedRequestContext
 ) => PickingPlanningPreviewService;
+export type FloorRoutingServiceFactory = (context: AuthenticatedRequestContext) => FloorRoutingService;
 export type ProductLocationRolesServiceFactory = (
   context: AuthenticatedRequestContext
 ) => ProductLocationRolesService;
@@ -51,4 +53,5 @@ export type BuildAppOptions = {
   getProductLocationRolesService?: ProductLocationRolesServiceFactory;
   getStoragePresetsService?: StoragePresetsServiceFactory;
   getPickingPlanningPreviewService?: PickingPlanningPreviewServiceFactory;
+  getFloorRoutingService?: FloorRoutingServiceFactory;
 };
