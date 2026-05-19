@@ -1,8 +1,16 @@
 import { ZodError } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ApiError } from '../../errors.js';
 import { createFloorRoutingRepo, type FloorRoutingRepo } from './repo.js';
 import type {
+  CreateRouteGraphEdgeRequest,
+  CreateRouteGraphNodeRequest,
   FloorRoutingPoint,
+  PatchRouteGraphEdgeRequest,
+  PatchRouteGraphNodeRequest,
+  RouteGraphDto,
+  RouteGraphEdgeDto,
+  RouteGraphNodeDto,
   ShortestFloorPathResponse,
   ShortestFloorPathRpcRow,
   ShortestFloorPathSegment
@@ -13,6 +21,35 @@ type ShortestPathInput = {
   floorId: string;
   startNodeId: string;
   endNodeId: string;
+};
+
+type GraphScope = {
+  tenantId: string;
+  floorId: string;
+};
+
+type NodeByIdInput = GraphScope & {
+  nodeId: string;
+};
+
+type EdgeByIdInput = GraphScope & {
+  edgeId: string;
+};
+
+type CreateNodeInput = GraphScope & {
+  body: CreateRouteGraphNodeRequest;
+};
+
+type PatchNodeInput = NodeByIdInput & {
+  body: PatchRouteGraphNodeRequest;
+};
+
+type CreateEdgeInput = GraphScope & {
+  body: CreateRouteGraphEdgeRequest;
+};
+
+type PatchEdgeInput = EdgeByIdInput & {
+  body: PatchRouteGraphEdgeRequest;
 };
 
 type SupabaseLikeError = {
@@ -95,7 +132,30 @@ function resolveTotalCost(rows: ShortestFloorPathRpcRow[], segments: ShortestFlo
   return segments.reduce((total, segment) => total + segment.cost, 0);
 }
 
+function assertNonEmptyPatch(input: Record<string, unknown>): void {
+  if (Object.keys(input).length === 0) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Patch body must include at least one field.');
+  }
+}
+
+function assertDistinctNodes(sourceNodeId: string, targetNodeId: string): void {
+  if (sourceNodeId === targetNodeId) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'sourceNodeId and targetNodeId must be different.');
+  }
+}
+
+function graphResourceNotFound(resource: 'Route graph node' | 'Route graph edge'): ApiError {
+  return new ApiError(404, 'NOT_FOUND', `${resource} was not found.`);
+}
+
 export type FloorRoutingService = {
+  getGraph(input: GraphScope): Promise<RouteGraphDto>;
+  createNode(input: CreateNodeInput): Promise<RouteGraphNodeDto>;
+  patchNode(input: PatchNodeInput): Promise<RouteGraphNodeDto>;
+  deleteNode(input: NodeByIdInput): Promise<void>;
+  createEdge(input: CreateEdgeInput): Promise<RouteGraphEdgeDto>;
+  patchEdge(input: PatchEdgeInput): Promise<RouteGraphEdgeDto>;
+  deleteEdge(input: EdgeByIdInput): Promise<void>;
   getShortestPath(input: ShortestPathInput): Promise<ShortestFloorPathResponse>;
 };
 
@@ -106,6 +166,61 @@ export function createFloorRoutingService(repoOrSupabase: FloorRoutingRepo | Sup
       : createFloorRoutingRepo(repoOrSupabase);
 
   return {
+    getGraph: (input) => repo.listGraph(input.tenantId, input.floorId),
+
+    createNode: (input) => repo.createNode(input.tenantId, input.floorId, input.body),
+
+    async patchNode(input) {
+      assertNonEmptyPatch(input.body);
+      const node = await repo.patchNode(input.tenantId, input.floorId, input.nodeId, input.body);
+      if (!node) {
+        throw graphResourceNotFound('Route graph node');
+      }
+      return node;
+    },
+
+    async deleteNode(input) {
+      const deleted = await repo.deleteNode(input.tenantId, input.floorId, input.nodeId);
+      if (!deleted) {
+        throw graphResourceNotFound('Route graph node');
+      }
+    },
+
+    async createEdge(input) {
+      assertDistinctNodes(input.body.sourceNodeId, input.body.targetNodeId);
+      return repo.createEdge(input.tenantId, input.floorId, input.body);
+    },
+
+    async patchEdge(input) {
+      assertNonEmptyPatch(input.body);
+
+      let existingEdge: RouteGraphEdgeDto | null = null;
+      if (input.body.sourceNodeId !== undefined || input.body.targetNodeId !== undefined) {
+        existingEdge = await repo.findEdge(input.tenantId, input.floorId, input.edgeId);
+        if (!existingEdge) {
+          throw graphResourceNotFound('Route graph edge');
+        }
+
+        assertDistinctNodes(
+          input.body.sourceNodeId ?? existingEdge.sourceNodeId,
+          input.body.targetNodeId ?? existingEdge.targetNodeId
+        );
+      }
+
+      const edge = await repo.patchEdge(input.tenantId, input.floorId, input.edgeId, input.body);
+      if (!edge) {
+        throw graphResourceNotFound('Route graph edge');
+      }
+      return edge;
+    },
+
+    async deleteEdge(input) {
+      const deleted = await repo.deleteEdge(input.tenantId, input.floorId, input.edgeId);
+      if (!deleted) {
+        throw graphResourceNotFound('Route graph edge');
+      }
+    },
+
     async getShortestPath(input) {
       if (input.startNodeId === input.endNodeId) {
         return emptyResponse('ok');

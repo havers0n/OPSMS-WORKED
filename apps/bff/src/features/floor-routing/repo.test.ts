@@ -15,11 +15,24 @@ type QueryCall = {
   args: unknown[];
 };
 
-function createQuerySupabase(rows: unknown[] = []) {
+function createBuilder(result: unknown) {
   const calls: QueryCall[] = [];
   const builder = {
+    calls,
     select(...args: unknown[]) {
       calls.push({ op: 'select', args });
+      return builder;
+    },
+    insert(...args: unknown[]) {
+      calls.push({ op: 'insert', args });
+      return builder;
+    },
+    update(...args: unknown[]) {
+      calls.push({ op: 'update', args });
+      return builder;
+    },
+    delete(...args: unknown[]) {
+      calls.push({ op: 'delete', args });
       return builder;
     },
     eq(...args: unknown[]) {
@@ -30,22 +43,209 @@ function createQuerySupabase(rows: unknown[] = []) {
       calls.push({ op: 'in', args });
       return builder;
     },
-    then(resolve: (value: { data: unknown[]; error: null }) => void) {
-      resolve({ data: rows, error: null });
+    order(...args: unknown[]) {
+      calls.push({ op: 'order', args });
+      return builder;
+    },
+    single() {
+      calls.push({ op: 'single', args: [] });
+      return builder;
+    },
+    maybeSingle() {
+      calls.push({ op: 'maybeSingle', args: [] });
+      return builder;
+    },
+    then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
+      return Promise.resolve(result).then(resolve, reject);
     }
   };
 
-  return {
-    calls,
-    supabase: {
-      from: vi.fn(() => builder)
-    }
-  };
+  return builder;
 }
 
+const nodeRow = {
+  id: ids.startNode,
+  floor_id: ids.floor,
+  x: 1,
+  y: 2,
+  kind: 'walkway',
+  label: null,
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z'
+};
+
+const edgeRow = {
+  id: ids.edge,
+  floor_id: ids.floor,
+  source_node_id: ids.startNode,
+  target_node_id: ids.endNode,
+  cost: 4,
+  reverse_cost: -1,
+  points: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z'
+};
+
 describe('floor routing repo', () => {
+  it('lists graph nodes and edges scoped by tenant_id and floor_id', async () => {
+    const nodeBuilder = createBuilder({ data: [nodeRow], error: null });
+    const edgeBuilder = createBuilder({ data: [edgeRow], error: null });
+    const from = vi.fn((table: string) => {
+      if (table === 'floor_route_nodes') return nodeBuilder;
+      if (table === 'floor_route_edges') return edgeBuilder;
+      throw new Error(`Unexpected table ${table}`);
+    });
+    const repo = createFloorRoutingRepo({ from } as never);
+
+    await expect(repo.listGraph(ids.tenant, ids.floor)).resolves.toEqual({
+      nodes: [
+        {
+          id: ids.startNode,
+          floorId: ids.floor,
+          x: 1,
+          y: 2,
+          kind: 'walkway',
+          label: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z'
+        }
+      ],
+      edges: [
+        {
+          id: ids.edge,
+          floorId: ids.floor,
+          sourceNodeId: ids.startNode,
+          targetNodeId: ids.endNode,
+          cost: 4,
+          reverseCost: -1,
+          points: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z'
+        }
+      ]
+    });
+
+    expect(from).toHaveBeenCalledWith('floor_route_nodes');
+    expect(from).toHaveBeenCalledWith('floor_route_edges');
+    expect(nodeBuilder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(nodeBuilder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+    expect(edgeBuilder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(edgeBuilder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+  });
+
+  it('inserts a node with tenant_id and floor_id from the service scope', async () => {
+    const builder = createBuilder({ data: nodeRow, error: null });
+    const repo = createFloorRoutingRepo({ from: vi.fn(() => builder) } as never);
+
+    await repo.createNode(ids.tenant, ids.floor, { x: 1, y: 2, label: null });
+
+    expect(builder.calls).toContainEqual({
+      op: 'insert',
+      args: [
+        {
+          tenant_id: ids.tenant,
+          floor_id: ids.floor,
+          x: 1,
+          y: 2,
+          kind: 'walkway',
+          label: null
+        }
+      ]
+    });
+  });
+
+  it('updates a node by id, tenant_id, and floor_id', async () => {
+    const builder = createBuilder({ data: { ...nodeRow, label: 'Updated' }, error: null });
+    const repo = createFloorRoutingRepo({ from: vi.fn(() => builder) } as never);
+
+    await repo.patchNode(ids.tenant, ids.floor, ids.startNode, { label: 'Updated' });
+
+    expect(builder.calls).toContainEqual({ op: 'update', args: [{ label: 'Updated' }] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['id', ids.startNode] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+  });
+
+  it('deletes a node by id, tenant_id, and floor_id', async () => {
+    const builder = createBuilder({ data: { id: ids.startNode }, error: null });
+    const repo = createFloorRoutingRepo({ from: vi.fn(() => builder) } as never);
+
+    await expect(repo.deleteNode(ids.tenant, ids.floor, ids.startNode)).resolves.toBe(true);
+
+    expect(builder.calls).toContainEqual({ op: 'delete', args: [] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['id', ids.startNode] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+  });
+
+  it('inserts an edge with tenant_id, floor_id, reverse_cost, and points', async () => {
+    const builder = createBuilder({ data: edgeRow, error: null });
+    const repo = createFloorRoutingRepo({ from: vi.fn(() => builder) } as never);
+
+    await repo.createEdge(ids.tenant, ids.floor, {
+      sourceNodeId: ids.startNode,
+      targetNodeId: ids.endNode,
+      cost: 4,
+      reverseCost: -1,
+      points: [{ x: 0, y: 0 }, { x: 4, y: 0 }]
+    });
+
+    expect(builder.calls).toContainEqual({
+      op: 'insert',
+      args: [
+        {
+          tenant_id: ids.tenant,
+          floor_id: ids.floor,
+          source_node_id: ids.startNode,
+          target_node_id: ids.endNode,
+          cost: 4,
+          reverse_cost: -1,
+          points: [{ x: 0, y: 0 }, { x: 4, y: 0 }]
+        }
+      ]
+    });
+  });
+
+  it('updates an edge by id, tenant_id, and floor_id while preserving reverse_cost and points', async () => {
+    const builder = createBuilder({ data: { ...edgeRow, reverse_cost: 2 }, error: null });
+    const repo = createFloorRoutingRepo({ from: vi.fn(() => builder) } as never);
+
+    await repo.patchEdge(ids.tenant, ids.floor, ids.edge, {
+      reverseCost: 2,
+      points: [{ x: 1, y: 1 }]
+    });
+
+    expect(builder.calls).toContainEqual({
+      op: 'update',
+      args: [
+        {
+          reverse_cost: 2,
+          points: [{ x: 1, y: 1 }]
+        }
+      ]
+    });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['id', ids.edge] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+  });
+
+  it('deletes an edge by id, tenant_id, and floor_id', async () => {
+    const builder = createBuilder({ data: { id: ids.edge }, error: null });
+    const repo = createFloorRoutingRepo({ from: vi.fn(() => builder) } as never);
+
+    await expect(repo.deleteEdge(ids.tenant, ids.floor, ids.edge)).resolves.toBe(true);
+
+    expect(builder.calls).toContainEqual({ op: 'delete', args: [] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['id', ids.edge] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+  });
+
   it('scopes node lookup by tenant_id and floor_id', async () => {
-    const { supabase, calls } = createQuerySupabase([{ id: ids.startNode }]);
+    const builder = createBuilder({ data: [{ id: ids.startNode }], error: null });
+    const supabase = {
+      from: vi.fn(() => builder)
+    };
     const repo = createFloorRoutingRepo(supabase as never);
 
     await expect(
@@ -53,10 +253,10 @@ describe('floor routing repo', () => {
     ).resolves.toEqual([ids.startNode]);
 
     expect(supabase.from).toHaveBeenCalledWith('floor_route_nodes');
-    expect(calls).toContainEqual({ op: 'select', args: ['id'] });
-    expect(calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
-    expect(calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
-    expect(calls).toContainEqual({ op: 'in', args: ['id', [ids.startNode, ids.endNode]] });
+    expect(builder.calls).toContainEqual({ op: 'select', args: ['id'] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['tenant_id', ids.tenant] });
+    expect(builder.calls).toContainEqual({ op: 'eq', args: ['floor_id', ids.floor] });
+    expect(builder.calls).toContainEqual({ op: 'in', args: ['id', [ids.startNode, ids.endNode]] });
   });
 
   it('calls shortest path RPC with exact p_* args and parses rows', async () => {
