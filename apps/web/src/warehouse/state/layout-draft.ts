@@ -4,7 +4,9 @@ import {
   useDraftPersistenceStatus,
   useInitializeDraft,
   useLastDraftSaveErrorMessage,
+  useLayoutEditMode,
   useLayoutDraftState,
+  useLayoutReadOnlyReason,
   useMarkDraftSaveConflict,
   useMarkDraftSaveError,
   useMarkDraftSaved,
@@ -14,6 +16,8 @@ import {
 import { useEditorStore } from '@/warehouse/editor/model/editor-store';
 
 export const useWarehouseLayoutDraft = useLayoutDraftState;
+export const useWarehouseLayoutEditMode = useLayoutEditMode;
+export const useWarehouseLayoutReadOnlyReason = useLayoutReadOnlyReason;
 export const useWarehouseDraftStatus = useDraftPersistenceStatus;
 export const useIsWarehouseDraftDirty = useDraftDirtyState;
 export const useLastWarehouseDraftSaveError = useLastDraftSaveErrorMessage;

@@ -9,6 +9,7 @@ import {
   useDuplicateRack,
   useIsLayoutEditable,
   useObjectWorkContext,
+  useRackReadOnlyReason,
   useRotateRack,
   useSelectedRackId,
   useSetObjectWorkContext,
@@ -406,6 +407,7 @@ export function RackInspector({
   const rack = layoutDraft && selectedRackId ? layoutDraft.racks[selectedRackId] : null;
   const faceA = rack?.faces.find((f) => f.side === 'A') ?? null;
   const faceB = rack?.faces.find((f) => f.side === 'B') ?? null;
+  const rackReadOnlyReason = useRackReadOnlyReason(rack);
 
   const rackCells = useMemo(() => {
     if (!layoutDraft || !rack) return [];
@@ -440,7 +442,7 @@ export function RackInspector({
   if (!rack) return null;
 
   const isRackLocked = rack.isLocked === true;
-  const isRackReadOnly = !isLayoutEditable || isRackLocked;
+  const isRackReadOnly = rackReadOnlyReason !== null;
 
   const renderTaskBody = () => {
     if (!showTaskNav) {

@@ -1,3 +1,4 @@
+import type { Rack } from '@wos/domain';
 import { useEditorStore } from './editor-store';
 import { useCameraStore } from './camera-store';
 import { useModeStore } from './mode-store';
@@ -11,6 +12,13 @@ import {
   type InteractionScope,
   type RackSelectionFocus
 } from './editor-types';
+import {
+  isLayoutEditModeEditable,
+  resolveLayoutEditMode,
+  resolveLayoutReadOnlyReason,
+  resolveRackReadOnlyReason
+} from './layout-edit-mode';
+import type { LayoutEditMode, LayoutReadOnlyReason, RackReadOnlyReason } from './layout-edit-mode';
 
 // Stable empty fallbacks — must live outside selectors so the reference never changes
 // between renders. Returning a new literal (e.g. `[] as string[]`) inside a Zustand
@@ -70,11 +78,20 @@ export const useSetHighlightedCellIds = () => useInteractionStore((state) => sta
 export const useClearHighlightedCellIds = () => useInteractionStore((state) => state.clearHighlightedCellIds);
 export const useCanvasZoom = () => useCameraStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
-export const useIsLayoutEditable = () => {
+export const useLayoutEditMode = (): LayoutEditMode => {
   const viewMode = useModeStore((state) => state.viewMode);
-  const draftState = useEditorStore((state) => state.draft?.state);
-  return viewMode === 'layout' && draftState === 'draft';
+  const draft = useEditorStore((state) => state.draft);
+  return resolveLayoutEditMode({ viewMode, draft });
 };
+export const useLayoutReadOnlyReason = (): LayoutReadOnlyReason | null =>
+  resolveLayoutReadOnlyReason(useLayoutEditMode());
+export const useRackReadOnlyReason = (
+  rack: Pick<Rack, 'isLocked'> | null | undefined
+): RackReadOnlyReason | null => {
+  const layoutEditMode = useLayoutEditMode();
+  return resolveRackReadOnlyReason({ layoutEditMode, rack });
+};
+export const useIsLayoutEditable = () => isLayoutEditModeEditable(useLayoutEditMode());
 export const useDraftDirtyState = () => useEditorStore((state) => state.isDraftDirty);
 export const useDraftPersistenceStatus = () => useEditorStore((state) => state.persistenceStatus);
 export const useLastDraftSaveErrorMessage = () => useEditorStore((state) => state.lastSaveErrorMessage);
