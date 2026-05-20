@@ -1,12 +1,21 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getWarehouseViewModeSnapshot,
   warehouseViewModeActions
 } from '@/warehouse/state/view-mode';
 import { translate } from '@/shared/i18n';
 import { ViewModeSwitcher } from './view-mode-switcher';
+
+const routingToolsAccessMock = vi.hoisted(() => ({
+  canAccessRoutingTools: false
+}));
+
+vi.mock('@/app/auth/routing-tools-access', () => ({
+  useCanAccessRoutingTools: () =>
+    routingToolsAccessMock.canAccessRoutingTools
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -31,6 +40,7 @@ function collectText(
 
 describe('ViewModeSwitcher view stages', () => {
   beforeEach(() => {
+    routingToolsAccessMock.canAccessRoutingTools = false;
     warehouseViewModeActions.reset();
   });
 
@@ -42,15 +52,17 @@ describe('ViewModeSwitcher view stages', () => {
     });
   });
 
-  it('renders picking plan as a View-only substage without old direct planning actions', () => {
+  it('renders only primary View substages for operators', () => {
     act(() => {
       renderer = TestRenderer.create(createElement(ViewModeSwitcher));
     });
 
+    const mapLabel = translate('warehouse.view.stage.map');
     const pickingPlanLabel = translate('warehouse.view.stage.pickingPlan');
     const routeGraphLabel = translate('warehouse.view.stage.routeGraph');
     const obstacleRouteLabel = translate('warehouse.view.stage.obstacleRoute');
     let text = collectText(renderer!.toJSON());
+    expect(text).not.toContain(mapLabel);
     expect(text).not.toContain(pickingPlanLabel);
     expect(text).not.toContain(routeGraphLabel);
     expect(text).not.toContain(obstacleRouteLabel);
@@ -62,11 +74,30 @@ describe('ViewModeSwitcher view stages', () => {
     });
 
     text = collectText(renderer!.toJSON());
+    expect(text).toContain(mapLabel);
     expect(text).toContain(pickingPlanLabel);
-    expect(text).toContain(routeGraphLabel);
-    expect(text).toContain(obstacleRouteLabel);
+    expect(text).not.toContain(routeGraphLabel);
+    expect(text).not.toContain(obstacleRouteLabel);
     expect(text).not.toContain('Plan picking');
     expect(text).not.toContain('Plan wave');
+  });
+
+  it('renders routing tool substages for admins and dev-capable users', () => {
+    routingToolsAccessMock.canAccessRoutingTools = true;
+
+    act(() => {
+      warehouseViewModeActions.setViewMode('view');
+    });
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(ViewModeSwitcher));
+    });
+
+    const text = collectText(renderer!.toJSON());
+    expect(text).toContain(translate('warehouse.view.stage.map'));
+    expect(text).toContain(translate('warehouse.view.stage.pickingPlan'));
+    expect(text).toContain(translate('warehouse.view.stage.routeGraph'));
+    expect(text).toContain(translate('warehouse.view.stage.obstacleRoute'));
   });
 
   it('updates the active View stage without changing the top-level mode', () => {
@@ -93,7 +124,9 @@ describe('ViewModeSwitcher view stages', () => {
     expect(getWarehouseViewModeSnapshot().viewStage).toBe('picking-plan');
   });
 
-  it('renders Route graph and activates route-graph', () => {
+  it('renders Route graph editor and activates route-graph', () => {
+    routingToolsAccessMock.canAccessRoutingTools = true;
+
     act(() => {
       warehouseViewModeActions.reset();
       warehouseViewModeActions.setViewMode('view');
@@ -117,7 +150,9 @@ describe('ViewModeSwitcher view stages', () => {
     expect(getWarehouseViewModeSnapshot().viewStage).toBe('route-graph');
   });
 
-  it('renders Obstacle route and activates obstacle-route', () => {
+  it('renders Obstacle route test and activates obstacle-route', () => {
+    routingToolsAccessMock.canAccessRoutingTools = true;
+
     act(() => {
       warehouseViewModeActions.reset();
       warehouseViewModeActions.setViewMode('view');
@@ -139,6 +174,21 @@ describe('ViewModeSwitcher view stages', () => {
 
     expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
     expect(getWarehouseViewModeSnapshot().viewStage).toBe('obstacle-route');
+  });
+
+  it('resets a hidden routing tool stage to map', () => {
+    act(() => {
+      warehouseViewModeActions.reset();
+      warehouseViewModeActions.setViewMode('view');
+      warehouseViewModeActions.setViewStage('route-graph');
+    });
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(ViewModeSwitcher));
+    });
+
+    expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
+    expect(getWarehouseViewModeSnapshot().viewStage).toBe('map');
   });
 
   it('resets View stage to map when switching away from View mode', () => {

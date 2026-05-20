@@ -1,4 +1,6 @@
+import { useEffect, useMemo } from 'react';
 import { GitBranch, Map, Route, Waypoints } from 'lucide-react';
+import { useCanAccessRoutingTools } from '@/app/auth/routing-tools-access';
 import {
   useSetWarehouseViewStage,
   useWarehouseViewStage,
@@ -8,6 +10,7 @@ import { useT } from '@/shared/i18n';
 
 const VIEW_STAGES: Array<{
   id: WarehouseViewStage;
+  isRoutingTool?: boolean;
   labelKey:
     | 'warehouse.view.stage.map'
     | 'warehouse.view.stage.pickingPlan'
@@ -17,11 +20,17 @@ const VIEW_STAGES: Array<{
 }> = [
   { id: 'map', labelKey: 'warehouse.view.stage.map', icon: Map },
   { id: 'picking-plan', labelKey: 'warehouse.view.stage.pickingPlan', icon: Route },
-  { id: 'route-graph', labelKey: 'warehouse.view.stage.routeGraph', icon: GitBranch },
+  {
+    id: 'route-graph',
+    labelKey: 'warehouse.view.stage.routeGraph',
+    icon: GitBranch,
+    isRoutingTool: true
+  },
   {
     id: 'obstacle-route',
     labelKey: 'warehouse.view.stage.obstacleRoute',
-    icon: Waypoints
+    icon: Waypoints,
+    isRoutingTool: true
   }
 ];
 
@@ -29,6 +38,19 @@ export function ViewStageSwitcher() {
   const t = useT();
   const viewStage = useWarehouseViewStage();
   const setViewStage = useSetWarehouseViewStage();
+  const canAccessRoutingTools = useCanAccessRoutingTools();
+  const visibleStages = useMemo(
+    () =>
+      VIEW_STAGES.filter(
+        (stage) => !stage.isRoutingTool || canAccessRoutingTools
+      ),
+    [canAccessRoutingTools]
+  );
+
+  useEffect(() => {
+    if (visibleStages.some((stage) => stage.id === viewStage)) return;
+    setViewStage('map');
+  }, [setViewStage, viewStage, visibleStages]);
 
   return (
     <div
@@ -38,7 +60,7 @@ export function ViewStageSwitcher() {
         border: '1px solid var(--border-muted)'
       }}
     >
-      {VIEW_STAGES.map((stage) => {
+      {visibleStages.map((stage) => {
         const Icon = stage.icon;
         const isActive = viewStage === stage.id;
 

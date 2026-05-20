@@ -5,6 +5,7 @@ type FrontendEnvSource = {
   readonly VITE_SUPABASE_ANON_KEY?: string;
   readonly VITE_BFF_URL?: string;
   readonly VITE_ENABLE_DEV_AUTO_LOGIN?: string;
+  readonly VITE_ENABLE_ROUTING_TOOLS?: string;
   readonly VITE_DEV_AUTH_EMAIL?: string;
   readonly VITE_DEV_AUTH_PASSWORD?: string;
 };
@@ -22,6 +23,7 @@ export function resolveFrontendEnv(source: FrontendEnvSource) {
   const isDev = source.DEV === true;
   const isProd = source.PROD === true;
   const enableDevAutoLoginFlag = source.VITE_ENABLE_DEV_AUTO_LOGIN === 'true';
+  const enableRoutingToolsFlag = source.VITE_ENABLE_ROUTING_TOOLS === 'true';
 
   if (isProd && enableDevAutoLoginFlag) {
     throw new Error('VITE_ENABLE_DEV_AUTO_LOGIN cannot be true in production.');
@@ -32,6 +34,7 @@ export function resolveFrontendEnv(source: FrontendEnvSource) {
     supabaseAnonKey: requiredFrontendEnv(source, 'VITE_SUPABASE_ANON_KEY'),
     bffUrl: source.VITE_BFF_URL ?? '/api',
     enableDevAutoLogin: isDev && enableDevAutoLoginFlag,
+    enableRoutingTools: enableRoutingToolsFlag,
     devAuthEmail: isDev ? (source.VITE_DEV_AUTH_EMAIL ?? 'admin@wos.local') : '',
     devAuthPassword: isDev ? (source.VITE_DEV_AUTH_PASSWORD ?? 'warehouse123') : ''
   };
