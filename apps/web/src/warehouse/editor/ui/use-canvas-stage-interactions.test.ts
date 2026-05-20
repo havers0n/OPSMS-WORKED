@@ -47,7 +47,9 @@ function renderHookHarness(params: {
   createFreeWall?: (x1: number, y1: number, x2: number, y2: number) => boolean;
   isDrawingWall?: boolean;
   isLayoutMode?: boolean;
+  isObstacleRouteMode?: boolean;
   isRouteGraphMode?: boolean;
+  onObstacleRouteEmptyCanvasClick?: (point: { x: number; y: number }) => void;
   onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
 }) {
   const stageMock = createStageMock();
@@ -66,12 +68,14 @@ function renderHookHarness(params: {
       isDrawingWall: params.isDrawingWall ?? false,
       isDrawingZone: false,
       isLayoutMode: params.isLayoutMode ?? false,
+      isObstacleRouteMode: params.isObstacleRouteMode ?? false,
       isPlacing: false,
       isRouteGraphMode: params.isRouteGraphMode ?? false,
       layoutDraft: null,
       setSelectedRackIds: () => undefined,
       stageRef,
       viewport: { width: 1000, height: 800 },
+      onObstacleRouteEmptyCanvasClick: params.onObstacleRouteEmptyCanvasClick,
       onRouteGraphEmptyCanvasClick: params.onRouteGraphEmptyCanvasClick
     });
     return null;
@@ -155,6 +159,56 @@ describe('useCanvasStageInteractions empty canvas clicks', () => {
     expect(clearHighlightedCellIds).not.toHaveBeenCalled();
   });
 
+  it('routes empty canvas clicks to obstacle route planning with world coordinates', () => {
+    const clearSelection = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+    const cancelPlacementInteraction = vi.fn();
+    const onObstacleRouteEmptyCanvasClick = vi.fn();
+
+    const { stageMock } = renderHookHarness({
+      interactionScope: 'object',
+      clearSelection,
+      clearHighlightedCellIds,
+      cancelPlacementInteraction,
+      isObstacleRouteMode: true,
+      onObstacleRouteEmptyCanvasClick
+    });
+
+    act(() => {
+      stageMock.trigger('click.canvas');
+    });
+
+    expect(onObstacleRouteEmptyCanvasClick).toHaveBeenCalledWith({
+      x: 0.25,
+      y: 0.5
+    });
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(clearHighlightedCellIds).not.toHaveBeenCalled();
+  });
+
+  it('keeps route graph empty clicks isolated from obstacle route behavior', () => {
+    const onObstacleRouteEmptyCanvasClick = vi.fn();
+    const onRouteGraphEmptyCanvasClick = vi.fn();
+
+    const { stageMock } = renderHookHarness({
+      interactionScope: 'object',
+      clearSelection: vi.fn(),
+      clearHighlightedCellIds: vi.fn(),
+      cancelPlacementInteraction: vi.fn(),
+      isObstacleRouteMode: true,
+      isRouteGraphMode: true,
+      onObstacleRouteEmptyCanvasClick,
+      onRouteGraphEmptyCanvasClick
+    });
+
+    act(() => {
+      stageMock.trigger('click.canvas');
+    });
+
+    expect(onRouteGraphEmptyCanvasClick).toHaveBeenCalledTimes(1);
+    expect(onObstacleRouteEmptyCanvasClick).not.toHaveBeenCalled();
+  });
+
   it('uses transform-aware relative pointer coordinates for route graph empty clicks', () => {
     const clearSelection = vi.fn();
     const clearHighlightedCellIds = vi.fn();
@@ -175,6 +229,7 @@ describe('useCanvasStageInteractions empty canvas clicks', () => {
         isDrawingWall: false,
         isDrawingZone: false,
         isLayoutMode: false,
+        isObstacleRouteMode: false,
         isPlacing: false,
         isRouteGraphMode: true,
         layoutDraft: null,

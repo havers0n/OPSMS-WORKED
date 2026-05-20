@@ -1,4 +1,4 @@
-import { GitBranch, Map, Route } from 'lucide-react';
+import { GitBranch, Map, Route, Waypoints } from 'lucide-react';
 import {
   useSetWarehouseViewStage,
   useWarehouseViewStage,
@@ -11,12 +11,18 @@ const VIEW_STAGES: Array<{
   labelKey:
     | 'warehouse.view.stage.map'
     | 'warehouse.view.stage.pickingPlan'
-    | 'warehouse.view.stage.routeGraph';
+    | 'warehouse.view.stage.routeGraph'
+    | 'warehouse.view.stage.obstacleRoute';
   icon: typeof Map;
 }> = [
   { id: 'map', labelKey: 'warehouse.view.stage.map', icon: Map },
   { id: 'picking-plan', labelKey: 'warehouse.view.stage.pickingPlan', icon: Route },
-  { id: 'route-graph', labelKey: 'warehouse.view.stage.routeGraph', icon: GitBranch }
+  { id: 'route-graph', labelKey: 'warehouse.view.stage.routeGraph', icon: GitBranch },
+  {
+    id: 'obstacle-route',
+    labelKey: 'warehouse.view.stage.obstacleRoute',
+    icon: Waypoints
+  }
 ];
 
 export function ViewStageSwitcher() {

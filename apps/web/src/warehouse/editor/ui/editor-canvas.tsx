@@ -81,6 +81,13 @@ import {
   resolveRouteStepAnchors
 } from '@/features/picking-planning-canvas/model/route-step-geometry';
 import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
+import { buildRouteObstaclesFromLayout } from '@/features/obstacle-route-planning/model/obstacle-builders';
+import { solveGridRoute } from '@/features/obstacle-route-planning/model/grid-route-solver';
+import type {
+  RoutePoint,
+  RouteSolveResult
+} from '@/features/obstacle-route-planning/model/obstacle-types';
+import { ObstacleRouteLayer } from '@/features/obstacle-route-planning/ui/obstacle-route-layer';
 import {
   useClearRouteGraphInteraction,
   useRouteGraphSelectedElement
@@ -243,6 +250,7 @@ export function EditorCanvas({
   const shouldShowPickingPlanningOverlay =
     isViewMode && viewStage === 'picking-plan' && !isDraftFallback;
   const isRouteGraphStage = isViewMode && viewStage === 'route-graph';
+  const isObstacleRouteStage = isViewMode && viewStage === 'obstacle-route';
   const routeGraphFloorId = workspace?.floorId ?? null;
   const selectedRouteGraphElement = useRouteGraphSelectedElement();
   const clearRouteGraphInteraction = useClearRouteGraphInteraction();
@@ -253,6 +261,17 @@ export function EditorCanvas({
     const layout = placementLayout ?? layoutDraft;
     return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
   }, [placementLayout, layoutDraft]);
+  const obstacleRouteLayout = placementLayout ?? layoutDraft;
+  const obstacleRouteObstacles = useMemo(
+    () => buildRouteObstaclesFromLayout(obstacleRouteLayout),
+    [obstacleRouteLayout]
+  );
+  const [obstacleRouteStart, setObstacleRouteStart] =
+    useState<RoutePoint | null>(null);
+  const [obstacleRouteEnd, setObstacleRouteEnd] =
+    useState<RoutePoint | null>(null);
+  const [obstacleRouteResult, setObstacleRouteResult] =
+    useState<RouteSolveResult | null>(null);
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const [isMobileNavigateMode, setIsMobileNavigateMode] = useState(true);
@@ -810,6 +829,62 @@ export function EditorCanvas({
     },
     [createRouteNodeMutation, routeGraphFloorId]
   );
+  const solveObstacleRoute = useCallback(
+    (start: RoutePoint, end: RoutePoint) =>
+      solveGridRoute(start, end, obstacleRouteObstacles),
+    [obstacleRouteObstacles]
+  );
+  const roundObstacleRoutePoint = useCallback((point: RoutePoint) => ({
+    x: Math.round(point.x * 10) / 10,
+    y: Math.round(point.y * 10) / 10
+  }), []);
+  const handleObstacleRouteEmptyCanvasClick = useCallback(
+    (point: RoutePoint) => {
+      const nextPoint = roundObstacleRoutePoint(point);
+
+      if (obstacleRouteStart === null || obstacleRouteEnd !== null) {
+        setObstacleRouteStart(nextPoint);
+        setObstacleRouteEnd(null);
+        setObstacleRouteResult(null);
+        return;
+      }
+
+      setObstacleRouteEnd(nextPoint);
+      setObstacleRouteResult(solveObstacleRoute(obstacleRouteStart, nextPoint));
+    },
+    [
+      obstacleRouteEnd,
+      obstacleRouteStart,
+      roundObstacleRoutePoint,
+      solveObstacleRoute
+    ]
+  );
+  const handleObstacleRouteStartDragEnd = useCallback(
+    (point: RoutePoint) => {
+      const nextPoint = roundObstacleRoutePoint(point);
+      setObstacleRouteStart(nextPoint);
+      setObstacleRouteResult(
+        obstacleRouteEnd ? solveObstacleRoute(nextPoint, obstacleRouteEnd) : null
+      );
+    },
+    [obstacleRouteEnd, roundObstacleRoutePoint, solveObstacleRoute]
+  );
+  const handleObstacleRouteEndDragEnd = useCallback(
+    (point: RoutePoint) => {
+      const nextPoint = roundObstacleRoutePoint(point);
+      setObstacleRouteEnd(nextPoint);
+      setObstacleRouteResult(
+        obstacleRouteStart ? solveObstacleRoute(obstacleRouteStart, nextPoint) : null
+      );
+    },
+    [obstacleRouteStart, roundObstacleRoutePoint, solveObstacleRoute]
+  );
+  useEffect(() => {
+    if (!obstacleRouteStart || !obstacleRouteEnd) return;
+    setObstacleRouteResult(
+      solveObstacleRoute(obstacleRouteStart, obstacleRouteEnd)
+    );
+  }, [obstacleRouteEnd, obstacleRouteStart, solveObstacleRoute]);
   const deleteRouteGraphNodeRef = useRef<(id: string) => void>(() => undefined);
   deleteRouteGraphNodeRef.current = (nodeId: string) => {
     if (!routeGraphFloorId) return;
@@ -841,12 +916,16 @@ export function EditorCanvas({
     isDrawingWall,
     isDrawingZone,
     isLayoutMode,
+    isObstacleRouteMode: isObstacleRouteStage,
     isPlacing,
     isRouteGraphMode: isRouteGraphStage,
     layoutDraft,
     setSelectedRackIds,
     stageRef,
     viewport,
+    onObstacleRouteEmptyCanvasClick: isObstacleRouteStage
+      ? handleObstacleRouteEmptyCanvasClick
+      : undefined,
     onRouteGraphEmptyCanvasClick: isRouteGraphStage
       ? handleRouteGraphEmptyCanvasClick
       : undefined,
@@ -1230,6 +1309,16 @@ export function EditorCanvas({
 
               {isRouteGraphStage && routeGraphFloorId && (
                 <RouteGraphLayer floorId={routeGraphFloorId} />
+              )}
+
+              {isObstacleRouteStage && (
+                <ObstacleRouteLayer
+                  start={obstacleRouteStart}
+                  end={obstacleRouteEnd}
+                  result={obstacleRouteResult}
+                  onStartDragEnd={handleObstacleRouteStartDragEnd}
+                  onEndDragEnd={handleObstacleRouteEndDragEnd}
+                />
               )}
 
               <Layer name="overlay-layer" listening={false}>
