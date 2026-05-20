@@ -12,10 +12,13 @@ import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
 
 type ClickHandler = () => void;
 
-function createStageMock() {
+function createStageMock(
+  relativePointerPosition: { x: number; y: number } = { x: 10, y: 20 }
+) {
   const handlers = new Map<string, ClickHandler>();
   const stage = {
-    getRelativePointerPosition: vi.fn(() => ({ x: 10, y: 20 })),
+    getPointerPosition: vi.fn(() => ({ x: 410, y: 620 })),
+    getRelativePointerPosition: vi.fn(() => relativePointerPosition),
     on: vi.fn((eventName: string, handler: ClickHandler) => {
       handlers.set(eventName, handler);
     }),
@@ -142,5 +145,51 @@ describe('useCanvasStageInteractions empty canvas clicks', () => {
     });
     expect(clearSelection).not.toHaveBeenCalled();
     expect(clearHighlightedCellIds).not.toHaveBeenCalled();
+  });
+
+  it('uses transform-aware relative pointer coordinates for route graph empty clicks', () => {
+    const clearSelection = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+    const cancelPlacementInteraction = vi.fn();
+    const onRouteGraphEmptyCanvasClick = vi.fn();
+    const stageMock = createStageMock({ x: 240, y: 320 });
+
+    function Harness() {
+      const stageRef = useRef<Konva.Stage | null>(stageMock.stage);
+      useCanvasStageInteractions({
+        cancelPlacementInteraction,
+        clearHighlightedCellIds,
+        clearSelection,
+        createRack: () => undefined,
+        createZone: () => undefined,
+        createFreeWall: () => undefined,
+        interactionScope: 'object',
+        isDrawingWall: false,
+        isDrawingZone: false,
+        isLayoutMode: false,
+        isPlacing: false,
+        isRouteGraphMode: true,
+        layoutDraft: null,
+        setSelectedRackIds: () => undefined,
+        stageRef,
+        viewport: { width: 1000, height: 800 },
+        onRouteGraphEmptyCanvasClick
+      });
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(createElement(Harness));
+    });
+    act(() => {
+      stageMock.trigger('click.canvas');
+    });
+
+    expect(stageMock.stage.getRelativePointerPosition).toHaveBeenCalledTimes(1);
+    expect(stageMock.stage.getPointerPosition).not.toHaveBeenCalled();
+    expect(onRouteGraphEmptyCanvasClick).toHaveBeenCalledWith({
+      x: 6,
+      y: 8
+    });
   });
 });

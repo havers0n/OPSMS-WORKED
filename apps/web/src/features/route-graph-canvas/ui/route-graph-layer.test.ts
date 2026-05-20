@@ -130,6 +130,83 @@ describe('RouteGraphLayer', () => {
     ]);
   });
 
+  it('renders normal edge endpoints from current node positions instead of stale edge points', () => {
+    graph = {
+      ...graph,
+      edges: [
+        {
+          ...graph.edges[0]!,
+          points: [
+            { x: 100, y: 100 },
+            { x: 200, y: 200 }
+          ]
+        }
+      ]
+    };
+
+    const renderer = renderLayer();
+
+    expect(findHostByTestId(renderer, 'route-graph-edge-edge-1').props.points).toEqual([
+      40,
+      80,
+      160,
+      240
+    ]);
+  });
+
+  it('keeps custom intermediate edge points while using current node endpoints', () => {
+    graph = {
+      ...graph,
+      edges: [
+        {
+          ...graph.edges[0]!,
+          points: [
+            { x: 100, y: 100 },
+            { x: 2, y: 3 },
+            { x: 200, y: 200 }
+          ]
+        }
+      ]
+    };
+
+    const renderer = renderLayer();
+
+    expect(findHostByTestId(renderer, 'route-graph-edge-edge-1').props.points).toEqual([
+      40,
+      80,
+      80,
+      120,
+      160,
+      240
+    ]);
+  });
+
+  it('updates connected edges from live node positions during drag', () => {
+    const renderer = renderLayer();
+    const nodeA = findHostByTestId(renderer, 'route-graph-node-node-a');
+
+    act(() => {
+      nodeA.props.onDragMove({
+        cancelBubble: false,
+        target: {
+          x: () => 200,
+          y: () => 280
+        }
+      });
+    });
+
+    expect(findHostByTestId(renderer, 'route-graph-node-node-a').props).toMatchObject({
+      x: 200,
+      y: 280
+    });
+    expect(findHostByTestId(renderer, 'route-graph-edge-edge-1').props.points).toEqual([
+      200,
+      280,
+      160,
+      240
+    ]);
+  });
+
   it('creates an edge after clicking node A then node B', async () => {
     const renderer = renderLayer();
     const nodeA = findHostByTestId(renderer, 'route-graph-node-node-a');
@@ -170,7 +247,7 @@ describe('RouteGraphLayer', () => {
     expect(getRouteGraphCanvasSnapshot().pendingSourceNodeId).toBe('node-a');
   });
 
-  it('patches node x/y on drag end', async () => {
+  it('patches node x/y as world metre coordinates on drag end', async () => {
     const renderer = renderLayer();
     const nodeA = findHostByTestId(renderer, 'route-graph-node-node-a');
 
