@@ -1,4 +1,4 @@
-import { Map, Route } from 'lucide-react';
+import { GitBranch, Map, Route } from 'lucide-react';
 import {
   useSetWarehouseViewStage,
   useWarehouseViewStage,
@@ -8,11 +8,15 @@ import { useT } from '@/shared/i18n';
 
 const VIEW_STAGES: Array<{
   id: WarehouseViewStage;
-  labelKey: 'warehouse.view.stage.map' | 'warehouse.view.stage.pickingPlan';
+  labelKey:
+    | 'warehouse.view.stage.map'
+    | 'warehouse.view.stage.pickingPlan'
+    | 'warehouse.view.stage.routeGraph';
   icon: typeof Map;
 }> = [
   { id: 'map', labelKey: 'warehouse.view.stage.map', icon: Map },
-  { id: 'picking-plan', labelKey: 'warehouse.view.stage.pickingPlan', icon: Route }
+  { id: 'picking-plan', labelKey: 'warehouse.view.stage.pickingPlan', icon: Route },
+  { id: 'route-graph', labelKey: 'warehouse.view.stage.routeGraph', icon: GitBranch }
 ];
 
 export function ViewStageSwitcher() {
