@@ -42,4 +42,15 @@ describe('resolveFrontendEnv', () => {
       }).enableDevAutoLogin
     ).toBe(true);
   });
+
+  it('enables routing tools from an explicit flag', () => {
+    expect(
+      resolveFrontendEnv({
+        ...requiredEnv,
+        DEV: false,
+        PROD: true,
+        VITE_ENABLE_ROUTING_TOOLS: 'true'
+      }).enableRoutingTools
+    ).toBe(true);
+  });
 });
