@@ -8,6 +8,7 @@ import {
   getRackGeometry,
   WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
+import { MIN_WALL_LENGTH } from '@/warehouse/editor/model/editor-store-helpers';
 import { MIN_ZONE_SIZE } from './zone-layer';
 
 type MarqueeRect = {
@@ -30,7 +31,7 @@ type UseCanvasStageInteractionsParams = {
   clearSelection: () => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: CanvasRect) => void;
-  createFreeWall: (x1: number, y1: number, x2: number, y2: number) => void;
+  createFreeWall: (x1: number, y1: number, x2: number, y2: number) => boolean;
   interactionScope: InteractionScope;
   isDrawingWall: boolean;
   isDrawingZone: boolean;
@@ -240,13 +241,16 @@ export function useCanvasStageInteractions({
     if (draftWallStartRef.current) {
       const pos = stageRef.current?.getRelativePointerPosition();
       if (!pos) return;
-      const dx = pos.x - draftWallStartRef.current.x;
-      const dy = pos.y - draftWallStartRef.current.y;
-      if (!dragDidHappenRef.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      const worldX = pos.x / WORLD_SCALE;
+      const worldY = pos.y / WORLD_SCALE;
+      const dx = worldX - draftWallStartRef.current.x;
+      const dy = worldY - draftWallStartRef.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < MIN_WALL_LENGTH) return;
       dragDidHappenRef.current = true;
       // metres, snapped to 1 m grid
-      const snapX2 = Math.round(pos.x / WORLD_SCALE);
-      const snapY2 = Math.round(pos.y / WORLD_SCALE);
+      const snapX2 = Math.round(worldX);
+      const snapY2 = Math.round(worldY);
       const absDx = Math.abs(snapX2 - draftWallStartRef.current.x);
       const absDy = Math.abs(snapY2 - draftWallStartRef.current.y);
       const isHorizontal = absDx >= absDy;
