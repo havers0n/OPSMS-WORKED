@@ -37,6 +37,8 @@ function renderHookHarness(params: {
   clearSelection: () => void;
   clearHighlightedCellIds: () => void;
   cancelPlacementInteraction: () => void;
+  isRouteGraphMode?: boolean;
+  onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
 }) {
   const stageMock = createStageMock();
 
@@ -54,10 +56,12 @@ function renderHookHarness(params: {
       isDrawingZone: false,
       isLayoutMode: false,
       isPlacing: false,
+      isRouteGraphMode: params.isRouteGraphMode ?? false,
       layoutDraft: null,
       setSelectedRackIds: () => undefined,
       stageRef,
-      viewport: { width: 1000, height: 800 }
+      viewport: { width: 1000, height: 800 },
+      onRouteGraphEmptyCanvasClick: params.onRouteGraphEmptyCanvasClick
     });
     return null;
   }
@@ -111,5 +115,32 @@ describe('useCanvasStageInteractions empty canvas clicks', () => {
     expect(cancelPlacementInteraction).toHaveBeenCalledTimes(1);
     expect(clearHighlightedCellIds).toHaveBeenCalledTimes(1);
     expect(clearSelection).not.toHaveBeenCalled();
+  });
+
+  it('routes empty canvas clicks to route graph creation with world coordinates', () => {
+    const clearSelection = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+    const cancelPlacementInteraction = vi.fn();
+    const onRouteGraphEmptyCanvasClick = vi.fn();
+
+    const { stageMock } = renderHookHarness({
+      interactionScope: 'object',
+      clearSelection,
+      clearHighlightedCellIds,
+      cancelPlacementInteraction,
+      isRouteGraphMode: true,
+      onRouteGraphEmptyCanvasClick
+    });
+
+    act(() => {
+      stageMock.trigger('click.canvas');
+    });
+
+    expect(onRouteGraphEmptyCanvasClick).toHaveBeenCalledWith({
+      x: 0.25,
+      y: 0.5
+    });
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(clearHighlightedCellIds).not.toHaveBeenCalled();
   });
 });

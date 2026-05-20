@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, FloorWorkspace, LayoutDraft } from '@wos/domain';
 import type {
   EditorSelection,
-  ViewMode
+  ViewMode,
+  ViewStage
 } from '@/warehouse/editor/model/editor-types';
 import { resolvePanelMode } from './storage-inspector-v2/mode';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
@@ -15,6 +16,7 @@ const { mockIsRackInViewport } = vi.hoisted(() => ({
 }));
 
 let mockViewMode: ViewMode = 'storage';
+let mockViewStage: ViewStage = 'map';
 let mockSelection: EditorSelection = { type: 'none' };
 let mockSelectedRackId: string | null = null;
 let mockSelectedRackActiveLevel = 2;
@@ -91,7 +93,7 @@ vi.mock('@/warehouse/editor/model/editor-selectors', () => ({
   useUpdateZoneRect: () => () => undefined,
   useMinRackDistance: () => 0,
   useViewMode: () => mockViewMode,
-  useViewStage: () => 'map' as const
+  useViewStage: () => mockViewStage
 }));
 
 vi.mock('@/warehouse/editor/model/editor-store', () => ({
@@ -140,7 +142,7 @@ vi.mock('./rack-layer', () => ({
 }));
 
 vi.mock('./shapes/selection-overlay-layer', () => ({
-  CellStateOverlayLayer: (props: Record<string, unknown>) => {
+  SelectionOverlayLayer: (props: Record<string, unknown>) => {
     cellStateOverlayLastProps = props;
     return createElement('CellStateOverlayLayer', props);
   }
@@ -163,6 +165,22 @@ vi.mock('./wall-layer', () => ({
 
 vi.mock('./zone-layer', () => ({
   ZoneLayer: () => null
+}));
+
+vi.mock('@/features/route-graph-canvas/model/route-graph-canvas-store', () => ({
+  useRouteGraphSelectedElement: () => null,
+  useClearRouteGraphInteraction: () => () => undefined
+}));
+
+vi.mock('@/entities/route-graph/api/mutations', () => ({
+  useCreateRouteNode: () => ({ mutate: vi.fn() }),
+  useDeleteRouteEdge: () => ({ mutate: vi.fn() }),
+  useDeleteRouteNode: () => ({ mutate: vi.fn() })
+}));
+
+vi.mock('@/features/route-graph-canvas/ui/route-graph-layer', () => ({
+  RouteGraphLayer: (props: Record<string, unknown>) =>
+    createElement('RouteGraphLayer', props)
 }));
 
 vi.mock('./use-canvas-keyboard-shortcuts', () => ({
@@ -308,6 +326,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockHandleZoom = vi.fn();
     mockHandleWheelZoom = vi.fn();
     mockSelectedRackId = null;
+    mockViewStage = 'map';
     mockSelection = { type: 'none' };
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
@@ -412,6 +431,68 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(rackLayerLastProps?.primarySelectedRackId).toBe(rackId);
+  });
+
+  it('mounts RouteGraphLayer only for View Route graph stage', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockViewStage = 'map';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RouteGraphLayer')
+    ).toHaveLength(0);
+
+    act(() => {
+      mockViewStage = 'route-graph';
+      renderer.update(
+        createElement(EditorCanvas, {
+          workspace: {
+            floorId: draft.floorId,
+            activeDraft: draft,
+            latestPublished: draft
+          },
+          onAddRack: () => undefined,
+          onOpenInspector: () => undefined
+        })
+      );
+    });
+
+    const routeGraphLayers = renderer.root.findAll(
+      (node) => String(node.type) === 'RouteGraphLayer'
+    );
+    expect(routeGraphLayers).toHaveLength(1);
+    expect(routeGraphLayers[0]?.props.floorId).toBe(draft.floorId);
+    expect(rackLayerLastProps).not.toHaveProperty('selectedRouteGraphElement');
+    expect(rackLayerLastProps).not.toHaveProperty('pendingSourceNodeId');
+    expect(rackLayerLastProps).not.toHaveProperty('routeGraph');
+
+    act(() => {
+      mockViewMode = 'storage';
+      renderer.update(
+        createElement(EditorCanvas, {
+          workspace: {
+            floorId: draft.floorId,
+            activeDraft: draft,
+            latestPublished: draft
+          },
+          onAddRack: () => undefined,
+          onOpenInspector: () => undefined
+        })
+      );
+    });
+
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'RouteGraphLayer')
+    ).toHaveLength(0);
   });
 
   it('preserves current contract: storage unresolved selected cell does not produce primarySelectedRackId', () => {

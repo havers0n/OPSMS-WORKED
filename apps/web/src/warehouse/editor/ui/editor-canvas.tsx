@@ -66,6 +66,11 @@ import {
   MAJOR_GRID_SIZE,
   MINOR_GRID_ZOOM_THRESHOLD
 } from '@/entities/layout-version/lib/canvas-geometry';
+import {
+  useCreateRouteNode,
+  useDeleteRouteEdge,
+  useDeleteRouteNode
+} from '@/entities/route-graph/api/mutations';
 import { usePickingPlanningOverlayStore } from '@/entities/picking-planning/model/overlay-store';
 import {
   deriveDisplayedRouteSteps,
@@ -76,6 +81,11 @@ import {
   resolveRouteStepAnchors
 } from '@/features/picking-planning-canvas/model/route-step-geometry';
 import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
+import {
+  useClearRouteGraphInteraction,
+  useRouteGraphSelectedElement
+} from '@/features/route-graph-canvas/model/route-graph-canvas-store';
+import { RouteGraphLayer } from '@/features/route-graph-canvas/ui/route-graph-layer';
 import { useWorkspaceLayout } from '../lib/use-workspace-layout';
 import { CanvasHud } from './canvas-hud';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
@@ -232,6 +242,13 @@ export function EditorCanvas({
     workspace?.latestPublished == null;
   const shouldShowPickingPlanningOverlay =
     isViewMode && viewStage === 'picking-plan' && !isDraftFallback;
+  const isRouteGraphStage = isViewMode && viewStage === 'route-graph';
+  const routeGraphFloorId = workspace?.floorId ?? null;
+  const selectedRouteGraphElement = useRouteGraphSelectedElement();
+  const clearRouteGraphInteraction = useClearRouteGraphInteraction();
+  const createRouteNodeMutation = useCreateRouteNode(routeGraphFloorId ?? '');
+  const deleteRouteNodeMutation = useDeleteRouteNode(routeGraphFloorId ?? '');
+  const deleteRouteEdgeMutation = useDeleteRouteEdge(routeGraphFloorId ?? '');
   const racks = useMemo(() => {
     const layout = placementLayout ?? layoutDraft;
     return layout ? layout.rackIds.map((id) => layout.racks[id]) : [];
@@ -757,6 +774,8 @@ export function EditorCanvas({
   isDrawingZoneRef.current = isDrawingZone;
   const isDrawingWallRef = useRef(isDrawingWall);
   isDrawingWallRef.current = isDrawingWall;
+  const isRouteGraphModeRef = useRef(isRouteGraphStage);
+  isRouteGraphModeRef.current = isRouteGraphStage;
   const interactionScopeRef = useRef(interactionScope);
   interactionScopeRef.current = interactionScope;
   const selectedZoneIdRef = useRef(selectedZoneId);
@@ -773,6 +792,34 @@ export function EditorCanvas({
   deleteZoneRef.current = deleteZone;
   const deleteWallRef = useRef(deleteWall);
   deleteWallRef.current = deleteWall;
+  const selectedRouteGraphElementRef = useRef(selectedRouteGraphElement);
+  selectedRouteGraphElementRef.current = selectedRouteGraphElement;
+  const clearRouteGraphInteractionRef = useRef(clearRouteGraphInteraction);
+  clearRouteGraphInteractionRef.current = clearRouteGraphInteraction;
+  const handleRouteGraphEmptyCanvasClick = useCallback(
+    (point: { x: number; y: number }) => {
+      if (!routeGraphFloorId) return;
+      const x = Math.round(point.x * 10) / 10;
+      const y = Math.round(point.y * 10) / 10;
+      createRouteNodeMutation.mutate({
+        x,
+        y,
+        kind: 'walkway',
+        label: null
+      });
+    },
+    [createRouteNodeMutation, routeGraphFloorId]
+  );
+  const deleteRouteGraphNodeRef = useRef<(id: string) => void>(() => undefined);
+  deleteRouteGraphNodeRef.current = (nodeId: string) => {
+    if (!routeGraphFloorId) return;
+    deleteRouteNodeMutation.mutate(nodeId);
+  };
+  const deleteRouteGraphEdgeRef = useRef<(id: string) => void>(() => undefined);
+  deleteRouteGraphEdgeRef.current = (edgeId: string) => {
+    if (!routeGraphFloorId) return;
+    deleteRouteEdgeMutation.mutate(edgeId);
+  };
 
   const {
     cancelDrawWall,
@@ -795,10 +842,14 @@ export function EditorCanvas({
     isDrawingZone,
     isLayoutMode,
     isPlacing,
+    isRouteGraphMode: isRouteGraphStage,
     layoutDraft,
     setSelectedRackIds,
     stageRef,
     viewport,
+    onRouteGraphEmptyCanvasClick: isRouteGraphStage
+      ? handleRouteGraphEmptyCanvasClick
+      : undefined,
     // V2: replace clearSelection with focus-store handler in storage V2 path
     onStorageEmptyClick: isStorageV2Active
       ? storageFocusHandleEmptyCanvasClick
@@ -810,6 +861,7 @@ export function EditorCanvas({
     isPlacingRef,
     isDrawingZoneRef,
     isDrawingWallRef,
+    isRouteGraphModeRef,
     interactionScopeRef,
     cancelPlacementInteractionRef,
     clearSelectionRef,
@@ -818,6 +870,10 @@ export function EditorCanvas({
     selectedWallIdRef,
     deleteZoneRef,
     deleteWallRef,
+    selectedRouteGraphElementRef,
+    clearRouteGraphInteractionRef,
+    deleteRouteGraphNodeRef,
+    deleteRouteGraphEdgeRef,
     cancelDrawZone,
     cancelDrawWall,
     setEditorMode,
@@ -1171,6 +1227,10 @@ export function EditorCanvas({
                 onV2StorageCellSelect={onV2StorageCellSelect}
                 onV2StorageRackSelect={onV2StorageRackSelect}
               />
+
+              {isRouteGraphStage && routeGraphFloorId && (
+                <RouteGraphLayer floorId={routeGraphFloorId} />
+              )}
 
               <Layer name="overlay-layer" listening={false}>
                 <StorageOccupancyOverlay

@@ -36,10 +36,12 @@ type UseCanvasStageInteractionsParams = {
   isDrawingZone: boolean;
   isLayoutMode: boolean;
   isPlacing: boolean;
+  isRouteGraphMode: boolean;
   layoutDraft: LayoutDraft | null;
   setSelectedRackIds: (rackIds: string[]) => void;
   stageRef: MutableRefObject<Konva.Stage | null>;
   viewport: { width: number; height: number };
+  onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
   /**
    * V2 Storage override for empty-canvas click.
    * When provided, replaces clearSelection() so that only the V2 StorageFocusStore
@@ -61,10 +63,12 @@ export function useCanvasStageInteractions({
   isDrawingZone,
   isLayoutMode,
   isPlacing,
+  isRouteGraphMode,
   layoutDraft,
   setSelectedRackIds,
   stageRef,
   viewport,
+  onRouteGraphEmptyCanvasClick,
   onStorageEmptyClick,
 }: UseCanvasStageInteractionsParams) {
   // marquee drives the Konva Rect visual; marqueeRef is readable in event handlers
@@ -89,6 +93,8 @@ export function useCanvasStageInteractions({
   isDrawingWallRef.current = isDrawingWall;
   const interactionScopeRef = useRef(interactionScope);
   interactionScopeRef.current = interactionScope;
+  const isRouteGraphModeRef = useRef(isRouteGraphMode);
+  isRouteGraphModeRef.current = isRouteGraphMode;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
   const createZoneRef = useRef(createZone);
@@ -103,6 +109,8 @@ export function useCanvasStageInteractions({
   cancelPlacementInteractionRef.current = cancelPlacementInteraction;
   const onStorageEmptyClickRef = useRef(onStorageEmptyClick);
   onStorageEmptyClickRef.current = onStorageEmptyClick;
+  const onRouteGraphEmptyCanvasClickRef = useRef(onRouteGraphEmptyCanvasClick);
+  onRouteGraphEmptyCanvasClickRef.current = onRouteGraphEmptyCanvasClick;
 
   const cancelDrawZone = useCallback(() => {
     draftZoneStartRef.current = null;
@@ -137,6 +145,11 @@ export function useCanvasStageInteractions({
           Math.round(pos.x / WORLD_SCALE),
           Math.round(pos.y / WORLD_SCALE)
         );
+      } else if (isRouteGraphModeRef.current) {
+        onRouteGraphEmptyCanvasClickRef.current?.({
+          x: pos.x / WORLD_SCALE,
+          y: pos.y / WORLD_SCALE
+        });
       } else if (isDrawingZoneRef.current || isDrawingWallRef.current) {
         return;
       } else {

@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { EditorMode, InteractionScope } from '@/warehouse/editor/model/editor-types';
+import type { RouteGraphSelection } from '@/features/route-graph-canvas/model/route-graph-canvas-store';
 
 type UseCanvasKeyboardShortcutsParams = {
   isLayoutEditable: boolean;
   isPlacingRef: MutableRefObject<boolean>;
   isDrawingZoneRef: MutableRefObject<boolean>;
   isDrawingWallRef: MutableRefObject<boolean>;
+  isRouteGraphModeRef: MutableRefObject<boolean>;
   interactionScopeRef: MutableRefObject<InteractionScope>;
   cancelPlacementInteractionRef: MutableRefObject<() => void>;
   clearSelectionRef: MutableRefObject<() => void>;
@@ -15,6 +17,10 @@ type UseCanvasKeyboardShortcutsParams = {
   selectedWallIdRef: MutableRefObject<string | null>;
   deleteZoneRef: MutableRefObject<(id: string) => void>;
   deleteWallRef: MutableRefObject<(id: string) => void>;
+  selectedRouteGraphElementRef: MutableRefObject<RouteGraphSelection>;
+  clearRouteGraphInteractionRef: MutableRefObject<() => void>;
+  deleteRouteGraphNodeRef: MutableRefObject<(id: string) => void>;
+  deleteRouteGraphEdgeRef: MutableRefObject<(id: string) => void>;
   cancelDrawZone: () => void;
   cancelDrawWall: () => void;
   setEditorMode: (mode: EditorMode) => void;
@@ -39,6 +45,7 @@ export function useCanvasKeyboardShortcuts({
   isPlacingRef,
   isDrawingZoneRef,
   isDrawingWallRef,
+  isRouteGraphModeRef,
   interactionScopeRef,
   cancelPlacementInteractionRef,
   clearSelectionRef,
@@ -47,6 +54,10 @@ export function useCanvasKeyboardShortcuts({
   selectedWallIdRef,
   deleteZoneRef,
   deleteWallRef,
+  selectedRouteGraphElementRef,
+  clearRouteGraphInteractionRef,
+  deleteRouteGraphNodeRef,
+  deleteRouteGraphEdgeRef,
   cancelDrawZone,
   cancelDrawWall,
   setEditorMode,
@@ -55,6 +66,14 @@ export function useCanvasKeyboardShortcuts({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (isRouteGraphModeRef.current) {
+          if (isEditableDomTarget(event.target)) {
+            return;
+          }
+          clearRouteGraphInteractionRef.current();
+          return;
+        }
+
         if (isPlacingRef.current || isDrawingZoneRef.current || isDrawingWallRef.current) {
           setEditorMode('select');
           cancelDrawZone();
@@ -77,6 +96,22 @@ export function useCanvasKeyboardShortcuts({
           clearHighlightedCellIds();
         }
 
+        return;
+      }
+
+      if (
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        isRouteGraphModeRef.current &&
+        !isEditableDomTarget(event.target)
+      ) {
+        const selectedElement = selectedRouteGraphElementRef.current;
+        if (selectedElement?.type === 'node') {
+          deleteRouteGraphNodeRef.current(selectedElement.id);
+          clearRouteGraphInteractionRef.current();
+        } else if (selectedElement?.type === 'edge') {
+          deleteRouteGraphEdgeRef.current(selectedElement.id);
+          clearRouteGraphInteractionRef.current();
+        }
         return;
       }
 
@@ -114,7 +149,10 @@ export function useCanvasKeyboardShortcuts({
     cancelDrawWall,
     cancelDrawZone,
     clearHighlightedCellIds,
+    clearRouteGraphInteractionRef,
     clearSelectionRef,
+    deleteRouteGraphEdgeRef,
+    deleteRouteGraphNodeRef,
     deleteWallRef,
     deleteZoneRef,
     interactionScopeRef,
@@ -122,7 +160,9 @@ export function useCanvasKeyboardShortcuts({
     isDrawingZoneRef,
     isLayoutEditable,
     isPlacingRef,
+    isRouteGraphModeRef,
     selectedRackIdsRef,
+    selectedRouteGraphElementRef,
     selectedWallIdRef,
     selectedZoneIdRef,
     setEditorMode
