@@ -36,12 +36,14 @@ type UseCanvasStageInteractionsParams = {
   isDrawingWall: boolean;
   isDrawingZone: boolean;
   isLayoutMode: boolean;
+  isObstacleRouteMode: boolean;
   isPlacing: boolean;
   isRouteGraphMode: boolean;
   layoutDraft: LayoutDraft | null;
   setSelectedRackIds: (rackIds: string[]) => void;
   stageRef: MutableRefObject<Konva.Stage | null>;
   viewport: { width: number; height: number };
+  onObstacleRouteEmptyCanvasClick?: (point: { x: number; y: number }) => void;
   onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
   /**
    * V2 Storage override for empty-canvas click.
@@ -63,12 +65,14 @@ export function useCanvasStageInteractions({
   isDrawingWall,
   isDrawingZone,
   isLayoutMode,
+  isObstacleRouteMode,
   isPlacing,
   isRouteGraphMode,
   layoutDraft,
   setSelectedRackIds,
   stageRef,
   viewport,
+  onObstacleRouteEmptyCanvasClick,
   onRouteGraphEmptyCanvasClick,
   onStorageEmptyClick,
 }: UseCanvasStageInteractionsParams) {
@@ -96,6 +100,8 @@ export function useCanvasStageInteractions({
   interactionScopeRef.current = interactionScope;
   const isRouteGraphModeRef = useRef(isRouteGraphMode);
   isRouteGraphModeRef.current = isRouteGraphMode;
+  const isObstacleRouteModeRef = useRef(isObstacleRouteMode);
+  isObstacleRouteModeRef.current = isObstacleRouteMode;
   const createRackRef = useRef(createRack);
   createRackRef.current = createRack;
   const createZoneRef = useRef(createZone);
@@ -112,6 +118,10 @@ export function useCanvasStageInteractions({
   onStorageEmptyClickRef.current = onStorageEmptyClick;
   const onRouteGraphEmptyCanvasClickRef = useRef(onRouteGraphEmptyCanvasClick);
   onRouteGraphEmptyCanvasClickRef.current = onRouteGraphEmptyCanvasClick;
+  const onObstacleRouteEmptyCanvasClickRef = useRef(
+    onObstacleRouteEmptyCanvasClick
+  );
+  onObstacleRouteEmptyCanvasClickRef.current = onObstacleRouteEmptyCanvasClick;
 
   const cancelDrawZone = useCallback(() => {
     draftZoneStartRef.current = null;
@@ -148,6 +158,11 @@ export function useCanvasStageInteractions({
         );
       } else if (isRouteGraphModeRef.current) {
         onRouteGraphEmptyCanvasClickRef.current?.({
+          x: pos.x / WORLD_SCALE,
+          y: pos.y / WORLD_SCALE
+        });
+      } else if (isObstacleRouteModeRef.current) {
+        onObstacleRouteEmptyCanvasClickRef.current?.({
           x: pos.x / WORLD_SCALE,
           y: pos.y / WORLD_SCALE
         });

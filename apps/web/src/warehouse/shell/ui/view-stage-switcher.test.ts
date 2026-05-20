@@ -49,9 +49,11 @@ describe('ViewModeSwitcher view stages', () => {
 
     const pickingPlanLabel = translate('warehouse.view.stage.pickingPlan');
     const routeGraphLabel = translate('warehouse.view.stage.routeGraph');
+    const obstacleRouteLabel = translate('warehouse.view.stage.obstacleRoute');
     let text = collectText(renderer!.toJSON());
     expect(text).not.toContain(pickingPlanLabel);
     expect(text).not.toContain(routeGraphLabel);
+    expect(text).not.toContain(obstacleRouteLabel);
     expect(text).not.toContain('Plan picking');
     expect(text).not.toContain('Plan wave');
 
@@ -62,6 +64,7 @@ describe('ViewModeSwitcher view stages', () => {
     text = collectText(renderer!.toJSON());
     expect(text).toContain(pickingPlanLabel);
     expect(text).toContain(routeGraphLabel);
+    expect(text).toContain(obstacleRouteLabel);
     expect(text).not.toContain('Plan picking');
     expect(text).not.toContain('Plan wave');
   });
@@ -112,6 +115,30 @@ describe('ViewModeSwitcher view stages', () => {
 
     expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
     expect(getWarehouseViewModeSnapshot().viewStage).toBe('route-graph');
+  });
+
+  it('renders Obstacle route and activates obstacle-route', () => {
+    act(() => {
+      warehouseViewModeActions.reset();
+      warehouseViewModeActions.setViewMode('view');
+    });
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(ViewModeSwitcher));
+    });
+
+    const obstacleRouteLabel = translate('warehouse.view.stage.obstacleRoute');
+    const obstacleRouteButton = renderer!.root.find(
+      (instance) =>
+        instance.type === 'button' && instance.props.title === obstacleRouteLabel
+    );
+
+    act(() => {
+      obstacleRouteButton.props.onClick();
+    });
+
+    expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
+    expect(getWarehouseViewModeSnapshot().viewStage).toBe('obstacle-route');
   });
 
   it('resets View stage to map when switching away from View mode', () => {

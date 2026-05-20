@@ -33,6 +33,8 @@ let cellStateOverlayLastProps: Record<string, unknown> | null = null;
 let storageOccupancyOverlayLastProps: Record<string, unknown> | null = null;
 let viewportControllerLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
+let obstacleRouteLayerLastProps: Record<string, unknown> | null = null;
+let canvasStageInteractionsLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
 let mockSceneLod: 0 | 1 | 2 = 2;
@@ -183,21 +185,31 @@ vi.mock('@/features/route-graph-canvas/ui/route-graph-layer', () => ({
     createElement('RouteGraphLayer', props)
 }));
 
+vi.mock('@/features/obstacle-route-planning/ui/obstacle-route-layer', () => ({
+  ObstacleRouteLayer: (props: Record<string, unknown>) => {
+    obstacleRouteLayerLastProps = props;
+    return createElement('ObstacleRouteLayer', props);
+  }
+}));
+
 vi.mock('./use-canvas-keyboard-shortcuts', () => ({
   useCanvasKeyboardShortcuts: () => undefined
 }));
 
 vi.mock('./use-canvas-stage-interactions', () => ({
-  useCanvasStageInteractions: () => ({
-    cancelDrawWall: () => undefined,
-    cancelDrawZone: () => undefined,
-    draftWallLine: null,
-    draftZoneRect: null,
-    marquee: null,
-    onMouseDown: () => undefined,
-    onMouseMove: () => undefined,
-    onMouseUp: () => undefined
-  })
+  useCanvasStageInteractions: (props: Record<string, unknown>) => {
+    canvasStageInteractionsLastProps = props;
+    return {
+      cancelDrawWall: () => undefined,
+      cancelDrawZone: () => undefined,
+      draftWallLine: null,
+      draftZoneRect: null,
+      marquee: null,
+      onMouseDown: () => undefined,
+      onMouseMove: () => undefined,
+      onMouseUp: () => undefined
+    };
+  }
 }));
 
 vi.mock('./use-canvas-viewport-controller', () => ({
@@ -317,6 +329,8 @@ describe('EditorCanvas storage active-rack wiring', () => {
     storageOccupancyOverlayLastProps = null;
     viewportControllerLastProps = null;
     canvasHudLastProps = null;
+    obstacleRouteLayerLastProps = null;
+    canvasStageInteractionsLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
@@ -493,6 +507,157 @@ describe('EditorCanvas storage active-rack wiring', () => {
     expect(
       renderer.root.findAll((node) => String(node.type) === 'RouteGraphLayer')
     ).toHaveLength(0);
+  });
+
+  it('mounts ObstacleRouteLayer only for View Obstacle route stage', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockViewStage = 'map';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'ObstacleRouteLayer')
+    ).toHaveLength(0);
+
+    act(() => {
+      mockViewStage = 'obstacle-route';
+      renderer.update(
+        createElement(EditorCanvas, {
+          workspace: {
+            floorId: draft.floorId,
+            activeDraft: draft,
+            latestPublished: draft
+          },
+          onAddRack: () => undefined,
+          onOpenInspector: () => undefined
+        })
+      );
+    });
+
+    const routeLayers = renderer.root.findAll(
+      (node) => String(node.type) === 'ObstacleRouteLayer'
+    );
+    expect(routeLayers).toHaveLength(1);
+    expect(obstacleRouteLayerLastProps).toMatchObject({
+      start: null,
+      end: null,
+      result: null
+    });
+    expect(rackLayerLastProps).not.toHaveProperty('obstacleRoute');
+    expect(rackLayerLastProps).not.toHaveProperty('routeSolver');
+    expect(rackLayerLastProps).not.toHaveProperty('obstacleRouteResult');
+
+    act(() => {
+      mockViewMode = 'storage';
+      renderer.update(
+        createElement(EditorCanvas, {
+          workspace: {
+            floorId: draft.floorId,
+            activeDraft: draft,
+            latestPublished: draft
+          },
+          onAddRack: () => undefined,
+          onOpenInspector: () => undefined
+        })
+      );
+    });
+
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'ObstacleRouteLayer')
+    ).toHaveLength(0);
+  });
+
+  it('uses obstacle-route empty canvas clicks to set start then solve to end', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockViewStage = 'obstacle-route';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    let onObstacleRouteEmptyCanvasClick =
+      canvasStageInteractionsLastProps?.onObstacleRouteEmptyCanvasClick as
+        | ((point: { x: number; y: number }) => void)
+        | undefined;
+    expect(typeof onObstacleRouteEmptyCanvasClick).toBe('function');
+
+    act(() => {
+      onObstacleRouteEmptyCanvasClick?.({ x: 1.23, y: 2.34 });
+    });
+
+    expect(obstacleRouteLayerLastProps?.start).toEqual({ x: 1.2, y: 2.3 });
+    expect(obstacleRouteLayerLastProps?.end).toBeNull();
+    expect(obstacleRouteLayerLastProps?.result).toBeNull();
+    onObstacleRouteEmptyCanvasClick =
+      canvasStageInteractionsLastProps?.onObstacleRouteEmptyCanvasClick as
+        | ((point: { x: number; y: number }) => void)
+        | undefined;
+
+    act(() => {
+      onObstacleRouteEmptyCanvasClick?.({ x: 5.01, y: 2.99 });
+    });
+
+    expect(obstacleRouteLayerLastProps?.start).toEqual({ x: 1.2, y: 2.3 });
+    expect(obstacleRouteLayerLastProps?.end).toEqual({ x: 5, y: 3 });
+    expect(obstacleRouteLayerLastProps?.result).toMatchObject({
+      status: 'ok'
+    });
+  });
+
+  it('recomputes obstacle route on marker drag end callbacks', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockViewStage = 'obstacle-route';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    let onObstacleRouteEmptyCanvasClick =
+      canvasStageInteractionsLastProps?.onObstacleRouteEmptyCanvasClick as (
+        point: { x: number; y: number }
+      ) => void;
+    act(() => {
+      onObstacleRouteEmptyCanvasClick({ x: 1, y: 1 });
+    });
+    onObstacleRouteEmptyCanvasClick =
+      canvasStageInteractionsLastProps?.onObstacleRouteEmptyCanvasClick as (
+        point: { x: number; y: number }
+      ) => void;
+    act(() => {
+      onObstacleRouteEmptyCanvasClick({ x: 3, y: 1 });
+    });
+
+    const onStartDragEnd = obstacleRouteLayerLastProps?.onStartDragEnd as (
+      point: { x: number; y: number }
+    ) => void;
+    act(() => {
+      onStartDragEnd({ x: 2.04, y: 1.05 });
+    });
+
+    expect(obstacleRouteLayerLastProps?.start).toEqual({ x: 2, y: 1.1 });
+    expect(obstacleRouteLayerLastProps?.result).toMatchObject({
+      status: 'ok'
+    });
   });
 
   it('preserves current contract: storage unresolved selected cell does not produce primarySelectedRackId', () => {
