@@ -445,11 +445,14 @@ describe('editor-store', () => {
     useEditorStore.getState().initializeDraft(draft);
 
     // 0.4 m drag — rounds to 0, producing zero length, below MIN_WALL_LENGTH (1 m)
-    useEditorStore.getState().createFreeWall(0, 0, 0.4, 0);
+    useEditorStore.getState().setEditorMode('draw-wall');
+    const created = useEditorStore.getState().createFreeWall(0, 0, 0.4, 0);
 
+    expect(created).toBe(false);
     expect(useEditorStore.getState().draft?.wallIds).toHaveLength(0);
     expect(useInteractionStore.getState().selection.type).toBe('none');
     expect(useEditorStore.getState().isDraftDirty).toBe(false);
+    expect(useModeStore.getState().editorMode).toBe('draw-wall');
   });
 
   it('createFreeWall is a no-op for a zero-length gesture', () => {
@@ -495,6 +498,119 @@ describe('editor-store', () => {
     useEditorStore.getState().createFreeWall(0, 0, 120, 0);
 
     expect(useModeStore.getState().editorMode).toBe('select');
+  });
+
+  it('createRack rejects placement intersecting a blocking wall', () => {
+    const wallId = crypto.randomUUID();
+    const draft = {
+      ...createUuidLayoutDraftFixture(),
+      wallIds: [wallId],
+      walls: {
+        [wallId]: {
+          id: wallId,
+          code: 'W01',
+          name: 'Wall 01',
+          wallType: 'generic' as const,
+          x1: 9,
+          y1: 10.5,
+          x2: 16,
+          y2: 10.5,
+          blocksRackPlacement: true
+        }
+      }
+    };
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setEditorMode('place');
+
+    useEditorStore.getState().createRack(10, 10);
+
+    expect(useEditorStore.getState().draft?.rackIds).toHaveLength(0);
+    expect(useModeStore.getState().editorMode).toBe('place');
+    expect(useEditorStore.getState().isDraftDirty).toBe(false);
+  });
+
+  it('createRack allows placement intersecting a non-blocking wall', () => {
+    const wallId = crypto.randomUUID();
+    const draft = {
+      ...createUuidLayoutDraftFixture(),
+      wallIds: [wallId],
+      walls: {
+        [wallId]: {
+          id: wallId,
+          code: 'W01',
+          name: 'Wall 01',
+          wallType: 'generic' as const,
+          x1: 9,
+          y1: 10.5,
+          x2: 16,
+          y2: 10.5,
+          blocksRackPlacement: false
+        }
+      }
+    };
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().createRack(10, 10);
+
+    expect(useEditorStore.getState().draft?.rackIds).toHaveLength(1);
+    expect(useModeStore.getState().editorMode).toBe('select');
+  });
+
+  it('updateRackPosition rejects movement intersecting a blocking wall', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const wallId = 'wall-1';
+    draft.wallIds = [wallId];
+    draft.walls = {
+      [wallId]: {
+        id: wallId,
+        code: 'W01',
+        name: 'Wall 01',
+        wallType: 'generic',
+        x1: 42,
+        y1: 39,
+        x2: 42,
+        y2: 43,
+        blocksRackPlacement: true
+      }
+    };
+    useEditorStore.getState().initializeDraft(draft);
+
+    useEditorStore.getState().updateRackPosition(rackId, 40, 40);
+
+    expect(useEditorStore.getState().draft?.racks[rackId]).toEqual(
+      expect.objectContaining({
+        x: 20,
+        y: 30
+      })
+    );
+    expect(useEditorStore.getState().isDraftDirty).toBe(false);
+  });
+
+  it('keeps existing rack-vs-rack minimum distance rejection behavior', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const secondRackId = 'rack-2';
+    draft.rackIds = [rackId, secondRackId];
+    draft.racks[secondRackId] = {
+      ...structuredClone(draft.racks[rackId]),
+      id: secondRackId,
+      displayCode: '02',
+      x: 30,
+      y: 30
+    };
+    useEditorStore.getState().initializeDraft(draft);
+    useEditorStore.getState().setMinRackDistance(10);
+
+    useEditorStore.getState().updateRackPosition(secondRackId, 26, 30);
+
+    expect(useEditorStore.getState().draft?.racks[secondRackId]).toEqual(
+      expect.objectContaining({
+        x: 30,
+        y: 30
+      })
+    );
+    expect(useEditorStore.getState().isDraftDirty).toBe(false);
   });
 
   it('createFreeWall grid-snaps input coordinates before building the wall', () => {

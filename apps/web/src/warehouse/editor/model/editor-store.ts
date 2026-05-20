@@ -34,6 +34,7 @@ import {
   cloneDraft,
   getRackSelectionFocus,
   getSelectedRackIds,
+  hasBlockingWallIntersection,
   makeRackSelection,
   newEntityId,
   nextLevelOrdinal,
@@ -137,7 +138,7 @@ type EditorStore = {
   }) => void;
   createRack: (x: number, y: number) => void;
   createZone: (rect: { x: number; y: number; width: number; height: number }) => void;
-  createFreeWall: (x1: number, y1: number, x2: number, y2: number) => void;
+  createFreeWall: (x1: number, y1: number, x2: number, y2: number) => boolean;
   createWallFromRackSide: (rackId: string, side: RackSideFocus) => void;
   deleteRack: (rackId: string) => void;
   deleteZone: (zoneId: string) => void;
@@ -610,10 +611,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       };
     }),
   createRack: (x, y) => {
+    let created = false;
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
       const newRack = buildNewRack(state.draft.racks, x, y);
+      if (hasBlockingWallIntersection(newRack, state.draft.walls)) {
+        return state;
+      }
+
       const nextDraft = cloneDraft(state.draft);
       nextDraft.rackIds = [...nextDraft.rackIds, newRack.id];
       nextDraft.racks[newRack.id] = newRack;
@@ -622,13 +628,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Update interaction state as a side effect inside set() — safe because
       // Zustand's set() is synchronous and this fires before subscribers.
       useInteractionStore.getState().setSelection(nextSelection);
+      created = true;
       return markDraftChanged(state, {
         draft: nextDraft,
         activeTask: { type: 'rack_creation', rackId: newRack.id },
         ...selectedRackActiveLevelResetPatch(prevSelection, nextSelection)
       });
     });
-    useModeStore.getState().setEditorMode('select');
+    if (created) {
+      useModeStore.getState().setEditorMode('select');
+    }
   },
   createZone: (rect) => {
     set((state) => {
@@ -649,6 +658,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     useModeStore.getState().setEditorMode('select');
   },
   createFreeWall: (x1, y1, x2, y2) => {
+    let created = false;
     set((state) => {
       if (!canEditDraft(state.draft)) return state;
 
@@ -661,12 +671,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const prevSelection = useInteractionStore.getState().selection;
       const nextSelection: EditorSelection = { type: 'wall', wallId: newWall.id };
       useInteractionStore.getState().setSelection(nextSelection);
+      created = true;
       return markDraftChanged(state, {
         draft: nextDraft,
         ...selectedRackActiveLevelResetPatch(prevSelection, nextSelection)
       });
     });
-    useModeStore.getState().setEditorMode('select');
+    if (created) {
+      useModeStore.getState().setEditorMode('select');
+    }
+    return created;
   },
   createWallFromRackSide: (rackId, side) => {
     set((state) => {
@@ -816,9 +830,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const rack = state.draft.racks[rackId];
       if (!rack || rack.isLocked) return state;
 
+      const candidateRack = { ...rack, x, y };
+      if (hasBlockingWallIntersection(candidateRack, state.draft.walls)) {
+        return state;
+      }
+
       // Validate position with minimum distance constraint
       const otherRacks = Object.values(state.draft.racks).filter(r => r.id !== rackId);
-      const isValid = checkMinimumDistance({ ...rack, x, y }, x, y, otherRacks, state.minRackDistance);
+      const isValid = checkMinimumDistance(candidateRack, x, y, otherRacks, state.minRackDistance);
 
       if (!isValid) {
         // Position violates minimum distance - reject update

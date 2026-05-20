@@ -14,8 +14,9 @@ type ClickHandler = () => void;
 
 function createStageMock() {
   const handlers = new Map<string, ClickHandler>();
+  let pointerPosition = { x: 10, y: 20 };
   const stage = {
-    getRelativePointerPosition: vi.fn(() => ({ x: 10, y: 20 })),
+    getRelativePointerPosition: vi.fn(() => pointerPosition),
     on: vi.fn((eventName: string, handler: ClickHandler) => {
       handlers.set(eventName, handler);
     }),
@@ -26,6 +27,9 @@ function createStageMock() {
 
   return {
     stage: stage as unknown as Konva.Stage,
+    setPointerPosition(nextPointerPosition: { x: number; y: number }) {
+      pointerPosition = nextPointerPosition;
+    },
     trigger(eventName: string) {
       handlers.get(eventName)?.();
     }
@@ -37,24 +41,28 @@ function renderHookHarness(params: {
   clearSelection: () => void;
   clearHighlightedCellIds: () => void;
   cancelPlacementInteraction: () => void;
+  createFreeWall?: (x1: number, y1: number, x2: number, y2: number) => boolean;
+  isDrawingWall?: boolean;
+  isLayoutMode?: boolean;
   isRouteGraphMode?: boolean;
   onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
 }) {
   const stageMock = createStageMock();
+  let interactions!: ReturnType<typeof useCanvasStageInteractions>;
 
   function Harness() {
     const stageRef = useRef<Konva.Stage | null>(stageMock.stage);
-    useCanvasStageInteractions({
+    interactions = useCanvasStageInteractions({
       cancelPlacementInteraction: params.cancelPlacementInteraction,
       clearHighlightedCellIds: params.clearHighlightedCellIds,
       clearSelection: params.clearSelection,
       createRack: () => undefined,
       createZone: () => undefined,
-      createFreeWall: () => undefined,
+      createFreeWall: params.createFreeWall ?? (() => false),
       interactionScope: params.interactionScope,
-      isDrawingWall: false,
+      isDrawingWall: params.isDrawingWall ?? false,
       isDrawingZone: false,
-      isLayoutMode: false,
+      isLayoutMode: params.isLayoutMode ?? false,
       isPlacing: false,
       isRouteGraphMode: params.isRouteGraphMode ?? false,
       layoutDraft: null,
@@ -71,7 +79,7 @@ function renderHookHarness(params: {
     renderer = TestRenderer.create(createElement(Harness));
   });
 
-  return { renderer, stageMock };
+  return { renderer, stageMock, getInteractions: () => interactions };
 }
 
 describe('useCanvasStageInteractions empty canvas clicks', () => {
@@ -142,5 +150,59 @@ describe('useCanvasStageInteractions empty canvas clicks', () => {
     });
     expect(clearSelection).not.toHaveBeenCalled();
     expect(clearHighlightedCellIds).not.toHaveBeenCalled();
+  });
+});
+
+describe('useCanvasStageInteractions free wall drawing', () => {
+  const mouseEvent = {
+    evt: {
+      button: 0
+    }
+  } as Konva.KonvaEventObject<MouseEvent>;
+
+  it('uses world-metre distance for free wall drag threshold', () => {
+    const createFreeWall = vi.fn(() => true);
+    const { stageMock, getInteractions } = renderHookHarness({
+      interactionScope: 'idle',
+      clearSelection: vi.fn(),
+      clearHighlightedCellIds: vi.fn(),
+      cancelPlacementInteraction: vi.fn(),
+      createFreeWall,
+      isDrawingWall: true,
+      isLayoutMode: true
+    });
+
+    act(() => {
+      stageMock.setPointerPosition({ x: 4000, y: 0 });
+      getInteractions().onMouseDown(mouseEvent);
+      stageMock.setPointerPosition({ x: 4020, y: 0 });
+      getInteractions().onMouseMove();
+      getInteractions().onMouseUp();
+    });
+
+    expect(createFreeWall).not.toHaveBeenCalled();
+  });
+
+  it('creates a free wall after a valid world-metre drag', () => {
+    const createFreeWall = vi.fn(() => true);
+    const { stageMock, getInteractions } = renderHookHarness({
+      interactionScope: 'idle',
+      clearSelection: vi.fn(),
+      clearHighlightedCellIds: vi.fn(),
+      cancelPlacementInteraction: vi.fn(),
+      createFreeWall,
+      isDrawingWall: true,
+      isLayoutMode: true
+    });
+
+    act(() => {
+      stageMock.setPointerPosition({ x: 4000, y: 0 });
+      getInteractions().onMouseDown(mouseEvent);
+      stageMock.setPointerPosition({ x: 4060, y: 0 });
+      getInteractions().onMouseMove();
+      getInteractions().onMouseUp();
+    });
+
+    expect(createFreeWall).toHaveBeenCalledWith(100, 0, 102, 0);
   });
 });

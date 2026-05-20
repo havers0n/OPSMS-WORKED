@@ -222,7 +222,7 @@ export function clampZoneSize(value: number) {
 
 const DEFAULT_ZONE_COLORS = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#a78bfa'];
 const WALL_SIDE_OFFSET = 12;
-const MIN_WALL_LENGTH = 1; // minimum wall length in metres
+export const MIN_WALL_LENGTH = 1; // minimum wall length in metres
 
 export function buildNewZone(
   zones: Record<string, Zone>,
@@ -356,6 +356,58 @@ export function normalizeWallGeometry(
     x2: x,
     y2: roundWallCoordinate(nextY2)
   };
+}
+
+function getRackBodyBounds(rack: Rack) {
+  const rect = getRackCanvasRect(rack);
+
+  return {
+    minX: rect.x / WORLD_SCALE,
+    maxX: (rect.x + rect.width) / WORLD_SCALE,
+    minY: rect.y / WORLD_SCALE,
+    maxY: (rect.y + rect.height) / WORLD_SCALE
+  };
+}
+
+function rangesOverlapInclusive(
+  leftMin: number,
+  leftMax: number,
+  rightMin: number,
+  rightMax: number
+) {
+  return leftMin <= rightMax && rightMin <= leftMax;
+}
+
+export function doesWallIntersectRackBody(wall: Wall, rack: Rack) {
+  const bounds = getRackBodyBounds(rack);
+  const minWallX = Math.min(wall.x1, wall.x2);
+  const maxWallX = Math.max(wall.x1, wall.x2);
+  const minWallY = Math.min(wall.y1, wall.y2);
+  const maxWallY = Math.max(wall.y1, wall.y2);
+
+  if (wall.y1 === wall.y2) {
+    return (
+      wall.y1 >= bounds.minY &&
+      wall.y1 <= bounds.maxY &&
+      rangesOverlapInclusive(minWallX, maxWallX, bounds.minX, bounds.maxX)
+    );
+  }
+
+  if (wall.x1 === wall.x2) {
+    return (
+      wall.x1 >= bounds.minX &&
+      wall.x1 <= bounds.maxX &&
+      rangesOverlapInclusive(minWallY, maxWallY, bounds.minY, bounds.maxY)
+    );
+  }
+
+  return false;
+}
+
+export function hasBlockingWallIntersection(rack: Rack, walls: Record<string, Wall>) {
+  return Object.values(walls).some(
+    (wall) => wall.blocksRackPlacement && doesWallIntersectRackBody(wall, rack)
+  );
 }
 
 function buildWallSeedFromRackSide(
