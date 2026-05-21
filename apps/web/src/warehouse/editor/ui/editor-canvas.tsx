@@ -81,7 +81,8 @@ import {
 } from '@/entities/picking-planning/model/route-steps';
 import {
   indexRouteAnchorStatus,
-  resolveRouteStepAnchors
+  resolveRouteStepAnchors,
+  solvePickingRoute
 } from '@/features/picking-planning-canvas/model/route-step-geometry';
 import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
 import { buildRouteObstaclesFromLayout } from '@/features/obstacle-route-planning/model/obstacle-builders';
@@ -681,6 +682,10 @@ export function EditorCanvas({
   const pickingPlanningStepGeometryById = useMemo(
     () => indexRouteAnchorStatus(pickingPlanningRouteAnchors),
     [pickingPlanningRouteAnchors]
+  );
+  const pickingPlanningRouteSegments = useMemo(
+    () => solvePickingRoute(pickingPlanningRouteAnchors, obstacleRouteObstacles),
+    [pickingPlanningRouteAnchors, obstacleRouteObstacles]
   );
   const cellStateOverlaysEnabled =
     (renderMode === 'full' ||
@@ -1367,6 +1372,7 @@ export function EditorCanvas({
                 {shouldShowPickingPlanningOverlay && (
                   <PickingRouteOverlayLayer
                     anchors={pickingPlanningRouteAnchors}
+                    solvedSegments={pickingPlanningRouteSegments}
                   />
                 )}
               </Layer>
