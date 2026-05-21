@@ -40,6 +40,7 @@ export * from './storage/cell-storage-snapshot';
 export * from './storage/rack-inspector';
 export * from './warehouse/site';
 export * from './warehouse/floor';
+export * from './warehouse/floor-aisle-topology';
 export * from './warehouse/floor-workspace';
 export * from './warehouse/setup-state';
 export * from './contracts/readiness';

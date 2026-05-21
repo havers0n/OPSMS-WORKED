@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
 import KonvaRuntime from 'konva';
@@ -71,6 +72,8 @@ import {
   useDeleteRouteEdge,
   useDeleteRouteNode
 } from '@/entities/route-graph/api/mutations';
+import { floorAisleTopologyQueryOptions } from '@/entities/aisle-topology/api/queries';
+import { buildFaceAccessByFaceId } from '@/entities/aisle-topology/model/face-access-map';
 import { usePickingPlanningOverlayStore } from '@/entities/picking-planning/model/overlay-store';
 import {
   deriveDisplayedRouteSteps,
@@ -252,6 +255,13 @@ export function EditorCanvas({
   const isRouteGraphStage = isViewMode && viewStage === 'route-graph';
   const isObstacleRouteStage = isViewMode && viewStage === 'obstacle-route';
   const routeGraphFloorId = workspace?.floorId ?? null;
+  const aisleTopologyQuery = useQuery(
+    floorAisleTopologyQueryOptions(routeGraphFloorId, shouldShowPickingPlanningOverlay)
+  );
+  const faceAccessByFaceId = useMemo(
+    () => buildFaceAccessByFaceId(aisleTopologyQuery.data),
+    [aisleTopologyQuery.data]
+  );
   const selectedRouteGraphElement = useRouteGraphSelectedElement();
   const clearRouteGraphInteraction = useClearRouteGraphInteraction();
   const createRouteNodeMutation = useCreateRouteNode(routeGraphFloorId ?? '');
@@ -656,9 +666,11 @@ export function EditorCanvas({
         steps: pickingPlanningRouteSteps,
         locationsById: pickingPlanningPreview?.locationsById,
         layout: placementLayout ?? layoutDraft,
-        publishedCellsById
+        publishedCellsById,
+        faceAccessByFaceId
       }),
     [
+      faceAccessByFaceId,
       layoutDraft,
       pickingPlanningPreview?.locationsById,
       pickingPlanningRouteSteps,
