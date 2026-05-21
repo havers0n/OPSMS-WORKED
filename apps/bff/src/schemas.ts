@@ -26,6 +26,7 @@ import {
   swapContainersBodySchema,
   containerTypeSchema,
   floorSchema,
+  floorAisleTopologySchema,
   floorWorkspaceSchema,
   layoutDraftSchema,
   layoutPublishRequestSchema,
@@ -274,6 +275,7 @@ export const swapContainersResponseSchema = canonicalSwapContainersResultSchema;
 export const transferInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const pickPartialInventoryUnitResponseSchema = canonicalTransferInventoryResultSchema;
 export const layoutDraftResponseSchema = layoutDraftSchema.nullable();
+export const floorAisleTopologyResponseSchema = floorAisleTopologySchema;
 export const floorWorkspaceResponseSchema = floorWorkspaceSchema;
 export const publishedLayoutSummaryResponseSchema = publishedLayoutSummarySchema.nullable();
 export const persistedDraftValidationResponseSchema = layoutValidationResultSchema;

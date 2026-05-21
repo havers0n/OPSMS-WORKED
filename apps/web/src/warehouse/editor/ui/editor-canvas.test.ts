@@ -1,5 +1,6 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cell, FloorWorkspace, LayoutDraft } from '@wos/domain';
 import type {
@@ -301,16 +302,30 @@ vi.mock('./use-canvas-scene-model', () => ({
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+function createCanvasElement(workspace: FloorWorkspace) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false
+      }
+    }
+  });
+
+  return createElement(
+    QueryClientProvider,
+    { client: queryClient },
+    createElement(EditorCanvas, {
+      workspace,
+      onAddRack: () => undefined,
+      onOpenInspector: () => undefined
+    })
+  );
+}
+
 function renderCanvas(workspace: FloorWorkspace) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = TestRenderer.create(
-      createElement(EditorCanvas, {
-        workspace,
-        onAddRack: () => undefined,
-        onOpenInspector: () => undefined
-      })
-    );
+    renderer = TestRenderer.create(createCanvasElement(workspace));
   });
   return renderer;
 }
@@ -468,14 +483,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
     act(() => {
       mockViewStage = 'route-graph';
       renderer.update(
-        createElement(EditorCanvas, {
-          workspace: {
-            floorId: draft.floorId,
-            activeDraft: draft,
-            latestPublished: draft
-          },
-          onAddRack: () => undefined,
-          onOpenInspector: () => undefined
+        createCanvasElement({
+          floorId: draft.floorId,
+          activeDraft: draft,
+          latestPublished: draft
         })
       );
     });
@@ -492,14 +503,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
     act(() => {
       mockViewMode = 'storage';
       renderer.update(
-        createElement(EditorCanvas, {
-          workspace: {
-            floorId: draft.floorId,
-            activeDraft: draft,
-            latestPublished: draft
-          },
-          onAddRack: () => undefined,
-          onOpenInspector: () => undefined
+        createCanvasElement({
+          floorId: draft.floorId,
+          activeDraft: draft,
+          latestPublished: draft
         })
       );
     });
@@ -530,14 +537,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
     act(() => {
       mockViewStage = 'obstacle-route';
       renderer.update(
-        createElement(EditorCanvas, {
-          workspace: {
-            floorId: draft.floorId,
-            activeDraft: draft,
-            latestPublished: draft
-          },
-          onAddRack: () => undefined,
-          onOpenInspector: () => undefined
+        createCanvasElement({
+          floorId: draft.floorId,
+          activeDraft: draft,
+          latestPublished: draft
         })
       );
     });
@@ -558,14 +561,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
     act(() => {
       mockViewMode = 'storage';
       renderer.update(
-        createElement(EditorCanvas, {
-          workspace: {
-            floorId: draft.floorId,
-            activeDraft: draft,
-            latestPublished: draft
-          },
-          onAddRack: () => undefined,
-          onOpenInspector: () => undefined
+        createCanvasElement({
+          floorId: draft.floorId,
+          activeDraft: draft,
+          latestPublished: draft
         })
       );
     });
@@ -1200,14 +1199,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
       act(() => {
         mockIsPanning = false;
         renderer.update(
-          createElement(EditorCanvas, {
-            workspace: {
-              floorId: draft.floorId,
-              activeDraft: draft,
-              latestPublished: draft
-            },
-            onAddRack: () => undefined,
-            onOpenInspector: () => undefined
+          createCanvasElement({
+            floorId: draft.floorId,
+            activeDraft: draft,
+            latestPublished: draft
           })
         );
       });

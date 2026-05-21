@@ -1,13 +1,12 @@
 import type { Cell, LayoutDraft } from '@wos/domain';
-import {
-  getCellCanvasRect,
-  WORLD_SCALE
-} from '@/entities/layout-version/lib/canvas-geometry';
+import { WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 import { getRouteStepId } from '@/entities/picking-planning/model/route-steps';
 import type {
   PickingPlanningPreviewResponse,
   PlanningRouteStepDto
 } from '@/entities/picking-planning/model/types';
+import { resolvePickPoint } from '@/features/pick-point-resolver/model/pick-point-resolver';
+import type { FaceAccessLike } from '@/features/pick-point-resolver/model/pick-point-types';
 
 export type PickingRouteAnchor =
   | {
@@ -15,7 +14,7 @@ export type PickingRouteAnchor =
       stepId: string;
       step: PlanningRouteStepDto;
       point: { x: number; y: number };
-      source: 'cell' | 'projection';
+      source: 'pick-point' | 'projection';
     }
   | {
       status: 'unresolved';
@@ -36,6 +35,7 @@ type ResolveRouteStepAnchorsParams = {
   locationsById: PickingPlanningPreviewResponse['locationsById'] | undefined;
   layout: LayoutDraft | null;
   publishedCellsById: Map<string, Cell>;
+  faceAccessByFaceId?: Map<string, FaceAccessLike>;
 };
 
 function isFinitePoint(x: unknown, y: unknown): x is number {
@@ -46,8 +46,16 @@ export function resolveRouteStepAnchors({
   steps,
   locationsById,
   layout,
-  publishedCellsById
+  publishedCellsById,
+  faceAccessByFaceId
 }: ResolveRouteStepAnchorsParams): PickingRouteAnchor[] {
+  const racksById = new Map(Object.entries(layout?.racks ?? {}));
+  const facesById = new Map(
+    [...racksById.values()].flatMap((rack) =>
+      rack.faces.map((face) => [face.id, face] as const)
+    )
+  );
+
   return steps.map((step) => {
     const stepId = getRouteStepId(step);
     if (!step?.fromLocationId) {
@@ -80,8 +88,21 @@ export function resolveRouteStepAnchors({
         return { status: 'unresolved', stepId, step, reason: 'missing-rack' };
       }
 
-      const rect = getCellCanvasRect(rack, cell);
-      if (!rect) {
+      const pickPoint = resolvePickPoint({
+        location: {
+          id: location.id,
+          cellId: location.cellId,
+          geometrySlotId: location.cellId,
+          floorX: location.x ?? null,
+          floorY: location.y ?? null
+        },
+        cellsById: publishedCellsById,
+        racksById,
+        facesById,
+        faceAccessByFaceId
+      });
+
+      if (pickPoint.status !== 'ok') {
         return {
           status: 'unresolved',
           stepId,
@@ -95,10 +116,10 @@ export function resolveRouteStepAnchors({
         stepId,
         step,
         point: {
-          x: rect.x + rect.width / 2,
-          y: rect.y + rect.height / 2
+          x: pickPoint.pickPoint.x * WORLD_SCALE,
+          y: pickPoint.pickPoint.y * WORLD_SCALE
         },
-        source: 'cell'
+        source: 'pick-point'
       };
     }
 

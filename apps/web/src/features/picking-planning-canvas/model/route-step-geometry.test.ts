@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Cell } from '@wos/domain';
+import { getCellCanvasRect, WORLD_SCALE } from '@/entities/layout-version/lib/canvas-geometry';
 import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import { resolveRouteStepAnchors } from './route-step-geometry';
 
@@ -52,8 +53,44 @@ describe('resolveRouteStepAnchors', () => {
     expect(anchors[0]).toMatchObject({
       status: 'resolved',
       stepId: 'task-1',
-      source: 'cell'
+      source: 'pick-point'
     });
+  });
+
+  it('resolves rack picks to aisle-side pick points instead of cell centers', () => {
+    const layout = createLayoutDraftFixture();
+    const rackId = layout.rackIds[0] as string;
+    const cell = createCell(rackId);
+    const anchors = resolveRouteStepAnchors({
+      steps: [step],
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01',
+          cellId: cell.id
+        }
+      },
+      layout,
+      publishedCellsById: new Map([[cell.id, cell]]),
+      faceAccessByFaceId: new Map([
+        [cell.rackFaceId, { faceId: cell.rackFaceId, normalX: 0, normalY: -1 }]
+      ])
+    });
+    const cellRect = getCellCanvasRect(layout.racks[rackId], cell);
+
+    expect(anchors[0]).toMatchObject({
+      status: 'resolved',
+      source: 'pick-point'
+    });
+    expect(cellRect).not.toBeNull();
+    if (!cellRect || anchors[0]?.status !== 'resolved') return;
+    expect(anchors[0].point).not.toEqual({
+      x: cellRect.x + cellRect.width / 2,
+      y: cellRect.y + cellRect.height / 2
+    });
+    expect(anchors[0].point.y).toBeLessThan(cellRect.y);
+    expect(anchors[0].point.x).toBeCloseTo((20 + 5 / 6) * WORLD_SCALE);
   });
 
   it('resolves anchors from direct finite projection coordinates', () => {
