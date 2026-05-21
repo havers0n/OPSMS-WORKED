@@ -102,7 +102,7 @@ describe('solvePickingRoute', () => {
     expect(result[0].canvasPoints[1]).toEqual(pxB);
   });
 
-  it('does not call solver and returns unroutable when an anchor is unresolved', () => {
+  it('does not call solver and returns skipped when an anchor is unresolved', () => {
     mockSolver.mockClear();
 
     const anchors: PickingRouteAnchor[] = [
@@ -114,11 +114,21 @@ describe('solvePickingRoute', () => {
 
     expect(mockSolver).not.toHaveBeenCalled();
     expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ status: 'unroutable', fromStepId: 's1', toStepId: 's2' });
-    expect(result[1]).toMatchObject({ status: 'unroutable', fromStepId: 's2', toStepId: 's3' });
+    expect(result[0]).toMatchObject({
+      status: 'skipped',
+      reason: 'unresolved_anchor',
+      fromStepId: 's1',
+      toStepId: 's2'
+    });
+    expect(result[1]).toMatchObject({
+      status: 'skipped',
+      reason: 'unresolved_anchor',
+      fromStepId: 's2',
+      toStepId: 's3'
+    });
   });
 
-  it('returns unroutable when solver reports a blocked endpoint', () => {
+  it('returns unroutable with solverStatus when solver reports a blocked endpoint', () => {
     mockSolver.mockReturnValueOnce({ status: 'end_blocked', points: [], cost: 0 });
 
     const fromPt = { x: 80, y: 200 };
@@ -131,6 +141,7 @@ describe('solvePickingRoute', () => {
 
     expect(result[0]).toMatchObject({
       status: 'unroutable',
+      solverStatus: 'end_blocked',
       fromStepId: 's1',
       toStepId: 's2',
       fromCanvasPoint: fromPt,
@@ -138,7 +149,27 @@ describe('solvePickingRoute', () => {
     });
   });
 
-  it('unroutable segment from unresolved anchor preserves available canvas points', () => {
+  it('returns unroutable with debugReason when solver returns one', () => {
+    mockSolver.mockReturnValueOnce({
+      status: 'no_path',
+      points: [],
+      cost: 0,
+      debugReason: 'grid_guard:300000'
+    });
+
+    const result = solvePickingRoute(
+      [resolvedAnchor('a', 0, 0), resolvedAnchor('b', 400, 400)],
+      []
+    );
+
+    expect(result[0]).toMatchObject({
+      status: 'unroutable',
+      solverStatus: 'no_path',
+      debugReason: 'grid_guard:300000'
+    });
+  });
+
+  it('skipped segment preserves the available canvas point when one anchor is unresolved', () => {
     const anchors: PickingRouteAnchor[] = [
       resolvedAnchor('s1', 80, 200),
       unresolvedAnchor('s2')
@@ -146,7 +177,8 @@ describe('solvePickingRoute', () => {
     const result = solvePickingRoute(anchors, []);
 
     expect(result[0]).toMatchObject({
-      status: 'unroutable',
+      status: 'skipped',
+      reason: 'unresolved_anchor',
       fromCanvasPoint: { x: 80, y: 200 },
       toCanvasPoint: undefined
     });

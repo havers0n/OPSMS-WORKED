@@ -150,10 +150,11 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
     expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
   });
 
-  it('renders fallback Arrow for an unroutable segment', () => {
+  it('renders fallback Arrow for a skipped (unresolved_anchor) segment', () => {
     const solvedSegments: SolvedRouteSegment[] = [
       {
-        status: 'unroutable',
+        status: 'skipped',
+        reason: 'unresolved_anchor',
         fromStepId: 'task-1',
         toStepId: 'task-2',
         fromCanvasPoint: { x: 10, y: 20 },
@@ -174,10 +175,36 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
     expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
   });
 
-  it('omits a segment entirely when unroutable with no canvas points', () => {
+  it('renders fallback Arrow for an unroutable (solver failure) segment', () => {
     const solvedSegments: SolvedRouteSegment[] = [
       {
         status: 'unroutable',
+        solverStatus: 'no_path',
+        fromStepId: 'task-1',
+        toStepId: 'task-2',
+        fromCanvasPoint: { x: 10, y: 20 },
+        toCanvasPoint: { x: 30, y: 40 }
+      }
+    ];
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(PickingRouteOverlayLayer, { anchors, solvedSegments })
+      );
+    });
+
+    const arrows = renderer.root.findAll((node) => String(node.type) === 'Arrow');
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0]?.props.stroke).toContain('234');
+    expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
+  });
+
+  it('omits a skipped segment when one canvas point is missing', () => {
+    const solvedSegments: SolvedRouteSegment[] = [
+      {
+        status: 'skipped',
+        reason: 'unresolved_anchor',
         fromStepId: 'task-1',
         toStepId: 'task-2',
         fromCanvasPoint: { x: 10, y: 20 },

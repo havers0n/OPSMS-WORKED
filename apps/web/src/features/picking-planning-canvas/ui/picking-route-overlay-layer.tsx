@@ -27,6 +27,8 @@ export function PickingRouteOverlayLayer({
                 />
               );
             }
+            // Both 'skipped' (unresolved anchor) and 'unroutable' (solver failure)
+            // render as a dashed fallback arrow when both endpoints are available.
             if (!seg.fromCanvasPoint || !seg.toCanvasPoint) return null;
             return (
               <Arrow

@@ -179,11 +179,23 @@ export type SolvedRouteSegment =
       canvasPoints: { x: number; y: number }[];
     }
   | {
-      status: 'unroutable';
+      // Solver was never called — one or both anchors could not be resolved.
+      status: 'skipped';
+      reason: 'unresolved_anchor';
       fromStepId: string;
       toStepId: string;
       fromCanvasPoint: { x: number; y: number } | undefined;
       toCanvasPoint: { x: number; y: number } | undefined;
+    }
+  | {
+      // Solver was called but returned a non-ok status.
+      status: 'unroutable';
+      solverStatus: 'no_path' | 'start_blocked' | 'end_blocked';
+      debugReason?: string;
+      fromStepId: string;
+      toStepId: string;
+      fromCanvasPoint: { x: number; y: number };
+      toCanvasPoint: { x: number; y: number };
     };
 
 export function solvePickingRoute(
@@ -198,7 +210,8 @@ export function solvePickingRoute(
 
     if (previous.status !== 'resolved' || anchor.status !== 'resolved') {
       return {
-        status: 'unroutable' as const,
+        status: 'skipped' as const,
+        reason: 'unresolved_anchor' as const,
         fromStepId: previous.stepId,
         toStepId: anchor.stepId,
         fromCanvasPoint: previous.status === 'resolved' ? previous.point : undefined,
@@ -220,6 +233,8 @@ export function solvePickingRoute(
     if (result.status !== 'ok') {
       return {
         status: 'unroutable' as const,
+        solverStatus: result.status,
+        debugReason: result.debugReason,
         fromStepId: previous.stepId,
         toStepId: anchor.stepId,
         fromCanvasPoint: previous.point,
