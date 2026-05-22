@@ -59,6 +59,7 @@ export type GridRouteSolverConfig = {
   boundsMarginM?: number;
   maxExpandedCells?: number;
   maxGridCells?: number;
+  maxEndpointSnapCells?: number;
 };
 
 export type ResolvedGridRouteSolverConfig = Required<GridRouteSolverConfig>;
@@ -68,5 +69,6 @@ export const DEFAULT_GRID_ROUTE_SOLVER_CONFIG: ResolvedGridRouteSolverConfig = {
   clearanceM: 0.4,
   boundsMarginM: 5,
   maxExpandedCells: 200_000,
-  maxGridCells: 250_000
+  maxGridCells: 250_000,
+  maxEndpointSnapCells: 2
 };

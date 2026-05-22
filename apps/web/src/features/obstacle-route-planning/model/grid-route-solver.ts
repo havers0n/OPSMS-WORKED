@@ -372,6 +372,71 @@ function buildCellWalkability(
   };
 }
 
+function appendIfDistinct(points: RoutePoint[], point: RoutePoint) {
+  const last = points[points.length - 1];
+  if (!last || distance(last, point) > EPSILON) {
+    points.push(point);
+  }
+}
+
+function prependIfDistinct(points: RoutePoint[], point: RoutePoint) {
+  const first = points[0];
+  if (!first || distance(first, point) > EPSILON) {
+    points.unshift(point);
+  }
+}
+
+function snapEndpointsToOriginal(
+  points: RoutePoint[],
+  start: RoutePoint,
+  end: RoutePoint
+) {
+  const next = [...points];
+  prependIfDistinct(next, start);
+  appendIfDistinct(next, end);
+  return next;
+}
+
+function findNearestWalkableCell(
+  blockedCell: Cell,
+  grid: Grid,
+  isWalkable: (cell: Cell) => boolean,
+  maxRadiusCells: number
+): { cell: Cell; radius: number } | null {
+  for (let radius = 1; radius <= maxRadiusCells; radius += 1) {
+    const candidates: Cell[] = [];
+
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      candidates.push({ x: blockedCell.x + dx, y: blockedCell.y - radius });
+      candidates.push({ x: blockedCell.x + dx, y: blockedCell.y + radius });
+    }
+    for (let dy = -radius + 1; dy <= radius - 1; dy += 1) {
+      candidates.push({ x: blockedCell.x - radius, y: blockedCell.y + dy });
+      candidates.push({ x: blockedCell.x + radius, y: blockedCell.y + dy });
+    }
+
+    const walkableCandidates = candidates
+      .filter((candidate) => isCellWithinGrid(candidate, grid) && isWalkable(candidate))
+      .sort((left, right) => {
+        const leftDx = left.x - blockedCell.x;
+        const leftDy = left.y - blockedCell.y;
+        const rightDx = right.x - blockedCell.x;
+        const rightDy = right.y - blockedCell.y;
+        const leftDist = leftDx * leftDx + leftDy * leftDy;
+        const rightDist = rightDx * rightDx + rightDy * rightDy;
+        if (leftDist !== rightDist) return leftDist - rightDist;
+        if (left.y !== right.y) return left.y - right.y;
+        return left.x - right.x;
+      });
+
+    if (walkableCandidates.length > 0) {
+      return { cell: walkableCandidates[0]!, radius };
+    }
+  }
+
+  return null;
+}
+
 function smoothFoundPath(
   start: RoutePoint,
   end: RoutePoint,
@@ -421,22 +486,48 @@ export function solveGridRoute(
 
   const startCell = pointToCell(start, grid);
   const endCell = pointToCell(end, grid);
-  const startKey = cellKey(startCell, grid);
-  const endKey = cellKey(endCell, grid);
   const isWalkable = buildCellWalkability(grid, obstacles, config.clearanceM);
+  const startSnap =
+    isWalkable(startCell)
+      ? null
+      : findNearestWalkableCell(
+          startCell,
+          grid,
+          isWalkable,
+          config.maxEndpointSnapCells
+        );
+  const endSnap =
+    isWalkable(endCell)
+      ? null
+      : findNearestWalkableCell(
+          endCell,
+          grid,
+          isWalkable,
+          config.maxEndpointSnapCells
+        );
 
-  if (!isWalkable(startCell)) {
+  if (!isWalkable(startCell) && !startSnap) {
     return { status: 'start_blocked', points: [], cost: 0 };
   }
-  if (!isWalkable(endCell)) {
+  if (!isWalkable(endCell) && !endSnap) {
     return { status: 'end_blocked', points: [], cost: 0 };
   }
+
+  const routedStartCell = startSnap?.cell ?? startCell;
+  const routedEndCell = endSnap?.cell ?? endCell;
+  const routedStartPoint = cellToPoint(routedStartCell, grid);
+  const routedEndPoint = cellToPoint(routedEndCell, grid);
+  const startKey = cellKey(routedStartCell, grid);
+  const endKey = cellKey(routedEndCell, grid);
 
   const frontier = new MinHeap();
   const cameFrom = new Map<number, number>();
   const costSoFar = new Map<number, number>([[startKey, 0]]);
   const visited = new Set<number>();
-  frontier.push({ key: startKey, priority: distance(start, end) });
+  frontier.push({
+    key: startKey,
+    priority: distance(routedStartPoint, routedEndPoint)
+  });
 
   const directions = [
     { dx: -1, dy: 0 },
@@ -468,11 +559,27 @@ export function solveGridRoute(
 
     if (currentItem.key === endKey) {
       const gridPath = reconstructPath(cameFrom, endKey, grid);
-      const points = smoothFoundPath(start, end, gridPath, obstacles, config);
+      const snappedPath = smoothFoundPath(
+        routedStartPoint,
+        routedEndPoint,
+        gridPath,
+        obstacles,
+        config
+      );
+      const points = snapEndpointsToOriginal(snappedPath, start, end);
+      const snapTags = [
+        startSnap ? `start_snap:r${startSnap.radius}` : null,
+        endSnap ? `end_snap:r${endSnap.radius}` : null
+      ].filter(Boolean);
       return {
         status: 'ok',
         points,
-        cost: totalPathCost(points)
+        cost: totalPathCost(points),
+        ...(snapTags.length > 0
+          ? {
+              debugReason: snapTags.join(',')
+            }
+          : {})
       };
     }
 
@@ -510,7 +617,7 @@ export function solveGridRoute(
         cameFrom.set(nextKey, currentItem.key);
         frontier.push({
           key: nextKey,
-          priority: nextCost + distance(nextPoint, end)
+          priority: nextCost + distance(nextPoint, routedEndPoint)
         });
       }
     }

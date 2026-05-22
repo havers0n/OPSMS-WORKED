@@ -122,6 +122,100 @@ describe('solveGridRoute', () => {
     expect(result.status).toBe('end_blocked');
   });
 
+  it('snaps a start endpoint when the point is clear but its grid cell is blocked', () => {
+    const rack: RouteObstacle = {
+      type: 'rack',
+      id: 'rack-1',
+      x: 0.2,
+      y: -0.25,
+      width: 1,
+      height: 0.5
+    };
+    const start = { x: -0.05, y: 0 };
+    const end = { x: -2, y: 0 };
+
+    const result = solveGridRoute(start, end, [rack], {
+      clearanceM: 0.1,
+      resolutionM: 0.5,
+      maxEndpointSnapCells: 2
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.points[0]).toEqual(start);
+    expect(result.points[result.points.length - 1]).toEqual(end);
+    expect(result.debugReason).toContain('start_snap:');
+    expectRouteClear(result.points, [rack], 0.1);
+  });
+
+  it('snaps an end endpoint when the point is clear but its grid cell is blocked', () => {
+    const rack: RouteObstacle = {
+      type: 'rack',
+      id: 'rack-1',
+      x: 0.2,
+      y: -0.25,
+      width: 1,
+      height: 0.5
+    };
+    const start = { x: -2, y: 0 };
+    const end = { x: -0.05, y: 0 };
+
+    const result = solveGridRoute(start, end, [rack], {
+      clearanceM: 0.1,
+      resolutionM: 0.5,
+      maxEndpointSnapCells: 2
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.points[0]).toEqual(start);
+    expect(result.points[result.points.length - 1]).toEqual(end);
+    expect(result.debugReason).toContain('end_snap:');
+    expectRouteClear(result.points, [rack], 0.1);
+  });
+
+  it('snaps both endpoints when nearby walkable cells exist', () => {
+    const obstacles: RouteObstacle[] = [
+      { type: 'rack', id: 'left', x: 0.2, y: -0.25, width: 1, height: 0.5 },
+      { type: 'rack', id: 'right', x: 2.2, y: -0.25, width: 1, height: 0.5 }
+    ];
+    const start = { x: -0.05, y: 0 };
+    const end = { x: 1.95, y: 0 };
+
+    const result = solveGridRoute(start, end, obstacles, {
+      clearanceM: 0.1,
+      resolutionM: 0.5,
+      maxEndpointSnapCells: 2
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.points[0]).toEqual(start);
+    expect(result.points[result.points.length - 1]).toEqual(end);
+    expect(result.debugReason).toContain('start_snap:');
+    expect(result.debugReason).toContain('end_snap:');
+    expectRouteClear(result.points, obstacles, 0.1);
+  });
+
+  it('returns start_blocked when no nearby walkable cell exists within snap radius', () => {
+    const rack: RouteObstacle = {
+      type: 'rack',
+      id: 'rack-1',
+      x: 0.2,
+      y: -0.25,
+      width: 1,
+      height: 0.5
+    };
+    const result = solveGridRoute(
+      { x: -0.05, y: 0 },
+      { x: -2, y: 0 },
+      [rack],
+      { clearanceM: 0.1, resolutionM: 0.5, maxEndpointSnapCells: 0 }
+    );
+
+    expect(result.status).toBe('start_blocked');
+  });
+
   it('does not cross a blocking wall segment', () => {
     const wall: RouteObstacle = {
       type: 'wall',
