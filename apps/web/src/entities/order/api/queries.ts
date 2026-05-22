@@ -9,7 +9,7 @@ export const orderKeys = {
   execution: (orderId: string | null) => [...orderKeys.all, 'execution', orderId ?? 'none'] as const
 };
 
-async function fetchOrders(status?: string): Promise<OrderSummary[]> {
+export async function fetchOrders(status?: string): Promise<OrderSummary[]> {
   const url = status ? `/api/orders?status=${encodeURIComponent(status)}` : '/api/orders';
   return bffRequest<OrderSummary[]>(url);
 }
