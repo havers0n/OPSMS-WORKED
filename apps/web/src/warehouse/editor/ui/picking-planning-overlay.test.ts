@@ -6,6 +6,8 @@ import {
   usePickingPlanningOverlayStore
 } from '@/entities/picking-planning/model/overlay-store';
 import { previewPickingPlanFromOrders } from '@/entities/picking-planning/api/preview';
+import { fetchOrders } from '@/entities/order/api/queries';
+import type { OrderSummary } from '@wos/domain';
 import type { PickingPlanningPreviewResponse } from '@/entities/picking-planning/model/types';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
 
@@ -13,6 +15,30 @@ vi.mock('@/entities/picking-planning/api/preview', () => ({
   previewPickingPlanFromOrders: vi.fn(),
   previewPickingPlanFromWave: vi.fn()
 }));
+
+vi.mock('@/entities/order/api/queries', () => ({
+  fetchOrders: vi.fn(),
+  ordersQueryOptions: vi.fn()
+}));
+
+function makeOrder(overrides: Partial<OrderSummary> = {}): OrderSummary {
+  return {
+    id: 'order-1',
+    tenantId: 'tenant-1',
+    externalNumber: '#EXT001',
+    status: 'released',
+    priority: 0,
+    waveId: null,
+    waveName: null,
+    createdAt: '2024-01-15T00:00:00Z',
+    releasedAt: null,
+    closedAt: null,
+    lineCount: 3,
+    unitCount: 5,
+    pickedUnitCount: 0,
+    ...overrides
+  };
+}
 
 (
   globalThis as typeof globalThis & {
@@ -143,6 +169,8 @@ describe('PickingPlanningOverlay', () => {
   beforeEach(() => {
     resetPickingPlanningOverlayStore();
     vi.mocked(previewPickingPlanFromOrders).mockReset();
+    vi.mocked(fetchOrders).mockReset();
+    vi.mocked(fetchOrders).mockResolvedValue([]);
   });
 
   it('collapses and expands without unmounting the stage entry point', () => {
@@ -175,19 +203,24 @@ describe('PickingPlanningOverlay', () => {
     ).toHaveLength(1);
   });
 
-  it('renders empty, loading, and error states', () => {
+  it('renders empty, loading, and error states', async () => {
     let renderer!: TestRenderer.ReactTestRenderer;
-    act(() => {
+    // Let orders effect resolve so we see the empty-list state
+    await act(async () => {
       renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
     });
+    // No source → order picker shown with empty list
     expect(normalizeText(collectText(renderer.toJSON()))).toContain(
-      'No picking planning source selected.'
+      'Select order'
+    );
+    expect(normalizeText(collectText(renderer.toJSON()))).toContain(
+      'No orders found'
     );
 
+    // Preview loading state (separate from order-list loading)
     act(() => {
-      usePickingPlanningOverlayStore.setState({
-        isLoading: true
-      });
+      usePickingPlanningOverlayStore.setState({ isLoading: true });
     });
     expect(normalizeText(collectText(renderer.toJSON()))).toContain(
       'Loading picking planning preview...'
@@ -202,6 +235,115 @@ describe('PickingPlanningOverlay', () => {
     expect(normalizeText(collectText(renderer.toJSON()))).toContain(
       'Preview failed'
     );
+  });
+
+  it('submitting order IDs (comma- and newline-separated) updates the source', async () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const textarea = renderer.root.find(
+      (n) => n.type === 'textarea' &&
+        n.props['data-testid'] === 'picking-plan-order-id-input'
+    );
+    act(() => {
+      textarea.props.onChange({ target: { value: 'uuid-1, uuid-2\nuuid-3' } });
+    });
+
+    const loadButton = renderer.root.find(
+      (n) =>
+        n.type === 'button' &&
+        n.props['data-testid'] === 'picking-plan-load-button'
+    );
+    act(() => {
+      loadButton.props.onClick();
+    });
+
+    expect(usePickingPlanningOverlayStore.getState().source).toEqual({
+      kind: 'orders',
+      orderIds: ['uuid-1', 'uuid-2', 'uuid-3']
+    });
+  });
+
+  it('renders fetched orders with human-readable labels', async () => {
+    vi.mocked(fetchOrders).mockResolvedValue([
+      makeOrder({ id: 'order-a', externalNumber: '#EXT999', status: 'released', lineCount: 5, createdAt: '2024-03-20T00:00:00Z' }),
+      makeOrder({ id: 'order-b', externalNumber: '#EXT000', status: 'ready', lineCount: 1, createdAt: '2024-03-21T00:00:00Z' })
+    ]);
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('#EXT999');
+    expect(text).toContain('released');
+    expect(text).toContain('5 lines');
+    expect(text).toContain('2024-03-20');
+    expect(text).toContain('#EXT000');
+    expect(text).toContain('ready');
+    expect(text).toContain('1 line');
+  });
+
+  it('clicking an order row sets source to that order id', async () => {
+    vi.mocked(fetchOrders).mockResolvedValue([makeOrder()]);
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const orderRow = renderer.root.find(
+      (n) =>
+        n.type === 'button' &&
+        n.props['data-testid'] === 'picking-plan-order-row-order-1'
+    );
+    act(() => {
+      orderRow.props.onClick();
+    });
+
+    expect(usePickingPlanningOverlayStore.getState().source).toEqual({
+      kind: 'orders',
+      orderIds: ['order-1']
+    });
+  });
+
+  it('shows empty state when order list is empty', async () => {
+    vi.mocked(fetchOrders).mockResolvedValue([]);
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    expect(normalizeText(collectText(renderer.toJSON()))).toContain(
+      'No orders found'
+    );
+  });
+
+  it('UUID textarea is present as advanced fallback in no-source state', async () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Advanced');
+
+    // The textarea is still present in the DOM
+    const textarea = renderer.root.find(
+      (n) =>
+        n.type === 'textarea' &&
+        n.props['data-testid'] === 'picking-plan-order-id-input'
+    );
+    expect(textarea).toBeDefined();
   });
 
   it('renders real preview summary, diagnostics, warnings, and route steps', async () => {

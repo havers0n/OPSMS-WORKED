@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -9,11 +10,16 @@ import {
   RefreshCcw,
   Route
 } from 'lucide-react';
+import type { OrderSummary } from '@wos/domain';
+import { fetchOrders } from '@/entities/order/api/queries';
 import {
   previewPickingPlanFromOrders,
   previewPickingPlanFromWave
 } from '@/entities/picking-planning/api/preview';
-import { readDevPickingPlanningSourceFromSearch } from '@/entities/picking-planning/model/dev-source';
+import {
+  canSeedPickingPlanningSource,
+  readDevPickingPlanningSourceFromSearch
+} from '@/entities/picking-planning/model/dev-source';
 import {
   usePickingPlanningOverlayStore
 } from '@/entities/picking-planning/model/overlay-store';
@@ -143,10 +149,39 @@ function RouteStepRow({
   );
 }
 
+function formatDate(iso: string | null | undefined): string {
+  return iso ? iso.slice(0, 10) : '';
+}
+
+function statusStyle(status: string): CSSProperties {
+  const map: Record<string, React.CSSProperties> = {
+    draft:     { background: 'rgba(148,163,184,0.2)', color: '#475569' },
+    ready:     { background: 'rgba(37,99,235,0.12)',  color: '#1d4ed8' },
+    released:  { background: 'rgba(22,163,74,0.12)',  color: '#15803d' },
+    picking:   { background: 'rgba(245,158,11,0.15)', color: '#b45309' },
+    picked:    { background: 'rgba(20,184,166,0.12)', color: '#0f766e' },
+    partial:   { background: 'rgba(249,115,22,0.12)', color: '#c2410c' },
+    closed:    { background: 'rgba(100,116,139,0.15)',color: '#64748b' },
+    cancelled: { background: 'rgba(239,68,68,0.12)',  color: '#dc2626' },
+  };
+  return map[status] ?? { background: 'rgba(148,163,184,0.2)', color: '#475569' };
+}
+
+function parseOrderIds(input: string): string[] {
+  return input
+    .split(/[\n,]/)
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 export function PickingPlanningOverlay({
   stepGeometryById = {}
 }: PickingPlanningOverlayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [orderIdInput, setOrderIdInput] = useState('');
+  const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const {
     activePackageId,
     errorMessage,
@@ -162,6 +197,61 @@ export function PickingPlanningOverlay({
     setSource,
     source
   } = usePickingPlanningOverlayStore();
+
+  function handleSelectOrder(orderId: string) {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.set('pickingPlanOrderIds', orderId);
+      params.delete('pickingPlanWaveId');
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}?${params.toString()}`
+      );
+    }
+    setSource({ kind: 'orders', orderIds: [orderId] });
+  }
+
+  function handleLoadFromInput() {
+    const orderIds = parseOrderIds(orderIdInput);
+    if (orderIds.length === 0) return;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.set('pickingPlanOrderIds', orderIds.join(','));
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}?${params.toString()}`
+      );
+    }
+    setSource({ kind: 'orders', orderIds });
+  }
+
+  useEffect(() => {
+    if (source.kind !== 'none') return;
+    if (!canSeedPickingPlanningSource(import.meta.env.MODE)) return;
+    let cancelled = false;
+    setOrdersLoading(true);
+    setOrdersError(null);
+    fetchOrders()
+      .then((data) => {
+        if (!cancelled) {
+          setOrders(data);
+          setOrdersLoading(false);
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setOrdersError(
+            e instanceof Error ? e.message : 'Failed to load orders.'
+          );
+          setOrdersLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [source.kind]);
 
   useEffect(() => {
     if (source.kind !== 'none') return;
@@ -297,11 +387,111 @@ export function PickingPlanningOverlay({
         </div>
 
         <div className="mt-3 max-h-[calc(100vh-142px)] overflow-y-auto pr-1">
-          {source.kind === 'none' && (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-4 text-sm text-slate-600">
-              No picking planning source selected.
-            </div>
-          )}
+          {source.kind === 'none' &&
+            (canSeedPickingPlanningSource(import.meta.env.MODE) ? (
+              <div className="space-y-4">
+                {/* Primary: order list */}
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-700">
+                    Select order
+                  </div>
+
+                  {ordersLoading && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-700">
+                      Loading orders...
+                    </div>
+                  )}
+
+                  {ordersError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50/80 p-3 text-xs text-red-700">
+                      {ordersError}
+                    </div>
+                  )}
+
+                  {!ordersLoading && !ordersError && orders.length === 0 && (
+                    <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-4 text-sm text-slate-500">
+                      No orders found. Create an order first or use the advanced
+                      input below.
+                    </div>
+                  )}
+
+                  {!ordersLoading && !ordersError && orders.length > 0 && (
+                    <div className="space-y-1.5">
+                      {orders.map((order) => (
+                        <button
+                          key={order.id}
+                          type="button"
+                          onClick={() => handleSelectOrder(order.id)}
+                          data-testid={`picking-plan-order-row-${order.id}`}
+                          className="w-full rounded-lg border px-3 py-2 text-left transition-colors hover:bg-white/80"
+                          style={{
+                            borderColor: 'rgba(148,163,184,0.35)',
+                            background: 'rgba(255,255,255,0.6)'
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-slate-800">
+                              {order.externalNumber}
+                            </span>
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              style={statusStyle(order.status)}
+                            >
+                              {order.status}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-3 text-[11px] text-slate-500">
+                            <span>
+                              {order.lineCount}{' '}
+                              {order.lineCount === 1 ? 'line' : 'lines'}
+                            </span>
+                            {order.createdAt && (
+                              <span>{formatDate(order.createdAt)}</span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Secondary: advanced UUID input */}
+                <div
+                  className="space-y-2 rounded-lg border border-slate-200 bg-white/50 p-3"
+                >
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Advanced: load by order ID
+                  </div>
+                  <textarea
+                    value={orderIdInput}
+                    onChange={(e) => setOrderIdInput(e.target.value)}
+                    placeholder={'uuid-1, uuid-2\nor one per line'}
+                    rows={2}
+                    data-testid="picking-plan-order-id-input"
+                    className="w-full rounded-lg border border-slate-300 bg-white/80 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleLoadFromInput}
+                    disabled={!orderIdInput.trim()}
+                    data-testid="picking-plan-load-button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{
+                      background: 'rgba(37,99,235,0.08)',
+                      borderColor: 'rgba(37,99,235,0.35)',
+                      color: 'var(--accent)'
+                    }}
+                  >
+                    <Route className="h-3.5 w-3.5" />
+                    Load order preview
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-4 text-sm text-slate-600">
+                No picking planning source selected.
+              </div>
+            ))}
 
           {isLoading && (
             <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-800">
