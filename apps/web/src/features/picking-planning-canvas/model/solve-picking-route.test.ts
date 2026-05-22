@@ -184,4 +184,55 @@ describe('solvePickingRoute', () => {
       toCanvasPoint: undefined
     });
   });
+
+  it('with startCanvasPoint adds a start-to-first-resolved segment', () => {
+    mockSolver
+      .mockReturnValueOnce({
+        status: 'ok',
+        points: [
+          { x: 1, y: 1 },
+          { x: 2, y: 2 }
+        ],
+        cost: 2
+      })
+      .mockReturnValueOnce({
+        status: 'ok',
+        points: [
+          { x: 2, y: 2 },
+          { x: 3, y: 2 }
+        ],
+        cost: 1
+      });
+
+    const result = solvePickingRoute(
+      [resolvedAnchor('a', 160, 160), resolvedAnchor('b', 240, 160)],
+      [],
+      undefined,
+      { startCanvasPoint: { x: 80, y: 80 } }
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      status: 'ok',
+      fromStepId: '__route_start__',
+      toStepId: 'a',
+      costMetres: 2
+    });
+    expect(result[1]).toMatchObject({
+      status: 'ok',
+      fromStepId: 'a',
+      toStepId: 'b',
+      costMetres: 1
+    });
+  });
+
+  it('with startCanvasPoint and no resolved anchors returns empty', () => {
+    const result = solvePickingRoute(
+      [unresolvedAnchor('a')],
+      [],
+      undefined,
+      { startCanvasPoint: { x: 80, y: 80 } }
+    );
+    expect(result).toEqual([]);
+  });
 });

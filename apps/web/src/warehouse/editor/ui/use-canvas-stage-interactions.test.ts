@@ -49,8 +49,10 @@ function renderHookHarness(params: {
   isLayoutMode?: boolean;
   isObstacleRouteMode?: boolean;
   isRouteGraphMode?: boolean;
+  isPickingPlanRouteStartPlacementMode?: boolean;
   onObstacleRouteEmptyCanvasClick?: (point: { x: number; y: number }) => void;
   onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
+  onPickingPlanRouteStartPointClick?: (point: { x: number; y: number }) => void;
 }) {
   const stageMock = createStageMock();
   let interactions!: ReturnType<typeof useCanvasStageInteractions>;
@@ -69,6 +71,8 @@ function renderHookHarness(params: {
       isDrawingZone: false,
       isLayoutMode: params.isLayoutMode ?? false,
       isObstacleRouteMode: params.isObstacleRouteMode ?? false,
+      isPickingPlanRouteStartPlacementMode:
+        params.isPickingPlanRouteStartPlacementMode ?? false,
       isPlacing: false,
       isRouteGraphMode: params.isRouteGraphMode ?? false,
       layoutDraft: null,
@@ -76,7 +80,9 @@ function renderHookHarness(params: {
       stageRef,
       viewport: { width: 1000, height: 800 },
       onObstacleRouteEmptyCanvasClick: params.onObstacleRouteEmptyCanvasClick,
-      onRouteGraphEmptyCanvasClick: params.onRouteGraphEmptyCanvasClick
+      onRouteGraphEmptyCanvasClick: params.onRouteGraphEmptyCanvasClick,
+      onPickingPlanRouteStartPointClick:
+        params.onPickingPlanRouteStartPointClick
     });
     return null;
   }
@@ -253,6 +259,56 @@ describe('useCanvasStageInteractions empty canvas clicks', () => {
     expect(onRouteGraphEmptyCanvasClick).toHaveBeenCalledWith({
       x: 6,
       y: 8
+    });
+  });
+
+  it('routes empty canvas clicks to picking-plan start placement and preempts clear', () => {
+    const clearSelection = vi.fn();
+    const clearHighlightedCellIds = vi.fn();
+    const onPickingPlanRouteStartPointClick = vi.fn();
+
+    const { stageMock } = renderHookHarness({
+      interactionScope: 'object',
+      clearSelection,
+      clearHighlightedCellIds,
+      cancelPlacementInteraction: vi.fn(),
+      isPickingPlanRouteStartPlacementMode: true,
+      onPickingPlanRouteStartPointClick
+    });
+
+    act(() => {
+      stageMock.trigger('click.canvas');
+    });
+
+    expect(onPickingPlanRouteStartPointClick).toHaveBeenCalledWith({
+      x: 0.25,
+      y: 0.5
+    });
+    expect(clearSelection).not.toHaveBeenCalled();
+    expect(clearHighlightedCellIds).not.toHaveBeenCalled();
+  });
+
+  it('places picking-plan route start on mouse down in placement mode', () => {
+    const onPickingPlanRouteStartPointClick = vi.fn();
+    const { getInteractions } = renderHookHarness({
+      interactionScope: 'object',
+      clearSelection: vi.fn(),
+      clearHighlightedCellIds: vi.fn(),
+      cancelPlacementInteraction: vi.fn(),
+      isPickingPlanRouteStartPlacementMode: true,
+      onPickingPlanRouteStartPointClick
+    });
+
+    const interactions = getInteractions();
+    act(() => {
+      interactions.onMouseDown({
+        evt: { button: 0 }
+      } as unknown as Konva.KonvaEventObject<MouseEvent>);
+    });
+
+    expect(onPickingPlanRouteStartPointClick).toHaveBeenCalledWith({
+      x: 0.25,
+      y: 0.5
     });
   });
 });

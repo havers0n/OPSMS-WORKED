@@ -57,6 +57,7 @@ vi.mock('@/entities/layout-version/lib/canvas-geometry', () => ({
   LOD_SECTION_THRESHOLD: 0.9,
   MAJOR_GRID_SIZE: 5,
   MINOR_GRID_ZOOM_THRESHOLD: 999,
+  WORLD_SCALE: 40,
   isRackInViewport: mockIsRackInViewport
 }));
 

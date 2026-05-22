@@ -46,6 +46,8 @@ type UseCanvasStageInteractionsParams = {
   viewport: { width: number; height: number };
   onObstacleRouteEmptyCanvasClick?: (point: { x: number; y: number }) => void;
   onRouteGraphEmptyCanvasClick?: (point: { x: number; y: number }) => void;
+  onPickingPlanRouteStartPointClick?: (point: { x: number; y: number }) => void;
+  isPickingPlanRouteStartPlacementMode?: boolean;
   /**
    * V2 Storage override for empty-canvas click.
    * When provided, replaces clearSelection() so that only the V2 StorageFocusStore
@@ -75,6 +77,8 @@ export function useCanvasStageInteractions({
   viewport,
   onObstacleRouteEmptyCanvasClick,
   onRouteGraphEmptyCanvasClick,
+  onPickingPlanRouteStartPointClick,
+  isPickingPlanRouteStartPlacementMode = false,
   onStorageEmptyClick,
 }: UseCanvasStageInteractionsParams) {
   // marquee drives the Konva Rect visual; marqueeRef is readable in event handlers
@@ -90,6 +94,7 @@ export function useCanvasStageInteractions({
   const draftWallStartRef = useRef<{ x: number; y: number } | null>(null);
   // Set to true on the first mousemove past threshold; cleared by click.canvas handler.
   const dragDidHappenRef = useRef(false);
+  const routeStartPlacedOnMouseDownRef = useRef(false);
 
   const isPlacingRef = useRef(isPlacing);
   isPlacingRef.current = isPlacing;
@@ -123,6 +128,15 @@ export function useCanvasStageInteractions({
     onObstacleRouteEmptyCanvasClick
   );
   onObstacleRouteEmptyCanvasClickRef.current = onObstacleRouteEmptyCanvasClick;
+  const onPickingPlanRouteStartPointClickRef = useRef(
+    onPickingPlanRouteStartPointClick
+  );
+  onPickingPlanRouteStartPointClickRef.current = onPickingPlanRouteStartPointClick;
+  const isPickingPlanRouteStartPlacementModeRef = useRef(
+    isPickingPlanRouteStartPlacementMode
+  );
+  isPickingPlanRouteStartPlacementModeRef.current =
+    isPickingPlanRouteStartPlacementMode;
 
   const cancelDrawZone = useCallback(() => {
     draftZoneStartRef.current = null;
@@ -151,7 +165,17 @@ export function useCanvasStageInteractions({
       const pos = stage.getRelativePointerPosition();
       if (!pos) return;
 
-      if (isPlacingRef.current) {
+      if (routeStartPlacedOnMouseDownRef.current) {
+        routeStartPlacedOnMouseDownRef.current = false;
+        return;
+      }
+
+      if (isPickingPlanRouteStartPlacementModeRef.current) {
+        onPickingPlanRouteStartPointClickRef.current?.({
+          x: pos.x / WORLD_SCALE,
+          y: pos.y / WORLD_SCALE
+        });
+      } else if (isPlacingRef.current) {
         // Convert canvas pixels → metres, snapped to 1 m grid
         createRackRef.current(
           Math.round(pos.x / WORLD_SCALE),
@@ -194,6 +218,17 @@ export function useCanvasStageInteractions({
   }, [viewport]);
 
   const onMouseDown = useCallback((event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (event.evt.button === 0 && isPickingPlanRouteStartPlacementModeRef.current) {
+      const pos = stageRef.current?.getRelativePointerPosition();
+      if (!pos) return;
+      routeStartPlacedOnMouseDownRef.current = true;
+      onPickingPlanRouteStartPointClickRef.current?.({
+        x: pos.x / WORLD_SCALE,
+        y: pos.y / WORLD_SCALE
+      });
+      return;
+    }
+
     // Empty-canvas drags in layout mode are either zone/wall creation or marquee selection.
     // Rack/zone/wall groups suppress this via cancelBubble on their own onMouseDown.
     if (event.evt.button !== 0 || !isLayoutMode || isPlacing) return;

@@ -118,4 +118,144 @@ describe('picking planning overlay store', () => {
       ]
     ).toBeUndefined();
   });
+
+  it('sets route order mode per package', () => {
+    usePickingPlanningOverlayStore.getState().setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('nearest-neighbor');
+  });
+
+  it('clears route order modes when source changes', () => {
+    usePickingPlanningOverlayStore.getState().setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+    usePickingPlanningOverlayStore.getState().setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    expect(usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId).toEqual({});
+  });
+
+  it('clears route order modes when preview changes', () => {
+    usePickingPlanningOverlayStore.getState().setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+    usePickingPlanningOverlayStore.getState().setPreview(createPreview());
+
+    expect(usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId).toEqual({});
+  });
+
+  it('switching to nearest mode clears manual reorder for package', () => {
+    const preview = createPreview();
+    usePickingPlanningOverlayStore.getState().setPreview(preview);
+    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
+    usePickingPlanningOverlayStore
+      .getState()
+      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+    expect(
+      usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId['pkg-1']
+    ).toBeUndefined();
+  });
+
+  it('manual reorder switches nearest mode back to original', () => {
+    const preview = createPreview();
+    usePickingPlanningOverlayStore.getState().setPreview(preview);
+    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+    usePickingPlanningOverlayStore
+      .getState()
+      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('original');
+  });
+
+  it('stores and clears route start point per package', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteStartPoint('pkg-1', { x: 1.2, y: 3.4, source: 'manual' });
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeStartPointByPackageId['pkg-1']
+    ).toEqual({ x: 1.2, y: 3.4, source: 'manual' });
+
+    usePickingPlanningOverlayStore.getState().clearRouteStartPoint('pkg-1');
+    expect(
+      usePickingPlanningOverlayStore.getState().routeStartPointByPackageId['pkg-1']
+    ).toBeUndefined();
+  });
+
+  it('tracks placement mode and clears it when cancelled', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .startPlacingRouteStartPoint('pkg-1');
+
+    expect(
+      usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
+    ).toBe('pkg-1');
+
+    usePickingPlanningOverlayStore.getState().cancelPlacingRouteStartPoint();
+
+    expect(
+      usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
+    ).toBeNull();
+  });
+
+  it('setRouteStartPoint clears placement for same package', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .startPlacingRouteStartPoint('pkg-1');
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteStartPoint('pkg-1', { x: 2, y: 3, source: 'manual' });
+
+    expect(
+      usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
+    ).toBeNull();
+  });
+
+  it('clears route start points and placement when source changes', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteStartPoint('pkg-1', { x: 1, y: 2, source: 'manual' });
+    usePickingPlanningOverlayStore
+      .getState()
+      .startPlacingRouteStartPoint('pkg-1');
+
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    expect(usePickingPlanningOverlayStore.getState().routeStartPointByPackageId).toEqual(
+      {}
+    );
+    expect(
+      usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
+    ).toBeNull();
+  });
+
+  it('clears route start points and placement when preview changes', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteStartPoint('pkg-1', { x: 1, y: 2, source: 'manual' });
+    usePickingPlanningOverlayStore
+      .getState()
+      .startPlacingRouteStartPoint('pkg-1');
+
+    usePickingPlanningOverlayStore.getState().setPreview(createPreview());
+
+    expect(usePickingPlanningOverlayStore.getState().routeStartPointByPackageId).toEqual(
+      {}
+    );
+    expect(
+      usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
+    ).toBeNull();
+  });
 });

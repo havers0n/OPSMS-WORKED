@@ -4,14 +4,38 @@ import type { PickingRouteAnchor, SolvedRouteSegment } from '../model/route-step
 type PickingRouteOverlayLayerProps = {
   anchors: PickingRouteAnchor[];
   solvedSegments?: SolvedRouteSegment[];
+  startCanvasPoint?: { x: number; y: number } | null;
 };
 
 export function PickingRouteOverlayLayer({
   anchors,
-  solvedSegments
+  solvedSegments,
+  startCanvasPoint
 }: PickingRouteOverlayLayerProps) {
   return (
     <>
+      {startCanvasPoint && (
+        <>
+          <Circle
+            x={startCanvasPoint.x}
+            y={startCanvasPoint.y}
+            radius={7}
+            fill="rgba(22,163,74,0.92)"
+            stroke="white"
+            strokeWidth={2}
+            strokeScaleEnabled={false}
+          />
+          <Text
+            x={startCanvasPoint.x + 10}
+            y={startCanvasPoint.y - 6}
+            text="Start"
+            fontSize={11}
+            fontStyle="bold"
+            fill="rgba(22,163,74,0.95)"
+            listening={false}
+          />
+        </>
+      )}
       {solvedSegments
         ? solvedSegments.map((seg) => {
             if (seg.status === 'ok') {

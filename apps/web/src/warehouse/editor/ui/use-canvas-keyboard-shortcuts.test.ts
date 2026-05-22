@@ -13,9 +13,11 @@ import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 let renderer: TestRenderer.ReactTestRenderer | null = null;
+let cancelPickingPlanRouteStartPlacementLastSpy = vi.fn();
 
 function renderKeyboardHarness(params: {
   isRouteGraphMode: boolean;
+  isPickingPlanRouteStartPlacementMode?: boolean;
   selectedRouteGraphElement:
     | { type: 'node' | 'edge'; id: string }
     | null;
@@ -27,6 +29,8 @@ function renderKeyboardHarness(params: {
     params.clearRouteGraphInteraction ?? vi.fn();
   const deleteRouteGraphNode = params.deleteRouteGraphNode ?? vi.fn();
   const deleteRouteGraphEdge = params.deleteRouteGraphEdge ?? vi.fn();
+  const cancelPickingPlanRouteStartPlacement = vi.fn();
+  cancelPickingPlanRouteStartPlacementLastSpy = cancelPickingPlanRouteStartPlacement;
 
   function Harness() {
     useCanvasKeyboardShortcuts({
@@ -35,7 +39,13 @@ function renderKeyboardHarness(params: {
       isDrawingZoneRef: useRef(false),
       isDrawingWallRef: useRef(false),
       isRouteGraphModeRef: useRef(params.isRouteGraphMode),
+      isPickingPlanRouteStartPlacementModeRef: useRef(
+        params.isPickingPlanRouteStartPlacementMode ?? false
+      ),
       interactionScopeRef: useRef<InteractionScope>('idle'),
+      cancelPickingPlanRouteStartPlacementRef: useRef(
+        cancelPickingPlanRouteStartPlacement
+      ),
       cancelPlacementInteractionRef: useRef(() => undefined),
       clearSelectionRef: useRef(() => undefined),
       selectedRackIdsRef: useRef([]),
@@ -133,5 +143,22 @@ describe('useCanvasKeyboardShortcuts route graph scope', () => {
     });
 
     expect(deleteRouteGraphNode).not.toHaveBeenCalled();
+  });
+
+  it('cancels picking-plan start placement on Escape', () => {
+    const clearRouteGraphInteraction = vi.fn();
+    renderKeyboardHarness({
+      isRouteGraphMode: false,
+      isPickingPlanRouteStartPlacementMode: true,
+      selectedRouteGraphElement: null,
+      clearRouteGraphInteraction
+    });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(clearRouteGraphInteraction).not.toHaveBeenCalled();
+    expect(cancelPickingPlanRouteStartPlacementLastSpy).toHaveBeenCalledTimes(1);
   });
 });

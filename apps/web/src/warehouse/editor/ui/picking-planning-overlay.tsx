@@ -25,6 +25,7 @@ import {
   usePickingPlanningOverlayStore
 } from '@/entities/picking-planning/model/overlay-store';
 import type { PickingRouteOrderMode } from '@/entities/picking-planning/model/overlay-store';
+import type { PickingRouteStartPoint } from '@/entities/picking-planning/model/overlay-store';
 import {
   deriveDisplayedRouteSteps,
   findPackageById,
@@ -52,6 +53,8 @@ type PickingPlanningOverlayProps = {
   nearestSolvedSegments?: SolvedRouteSegment[];
   nearestNeighborStepIds?: string[];
   activeRouteOrderMode?: PickingRouteOrderMode;
+  routeStartPoint?: PickingRouteStartPoint | null;
+  isPlacingRouteStartPoint?: boolean;
 };
 
 function sourceLabel(source: PickingPlanningOverlaySource) {
@@ -193,7 +196,9 @@ export function PickingPlanningOverlay({
   originalSolvedSegments = solvedSegments,
   nearestSolvedSegments = solvedSegments,
   nearestNeighborStepIds = [],
-  activeRouteOrderMode
+  activeRouteOrderMode,
+  routeStartPoint = null,
+  isPlacingRouteStartPoint = false
 }: PickingPlanningOverlayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
@@ -214,6 +219,9 @@ export function PickingPlanningOverlay({
     setActivePackageId,
     setPreview,
     setRouteOrderMode,
+    clearRouteStartPoint,
+    startPlacingRouteStartPoint,
+    cancelPlacingRouteStartPoint,
     setSelectedStepId,
     setSource,
     source
@@ -825,6 +833,71 @@ export function PickingPlanningOverlay({
                       </button>
                     </div>
                   </div>
+                  <div
+                    className="rounded-lg border bg-white/70 px-3 py-2 text-xs text-slate-700"
+                    style={{ borderColor: 'rgba(148,163,184,0.35)' }}
+                  >
+                    <div className="font-semibold text-slate-800">Route start</div>
+                    <div className="mt-1 text-[11px] text-slate-500">
+                      {isPlacingRouteStartPoint
+                        ? 'Click on the map to place route start. Esc to cancel.'
+                        : routeStartPoint
+                          ? 'Start: Manual point'
+                          : 'No start point set'}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!activePackage) return;
+                          cancelPlacingRouteStartPoint();
+                          startPlacingRouteStartPoint(activePackage.workPackage.id);
+                        }}
+                        disabled={!activePackage}
+                        className="rounded-md border px-2 py-1 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                        style={{
+                          background: 'rgba(255,255,255,0.8)',
+                          borderColor: 'rgba(148,163,184,0.35)',
+                          color: 'var(--accent)'
+                        }}
+                        data-testid="picking-plan-set-start-point"
+                      >
+                        Set start point
+                      </button>
+                      {isPlacingRouteStartPoint && (
+                        <button
+                          type="button"
+                          onClick={cancelPlacingRouteStartPoint}
+                          className="rounded-md border px-2 py-1 text-[11px] font-semibold"
+                          style={{
+                            background: 'rgba(255,255,255,0.8)',
+                            borderColor: 'rgba(148,163,184,0.35)',
+                            color: '#475569'
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      {routeStartPoint && activePackage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearRouteStartPoint(activePackage.workPackage.id);
+                            cancelPlacingRouteStartPoint();
+                          }}
+                          className="rounded-md border px-2 py-1 text-[11px] font-semibold"
+                          style={{
+                            background: 'rgba(255,255,255,0.8)',
+                            borderColor: 'rgba(148,163,184,0.35)',
+                            color: '#475569'
+                          }}
+                          data-testid="picking-plan-clear-start-point"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="space-y-1.5">
                     {displayedSteps.map((step, index) => {
                       const stepId = getRouteStepId(step);
@@ -896,6 +969,11 @@ export function PickingPlanningOverlay({
                       <div className="mt-1 text-[11px] text-slate-500">
                         {distanceComparisonMessage}
                       </div>
+                      {routeStartPoint && (
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          Includes start point
+                        </div>
+                      )}
                       {activeRouteOrderModeValue === 'nearest-neighbor' &&
                         distanceDeltaMetres > 0 && (
                           <div className="mt-1 text-[11px] font-semibold text-amber-700">

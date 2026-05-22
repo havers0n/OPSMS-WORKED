@@ -9,7 +9,9 @@ type UseCanvasKeyboardShortcutsParams = {
   isDrawingZoneRef: MutableRefObject<boolean>;
   isDrawingWallRef: MutableRefObject<boolean>;
   isRouteGraphModeRef: MutableRefObject<boolean>;
+  isPickingPlanRouteStartPlacementModeRef: MutableRefObject<boolean>;
   interactionScopeRef: MutableRefObject<InteractionScope>;
+  cancelPickingPlanRouteStartPlacementRef: MutableRefObject<() => void>;
   cancelPlacementInteractionRef: MutableRefObject<() => void>;
   clearSelectionRef: MutableRefObject<() => void>;
   selectedRackIdsRef: MutableRefObject<string[]>;
@@ -46,7 +48,9 @@ export function useCanvasKeyboardShortcuts({
   isDrawingZoneRef,
   isDrawingWallRef,
   isRouteGraphModeRef,
+  isPickingPlanRouteStartPlacementModeRef,
   interactionScopeRef,
+  cancelPickingPlanRouteStartPlacementRef,
   cancelPlacementInteractionRef,
   clearSelectionRef,
   selectedRackIdsRef,
@@ -71,6 +75,11 @@ export function useCanvasKeyboardShortcuts({
             return;
           }
           clearRouteGraphInteractionRef.current();
+          return;
+        }
+
+        if (isPickingPlanRouteStartPlacementModeRef.current) {
+          cancelPickingPlanRouteStartPlacementRef.current();
           return;
         }
 
@@ -148,6 +157,7 @@ export function useCanvasKeyboardShortcuts({
     cancelPlacementInteractionRef,
     cancelDrawWall,
     cancelDrawZone,
+    cancelPickingPlanRouteStartPlacementRef,
     clearHighlightedCellIds,
     clearRouteGraphInteractionRef,
     clearSelectionRef,
@@ -159,6 +169,7 @@ export function useCanvasKeyboardShortcuts({
     isDrawingWallRef,
     isDrawingZoneRef,
     isLayoutEditable,
+    isPickingPlanRouteStartPlacementModeRef,
     isPlacingRef,
     isRouteGraphModeRef,
     selectedRackIdsRef,

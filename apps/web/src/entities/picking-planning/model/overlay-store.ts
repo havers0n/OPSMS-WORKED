@@ -4,6 +4,13 @@ import type {
   PickingPlanningPreviewResponse
 } from './types';
 
+export type PickingRouteOrderMode = 'original' | 'nearest-neighbor';
+export type PickingRouteStartPoint = {
+  x: number;
+  y: number;
+  source: 'manual';
+};
+
 export type PickingPlanningOverlayState = {
   source: PickingPlanningOverlaySource;
   preview: PickingPlanningPreviewResponse | null;
@@ -12,10 +19,18 @@ export type PickingPlanningOverlayState = {
   activePackageId: string | null;
   selectedStepId: string | null;
   reorderedStepIdsByPackageId: Record<string, string[]>;
+  routeOrderModeByPackageId: Record<string, PickingRouteOrderMode>;
+  routeStartPointByPackageId: Record<string, PickingRouteStartPoint>;
+  placingRouteStartForPackageId: string | null;
   setSource: (source: PickingPlanningOverlaySource) => void;
   setPreview: (preview: PickingPlanningPreviewResponse | null) => void;
   setActivePackageId: (packageId: string | null) => void;
   setSelectedStepId: (stepId: string | null) => void;
+  setRouteOrderMode: (packageId: string, mode: PickingRouteOrderMode) => void;
+  setRouteStartPoint: (packageId: string, point: PickingRouteStartPoint) => void;
+  clearRouteStartPoint: (packageId: string) => void;
+  startPlacingRouteStartPoint: (packageId: string) => void;
+  cancelPlacingRouteStartPoint: () => void;
   reorderPackageSteps: (
     packageId: string,
     stepIds: string[],
@@ -32,7 +47,10 @@ const initialState = {
   errorMessage: null,
   activePackageId: null,
   selectedStepId: null,
-  reorderedStepIdsByPackageId: {}
+  reorderedStepIdsByPackageId: {},
+  routeOrderModeByPackageId: {},
+  routeStartPointByPackageId: {},
+  placingRouteStartForPackageId: null
 };
 
 function moveStepId(stepIds: string[], stepId: string, direction: -1 | 1) {
@@ -60,7 +78,10 @@ export const usePickingPlanningOverlayStore =
         errorMessage: null,
         activePackageId: null,
         selectedStepId: null,
-        reorderedStepIdsByPackageId: {}
+        reorderedStepIdsByPackageId: {},
+        routeOrderModeByPackageId: {},
+        routeStartPointByPackageId: {},
+        placingRouteStartForPackageId: null
       }),
     setPreview: (preview) =>
       set((state) => {
@@ -78,17 +99,68 @@ export const usePickingPlanningOverlayStore =
             ? state.activePackageId
             : firstPackageId,
           selectedStepId: null,
-          reorderedStepIdsByPackageId: {}
+          reorderedStepIdsByPackageId: {},
+          routeOrderModeByPackageId: {},
+          routeStartPointByPackageId: {},
+          placingRouteStartForPackageId: null
         };
       }),
     setActivePackageId: (activePackageId) =>
       set({ activePackageId, selectedStepId: null }),
     setSelectedStepId: (selectedStepId) => set({ selectedStepId }),
+    setRouteOrderMode: (packageId, mode) =>
+      set((state) => {
+        const nextRouteOrderModeByPackageId = {
+          ...state.routeOrderModeByPackageId,
+          [packageId]: mode
+        };
+        if (mode !== 'nearest-neighbor') {
+          return { routeOrderModeByPackageId: nextRouteOrderModeByPackageId };
+        }
+        const nextReorderedStepIdsByPackageId = {
+          ...state.reorderedStepIdsByPackageId
+        };
+        delete nextReorderedStepIdsByPackageId[packageId];
+        return {
+          routeOrderModeByPackageId: nextRouteOrderModeByPackageId,
+          reorderedStepIdsByPackageId: nextReorderedStepIdsByPackageId
+        };
+      }),
+    setRouteStartPoint: (packageId, point) =>
+      set((state) => ({
+        routeStartPointByPackageId: {
+          ...state.routeStartPointByPackageId,
+          [packageId]: point
+        },
+        placingRouteStartForPackageId:
+          state.placingRouteStartForPackageId === packageId
+            ? null
+            : state.placingRouteStartForPackageId
+      })),
+    clearRouteStartPoint: (packageId) =>
+      set((state) => {
+        const next = { ...state.routeStartPointByPackageId };
+        delete next[packageId];
+        return { routeStartPointByPackageId: next };
+      }),
+    startPlacingRouteStartPoint: (packageId) =>
+      set({ placingRouteStartForPackageId: packageId }),
+    cancelPlacingRouteStartPoint: () =>
+      set({ placingRouteStartForPackageId: null }),
     reorderPackageSteps: (packageId, stepIds, stepId, direction) =>
       set((state) => {
+        const mode = state.routeOrderModeByPackageId[packageId] ?? 'original';
+        const nextRouteOrderModeByPackageId =
+          mode === 'nearest-neighbor'
+            ? {
+                ...state.routeOrderModeByPackageId,
+                [packageId]: 'original' as const
+              }
+            : state.routeOrderModeByPackageId;
         const current =
           state.reorderedStepIdsByPackageId[packageId] ?? stepIds;
         return {
+          routeOrderModeByPackageId: nextRouteOrderModeByPackageId,
           reorderedStepIdsByPackageId: {
             ...state.reorderedStepIdsByPackageId,
             [packageId]: moveStepId(current, stepId, direction)

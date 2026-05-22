@@ -57,6 +57,31 @@ describe('PickingRouteOverlayLayer', () => {
     expect(renderer.root.findAll((node) => String(node.type) === 'Arrow')).toHaveLength(1);
   });
 
+  it('renders start marker and label when startCanvasPoint is provided', () => {
+    const anchors: PickingRouteAnchor[] = [
+      {
+        status: 'resolved',
+        stepId: 'task-1',
+        step,
+        point: { x: 10, y: 20 },
+        source: 'projection'
+      }
+    ];
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(PickingRouteOverlayLayer, {
+          anchors,
+          startCanvasPoint: { x: 1, y: 2 }
+        })
+      );
+    });
+
+    const labels = renderer.root.findAll((node) => String(node.type) === 'Text');
+    expect(labels.some((node) => node.props.text === 'Start')).toBe(true);
+  });
+
   it('skips unresolved anchors when drawing lines', () => {
     const anchors: PickingRouteAnchor[] = [
       {

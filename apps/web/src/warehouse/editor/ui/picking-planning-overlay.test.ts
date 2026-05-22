@@ -751,4 +751,89 @@ describe('PickingPlanningOverlay', () => {
     const text = normalizeText(collectText(renderer.toJSON()));
     expect(text).toContain('Nearest is longer than original for this route.');
   });
+
+  it('renders start-point controls and starts placement for active package', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const setStartButton = renderer.root.findByProps({
+      'data-testid': 'picking-plan-set-start-point'
+    });
+    act(() => {
+      setStartButton.props.onClick();
+    });
+
+    expect(
+      usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
+    ).toBe('pkg-1');
+  });
+
+  it('shows clear button and includes-start label when start point exists', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          routeStartPoint: { x: 1, y: 2, source: 'manual' },
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: '__route_start__',
+              toStepId: 'task-1',
+              costMetres: 10,
+              canvasPoints: []
+            }
+          ]
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Start: Manual point');
+    expect(text).toContain('Includes start point');
+    expect(
+      renderer.root.findAllByProps({
+        'data-testid': 'picking-plan-clear-start-point'
+      })
+    ).toHaveLength(1);
+  });
+
+  it('shows placement hint when placing start point', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          isPlacingRouteStartPoint: true
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Click on the map to place route start. Esc to cancel.');
+  });
 });

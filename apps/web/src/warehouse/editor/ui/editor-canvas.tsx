@@ -65,7 +65,8 @@ import {
   GRID_SIZE,
   isRackInViewport,
   MAJOR_GRID_SIZE,
-  MINOR_GRID_ZOOM_THRESHOLD
+  MINOR_GRID_ZOOM_THRESHOLD,
+  WORLD_SCALE
 } from '@/entities/layout-version/lib/canvas-geometry';
 import {
   useCreateRouteNode,
@@ -77,13 +78,15 @@ import { buildFaceAccessByFaceId } from '@/entities/aisle-topology/model/face-ac
 import { usePickingPlanningOverlayStore } from '@/entities/picking-planning/model/overlay-store';
 import {
   deriveDisplayedRouteSteps,
-  findPackageById
+  findPackageById,
+  getRouteStepId
 } from '@/entities/picking-planning/model/route-steps';
 import {
   indexRouteAnchorStatus,
   resolveRouteStepAnchors,
   solvePickingRoute
 } from '@/features/picking-planning-canvas/model/route-step-geometry';
+import { sequencePickingRouteNearestNeighbor } from '@/features/picking-planning-canvas/model/sequence-route-nearest-neighbor';
 import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
 import { buildRouteObstaclesFromLayout } from '@/features/obstacle-route-planning/model/obstacle-builders';
 import { solveGridRoute } from '@/features/obstacle-route-planning/model/grid-route-solver';
@@ -149,6 +152,21 @@ export function EditorCanvas({
     usePickingPlanningOverlayStore(
       (state) => state.reorderedStepIdsByPackageId
     );
+  const pickingPlanningRouteOrderModeByPackageId = usePickingPlanningOverlayStore(
+    (state) => state.routeOrderModeByPackageId
+  );
+  const pickingPlanningRouteStartPointByPackageId = usePickingPlanningOverlayStore(
+    (state) => state.routeStartPointByPackageId
+  );
+  const pickingPlanningPlacingRouteStartForPackageId = usePickingPlanningOverlayStore(
+    (state) => state.placingRouteStartForPackageId
+  );
+  const setPickingPlanningRouteStartPoint = usePickingPlanningOverlayStore(
+    (state) => state.setRouteStartPoint
+  );
+  const cancelPickingPlanningRouteStartPlacement = usePickingPlanningOverlayStore(
+    (state) => state.cancelPlacingRouteStartPoint
+  );
   const isStorageV2Active = viewMode === 'storage';
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
@@ -654,7 +672,7 @@ export function EditorCanvas({
       ),
     [pickingPlanningActivePackageId, pickingPlanningPreview?.packages]
   );
-  const pickingPlanningRouteSteps = useMemo(
+  const pickingPlanningOriginalRouteSteps = useMemo(
     () =>
       pickingPlanningActivePackage
         ? deriveDisplayedRouteSteps(
@@ -666,10 +684,10 @@ export function EditorCanvas({
         : [],
     [pickingPlanningActivePackage, pickingPlanningReorderedStepIdsByPackageId]
   );
-  const pickingPlanningRouteAnchors = useMemo(
+  const pickingPlanningOriginalRouteAnchors = useMemo(
     () =>
       resolveRouteStepAnchors({
-        steps: pickingPlanningRouteSteps,
+        steps: pickingPlanningOriginalRouteSteps,
         locationsById: pickingPlanningPreview?.locationsById,
         layout: placementLayout ?? layoutDraft,
         publishedCellsById,
@@ -679,18 +697,108 @@ export function EditorCanvas({
       faceAccessByFaceId,
       layoutDraft,
       pickingPlanningPreview?.locationsById,
-      pickingPlanningRouteSteps,
+      pickingPlanningOriginalRouteSteps,
       placementLayout,
       publishedCellsById
     ]
   );
-  const pickingPlanningStepGeometryById = useMemo(
-    () => indexRouteAnchorStatus(pickingPlanningRouteAnchors),
-    [pickingPlanningRouteAnchors]
+  const pickingPlanningActiveRouteStartPoint = pickingPlanningActivePackage
+    ? (pickingPlanningRouteStartPointByPackageId[
+        pickingPlanningActivePackage.workPackage.id
+      ] ?? null)
+    : null;
+  const pickingPlanningActiveRouteStartCanvasPoint = pickingPlanningActiveRouteStartPoint
+    ? {
+        x: pickingPlanningActiveRouteStartPoint.x * WORLD_SCALE,
+        y: pickingPlanningActiveRouteStartPoint.y * WORLD_SCALE
+      }
+    : undefined;
+  const pickingPlanningNearestNeighborStepIds = useMemo(
+    () =>
+      sequencePickingRouteNearestNeighbor(pickingPlanningOriginalRouteAnchors, {
+        startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint
+      }),
+    [pickingPlanningActiveRouteStartCanvasPoint, pickingPlanningOriginalRouteAnchors]
   );
-  const pickingPlanningRouteSegments = useMemo(
-    () => solvePickingRoute(pickingPlanningRouteAnchors, obstacleRouteObstacles),
-    [pickingPlanningRouteAnchors, obstacleRouteObstacles]
+  const pickingPlanningNearestRouteSteps = useMemo(() => {
+    if (!pickingPlanningActivePackage) return [];
+    return deriveDisplayedRouteSteps(
+      pickingPlanningActivePackage.route.steps,
+      pickingPlanningNearestNeighborStepIds
+    );
+  }, [pickingPlanningActivePackage, pickingPlanningNearestNeighborStepIds]);
+  const pickingPlanningNearestRouteAnchors = useMemo(
+    () =>
+      resolveRouteStepAnchors({
+        steps: pickingPlanningNearestRouteSteps,
+        locationsById: pickingPlanningPreview?.locationsById,
+        layout: placementLayout ?? layoutDraft,
+        publishedCellsById,
+        faceAccessByFaceId
+      }),
+    [
+      faceAccessByFaceId,
+      layoutDraft,
+      pickingPlanningNearestRouteSteps,
+      pickingPlanningPreview?.locationsById,
+      placementLayout,
+      publishedCellsById
+    ]
+  );
+  const pickingPlanningActiveRouteOrderMode =
+    pickingPlanningActivePackage
+      ? (pickingPlanningRouteOrderModeByPackageId[
+          pickingPlanningActivePackage.workPackage.id
+        ] ?? 'original')
+      : 'original';
+  const isPickingPlanRouteStartPlacementMode =
+    shouldShowPickingPlanningOverlay &&
+    !!pickingPlanningActivePackage &&
+    pickingPlanningPlacingRouteStartForPackageId ===
+      pickingPlanningActivePackage.workPackage.id;
+  const pickingPlanningActiveRouteAnchors =
+    pickingPlanningActiveRouteOrderMode === 'nearest-neighbor'
+      ? pickingPlanningNearestRouteAnchors
+      : pickingPlanningOriginalRouteAnchors;
+  const pickingPlanningStepGeometryById = useMemo(
+    () => indexRouteAnchorStatus(pickingPlanningActiveRouteAnchors),
+    [pickingPlanningActiveRouteAnchors]
+  );
+  const pickingPlanningOriginalRouteSegments = useMemo(
+    () =>
+      solvePickingRoute(
+        pickingPlanningOriginalRouteAnchors,
+        obstacleRouteObstacles,
+        undefined,
+        { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
+      ),
+    [
+      obstacleRouteObstacles,
+      pickingPlanningActiveRouteStartCanvasPoint,
+      pickingPlanningOriginalRouteAnchors
+    ]
+  );
+  const pickingPlanningNearestRouteSegments = useMemo(
+    () =>
+      solvePickingRoute(
+        pickingPlanningNearestRouteAnchors,
+        obstacleRouteObstacles,
+        undefined,
+        { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
+      ),
+    [
+      obstacleRouteObstacles,
+      pickingPlanningActiveRouteStartCanvasPoint,
+      pickingPlanningNearestRouteAnchors
+    ]
+  );
+  const pickingPlanningActiveRouteSegments =
+    pickingPlanningActiveRouteOrderMode === 'nearest-neighbor'
+      ? pickingPlanningNearestRouteSegments
+      : pickingPlanningOriginalRouteSegments;
+  const pickingPlanningNearestRouteStepIds = useMemo(
+    () => pickingPlanningNearestRouteSteps.map(getRouteStepId),
+    [pickingPlanningNearestRouteSteps]
   );
   const cellStateOverlaysEnabled =
     (renderMode === 'full' ||
@@ -817,6 +925,11 @@ export function EditorCanvas({
   isDrawingWallRef.current = isDrawingWall;
   const isRouteGraphModeRef = useRef(isRouteGraphStage);
   isRouteGraphModeRef.current = isRouteGraphStage;
+  const isPickingPlanRouteStartPlacementModeRef = useRef(
+    isPickingPlanRouteStartPlacementMode
+  );
+  isPickingPlanRouteStartPlacementModeRef.current =
+    isPickingPlanRouteStartPlacementMode;
   const interactionScopeRef = useRef(interactionScope);
   interactionScopeRef.current = interactionScope;
   const selectedZoneIdRef = useRef(selectedZoneId);
@@ -827,6 +940,11 @@ export function EditorCanvas({
   clearSelectionRef.current = clearSelection;
   const cancelPlacementInteractionRef = useRef(cancelPlacementInteraction);
   cancelPlacementInteractionRef.current = cancelPlacementInteraction;
+  const cancelPickingPlanRouteStartPlacementRef = useRef(
+    cancelPickingPlanningRouteStartPlacement
+  );
+  cancelPickingPlanRouteStartPlacementRef.current =
+    cancelPickingPlanningRouteStartPlacement;
   const selectedRackIdsRef = useRef(effectiveSelectedRackIds);
   selectedRackIdsRef.current = effectiveSelectedRackIds;
   const deleteZoneRef = useRef(deleteZone);
@@ -907,6 +1025,22 @@ export function EditorCanvas({
       solveObstacleRoute(obstacleRouteStart, obstacleRouteEnd)
     );
   }, [obstacleRouteEnd, obstacleRouteStart, solveObstacleRoute]);
+  const handlePickingPlanRouteStartPointClick = useCallback(
+    (point: RoutePoint) => {
+      if (!pickingPlanningActivePackage) return;
+      setPickingPlanningRouteStartPoint(pickingPlanningActivePackage.workPackage.id, {
+        x: Math.round(point.x * 10) / 10,
+        y: Math.round(point.y * 10) / 10,
+        source: 'manual'
+      });
+      cancelPickingPlanningRouteStartPlacement();
+    },
+    [
+      cancelPickingPlanningRouteStartPlacement,
+      pickingPlanningActivePackage,
+      setPickingPlanningRouteStartPoint
+    ]
+  );
   const deleteRouteGraphNodeRef = useRef<(id: string) => void>(() => undefined);
   deleteRouteGraphNodeRef.current = (nodeId: string) => {
     if (!routeGraphFloorId) return;
@@ -948,6 +1082,10 @@ export function EditorCanvas({
     onObstacleRouteEmptyCanvasClick: isObstacleRouteStage
       ? handleObstacleRouteEmptyCanvasClick
       : undefined,
+    onPickingPlanRouteStartPointClick: isPickingPlanRouteStartPlacementMode
+      ? handlePickingPlanRouteStartPointClick
+      : undefined,
+    isPickingPlanRouteStartPlacementMode,
     onRouteGraphEmptyCanvasClick: isRouteGraphStage
       ? handleRouteGraphEmptyCanvasClick
       : undefined,
@@ -963,7 +1101,9 @@ export function EditorCanvas({
     isDrawingZoneRef,
     isDrawingWallRef,
     isRouteGraphModeRef,
+    isPickingPlanRouteStartPlacementModeRef,
     interactionScopeRef,
+    cancelPickingPlanRouteStartPlacementRef,
     cancelPlacementInteractionRef,
     clearSelectionRef,
     selectedRackIdsRef,
@@ -1127,7 +1267,13 @@ export function EditorCanvas({
           {shouldShowPickingPlanningOverlay && (
             <PickingPlanningOverlay
               stepGeometryById={pickingPlanningStepGeometryById}
-              solvedSegments={pickingPlanningRouteSegments}
+              solvedSegments={pickingPlanningActiveRouteSegments}
+              originalSolvedSegments={pickingPlanningOriginalRouteSegments}
+              nearestSolvedSegments={pickingPlanningNearestRouteSegments}
+              nearestNeighborStepIds={pickingPlanningNearestRouteStepIds}
+              activeRouteOrderMode={pickingPlanningActiveRouteOrderMode}
+              routeStartPoint={pickingPlanningActiveRouteStartPoint}
+              isPlacingRouteStartPoint={isPickingPlanRouteStartPlacementMode}
             />
           )}
 
@@ -1377,8 +1523,9 @@ export function EditorCanvas({
 
                 {shouldShowPickingPlanningOverlay && (
                   <PickingRouteOverlayLayer
-                    anchors={pickingPlanningRouteAnchors}
-                    solvedSegments={pickingPlanningRouteSegments}
+                    anchors={pickingPlanningActiveRouteAnchors}
+                    solvedSegments={pickingPlanningActiveRouteSegments}
+                    startCanvasPoint={pickingPlanningActiveRouteStartCanvasPoint ?? null}
                   />
                 )}
               </Layer>
