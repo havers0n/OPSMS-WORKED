@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowLeft,
   ChevronDown,
   ChevronUp,
   Maximize2,
@@ -23,6 +24,7 @@ import {
 import {
   usePickingPlanningOverlayStore
 } from '@/entities/picking-planning/model/overlay-store';
+import type { PickingRouteOrderMode } from '@/entities/picking-planning/model/overlay-store';
 import {
   deriveDisplayedRouteSteps,
   findPackageById,
@@ -46,6 +48,10 @@ export type PickingPlanningStepGeometryStatus = {
 type PickingPlanningOverlayProps = {
   stepGeometryById?: Record<string, PickingPlanningStepGeometryStatus>;
   solvedSegments?: SolvedRouteSegment[];
+  originalSolvedSegments?: SolvedRouteSegment[];
+  nearestSolvedSegments?: SolvedRouteSegment[];
+  nearestNeighborStepIds?: string[];
+  activeRouteOrderMode?: PickingRouteOrderMode;
 };
 
 function sourceLabel(source: PickingPlanningOverlaySource) {
@@ -73,6 +79,7 @@ function RouteStepRow({
   index,
   isFirst,
   isLast,
+  isReorderEnabled,
   onMove,
   onSelect,
   selected,
@@ -82,6 +89,7 @@ function RouteStepRow({
   index: number;
   isFirst: boolean;
   isLast: boolean;
+  isReorderEnabled: boolean;
   onMove: (direction: -1 | 1) => void;
   onSelect: () => void;
   selected: boolean;
@@ -134,7 +142,7 @@ function RouteStepRow({
         <button
           type="button"
           onClick={() => onMove(-1)}
-          disabled={isFirst}
+          disabled={!isReorderEnabled || isFirst}
           title={`Move ${step.taskId} up`}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
         >
@@ -143,7 +151,7 @@ function RouteStepRow({
         <button
           type="button"
           onClick={() => onMove(1)}
-          disabled={isLast}
+          disabled={!isReorderEnabled || isLast}
           title={`Move ${step.taskId} down`}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
         >
@@ -181,7 +189,11 @@ function parseOrderIds(input: string): string[] {
 
 export function PickingPlanningOverlay({
   stepGeometryById = {},
-  solvedSegments = []
+  solvedSegments = [],
+  originalSolvedSegments = solvedSegments,
+  nearestSolvedSegments = solvedSegments,
+  nearestNeighborStepIds = [],
+  activeRouteOrderMode
 }: PickingPlanningOverlayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
@@ -197,9 +209,11 @@ export function PickingPlanningOverlay({
     reorderedStepIdsByPackageId,
     resetReorder,
     reorderPackageSteps,
+    routeOrderModeByPackageId,
     selectedStepId,
     setActivePackageId,
     setPreview,
+    setRouteOrderMode,
     setSelectedStepId,
     setSource,
     source
@@ -232,6 +246,20 @@ export function PickingPlanningOverlay({
       );
     }
     setSource({ kind: 'orders', orderIds });
+  }
+
+  function handleBackToOrders() {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('pickingPlanOrderIds');
+      params.delete('pickingPlanWaveId');
+      const nextSearch = params.toString();
+      const nextUrl = nextSearch
+        ? `${window.location.pathname}?${nextSearch}`
+        : window.location.pathname;
+      window.history.replaceState(null, '', nextUrl);
+    }
+    setSource({ kind: 'none' });
   }
 
   useEffect(() => {
@@ -317,15 +345,27 @@ export function PickingPlanningOverlay({
     () => findPackageById(preview?.packages ?? [], activePackageId),
     [activePackageId, preview?.packages]
   );
+  const activeRouteOrderModeValue: PickingRouteOrderMode = activePackage
+    ? (activeRouteOrderMode ??
+      routeOrderModeByPackageId[activePackage.workPackage.id] ??
+      'original')
+    : 'original';
   const displayedSteps = useMemo(
     () =>
       activePackage
         ? deriveDisplayedRouteSteps(
             activePackage.route.steps,
-            reorderedStepIdsByPackageId[activePackage.workPackage.id]
+            (activeRouteOrderModeValue === 'nearest-neighbor'
+              ? nearestNeighborStepIds
+              : reorderedStepIdsByPackageId[activePackage.workPackage.id])
           )
         : [],
-    [activePackage, reorderedStepIdsByPackageId]
+    [
+      activePackage,
+      activeRouteOrderModeValue,
+      nearestNeighborStepIds,
+      reorderedStepIdsByPackageId
+    ]
   );
   const displayedStepIds = useMemo(
     () => displayedSteps.map(getRouteStepId),
@@ -339,6 +379,39 @@ export function PickingPlanningOverlay({
     () => summarizePickingRouteSegments(solvedSegments),
     [solvedSegments]
   );
+  const originalRouteDiagnostics = useMemo(
+    () => summarizePickingRouteSegments(originalSolvedSegments),
+    [originalSolvedSegments]
+  );
+  const nearestRouteDiagnostics = useMemo(
+    () => summarizePickingRouteSegments(nearestSolvedSegments),
+    [nearestSolvedSegments]
+  );
+  const distanceDeltaMetres = useMemo(
+    () =>
+      nearestRouteDiagnostics.totalDistanceMetres -
+      originalRouteDiagnostics.totalDistanceMetres,
+    [nearestRouteDiagnostics.totalDistanceMetres, originalRouteDiagnostics.totalDistanceMetres]
+  );
+  const distanceDeltaPct = useMemo(() => {
+    if (originalRouteDiagnostics.totalDistanceMetres <= 0) return null;
+    return (distanceDeltaMetres / originalRouteDiagnostics.totalDistanceMetres) * 100;
+  }, [distanceDeltaMetres, originalRouteDiagnostics.totalDistanceMetres]);
+  const distanceComparisonMessage = useMemo(() => {
+    if (distanceDeltaMetres < 0) {
+      return `Nearest is shorter by ${formatNumber(Math.abs(distanceDeltaMetres), ' m')}${
+        distanceDeltaPct === null
+          ? ''
+          : ` (${formatNumber(Math.abs(distanceDeltaPct), '%')})`
+      }`;
+    }
+    if (distanceDeltaMetres > 0) {
+      return `Nearest is longer by ${formatNumber(distanceDeltaMetres, ' m')}${
+        distanceDeltaPct === null ? '' : ` (${formatNumber(distanceDeltaPct, '%')})`
+      }`;
+    }
+    return 'No distance change';
+  }, [distanceDeltaMetres, distanceDeltaPct]);
 
   if (isCollapsed) {
     return (
@@ -386,6 +459,21 @@ export function PickingPlanningOverlay({
             <div className="mt-1 text-[11px] text-slate-500">
               {sourceLabel(source)}
             </div>
+            {source.kind !== 'none' && (
+              <button
+                type="button"
+                onClick={handleBackToOrders}
+                data-testid="picking-plan-back-to-orders"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors hover:bg-white/80"
+                style={{
+                  borderColor: 'rgba(148,163,184,0.42)',
+                  color: 'var(--accent)'
+                }}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to orders
+              </button>
+            )}
           </div>
           <button
             type="button"
@@ -669,14 +757,73 @@ export function PickingPlanningOverlay({
                     <div className="text-xs font-semibold text-slate-800">
                       Route steps · {activePackage.route.metadata.mode}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => resetReorder(activePackage.workPackage.id)}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-white/75"
-                    >
-                      <RefreshCcw className="h-3 w-3" />
-                      Reset
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        Route order:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRouteOrderMode(activePackage.workPackage.id, 'original')
+                        }
+                        className="rounded-md border px-2 py-1 text-[11px] font-semibold"
+                        style={{
+                          background:
+                            activeRouteOrderModeValue === 'original'
+                              ? 'rgba(219,234,254,0.9)'
+                              : 'rgba(255,255,255,0.75)',
+                          borderColor:
+                            activeRouteOrderModeValue === 'original'
+                              ? 'rgba(37,99,235,0.5)'
+                              : 'rgba(148,163,184,0.35)',
+                          color:
+                            activeRouteOrderModeValue === 'original'
+                              ? 'var(--accent)'
+                              : '#475569'
+                        }}
+                        data-testid="picking-plan-route-order-original"
+                      >
+                        Original
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRouteOrderMode(
+                            activePackage.workPackage.id,
+                            'nearest-neighbor'
+                          )
+                        }
+                        className="rounded-md border px-2 py-1 text-[11px] font-semibold"
+                        style={{
+                          background:
+                            activeRouteOrderModeValue === 'nearest-neighbor'
+                              ? 'rgba(219,234,254,0.9)'
+                              : 'rgba(255,255,255,0.75)',
+                          borderColor:
+                            activeRouteOrderModeValue === 'nearest-neighbor'
+                              ? 'rgba(37,99,235,0.5)'
+                              : 'rgba(148,163,184,0.35)',
+                          color:
+                            activeRouteOrderModeValue === 'nearest-neighbor'
+                              ? 'var(--accent)'
+                              : '#475569'
+                        }}
+                        data-testid="picking-plan-route-order-nearest"
+                      >
+                        Nearest
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRouteOrderMode(activePackage.workPackage.id, 'original');
+                          resetReorder(activePackage.workPackage.id);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-white/75"
+                      >
+                        <RefreshCcw className="h-3 w-3" />
+                        Reset
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     {displayedSteps.map((step, index) => {
@@ -687,14 +834,18 @@ export function PickingPlanningOverlay({
                           index={index}
                           isFirst={index === 0}
                           isLast={index === displayedSteps.length - 1}
-                          onMove={(direction) =>
+                          isReorderEnabled={
+                            activeRouteOrderModeValue === 'original'
+                          }
+                          onMove={(direction) => {
+                            if (activeRouteOrderModeValue === 'nearest-neighbor') return;
                             reorderPackageSteps(
                               activePackage.workPackage.id,
                               displayedStepIds,
                               stepId,
                               direction
-                            )
-                          }
+                            );
+                          }}
                           onSelect={() => setSelectedStepId(stepId)}
                           selected={selectedStepId === stepId}
                           status={stepGeometryById[stepId]}
@@ -712,7 +863,22 @@ export function PickingPlanningOverlay({
                         Route diagnostics
                       </div>
                       <div className="mt-1">
-                        Distance: {formatNumber(routeDiagnostics.totalDistanceMetres, ' m')}
+                        Original: {formatNumber(originalRouteDiagnostics.totalDistanceMetres, ' m')}
+                      </div>
+                      <div>
+                        Nearest: {formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')}
+                      </div>
+                      <div>
+                        Delta: {formatNumber(distanceDeltaMetres, ' m')}
+                        {distanceDeltaPct === null
+                          ? ''
+                          : ` (${formatNumber(distanceDeltaPct, '%')})`}
+                      </div>
+                      <div>
+                        Active:{' '}
+                        {activeRouteOrderModeValue === 'nearest-neighbor'
+                          ? 'Nearest'
+                          : 'Original'}
                       </div>
                       <div>
                         Segments: {routeDiagnostics.solvedSegments} solved /{' '}
@@ -727,6 +893,22 @@ export function PickingPlanningOverlay({
                             ? 'Partial'
                             : 'Empty'}
                       </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        {distanceComparisonMessage}
+                      </div>
+                      {activeRouteOrderModeValue === 'nearest-neighbor' &&
+                        distanceDeltaMetres > 0 && (
+                          <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                            Nearest is longer than original for this route.
+                          </div>
+                        )}
+                      {activeRouteOrderModeValue === 'nearest-neighbor' &&
+                        (routeDiagnostics.unroutableSegments > 0 ||
+                          routeDiagnostics.skippedSegments > 0) && (
+                          <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                            Warning: nearest route has skipped or blocked segments.
+                          </div>
+                        )}
                       {import.meta.env.DEV && (
                         <div className="mt-1 space-y-1 text-[11px] text-slate-500">
                           {solvedSegments.map((segment, index) => (

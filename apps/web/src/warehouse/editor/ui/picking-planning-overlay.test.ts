@@ -314,6 +314,37 @@ describe('PickingPlanningOverlay', () => {
     });
   });
 
+  it('returns to order list from active picking source', async () => {
+    vi.mocked(fetchOrders).mockResolvedValue([makeOrder()]);
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const backButton = renderer.root.find(
+      (n) =>
+        n.type === 'button' &&
+        n.props['data-testid'] === 'picking-plan-back-to-orders'
+    );
+    act(() => {
+      backButton.props.onClick();
+    });
+
+    expect(usePickingPlanningOverlayStore.getState().source).toEqual({
+      kind: 'none'
+    });
+    expect(normalizeText(collectText(renderer.toJSON()))).toContain(
+      'Select order'
+    );
+  });
+
   it('shows empty state when order list is empty', async () => {
     vi.mocked(fetchOrders).mockResolvedValue([]);
 
@@ -429,7 +460,10 @@ describe('PickingPlanningOverlay', () => {
 
     const text = normalizeText(collectText(renderer.toJSON()));
     expect(text).toContain('Route diagnostics');
-    expect(text).toContain('Distance: 34.2 m');
+    expect(text).toContain('Original: 34.2 m');
+    expect(text).toContain('Nearest: 34.2 m');
+    expect(text).toContain('Delta: 0 m (0%)');
+    expect(text).toContain('Active: Original');
     expect(text).toContain('Segments: 1 solved / 0 skipped / 1 blocked');
     expect(text).toContain('Status: Partial');
   });
@@ -463,5 +497,258 @@ describe('PickingPlanningOverlay', () => {
     expect(normalizeText(collectText(renderer.toJSON()))).toMatch(
       /1 sku-2.*2 sku-1/
     );
+  });
+
+  it('defaults to Original route order mode and can switch to Nearest', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PickingPlanningOverlay));
+      await Promise.resolve();
+    });
+
+    const originalButton = renderer.root.findByProps({
+      'data-testid': 'picking-plan-route-order-original'
+    });
+    const nearestButton = renderer.root.findByProps({
+      'data-testid': 'picking-plan-route-order-nearest'
+    });
+    expect(typeof originalButton.props.onClick).toBe('function');
+    expect(typeof nearestButton.props.onClick).toBe('function');
+
+    act(() => {
+      nearestButton.props.onClick();
+    });
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('nearest-neighbor');
+  });
+
+  it('nearest mode hides manual reorder interactions and applies nearest order', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          nearestNeighborStepIds: ['task-2', 'task-1'],
+          activeRouteOrderMode: 'nearest-neighbor'
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toMatch(/1 sku-2.*2 sku-1/);
+
+    const moveTask1Down = renderer.root.find(
+      (instance) =>
+        instance.type === 'button' && instance.props.title === 'Move task-1 down'
+    );
+    expect(moveTask1Down.props.disabled).toBe(true);
+  });
+
+  it('shows nearest shorter message', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 100,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 100,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 80,
+              canvasPoints: []
+            }
+          ]
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Nearest is shorter by 20 m (20%)');
+  });
+
+  it('shows nearest longer message', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 202.7,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 202.7,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 210.6,
+              canvasPoints: []
+            }
+          ]
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Nearest is longer by 7.9 m (3.9%)');
+  });
+
+  it('shows equal distance message', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 50,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 50,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 50,
+              canvasPoints: []
+            }
+          ]
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('No distance change');
+  });
+
+  it('shows active nearest worse warning', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          activeRouteOrderMode: 'nearest-neighbor',
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 120,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 100,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 120,
+              canvasPoints: []
+            }
+          ]
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Nearest is longer than original for this route.');
   });
 });
