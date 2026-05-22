@@ -7,7 +7,8 @@ function makeRepo(overrides: Partial<PickingPlanningOrderInputReadRepo> = {}): P
     listProducts: async () => [],
     listUnitProfiles: async () => [],
     listPackagingLevels: async () => [],
-    listPrimaryPickLocations: async () => [],
+    listExplicitLocationRoles: async () => [],
+    listStructuralRolesForLocations: async () => [],
     listInventoryUnits: async () => [],
     listContainerLocations: async () => [],
     listLocations: async () => [],
@@ -36,7 +37,7 @@ describe('buildPlanningInputFromOrders', () => {
             size_class: 'small'
           }
         ],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-1' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
         listInventoryUnits: async () => [
           { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
         ],
@@ -69,30 +70,37 @@ describe('buildPlanningInputFromOrders', () => {
     expect(result.unresolved).toEqual([]);
   });
 
-  it('marks unresolved when no primary pick location or inventory', async () => {
-    const unresolvedNoLocation = await buildPlanningInputFromOrders(
+  it('marks unresolved when no primary pick location exists for product', async () => {
+    // No inventory anywhere → no candidate locations → no_primary_pick_location
+    const noInventory = await buildPlanningInputFromOrders(
       makeRepo({
         listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 1, qty_picked: 0 }],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }]
       }),
       { orderIds: ['o1'] }
     );
-    expect(unresolvedNoLocation.unresolved[0]?.reason).toBe('no_primary_pick_location');
-    expect(unresolvedNoLocation.warningDetails).toContainEqual(
+    expect(noInventory.unresolved[0]?.reason).toBe('no_primary_pick_location');
+    expect(noInventory.warningDetails).toContainEqual(
       expect.objectContaining({ code: 'NO_PRIMARY_PICK_LOCATION', severity: 'error' })
     );
+  });
 
-    const unresolvedNoInventory = await buildPlanningInputFromOrders(
+  it('marks unresolved no_available_inventory when primary pick location has insufficient stock', async () => {
+    const result = await buildPlanningInputFromOrders(
       makeRepo({
-        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 2, qty_picked: 0 }],
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 10, qty_picked: 0 }],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-1' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 5, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
         listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
       }),
       { orderIds: ['o1'] }
     );
-    expect(unresolvedNoInventory.unresolved.some((line) => line.reason === 'no_available_inventory')).toBe(true);
-    expect(unresolvedNoInventory.warningDetails).toContainEqual(
+    expect(result.unresolved.some((line) => line.reason === 'no_available_inventory')).toBe(true);
+    expect(result.warningDetails).toContainEqual(
       expect.objectContaining({ code: 'NO_AVAILABLE_INVENTORY', severity: 'error' })
     );
   });
@@ -113,7 +121,7 @@ describe('buildPlanningInputFromOrders', () => {
             size_class: null
           }
         ],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-1' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
         listInventoryUnits: async () => [
           { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 2, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
         ],
@@ -141,7 +149,7 @@ describe('buildPlanningInputFromOrders', () => {
         ],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
         listUnitProfiles: async () => [],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-1' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
         listInventoryUnits: async () => [
           { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
         ],
@@ -169,9 +177,9 @@ describe('buildPlanningInputFromOrders', () => {
         listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 10, qty_picked: 0 }],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
         listUnitProfiles: async () => [],
-        listPrimaryPickLocations: async () => [
-          { product_id: 'p1', location_id: 'loc-a' },
-          { product_id: 'p1', location_id: 'loc-b' }
+        listExplicitLocationRoles: async () => [
+          { product_id: 'p1', location_id: 'loc-a', role: 'primary_pick' },
+          { product_id: 'p1', location_id: 'loc-b', role: 'primary_pick' }
         ],
         listInventoryUnits: async () => [
           { id: 'iu-a', product_id: 'p1', container_id: 'c-a', quantity: 6, uom: 'ea', created_at: '2025-01-01T00:00:00Z' },
@@ -213,7 +221,7 @@ describe('buildPlanningInputFromOrders', () => {
         listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 10, qty_picked: 0 }],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
         listUnitProfiles: async () => [],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-a' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-a', role: 'primary_pick' }],
         listInventoryUnits: async () => [
           { id: 'iu-a', product_id: 'p1', container_id: 'c-a', quantity: 6, uom: 'ea', created_at: '2025-01-01T00:00:00Z' },
           { id: 'iu-b', product_id: 'p1', container_id: 'c-b', quantity: 4, uom: 'ea', created_at: '2025-01-02T00:00:00Z' }
@@ -247,7 +255,7 @@ describe('buildPlanningInputFromOrders', () => {
         ],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
         listUnitProfiles: async () => [],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-a' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-a', role: 'primary_pick' }],
         listInventoryUnits: async () => [
           { id: 'iu-a', product_id: 'p1', container_id: 'c-a', quantity: 12, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
         ],
@@ -270,7 +278,7 @@ describe('buildPlanningInputFromOrders', () => {
         listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 10, qty_picked: 0 }],
         listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
         listUnitProfiles: async () => [],
-        listPrimaryPickLocations: async () => [{ product_id: 'p1', location_id: 'loc-a' }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-a', role: 'primary_pick' }],
         listInventoryUnits: async () => [
           { id: 'iu-a', product_id: 'p1', container_id: 'c-a', quantity: 6, uom: 'ea', created_at: '2025-01-01T00:00:00Z' },
           { id: 'iu-b', product_id: 'p1', container_id: 'c-b', quantity: 3, uom: 'ea', created_at: '2025-01-02T00:00:00Z' }
@@ -288,5 +296,116 @@ describe('buildPlanningInputFromOrders', () => {
     expect(result.unresolved).toEqual([
       expect.objectContaining({ orderLineId: 'l1', qty: 10, reason: 'no_available_inventory' })
     ]);
+  });
+
+  // --- Effective role fallback tests ---
+
+  it('creates task when no explicit row exists but inventory is at a structural primary_pick location', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 3, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
+        // No explicit product_location_roles row for this product
+        listExplicitLocationRoles: async () => [],
+        // Location has structural primary_pick default from its rack level
+        listStructuralRolesForLocations: async () => [{ location_id: 'loc-1', structural_default_role: 'primary_pick' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.unresolved).toEqual([]);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0]).toMatchObject({ fromLocationId: 'loc-1', qty: 3 });
+  });
+
+  it('emits no_primary_pick_location when no explicit row and inventory is at a structural reserve location', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 1, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
+        listExplicitLocationRoles: async () => [],
+        listStructuralRolesForLocations: async () => [{ location_id: 'loc-1', structural_default_role: 'reserve' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved[0]?.reason).toBe('no_primary_pick_location');
+  });
+
+  it('explicit reserve override on structural primary_pick location prevents pick task', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 1, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
+        // Product explicitly assigned as reserve at this location, overriding the structural primary_pick default
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'reserve' }],
+        listStructuralRolesForLocations: async () => [{ location_id: 'loc-1', structural_default_role: 'primary_pick' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved[0]?.reason).toBe('no_primary_pick_location');
+  });
+
+  it('explicit primary_pick override on structural reserve location creates task', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 2, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
+        // Product explicitly assigned as primary_pick, overriding the structural reserve default
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
+        listStructuralRolesForLocations: async () => [{ location_id: 'loc-1', structural_default_role: 'reserve' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.unresolved).toEqual([]);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0]).toMatchObject({ fromLocationId: 'loc-1', qty: 2 });
+  });
+
+  it('emits no_primary_pick_location when neither explicit nor structural primary_pick exists', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 1, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1' }],
+        listExplicitLocationRoles: async () => [],
+        listStructuralRolesForLocations: async () => [],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 5, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved[0]?.reason).toBe('no_primary_pick_location');
+    expect(result.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'NO_PRIMARY_PICK_LOCATION', severity: 'error' })
+    );
   });
 });

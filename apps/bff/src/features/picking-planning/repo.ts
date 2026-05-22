@@ -74,19 +74,76 @@ export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient
       return data ?? [];
     },
 
-    async listPrimaryPickLocations(productIds) {
-      if (productIds.length === 0) return [];
+    async listExplicitLocationRoles(productIds, locationIds) {
+      if (productIds.length === 0 || locationIds.length === 0) return [];
       const { data, error } = await supabase
         .from('product_location_roles')
-        .select('product_id,location_id')
+        .select('product_id,location_id,role')
         .in('product_id', productIds)
+        .in('location_id', locationIds)
         .eq('tenant_id', tenantId)
-        .eq('role', 'primary_pick')
-        .eq('state', 'published')
-        .order('product_id', { ascending: true })
-        .order('location_id', { ascending: true });
+        .eq('state', 'published');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Array<{ product_id: string; location_id: string; role: 'primary_pick' | 'reserve' }>;
+    },
+
+    async listStructuralRolesForLocations(locationIds) {
+      if (locationIds.length === 0) return [];
+
+      // Step 1: get geometry_slot_id for each candidate location (tenant-scoped).
+      const { data: locationRows, error: locError } = await supabase
+        .from('locations')
+        .select('id,geometry_slot_id')
+        .in('id', locationIds)
+        .eq('tenant_id', tenantId);
+      if (locError) throw locError;
+
+      const locationToSlot = new Map(
+        (locationRows ?? [])
+          .filter((row): row is { id: string; geometry_slot_id: string } => row.geometry_slot_id != null)
+          .map((row) => [row.id, row.geometry_slot_id])
+      );
+      const slotIds = Array.from(locationToSlot.values());
+      if (slotIds.length === 0) return [];
+
+      // Step 2: get rack_level_id for each geometry slot (cells).
+      const { data: cellRows, error: cellError } = await supabase
+        .from('cells')
+        .select('id,rack_level_id')
+        .in('id', slotIds);
+      if (cellError) throw cellError;
+
+      const slotToLevel = new Map(
+        (cellRows ?? [])
+          .filter((row): row is { id: string; rack_level_id: string } => row.rack_level_id != null)
+          .map((row) => [row.id, row.rack_level_id])
+      );
+      const levelIds = Array.from(new Set(slotToLevel.values()));
+      if (levelIds.length === 0) return [];
+
+      // Step 3: get structural_default_role for each rack level.
+      const { data: levelRows, error: levelError } = await supabase
+        .from('rack_levels')
+        .select('id,structural_default_role')
+        .in('id', levelIds);
+      if (levelError) throw levelError;
+
+      const levelToRole = new Map(
+        (levelRows ?? []).map((row) => [row.id as string, row.structural_default_role as string | null])
+      );
+
+      // Assemble: location → slot → rack_level → structural_default_role.
+      const result: Array<{ location_id: string; structural_default_role: 'primary_pick' | 'reserve' }> = [];
+      for (const locationId of locationIds) {
+        const slotId = locationToSlot.get(locationId);
+        if (!slotId) continue;
+        const levelId = slotToLevel.get(slotId);
+        if (!levelId) continue;
+        const role = levelToRole.get(levelId);
+        if (role !== 'primary_pick' && role !== 'reserve') continue;
+        result.push({ location_id: locationId, structural_default_role: role });
+      }
+      return result;
     },
 
     async listInventoryUnits(productIds) {
@@ -118,7 +175,7 @@ export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient
       if (locationIds.length === 0) return [];
       const { data, error } = await supabase
         .from('locations')
-        .select('id,tenant_id,floor_id,warehouse_id,code,sort_order,route_sequence,pick_sequence,geometry_slot_id,floor_x,floor_y,zone_id,pick_zone_id,task_zone_id,allocation_zone_id,access_aisle_id,side_of_aisle,position_along_aisle,travel_node_id')
+        .select('id,tenant_id,floor_id,code,sort_order,route_sequence,pick_sequence,geometry_slot_id,floor_x,floor_y,zone_id,pick_zone_id,task_zone_id,allocation_zone_id,access_aisle_id,side_of_aisle,position_along_aisle,travel_node_id')
         .in('id', locationIds)
         .eq('tenant_id', tenantId)
         .eq('status', 'active');
