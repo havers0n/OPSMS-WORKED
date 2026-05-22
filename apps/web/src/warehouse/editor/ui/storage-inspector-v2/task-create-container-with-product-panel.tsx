@@ -23,6 +23,26 @@ export interface CreateContainerWithProductTaskPanelProps {
   rackDisplayCode: string;
   locationCode: string;
   activeLevel: number;
+  selectedProductPlacement: {
+    totalQuantity: number;
+    uom: string;
+    containerCount: number;
+  } | null;
+  locationInventoryPreview: Array<{
+    key: string;
+    title: string;
+    meta: string | null;
+    totalQuantity: number;
+    uom: string;
+    containerCount: number;
+  }>;
+  productPlacementById: Record<
+    string,
+    {
+      inCurrentLocation: boolean;
+      floorCellCount: number;
+    }
+  >;
   onContainerTypeChange: (id: string) => void;
   onExternalCodeChange: (value: string) => void;
   onProductSearchChange: (value: string) => void;
@@ -48,6 +68,9 @@ export function CreateContainerWithProductTaskPanel({
   rackDisplayCode,
   locationCode,
   activeLevel,
+  selectedProductPlacement,
+  locationInventoryPreview,
+  productPlacementById,
   onContainerTypeChange,
   onExternalCodeChange,
   onProductSearchChange,
@@ -92,6 +115,27 @@ export function CreateContainerWithProductTaskPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {locationInventoryPreview.length > 0 ? (
+          <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+              {t('storage.field.currentInventory')}
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {locationInventoryPreview.slice(0, 3).map((item) => (
+                <div key={item.key} className="flex items-start justify-between gap-2 text-xs">
+                  <div className="min-w-0 flex-1 text-gray-600">
+                    <span className="truncate">{item.title}</span>
+                    {item.meta ? <span className="ms-1.5 font-mono text-[11px] text-gray-500" dir="ltr">{item.meta}</span> : null}
+                  </div>
+                  <span className="font-mono text-[11px] text-gray-700">
+                    {item.totalQuantity} {item.uom}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <ContainerTypeSelect
           containerTypes={containerTypes}
           value={containerTypeId}
@@ -135,10 +179,25 @@ export function CreateContainerWithProductTaskPanel({
                   role="option"
                   aria-selected={false}
                   onClick={() => onProductSelect(product)}
-                  className="px-3 py-2 text-xs cursor-pointer hover:bg-blue-50 flex items-baseline gap-2"
+                  className="px-3 py-2 text-xs cursor-pointer hover:bg-blue-50"
                 >
-                  <span className="font-mono text-gray-500" dir="ltr">{product.sku}</span>
-                  <span className="text-gray-700 truncate">{product.name}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-gray-500" dir="ltr">{product.sku}</span>
+                    <span className="text-gray-700 truncate">{product.name}</span>
+                  </div>
+                  {productPlacementById[product.id] ? (
+                    <div className="mt-1">
+                      {productPlacementById[product.id].inCurrentLocation ? (
+                        <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                          In this location
+                        </span>
+                      ) : productPlacementById[product.id].floorCellCount > 0 ? (
+                        <span className="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                          On this floor: {productPlacementById[product.id].floorCellCount}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -149,6 +208,11 @@ export function CreateContainerWithProductTaskPanel({
               {selectedProduct.name && <span className="ms-1.5">{selectedProduct.name}</span>}
             </div>
           )}
+          {selectedProductPlacement ? (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              Already in this location: {selectedProductPlacement.totalQuantity} {selectedProductPlacement.uom} across {selectedProductPlacement.containerCount} container(s).
+            </p>
+          ) : null}
         </div>
 
         <div className="flex gap-2">

@@ -1,12 +1,12 @@
 import type { FloorWorkspace, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
 import React, { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useContainerTypes } from '@/entities/container/api/use-container-types';
 import { LocationAddress } from '@/entities/location/ui/location-address';
 import { useLocationByCell } from '@/entities/location/api/use-location-by-cell';
-import { locationKeys } from '@/entities/location/api/queries';
+import { floorCellsByProductQueryOptions, locationKeys } from '@/entities/location/api/queries';
 import { useLocationStorage } from '@/entities/location/api/use-location-storage';
 import { useProductsSearch } from '@/entities/product/api/use-products-search';
 import { productStoragePresetsQueryOptions } from '@/entities/product/api/queries';
@@ -553,6 +553,15 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   const moveTargetCellId = moveTaskState?.targetCellId ?? null;
   const { data: moveTargetLocationRef, isLoading: moveTargetLocationLoading } = useLocationByCell(moveTargetCellId);
+  const createWithProductFloorPlacementQueries = useQueries({
+    queries: createWithProductSearchResults.slice(0, 10).map((product) => ({
+      ...floorCellsByProductQueryOptions(floorId, product.id),
+      enabled:
+        mode.kind === 'task-create-container-with-product' &&
+        createWithProductSearch.trim().length > 0 &&
+        Boolean(floorId)
+    }))
+  });
 
   const resetCreateTaskState = () => {
     setCreateContainerTypeId('');
@@ -1052,7 +1061,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
       await invalidatePlacementQueries(queryClient, { floorId, containerId });
       await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
-      setSelectedContainerId(null);
+      setSelectedContainerId(containerId);
       closeCreateWithProductTask();
     } finally {
       setCreateWithProductIsSubmitting(false);
@@ -1471,6 +1480,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
   const isOccupied = storageRows.length > 0;
   const containers = groupByContainer(storageRows);
+  const cellOverviewContainers = buildCurrentContainerCards(containers, t);
+  const cellOverviewInventoryItems = buildCurrentInventoryItems(storageRows);
+  const cellOverviewPolicyAssignments = buildPolicyAssignments(locationProductAssignments);
 
   if (mode.kind === 'task-place-existing') {
     return (
@@ -1541,6 +1553,60 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   }
 
   if (mode.kind === 'task-create-container-with-product') {
+    const currentLocationProductIds = new Set(
+      storageRows
+        .filter((row) => row.product?.id)
+        .map((row) => row.product!.id)
+    );
+    const productPlacementById = createWithProductSearchResults
+      .slice(0, 10)
+      .reduce<
+        Record<
+          string,
+          {
+            inCurrentLocation: boolean;
+            floorCellCount: number;
+          }
+        >
+      >((acc, product, index) => {
+        const floorCellCount = createWithProductFloorPlacementQueries[index]?.data?.length ?? 0;
+        acc[product.id] = {
+          inCurrentLocation: currentLocationProductIds.has(product.id),
+          floorCellCount
+        };
+        return acc;
+      }, {});
+
+    const selectedProductPlacement = createWithProductSelectedProduct
+      ? storageRows
+          .filter(
+            (row) =>
+              row.product?.id === createWithProductSelectedProduct.id &&
+              row.quantity !== null &&
+              row.uom !== null
+          )
+          .reduce<{
+            totalQuantity: number;
+            uom: string;
+            containerCount: number;
+            containerIds: Set<string>;
+          } | null>((acc, row) => {
+            if (!acc) {
+              return {
+                totalQuantity: row.quantity ?? 0,
+                uom: row.uom ?? '',
+                containerCount: 1,
+                containerIds: new Set([row.containerId])
+              };
+            }
+            if (acc.uom !== row.uom) return acc;
+            acc.totalQuantity += row.quantity ?? 0;
+            acc.containerIds.add(row.containerId);
+            acc.containerCount = acc.containerIds.size;
+            return acc;
+          }, null)
+      : null;
+
     return (
       <CreateContainerWithProductTaskPanel
         containerTypes={containerTypes}
@@ -1557,6 +1623,17 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         rackDisplayCode={rackDisplayCode}
         locationCode={locationCode}
         activeLevel={activeLevel}
+        selectedProductPlacement={
+          selectedProductPlacement
+            ? {
+                totalQuantity: selectedProductPlacement.totalQuantity,
+                uom: selectedProductPlacement.uom,
+                containerCount: selectedProductPlacement.containerCount
+              }
+            : null
+        }
+        locationInventoryPreview={cellOverviewInventoryItems}
+        productPlacementById={productPlacementById}
         onContainerTypeChange={setCreateWithProductContainerTypeId}
         onExternalCodeChange={setCreateWithProductExternalCode}
         onProductSearchChange={handleCreateWithProductSearchChange}
@@ -2091,10 +2168,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       />
     );
   }
-
-  const cellOverviewContainers = buildCurrentContainerCards(containers, t);
-  const cellOverviewInventoryItems = buildCurrentInventoryItems(storageRows);
-  const cellOverviewPolicyAssignments = buildPolicyAssignments(locationProductAssignments);
 
   return (
     <CellSectionOverviewPanel

@@ -178,6 +178,11 @@ vi.mock('@/entities/location/api/queries', () => ({
     storage: (locationId: string | null) => ['location', 'storage', locationId ?? 'none'] as const,
     occupancyByFloor: (floorId: string | null) => ['location', 'occupancy-by-floor', floorId ?? 'none'] as const,
   },
+  floorCellsByProductQueryOptions: (floorId: string | null, productId: string | null) => ({
+    queryKey: ['location', 'cells-by-product', floorId ?? 'none', productId ?? 'none'] as const,
+    queryFn: async () => [] as string[],
+    enabled: Boolean(floorId) && Boolean(productId)
+  }),
 }));
 
 const mockCreateContainer = vi.fn();
@@ -265,6 +270,11 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
         isLoading: false
       };
     },
+    useQueries: (options: { queries: Array<{ queryKey?: readonly unknown[] }> }) =>
+      options.queries.map(() => ({
+        data: [] as string[],
+        isLoading: false
+      })),
     useQueryClient: () => ({
       invalidateQueries: mockInvalidateQueries,
       refetchQueries: mockRefetchQueries,
