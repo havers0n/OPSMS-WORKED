@@ -127,6 +127,26 @@ describe('picking planning overlay store', () => {
     ).toBe('nearest-neighbor');
   });
 
+  it('supports route-cost mode per package', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteOrderMode('pkg-1', 'nearest-route-cost');
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('nearest-route-cost');
+  });
+
+  it('supports improved route-cost mode per package', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteOrderMode('pkg-1', 'improved-route-cost');
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('improved-route-cost');
+  });
+
   it('clears route order modes when source changes', () => {
     usePickingPlanningOverlayStore.getState().setRouteOrderMode('pkg-1', 'nearest-neighbor');
 
@@ -167,6 +187,40 @@ describe('picking planning overlay store', () => {
     usePickingPlanningOverlayStore
       .getState()
       .setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+    usePickingPlanningOverlayStore
+      .getState()
+      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('original');
+  });
+
+  it('manual reorder switches route-cost mode back to original', () => {
+    const preview = createPreview();
+    usePickingPlanningOverlayStore.getState().setPreview(preview);
+    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteOrderMode('pkg-1', 'nearest-route-cost');
+
+    usePickingPlanningOverlayStore
+      .getState()
+      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('original');
+  });
+
+  it('manual reorder switches improved mode back to original', () => {
+    const preview = createPreview();
+    usePickingPlanningOverlayStore.getState().setPreview(preview);
+    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteOrderMode('pkg-1', 'improved-route-cost');
 
     usePickingPlanningOverlayStore
       .getState()

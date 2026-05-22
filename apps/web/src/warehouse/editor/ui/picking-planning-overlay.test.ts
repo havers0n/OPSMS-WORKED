@@ -499,7 +499,7 @@ describe('PickingPlanningOverlay', () => {
     );
   });
 
-  it('defaults to Original route order mode and can switch to Nearest', async () => {
+  it('defaults to Original route order mode and can switch to Nearest, Route-cost, and Improved', async () => {
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     act(() => {
       usePickingPlanningOverlayStore
@@ -519,8 +519,16 @@ describe('PickingPlanningOverlay', () => {
     const nearestButton = renderer.root.findByProps({
       'data-testid': 'picking-plan-route-order-nearest'
     });
+    const routeCostButton = renderer.root.findByProps({
+      'data-testid': 'picking-plan-route-order-nearest-route-cost'
+    });
+    const improvedButton = renderer.root.findByProps({
+      'data-testid': 'picking-plan-route-order-improved-route-cost'
+    });
     expect(typeof originalButton.props.onClick).toBe('function');
     expect(typeof nearestButton.props.onClick).toBe('function');
+    expect(typeof routeCostButton.props.onClick).toBe('function');
+    expect(typeof improvedButton.props.onClick).toBe('function');
 
     act(() => {
       nearestButton.props.onClick();
@@ -528,6 +536,20 @@ describe('PickingPlanningOverlay', () => {
     expect(
       usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
     ).toBe('nearest-neighbor');
+
+    act(() => {
+      routeCostButton.props.onClick();
+    });
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('nearest-route-cost');
+
+    act(() => {
+      improvedButton.props.onClick();
+    });
+    expect(
+      usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
+    ).toBe('improved-route-cost');
   });
 
   it('nearest mode hides manual reorder interactions and applies nearest order', async () => {
@@ -544,6 +566,64 @@ describe('PickingPlanningOverlay', () => {
         createElement(PickingPlanningOverlay, {
           nearestNeighborStepIds: ['task-2', 'task-1'],
           activeRouteOrderMode: 'nearest-neighbor'
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toMatch(/1 sku-2.*2 sku-1/);
+
+    const moveTask1Down = renderer.root.find(
+      (instance) =>
+        instance.type === 'button' && instance.props.title === 'Move task-1 down'
+    );
+    expect(moveTask1Down.props.disabled).toBe(true);
+  });
+
+  it('route-cost mode hides manual reorder interactions and applies route-cost order', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          nearestRouteCostStepIds: ['task-2', 'task-1'],
+          activeRouteOrderMode: 'nearest-route-cost'
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toMatch(/1 sku-2.*2 sku-1/);
+
+    const moveTask1Down = renderer.root.find(
+      (instance) =>
+        instance.type === 'button' && instance.props.title === 'Move task-1 down'
+    );
+    expect(moveTask1Down.props.disabled).toBe(true);
+  });
+
+  it('improved mode hides manual reorder interactions and applies improved order', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          improvedRouteCostStepIds: ['task-2', 'task-1'],
+          activeRouteOrderMode: 'improved-route-cost'
         })
       );
       await Promise.resolve();
@@ -750,6 +830,149 @@ describe('PickingPlanningOverlay', () => {
 
     const text = normalizeText(collectText(renderer.toJSON()));
     expect(text).toContain('Nearest is longer than original for this route.');
+  });
+
+  it('shows route-cost fallback message when disabled by anchor guard', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          nearestRouteCostSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          nearestRouteCostFallbackReason: 'too_many_resolved_anchors',
+          nearestRouteCostResolvedAnchorsCount: 30,
+          nearestRouteCostMaxResolvedAnchors: 25,
+          nearestRouteCostPairSolveCount: 0,
+          nearestRouteCostUnreachablePairCount: 0,
+          originalCanvasStepIds: ['task-1', 'task-2'],
+          nearestCanvasStepIds: ['task-1', 'task-2'],
+          nearestRouteCostCanvasStepIds: ['task-1', 'task-2']
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Route-cost fallback: disabled for this package');
+    expect(text).toContain('30 resolved anchors; limit 25');
+    expect(text).toContain('DEV route-order debug');
+    expect(text).toContain('status: fallback(too_many_resolved_anchors)');
+    expect(text).toContain('Route-cost stats · pair solves: 0 · unreachable pairs: 0');
+  });
+
+  it('shows improved fallback warning and improved diagnostics', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          activeRouteOrderMode: 'improved-route-cost',
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 10,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 7,
+              canvasPoints: []
+            }
+          ],
+          nearestRouteCostSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 7,
+              canvasPoints: []
+            }
+          ],
+          improvedSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 7,
+              canvasPoints: []
+            }
+          ],
+          improvedRouteCostFallbackReason: 'route_cost_seed_fallback',
+          improvedRouteCostPairSolveCount: 0,
+          improvedRouteCostUnreachablePairCount: 0,
+          improvedRouteCostIterationCount: 0,
+          improvedRouteCostImprovementCount: 0,
+          improvedRouteCostConverged: true
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Improved fallback: using route-cost order');
+    expect(text).toContain('Improved stats · method: route-cost 2-opt local search');
   });
 
   it('renders start-point controls and starts placement for active package', async () => {

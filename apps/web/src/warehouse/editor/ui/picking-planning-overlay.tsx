@@ -51,7 +51,28 @@ type PickingPlanningOverlayProps = {
   solvedSegments?: SolvedRouteSegment[];
   originalSolvedSegments?: SolvedRouteSegment[];
   nearestSolvedSegments?: SolvedRouteSegment[];
+  nearestRouteCostSolvedSegments?: SolvedRouteSegment[];
+  improvedSolvedSegments?: SolvedRouteSegment[];
   nearestNeighborStepIds?: string[];
+  nearestRouteCostStepIds?: string[];
+  improvedRouteCostStepIds?: string[];
+  nearestRouteCostFallbackReason?: 'too_many_resolved_anchors';
+  nearestRouteCostResolvedAnchorsCount?: number;
+  nearestRouteCostMaxResolvedAnchors?: number;
+  nearestRouteCostIsPartial?: boolean;
+  nearestRouteCostPairSolveCount?: number;
+  nearestRouteCostUnreachablePairCount?: number;
+  improvedRouteCostFallbackReason?: string;
+  improvedRouteCostPairSolveCount?: number;
+  improvedRouteCostUnreachablePairCount?: number;
+  improvedRouteCostIterationCount?: number;
+  improvedRouteCostImprovementCount?: number;
+  improvedRouteCostConverged?: boolean;
+  improvedRouteCostEstimatedTotalMetres?: number | null;
+  originalCanvasStepIds?: string[];
+  nearestCanvasStepIds?: string[];
+  nearestRouteCostCanvasStepIds?: string[];
+  improvedRouteCostCanvasStepIds?: string[];
   activeRouteOrderMode?: PickingRouteOrderMode;
   routeStartPoint?: PickingRouteStartPoint | null;
   isPlacingRouteStartPoint?: boolean;
@@ -66,6 +87,24 @@ function sourceLabel(source: PickingPlanningOverlaySource) {
 function formatNumber(value: number | undefined, suffix = '') {
   if (value === undefined || !Number.isFinite(value)) return '-';
   return `${Number.isInteger(value) ? value : value.toFixed(1)}${suffix}`;
+}
+
+function summarizeStepOrder(steps: PlanningRouteStepDto[]) {
+  if (steps.length === 0) return '-';
+  return steps
+    .map(
+      (step, index) =>
+        `${index + 1}.${step.skuId}@${step.fromLocationId ?? '?'}`
+    )
+    .join(' | ');
+}
+
+function areOrdersEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 function groupWarnings(warnings: PlanningWarningDto[]) {
@@ -195,7 +234,28 @@ export function PickingPlanningOverlay({
   solvedSegments = [],
   originalSolvedSegments = solvedSegments,
   nearestSolvedSegments = solvedSegments,
+  nearestRouteCostSolvedSegments = solvedSegments,
+  improvedSolvedSegments = solvedSegments,
   nearestNeighborStepIds = [],
+  nearestRouteCostStepIds = [],
+  improvedRouteCostStepIds = [],
+  nearestRouteCostFallbackReason,
+  nearestRouteCostResolvedAnchorsCount,
+  nearestRouteCostMaxResolvedAnchors,
+  nearestRouteCostIsPartial = false,
+  nearestRouteCostPairSolveCount = 0,
+  nearestRouteCostUnreachablePairCount = 0,
+  improvedRouteCostFallbackReason,
+  improvedRouteCostPairSolveCount = 0,
+  improvedRouteCostUnreachablePairCount = 0,
+  improvedRouteCostIterationCount = 0,
+  improvedRouteCostImprovementCount = 0,
+  improvedRouteCostConverged = true,
+  improvedRouteCostEstimatedTotalMetres = null,
+  originalCanvasStepIds = [],
+  nearestCanvasStepIds = [],
+  nearestRouteCostCanvasStepIds = [],
+  improvedRouteCostCanvasStepIds = [],
   activeRouteOrderMode,
   routeStartPoint = null,
   isPlacingRouteStartPoint = false
@@ -365,13 +425,19 @@ export function PickingPlanningOverlay({
             activePackage.route.steps,
             (activeRouteOrderModeValue === 'nearest-neighbor'
               ? nearestNeighborStepIds
+              : activeRouteOrderModeValue === 'nearest-route-cost'
+                ? nearestRouteCostStepIds
+                : activeRouteOrderModeValue === 'improved-route-cost'
+                  ? improvedRouteCostStepIds
               : reorderedStepIdsByPackageId[activePackage.workPackage.id])
           )
         : [],
     [
       activePackage,
       activeRouteOrderModeValue,
+      improvedRouteCostStepIds,
       nearestNeighborStepIds,
+      nearestRouteCostStepIds,
       reorderedStepIdsByPackageId
     ]
   );
@@ -394,6 +460,14 @@ export function PickingPlanningOverlay({
   const nearestRouteDiagnostics = useMemo(
     () => summarizePickingRouteSegments(nearestSolvedSegments),
     [nearestSolvedSegments]
+  );
+  const nearestRouteCostDiagnostics = useMemo(
+    () => summarizePickingRouteSegments(nearestRouteCostSolvedSegments),
+    [nearestRouteCostSolvedSegments]
+  );
+  const improvedRouteDiagnostics = useMemo(
+    () => summarizePickingRouteSegments(improvedSolvedSegments),
+    [improvedSolvedSegments]
   );
   const distanceDeltaMetres = useMemo(
     () =>
@@ -420,6 +494,159 @@ export function PickingPlanningOverlay({
     }
     return 'No distance change';
   }, [distanceDeltaMetres, distanceDeltaPct]);
+  const routeCostDistanceDeltaMetres = useMemo(
+    () =>
+      nearestRouteCostDiagnostics.totalDistanceMetres -
+      originalRouteDiagnostics.totalDistanceMetres,
+    [
+      nearestRouteCostDiagnostics.totalDistanceMetres,
+      originalRouteDiagnostics.totalDistanceMetres
+    ]
+  );
+  const routeCostDistanceDeltaPct = useMemo(() => {
+    if (originalRouteDiagnostics.totalDistanceMetres <= 0) return null;
+    return (
+      (routeCostDistanceDeltaMetres / originalRouteDiagnostics.totalDistanceMetres) *
+      100
+    );
+  }, [originalRouteDiagnostics.totalDistanceMetres, routeCostDistanceDeltaMetres]);
+  const routeCostComparisonMessage = useMemo(() => {
+    if (routeCostDistanceDeltaMetres < 0) {
+      return `Route-cost nearest is shorter by ${formatNumber(Math.abs(routeCostDistanceDeltaMetres), ' m')}${
+        routeCostDistanceDeltaPct === null
+          ? ''
+          : ` (${formatNumber(Math.abs(routeCostDistanceDeltaPct), '%')})`
+      }`;
+    }
+    if (routeCostDistanceDeltaMetres > 0) {
+      return `Route-cost nearest is longer by ${formatNumber(routeCostDistanceDeltaMetres, ' m')}${
+        routeCostDistanceDeltaPct === null
+          ? ''
+          : ` (${formatNumber(routeCostDistanceDeltaPct, '%')})`
+      }`;
+    }
+    return 'Route-cost nearest has no distance change';
+  }, [routeCostDistanceDeltaMetres, routeCostDistanceDeltaPct]);
+  const improvedDistanceDeltaFromOriginalMetres = useMemo(
+    () =>
+      improvedRouteDiagnostics.totalDistanceMetres -
+      originalRouteDiagnostics.totalDistanceMetres,
+    [
+      improvedRouteDiagnostics.totalDistanceMetres,
+      originalRouteDiagnostics.totalDistanceMetres
+    ]
+  );
+  const improvedDistanceDeltaFromOriginalPct = useMemo(() => {
+    if (originalRouteDiagnostics.totalDistanceMetres <= 0) return null;
+    return (
+      (improvedDistanceDeltaFromOriginalMetres /
+        originalRouteDiagnostics.totalDistanceMetres) *
+      100
+    );
+  }, [
+    improvedDistanceDeltaFromOriginalMetres,
+    originalRouteDiagnostics.totalDistanceMetres
+  ]);
+  const improvedDistanceDeltaFromRouteCostMetres = useMemo(
+    () =>
+      improvedRouteDiagnostics.totalDistanceMetres -
+      nearestRouteCostDiagnostics.totalDistanceMetres,
+    [
+      improvedRouteDiagnostics.totalDistanceMetres,
+      nearestRouteCostDiagnostics.totalDistanceMetres
+    ]
+  );
+  const improvedDistanceDeltaFromRouteCostPct = useMemo(() => {
+    if (nearestRouteCostDiagnostics.totalDistanceMetres <= 0) return null;
+    return (
+      (improvedDistanceDeltaFromRouteCostMetres /
+        nearestRouteCostDiagnostics.totalDistanceMetres) *
+      100
+    );
+  }, [
+    improvedDistanceDeltaFromRouteCostMetres,
+    nearestRouteCostDiagnostics.totalDistanceMetres
+  ]);
+  const improvedComparisonMessage = useMemo(() => {
+    if (improvedDistanceDeltaFromRouteCostMetres < 0) {
+      return `Improved is shorter by ${formatNumber(Math.abs(improvedDistanceDeltaFromRouteCostMetres), ' m')}${
+        improvedDistanceDeltaFromRouteCostPct === null
+          ? ''
+          : ` (${formatNumber(Math.abs(improvedDistanceDeltaFromRouteCostPct), '%')})`
+      } vs Route-cost`;
+    }
+    if (improvedDistanceDeltaFromRouteCostMetres > 0) {
+      return `Improved is longer by ${formatNumber(improvedDistanceDeltaFromRouteCostMetres, ' m')}${
+        improvedDistanceDeltaFromRouteCostPct === null
+          ? ''
+          : ` (${formatNumber(improvedDistanceDeltaFromRouteCostPct, '%')})`
+      } vs Route-cost`;
+    }
+    return 'No improvement found vs Route-cost';
+  }, [improvedDistanceDeltaFromRouteCostMetres, improvedDistanceDeltaFromRouteCostPct]);
+  const originalModeSteps = useMemo(
+    () =>
+      activePackage
+        ? deriveDisplayedRouteSteps(
+            activePackage.route.steps,
+            reorderedStepIdsByPackageId[activePackage.workPackage.id]
+          )
+        : [],
+    [activePackage, reorderedStepIdsByPackageId]
+  );
+  const nearestModeSteps = useMemo(
+    () =>
+      activePackage
+        ? deriveDisplayedRouteSteps(activePackage.route.steps, nearestNeighborStepIds)
+        : [],
+    [activePackage, nearestNeighborStepIds]
+  );
+  const nearestRouteCostModeSteps = useMemo(
+    () =>
+      activePackage
+        ? deriveDisplayedRouteSteps(activePackage.route.steps, nearestRouteCostStepIds)
+        : [],
+    [activePackage, nearestRouteCostStepIds]
+  );
+  const improvedRouteCostModeSteps = useMemo(
+    () =>
+      activePackage
+        ? deriveDisplayedRouteSteps(activePackage.route.steps, improvedRouteCostStepIds)
+        : [],
+    [activePackage, improvedRouteCostStepIds]
+  );
+  const originalModeStepIds = useMemo(
+    () => originalModeSteps.map(getRouteStepId),
+    [originalModeSteps]
+  );
+  const nearestModeStepIds = useMemo(
+    () => nearestModeSteps.map(getRouteStepId),
+    [nearestModeSteps]
+  );
+  const nearestRouteCostModeStepIds = useMemo(
+    () => nearestRouteCostModeSteps.map(getRouteStepId),
+    [nearestRouteCostModeSteps]
+  );
+  const improvedRouteCostModeStepIds = useMemo(
+    () => improvedRouteCostModeSteps.map(getRouteStepId),
+    [improvedRouteCostModeSteps]
+  );
+  const originalSidebarCanvasAligned = useMemo(
+    () => areOrdersEqual(originalModeStepIds, originalCanvasStepIds),
+    [originalCanvasStepIds, originalModeStepIds]
+  );
+  const nearestSidebarCanvasAligned = useMemo(
+    () => areOrdersEqual(nearestModeStepIds, nearestCanvasStepIds),
+    [nearestCanvasStepIds, nearestModeStepIds]
+  );
+  const nearestRouteCostSidebarCanvasAligned = useMemo(
+    () => areOrdersEqual(nearestRouteCostModeStepIds, nearestRouteCostCanvasStepIds),
+    [nearestRouteCostCanvasStepIds, nearestRouteCostModeStepIds]
+  );
+  const improvedRouteCostSidebarCanvasAligned = useMemo(
+    () => areOrdersEqual(improvedRouteCostModeStepIds, improvedRouteCostCanvasStepIds),
+    [improvedRouteCostCanvasStepIds, improvedRouteCostModeStepIds]
+  );
 
   if (isCollapsed) {
     return (
@@ -822,6 +1049,60 @@ export function PickingPlanningOverlay({
                       </button>
                       <button
                         type="button"
+                        onClick={() =>
+                          setRouteOrderMode(
+                            activePackage.workPackage.id,
+                            'nearest-route-cost'
+                          )
+                        }
+                        className="rounded-md border px-2 py-1 text-[11px] font-semibold"
+                        style={{
+                          background:
+                            activeRouteOrderModeValue === 'nearest-route-cost'
+                              ? 'rgba(219,234,254,0.9)'
+                              : 'rgba(255,255,255,0.75)',
+                          borderColor:
+                            activeRouteOrderModeValue === 'nearest-route-cost'
+                              ? 'rgba(37,99,235,0.5)'
+                              : 'rgba(148,163,184,0.35)',
+                          color:
+                            activeRouteOrderModeValue === 'nearest-route-cost'
+                              ? 'var(--accent)'
+                              : '#475569'
+                        }}
+                        data-testid="picking-plan-route-order-nearest-route-cost"
+                      >
+                        Route-cost
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRouteOrderMode(
+                            activePackage.workPackage.id,
+                            'improved-route-cost'
+                          )
+                        }
+                        className="rounded-md border px-2 py-1 text-[11px] font-semibold"
+                        style={{
+                          background:
+                            activeRouteOrderModeValue === 'improved-route-cost'
+                              ? 'rgba(219,234,254,0.9)'
+                              : 'rgba(255,255,255,0.75)',
+                          borderColor:
+                            activeRouteOrderModeValue === 'improved-route-cost'
+                              ? 'rgba(37,99,235,0.5)'
+                              : 'rgba(148,163,184,0.35)',
+                          color:
+                            activeRouteOrderModeValue === 'improved-route-cost'
+                              ? 'var(--accent)'
+                              : '#475569'
+                        }}
+                        data-testid="picking-plan-route-order-improved-route-cost"
+                      >
+                        Improved
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
                           setRouteOrderMode(activePackage.workPackage.id, 'original');
                           resetReorder(activePackage.workPackage.id);
@@ -911,7 +1192,7 @@ export function PickingPlanningOverlay({
                             activeRouteOrderModeValue === 'original'
                           }
                           onMove={(direction) => {
-                            if (activeRouteOrderModeValue === 'nearest-neighbor') return;
+                            if (activeRouteOrderModeValue !== 'original') return;
                             reorderPackageSteps(
                               activePackage.workPackage.id,
                               displayedStepIds,
@@ -942,15 +1223,43 @@ export function PickingPlanningOverlay({
                         Nearest: {formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')}
                       </div>
                       <div>
+                        Route-cost: {formatNumber(nearestRouteCostDiagnostics.totalDistanceMetres, ' m')}
+                      </div>
+                      <div>
+                        Improved: {formatNumber(improvedRouteDiagnostics.totalDistanceMetres, ' m')}
+                      </div>
+                      <div>
                         Delta: {formatNumber(distanceDeltaMetres, ' m')}
                         {distanceDeltaPct === null
                           ? ''
                           : ` (${formatNumber(distanceDeltaPct, '%')})`}
                       </div>
                       <div>
+                        Route-cost delta: {formatNumber(routeCostDistanceDeltaMetres, ' m')}
+                        {routeCostDistanceDeltaPct === null
+                          ? ''
+                          : ` (${formatNumber(routeCostDistanceDeltaPct, '%')})`}
+                      </div>
+                      <div>
+                        Improved delta: {formatNumber(improvedDistanceDeltaFromOriginalMetres, ' m')}
+                        {improvedDistanceDeltaFromOriginalPct === null
+                          ? ''
+                          : ` (${formatNumber(improvedDistanceDeltaFromOriginalPct, '%')})`}
+                      </div>
+                      <div>
+                        Improved vs Route-cost: {formatNumber(improvedDistanceDeltaFromRouteCostMetres, ' m')}
+                        {improvedDistanceDeltaFromRouteCostPct === null
+                          ? ''
+                          : ` (${formatNumber(improvedDistanceDeltaFromRouteCostPct, '%')})`}
+                      </div>
+                      <div>
                         Active:{' '}
                         {activeRouteOrderModeValue === 'nearest-neighbor'
                           ? 'Nearest'
+                          : activeRouteOrderModeValue === 'nearest-route-cost'
+                            ? 'Route-cost'
+                            : activeRouteOrderModeValue === 'improved-route-cost'
+                              ? 'Improved'
                           : 'Original'}
                       </div>
                       <div>
@@ -969,6 +1278,17 @@ export function PickingPlanningOverlay({
                       <div className="mt-1 text-[11px] text-slate-500">
                         {distanceComparisonMessage}
                       </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        {routeCostComparisonMessage}
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        {improvedComparisonMessage}
+                      </div>
+                      {nearestRouteCostFallbackReason === 'too_many_resolved_anchors' && (
+                        <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                          Route-cost fallback: disabled for this package ({nearestRouteCostResolvedAnchorsCount ?? '-'} resolved anchors; limit {nearestRouteCostMaxResolvedAnchors ?? '-'}). Showing original order for route-cost mode.
+                        </div>
+                      )}
                       {routeStartPoint && (
                         <div className="mt-1 text-[11px] text-slate-500">
                           Includes start point
@@ -987,6 +1307,65 @@ export function PickingPlanningOverlay({
                             Warning: nearest route has skipped or blocked segments.
                           </div>
                         )}
+                      {activeRouteOrderModeValue === 'nearest-route-cost' &&
+                        nearestRouteCostIsPartial && (
+                          <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                            Warning: route-cost nearest is partial due to unreachable transitions.
+                          </div>
+                        )}
+                      {activeRouteOrderModeValue === 'improved-route-cost' &&
+                        improvedDistanceDeltaFromRouteCostMetres > 0 && (
+                          <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                            Warning: Improved is longer than Route-cost for this route.
+                          </div>
+                        )}
+                      {improvedRouteCostFallbackReason && (
+                        <div className="mt-1 text-[11px] font-semibold text-amber-700">
+                          Improved fallback: using route-cost order ({improvedRouteCostFallbackReason}).
+                        </div>
+                      )}
+                      {import.meta.env.DEV && (
+                        <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[10px] text-slate-700">
+                          <div className="font-semibold text-slate-800">
+                            DEV route-order debug
+                          </div>
+                          <div className="mt-1">
+                            Original · {formatNumber(originalRouteDiagnostics.totalDistanceMetres, ' m')} · status: computed · align: {originalSidebarCanvasAligned ? 'yes' : 'no'}
+                          </div>
+                          <div className="truncate">
+                            {summarizeStepOrder(originalModeSteps)}
+                          </div>
+                          <div className="mt-1">
+                            Nearest · {formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')} · status: computed · align: {nearestSidebarCanvasAligned ? 'yes' : 'no'}
+                          </div>
+                          <div className="truncate">
+                            {summarizeStepOrder(nearestModeSteps)}
+                          </div>
+                          <div className="mt-1">
+                            Route-cost · {formatNumber(nearestRouteCostDiagnostics.totalDistanceMetres, ' m')} · status: {nearestRouteCostFallbackReason ? `fallback(${nearestRouteCostFallbackReason})` : 'computed'} · align: {nearestRouteCostSidebarCanvasAligned ? 'yes' : 'no'}
+                          </div>
+                          <div className="truncate">
+                            {summarizeStepOrder(nearestRouteCostModeSteps)}
+                          </div>
+                          <div className="mt-1">
+                            Route-cost stats · pair solves: {nearestRouteCostPairSolveCount} · unreachable pairs: {nearestRouteCostUnreachablePairCount}
+                          </div>
+                          <div className="mt-1">
+                            Improved · {formatNumber(improvedRouteDiagnostics.totalDistanceMetres, ' m')} · status: {improvedRouteCostFallbackReason ? `fallback(${improvedRouteCostFallbackReason})` : 'computed'} · align: {improvedRouteCostSidebarCanvasAligned ? 'yes' : 'no'}
+                          </div>
+                          <div className="truncate">
+                            {summarizeStepOrder(improvedRouteCostModeSteps)}
+                          </div>
+                          <div className="mt-1">
+                            Improved stats · method: route-cost 2-opt local search · estimate: {formatNumber(improvedRouteCostEstimatedTotalMetres ?? undefined, ' m')} · iterations: {improvedRouteCostIterationCount} · improvements: {improvedRouteCostImprovementCount} · converged: {improvedRouteCostConverged ? 'yes' : 'no'} · pair solves: {improvedRouteCostPairSolveCount} · unreachable pairs: {improvedRouteCostUnreachablePairCount}
+                          </div>
+                          {nearestRouteCostFallbackReason === 'too_many_resolved_anchors' && (
+                            <div>
+                              guard: resolved anchors {nearestRouteCostResolvedAnchorsCount ?? '-'} &gt; limit {nearestRouteCostMaxResolvedAnchors ?? '-'}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {import.meta.env.DEV && (
                         <div className="mt-1 space-y-1 text-[11px] text-slate-500">
                           {solvedSegments.map((segment, index) => (

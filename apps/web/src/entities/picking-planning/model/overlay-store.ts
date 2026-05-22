@@ -4,7 +4,11 @@ import type {
   PickingPlanningPreviewResponse
 } from './types';
 
-export type PickingRouteOrderMode = 'original' | 'nearest-neighbor';
+export type PickingRouteOrderMode =
+  | 'original'
+  | 'nearest-neighbor'
+  | 'nearest-route-cost'
+  | 'improved-route-cost';
 export type PickingRouteStartPoint = {
   x: number;
   y: number;
@@ -114,7 +118,7 @@ export const usePickingPlanningOverlayStore =
           ...state.routeOrderModeByPackageId,
           [packageId]: mode
         };
-        if (mode !== 'nearest-neighbor') {
+        if (mode === 'original') {
           return { routeOrderModeByPackageId: nextRouteOrderModeByPackageId };
         }
         const nextReorderedStepIdsByPackageId = {
@@ -151,7 +155,7 @@ export const usePickingPlanningOverlayStore =
       set((state) => {
         const mode = state.routeOrderModeByPackageId[packageId] ?? 'original';
         const nextRouteOrderModeByPackageId =
-          mode === 'nearest-neighbor'
+          mode !== 'original'
             ? {
                 ...state.routeOrderModeByPackageId,
                 [packageId]: 'original' as const
