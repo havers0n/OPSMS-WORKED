@@ -661,6 +661,9 @@ function buildRackSection(row: RackSectionRow, allLevels: RackLevelRow[]) {
 
 function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevels: RackLevelRow[]) {
   const relationshipMode = row.face_mode ?? (row.is_mirrored ? 'mirrored' : 'independent');
+  // Mirrored faces share section/level structure with their source face; sections are
+  // only stored under the source face_id in the DB.
+  const sectionSourceFaceId = row.is_mirrored && row.mirror_source_face_id ? row.mirror_source_face_id : row.id;
   return {
     id: row.id,
     side: row.side,
@@ -671,7 +674,7 @@ function buildRackFace(row: RackFaceRow, allSections: RackSectionRow[], allLevel
     mirrorSourceFaceId: row.mirror_source_face_id,
     faceLength: row.face_length ?? undefined,
     sections: allSections
-      .filter((section) => section.rack_face_id === row.id)
+      .filter((section) => section.rack_face_id === sectionSourceFaceId)
       .sort((a, b) => a.ordinal - b.ordinal)
       .map((section) => buildRackSection(section, allLevels))
   };
@@ -850,43 +853,52 @@ export function mapLayoutBundleJsonToDomain(json: unknown): LayoutDraft | null {
     versionNo: bundle.versionNo
   });
 
-  const racks = bundle.racks.map((rack) => ({
-    id: rack.id,
-    geometry: rackGeometrySchema.parse({
-      x: rack.x,
-      y: rack.y,
-      totalLength: rack.totalLength,
-      depth: rack.depth,
-      rotationDeg: rack.rotationDeg
-    }),
-    structure: rackStructureSchema.parse({
-      displayCode: rack.displayCode,
-      kind: rack.kind,
-      axis: rack.axis,
-      isLocked: rack.isLocked ?? false,
-      faces: rack.faces.map((face) => ({
-        id: face.id,
-        side: face.side,
-        enabled: face.enabled,
-        slotNumberingDirection: face.slotNumberingDirection,
-        relationshipMode: face.relationshipMode ?? (face.isMirrored ? 'mirrored' : 'independent'),
-        isMirrored: face.isMirrored,
-        mirrorSourceFaceId: face.mirrorSourceFaceId,
-        faceLength: face.faceLength ?? undefined,
-        sections: face.sections.map((section) => ({
-          id: section.id,
-          ordinal: section.ordinal,
-          length: section.length,
-          levels: section.levels.map((level) => ({
-            id: level.id,
-            ordinal: level.ordinal,
-            slotCount: level.slotCount,
-            structuralDefaultRole: level.structuralDefaultRole ?? 'none'
-          }))
-        }))
-      }))
-    })
-  }));
+  const racks = bundle.racks.map((rack) => {
+    // Mirrored faces share section/level structure with their source face; sections are
+    // only stored under the source face in the RPC bundle.
+    const rawSectionsByFaceId = new Map(rack.faces.map((face) => [face.id, face.sections]));
+    return {
+      id: rack.id,
+      geometry: rackGeometrySchema.parse({
+        x: rack.x,
+        y: rack.y,
+        totalLength: rack.totalLength,
+        depth: rack.depth,
+        rotationDeg: rack.rotationDeg
+      }),
+      structure: rackStructureSchema.parse({
+        displayCode: rack.displayCode,
+        kind: rack.kind,
+        axis: rack.axis,
+        isLocked: rack.isLocked ?? false,
+        faces: rack.faces.map((face) => {
+          const sectionSourceFaceId = face.isMirrored && face.mirrorSourceFaceId ? face.mirrorSourceFaceId : face.id;
+          const rawSections = rawSectionsByFaceId.get(sectionSourceFaceId) ?? face.sections;
+          return {
+            id: face.id,
+            side: face.side,
+            enabled: face.enabled,
+            slotNumberingDirection: face.slotNumberingDirection,
+            relationshipMode: face.relationshipMode ?? (face.isMirrored ? 'mirrored' : 'independent'),
+            isMirrored: face.isMirrored,
+            mirrorSourceFaceId: face.mirrorSourceFaceId,
+            faceLength: face.faceLength ?? undefined,
+            sections: rawSections.map((section) => ({
+              id: section.id,
+              ordinal: section.ordinal,
+              length: section.length,
+              levels: section.levels.map((level) => ({
+                id: level.id,
+                ordinal: level.ordinal,
+                slotCount: level.slotCount,
+                structuralDefaultRole: level.structuralDefaultRole ?? 'none'
+              }))
+            }))
+          };
+        })
+      })
+    };
+  });
 
   const zones = (bundle.zones ?? []).map((zone) => ({
     id: zone.id,

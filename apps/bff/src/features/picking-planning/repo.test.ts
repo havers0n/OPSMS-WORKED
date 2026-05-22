@@ -81,10 +81,10 @@ describe('picking planning read repos', () => {
   it('tenant-scopes order input read tables that carry tenant_id', async () => {
     const { supabase, tables } = makeSupabaseMock({
       order_lines: [{ order_id: 'order-1', id: 'line-1', product_id: 'product-1', sku: 'sku-1', qty_required: 1, qty_picked: 0 }],
-      product_location_roles: [{ product_id: 'product-1', location_id: 'location-1' }],
+      product_location_roles: [{ product_id: 'product-1', location_id: 'location-1', role: 'primary_pick' }],
       inventory_unit: [{ id: 'iu-1', product_id: 'product-1', container_id: 'container-1', quantity: 1, uom: 'ea', created_at: '2026-01-01T00:00:00Z' }],
       containers: [{ id: 'container-1', current_location_id: 'location-1' }],
-      locations: [{ id: 'location-1', tenant_id: tenantId, floor_id: 'floor-1', code: 'A-01' }]
+      locations: [{ id: 'location-1', tenant_id: tenantId, floor_id: 'floor-1', code: 'A-01', geometry_slot_id: null }]
     });
     const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
 
@@ -92,7 +92,8 @@ describe('picking planning read repos', () => {
     await repo.listProducts(['product-1']);
     await repo.listUnitProfiles(['product-1']);
     await repo.listPackagingLevels(['product-1']);
-    await repo.listPrimaryPickLocations(['product-1']);
+    await repo.listExplicitLocationRoles(['product-1'], ['location-1']);
+    await repo.listStructuralRolesForLocations(['location-1']);
     await repo.listInventoryUnits(['product-1']);
     await repo.listContainerLocations(['container-1']);
     await repo.listLocations(['location-1']);
@@ -131,22 +132,46 @@ describe('picking planning read repos', () => {
     expectEq(orders, 'tenant_id', tenantId);
   });
 
-  it('orders primary pick locations deterministically by product then location', async () => {
+  it('filters explicit location roles by published state only', async () => {
     const { supabase, tables } = makeSupabaseMock({
       product_location_roles: [
-        { product_id: 'product-1', location_id: 'location-b' },
-        { product_id: 'product-1', location_id: 'location-a' }
+        { product_id: 'product-1', location_id: 'location-a', role: 'primary_pick' },
+        { product_id: 'product-1', location_id: 'location-b', role: 'reserve' }
       ]
     });
     const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
 
-    await repo.listPrimaryPickLocations(['product-1']);
+    await repo.listExplicitLocationRoles(['product-1'], ['location-a', 'location-b']);
 
     const productLocationRoles = findTable(tables, 'product_location_roles');
-    expect(productLocationRoles.calls.filter((call) => call.op === 'order')).toEqual([
-      { op: 'order', args: ['product_id', { ascending: true }] },
-      { op: 'order', args: ['location_id', { ascending: true }] }
-    ]);
+    expectEq(productLocationRoles, 'state', 'published');
+    expectEq(productLocationRoles, 'tenant_id', tenantId);
+    expect(productLocationRoles.calls).toContainEqual({ op: 'in', args: ['product_id', ['product-1']] });
+    expect(productLocationRoles.calls).toContainEqual({ op: 'in', args: ['location_id', ['location-a', 'location-b']] });
+  });
+
+  it('resolves structural roles through location → cell → rack_level chain', async () => {
+    const { supabase, tables } = makeSupabaseMock({
+      locations: [{ id: 'loc-1', geometry_slot_id: 'slot-1' }],
+      cells: [{ id: 'slot-1', rack_level_id: 'level-1' }],
+      rack_levels: [{ id: 'level-1', structural_default_role: 'primary_pick' }]
+    });
+    const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
+
+    const result = await repo.listStructuralRolesForLocations(['loc-1']);
+
+    expect(result).toEqual([{ location_id: 'loc-1', structural_default_role: 'primary_pick' }]);
+
+    // Verify query chain: locations → cells → rack_levels
+    const locationsTable = findTable(tables, 'locations');
+    expectEq(locationsTable, 'tenant_id', tenantId);
+    expect(locationsTable.calls).toContainEqual({ op: 'in', args: ['id', ['loc-1']] });
+
+    const cellsTable = findTable(tables, 'cells');
+    expect(cellsTable.calls).toContainEqual({ op: 'in', args: ['id', ['slot-1']] });
+
+    const levelsTable = findTable(tables, 'rack_levels');
+    expect(levelsTable.calls).toContainEqual({ op: 'in', args: ['id', ['level-1']] });
   });
 
   it('returns no wave order IDs when the wave is not visible in the tenant', async () => {
@@ -157,5 +182,16 @@ describe('picking planning read repos', () => {
 
     expect(tables.map((entry) => entry.table)).toEqual(['waves']);
     expectEq(findTable(tables, 'waves'), 'tenant_id', tenantId);
+  });
+
+  it('returns empty arrays without hitting the database when input lists are empty', async () => {
+    const { supabase, tables } = makeSupabaseMock({});
+    const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
+
+    await expect(repo.listExplicitLocationRoles([], ['loc-1'])).resolves.toEqual([]);
+    await expect(repo.listExplicitLocationRoles(['p1'], [])).resolves.toEqual([]);
+    await expect(repo.listStructuralRolesForLocations([])).resolves.toEqual([]);
+
+    expect(tables).toHaveLength(0);
   });
 });

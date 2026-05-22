@@ -40,9 +40,15 @@ type ProductPackagingLevelPlanningRow = {
   pack_depth_mm: number | null;
 };
 
-type ProductPrimaryPickLocationRow = {
+type ExplicitLocationRoleRow = {
   product_id: string;
   location_id: string;
+  role: 'primary_pick' | 'reserve';
+};
+
+type StructuralRoleRow = {
+  location_id: string;
+  structural_default_role: 'primary_pick' | 'reserve';
 };
 
 type InventoryUnitPlanningRow = {
@@ -104,7 +110,8 @@ export type PickingPlanningOrderInputReadRepo = {
   listProducts(productIds: string[]): Promise<ProductPlanningRow[]>;
   listUnitProfiles(productIds: string[]): Promise<ProductUnitProfilePlanningRow[]>;
   listPackagingLevels(productIds: string[]): Promise<ProductPackagingLevelPlanningRow[]>;
-  listPrimaryPickLocations(productIds: string[]): Promise<ProductPrimaryPickLocationRow[]>;
+  listExplicitLocationRoles(productIds: string[], locationIds: string[]): Promise<ExplicitLocationRoleRow[]>;
+  listStructuralRolesForLocations(locationIds: string[]): Promise<StructuralRoleRow[]>;
   listInventoryUnits(productIds: string[]): Promise<InventoryUnitPlanningRow[]>;
   listContainerLocations(containerIds: string[]): Promise<ContainerLocationRow[]>;
   listLocations(locationIds: string[]): Promise<StorageLocationProjectionRow[]>;
@@ -182,6 +189,20 @@ function compareInventoryUnits(left: InventoryUnitPlanningRow, right: InventoryU
   return left.id.localeCompare(right.id);
 }
 
+// Explicit product_location_roles take precedence over structural defaults.
+// If an explicit published role exists for (product, location), it wins regardless of structural default.
+// If no explicit row exists, the location's structural_default_role applies.
+function resolveEffectivePickRole(
+  productId: string,
+  locationId: string,
+  explicitRoleByKey: Map<string, 'primary_pick' | 'reserve'>,
+  structuralRoleByLocation: Map<string, 'primary_pick' | 'reserve'>
+): 'primary_pick' | 'reserve' | 'none' {
+  const explicit = explicitRoleByKey.get(`${productId}:${locationId}`);
+  if (explicit !== undefined) return explicit;
+  return structuralRoleByLocation.get(locationId) ?? 'none';
+}
+
 export async function buildPlanningInputFromOrders(
   repo: PickingPlanningOrderInputReadRepo,
   request: BuildPlanningInputFromOrdersRequest
@@ -217,11 +238,10 @@ export async function buildPlanningInputFromOrders(
   }
 
   const productIds = toUnique(lines.map((line) => line.product_id).filter((id): id is string => typeof id === 'string'));
-  const [products, profiles, packagingLevels, primaryLocations, inventoryUnits] = await Promise.all([
+  const [products, profiles, packagingLevels, inventoryUnits] = await Promise.all([
     repo.listProducts(productIds),
     repo.listUnitProfiles(productIds),
     repo.listPackagingLevels(productIds),
-    repo.listPrimaryPickLocations(productIds),
     repo.listInventoryUnits(productIds)
   ]);
 
@@ -240,22 +260,50 @@ export async function buildPlanningInputFromOrders(
     }
   }
 
-  const primaryLocationsByProduct = new Map<string, string[]>();
-  for (const row of primaryLocations) {
-    const list = primaryLocationsByProduct.get(row.product_id);
-    if (list) {
-      list.push(row.location_id);
-    } else {
-      primaryLocationsByProduct.set(row.product_id, [row.location_id]);
-    }
-  }
-
+  // Resolve effective primary-pick locations by starting from where inventory physically sits.
+  // Candidate locations are all locations that currently hold inventory for the order's products.
   const containerIds = toUnique(inventoryUnits.map((row) => row.container_id));
   const containers = await repo.listContainerLocations(containerIds);
   const containerLocationById = new Map(containers.map((row) => [row.id, row.current_location_id]));
 
-  const locationIdsFromPrimary = toUnique(primaryLocations.map((row) => row.location_id));
-  const locations = await repo.listLocations(locationIdsFromPrimary);
+  const candidateLocationIds = toUnique(
+    containers.map((row) => row.current_location_id).filter((id): id is string => id != null)
+  ).sort();
+
+  // Fetch explicit product-specific overrides and structural rack-level defaults in parallel.
+  const [explicitRoleRows, structuralRoleRows] = await Promise.all([
+    repo.listExplicitLocationRoles(productIds, candidateLocationIds),
+    repo.listStructuralRolesForLocations(candidateLocationIds)
+  ]);
+
+  const explicitRoleByKey = new Map<string, 'primary_pick' | 'reserve'>();
+  for (const row of explicitRoleRows) {
+    explicitRoleByKey.set(`${row.product_id}:${row.location_id}`, row.role);
+  }
+
+  const structuralRoleByLocation = new Map<string, 'primary_pick' | 'reserve'>();
+  for (const row of structuralRoleRows) {
+    structuralRoleByLocation.set(row.location_id, row.structural_default_role);
+  }
+
+  // Build per-product list of effective primary-pick location IDs (sorted for determinism).
+  const primaryLocationsByProduct = new Map<string, string[]>();
+  for (const productId of productIds) {
+    for (const locationId of candidateLocationIds) {
+      const effective = resolveEffectivePickRole(productId, locationId, explicitRoleByKey, structuralRoleByLocation);
+      if (effective === 'primary_pick') {
+        const list = primaryLocationsByProduct.get(productId);
+        if (list) {
+          list.push(locationId);
+        } else {
+          primaryLocationsByProduct.set(productId, [locationId]);
+        }
+      }
+    }
+  }
+
+  const primaryLocationIds = toUnique(Array.from(primaryLocationsByProduct.values()).flat());
+  const locations = await repo.listLocations(primaryLocationIds);
   const locationById = new Map(locations.map((row) => [row.id, row]));
 
   const eligibleInventoryByProductAndLocation = new Map<string, InventoryUnitPlanningRow[]>();
