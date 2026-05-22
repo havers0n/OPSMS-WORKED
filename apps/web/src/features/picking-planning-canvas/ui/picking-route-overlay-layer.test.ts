@@ -117,6 +117,7 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
         status: 'ok',
         fromStepId: 'task-1',
         toStepId: 'task-2',
+        costMetres: 3,
         canvasPoints: [
           { x: 10, y: 20 },
           { x: 20, y: 20 },

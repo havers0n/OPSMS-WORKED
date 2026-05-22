@@ -1127,6 +1127,7 @@ export function EditorCanvas({
           {shouldShowPickingPlanningOverlay && (
             <PickingPlanningOverlay
               stepGeometryById={pickingPlanningStepGeometryById}
+              solvedSegments={pickingPlanningRouteSegments}
             />
           )}
 

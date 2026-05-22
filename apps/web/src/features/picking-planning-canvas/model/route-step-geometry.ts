@@ -177,6 +177,7 @@ export type SolvedRouteSegment =
       fromStepId: string;
       toStepId: string;
       canvasPoints: { x: number; y: number }[];
+      costMetres: number;
     }
   | {
       // Solver was never called — one or both anchors could not be resolved.
@@ -246,6 +247,7 @@ export function solvePickingRoute(
       status: 'ok' as const,
       fromStepId: previous.stepId,
       toStepId: anchor.stepId,
+      costMetres: result.cost,
       canvasPoints: result.points.map((p) => ({
         x: p.x * WORLD_SCALE,
         y: p.y * WORLD_SCALE

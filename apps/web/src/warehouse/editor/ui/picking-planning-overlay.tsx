@@ -33,6 +33,10 @@ import type {
   PlanningRouteStepDto,
   PlanningWarningDto
 } from '@/entities/picking-planning/model/types';
+import {
+  summarizePickingRouteSegments
+} from '@/features/picking-planning-canvas/model/summarize-picking-route-segments';
+import type { SolvedRouteSegment } from '@/features/picking-planning-canvas/model/route-step-geometry';
 
 export type PickingPlanningStepGeometryStatus = {
   status: 'resolved' | 'unresolved';
@@ -41,6 +45,7 @@ export type PickingPlanningStepGeometryStatus = {
 
 type PickingPlanningOverlayProps = {
   stepGeometryById?: Record<string, PickingPlanningStepGeometryStatus>;
+  solvedSegments?: SolvedRouteSegment[];
 };
 
 function sourceLabel(source: PickingPlanningOverlaySource) {
@@ -175,9 +180,11 @@ function parseOrderIds(input: string): string[] {
 }
 
 export function PickingPlanningOverlay({
-  stepGeometryById = {}
+  stepGeometryById = {},
+  solvedSegments = []
 }: PickingPlanningOverlayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [warningsExpanded, setWarningsExpanded] = useState(false);
   const [orderIdInput, setOrderIdInput] = useState('');
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -327,6 +334,10 @@ export function PickingPlanningOverlay({
   const warningGroups = useMemo(
     () => groupWarnings(preview?.warningDetails ?? []),
     [preview?.warningDetails]
+  );
+  const routeDiagnostics = useMemo(
+    () => summarizePickingRouteSegments(solvedSegments),
+    [solvedSegments]
   );
 
   if (isCollapsed) {
@@ -585,29 +596,45 @@ export function PickingPlanningOverlay({
                 )}
 
               {preview.warningDetails.length > 0 && (
-                <div className="space-y-1.5">
-                  {(['error', 'warning', 'info'] as const).map((severity) =>
-                    warningGroups[severity].length > 0 ? (
-                      <div
-                        key={severity}
-                        className="rounded-lg border bg-white/75 px-3 py-2 text-xs"
-                      >
-                        <div className="flex items-center gap-1 font-semibold capitalize text-slate-800">
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-                          {severity} warnings
-                        </div>
-                        <div className="mt-1 space-y-1 text-[11px] text-slate-600">
-                          {warningGroups[severity].map((warning) => (
-                            <div key={`${warning.code}:${warning.message}`}>
-                              <span className="font-semibold">{warning.code}</span>
-                              {': '}
-                              {warning.message}
-                              {warning.source ? ` (${warning.source})` : ''}
+                <div className="rounded-lg border bg-white/75 px-3 py-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setWarningsExpanded((prev) => !prev)}
+                    data-testid="picking-plan-warnings-toggle"
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                  >
+                    <span className="flex items-center gap-1 font-semibold text-slate-800">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                      Warnings ({preview.warningDetails.length})
+                    </span>
+                    {warningsExpanded ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
+                    )}
+                  </button>
+                  {warningsExpanded && (
+                    <div className="mt-1.5 space-y-1.5">
+                      {(['error', 'warning', 'info'] as const).map((severity) =>
+                        warningGroups[severity].length > 0 ? (
+                          <div key={severity}>
+                            <div className="font-semibold capitalize text-slate-800">
+                              {severity} warnings ({warningGroups[severity].length})
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null
+                            <div className="mt-1 space-y-1 text-[11px] text-slate-600">
+                              {warningGroups[severity].map((warning) => (
+                                <div key={`${warning.code}:${warning.message}`}>
+                                  <span className="font-semibold">{warning.code}</span>
+                                  {': '}
+                                  {warning.message}
+                                  {warning.source ? ` (${warning.source})` : ''}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -676,6 +703,46 @@ export function PickingPlanningOverlay({
                       );
                     })}
                   </div>
+                  {routeDiagnostics.totalSegments > 0 && (
+                    <div
+                      className="rounded-lg border bg-white/75 px-3 py-2 text-xs text-slate-700"
+                      style={{ borderColor: 'rgba(148,163,184,0.35)' }}
+                    >
+                      <div className="font-semibold text-slate-800">
+                        Route diagnostics
+                      </div>
+                      <div className="mt-1">
+                        Distance: {formatNumber(routeDiagnostics.totalDistanceMetres, ' m')}
+                      </div>
+                      <div>
+                        Segments: {routeDiagnostics.solvedSegments} solved /{' '}
+                        {routeDiagnostics.skippedSegments} skipped /{' '}
+                        {routeDiagnostics.unroutableSegments} blocked
+                      </div>
+                      <div>
+                        Status:{' '}
+                        {routeDiagnostics.status === 'ok'
+                          ? 'OK'
+                          : routeDiagnostics.status === 'partial'
+                            ? 'Partial'
+                            : 'Empty'}
+                      </div>
+                      {import.meta.env.DEV && (
+                        <div className="mt-1 space-y-1 text-[11px] text-slate-500">
+                          {solvedSegments.map((segment, index) => (
+                            <div key={`${segment.fromStepId}:${segment.toStepId}`}>
+                              Segment {index + 1}: {segment.status}
+                              {segment.status === 'unroutable' &&
+                                `, ${segment.solverStatus}`}
+                              {segment.status === 'unroutable' &&
+                                segment.debugReason &&
+                                `, ${segment.debugReason}`}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -9,6 +9,7 @@ import { previewPickingPlanFromOrders } from '@/entities/picking-planning/api/pr
 import { fetchOrders } from '@/entities/order/api/queries';
 import type { OrderSummary } from '@wos/domain';
 import type { PickingPlanningPreviewResponse } from '@/entities/picking-planning/model/types';
+import type { SolvedRouteSegment } from '@/features/picking-planning-canvas/model/route-step-geometry';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
 
 vi.mock('@/entities/picking-planning/api/preview', () => ({
@@ -366,14 +367,71 @@ describe('PickingPlanningOverlay', () => {
       await Promise.resolve();
     });
 
+    const collapsedText = normalizeText(collectText(renderer.toJSON()));
+    expect(collapsedText).toContain('Batch picking · batch');
+    expect(collapsedText).toContain('66.7%');
+    expect(collapsedText).toContain('no_primary_pick_location : 1');
+    expect(collapsedText).toContain('Warnings ( 2 )');
+    expect(collapsedText).not.toContain('DISTANCE_MODE_FALLBACK');
+    expect(collapsedText).toContain('sku-1 · 1');
+    expect(collapsedText).toContain('canvas-unresolved : missing-rack');
+
+    const warningsToggle = renderer.root.findByProps({
+      'data-testid': 'picking-plan-warnings-toggle'
+    });
+    await act(async () => {
+      warningsToggle.props.onClick();
+      await Promise.resolve();
+    });
+
+    const expandedText = normalizeText(collectText(renderer.toJSON()));
+    expect(expandedText).toContain('warning warnings ( 1 )');
+    expect(expandedText).toContain('DISTANCE_MODE_FALLBACK');
+  });
+
+  it('renders route diagnostics from solved segments', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    const solvedSegments: SolvedRouteSegment[] = [
+      {
+        status: 'ok',
+        fromStepId: 'task-1',
+        toStepId: 'task-2',
+        costMetres: 34.2,
+        canvasPoints: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 }
+        ]
+      },
+      {
+        status: 'unroutable',
+        solverStatus: 'end_blocked',
+        debugReason: 'end_snap:r1',
+        fromStepId: 'task-2',
+        toStepId: 'task-3',
+        fromCanvasPoint: { x: 10, y: 0 },
+        toCanvasPoint: { x: 20, y: 0 }
+      }
+    ];
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, { solvedSegments })
+      );
+      await Promise.resolve();
+    });
+
     const text = normalizeText(collectText(renderer.toJSON()));
-    expect(text).toContain('Batch picking · batch');
-    expect(text).toContain('66.7%');
-    expect(text).toContain('no_primary_pick_location : 1');
-    expect(text).toContain('warning warnings');
-    expect(text).toContain('DISTANCE_MODE_FALLBACK');
-    expect(text).toContain('sku-1 · 1');
-    expect(text).toContain('canvas-unresolved : missing-rack');
+    expect(text).toContain('Route diagnostics');
+    expect(text).toContain('Distance: 34.2 m');
+    expect(text).toContain('Segments: 1 solved / 0 skipped / 1 blocked');
+    expect(text).toContain('Status: Partial');
   });
 
   it('reorders displayed route steps locally', async () => {

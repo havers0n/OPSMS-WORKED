@@ -72,6 +72,7 @@ describe('solvePickingRoute', () => {
       toStepId: 's2'
     });
     if (result[0]?.status !== 'ok') return;
+    expect(result[0].costMetres).toBe(2);
     expect(result[0].canvasPoints).toEqual([
       { x: 2 * WORLD_SCALE, y: 5 * WORLD_SCALE },
       { x: 4 * WORLD_SCALE, y: 5 * WORLD_SCALE }
