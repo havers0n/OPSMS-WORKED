@@ -50,6 +50,7 @@ type CanvasOffset = {
 
 type UseCanvasViewportControllerParams = {
   autoFitRacks: Rack[];
+  blockMousePan?: boolean;
   disableGridDuringPan?: boolean;
   hasStorageFocus?: boolean;
   isMobileNavigateMode?: boolean;
@@ -378,6 +379,7 @@ export function getModeEntryCamera({
 
 export function useCanvasViewportController({
   autoFitRacks,
+  blockMousePan = false,
   hasStorageFocus = false,
   isMobileNavigateMode = false,
   setCanvasZoom,
@@ -728,6 +730,7 @@ export function useCanvasViewportController({
 
     const onMouseDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
+      if (blockMousePan) return;
       const stage = stageRef.current;
       if (!stage) return;
       // Only pan on empty canvas — let clicks on shapes reach Konva normally.
@@ -991,6 +994,7 @@ export function useCanvasViewportController({
       window.removeEventListener('touchcancel', onTouchCancel);
     };
   }, [
+    blockMousePan,
     stageRef,
     handleZoom,
     commitTransformOnlyZoom,

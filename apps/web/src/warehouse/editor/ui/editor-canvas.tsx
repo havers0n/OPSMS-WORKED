@@ -306,6 +306,11 @@ export function EditorCanvas({
   const { containerRef, viewport, canvasOffset, isPanning, handleZoom, handleWheelZoom } =
     useCanvasViewportController({
       autoFitRacks: racks,
+      blockMousePan:
+        viewMode === 'layout' &&
+        (editorMode === 'place' ||
+          editorMode === 'draw-zone' ||
+          editorMode === 'draw-wall'),
       disableGridDuringPan: diagnosticsFlags.grid === 'off-during-pan',
       hasStorageFocus:
         isStorageV2Active &&

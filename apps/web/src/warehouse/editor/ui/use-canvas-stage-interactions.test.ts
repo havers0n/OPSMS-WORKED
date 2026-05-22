@@ -264,7 +264,7 @@ describe('useCanvasStageInteractions free wall drawing', () => {
     }
   } as Konva.KonvaEventObject<MouseEvent>;
 
-  it('uses world-metre distance for free wall drag threshold', () => {
+  it('does not create a free wall for a click/no-drag gesture', () => {
     const createFreeWall = vi.fn(() => true);
     const { stageMock, getInteractions } = renderHookHarness({
       interactionScope: 'idle',
@@ -279,7 +279,28 @@ describe('useCanvasStageInteractions free wall drawing', () => {
     act(() => {
       stageMock.setPointerPosition({ x: 4000, y: 0 });
       getInteractions().onMouseDown(mouseEvent);
-      stageMock.setPointerPosition({ x: 4020, y: 0 });
+      getInteractions().onMouseUp();
+    });
+
+    expect(createFreeWall).not.toHaveBeenCalled();
+  });
+
+  it('does not create a free wall when screen drag is below pointer threshold', () => {
+    const createFreeWall = vi.fn(() => true);
+    const { stageMock, getInteractions } = renderHookHarness({
+      interactionScope: 'idle',
+      clearSelection: vi.fn(),
+      clearHighlightedCellIds: vi.fn(),
+      cancelPlacementInteraction: vi.fn(),
+      createFreeWall,
+      isDrawingWall: true,
+      isLayoutMode: true
+    });
+
+    act(() => {
+      stageMock.setPointerPosition({ x: 4000, y: 0 });
+      getInteractions().onMouseDown(mouseEvent);
+      stageMock.setPointerPosition({ x: 4005, y: 0 });
       getInteractions().onMouseMove();
       getInteractions().onMouseUp();
     });
@@ -287,7 +308,7 @@ describe('useCanvasStageInteractions free wall drawing', () => {
     expect(createFreeWall).not.toHaveBeenCalled();
   });
 
-  it('creates a free wall after a valid world-metre drag', () => {
+  it('creates a free wall after an intentional drag above pointer threshold', () => {
     const createFreeWall = vi.fn(() => true);
     const { stageMock, getInteractions } = renderHookHarness({
       interactionScope: 'idle',
@@ -302,11 +323,11 @@ describe('useCanvasStageInteractions free wall drawing', () => {
     act(() => {
       stageMock.setPointerPosition({ x: 4000, y: 0 });
       getInteractions().onMouseDown(mouseEvent);
-      stageMock.setPointerPosition({ x: 4060, y: 0 });
+      stageMock.setPointerPosition({ x: 4008, y: 0 });
       getInteractions().onMouseMove();
       getInteractions().onMouseUp();
     });
 
-    expect(createFreeWall).toHaveBeenCalledWith(100, 0, 102, 0);
+    expect(createFreeWall).toHaveBeenCalledWith(100, 0, 100, 0);
   });
 });
