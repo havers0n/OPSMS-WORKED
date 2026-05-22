@@ -5,6 +5,11 @@ import type {
   PickingPlanningPreviewResponse,
   PlanningRouteStepDto
 } from '@/entities/picking-planning/model/types';
+import { solveGridRoute } from '@/features/obstacle-route-planning/model/grid-route-solver';
+import type {
+  GridRouteSolverConfig,
+  RouteObstacle
+} from '@/features/obstacle-route-planning/model/obstacle-types';
 import { resolvePickPoint } from '@/features/pick-point-resolver/model/pick-point-resolver';
 import type { FaceAccessLike } from '@/features/pick-point-resolver/model/pick-point-types';
 
@@ -164,4 +169,87 @@ export function indexRouteAnchorStatus(anchors: PickingRouteAnchor[]) {
         : { status: 'unresolved' as const, reason: anchor.reason }
     ])
   );
+}
+
+export type SolvedRouteSegment =
+  | {
+      status: 'ok';
+      fromStepId: string;
+      toStepId: string;
+      canvasPoints: { x: number; y: number }[];
+    }
+  | {
+      // Solver was never called — one or both anchors could not be resolved.
+      status: 'skipped';
+      reason: 'unresolved_anchor';
+      fromStepId: string;
+      toStepId: string;
+      fromCanvasPoint: { x: number; y: number } | undefined;
+      toCanvasPoint: { x: number; y: number } | undefined;
+    }
+  | {
+      // Solver was called but returned a non-ok status.
+      status: 'unroutable';
+      solverStatus: 'no_path' | 'start_blocked' | 'end_blocked';
+      debugReason?: string;
+      fromStepId: string;
+      toStepId: string;
+      fromCanvasPoint: { x: number; y: number };
+      toCanvasPoint: { x: number; y: number };
+    };
+
+export function solvePickingRoute(
+  anchors: PickingRouteAnchor[],
+  obstacles: RouteObstacle[],
+  config?: GridRouteSolverConfig
+): SolvedRouteSegment[] {
+  if (anchors.length < 2) return [];
+
+  return anchors.slice(1).map((anchor, index) => {
+    const previous = anchors[index]!;
+
+    if (previous.status !== 'resolved' || anchor.status !== 'resolved') {
+      return {
+        status: 'skipped' as const,
+        reason: 'unresolved_anchor' as const,
+        fromStepId: previous.stepId,
+        toStepId: anchor.stepId,
+        fromCanvasPoint: previous.status === 'resolved' ? previous.point : undefined,
+        toCanvasPoint: anchor.status === 'resolved' ? anchor.point : undefined
+      };
+    }
+
+    const startWorld = {
+      x: previous.point.x / WORLD_SCALE,
+      y: previous.point.y / WORLD_SCALE
+    };
+    const endWorld = {
+      x: anchor.point.x / WORLD_SCALE,
+      y: anchor.point.y / WORLD_SCALE
+    };
+
+    const result = solveGridRoute(startWorld, endWorld, obstacles, config);
+
+    if (result.status !== 'ok') {
+      return {
+        status: 'unroutable' as const,
+        solverStatus: result.status,
+        debugReason: result.debugReason,
+        fromStepId: previous.stepId,
+        toStepId: anchor.stepId,
+        fromCanvasPoint: previous.point,
+        toCanvasPoint: anchor.point
+      };
+    }
+
+    return {
+      status: 'ok' as const,
+      fromStepId: previous.stepId,
+      toStepId: anchor.stepId,
+      canvasPoints: result.points.map((p) => ({
+        x: p.x * WORLD_SCALE,
+        y: p.y * WORLD_SCALE
+      }))
+    };
+  });
 }
