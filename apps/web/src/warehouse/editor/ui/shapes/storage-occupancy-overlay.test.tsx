@@ -354,15 +354,15 @@ describe('getStorageOccupancyOverlaySurfaceRect', () => {
 describe('StorageOccupancyOverlay', () => {
   it('renders active occupancy marks at storage overview zoom while RackCells would be gated', () => {
     const renderer = renderOverlay({ zoom: 0.6 });
-    const layer = renderer.root.findByProps({
-      name: 'storage-occupancy-overlay-layer'
+    const group = renderer.root.findByProps({
+      name: 'storage-occupancy-rack-group'
     });
     const shapes = getStorageShapes(renderer);
 
-    expect(layer.props.listening).toBe(false);
-    expect(layer.props.wosOverlayLod).toBe('cell-compact');
+    expect(group.props.listening).toBe(false);
     expect(shapes).toHaveLength(1);
     expect(shapes[0]?.props.listening).toBe(false);
+    expect(shapes[0]?.props.overlayLod).toBe('cell-compact');
     expect(shapes[0]?.props.cells.map((cell: { cellId: string }) => cell.cellId)).toEqual([
       'cell-1',
       'cell-3'
@@ -410,16 +410,16 @@ describe('StorageOccupancyOverlay', () => {
       renderMode: 'interaction-skeleton',
       zoom: 0.6
     });
-    const layer = renderer.root.findByProps({
-      name: 'storage-occupancy-overlay-layer'
+    const group = renderer.root.findByProps({
+      name: 'storage-occupancy-rack-group'
     });
     const shapes = getStorageShapes(renderer);
 
-    expect(layer.props.listening).toBe(false);
-    expect(layer.props.wosOverlayLod).toBe('rack-summary');
+    expect(group.props.listening).toBe(false);
     expect(shapes).toHaveLength(1);
     expect(shapes[0]?.props.name).toBe('storage-occupancy-rack-summary');
     expect(shapes[0]?.props.listening).toBe(false);
+    expect(shapes[0]?.props.overlayLod).toBe('rack-summary');
     expect(renderer.root.findAll((node) => String(node.type) === 'Text')).toHaveLength(0);
     expect(
       renderer.root.findAll(

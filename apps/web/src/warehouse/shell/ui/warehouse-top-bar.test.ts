@@ -46,6 +46,7 @@ vi.mock('@/app/store/ui-selectors', () => ({
   useActiveFloorId: () => 'floor-1',
   useActiveSiteId: () => 'site-1',
   useIsDrawerCollapsed: () => false,
+  useIsNavigatorCollapsed: () => false,
   useSetActiveFloorId: () => vi.fn(),
   useSetActiveSiteId: () => vi.fn(),
   useToggleDrawer: () => vi.fn()
