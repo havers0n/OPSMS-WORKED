@@ -89,7 +89,7 @@ describe('PickingStepCard', () => {
     expect(text).toContain('Product One');
     expect(text).toContain('SKU: SKU-001');
     expect(text).toContain('Barcode: 123456');
-    expect(text).toContain('Pick: 4 boxes + 1 each');
+    expect(text).toContain('Pick: 4 boxes + 1 unit');
     expect(text).toContain('Location: A-01-01');
   });
 

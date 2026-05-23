@@ -18,7 +18,7 @@ describe('formatPickInstruction', () => {
       packagingLevels: [{ id: 'box', code: 'boxes', name: 'Box', qtyEach: 2 }]
     });
 
-    expect(result.instruction).toBe('4 boxes + 1 each');
+    expect(result.instruction).toBe('4 boxes + 1 unit');
     expect(result.degraded).toBe(false);
   });
 
@@ -40,6 +40,32 @@ describe('formatPickInstruction', () => {
 
     expect(result.instruction).toBe('9 units');
     expect(result.degraded).toBe(true);
+    expect(result.reason).toBe('invalid_packaging_levels');
+  });
+
+  it('falls back to raw units for duplicate same-size packaging', () => {
+    const result = formatPickInstruction({
+      qtyEach: 8,
+      packagingLevels: [
+        { id: 'box-a', code: 'box-a', name: 'Box A', qtyEach: 2 },
+        { id: 'box-b', code: 'box-b', name: 'Box B', qtyEach: 2 }
+      ]
+    });
+
+    expect(result.instruction).toBe('8 units');
+    expect(result.degraded).toBe(true);
+    expect(result.reason).toBe('ambiguous_packaging');
+  });
+
+  it('falls back for non-integer qtyEach without flooring', () => {
+    const result = formatPickInstruction({
+      qtyEach: 8.5,
+      packagingLevels: [{ id: 'box', code: 'boxes', name: 'Box', qtyEach: 2 }]
+    });
+
+    expect(result.instruction).toBe('8.5 units');
+    expect(result.degraded).toBe(true);
+    expect(result.reason).toBe('non_integer_quantity');
   });
 
   it('never over-picks', () => {
@@ -48,7 +74,7 @@ describe('formatPickInstruction', () => {
       packagingLevels: [{ id: 'box', code: 'boxes', name: 'Box', qtyEach: 2 }]
     });
 
-    expect(result.instruction).toBe('2 boxes + 1 each');
+    expect(result.instruction).toBe('2 boxes + 1 unit');
   });
 
   it('uses largest practical levels first', () => {
@@ -61,6 +87,6 @@ describe('formatPickInstruction', () => {
       ]
     });
 
-    expect(result.instruction).toBe('2 masters + 3 boxes + 1 each');
+    expect(result.instruction).toBe('2 masters + 3 boxes + 1 unit');
   });
 });

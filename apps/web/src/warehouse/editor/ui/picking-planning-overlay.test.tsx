@@ -10,7 +10,10 @@ import { fetchOrders } from '@/entities/order/api/queries';
 import type { OrderSummary } from '@wos/domain';
 import type { PickingPlanningPreviewResponse } from '@/entities/picking-planning/model/types';
 import type { SolvedRouteSegment } from '@/features/picking-planning-canvas/model/route-step-geometry';
+import { resetPickingRunStore } from '@/features/picking-execution/model/picking-run-store';
 import { PickingPlanningOverlay } from './picking-planning-overlay';
+
+const setSelectedCellIdSpy = vi.fn();
 
 vi.mock('@/entities/picking-planning/api/preview', () => ({
   previewPickingPlanFromOrders: vi.fn(),
@@ -20,6 +23,10 @@ vi.mock('@/entities/picking-planning/api/preview', () => ({
 vi.mock('@/entities/order/api/queries', () => ({
   fetchOrders: vi.fn(),
   ordersQueryOptions: vi.fn()
+}));
+
+vi.mock('@/warehouse/editor/model/editor-selectors', () => ({
+  useSetSelectedCellId: () => setSelectedCellIdSpy
 }));
 
 function makeOrder(overrides: Partial<OrderSummary> = {}): OrderSummary {
@@ -176,12 +183,99 @@ describe('PickingPlanningOverlay', () => {
     // the dev-source effect in the next test.
     window.history.replaceState(null, '', '/');
     resetPickingPlanningOverlayStore();
+    resetPickingRunStore();
     vi.mocked(previewPickingPlanFromOrders).mockReset();
     // Default: preview always resolves so the preview effect never leaves a
     // dangling promise that would fire setPreview() outside act.
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     vi.mocked(fetchOrders).mockReset();
     vi.mocked(fetchOrders).mockResolvedValue([]);
+    setSelectedCellIdSpy.mockReset();
+  });
+
+  it('renders picker run panel for active package', async () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    render(createElement(PickingPlanningOverlay));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId('picking-step-card')).toHaveLength(1)
+    );
+    expect(bodyText()).toContain('Current pick');
+  });
+
+  it('confirm advances steps and reaches completed state after final step', async () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    render(createElement(PickingPlanningOverlay));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId('picking-step-confirm')).toHaveLength(1)
+    );
+
+    expect(bodyText()).toContain('sku-1');
+    fireEvent.click(screen.getByTestId('picking-step-confirm'));
+    await waitFor(() => expect(bodyText()).toContain('sku-2'));
+
+    fireEvent.click(screen.getByTestId('picking-step-confirm'));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId('picking-run-completed')).toHaveLength(1)
+    );
+  });
+
+  it('where-is-it calls focus path when cellId exists', async () => {
+    const preview = createPreview();
+    preview.packages[0].route.steps[0] = {
+      ...preview.packages[0].route.steps[0],
+      cellId: 'cell-100'
+    };
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(preview);
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    render(createElement(PickingPlanningOverlay));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId('picking-step-where-is-it')).toHaveLength(1)
+    );
+
+    fireEvent.click(screen.getByTestId('picking-step-where-is-it'));
+    expect(setSelectedCellIdSpy).toHaveBeenCalledWith('cell-100');
+  });
+
+  it('where-is-it degrades safely when cellId is missing', async () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    render(createElement(PickingPlanningOverlay));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId('picking-step-where-is-it')).toHaveLength(1)
+    );
+
+    fireEvent.click(screen.getByTestId('picking-step-where-is-it'));
+    expect(setSelectedCellIdSpy).toHaveBeenCalledWith(null);
+  });
+
+  it('confirm and where-is-it stay local and do not reload preview', async () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    render(createElement(PickingPlanningOverlay));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId('picking-step-confirm')).toHaveLength(1)
+    );
+    await waitFor(() =>
+      expect(vi.mocked(previewPickingPlanFromOrders)).toHaveBeenCalledTimes(1)
+    );
+
+    fireEvent.click(screen.getByTestId('picking-step-confirm'));
+    fireEvent.click(screen.getByTestId('picking-step-where-is-it'));
+
+    expect(vi.mocked(previewPickingPlanFromOrders)).toHaveBeenCalledTimes(1);
   });
 
   it('collapses and expands without unmounting the stage entry point', async () => {
