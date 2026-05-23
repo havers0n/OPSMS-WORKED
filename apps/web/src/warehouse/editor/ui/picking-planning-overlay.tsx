@@ -654,9 +654,9 @@ export function PickingPlanningOverlay({
   );
   const computedModes = routePerformanceSummary?.computedModes ?? {
     original: true,
-    nearest: true,
-    nearestRouteCost: true,
-    improved: true
+    nearest: false,
+    nearestRouteCost: false,
+    improved: false
   };
   const canCompareNearest = computedModes.original && computedModes.nearest;
   const canCompareRouteCost =
@@ -1474,30 +1474,48 @@ export function PickingPlanningOverlay({
                           <div className="truncate">
                             {summarizeStepOrder(originalModeSteps)}
                           </div>
-                          <div className="mt-1">
-                            Nearest · {formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')} · status: computed · align: {nearestSidebarCanvasAligned ? 'yes' : 'no'}
-                          </div>
-                          <div className="truncate">
-                            {summarizeStepOrder(nearestModeSteps)}
-                          </div>
-                          <div className="mt-1">
-                            Route-cost · {formatNumber(nearestRouteCostDiagnostics.totalDistanceMetres, ' m')} · status: {nearestRouteCostFallbackReason ? `fallback(${nearestRouteCostFallbackReason})` : 'computed'} · align: {nearestRouteCostSidebarCanvasAligned ? 'yes' : 'no'}
-                          </div>
-                          <div className="truncate">
-                            {summarizeStepOrder(nearestRouteCostModeSteps)}
-                          </div>
-                          <div className="mt-1">
-                            Route-cost stats · pair solves: {nearestRouteCostPairSolveCount} · unreachable pairs: {nearestRouteCostUnreachablePairCount}
-                          </div>
-                          <div className="mt-1">
-                            Improved · {formatNumber(improvedRouteDiagnostics.totalDistanceMetres, ' m')} · status: {improvedRouteCostFallbackReason ? `fallback(${improvedRouteCostFallbackReason})` : 'computed'} · align: {improvedRouteCostSidebarCanvasAligned ? 'yes' : 'no'}
-                          </div>
-                          <div className="truncate">
-                            {summarizeStepOrder(improvedRouteCostModeSteps)}
-                          </div>
-                          <div className="mt-1">
-                            Improved stats · method: route-cost 2-opt local search · estimate: {formatNumber(improvedRouteCostEstimatedTotalMetres ?? undefined, ' m')} · iterations: {improvedRouteCostIterationCount} · improvements: {improvedRouteCostImprovementCount} · converged: {improvedRouteCostConverged ? 'yes' : 'no'} · pair solves: {improvedRouteCostPairSolveCount} · unreachable pairs: {improvedRouteCostUnreachablePairCount}
-                          </div>
+                          {computedModes.nearest ? (
+                            <>
+                              <div className="mt-1">
+                                Nearest · {formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')} · status: computed · align: {nearestSidebarCanvasAligned ? 'yes' : 'no'}
+                              </div>
+                              <div className="truncate">
+                                {summarizeStepOrder(nearestModeSteps)}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="mt-1">Nearest · not computed · status: skipped</div>
+                          )}
+                          {computedModes.nearestRouteCost ? (
+                            <>
+                              <div className="mt-1">
+                                Route-cost · {formatNumber(nearestRouteCostDiagnostics.totalDistanceMetres, ' m')} · status: {nearestRouteCostFallbackReason ? `fallback(${nearestRouteCostFallbackReason})` : 'computed'} · align: {nearestRouteCostSidebarCanvasAligned ? 'yes' : 'no'}
+                              </div>
+                              <div className="truncate">
+                                {summarizeStepOrder(nearestRouteCostModeSteps)}
+                              </div>
+                              <div className="mt-1">
+                                Route-cost stats · pair solves: {nearestRouteCostPairSolveCount} · unreachable pairs: {nearestRouteCostUnreachablePairCount}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="mt-1">Route-cost · not computed · status: skipped</div>
+                          )}
+                          {computedModes.improved ? (
+                            <>
+                              <div className="mt-1">
+                                Improved · {formatNumber(improvedRouteDiagnostics.totalDistanceMetres, ' m')} · status: {improvedRouteCostFallbackReason ? `fallback(${improvedRouteCostFallbackReason})` : 'computed'} · align: {improvedRouteCostSidebarCanvasAligned ? 'yes' : 'no'}
+                              </div>
+                              <div className="truncate">
+                                {summarizeStepOrder(improvedRouteCostModeSteps)}
+                              </div>
+                              <div className="mt-1">
+                                Improved stats · method: route-cost 2-opt local search · estimate: {formatNumber(improvedRouteCostEstimatedTotalMetres ?? undefined, ' m')} · iterations: {improvedRouteCostIterationCount} · improvements: {improvedRouteCostImprovementCount} · converged: {improvedRouteCostConverged ? 'yes' : 'no'} · pair solves: {improvedRouteCostPairSolveCount} · unreachable pairs: {improvedRouteCostUnreachablePairCount}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="mt-1">Improved · not computed · status: skipped</div>
+                          )}
                           {nearestRouteCostFallbackReason === 'too_many_resolved_anchors' && (
                             <div>
                               guard: resolved anchors {nearestRouteCostResolvedAnchorsCount ?? '-'} &gt; limit {nearestRouteCostMaxResolvedAnchors ?? '-'}

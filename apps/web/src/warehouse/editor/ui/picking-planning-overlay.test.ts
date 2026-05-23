@@ -458,7 +458,58 @@ describe('PickingPlanningOverlay', () => {
           originalSolvedSegments: solvedSegments,
           nearestSolvedSegments: solvedSegments,
           nearestRouteCostSolvedSegments: solvedSegments,
-          improvedSolvedSegments: solvedSegments
+          improvedSolvedSegments: solvedSegments,
+          routePerformanceSummary: {
+            scope: 'comparison',
+            computedModes: {
+              original: true,
+              nearest: true,
+              nearestRouteCost: true,
+              improved: true
+            },
+            anchorResolutionMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            solveMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            sequenceMs: {
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0
+            },
+            routeDiagnosticsMs: 0,
+            totalRouteComputeMs: 0,
+            counts: {
+              anchorCount: 2,
+              resolvedAnchorCount: 2,
+              unresolvedAnchorCount: 0,
+              obstacleCount: 0,
+              rackObstacleCount: 0,
+              wallObstacleCount: 0,
+              routeSegmentCount: 2
+            },
+            mode: {
+              activeMode: 'original',
+              hasManualStartPoint: false,
+              nearestRouteCostIsPartial: false,
+              improvedRouteCostIsPartial: false
+            },
+            pairStats: {
+              nearestRouteCostPairSolveCount: 0,
+              nearestRouteCostUnreachablePairCount: 0,
+              improvedRouteCostPairSolveCount: 0,
+              improvedRouteCostUnreachablePairCount: 0
+            }
+          }
         })
       );
       await Promise.resolve();
@@ -683,7 +734,58 @@ describe('PickingPlanningOverlay', () => {
               costMetres: 80,
               canvasPoints: []
             }
-          ]
+          ],
+          routePerformanceSummary: {
+            scope: 'comparison',
+            computedModes: {
+              original: true,
+              nearest: true,
+              nearestRouteCost: false,
+              improved: false
+            },
+            anchorResolutionMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            solveMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            sequenceMs: {
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0
+            },
+            routeDiagnosticsMs: 0,
+            totalRouteComputeMs: 0,
+            counts: {
+              anchorCount: 2,
+              resolvedAnchorCount: 2,
+              unresolvedAnchorCount: 0,
+              obstacleCount: 0,
+              rackObstacleCount: 0,
+              wallObstacleCount: 0,
+              routeSegmentCount: 1
+            },
+            mode: {
+              activeMode: 'original',
+              hasManualStartPoint: false,
+              nearestRouteCostIsPartial: false,
+              improvedRouteCostIsPartial: false
+            },
+            pairStats: {
+              nearestRouteCostPairSolveCount: 0,
+              nearestRouteCostUnreachablePairCount: 0,
+              improvedRouteCostPairSolveCount: 0,
+              improvedRouteCostUnreachablePairCount: 0
+            }
+          }
         })
       );
       await Promise.resolve();
@@ -731,7 +833,58 @@ describe('PickingPlanningOverlay', () => {
               costMetres: 210.6,
               canvasPoints: []
             }
-          ]
+          ],
+          routePerformanceSummary: {
+            scope: 'comparison',
+            computedModes: {
+              original: true,
+              nearest: true,
+              nearestRouteCost: false,
+              improved: false
+            },
+            anchorResolutionMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            solveMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            sequenceMs: {
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0
+            },
+            routeDiagnosticsMs: 0,
+            totalRouteComputeMs: 0,
+            counts: {
+              anchorCount: 2,
+              resolvedAnchorCount: 2,
+              unresolvedAnchorCount: 0,
+              obstacleCount: 0,
+              rackObstacleCount: 0,
+              wallObstacleCount: 0,
+              routeSegmentCount: 1
+            },
+            mode: {
+              activeMode: 'original',
+              hasManualStartPoint: false,
+              nearestRouteCostIsPartial: false,
+              improvedRouteCostIsPartial: false
+            },
+            pairStats: {
+              nearestRouteCostPairSolveCount: 0,
+              nearestRouteCostUnreachablePairCount: 0,
+              improvedRouteCostPairSolveCount: 0,
+              improvedRouteCostUnreachablePairCount: 0
+            }
+          }
         })
       );
       await Promise.resolve();
@@ -779,7 +932,58 @@ describe('PickingPlanningOverlay', () => {
               costMetres: 50,
               canvasPoints: []
             }
-          ]
+          ],
+          routePerformanceSummary: {
+            scope: 'comparison',
+            computedModes: {
+              original: true,
+              nearest: true,
+              nearestRouteCost: false,
+              improved: false
+            },
+            anchorResolutionMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            solveMs: {
+              original: 0,
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 0
+            },
+            sequenceMs: {
+              nearest: 0,
+              nearestRouteCost: 0,
+              improved: 0
+            },
+            routeDiagnosticsMs: 0,
+            totalRouteComputeMs: 0,
+            counts: {
+              anchorCount: 2,
+              resolvedAnchorCount: 2,
+              unresolvedAnchorCount: 0,
+              obstacleCount: 0,
+              rackObstacleCount: 0,
+              wallObstacleCount: 0,
+              routeSegmentCount: 1
+            },
+            mode: {
+              activeMode: 'original',
+              hasManualStartPoint: false,
+              nearestRouteCostIsPartial: false,
+              improvedRouteCostIsPartial: false
+            },
+            pairStats: {
+              nearestRouteCostPairSolveCount: 0,
+              nearestRouteCostUnreachablePairCount: 0,
+              improvedRouteCostPairSolveCount: 0,
+              improvedRouteCostUnreachablePairCount: 0
+            }
+          }
         })
       );
       await Promise.resolve();
@@ -903,10 +1107,10 @@ describe('PickingPlanningOverlay', () => {
     expect(text).toContain('Route-cost fallback: disabled for this package');
     expect(text).toContain('30 resolved anchors; limit 25');
     expect(text).toContain('DEV route-order debug');
-    expect(text).toContain('status: fallback(too_many_resolved_anchors)');
-    expect(text).toContain('Route-cost stats · pair solves: 0 · unreachable pairs: 0');
+    expect(text).toContain('Route-cost · not computed · status: skipped');
+    expect(text).not.toContain('status: fallback(too_many_resolved_anchors)');
+    expect(text).not.toContain('Route-cost stats · pair solves: 0 · unreachable pairs: 0');
   });
-
   it('shows improved fallback warning and improved diagnostics', async () => {
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     act(() => {
@@ -978,9 +1182,9 @@ describe('PickingPlanningOverlay', () => {
 
     const text = normalizeText(collectText(renderer.toJSON()));
     expect(text).toContain('Improved fallback: using route-cost order');
-    expect(text).toContain('Improved stats · method: route-cost 2-opt local search');
+    expect(text).toContain('Improved · not computed · status: skipped');
+    expect(text).not.toContain('Improved stats · method: route-cost 2-opt local search');
   });
-
   it('renders DEV route perf block from performance summary metadata', async () => {
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     act(() => {
@@ -1069,6 +1273,15 @@ describe('PickingPlanningOverlay', () => {
     expect(text).toContain('pairs · rc: - · imp: -');
     expect(text).toContain('rc fallback: too_many_resolved_anchors');
     expect(text).toContain('imp fallback: route_cost_seed_fallback');
+    expect(text).toContain('Original · 1 m · status: computed');
+    expect(text).toContain('Nearest · not computed · status: skipped');
+    expect(text).toContain('Route-cost · not computed · status: skipped');
+    expect(text).toContain('Improved · not computed · status: skipped');
+    expect(text).not.toContain('Nearest · 0 m · status: computed');
+    expect(text).not.toContain('Route-cost · 0 m · status: computed');
+    expect(text).not.toContain('Improved · 0 m · status: computed');
+    expect(text).not.toContain('Route-cost stats · pair solves: 20 · unreachable pairs: 3');
+    expect(text).not.toContain('Improved stats · method: route-cost 2-opt local search');
   });
 
   it('renders comparison deltas when comparison scope computes all modes', async () => {
@@ -1189,6 +1402,11 @@ describe('PickingPlanningOverlay', () => {
     expect(text).toContain('Route-cost delta:');
     expect(text).toContain('Improved delta:');
     expect(text).toContain('Improved vs Route-cost:');
+    expect(text).toContain('Nearest · 10 m · status: computed');
+    expect(text).toContain('Route-cost · 8 m · status: computed');
+    expect(text).toContain('Improved · 6 m · status: computed');
+    expect(text).toContain('Route-cost stats · pair solves: 0 · unreachable pairs: 0');
+    expect(text).toContain('Improved stats · method: route-cost 2-opt local search');
   });
 
   it('handles missing comparison summaries when only active route is computed', async () => {
@@ -1466,6 +1684,57 @@ describe('PickingPlanningOverlay', () => {
     expect(text).toContain('Includes start point');
     expect(text).not.toContain('Delta:');
     expect(text).not.toContain('Route-cost delta:');
+  });
+
+  it('does not render comparison deltas when routePerformanceSummary is missing', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          originalSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 20,
+              canvasPoints: []
+            }
+          ],
+          nearestSolvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 10,
+              canvasPoints: []
+            }
+          ]
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('Nearest: not computed');
+    expect(text).not.toContain('Delta:');
+    expect(text).not.toContain('shorter by');
+    expect(text).not.toContain('longer by');
   });
 
   it('shows placement hint when placing start point', async () => {
