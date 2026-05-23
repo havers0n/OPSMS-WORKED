@@ -81,6 +81,7 @@ import {
   findPackageById,
   getRouteStepId
 } from '@/entities/picking-planning/model/route-steps';
+import type { PickingRoutePerformanceSummary } from '@/entities/picking-planning/model/types';
 import {
   indexRouteAnchorStatus,
   resolveRouteStepAnchors,
@@ -92,6 +93,7 @@ import {
   sequencePickingRouteNearestByRouteCost
 } from '@/features/picking-planning-canvas/model/sequence-route-nearest-route-cost';
 import { sequencePickingRouteImprovedByRouteCost } from '@/features/picking-planning-canvas/model/sequence-route-improved-route-cost';
+import { summarizePickingRouteSegments } from '@/features/picking-planning-canvas/model/summarize-picking-route-segments';
 import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
 import { buildRouteObstaclesFromLayout } from '@/features/obstacle-route-planning/model/obstacle-builders';
 import { solveGridRoute } from '@/features/obstacle-route-planning/model/grid-route-solver';
@@ -127,6 +129,7 @@ import {
 } from './canvas-diagnostics';
 import type { CanvasRenderMode } from './canvas-render-mode';
 import { isCanvasFullDetailRenderMode } from './canvas-render-mode';
+import { resolveRouteComputationFlags } from './route-computation-scope';
 
 const EMPTY_RACK_IDS: string[] = [];
 const EMPTY_CELL_ID_SET = new Set<string>();
@@ -134,6 +137,10 @@ const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
 const ZOOM_INTERACTION_IDLE_MS = 550;
 const noopSetHoveredRackId = () => undefined;
+
+function nowMs() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
 
 export function EditorCanvas({
   workspace,
@@ -162,6 +169,9 @@ export function EditorCanvas({
   );
   const pickingPlanningRouteStartPointByPackageId = usePickingPlanningOverlayStore(
     (state) => state.routeStartPointByPackageId
+  );
+  const routeComparisonDebugEnabled = usePickingPlanningOverlayStore(
+    (state) => state.routeComparisonDebugEnabled
   );
   const pickingPlanningPlacingRouteStartForPackageId = usePickingPlanningOverlayStore(
     (state) => state.placingRouteStartForPackageId
@@ -689,15 +699,33 @@ export function EditorCanvas({
         : [],
     [pickingPlanningActivePackage, pickingPlanningReorderedStepIdsByPackageId]
   );
-  const pickingPlanningOriginalRouteAnchors = useMemo(
-    () =>
-      resolveRouteStepAnchors({
-        steps: pickingPlanningOriginalRouteSteps,
-        locationsById: pickingPlanningPreview?.locationsById,
-        layout: placementLayout ?? layoutDraft,
-        publishedCellsById,
-        faceAccessByFaceId
-      }),
+  const pickingPlanningActiveRouteOrderMode =
+    pickingPlanningActivePackage
+      ? (pickingPlanningRouteOrderModeByPackageId[
+          pickingPlanningActivePackage.workPackage.id
+        ] ?? 'original')
+      : 'original';
+  const {
+    scope: pickingPlanningRouteComputationScope,
+    shouldComputeNearestRoute,
+    shouldComputeNearestRouteCostRoute,
+    shouldComputeImprovedRouteCostRoute
+  } = resolveRouteComputationFlags({
+    activeMode: pickingPlanningActiveRouteOrderMode,
+    isDev: import.meta.env.DEV,
+    routeComparisonDebugEnabled
+  });
+  const pickingPlanningOriginalRouteAnchorsMeasured = useMemo(() => {
+    const startedAtMs = nowMs();
+    const anchors = resolveRouteStepAnchors({
+      steps: pickingPlanningOriginalRouteSteps,
+      locationsById: pickingPlanningPreview?.locationsById,
+      layout: placementLayout ?? layoutDraft,
+      publishedCellsById,
+      faceAccessByFaceId
+    });
+    return { anchors, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       faceAccessByFaceId,
       layoutDraft,
@@ -707,6 +735,8 @@ export function EditorCanvas({
       publishedCellsById
     ]
   );
+  const pickingPlanningOriginalRouteAnchors =
+    pickingPlanningOriginalRouteAnchorsMeasured.anchors;
   const pickingPlanningActiveRouteStartPoint = pickingPlanningActivePackage
     ? (pickingPlanningRouteStartPointByPackageId[
         pickingPlanningActivePackage.workPackage.id
@@ -718,13 +748,25 @@ export function EditorCanvas({
         y: pickingPlanningActiveRouteStartPoint.y * WORLD_SCALE
       }
     : undefined;
-  const pickingPlanningNearestNeighborStepIds = useMemo(
-    () =>
-      sequencePickingRouteNearestNeighbor(pickingPlanningOriginalRouteAnchors, {
+  const pickingPlanningNearestNeighborSequenceMeasured = useMemo(() => {
+    if (!shouldComputeNearestRoute) {
+      return { orderedStepIds: pickingPlanningOriginalRouteAnchors.map((anchor) => anchor.stepId), durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const orderedStepIds = sequencePickingRouteNearestNeighbor(
+      pickingPlanningOriginalRouteAnchors,
+      {
         startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint
-      }),
-    [pickingPlanningActiveRouteStartCanvasPoint, pickingPlanningOriginalRouteAnchors]
-  );
+      }
+    );
+    return { orderedStepIds, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  }, [
+    pickingPlanningActiveRouteStartCanvasPoint,
+    pickingPlanningOriginalRouteAnchors,
+    shouldComputeNearestRoute
+  ]);
+  const pickingPlanningNearestNeighborStepIds =
+    pickingPlanningNearestNeighborSequenceMeasured.orderedStepIds;
   const pickingPlanningNearestRouteSteps = useMemo(() => {
     if (!pickingPlanningActivePackage) return [];
     return deriveDisplayedRouteSteps(
@@ -732,36 +774,68 @@ export function EditorCanvas({
       pickingPlanningNearestNeighborStepIds
     );
   }, [pickingPlanningActivePackage, pickingPlanningNearestNeighborStepIds]);
-  const pickingPlanningNearestRouteAnchors = useMemo(
-    () =>
-      resolveRouteStepAnchors({
-        steps: pickingPlanningNearestRouteSteps,
-        locationsById: pickingPlanningPreview?.locationsById,
-        layout: placementLayout ?? layoutDraft,
-        publishedCellsById,
-        faceAccessByFaceId
-      }),
+  const pickingPlanningNearestRouteAnchorsMeasured = useMemo(() => {
+    if (!shouldComputeNearestRoute) {
+      return { anchors: pickingPlanningOriginalRouteAnchors, durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const anchors = resolveRouteStepAnchors({
+      steps: pickingPlanningNearestRouteSteps,
+      locationsById: pickingPlanningPreview?.locationsById,
+      layout: placementLayout ?? layoutDraft,
+      publishedCellsById,
+      faceAccessByFaceId
+    });
+    return { anchors, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       faceAccessByFaceId,
       layoutDraft,
       pickingPlanningNearestRouteSteps,
       pickingPlanningPreview?.locationsById,
       placementLayout,
-      publishedCellsById
+      pickingPlanningOriginalRouteAnchors,
+      publishedCellsById,
+      shouldComputeNearestRoute
     ]
   );
-  const pickingPlanningNearestRouteCostResult = useMemo(
-    () =>
-      sequencePickingRouteNearestByRouteCost(pickingPlanningOriginalRouteAnchors, {
+  const pickingPlanningNearestRouteAnchors =
+    pickingPlanningNearestRouteAnchorsMeasured.anchors;
+  const pickingPlanningNearestRouteCostSequenceMeasured = useMemo(() => {
+    if (!shouldComputeNearestRouteCostRoute) {
+      return {
+        result: {
+          orderedStepIds: pickingPlanningOriginalRouteAnchors.map(
+            (anchor) => anchor.stepId
+          ),
+          isPartial: false,
+          resolvedAnchorsCount: 0,
+          unresolvedTransitionCount: 0,
+          pairSolveCount: 0,
+          unreachablePairCount: 0
+        },
+        durationMs: 0
+      };
+    }
+    const startedAtMs = nowMs();
+    const result = sequencePickingRouteNearestByRouteCost(
+      pickingPlanningOriginalRouteAnchors,
+      {
         obstacles: obstacleRouteObstacles,
         startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint
-      }),
+      }
+    );
+    return { result, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       obstacleRouteObstacles,
       pickingPlanningActiveRouteStartCanvasPoint,
-      pickingPlanningOriginalRouteAnchors
+      pickingPlanningOriginalRouteAnchors,
+      shouldComputeNearestRouteCostRoute
     ]
   );
+  const pickingPlanningNearestRouteCostResult =
+    pickingPlanningNearestRouteCostSequenceMeasured.result;
   const pickingPlanningNearestRouteCostStepIds =
     pickingPlanningNearestRouteCostResult.orderedStepIds;
   const pickingPlanningNearestRouteCostSteps = useMemo(() => {
@@ -771,37 +845,70 @@ export function EditorCanvas({
       pickingPlanningNearestRouteCostStepIds
     );
   }, [pickingPlanningActivePackage, pickingPlanningNearestRouteCostStepIds]);
-  const pickingPlanningNearestRouteCostAnchors = useMemo(
-    () =>
-      resolveRouteStepAnchors({
-        steps: pickingPlanningNearestRouteCostSteps,
-        locationsById: pickingPlanningPreview?.locationsById,
-        layout: placementLayout ?? layoutDraft,
-        publishedCellsById,
-        faceAccessByFaceId
-      }),
+  const pickingPlanningNearestRouteCostAnchorsMeasured = useMemo(() => {
+    if (!shouldComputeNearestRouteCostRoute) {
+      return { anchors: pickingPlanningOriginalRouteAnchors, durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const anchors = resolveRouteStepAnchors({
+      steps: pickingPlanningNearestRouteCostSteps,
+      locationsById: pickingPlanningPreview?.locationsById,
+      layout: placementLayout ?? layoutDraft,
+      publishedCellsById,
+      faceAccessByFaceId
+    });
+    return { anchors, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       faceAccessByFaceId,
       layoutDraft,
       pickingPlanningNearestRouteCostSteps,
       pickingPlanningPreview?.locationsById,
       placementLayout,
-      publishedCellsById
+      pickingPlanningOriginalRouteAnchors,
+      publishedCellsById,
+      shouldComputeNearestRouteCostRoute
     ]
   );
-  const pickingPlanningImprovedRouteCostResult = useMemo(
-    () =>
-      sequencePickingRouteImprovedByRouteCost({
-        anchors: pickingPlanningOriginalRouteAnchors,
-        obstacles: obstacleRouteObstacles,
-        startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint
-      }),
+  const pickingPlanningNearestRouteCostAnchors =
+    pickingPlanningNearestRouteCostAnchorsMeasured.anchors;
+  const pickingPlanningImprovedRouteCostSequenceMeasured = useMemo(() => {
+    if (!shouldComputeImprovedRouteCostRoute) {
+      return {
+        result: {
+          orderedStepIds: pickingPlanningOriginalRouteAnchors.map(
+            (anchor) => anchor.stepId
+          ),
+          estimatedTotalCostMetres: null,
+          resolvedAnchorsCount: 0,
+          unresolvedAnchorsCount: 0,
+          pairSolveCount: 0,
+          unreachablePairCount: 0,
+          iterationCount: 0,
+          improvementCount: 0,
+          converged: true,
+          isPartial: false
+        },
+        durationMs: 0
+      };
+    }
+    const startedAtMs = nowMs();
+    const result = sequencePickingRouteImprovedByRouteCost({
+      anchors: pickingPlanningOriginalRouteAnchors,
+      obstacles: obstacleRouteObstacles,
+      startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint
+    });
+    return { result, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       obstacleRouteObstacles,
       pickingPlanningActiveRouteStartCanvasPoint,
-      pickingPlanningOriginalRouteAnchors
+      pickingPlanningOriginalRouteAnchors,
+      shouldComputeImprovedRouteCostRoute
     ]
   );
+  const pickingPlanningImprovedRouteCostResult =
+    pickingPlanningImprovedRouteCostSequenceMeasured.result;
   const pickingPlanningImprovedRouteCostStepIds =
     pickingPlanningImprovedRouteCostResult.orderedStepIds;
   const pickingPlanningImprovedRouteCostSteps = useMemo(() => {
@@ -811,30 +918,33 @@ export function EditorCanvas({
       pickingPlanningImprovedRouteCostStepIds
     );
   }, [pickingPlanningActivePackage, pickingPlanningImprovedRouteCostStepIds]);
-  const pickingPlanningImprovedRouteCostAnchors = useMemo(
-    () =>
-      resolveRouteStepAnchors({
-        steps: pickingPlanningImprovedRouteCostSteps,
-        locationsById: pickingPlanningPreview?.locationsById,
-        layout: placementLayout ?? layoutDraft,
-        publishedCellsById,
-        faceAccessByFaceId
-      }),
+  const pickingPlanningImprovedRouteCostAnchorsMeasured = useMemo(() => {
+    if (!shouldComputeImprovedRouteCostRoute) {
+      return { anchors: pickingPlanningOriginalRouteAnchors, durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const anchors = resolveRouteStepAnchors({
+      steps: pickingPlanningImprovedRouteCostSteps,
+      locationsById: pickingPlanningPreview?.locationsById,
+      layout: placementLayout ?? layoutDraft,
+      publishedCellsById,
+      faceAccessByFaceId
+    });
+    return { anchors, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       faceAccessByFaceId,
       layoutDraft,
       pickingPlanningImprovedRouteCostSteps,
       pickingPlanningPreview?.locationsById,
       placementLayout,
-      publishedCellsById
+      pickingPlanningOriginalRouteAnchors,
+      publishedCellsById,
+      shouldComputeImprovedRouteCostRoute
     ]
   );
-  const pickingPlanningActiveRouteOrderMode =
-    pickingPlanningActivePackage
-      ? (pickingPlanningRouteOrderModeByPackageId[
-          pickingPlanningActivePackage.workPackage.id
-        ] ?? 'original')
-      : 'original';
+  const pickingPlanningImprovedRouteCostAnchors =
+    pickingPlanningImprovedRouteCostAnchorsMeasured.anchors;
   const isPickingPlanRouteStartPlacementMode =
     shouldShowPickingPlanningOverlay &&
     !!pickingPlanningActivePackage &&
@@ -852,62 +962,90 @@ export function EditorCanvas({
     () => indexRouteAnchorStatus(pickingPlanningActiveRouteAnchors),
     [pickingPlanningActiveRouteAnchors]
   );
-  const pickingPlanningOriginalRouteSegments = useMemo(
-    () =>
-      solvePickingRoute(
-        pickingPlanningOriginalRouteAnchors,
-        obstacleRouteObstacles,
-        undefined,
-        { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
-      ),
+  const pickingPlanningOriginalRouteSegmentsMeasured = useMemo(() => {
+    const startedAtMs = nowMs();
+    const segments = solvePickingRoute(
+      pickingPlanningOriginalRouteAnchors,
+      obstacleRouteObstacles,
+      undefined,
+      { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
+    );
+    return { segments, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       obstacleRouteObstacles,
       pickingPlanningActiveRouteStartCanvasPoint,
       pickingPlanningOriginalRouteAnchors
     ]
   );
-  const pickingPlanningNearestRouteSegments = useMemo(
-    () =>
-      solvePickingRoute(
-        pickingPlanningNearestRouteAnchors,
-        obstacleRouteObstacles,
-        undefined,
-        { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
-      ),
+  const pickingPlanningOriginalRouteSegments =
+    pickingPlanningOriginalRouteSegmentsMeasured.segments;
+  const pickingPlanningNearestRouteSegmentsMeasured = useMemo(() => {
+    if (!shouldComputeNearestRoute) {
+      return { segments: [] as ReturnType<typeof solvePickingRoute>, durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const segments = solvePickingRoute(
+      pickingPlanningNearestRouteAnchors,
+      obstacleRouteObstacles,
+      undefined,
+      { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
+    );
+    return { segments, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       obstacleRouteObstacles,
       pickingPlanningActiveRouteStartCanvasPoint,
-      pickingPlanningNearestRouteAnchors
+      pickingPlanningNearestRouteAnchors,
+      shouldComputeNearestRoute
     ]
   );
-  const pickingPlanningNearestRouteCostSegments = useMemo(
-    () =>
-      solvePickingRoute(
-        pickingPlanningNearestRouteCostAnchors,
-        obstacleRouteObstacles,
-        undefined,
-        { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
-      ),
+  const pickingPlanningNearestRouteSegments =
+    pickingPlanningNearestRouteSegmentsMeasured.segments;
+  const pickingPlanningNearestRouteCostSegmentsMeasured = useMemo(() => {
+    if (!shouldComputeNearestRouteCostRoute) {
+      return { segments: [] as ReturnType<typeof solvePickingRoute>, durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const segments = solvePickingRoute(
+      pickingPlanningNearestRouteCostAnchors,
+      obstacleRouteObstacles,
+      undefined,
+      { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
+    );
+    return { segments, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       obstacleRouteObstacles,
       pickingPlanningActiveRouteStartCanvasPoint,
-      pickingPlanningNearestRouteCostAnchors
+      pickingPlanningNearestRouteCostAnchors,
+      shouldComputeNearestRouteCostRoute
     ]
   );
-  const pickingPlanningImprovedRouteCostSegments = useMemo(
-    () =>
-      solvePickingRoute(
-        pickingPlanningImprovedRouteCostAnchors,
-        obstacleRouteObstacles,
-        undefined,
-        { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
-      ),
+  const pickingPlanningNearestRouteCostSegments =
+    pickingPlanningNearestRouteCostSegmentsMeasured.segments;
+  const pickingPlanningImprovedRouteCostSegmentsMeasured = useMemo(() => {
+    if (!shouldComputeImprovedRouteCostRoute) {
+      return { segments: [] as ReturnType<typeof solvePickingRoute>, durationMs: 0 };
+    }
+    const startedAtMs = nowMs();
+    const segments = solvePickingRoute(
+      pickingPlanningImprovedRouteCostAnchors,
+      obstacleRouteObstacles,
+      undefined,
+      { startCanvasPoint: pickingPlanningActiveRouteStartCanvasPoint }
+    );
+    return { segments, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  },
     [
       obstacleRouteObstacles,
       pickingPlanningActiveRouteStartCanvasPoint,
-      pickingPlanningImprovedRouteCostAnchors
+      pickingPlanningImprovedRouteCostAnchors,
+      shouldComputeImprovedRouteCostRoute
     ]
   );
+  const pickingPlanningImprovedRouteCostSegments =
+    pickingPlanningImprovedRouteCostSegmentsMeasured.segments;
   const pickingPlanningActiveRouteSegments =
     pickingPlanningActiveRouteOrderMode === 'nearest-neighbor'
       ? pickingPlanningNearestRouteSegments
@@ -935,6 +1073,153 @@ export function EditorCanvas({
   const pickingPlanningImprovedRouteCostCanvasStepIds = useMemo(
     () => pickingPlanningImprovedRouteCostAnchors.map((anchor) => anchor.stepId),
     [pickingPlanningImprovedRouteCostAnchors]
+  );
+  const pickingPlanningRouteDiagnosticsSummaryMeasured = useMemo(() => {
+    const startedAtMs = nowMs();
+    const summary = {
+      original: summarizePickingRouteSegments(pickingPlanningOriginalRouteSegments),
+      nearest: summarizePickingRouteSegments(pickingPlanningNearestRouteSegments),
+      nearestRouteCost: summarizePickingRouteSegments(
+        pickingPlanningNearestRouteCostSegments
+      ),
+      improved: summarizePickingRouteSegments(pickingPlanningImprovedRouteCostSegments)
+    };
+    return { summary, durationMs: Math.max(0, nowMs() - startedAtMs) };
+  }, [
+    pickingPlanningImprovedRouteCostSegments,
+    pickingPlanningNearestRouteCostSegments,
+    pickingPlanningNearestRouteSegments,
+    pickingPlanningOriginalRouteSegments
+  ]);
+  const pickingPlanningRoutePerformanceSummary = useMemo<PickingRoutePerformanceSummary>(
+    () => {
+      const originalAnchorCount = pickingPlanningOriginalRouteAnchors.length;
+      const resolvedAnchorCount = pickingPlanningOriginalRouteAnchors.filter(
+        (anchor) => anchor.status === 'resolved'
+      ).length;
+      const unresolvedAnchorCount = originalAnchorCount - resolvedAnchorCount;
+      const obstacleCount = obstacleRouteObstacles.length;
+      const rackObstacleCount = obstacleRouteObstacles.filter(
+        (obstacle) => obstacle.type === 'rack'
+      ).length;
+      const wallObstacleCount = obstacleCount - rackObstacleCount;
+      const routeSegmentCount =
+        pickingPlanningActiveRouteSegments.length;
+
+      const anchorResolutionTotalMs =
+        pickingPlanningOriginalRouteAnchorsMeasured.durationMs +
+        pickingPlanningNearestRouteAnchorsMeasured.durationMs +
+        pickingPlanningNearestRouteCostAnchorsMeasured.durationMs +
+        pickingPlanningImprovedRouteCostAnchorsMeasured.durationMs;
+      const solveTotalMs =
+        pickingPlanningOriginalRouteSegmentsMeasured.durationMs +
+        pickingPlanningNearestRouteSegmentsMeasured.durationMs +
+        pickingPlanningNearestRouteCostSegmentsMeasured.durationMs +
+        pickingPlanningImprovedRouteCostSegmentsMeasured.durationMs;
+      const totalRouteComputeMs =
+        anchorResolutionTotalMs +
+        solveTotalMs +
+        pickingPlanningNearestNeighborSequenceMeasured.durationMs +
+        pickingPlanningNearestRouteCostSequenceMeasured.durationMs +
+        pickingPlanningImprovedRouteCostSequenceMeasured.durationMs +
+        pickingPlanningRouteDiagnosticsSummaryMeasured.durationMs;
+
+      return {
+        scope: pickingPlanningRouteComputationScope,
+        computedModes: {
+          original: true,
+          nearest: shouldComputeNearestRoute,
+          nearestRouteCost: shouldComputeNearestRouteCostRoute,
+          improved: shouldComputeImprovedRouteCostRoute
+        },
+        anchorResolutionMs: {
+          original: pickingPlanningOriginalRouteAnchorsMeasured.durationMs,
+          nearest: pickingPlanningNearestRouteAnchorsMeasured.durationMs,
+          nearestRouteCost:
+            pickingPlanningNearestRouteCostAnchorsMeasured.durationMs,
+          improved: pickingPlanningImprovedRouteCostAnchorsMeasured.durationMs,
+          total: anchorResolutionTotalMs
+        },
+        solveMs: {
+          original: pickingPlanningOriginalRouteSegmentsMeasured.durationMs,
+          nearest: pickingPlanningNearestRouteSegmentsMeasured.durationMs,
+          nearestRouteCost:
+            pickingPlanningNearestRouteCostSegmentsMeasured.durationMs,
+          improved: pickingPlanningImprovedRouteCostSegmentsMeasured.durationMs,
+          total: solveTotalMs
+        },
+        sequenceMs: {
+          nearest: pickingPlanningNearestNeighborSequenceMeasured.durationMs,
+          nearestRouteCost:
+            pickingPlanningNearestRouteCostSequenceMeasured.durationMs,
+          improved: pickingPlanningImprovedRouteCostSequenceMeasured.durationMs
+        },
+        routeDiagnosticsMs: pickingPlanningRouteDiagnosticsSummaryMeasured.durationMs,
+        totalRouteComputeMs,
+        counts: {
+          anchorCount: originalAnchorCount,
+          resolvedAnchorCount,
+          unresolvedAnchorCount,
+          obstacleCount,
+          rackObstacleCount,
+          wallObstacleCount,
+          routeSegmentCount
+        },
+        mode: {
+          activeMode: pickingPlanningActiveRouteOrderMode,
+          hasManualStartPoint: !!pickingPlanningActiveRouteStartCanvasPoint,
+          nearestRouteCostFallbackReason:
+            pickingPlanningNearestRouteCostResult.fallbackReason,
+          nearestRouteCostIsPartial:
+            pickingPlanningNearestRouteCostResult.isPartial,
+          improvedRouteCostFallbackReason:
+            pickingPlanningImprovedRouteCostResult.fallbackReason,
+          improvedRouteCostIsPartial:
+            pickingPlanningImprovedRouteCostResult.isPartial
+        },
+        pairStats: {
+          nearestRouteCostPairSolveCount:
+            pickingPlanningNearestRouteCostResult.pairSolveCount,
+          nearestRouteCostUnreachablePairCount:
+            pickingPlanningNearestRouteCostResult.unreachablePairCount,
+          improvedRouteCostPairSolveCount:
+            pickingPlanningImprovedRouteCostResult.pairSolveCount,
+          improvedRouteCostUnreachablePairCount:
+            pickingPlanningImprovedRouteCostResult.unreachablePairCount
+        }
+      };
+    },
+    [
+      obstacleRouteObstacles,
+      pickingPlanningActiveRouteOrderMode,
+      pickingPlanningActiveRouteSegments.length,
+      pickingPlanningActiveRouteStartCanvasPoint,
+      pickingPlanningRouteComputationScope,
+      pickingPlanningImprovedRouteCostAnchorsMeasured.durationMs,
+      pickingPlanningImprovedRouteCostResult.fallbackReason,
+      pickingPlanningImprovedRouteCostResult.isPartial,
+      pickingPlanningImprovedRouteCostResult.pairSolveCount,
+      pickingPlanningImprovedRouteCostResult.unreachablePairCount,
+      pickingPlanningImprovedRouteCostSequenceMeasured.durationMs,
+      pickingPlanningImprovedRouteCostSegmentsMeasured.durationMs,
+      pickingPlanningNearestNeighborSequenceMeasured.durationMs,
+      pickingPlanningNearestRouteAnchorsMeasured.durationMs,
+      pickingPlanningNearestRouteCostAnchorsMeasured.durationMs,
+      pickingPlanningNearestRouteCostResult.fallbackReason,
+      pickingPlanningNearestRouteCostResult.isPartial,
+      pickingPlanningNearestRouteCostResult.pairSolveCount,
+      pickingPlanningNearestRouteCostResult.unreachablePairCount,
+      pickingPlanningNearestRouteCostSequenceMeasured.durationMs,
+      pickingPlanningNearestRouteCostSegmentsMeasured.durationMs,
+      pickingPlanningNearestRouteSegmentsMeasured.durationMs,
+      pickingPlanningOriginalRouteAnchors,
+      pickingPlanningOriginalRouteAnchorsMeasured.durationMs,
+      pickingPlanningOriginalRouteSegmentsMeasured.durationMs,
+      pickingPlanningRouteDiagnosticsSummaryMeasured.durationMs,
+      shouldComputeImprovedRouteCostRoute,
+      shouldComputeNearestRoute,
+      shouldComputeNearestRouteCostRoute
+    ]
   );
   const cellStateOverlaysEnabled =
     (renderMode === 'full' ||
@@ -1459,6 +1744,7 @@ export function EditorCanvas({
               activeRouteOrderMode={pickingPlanningActiveRouteOrderMode}
               routeStartPoint={pickingPlanningActiveRouteStartPoint}
               isPlacingRouteStartPoint={isPickingPlanRouteStartPlacementMode}
+              routePerformanceSummary={pickingPlanningRoutePerformanceSummary}
             />
           )}
 

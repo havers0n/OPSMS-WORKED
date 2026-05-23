@@ -33,6 +33,7 @@ import {
 } from '@/entities/picking-planning/model/route-steps';
 import type {
   PickingPlanningOverlaySource,
+  PickingRoutePerformanceSummary,
   PlanningRouteStepDto,
   PlanningWarningDto
 } from '@/entities/picking-planning/model/types';
@@ -76,6 +77,7 @@ type PickingPlanningOverlayProps = {
   activeRouteOrderMode?: PickingRouteOrderMode;
   routeStartPoint?: PickingRouteStartPoint | null;
   isPlacingRouteStartPoint?: boolean;
+  routePerformanceSummary?: PickingRoutePerformanceSummary;
 };
 
 function sourceLabel(source: PickingPlanningOverlaySource) {
@@ -233,9 +235,9 @@ export function PickingPlanningOverlay({
   stepGeometryById = {},
   solvedSegments = [],
   originalSolvedSegments = solvedSegments,
-  nearestSolvedSegments = solvedSegments,
-  nearestRouteCostSolvedSegments = solvedSegments,
-  improvedSolvedSegments = solvedSegments,
+  nearestSolvedSegments = [],
+  nearestRouteCostSolvedSegments = [],
+  improvedSolvedSegments = [],
   nearestNeighborStepIds = [],
   nearestRouteCostStepIds = [],
   improvedRouteCostStepIds = [],
@@ -258,7 +260,8 @@ export function PickingPlanningOverlay({
   improvedRouteCostCanvasStepIds = [],
   activeRouteOrderMode,
   routeStartPoint = null,
-  isPlacingRouteStartPoint = false
+  isPlacingRouteStartPoint = false,
+  routePerformanceSummary
 }: PickingPlanningOverlayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
@@ -279,12 +282,14 @@ export function PickingPlanningOverlay({
     setActivePackageId,
     setPreview,
     setRouteOrderMode,
+    setRouteComparisonDebugEnabled,
     clearRouteStartPoint,
     startPlacingRouteStartPoint,
     cancelPlacingRouteStartPoint,
     setSelectedStepId,
     setSource,
-    source
+    source,
+    routeComparisonDebugEnabled
   } = usePickingPlanningOverlayStore();
 
   function handleSelectOrder(orderId: string) {
@@ -647,6 +652,24 @@ export function PickingPlanningOverlay({
     () => areOrdersEqual(improvedRouteCostModeStepIds, improvedRouteCostCanvasStepIds),
     [improvedRouteCostCanvasStepIds, improvedRouteCostModeStepIds]
   );
+  const computedModes = routePerformanceSummary?.computedModes ?? {
+    original: true,
+    nearest: true,
+    nearestRouteCost: true,
+    improved: true
+  };
+  const canCompareNearest = computedModes.original && computedModes.nearest;
+  const canCompareRouteCost =
+    computedModes.original && computedModes.nearestRouteCost;
+  const canCompareImprovedFromOriginal =
+    computedModes.original && computedModes.improved;
+  const canCompareImprovedFromRouteCost =
+    computedModes.nearestRouteCost && computedModes.improved;
+  const isComparisonDisabled =
+    routePerformanceSummary?.scope === 'active-only' &&
+    !computedModes.nearest &&
+    !computedModes.nearestRouteCost &&
+    !computedModes.improved;
 
   if (isCollapsed) {
     return (
@@ -1220,38 +1243,58 @@ export function PickingPlanningOverlay({
                         Original: {formatNumber(originalRouteDiagnostics.totalDistanceMetres, ' m')}
                       </div>
                       <div>
-                        Nearest: {formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')}
+                        Nearest:{' '}
+                        {computedModes.nearest
+                          ? formatNumber(nearestRouteDiagnostics.totalDistanceMetres, ' m')
+                          : 'not computed'}
                       </div>
                       <div>
-                        Route-cost: {formatNumber(nearestRouteCostDiagnostics.totalDistanceMetres, ' m')}
+                        Route-cost:{' '}
+                        {computedModes.nearestRouteCost
+                          ? formatNumber(
+                              nearestRouteCostDiagnostics.totalDistanceMetres,
+                              ' m'
+                            )
+                          : 'not computed'}
                       </div>
                       <div>
-                        Improved: {formatNumber(improvedRouteDiagnostics.totalDistanceMetres, ' m')}
+                        Improved:{' '}
+                        {computedModes.improved
+                          ? formatNumber(improvedRouteDiagnostics.totalDistanceMetres, ' m')
+                          : 'not computed'}
                       </div>
-                      <div>
-                        Delta: {formatNumber(distanceDeltaMetres, ' m')}
-                        {distanceDeltaPct === null
-                          ? ''
-                          : ` (${formatNumber(distanceDeltaPct, '%')})`}
-                      </div>
-                      <div>
-                        Route-cost delta: {formatNumber(routeCostDistanceDeltaMetres, ' m')}
-                        {routeCostDistanceDeltaPct === null
-                          ? ''
-                          : ` (${formatNumber(routeCostDistanceDeltaPct, '%')})`}
-                      </div>
-                      <div>
-                        Improved delta: {formatNumber(improvedDistanceDeltaFromOriginalMetres, ' m')}
-                        {improvedDistanceDeltaFromOriginalPct === null
-                          ? ''
-                          : ` (${formatNumber(improvedDistanceDeltaFromOriginalPct, '%')})`}
-                      </div>
-                      <div>
-                        Improved vs Route-cost: {formatNumber(improvedDistanceDeltaFromRouteCostMetres, ' m')}
-                        {improvedDistanceDeltaFromRouteCostPct === null
-                          ? ''
-                          : ` (${formatNumber(improvedDistanceDeltaFromRouteCostPct, '%')})`}
-                      </div>
+                      {canCompareNearest && (
+                        <div>
+                          Delta: {formatNumber(distanceDeltaMetres, ' m')}
+                          {distanceDeltaPct === null
+                            ? ''
+                            : ` (${formatNumber(distanceDeltaPct, '%')})`}
+                        </div>
+                      )}
+                      {canCompareRouteCost && (
+                        <div>
+                          Route-cost delta: {formatNumber(routeCostDistanceDeltaMetres, ' m')}
+                          {routeCostDistanceDeltaPct === null
+                            ? ''
+                            : ` (${formatNumber(routeCostDistanceDeltaPct, '%')})`}
+                        </div>
+                      )}
+                      {canCompareImprovedFromOriginal && (
+                        <div>
+                          Improved delta: {formatNumber(improvedDistanceDeltaFromOriginalMetres, ' m')}
+                          {improvedDistanceDeltaFromOriginalPct === null
+                            ? ''
+                            : ` (${formatNumber(improvedDistanceDeltaFromOriginalPct, '%')})`}
+                        </div>
+                      )}
+                      {canCompareImprovedFromRouteCost && (
+                        <div>
+                          Improved vs Route-cost: {formatNumber(improvedDistanceDeltaFromRouteCostMetres, ' m')}
+                          {improvedDistanceDeltaFromRouteCostPct === null
+                            ? ''
+                            : ` (${formatNumber(improvedDistanceDeltaFromRouteCostPct, '%')})`}
+                        </div>
+                      )}
                       <div>
                         Active:{' '}
                         {activeRouteOrderModeValue === 'nearest-neighbor'
@@ -1275,15 +1318,26 @@ export function PickingPlanningOverlay({
                             ? 'Partial'
                             : 'Empty'}
                       </div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {distanceComparisonMessage}
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {routeCostComparisonMessage}
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {improvedComparisonMessage}
-                      </div>
+                      {canCompareNearest && (
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {distanceComparisonMessage}
+                        </div>
+                      )}
+                      {canCompareRouteCost && (
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {routeCostComparisonMessage}
+                        </div>
+                      )}
+                      {canCompareImprovedFromRouteCost && (
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {improvedComparisonMessage}
+                        </div>
+                      )}
+                      {isComparisonDisabled && (
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          Enable comparison routes to compare alternative modes.
+                        </div>
+                      )}
                       {nearestRouteCostFallbackReason === 'too_many_resolved_anchors' && (
                         <div className="mt-1 text-[11px] font-semibold text-amber-700">
                           Route-cost fallback: disabled for this package ({nearestRouteCostResolvedAnchorsCount ?? '-'} resolved anchors; limit {nearestRouteCostMaxResolvedAnchors ?? '-'}). Showing original order for route-cost mode.
@@ -1322,6 +1376,91 @@ export function PickingPlanningOverlay({
                       {improvedRouteCostFallbackReason && (
                         <div className="mt-1 text-[11px] font-semibold text-amber-700">
                           Improved fallback: using route-cost order ({improvedRouteCostFallbackReason}).
+                        </div>
+                      )}
+                      {import.meta.env.DEV && (
+                        <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[10px] text-slate-700">
+                          <div className="font-semibold text-slate-800">DEV route perf</div>
+                          <label className="mt-1 inline-flex cursor-pointer items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={routeComparisonDebugEnabled}
+                              onChange={(event) =>
+                                setRouteComparisonDebugEnabled(event.target.checked)
+                              }
+                              data-testid="route-comparison-debug-toggle"
+                            />
+                            <span>Compute comparison routes</span>
+                          </label>
+                          {routePerformanceSummary ? (
+                            <>
+                              <div className="mt-1">
+                                total compute: {formatNumber(routePerformanceSummary.totalRouteComputeMs, ' ms')} · active: {routePerformanceSummary.mode.activeMode}
+                              </div>
+                              <div>
+                                scope: {routePerformanceSummary.scope} · computed:{' '}
+                                {routePerformanceSummary.computedModes.original ? 'original' : ''}
+                                {routePerformanceSummary.computedModes.nearest ? ', nearest' : ''}
+                                {routePerformanceSummary.computedModes.nearestRouteCost ? ', route-cost' : ''}
+                                {routePerformanceSummary.computedModes.improved ? ', improved' : ''}
+                              </div>
+                              <div>
+                                skipped:
+                                {!routePerformanceSummary.computedModes.nearest ? ' nearest' : ''}
+                                {!routePerformanceSummary.computedModes.nearestRouteCost
+                                  ? ' route-cost'
+                                  : ''}
+                                {!routePerformanceSummary.computedModes.improved
+                                  ? ' improved'
+                                  : ''}
+                                {routePerformanceSummary.computedModes.nearest &&
+                                routePerformanceSummary.computedModes.nearestRouteCost &&
+                                routePerformanceSummary.computedModes.improved
+                                  ? ' none'
+                                  : ''}
+                              </div>
+                              <div>
+                                anchors ms · orig: {formatNumber(routePerformanceSummary.anchorResolutionMs.original, ' ms')} · near: {formatNumber(routePerformanceSummary.anchorResolutionMs.nearest, ' ms')} · rc: {formatNumber(routePerformanceSummary.anchorResolutionMs.nearestRouteCost, ' ms')} · imp: {formatNumber(routePerformanceSummary.anchorResolutionMs.improved, ' ms')} · total: {formatNumber(routePerformanceSummary.anchorResolutionMs.total, ' ms')}
+                              </div>
+                              <div>
+                                sequence ms · near: {formatNumber(routePerformanceSummary.sequenceMs.nearest, ' ms')} · rc: {formatNumber(routePerformanceSummary.sequenceMs.nearestRouteCost, ' ms')} · imp: {formatNumber(routePerformanceSummary.sequenceMs.improved, ' ms')}
+                              </div>
+                              <div>
+                                solve ms · orig: {formatNumber(routePerformanceSummary.solveMs.original, ' ms')} · near: {formatNumber(routePerformanceSummary.solveMs.nearest, ' ms')} · rc: {formatNumber(routePerformanceSummary.solveMs.nearestRouteCost, ' ms')} · imp: {formatNumber(routePerformanceSummary.solveMs.improved, ' ms')} · total: {formatNumber(routePerformanceSummary.solveMs.total, ' ms')}
+                              </div>
+                              <div>
+                                diagnostics ms: {formatNumber(routePerformanceSummary.routeDiagnosticsMs, ' ms')}
+                              </div>
+                              <div>
+                                counts · anchors: {routePerformanceSummary.counts.anchorCount} ({routePerformanceSummary.counts.resolvedAnchorCount} resolved, {routePerformanceSummary.counts.unresolvedAnchorCount} unresolved) · obstacles: {routePerformanceSummary.counts.obstacleCount} (rack {routePerformanceSummary.counts.rackObstacleCount}, wall {routePerformanceSummary.counts.wallObstacleCount}) · segments: {routePerformanceSummary.counts.routeSegmentCount}
+                              </div>
+                              <div>
+                                pairs · rc:{' '}
+                                {routePerformanceSummary.computedModes.nearestRouteCost
+                                  ? `${routePerformanceSummary.pairStats.nearestRouteCostPairSolveCount}/${routePerformanceSummary.pairStats.nearestRouteCostUnreachablePairCount}`
+                                  : '-'}{' '}
+                                · imp:{' '}
+                                {routePerformanceSummary.computedModes.improved
+                                  ? `${routePerformanceSummary.pairStats.improvedRouteCostPairSolveCount}/${routePerformanceSummary.pairStats.improvedRouteCostUnreachablePairCount}`
+                                  : '-'}
+                              </div>
+                              <div>
+                                flags · start: {routePerformanceSummary.mode.hasManualStartPoint ? 'yes' : 'no'} · rc partial: {routePerformanceSummary.mode.nearestRouteCostIsPartial ? 'yes' : 'no'} · imp partial: {routePerformanceSummary.mode.improvedRouteCostIsPartial ? 'yes' : 'no'}
+                              </div>
+                              {routePerformanceSummary.mode.nearestRouteCostFallbackReason && (
+                                <div>
+                                  rc fallback: {routePerformanceSummary.mode.nearestRouteCostFallbackReason}
+                                </div>
+                              )}
+                              {routePerformanceSummary.mode.improvedRouteCostFallbackReason && (
+                                <div>
+                                  imp fallback: {routePerformanceSummary.mode.improvedRouteCostFallbackReason}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="mt-1">No route perf summary</div>
+                          )}
                         </div>
                       )}
                       {import.meta.env.DEV && (

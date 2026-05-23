@@ -171,3 +171,57 @@ export type PickingPlanningOverlaySource =
   | { kind: 'none' }
   | { kind: 'orders'; orderIds: string[] }
   | { kind: 'wave'; waveId: string };
+
+export type PickingRoutePerformanceSummary = {
+  scope: 'active-only' | 'comparison';
+  computedModes: {
+    original: boolean;
+    nearest: boolean;
+    nearestRouteCost: boolean;
+    improved: boolean;
+  };
+  anchorResolutionMs: {
+    original: number;
+    nearest: number;
+    nearestRouteCost: number;
+    improved: number;
+    total: number;
+  };
+  solveMs: {
+    original: number;
+    nearest: number;
+    nearestRouteCost: number;
+    improved: number;
+    total: number;
+  };
+  sequenceMs: {
+    nearest: number;
+    nearestRouteCost: number;
+    improved: number;
+  };
+  routeDiagnosticsMs: number;
+  totalRouteComputeMs: number;
+  counts: {
+    anchorCount: number;
+    resolvedAnchorCount: number;
+    unresolvedAnchorCount: number;
+    obstacleCount: number;
+    rackObstacleCount: number;
+    wallObstacleCount: number;
+    routeSegmentCount: number;
+  };
+  mode: {
+    activeMode: 'original' | 'nearest-neighbor' | 'nearest-route-cost' | 'improved-route-cost';
+    hasManualStartPoint: boolean;
+    nearestRouteCostFallbackReason?: 'too_many_resolved_anchors';
+    nearestRouteCostIsPartial: boolean;
+    improvedRouteCostFallbackReason?: string;
+    improvedRouteCostIsPartial: boolean;
+  };
+  pairStats: {
+    nearestRouteCostPairSolveCount: number;
+    nearestRouteCostUnreachablePairCount: number;
+    improvedRouteCostPairSolveCount: number;
+    improvedRouteCostUnreachablePairCount: number;
+  };
+};

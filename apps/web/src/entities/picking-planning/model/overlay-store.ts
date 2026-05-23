@@ -26,6 +26,7 @@ export type PickingPlanningOverlayState = {
   routeOrderModeByPackageId: Record<string, PickingRouteOrderMode>;
   routeStartPointByPackageId: Record<string, PickingRouteStartPoint>;
   placingRouteStartForPackageId: string | null;
+  routeComparisonDebugEnabled: boolean;
   setSource: (source: PickingPlanningOverlaySource) => void;
   setPreview: (preview: PickingPlanningPreviewResponse | null) => void;
   setActivePackageId: (packageId: string | null) => void;
@@ -35,6 +36,7 @@ export type PickingPlanningOverlayState = {
   clearRouteStartPoint: (packageId: string) => void;
   startPlacingRouteStartPoint: (packageId: string) => void;
   cancelPlacingRouteStartPoint: () => void;
+  setRouteComparisonDebugEnabled: (enabled: boolean) => void;
   reorderPackageSteps: (
     packageId: string,
     stepIds: string[],
@@ -54,7 +56,8 @@ const initialState = {
   reorderedStepIdsByPackageId: {},
   routeOrderModeByPackageId: {},
   routeStartPointByPackageId: {},
-  placingRouteStartForPackageId: null
+  placingRouteStartForPackageId: null,
+  routeComparisonDebugEnabled: false
 };
 
 function moveStepId(stepIds: string[], stepId: string, direction: -1 | 1) {
@@ -85,7 +88,8 @@ export const usePickingPlanningOverlayStore =
         reorderedStepIdsByPackageId: {},
         routeOrderModeByPackageId: {},
         routeStartPointByPackageId: {},
-        placingRouteStartForPackageId: null
+        placingRouteStartForPackageId: null,
+        routeComparisonDebugEnabled: false
       }),
     setPreview: (preview) =>
       set((state) => {
@@ -106,7 +110,8 @@ export const usePickingPlanningOverlayStore =
           reorderedStepIdsByPackageId: {},
           routeOrderModeByPackageId: {},
           routeStartPointByPackageId: {},
-          placingRouteStartForPackageId: null
+          placingRouteStartForPackageId: null,
+          routeComparisonDebugEnabled: false
         };
       }),
     setActivePackageId: (activePackageId) =>
@@ -151,6 +156,8 @@ export const usePickingPlanningOverlayStore =
       set({ placingRouteStartForPackageId: packageId }),
     cancelPlacingRouteStartPoint: () =>
       set({ placingRouteStartForPackageId: null }),
+    setRouteComparisonDebugEnabled: (enabled) =>
+      set({ routeComparisonDebugEnabled: enabled }),
     reorderPackageSteps: (packageId, stepIds, stepId, direction) =>
       set((state) => {
         const mode = state.routeOrderModeByPackageId[packageId] ?? 'original';

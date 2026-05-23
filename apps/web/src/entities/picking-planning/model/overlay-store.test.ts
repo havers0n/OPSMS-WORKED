@@ -312,4 +312,33 @@ describe('picking planning overlay store', () => {
       usePickingPlanningOverlayStore.getState().placingRouteStartForPackageId
     ).toBeNull();
   });
+
+  it('defaults route comparison debug to disabled and allows toggling it', () => {
+    expect(
+      usePickingPlanningOverlayStore.getState().routeComparisonDebugEnabled
+    ).toBe(false);
+
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteComparisonDebugEnabled(true);
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeComparisonDebugEnabled
+    ).toBe(true);
+  });
+
+  it('resets route comparison debug flag when source changes', () => {
+    usePickingPlanningOverlayStore
+      .getState()
+      .setRouteComparisonDebugEnabled(true);
+
+    usePickingPlanningOverlayStore.getState().setSource({
+      kind: 'orders',
+      orderIds: ['order-1']
+    });
+
+    expect(
+      usePickingPlanningOverlayStore.getState().routeComparisonDebugEnabled
+    ).toBe(false);
+  });
 });
