@@ -37,6 +37,16 @@ function createPlanningResult(): PickingPlanningResult {
         {
           id: 'task-1',
           skuId: 'sku-1',
+          productId: 'product-1',
+          productName: 'Widget',
+          productImageUrl: 'https://cdn.example.com/widget.png',
+          barcode: '1234567890',
+          displayCode: '1234567890',
+          qtyEach: 2,
+          packagingLevels: [
+            { id: 'pack-each', code: 'EA', name: 'Each', qtyEach: 1, sortOrder: 1 },
+            { id: 'pack-box', code: 'BOX', name: 'Box', qtyEach: 6, sortOrder: 2 }
+          ],
           fromLocationId: 'loc-1',
           qty: 2,
           orderRefs: [{ orderId: 'order-1', orderLineId: 'line-1', qty: 2 }]
@@ -112,6 +122,16 @@ function createPlanningResult(): PickingPlanningResult {
             {
               id: 'task-1',
               skuId: 'sku-1',
+              productId: 'product-1',
+              productName: 'Widget',
+              productImageUrl: 'https://cdn.example.com/widget.png',
+              barcode: '1234567890',
+              displayCode: '1234567890',
+              qtyEach: 2,
+              packagingLevels: [
+                { id: 'pack-each', code: 'EA', name: 'Each', qtyEach: 1, sortOrder: 1 },
+                { id: 'pack-box', code: 'BOX', name: 'Box', qtyEach: 6, sortOrder: 2 }
+              ],
               fromLocationId: 'loc-1',
               qty: 2,
               orderRefs: [{ orderId: 'order-1', orderLineId: 'line-1', qty: 2 }]
@@ -229,6 +249,22 @@ describe('response mapper', () => {
     expect((result.packages[0] as any).package).toBeUndefined();
     expect(result.summary).toMatchObject({ taskCount: 1, packageCount: 1, routeStepCount: 1, splitReason: 'none' });
     expect(result.packages[0].route.steps.map((step) => step.sequence)).toEqual([1]);
+    expect(result.packages[0].route.steps[0]).toMatchObject({
+      productId: 'product-1',
+      displayCode: '1234567890',
+      barcode: '1234567890',
+      productName: 'Widget',
+      productImageUrl: 'https://cdn.example.com/widget.png',
+      qtyToPick: 2,
+      qtyEach: 2,
+      locationId: 'loc-1',
+      addressLabel: 'A-01',
+      cellId: 'cell-1'
+    });
+    expect(result.packages[0].route.steps[0].packagingLevels).toEqual([
+      { id: 'pack-each', code: 'EA', name: 'Each', qtyEach: 1, sortOrder: 1 },
+      { id: 'pack-box', code: 'BOX', name: 'Box', qtyEach: 6, sortOrder: 2 }
+    ]);
     expect(result.locationsById['loc-1']).toMatchObject({
       id: 'loc-1',
       cellId: 'cell-1',
@@ -320,5 +356,41 @@ describe('response mapper', () => {
     expect(result.locationsById['loc-1']?.cellId).toBe('cell-1');
     expect(result.warningDetails.map((warning) => warning.message)).toEqual(['planning-warning', 'shared-warning']);
     expect(planning.warnings).toEqual(originalWarnings);
+  });
+
+  it('returns nullables and empty packagingLevels when product metadata is missing', () => {
+    const planning = createPlanningResult();
+    planning.packages[0]!.package.tasks[0] = {
+      ...planning.packages[0]!.package.tasks[0]!,
+      productId: undefined,
+      productName: undefined,
+      productImageUrl: null,
+      barcode: null,
+      displayCode: undefined,
+      qtyEach: undefined,
+      packagingLevels: undefined
+    };
+
+    const result = mapPlanningPreviewToResponse({
+      kind: 'explicit',
+      planning,
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01'
+        }
+      }
+    });
+
+    expect(result.packages[0].route.steps[0]).toMatchObject({
+      productId: null,
+      productName: null,
+      productImageUrl: null,
+      barcode: null,
+      qtyToPick: 2,
+      qtyEach: 2
+    });
+    expect(result.packages[0].route.steps[0].packagingLevels).toEqual([]);
   });
 });

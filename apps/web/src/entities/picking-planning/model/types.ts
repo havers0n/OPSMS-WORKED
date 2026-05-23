@@ -33,8 +33,24 @@ export type PlanningRouteStepDto = {
   sequence: number;
   taskId: string;
   fromLocationId: string;
+  locationId?: string;
+  addressLabel?: string;
+  cellId?: string | null;
+  productId?: string | null;
   skuId: string;
+  displayCode?: string | null;
+  barcode?: string | null;
+  productName?: string | null;
+  productImageUrl?: string | null;
   qtyToPick: number;
+  qtyEach?: number;
+  packagingLevels?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    qtyEach: number;
+    sortOrder?: number;
+  }>;
   allocations: Array<{
     orderId: string;
     orderLineId?: string;

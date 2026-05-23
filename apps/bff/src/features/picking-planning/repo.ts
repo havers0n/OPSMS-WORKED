@@ -47,7 +47,9 @@ export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient
 
     async listProducts(productIds) {
       if (productIds.length === 0) return [];
-      const { data, error } = await supabase.from('products').select('id,sku').in('id', productIds);
+      // products is shared catalog/master data (not tenant-scoped table in this schema).
+      // Scope is constrained by explicit product IDs derived from tenant-scoped order lines.
+      const { data, error } = await supabase.from('products').select('id,sku,name,image_urls').in('id', productIds);
       if (error) throw error;
       return data ?? [];
     },
@@ -64,10 +66,13 @@ export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient
 
     async listPackagingLevels(productIds) {
       if (productIds.length === 0) return [];
+      // product_packaging_levels is product master data keyed by product_id (not tenant-scoped table in this schema).
+      // Scope is constrained by explicit product IDs derived from tenant-scoped order lines.
       const { data, error } = await supabase
         .from('product_packaging_levels')
-        .select('product_id,base_unit_qty,is_default_pick_uom,is_base,can_pick,is_active,pack_weight_g,pack_width_mm,pack_height_mm,pack_depth_mm')
+        .select('id,product_id,code,name,barcode,base_unit_qty,sort_order,is_default_pick_uom,is_base,can_pick,is_active,pack_weight_g,pack_width_mm,pack_height_mm,pack_depth_mm')
         .in('product_id', productIds)
+        .order('sort_order', { ascending: true })
         .order('is_default_pick_uom', { ascending: false })
         .order('is_base', { ascending: false });
       if (error) throw error;

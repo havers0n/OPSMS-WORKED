@@ -15,6 +15,8 @@ type OrderLinePlanningRow = {
 type ProductPlanningRow = {
   id: string;
   sku: string | null;
+  name: string | null;
+  image_urls: unknown;
 };
 
 type ProductUnitProfilePlanningRow = {
@@ -28,8 +30,13 @@ type ProductUnitProfilePlanningRow = {
 };
 
 type ProductPackagingLevelPlanningRow = {
+  id: string;
   product_id: string;
+  code: string;
+  name: string;
+  barcode: string | null;
   base_unit_qty: number;
+  sort_order: number;
   is_default_pick_uom: boolean;
   is_base: boolean;
   can_pick: boolean;
@@ -68,6 +75,14 @@ type ContainerLocationRow = {
 type InventoryAllocationLedger = {
   remainingByInventoryUnitId: Map<string, number>;
   allocatedByInventoryUnitId: Map<string, number>;
+};
+
+type RouteStepPackagingLevel = {
+  id: string;
+  code: string;
+  name: string;
+  qtyEach: number;
+  sortOrder?: number;
 };
 
 type StagedInventoryAllocation = {
@@ -119,6 +134,14 @@ export type PickingPlanningOrderInputReadRepo = {
 
 function toUnique(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+function firstImageUrl(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  for (const entry of value) {
+    if (typeof entry === 'string' && entry.trim().length > 0) return entry;
+  }
+  return null;
 }
 
 function toUnitWeightG(profile: ProductUnitProfilePlanningRow | undefined, packLevel: ProductPackagingLevelPlanningRow | undefined): number | undefined {
@@ -248,8 +271,28 @@ export async function buildPlanningInputFromOrders(
   const productById = new Map(products.map((row) => [row.id, row]));
   const profileByProductId = new Map(profiles.map((row) => [row.product_id, row]));
   const pickPackLevelByProductId = new Map<string, ProductPackagingLevelPlanningRow>();
+  const packagingLevelsByProductId = new Map<string, RouteStepPackagingLevel[]>();
+  const barcodeByProductId = new Map<string, string>();
   for (const level of packagingLevels) {
-    if (!level.is_active || !level.can_pick) continue;
+    if (!level.is_active || !level.can_pick || level.base_unit_qty <= 0) continue;
+
+    const levelList = packagingLevelsByProductId.get(level.product_id);
+    const mappedLevel = {
+      id: level.id,
+      code: level.code,
+      name: level.name,
+      qtyEach: level.base_unit_qty,
+      sortOrder: level.sort_order
+    } satisfies RouteStepPackagingLevel;
+    if (levelList) {
+      levelList.push(mappedLevel);
+    } else {
+      packagingLevelsByProductId.set(level.product_id, [mappedLevel]);
+    }
+    if (!barcodeByProductId.has(level.product_id) && level.barcode) {
+      barcodeByProductId.set(level.product_id, level.barcode);
+    }
+
     if (level.is_default_pick_uom) {
       pickPackLevelByProductId.set(level.product_id, level);
       continue;
@@ -258,6 +301,13 @@ export async function buildPlanningInputFromOrders(
     if (!pickPackLevelByProductId.has(level.product_id) && level.is_base) {
       pickPackLevelByProductId.set(level.product_id, level);
     }
+  }
+  for (const [productId, levels] of packagingLevelsByProductId.entries()) {
+    levels.sort((left, right) => {
+      if ((left.sortOrder ?? 0) !== (right.sortOrder ?? 0)) return (left.sortOrder ?? 0) - (right.sortOrder ?? 0);
+      return left.id.localeCompare(right.id);
+    });
+    packagingLevelsByProductId.set(productId, levels);
   }
 
   // Resolve effective primary-pick locations by starting from where inventory physically sits.
@@ -470,6 +520,10 @@ export async function buildPlanningInputFromOrders(
     }
 
     const skuId = product.sku ?? line.sku;
+    const productImageUrl = firstImageUrl(product.image_urls);
+    const packagingLevelsForStep = packagingLevelsByProductId.get(line.product_id) ?? [];
+    const displayCode = product.sku ?? null;
+    const barcode = barcodeByProductId.get(line.product_id) ?? null;
     for (const allocation of stagedAllocations) {
       const remainingInventoryQty = allocationLedger.remainingByInventoryUnitId.get(allocation.inventoryUnitId) ?? 0;
       allocationLedger.remainingByInventoryUnitId.set(allocation.inventoryUnitId, remainingInventoryQty - allocation.qty);
@@ -489,6 +543,13 @@ export async function buildPlanningInputFromOrders(
       tasks.push({
         id: locationAllocations.length === 1 ? `candidate-${line.order_id}-${line.id}` : `candidate-${line.order_id}-${line.id}-${index + 1}`,
         skuId,
+        productId: line.product_id,
+        productName: product.name ?? undefined,
+        productImageUrl,
+        barcode,
+        displayCode,
+        qtyEach: qty,
+        packagingLevels: packagingLevelsForStep,
         fromLocationId: locationId,
         qty,
         orderRefs: [{ orderId: line.order_id, orderLineId: line.id, qty }],

@@ -35,8 +35,24 @@ export type PlanningRouteStepDto = {
   sequence: number;
   taskId: string;
   fromLocationId: string;
+  locationId: string;
+  addressLabel: string;
+  cellId: string | null;
+  productId: string | null;
   skuId: string;
+  displayCode: string | null;
+  barcode: string | null;
+  productName: string | null;
+  productImageUrl: string | null;
   qtyToPick: number;
+  qtyEach: number;
+  packagingLevels: Array<{
+    id: string;
+    code: string;
+    name: string;
+    qtyEach: number;
+    sortOrder?: number;
+  }>;
   allocations: Array<{
     orderId: string;
     orderLineId?: string;
@@ -186,13 +202,31 @@ export function mapWorkPackageToDto(pkg: WorkPackageDraft): PlanningWorkPackageD
   };
 }
 
-export function mapRouteStepToDto(step: RouteStep): PlanningRouteStepDto {
+export function mapRouteStepToDto(
+  step: RouteStep,
+  args?: {
+    taskById?: Map<string, WorkPackageDraft['tasks'][number]>;
+    locationsById?: Record<string, StorageLocationProjection>;
+  }
+): PlanningRouteStepDto {
+  const task = args?.taskById?.get(step.taskId);
+  const location = args?.locationsById?.[step.fromLocationId];
   return {
     sequence: step.sequence,
     taskId: step.taskId,
     fromLocationId: step.fromLocationId,
+    locationId: step.fromLocationId,
+    addressLabel: location?.addressLabel ?? step.fromLocationId,
+    cellId: location?.cellId ?? null,
+    productId: task?.productId ?? null,
     skuId: step.skuId,
+    displayCode: task?.displayCode ?? task?.skuId ?? step.skuId ?? null,
+    barcode: task?.barcode ?? null,
+    productName: task?.productName ?? null,
+    productImageUrl: task?.productImageUrl ?? null,
     qtyToPick: step.qtyToPick,
+    qtyEach: task?.qtyEach ?? step.qtyToPick,
+    packagingLevels: task?.packagingLevels?.map((level) => ({ ...level })) ?? [],
     allocations: step.allocations.map((allocation) => ({ ...allocation })),
     handlingInstruction: step.handlingInstruction
   };
@@ -256,19 +290,24 @@ export function mapPlanningPreviewToResponse(args: {
       warnings: [...args.planning.split.warnings],
       packageIds: args.planning.split.packages.map((pkg) => pkg.id)
     },
-    packages: args.planning.packages.map((plannedPackage) => ({
-      workPackage: mapWorkPackageToDto(plannedPackage.package),
-      route: {
-        steps: plannedPackage.route.steps.map(mapRouteStepToDto),
-        warnings: [...plannedPackage.route.warnings],
-        metadata: {
-          mode: plannedPackage.route.metadata.mode,
-          taskCount: plannedPackage.route.metadata.taskCount,
-          sequencedCount: plannedPackage.route.metadata.sequencedCount,
-          unknownLocationCount: plannedPackage.route.metadata.unknownLocationCount
+    packages: args.planning.packages.map((plannedPackage) => {
+      const taskById = new Map(plannedPackage.package.tasks.map((task) => [task.id, task]));
+      return {
+        workPackage: mapWorkPackageToDto(plannedPackage.package),
+        route: {
+          steps: plannedPackage.route.steps.map((step) =>
+            mapRouteStepToDto(step, { taskById, locationsById: args.locationsById as Record<string, StorageLocationProjection> | undefined })
+          ),
+          warnings: [...plannedPackage.route.warnings],
+          metadata: {
+            mode: plannedPackage.route.metadata.mode,
+            taskCount: plannedPackage.route.metadata.taskCount,
+            sequencedCount: plannedPackage.route.metadata.sequencedCount,
+            unknownLocationCount: plannedPackage.route.metadata.unknownLocationCount
+          }
         }
-      }
-    })),
+      };
+    }),
     locationsById: mapLocationsByIdToDto(args.locationsById),
     unresolved: args.unresolved?.map((line) => ({ ...line })),
     warnings,

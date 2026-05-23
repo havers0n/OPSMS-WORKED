@@ -52,6 +52,19 @@ export type PickingStrategy = {
 export type PickTaskCandidate = {
   id: string;
   skuId: string;
+  productId?: string;
+  productName?: string;
+  productImageUrl?: string | null;
+  barcode?: string | null;
+  displayCode?: string | null;
+  qtyEach?: number;
+  packagingLevels?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    qtyEach: number;
+    sortOrder?: number;
+  }>;
   fromLocationId: string;
   qty: number;
   orderRefs: {

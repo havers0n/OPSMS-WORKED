@@ -273,6 +273,19 @@ describe('POST /api/picking-planning/preview', () => {
     expect(payload.summary.taskCount).toBe(2);
     expect(payload.summary.packageCount).toBeGreaterThan(0);
     expect(payload.packages[0].route.steps[0].sequence).toBe(1);
+    expect(payload.packages[0].route.steps[0]).toMatchObject({
+      locationId: 'loc-1',
+      addressLabel: 'loc-1',
+      cellId: null,
+      productId: null,
+      displayCode: 'sku-1',
+      barcode: null,
+      productName: null,
+      productImageUrl: null,
+      qtyToPick: 2,
+      qtyEach: 2,
+      packagingLevels: []
+    });
     expect(payload.rootWorkPackage.id).toBe('wp-1');
   });
 
