@@ -41,6 +41,8 @@ import {
   summarizePickingRouteSegments
 } from '@/features/picking-planning-canvas/model/summarize-picking-route-segments';
 import type { SolvedRouteSegment } from '@/features/picking-planning-canvas/model/route-step-geometry';
+import { PickingRunPanel } from '@/features/picking-execution/ui/picking-run-panel';
+import { useSetSelectedCellId } from '@/warehouse/editor/model/editor-selectors';
 
 export type PickingPlanningStepGeometryStatus = {
   status: 'resolved' | 'unresolved';
@@ -269,6 +271,7 @@ export function PickingPlanningOverlay({
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const setSelectedCellId = useSetSelectedCellId();
   const {
     activePackageId,
     errorMessage,
@@ -1203,6 +1206,13 @@ export function PickingPlanningOverlay({
                     </div>
                   </div>
                   <div className="space-y-1.5">
+                    <PickingRunPanel
+                      packageId={activePackage.workPackage.id}
+                      displayedSteps={displayedSteps}
+                      onFocusCell={(cellId) => {
+                        setSelectedCellId(cellId);
+                      }}
+                    />
                     {displayedSteps.map((step, index) => {
                       const stepId = getRouteStepId(step);
                       return (
