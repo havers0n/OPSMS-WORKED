@@ -6,7 +6,10 @@ describe('resolveRouteComputationFlags', () => {
     const result = resolveRouteComputationFlags({
       activeMode: 'original',
       isDev: true,
-      routeComparisonDebugEnabled: false
+      routeComparisonDebugEnabled: false,
+      routeStepCount: 8,
+      obstacleCount: 0,
+      autoComputePolicyEnabled: false
     });
 
     expect(result.scope).toBe('active-only');
@@ -20,7 +23,10 @@ describe('resolveRouteComputationFlags', () => {
     const result = resolveRouteComputationFlags({
       activeMode: 'original',
       isDev: true,
-      routeComparisonDebugEnabled: true
+      routeComparisonDebugEnabled: true,
+      routeStepCount: 8,
+      obstacleCount: 0,
+      autoComputePolicyEnabled: false
     });
 
     expect(result.scope).toBe('comparison');
@@ -34,7 +40,10 @@ describe('resolveRouteComputationFlags', () => {
     const result = resolveRouteComputationFlags({
       activeMode: 'improved-route-cost',
       isDev: false,
-      routeComparisonDebugEnabled: true
+      routeComparisonDebugEnabled: true,
+      routeStepCount: 8,
+      obstacleCount: 0,
+      autoComputePolicyEnabled: false
     });
 
     expect(result.scope).toBe('active-only');

@@ -1,5 +1,6 @@
 import type { PickingRouteOrderMode } from '@/entities/picking-planning/model/overlay-store';
 import type { PickingRoutePerformanceSummary } from '@/entities/picking-planning/model/types';
+import { resolveRouteAutoComputePolicy } from './route-auto-compute-policy';
 
 export type RouteComputationFlags = {
   scope: PickingRoutePerformanceSummary['scope'];
@@ -7,28 +8,39 @@ export type RouteComputationFlags = {
   shouldComputeNearestRoute: boolean;
   shouldComputeNearestRouteCostRoute: boolean;
   shouldComputeImprovedRouteCostRoute: boolean;
+  policy: NonNullable<PickingRoutePerformanceSummary['policy']>;
 };
 
 export function resolveRouteComputationFlags({
   activeMode,
   isDev,
-  routeComparisonDebugEnabled
+  routeComparisonDebugEnabled,
+  routeStepCount,
+  obstacleCount,
+  autoComputePolicyEnabled
 }: {
   activeMode: PickingRouteOrderMode;
   isDev: boolean;
   routeComparisonDebugEnabled: boolean;
+  routeStepCount: number;
+  obstacleCount: number;
+  autoComputePolicyEnabled: boolean;
 }): RouteComputationFlags {
-  const shouldComputeComparisonRoutes = isDev && routeComparisonDebugEnabled;
-  const scope: PickingRoutePerformanceSummary['scope'] =
-    shouldComputeComparisonRoutes ? 'comparison' : 'active-only';
+  const policy = resolveRouteAutoComputePolicy({
+    activeMode,
+    isDev,
+    routeComparisonDebugEnabled,
+    autoComputePolicyEnabled,
+    routeStepCount,
+    obstacleCount
+  });
+  const shouldComputeComparisonRoutes = policy.scope === 'comparison';
   return {
-    scope,
+    scope: policy.scope,
     shouldComputeComparisonRoutes,
-    shouldComputeNearestRoute:
-      shouldComputeComparisonRoutes || activeMode === 'nearest-neighbor',
-    shouldComputeNearestRouteCostRoute:
-      shouldComputeComparisonRoutes || activeMode === 'nearest-route-cost',
-    shouldComputeImprovedRouteCostRoute:
-      shouldComputeComparisonRoutes || activeMode === 'improved-route-cost'
+    shouldComputeNearestRoute: policy.computedModes.nearest,
+    shouldComputeNearestRouteCostRoute: policy.computedModes.nearestRouteCost,
+    shouldComputeImprovedRouteCostRoute: policy.computedModes.improved,
+    policy
   };
 }

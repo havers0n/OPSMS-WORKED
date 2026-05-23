@@ -1539,6 +1539,119 @@ describe('PickingPlanningOverlay', () => {
     ).toBe(true);
   });
 
+  it('shows policy diagnostics in DEV route perf panel', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    act(() => {
+      usePickingPlanningOverlayStore
+        .getState()
+        .setSource({ kind: 'orders', orderIds: ['order-1'] });
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        createElement(PickingPlanningOverlay, {
+          solvedSegments: [
+            {
+              status: 'ok',
+              fromStepId: 'task-1',
+              toStepId: 'task-2',
+              costMetres: 1,
+              canvasPoints: []
+            }
+          ],
+          routePerformanceSummary: {
+            scope: 'active-only',
+            computedModes: {
+              original: true,
+              nearest: true,
+              nearestRouteCost: false,
+              improved: false
+            },
+            anchorResolutionMs: {
+              original: 1,
+              nearest: 1,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 2
+            },
+            solveMs: {
+              original: 1,
+              nearest: 1,
+              nearestRouteCost: 0,
+              improved: 0,
+              total: 2
+            },
+            sequenceMs: {
+              nearest: 1,
+              nearestRouteCost: 0,
+              improved: 0
+            },
+            routeDiagnosticsMs: 0,
+            totalRouteComputeMs: 4,
+            counts: {
+              anchorCount: 2,
+              resolvedAnchorCount: 2,
+              unresolvedAnchorCount: 0,
+              obstacleCount: 1,
+              rackObstacleCount: 1,
+              wallObstacleCount: 0,
+              routeSegmentCount: 1
+            },
+            mode: {
+              activeMode: 'original',
+              hasManualStartPoint: false,
+              nearestRouteCostIsPartial: false,
+              improvedRouteCostIsPartial: false
+            },
+            pairStats: {
+              nearestRouteCostPairSolveCount: 0,
+              nearestRouteCostUnreachablePairCount: 0,
+              improvedRouteCostPairSolveCount: 0,
+              improvedRouteCostUnreachablePairCount: 0
+            },
+            policy: {
+              scope: 'active-only',
+              autoSelected: false,
+              autoComputePolicyEnabled: true,
+              computedModes: {
+                original: true,
+                nearest: true,
+                nearestRouteCost: false,
+                improved: false
+              },
+              reasonsByMode: {
+                original: 'always_computed',
+                nearest: 'auto_small_workload',
+                nearestRouteCost: 'route_step_count_too_high',
+                improved: 'route_step_count_too_high'
+              },
+              limits: {
+                maxRouteStepsForNearestExtra: 20,
+                maxRouteStepsForRouteCost: 16,
+                maxRouteStepsForImproved: 12,
+                maxObstacleCountForExtras: 120
+              },
+              inputs: {
+                activeMode: 'original',
+                routeStepCount: 2,
+                obstacleCount: 1,
+                isDev: true,
+                routeComparisonDebugEnabled: false
+              }
+            }
+          }
+        })
+      );
+      await Promise.resolve();
+    });
+
+    const text = normalizeText(collectText(renderer.toJSON()));
+    expect(text).toContain('policy scope: active-only');
+    expect(text).toContain('policy reasons · nearest: auto_small_workload');
+    expect(text).toContain('policy limits · near steps: 20');
+  });
+
   it('renders start-point controls and starts placement for active package', async () => {
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     act(() => {

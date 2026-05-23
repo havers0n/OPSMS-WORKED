@@ -11,6 +11,8 @@ import type {
 import { resolvePanelMode } from './storage-inspector-v2/mode';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
 import { EditorCanvas } from './editor-canvas';
+import { usePickingPlanningOverlayStore } from '@/entities/picking-planning/model/overlay-store';
+import * as pickingRoutesComputeModule from '@/features/picking-planning-canvas/model/compute-picking-routes';
 
 const { mockIsRackInViewport } = vi.hoisted(() => ({
   mockIsRackInViewport: vi.fn(() => true)
@@ -36,6 +38,8 @@ let viewportControllerLastProps: Record<string, unknown> | null = null;
 let canvasHudLastProps: Record<string, unknown> | null = null;
 let obstacleRouteLayerLastProps: Record<string, unknown> | null = null;
 let canvasStageInteractionsLastProps: Record<string, unknown> | null = null;
+let pickingPlanningOverlayLastProps: Record<string, unknown> | null = null;
+let pickingRouteOverlayLayerLastProps: Record<string, unknown> | null = null;
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
 let mockSceneLod: 0 | 1 | 2 = 2;
@@ -130,6 +134,20 @@ vi.mock('./canvas-hud', () => ({
   CanvasHud: (props: Record<string, unknown>) => {
     canvasHudLastProps = props;
     return null;
+  }
+}));
+
+vi.mock('./picking-planning-overlay', () => ({
+  PickingPlanningOverlay: (props: Record<string, unknown>) => {
+    pickingPlanningOverlayLastProps = props;
+    return createElement('PickingPlanningOverlay', props);
+  }
+}));
+
+vi.mock('@/features/picking-planning-canvas/ui/picking-route-overlay-layer', () => ({
+  PickingRouteOverlayLayer: (props: Record<string, unknown>) => {
+    pickingRouteOverlayLayerLastProps = props;
+    return createElement('PickingRouteOverlayLayer', props);
   }
 }));
 
@@ -347,6 +365,8 @@ describe('EditorCanvas storage active-rack wiring', () => {
     canvasHudLastProps = null;
     obstacleRouteLayerLastProps = null;
     canvasStageInteractionsLastProps = null;
+    pickingPlanningOverlayLastProps = null;
+    pickingRouteOverlayLayerLastProps = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
@@ -358,6 +378,21 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockSelectedRackId = null;
     mockViewStage = 'map';
     mockSelection = { type: 'none' };
+    act(() => {
+      usePickingPlanningOverlayStore.setState({
+        source: { kind: 'none' },
+        preview: null,
+        isLoading: false,
+        errorMessage: null,
+        activePackageId: null,
+        selectedStepId: null,
+        reorderedStepIdsByPackageId: {},
+        routeOrderModeByPackageId: {},
+        routeStartPointByPackageId: {},
+        placingRouteStartForPackageId: null,
+        routeComparisonDebugEnabled: false
+      });
+    });
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
   });
@@ -938,6 +973,273 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
 
     expect(canvasHudLastProps?.shouldShowStorageCellBar).toBe(false);
+  });
+
+  it('passes active solved segments to PickingRouteOverlayLayer and perf summary to PickingPlanningOverlay', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockViewStage = 'picking-plan';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    act(() => {
+      usePickingPlanningOverlayStore.setState({
+        source: { kind: 'orders', orderIds: ['order-1'] },
+        preview: {
+        kind: 'orders',
+        input: { orderIds: ['order-1'] },
+        strategy: {
+          id: 'strategy-1',
+          code: 'S1',
+          name: 'Strategy',
+          method: 'wave',
+          requiresPostSort: false,
+          requiresCartSlots: false,
+          preserveOrderSeparation: false,
+          aggregateSameSku: true,
+          routePriorityMode: 'original'
+        },
+        summary: {
+          packageCount: 1,
+          routeStepCount: 2,
+          taskCount: 2,
+          wasSplit: false,
+          splitReason: '',
+          warningCount: 0
+        },
+        rootWorkPackage: {
+          id: 'pkg-1',
+          method: 'wave',
+          strategyId: 'strategy-1',
+          taskCount: 2,
+          orderCount: 1,
+          uniqueSkuCount: 2,
+          uniqueLocationCount: 2,
+          uniqueZoneCount: 1,
+          uniqueAisleCount: 1,
+          complexity: { level: 'low', score: 1, warnings: [], exceeds: {} },
+          warnings: []
+        },
+        split: {
+          wasSplit: false,
+          reason: '',
+          warnings: [],
+          packageIds: ['pkg-1']
+        },
+        packages: [
+          {
+            workPackage: {
+              id: 'pkg-1',
+              method: 'wave',
+              strategyId: 'strategy-1',
+              taskCount: 2,
+              orderCount: 1,
+              uniqueSkuCount: 2,
+              uniqueLocationCount: 2,
+              uniqueZoneCount: 1,
+              uniqueAisleCount: 1,
+              complexity: { level: 'low', score: 1, warnings: [], exceeds: {} },
+              warnings: []
+            },
+            route: {
+              steps: [
+                {
+                  sequence: 1,
+                  taskId: 'task-1',
+                  fromLocationId: 'loc-1',
+                  skuId: 'sku-1',
+                  qtyToPick: 1,
+                  allocations: []
+                },
+                {
+                  sequence: 2,
+                  taskId: 'task-2',
+                  fromLocationId: 'loc-2',
+                  skuId: 'sku-2',
+                  qtyToPick: 1,
+                  allocations: []
+                }
+              ],
+              warnings: [],
+              metadata: {
+                mode: 'original',
+                taskCount: 2,
+                sequencedCount: 2,
+                unknownLocationCount: 0
+              }
+            }
+          }
+        ],
+        locationsById: {
+          'loc-1': { id: 'loc-1', x: 1, y: 1 },
+          'loc-2': { id: 'loc-2', x: 2, y: 2 }
+        } as never,
+        warnings: [],
+        warningDetails: []
+        },
+        activePackageId: 'pkg-1'
+      });
+    });
+
+    renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(pickingRouteOverlayLayerLastProps).not.toBeNull();
+    expect(Array.isArray(pickingRouteOverlayLayerLastProps?.solvedSegments)).toBe(
+      true
+    );
+    expect(pickingPlanningOverlayLastProps).not.toBeNull();
+    expect(pickingPlanningOverlayLastProps?.routePerformanceSummary).toBeTruthy();
+  });
+
+  it('does not recompute picking routes when unrelated canvas state changes', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'view';
+    mockViewStage = 'picking-plan';
+    mockSelection = { type: 'none' };
+    mockPublishedCellsById = new Map();
+
+    act(() => {
+      usePickingPlanningOverlayStore.setState({
+        source: { kind: 'orders', orderIds: ['order-1'] },
+        preview: {
+          kind: 'orders',
+          input: { orderIds: ['order-1'] },
+          strategy: {
+            id: 'strategy-1',
+            code: 'S1',
+            name: 'Strategy',
+            method: 'wave',
+            requiresPostSort: false,
+            requiresCartSlots: false,
+            preserveOrderSeparation: false,
+            aggregateSameSku: true,
+            routePriorityMode: 'original'
+          },
+          summary: {
+            packageCount: 1,
+            routeStepCount: 2,
+            taskCount: 2,
+            wasSplit: false,
+            splitReason: '',
+            warningCount: 0
+          },
+          rootWorkPackage: {
+            id: 'pkg-1',
+            method: 'wave',
+            strategyId: 'strategy-1',
+            taskCount: 2,
+            orderCount: 1,
+            uniqueSkuCount: 2,
+            uniqueLocationCount: 2,
+            uniqueZoneCount: 1,
+            uniqueAisleCount: 1,
+            complexity: { level: 'low', score: 1, warnings: [], exceeds: {} },
+            warnings: []
+          },
+          split: {
+            wasSplit: false,
+            reason: '',
+            warnings: [],
+            packageIds: ['pkg-1']
+          },
+          packages: [
+            {
+              workPackage: {
+                id: 'pkg-1',
+                method: 'wave',
+                strategyId: 'strategy-1',
+                taskCount: 2,
+                orderCount: 1,
+                uniqueSkuCount: 2,
+                uniqueLocationCount: 2,
+                uniqueZoneCount: 1,
+                uniqueAisleCount: 1,
+                complexity: { level: 'low', score: 1, warnings: [], exceeds: {} },
+                warnings: []
+              },
+              route: {
+                steps: [
+                  {
+                    sequence: 1,
+                    taskId: 'task-1',
+                    fromLocationId: 'loc-1',
+                    skuId: 'sku-1',
+                    qtyToPick: 1,
+                    allocations: []
+                  },
+                  {
+                    sequence: 2,
+                    taskId: 'task-2',
+                    fromLocationId: 'loc-2',
+                    skuId: 'sku-2',
+                    qtyToPick: 1,
+                    allocations: []
+                  }
+                ],
+                warnings: [],
+                metadata: {
+                  mode: 'original',
+                  taskCount: 2,
+                  sequencedCount: 2,
+                  unknownLocationCount: 0
+                }
+              }
+            }
+          ],
+          locationsById: {
+            'loc-1': { id: 'loc-1', x: 1, y: 1 },
+            'loc-2': { id: 'loc-2', x: 2, y: 2 }
+          } as never,
+          warnings: [],
+          warningDetails: []
+        },
+        activePackageId: 'pkg-1'
+      });
+    });
+
+    const computeSpy = vi.spyOn(
+      pickingRoutesComputeModule,
+      'computePickingRoutes'
+    );
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+    const firstCallArgs = computeSpy.mock.calls[0]?.[0];
+    expect(firstCallArgs).toBeTruthy();
+    expect(firstCallArgs?.routeComputationFlags).toMatchObject({
+      scope: 'active-only',
+      shouldComputeNearestRoute: false,
+      shouldComputeNearestRouteCostRoute: false,
+      shouldComputeImprovedRouteCostRoute: false
+    });
+    expect(firstCallArgs?.routeComputationFlags.policy).toMatchObject({
+      scope: 'active-only',
+      autoSelected: false,
+      autoComputePolicyEnabled: false
+    });
+    const callsBefore = computeSpy.mock.calls.length;
+
+    act(() => {
+      mockSelection = { type: 'rack', rackIds: ['rack-unrelated'] };
+      renderer.update(
+        createCanvasElement({
+          floorId: draft.floorId,
+          activeDraft: draft,
+          latestPublished: draft
+        })
+      );
+    });
+
+    expect(computeSpy.mock.calls.length).toBe(callsBefore);
+    computeSpy.mockRestore();
   });
 
   it('does not keep an offscreen ordinary selected cell parent rack in the RackLayer input', () => {

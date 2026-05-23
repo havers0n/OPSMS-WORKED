@@ -1404,6 +1404,42 @@ export function PickingPlanningOverlay({
                                 {routePerformanceSummary.computedModes.nearestRouteCost ? ', route-cost' : ''}
                                 {routePerformanceSummary.computedModes.improved ? ', improved' : ''}
                               </div>
+                              {routePerformanceSummary.policy && (
+                                <>
+                                  <div>
+                                    policy scope: {routePerformanceSummary.policy.scope} · autoSelected:{' '}
+                                    {routePerformanceSummary.policy.autoSelected ? 'yes' : 'no'} · prod auto:{' '}
+                                    {routePerformanceSummary.policy.autoComputePolicyEnabled
+                                      ? 'enabled'
+                                      : 'disabled'}
+                                  </div>
+                                  <div>
+                                    policy reasons · nearest:{' '}
+                                    {routePerformanceSummary.policy.reasonsByMode.nearest} · rc:{' '}
+                                    {routePerformanceSummary.policy.reasonsByMode.nearestRouteCost} · imp:{' '}
+                                    {routePerformanceSummary.policy.reasonsByMode.improved}
+                                  </div>
+                                  <div>
+                                    policy limits · near steps:{' '}
+                                    {
+                                      routePerformanceSummary.policy.limits
+                                        .maxRouteStepsForNearestExtra
+                                    } · rc steps:{' '}
+                                    {
+                                      routePerformanceSummary.policy.limits
+                                        .maxRouteStepsForRouteCost
+                                    } · imp steps:{' '}
+                                    {
+                                      routePerformanceSummary.policy.limits
+                                        .maxRouteStepsForImproved
+                                    } · obstacles:{' '}
+                                    {
+                                      routePerformanceSummary.policy.limits
+                                        .maxObstacleCountForExtras
+                                    }
+                                  </div>
+                                </>
+                              )}
                               <div>
                                 skipped:
                                 {!routePerformanceSummary.computedModes.nearest ? ' nearest' : ''}

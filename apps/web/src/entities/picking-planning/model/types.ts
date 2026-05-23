@@ -224,4 +224,34 @@ export type PickingRoutePerformanceSummary = {
     improvedRouteCostPairSolveCount: number;
     improvedRouteCostUnreachablePairCount: number;
   };
+  policy?: {
+    scope: 'active-only' | 'comparison';
+    autoSelected: false;
+    autoComputePolicyEnabled: boolean;
+    computedModes: {
+      original: boolean;
+      nearest: boolean;
+      nearestRouteCost: boolean;
+      improved: boolean;
+    };
+    reasonsByMode: {
+      original: 'always_computed';
+      nearest: string;
+      nearestRouteCost: string;
+      improved: string;
+    };
+    limits: {
+      maxRouteStepsForNearestExtra: number;
+      maxRouteStepsForRouteCost: number;
+      maxRouteStepsForImproved: number;
+      maxObstacleCountForExtras: number;
+    };
+    inputs: {
+      activeMode: 'original' | 'nearest-neighbor' | 'nearest-route-cost' | 'improved-route-cost';
+      routeStepCount: number;
+      obstacleCount: number;
+      isDev: boolean;
+      routeComparisonDebugEnabled: boolean;
+    };
+  };
 };
