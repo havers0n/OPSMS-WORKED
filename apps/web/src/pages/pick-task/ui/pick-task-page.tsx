@@ -19,7 +19,7 @@ import {
   containerTypesQueryOptions
 } from '@/entities/container/api/queries';
 import { orderQueryOptions } from '@/entities/order/api/queries';
-import { useAllocatePickSteps, useExecutePickStep } from '@/entities/pick-task/api/mutations';
+import { useAllocatePickSteps, useExecutePickStep, useSkipPickStep } from '@/entities/pick-task/api/mutations';
 import { pickTaskDetailQueryOptions } from '@/entities/pick-task/api/queries';
 import {
   findNextPendingStep,
@@ -216,9 +216,14 @@ function GuidedStepCard({
   taskNumber: string;
   onExecuted: () => void;
 }) {
-  // Local qty state — reset on remount (parent uses key={step.id})
+  // All state resets on remount — parent uses key={step.id}
   const [qtyActual, setQtyActual] = useState(String(step.qtyRequired));
+  const [partialConfirm, setPartialConfirm] = useState(false);
+  const [skipConfirm, setSkipConfirm] = useState(false);
   const execute = useExecutePickStep();
+  const skip = useSkipPickStep();
+
+  const isBusy = execute.isPending || skip.isPending;
 
   const parsedQty = Number(qtyActual);
   const isValidQty =
@@ -234,23 +239,56 @@ function GuidedStepCard({
     step.status === 'skipped' ||
     step.status === 'exception';
 
-  function handleConfirm() {
+  function handleConfirmClick() {
     if (!isValidQty) return;
+    // Partial pick: require explicit two-step confirmation
+    if (isUnderPick && !partialConfirm) {
+      setPartialConfirm(true);
+      setSkipConfirm(false);
+      return;
+    }
     execute.mutate(
       { stepId: step.id, qtyActual: parsedQty, pickContainerId },
       { onSuccess: onExecuted }
     );
   }
 
-  // ── Already completed ──
+  function handleSkipConfirm() {
+    skip.mutate(
+      { stepId: step.id },
+      { onSuccess: onExecuted }
+    );
+  }
+
+  function handleQtyChange(value: string) {
+    setQtyActual(value);
+    setPartialConfirm(false); // reset confirmation if qty changes
+  }
+
+  // ── Already completed / skipped ──
   if (isPicked) {
+    const isSkipped = step.status === 'skipped';
     return (
-      <div className="flex flex-col items-center gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-10 text-center">
-        <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+      <div
+        className={`flex flex-col items-center gap-4 rounded-2xl border p-10 text-center ${
+          isSkipped
+            ? 'border-slate-200 bg-slate-50'
+            : 'border-emerald-200 bg-emerald-50'
+        }`}
+      >
+        <CheckCircle2
+          className={`h-12 w-12 ${isSkipped ? 'text-slate-400' : 'text-emerald-500'}`}
+        />
         <div>
-          <div className="text-lg font-semibold text-emerald-900">{step.itemName}</div>
-          <div className="mt-1 text-sm text-emerald-700">
-            {step.qtyPicked} of {step.qtyRequired} picked
+          <div
+            className={`text-lg font-semibold ${
+              isSkipped ? 'text-slate-700' : 'text-emerald-900'
+            }`}
+          >
+            {step.itemName}
+          </div>
+          <div className={`mt-1 text-sm ${isSkipped ? 'text-slate-500' : 'text-emerald-700'}`}>
+            {isSkipped ? 'Step was skipped' : `${step.qtyPicked} of ${step.qtyRequired} picked`}
           </div>
           <span
             className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getPickStepStatusColor(step.status)}`}
@@ -269,9 +307,7 @@ function GuidedStepCard({
         <AlertCircle className="h-12 w-12 text-amber-500" />
         <div>
           <div className="text-lg font-semibold text-amber-900">{step.itemName}</div>
-          <div className="mt-1 text-sm text-amber-800">
-            This step needs replenishment.
-          </div>
+          <div className="mt-1 text-sm text-amber-800">This step needs replenishment.</div>
           <div className="mt-0.5 text-sm text-amber-700">
             Notify your supervisor — no action required from you.
           </div>
@@ -337,69 +373,160 @@ function GuidedStepCard({
         </div>
       </div>
 
-      {/* Qty input */}
-      <div className="border-t border-slate-100 p-5">
-        <div className="mb-3 text-xs font-medium text-slate-700">
-          Quantity to pick{' '}
-          <span className="font-normal text-slate-400">(required: {step.qtyRequired})</span>
+      {/* Qty input (hidden during partial confirm) */}
+      {!partialConfirm && (
+        <div className="border-t border-slate-100 p-5">
+          <div className="mb-3 text-xs font-medium text-slate-700">
+            Quantity to pick{' '}
+            <span className="font-normal text-slate-400">(required: {step.qtyRequired})</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleQtyChange(String(Math.max(1, Number(qtyActual) - 1)))}
+              disabled={parsedQty <= 1 || isBusy}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min={1}
+              max={step.qtyRequired}
+              value={qtyActual}
+              onChange={(e) => handleQtyChange(e.target.value)}
+              disabled={isBusy}
+              className="h-11 flex-1 rounded-xl border border-slate-300 text-center text-lg font-semibold outline-none focus:border-cyan-500 disabled:bg-slate-100"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                handleQtyChange(String(Math.min(step.qtyRequired, Number(qtyActual) + 1)))
+              }
+              disabled={parsedQty >= step.qtyRequired || isBusy}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+            >
+              +
+            </button>
+          </div>
+
+          {isUnderPick && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Less than required — confirming will record a partial pick exception.
+            </div>
+          )}
+
+          {execute.isError && (
+            <div className="mt-3 text-xs text-red-600">
+              {execute.error instanceof Error
+                ? execute.error.message
+                : 'Execution failed. Try again.'}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-3">
+      )}
+
+      {/* ── Partial confirmation screen ── */}
+      {partialConfirm && (
+        <div className="border-t border-amber-200 bg-amber-50 p-5">
+          <div className="mb-4 flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <div className="text-sm font-semibold text-amber-900">Confirm partial pick</div>
+              <div className="mt-0.5 text-sm text-amber-800">
+                You are picking{' '}
+                <span className="font-semibold">{parsedQty}</span>
+                {' '}of{' '}
+                <span className="font-semibold">{step.qtyRequired}</span>{' '}
+                required. This will be recorded as a partial pick exception.
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPartialConfirm(false)}
+              disabled={isBusy}
+              className="flex-1 rounded-xl border border-amber-300 bg-white py-2.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+            >
+              Go back
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={handleConfirmClick}
+              className="flex-1 rounded-xl bg-amber-600 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
+            >
+              {execute.isPending ? 'Confirming…' : 'Confirm partial'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm button (normal flow) ── */}
+      {!partialConfirm && (
+        <div className="border-t border-slate-100 px-5 pb-5">
           <button
             type="button"
-            onClick={() => setQtyActual((v) => String(Math.max(1, Number(v) - 1)))}
-            disabled={parsedQty <= 1 || execute.isPending}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+            disabled={!isValidQty || isBusy}
+            onClick={handleConfirmClick}
+            className="w-full rounded-xl bg-cyan-600 py-3.5 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
           >
-            −
-          </button>
-          <input
-            type="number"
-            min={1}
-            max={step.qtyRequired}
-            value={qtyActual}
-            onChange={(e) => setQtyActual(e.target.value)}
-            disabled={execute.isPending}
-            className="h-11 flex-1 rounded-xl border border-slate-300 text-center text-lg font-semibold outline-none focus:border-cyan-500 disabled:bg-slate-100"
-          />
-          <button
-            type="button"
-            onClick={() =>
-              setQtyActual((v) => String(Math.min(step.qtyRequired, Number(v) + 1)))
-            }
-            disabled={parsedQty >= step.qtyRequired || execute.isPending}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
-          >
-            +
+            {execute.isPending ? 'Confirming…' : 'Confirm pick'}
           </button>
         </div>
+      )}
 
-        {isUnderPick && (
-          <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Partial pick — less than required. This will be recorded as an exception.
-          </div>
-        )}
-
-        {execute.isError && (
-          <div className="mt-3 text-xs text-red-600">
-            {execute.error instanceof Error
-              ? execute.error.message
-              : 'Execution failed. Try again.'}
-          </div>
-        )}
-      </div>
-
-      {/* Confirm */}
-      <div className="border-t border-slate-100 px-5 pb-5">
-        <button
-          type="button"
-          disabled={!isValidQty || execute.isPending}
-          onClick={handleConfirm}
-          className="w-full rounded-xl bg-cyan-600 py-3.5 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
-        >
-          {execute.isPending ? 'Confirming…' : 'Confirm pick'}
-        </button>
-      </div>
+      {/* ── Skip step section ── */}
+      {!partialConfirm && (
+        <div className="border-t border-slate-100 px-5 pb-5">
+          {!skipConfirm ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => setSkipConfirm(true)}
+              className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            >
+              Skip step
+            </button>
+          ) : (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="mb-3 text-sm font-semibold text-red-900">
+                Skip this step?
+              </div>
+              <div className="mb-4 text-xs text-red-700">
+                The step will be marked as skipped. This can't be undone from this screen.
+              </div>
+              {skip.isError && (
+                <div className="mb-3 text-xs text-red-600">
+                  {skip.error instanceof Error
+                    ? skip.error.message
+                    : 'Skip failed. Try again.'}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSkipConfirm(false)}
+                  disabled={isBusy}
+                  className="flex-1 rounded-xl border border-red-200 bg-white py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSkipConfirm}
+                  disabled={isBusy}
+                  className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                >
+                  {skip.isPending ? 'Skipping…' : 'Confirm skip'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

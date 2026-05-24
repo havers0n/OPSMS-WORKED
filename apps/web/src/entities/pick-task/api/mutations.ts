@@ -61,3 +61,36 @@ export function useExecutePickStep() {
     }
   });
 }
+
+// ── skipPickStep ──────────────────────────────────────────────────────────────
+
+type SkipPickStepInput = {
+  stepId: string;
+};
+
+type SkipPickStepResult = {
+  stepId: string;
+  status: 'skipped';
+  qtyPicked: number;
+  taskId: string;
+  taskStatus: 'in_progress' | 'completed' | 'completed_with_exceptions';
+  orderStatus: string | null;
+  waveStatus: string | null;
+  movementId: null;
+};
+
+async function skipPickStep({ stepId }: SkipPickStepInput): Promise<SkipPickStepResult> {
+  return bffRequest<SkipPickStepResult>(`/api/pick-steps/${stepId}/skip`, {
+    method: 'POST'
+  });
+}
+
+export function useSkipPickStep() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: skipPickStep,
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: pickTaskKeys.detail(result.taskId) });
+    }
+  });
+}
