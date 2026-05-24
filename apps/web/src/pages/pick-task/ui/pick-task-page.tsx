@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Zap
 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { Container, ContainerType, PickStepDetail, PickTaskDetail } from '@wos/domain';
 import {
@@ -32,6 +32,7 @@ import {
 import { useCreateContainer } from '@/features/container-create/api/mutations';
 import { ProductPickPhoto } from '@/features/picking-execution/ui/product-pick-photo';
 import { routes, waveDetailPath, warehouseViewPath } from '@/shared/config/routes';
+import { useBarcodeScan } from '@/shared/lib/use-barcode-scan';
 
 // ── Container setup (choose existing OR create new) ───────────────────────────
 
@@ -223,10 +224,28 @@ function GuidedStepCard({
   const [qtyActual, setQtyActual] = useState(String(step.qtyRequired));
   const [partialConfirm, setPartialConfirm] = useState(false);
   const [skipConfirm, setSkipConfirm] = useState(false);
+  const [scanState, setScanState] = useState<'idle' | 'match' | 'mismatch'>('idle');
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
   const execute = useExecutePickStep();
   const skip = useSkipPickStep();
 
   const isBusy = execute.isPending || skip.isPending;
+
+  // ── Barcode scan handler (optional — works even without a scanner) ──
+  const handleScan = useCallback(
+    (barcode: string) => {
+      setLastScanned(barcode);
+      // Normalise both sides: lowercase, strip dashes/spaces
+      const norm = (s: string) => s.toLowerCase().replace(/[\s\-]/g, '');
+      const matches = norm(barcode) === norm(step.sku);
+      setScanState(matches ? 'match' : 'mismatch');
+      // Auto-dismiss after 3 s
+      setTimeout(() => setScanState('idle'), 3000);
+    },
+    [step.sku]
+  );
+
+  useBarcodeScan(handleScan);
 
   const parsedQty = Number(qtyActual);
   const isValidQty =
@@ -323,7 +342,15 @@ function GuidedStepCard({
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       {/* Product */}
-      <div className="flex gap-4 p-5">
+      <div
+        className={`flex gap-4 p-5 transition-colors duration-300 ${
+          scanState === 'match'
+            ? 'bg-emerald-50'
+            : scanState === 'mismatch'
+              ? 'bg-red-50'
+              : ''
+        }`}
+      >
         <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
         <div className="min-w-0 flex-1">
           {/* Order badge — only shown for wave tasks */}
@@ -340,6 +367,27 @@ function GuidedStepCard({
           </div>
         </div>
       </div>
+
+      {/* ── Scan feedback (optional — only visible after a scan) ── */}
+      {scanState === 'match' && (
+        <div className="flex items-center gap-2 border-t border-emerald-200 bg-emerald-50 px-5 py-2.5">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="text-sm font-medium text-emerald-800">
+            Product verified — confirm to pick
+          </span>
+        </div>
+      )}
+      {scanState === 'mismatch' && (
+        <div className="flex items-start gap-2 border-t border-red-200 bg-red-50 px-5 py-2.5">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+          <div>
+            <div className="text-sm font-medium text-red-800">Wrong item scanned</div>
+            {lastScanned && (
+              <div className="mt-0.5 font-mono text-xs text-red-600">{lastScanned}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Source location + container */}
       <div className="grid grid-cols-2 gap-px border-t border-slate-100 bg-slate-100">
