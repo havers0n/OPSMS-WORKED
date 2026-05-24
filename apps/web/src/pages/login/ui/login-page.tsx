@@ -27,8 +27,8 @@ export function LoginPage() {
       return;
     }
 
-    navigate(routes.warehouse, { replace: true });
-  }, [isReady, navigate, user]);
+    navigate(nextPath, { replace: true });
+  }, [isReady, navigate, nextPath, user]);
 
   const handleSubmit = async () => {
     setFormError(null);
