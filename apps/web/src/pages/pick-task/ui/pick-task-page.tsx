@@ -236,7 +236,7 @@ function GuidedStepCard({
     (barcode: string) => {
       setLastScanned(barcode);
       // Normalise both sides: lowercase, strip dashes/spaces
-      const norm = (s: string) => s.toLowerCase().replace(/[\s\-]/g, '');
+      const norm = (s: string) => s.toLowerCase().replace(/[\s-]/g, '');
       const matches = norm(barcode) === norm(step.sku);
       setScanState(matches ? 'match' : 'mismatch');
       // Auto-dismiss after 3 s
