@@ -1133,6 +1133,33 @@ describe('editor-store', () => {
     expect(faceB?.sections).toEqual([]);
   });
 
+  it('setFaceBRelationship works when crypto.randomUUID is unavailable', () => {
+    const draft = createLayoutDraftFixture();
+    const rackId = draft.rackIds[0];
+    const originalRandomUUID = globalThis.crypto.randomUUID;
+
+    Object.defineProperty(globalThis.crypto, 'randomUUID', {
+      value: undefined,
+      configurable: true
+    });
+
+    try {
+      useEditorStore.getState().initializeDraft(draft);
+      expect(() => useEditorStore.getState().setFaceBRelationship(rackId, 'mirrored')).not.toThrow();
+
+      const rack = useEditorStore.getState().draft?.racks[rackId];
+      const faceB = rack?.faces.find((face) => face.side === 'B');
+      expect(rack?.kind).toBe('paired');
+      expect(faceB?.enabled).toBe(true);
+      expect(faceB?.relationshipMode).toBe('mirrored');
+    } finally {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {
+        value: originalRandomUUID,
+        configurable: true
+      });
+    }
+  });
+
   it('keeps mirrored Face B numbering aligned with Face A numbering edits', () => {
     const draft = createLayoutDraftFixture();
     const rackId = draft.rackIds[0];
