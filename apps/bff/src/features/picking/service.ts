@@ -3,6 +3,7 @@ import {
   createPickingRepo,
   type AllocationResult,
   type ExecutePickStepResult,
+  type SkipPickStepResult,
   type PickingRepo
 } from './repo.js';
 
@@ -17,9 +18,15 @@ export type ExecutePickStepCommand = {
   actorId: string | null;
 };
 
+export type SkipPickStepCommand = {
+  stepId: string;
+  actorId: string | null;
+};
+
 export type PickingService = {
   allocatePickSteps(command: AllocatePickStepsCommand): Promise<AllocationResult>;
   executePickStep(command: ExecutePickStepCommand): Promise<ExecutePickStepResult>;
+  skipPickStep(command: SkipPickStepCommand): Promise<SkipPickStepResult>;
 };
 
 export function createPickingServiceFromRepo(repo: PickingRepo): PickingService {
@@ -31,7 +38,9 @@ export function createPickingServiceFromRepo(repo: PickingRepo): PickingService 
         command.qtyActual,
         command.pickContainerId,
         command.actorId
-      )
+      ),
+    skipPickStep: (command) =>
+      repo.skipPickStep(command.stepId, command.actorId)
   };
 }
 

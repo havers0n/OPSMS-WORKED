@@ -5,6 +5,7 @@ import {
   allocatePickStepsResponseSchema,
   executePickStepBodySchema,
   executePickStepResponseSchema,
+  skipPickStepResponseSchema,
   idResponseSchema,
   pickTaskDetailResponseSchema,
   pickTasksResponseSchema
@@ -85,6 +86,27 @@ export function registerPickingExecutionRoutes(app: FastifyInstance, deps: Picki
         actorId: auth.user.id
       });
       return parseOrThrow(executePickStepResponseSchema, result);
+    } catch (error) {
+      throw mapPickingError(error) ?? error;
+    }
+  });
+
+  app.post('/api/pick-steps/:stepId/skip', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const stepId = parseOrThrow(
+      idResponseSchema,
+      { id: (request.params as { stepId: string }).stepId }
+    ).id;
+    const pickingService = deps.getPickingService(auth);
+
+    try {
+      const result = await pickingService.skipPickStep({
+        stepId,
+        actorId: auth.user.id
+      });
+      return parseOrThrow(skipPickStepResponseSchema, result);
     } catch (error) {
       throw mapPickingError(error) ?? error;
     }
