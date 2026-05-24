@@ -100,27 +100,35 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
       const orderLineIds = [...new Set(
         steps.map((s) => s.order_line_id).filter((id): id is string => id !== null)
       )];
+      const orderIds = [...new Set(
+        steps.map((s) => s.order_id).filter((id): id is string => id !== null)
+      )];
 
       // 4. Batch-fetch enrichment data in parallel
-      const [containerResult, locationResult, cellResult, orderLineResult] = await Promise.all([
-        containerIds.length > 0
-          ? supabase.from('containers').select('id,system_code,external_code').in('id', containerIds)
-          : Promise.resolve({ data: [], error: null }),
-        locationIds.length > 0
-          ? supabase.from('locations').select('id,code,geometry_slot_id,floor_id').in('id', locationIds)
-          : Promise.resolve({ data: [], error: null }),
-        cellIds.length > 0
-          ? supabase.from('cells').select('id,address,layout_version_id').in('id', cellIds)
-          : Promise.resolve({ data: [], error: null }),
-        orderLineIds.length > 0
-          ? supabase.from('order_lines').select('id,product_id').in('id', orderLineIds)
-          : Promise.resolve({ data: [], error: null })
-      ]);
+      const [containerResult, locationResult, cellResult, orderLineResult, orderResult] =
+        await Promise.all([
+          containerIds.length > 0
+            ? supabase.from('containers').select('id,system_code,external_code').in('id', containerIds)
+            : Promise.resolve({ data: [], error: null }),
+          locationIds.length > 0
+            ? supabase.from('locations').select('id,code,geometry_slot_id,floor_id').in('id', locationIds)
+            : Promise.resolve({ data: [], error: null }),
+          cellIds.length > 0
+            ? supabase.from('cells').select('id,address,layout_version_id').in('id', cellIds)
+            : Promise.resolve({ data: [], error: null }),
+          orderLineIds.length > 0
+            ? supabase.from('order_lines').select('id,product_id').in('id', orderLineIds)
+            : Promise.resolve({ data: [], error: null }),
+          orderIds.length > 0
+            ? supabase.from('orders').select('id,external_number').in('id', orderIds)
+            : Promise.resolve({ data: [], error: null })
+        ]);
 
       if (containerResult.error) throw containerResult.error;
       if (locationResult.error) throw locationResult.error;
       if (cellResult.error) throw cellResult.error;
       if (orderLineResult.error) throw orderLineResult.error;
+      if (orderResult.error) throw orderResult.error;
 
       // 5. Fetch products for image URLs
       const productIds = [...new Set(
@@ -139,6 +147,11 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
       const containerCodeById = new Map(
         ((containerResult.data ?? []) as { id: string; system_code: string; external_code: string | null }[])
           .map((c) => [c.id, c.system_code])
+      );
+
+      const orderNumberById = new Map(
+        ((orderResult.data ?? []) as { id: string; external_number: string }[])
+          .map((o) => [o.id, o.external_number])
       );
 
       const locationRows = (locationResult.data ?? []) as {
@@ -234,7 +247,8 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
             }
             return row.source_cell_id ? (floorIdByCellId.get(row.source_cell_id) ?? null) : null;
           })(),
-          imageUrl: productId ? (imageUrlByProductId.get(productId) ?? null) : null
+          imageUrl: productId ? (imageUrlByProductId.get(productId) ?? null) : null,
+          orderNumber: row.order_id ? (orderNumberById.get(row.order_id) ?? null) : null
         };
       });
 

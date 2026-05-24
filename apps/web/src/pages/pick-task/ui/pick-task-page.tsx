@@ -26,7 +26,8 @@ import {
   getPickStepStatusColor,
   getPickStepStatusLabel,
   getPickTaskStatusColor,
-  getPickTaskStatusLabel
+  getPickTaskStatusLabel,
+  isTerminalStep
 } from '@/entities/pick-task/lib/pick-task-actions';
 import { useCreateContainer } from '@/features/container-create/api/mutations';
 import { ProductPickPhoto } from '@/features/picking-execution/ui/product-pick-photo';
@@ -208,12 +209,14 @@ function GuidedStepCard({
   pickContainerId,
   taskId,
   taskNumber,
+  isWavePick,
   onExecuted
 }: {
   step: PickStepDetail;
   pickContainerId: string;
   taskId: string;
   taskNumber: string;
+  isWavePick: boolean;
   onExecuted: () => void;
 }) {
   // All state resets on remount — parent uses key={step.id}
@@ -323,6 +326,12 @@ function GuidedStepCard({
       <div className="flex gap-4 p-5">
         <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
         <div className="min-w-0 flex-1">
+          {/* Order badge — only shown for wave tasks */}
+          {isWavePick && step.orderNumber && (
+            <div className="mb-1.5 inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+              {step.orderNumber}
+            </div>
+          )}
           <div className="text-lg font-bold leading-snug text-slate-900">{step.itemName}</div>
           <div className="mt-0.5 text-sm text-slate-500">{step.sku}</div>
           <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-3 py-1.5 text-sm font-semibold text-cyan-700">
@@ -531,6 +540,65 @@ function GuidedStepCard({
   );
 }
 
+// ── Wave order summary ────────────────────────────────────────────────────────
+
+function WaveOrderSummary({ steps }: { steps: PickStepDetail[] }) {
+  // Group by orderId to build per-order progress
+  type OrderGroup = { orderNumber: string | null; total: number; done: number };
+  const orderGroups = new Map<string, OrderGroup>();
+
+  for (const step of steps) {
+    if (!step.orderId) continue;
+    const existing = orderGroups.get(step.orderId);
+    const done = isTerminalStep(step.status) ? 1 : 0;
+    if (existing) {
+      existing.total++;
+      existing.done += done;
+    } else {
+      orderGroups.set(step.orderId, {
+        orderNumber: step.orderNumber ?? null,
+        total: 1,
+        done
+      });
+    }
+  }
+
+  if (orderGroups.size === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+      <div className="mb-2 text-xs font-semibold text-violet-800">
+        Wave pick — {orderGroups.size} order{orderGroups.size !== 1 ? 's' : ''}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {[...orderGroups.entries()].map(([orderId, group]) => {
+          const isComplete = group.done === group.total;
+          return (
+            <div
+              key={orderId}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${
+                isComplete
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-violet-200 bg-white text-violet-700'
+              }`}
+            >
+              <span>{group.orderNumber ?? `…${orderId.slice(-6)}`}</span>
+              <span
+                className={`font-normal ${
+                  isComplete ? 'text-emerald-500' : 'text-violet-400'
+                }`}
+              >
+                {group.done}/{group.total}
+              </span>
+              {isComplete && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Guided pick execution (navigation + step card) ────────────────────────────
 
 function GuidedPickExecution({
@@ -545,6 +613,7 @@ function GuidedPickExecution({
   taskNumber: string;
 }) {
   const steps = task.steps;
+  const isWavePick = task.sourceType === 'wave';
 
   // Start at first pending step; fall back to 0
   const [activeIndex, setActiveIndex] = useState<number>(() => {
@@ -558,7 +627,6 @@ function GuidedPickExecution({
   const isLastStep = safeIndex === steps.length - 1;
 
   function handleExecuted() {
-    // Advance to next index; React Query will refresh statuses async
     if (!isLastStep) {
       setActiveIndex((i) => i + 1);
     }
@@ -568,6 +636,9 @@ function GuidedPickExecution({
 
   return (
     <div className="space-y-4">
+      {/* Wave order summary — only for wave tasks */}
+      {isWavePick && <WaveOrderSummary steps={steps} />}
+
       {/* Step navigation row */}
       <div className="flex items-center gap-3">
         <button
@@ -587,7 +658,7 @@ function GuidedPickExecution({
               key={s.id}
               type="button"
               onClick={() => setActiveIndex(i)}
-              aria-label={`Go to step ${i + 1}: ${s.itemName}`}
+              aria-label={`Go to step ${i + 1}: ${s.itemName}${s.orderNumber ? ` (${s.orderNumber})` : ''}`}
               className={`shrink-0 rounded-full transition-all ${
                 i === safeIndex
                   ? 'h-2.5 w-2.5 bg-cyan-600'
@@ -636,6 +707,7 @@ function GuidedPickExecution({
         pickContainerId={pickContainerId}
         taskId={taskId}
         taskNumber={taskNumber}
+        isWavePick={isWavePick}
         onExecuted={handleExecuted}
       />
     </div>
