@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, AlertCircle, ChevronRight, PackagePlus, RefreshCw, X } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
@@ -14,6 +14,27 @@ import { routes } from '@/shared/config/routes';
 import { OrderPreview } from '@/features/order-detail/ui/order-preview';
 
 // ── Wave workflow is now centralized in entities/wave/lib/wave-actions.ts ──
+
+// ── Mobile viewport detection ──────────────────────────────────────────────────
+
+const MOBILE_BREAKPOINT_PX = 640;
+
+function getIsMobileViewport() {
+  if (typeof window === 'undefined') return false;
+  if (window.innerWidth === 0) return false;
+  return window.innerWidth < MOBILE_BREAKPOINT_PX;
+}
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(getIsMobileViewport);
+  useEffect(() => {
+    const update = () => setIsMobile(getIsMobileViewport());
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return isMobile;
+}
 
 // ── Add Order Modal ────────────────────────────────────────────────────────────
 
@@ -249,6 +270,7 @@ export function WaveDetailPage() {
   const { id: waveId } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showAddOrder, setShowAddOrder] = useState(false);
+  const isMobileViewport = useIsMobileViewport();
 
   const { data: wave, isLoading, refetch, isRefetching } = useQuery(waveQueryOptions(waveId ?? null));
 
@@ -359,8 +381,8 @@ export function WaveDetailPage() {
 
       {/* ── Master-Detail Area ────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Orders List */}
-        <div className="flex flex-1 flex-col overflow-hidden bg-white">
+        {/* Left: Orders List — hidden on mobile when an order is open */}
+        <div className={`flex flex-col overflow-hidden bg-white ${isMobileViewport && selectedOrderId ? 'hidden' : 'flex-1'}`}>
           <div className="border-b border-slate-200 px-6 py-3 flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
               Orders <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">{wave.orders.length}</span>
@@ -414,17 +436,40 @@ export function WaveDetailPage() {
           )}
         </div>
 
-        {/* Right: Order Preview (if selected) */}
-        {selectedOrderId ? (
-          <div className="w-[360px] border-l border-slate-200 bg-white overflow-hidden flex flex-col">
-            <OrderPreview orderId={selectedOrderId} onClose={closeOrder} />
-          </div>
-        ) : (
-          <div className="w-[360px] border-l border-slate-200 bg-slate-50 flex flex-col items-center justify-center">
-            <div className="text-center">
-              <div className="text-xs text-slate-500">Select an order to view details</div>
+        {/* Right: Order Preview */}
+        {isMobileViewport ? (
+          /* Mobile: full-screen overlay so the orders list stays full-width */
+          selectedOrderId ? (
+            <div className="fixed inset-0 z-40 flex flex-col bg-white">
+              <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={closeOrder}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  aria-label="Back to orders"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-medium text-slate-700">Order Details</span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <OrderPreview orderId={selectedOrderId} onClose={closeOrder} />
+              </div>
             </div>
-          </div>
+          ) : null
+        ) : (
+          /* Desktop: persistent side panel */
+          selectedOrderId ? (
+            <div className="w-[360px] border-l border-slate-200 bg-white overflow-hidden flex flex-col">
+              <OrderPreview orderId={selectedOrderId} onClose={closeOrder} />
+            </div>
+          ) : (
+            <div className="w-[360px] border-l border-slate-200 bg-slate-50 flex flex-col items-center justify-center">
+              <div className="text-center">
+                <div className="text-xs text-slate-500">Select an order to view details</div>
+              </div>
+            </div>
+          )
         )}
       </div>
 
