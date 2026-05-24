@@ -665,7 +665,7 @@ function GuidedPickExecution({
 
   // Start at first pending step; fall back to 0
   const [activeIndex, setActiveIndex] = useState<number>(() => {
-    const firstPending = steps.findIndex((s) => s.status === 'pending');
+    const firstPending = steps.findIndex((s: PickStepDetail) => s.status === 'pending');
     return firstPending >= 0 ? firstPending : 0;
   });
 
@@ -701,7 +701,7 @@ function GuidedPickExecution({
 
         {/* Step progress dots */}
         <div className="flex flex-1 items-center justify-center gap-1.5 overflow-x-hidden">
-          {steps.map((s, i) => (
+          {steps.map((s: PickStepDetail, i: number) => (
             <button
               key={s.id}
               type="button"
@@ -1113,18 +1113,18 @@ export function PickTaskPage() {
   const isTerminalTask =
     task.status === 'completed' || task.status === 'completed_with_exceptions';
 
-  const nextPendingStep = findNextPendingStep(task.steps);
+  const nextPendingStep: PickStepDetail | null = findNextPendingStep<PickStepDetail>(task.steps as PickStepDetail[]);
 
-  const pendingSteps = task.steps.filter((s) => s.status === 'pending');
+  const pendingSteps = task.steps.filter((s: PickStepDetail) => s.status === 'pending');
   const allRemainingBlocked =
     !isTerminalTask &&
     pendingSteps.length === 0 &&
-    task.steps.some((s) => s.status === 'needs_replenishment');
+    task.steps.some((s: PickStepDetail) => s.status === 'needs_replenishment');
 
   const hasUnallocatedSteps =
     !isTerminalTask &&
     task.steps.some(
-      (s) =>
+      (s: PickStepDetail) =>
         s.status === 'pending' &&
         s.sourceLocationId === null &&
         s.sourceCellId === null
@@ -1284,7 +1284,7 @@ export function PickTaskPage() {
             {/* ── List mode ── */}
             {viewMode === 'list' && (
               <div className="space-y-3">
-                {task.steps.map((step) => {
+                {task.steps.map((step: PickStepDetail) => {
                   const isActive = Boolean(pickContainer) && nextPendingStep?.id === step.id;
                   return (
                     <StepCard
@@ -1315,7 +1315,7 @@ export function PickTaskPage() {
               </span>
             </div>
             <div className="space-y-3">
-              {task.steps.map((step) => (
+              {task.steps.map((step: PickStepDetail) => (
                 <StepCard
                   key={step.id}
                   step={step}
@@ -1340,7 +1340,7 @@ export function PickTaskPage() {
               </span>
             </div>
             <div className="space-y-3">
-              {task.steps.map((step) => (
+              {task.steps.map((step: PickStepDetail) => (
                 <StepCard
                   key={step.id}
                   step={step}
