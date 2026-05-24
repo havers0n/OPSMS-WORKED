@@ -88,6 +88,8 @@ export function newEntityId() {
   if (typeof globalThis.crypto?.getRandomValues === 'function') {
     globalThis.crypto.getRandomValues(bytes);
   } else {
+    // Last-resort compatibility fallback for temporary client-side draft IDs only.
+    // Not suitable for security-sensitive or cryptographic identifiers.
     for (let i = 0; i < bytes.length; i += 1) {
       bytes[i] = Math.floor(Math.random() * 256);
     }
