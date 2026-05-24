@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, ChevronRight, Package, RefreshCw, Waves as WavesIcon } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ChevronRight, Package, Play, RefreshCw, Waves as WavesIcon } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, WaveStatus } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
-import { getOrderStatusColor, getOrderStatusLabel, getPrimaryActionLabel, getProgressLabel, getPrimaryTransitionTarget } from '@/entities/order/lib/order-actions';
+import { getOrderStatusColor, getOrderStatusLabel, getPrimaryActionLabel, getProgressLabel, getPrimaryTransitionTarget, isActiveOrder } from '@/entities/order/lib/order-actions';
 import { useCreateWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { wavesQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
@@ -323,7 +323,7 @@ export function OperationsPage() {
                           <td className="px-4 py-3 text-slate-600">{order.lineCount}</td>
                           <td className="px-4 py-3 text-slate-500">{getProgressLabel(order)}</td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                               {canTransition && target && (
                                 <button
                                   type="button"
@@ -332,6 +332,17 @@ export function OperationsPage() {
                                   className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                                 >
                                   {getPrimaryActionLabel(order.status, target)}
+                                </button>
+                              )}
+                              {isActiveOrder(order.status) && (
+                                <button
+                                  type="button"
+                                  title={t('operations.preview.action.startPicking')}
+                                  onClick={() => setSearchParams((p) => { p.set('order', order.id); return p; })}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100"
+                                >
+                                  <Play className="h-3 w-3" />
+                                  {t('operations.preview.action.pick')}
                                 </button>
                               )}
                             </div>
