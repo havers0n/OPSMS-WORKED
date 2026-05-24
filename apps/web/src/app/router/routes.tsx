@@ -1,5 +1,5 @@
-import { Suspense, lazy } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { AppShell } from '@/app/layouts/app-shell';
 import { ProtectedRoute } from '@/app/router/protected-route';
 import { LoginPage } from '@/pages/login/ui/login-page';
@@ -12,8 +12,20 @@ import { SettingsPage } from '@/pages/settings/ui/settings-page';
 import { WaveDetailPage } from '@/pages/wave-detail/ui/wave-detail-page';
 import { routes } from '@/shared/config/routes';
 import { useT } from '@/shared/i18n';
+import { warehouseViewModeActions } from '@/warehouse/state/view-mode';
 
 const WarehouseApp = lazy(() => import('@/warehouse/app/warehouse-app'));
+
+function PickingEntryRoute() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    warehouseViewModeActions.setViewStage('picking-plan');
+    navigate(routes.warehouseView, { replace: true });
+  }, [navigate]);
+
+  return null;
+}
 
 export function AppRouter() {
   const t = useT();
@@ -46,6 +58,8 @@ export function AppRouter() {
           <Route path={routes.products} element={<ProductsPage />} />
           <Route path={routes.productDetail} element={<ProductDetailPage />} />
           <Route path={routes.operations} element={<OperationsPage />} />
+          <Route path={routes.picking} element={<Navigate to={routes.operations} replace />} />
+          <Route path={routes.pickingPlan} element={<PickingEntryRoute />} />
           <Route path={routes.settings} element={<SettingsPage />} />
           <Route path={routes.orderDetail} element={<OrderDetailPage />} />
           <Route path={routes.waveDetail} element={<WaveDetailPage />} />
