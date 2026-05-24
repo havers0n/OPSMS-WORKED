@@ -44,6 +44,13 @@ export function LeftDrawer() {
       enabled: true
     },
     {
+      label: t('app.navigation.pickingPlan'),
+      description: t('app.navigation.pickingPlan.description'),
+      icon: ShoppingBasket,
+      to: routes.pickingPlan,
+      enabled: true
+    },
+    {
       label: t('app.navigation.operations'),
       description: t('app.navigation.operations.description'),
       icon: Layers,
