@@ -46,6 +46,7 @@ export function AppRouter() {
           <Route path={routes.products} element={<ProductsPage />} />
           <Route path={routes.productDetail} element={<ProductDetailPage />} />
           <Route path={routes.operations} element={<OperationsPage />} />
+          <Route path={routes.picking} element={<Navigate to={routes.operations} replace />} />
           <Route path={routes.settings} element={<SettingsPage />} />
           <Route path={routes.orderDetail} element={<OrderDetailPage />} />
           <Route path={routes.waveDetail} element={<WaveDetailPage />} />
