@@ -1,5 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, CheckCircle2, MapPin, Package, RefreshCw, Zap } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  List,
+  MapPin,
+  Package,
+  RefreshCw,
+  Zap
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { Container, ContainerType, PickStepDetail, PickTaskDetail } from '@wos/domain';
@@ -18,6 +29,7 @@ import {
   getPickTaskStatusLabel
 } from '@/entities/pick-task/lib/pick-task-actions';
 import { useCreateContainer } from '@/features/container-create/api/mutations';
+import { ProductPickPhoto } from '@/features/picking-execution/ui/product-pick-photo';
 import { routes, waveDetailPath, warehouseViewPath } from '@/shared/config/routes';
 
 // ── Container setup (choose existing OR create new) ───────────────────────────
@@ -40,7 +52,6 @@ function PickContainerSetup({
 
   const active = containers.filter((c) => c.status === 'active');
 
-  // Build lookup map — data is already in memory, no extra fetch
   const typeById = new Map(containerTypes.map((t) => [t.id, t]));
 
   function handleCreate(e: React.FormEvent) {
@@ -190,7 +201,321 @@ function PickContainerSetup({
   );
 }
 
-// ── Step card ─────────────────────────────────────────────────────────────────
+// ── Guided step card (one step, full focus) ───────────────────────────────────
+
+function GuidedStepCard({
+  step,
+  pickContainerId,
+  taskId,
+  taskNumber,
+  onExecuted
+}: {
+  step: PickStepDetail;
+  pickContainerId: string;
+  taskId: string;
+  taskNumber: string;
+  onExecuted: () => void;
+}) {
+  // Local qty state — reset on remount (parent uses key={step.id})
+  const [qtyActual, setQtyActual] = useState(String(step.qtyRequired));
+  const execute = useExecutePickStep();
+
+  const parsedQty = Number(qtyActual);
+  const isValidQty =
+    Number.isFinite(parsedQty) &&
+    Number.isInteger(parsedQty) &&
+    parsedQty >= 1 &&
+    parsedQty <= step.qtyRequired;
+  const isUnderPick = isValidQty && parsedQty < step.qtyRequired;
+  const isBlocked = step.status === 'needs_replenishment';
+  const isPicked =
+    step.status === 'picked' ||
+    step.status === 'partial' ||
+    step.status === 'skipped' ||
+    step.status === 'exception';
+
+  function handleConfirm() {
+    if (!isValidQty) return;
+    execute.mutate(
+      { stepId: step.id, qtyActual: parsedQty, pickContainerId },
+      { onSuccess: onExecuted }
+    );
+  }
+
+  // ── Already completed ──
+  if (isPicked) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-10 text-center">
+        <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+        <div>
+          <div className="text-lg font-semibold text-emerald-900">{step.itemName}</div>
+          <div className="mt-1 text-sm text-emerald-700">
+            {step.qtyPicked} of {step.qtyRequired} picked
+          </div>
+          <span
+            className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getPickStepStatusColor(step.status)}`}
+          >
+            {getPickStepStatusLabel(step.status)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Blocked (needs replenishment) ──
+  if (isBlocked) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-10 text-center">
+        <AlertCircle className="h-12 w-12 text-amber-500" />
+        <div>
+          <div className="text-lg font-semibold text-amber-900">{step.itemName}</div>
+          <div className="mt-1 text-sm text-amber-800">
+            This step needs replenishment.
+          </div>
+          <div className="mt-0.5 text-sm text-amber-700">
+            Notify your supervisor — no action required from you.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Pending: full pick UI ──
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {/* Product */}
+      <div className="flex gap-4 p-5">
+        <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
+        <div className="min-w-0 flex-1">
+          <div className="text-lg font-bold leading-snug text-slate-900">{step.itemName}</div>
+          <div className="mt-0.5 text-sm text-slate-500">{step.sku}</div>
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-3 py-1.5 text-sm font-semibold text-cyan-700">
+            <Package className="h-3.5 w-3.5" />
+            Pick {step.qtyRequired}
+          </div>
+        </div>
+      </div>
+
+      {/* Source location + container */}
+      <div className="grid grid-cols-2 gap-px border-t border-slate-100 bg-slate-100">
+        <div className="bg-white p-4">
+          <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-500">
+            <MapPin className="h-3 w-3" />
+            Pick from
+          </div>
+          <div className="text-sm font-medium text-slate-900">
+            {step.sourceCellAddress && step.sourceCellId && step.sourceFloorId ? (
+              <Link
+                to={warehouseViewPath({
+                  floorId: step.sourceFloorId,
+                  cellId: step.sourceCellId,
+                  returnTaskId: taskId,
+                  returnTaskNumber: taskNumber
+                })}
+                className="text-cyan-700 underline-offset-2 hover:underline"
+              >
+                {step.sourceCellAddress}
+              </Link>
+            ) : (
+              step.sourceCellAddress ??
+              step.sourceLocationCode ?? (
+                <span className="italic text-slate-400">Not allocated</span>
+              )
+            )}
+          </div>
+        </div>
+        <div className="bg-white p-4">
+          <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-500">
+            <Package className="h-3 w-3" />
+            Container
+          </div>
+          <div className="text-sm font-medium text-slate-900">
+            {step.sourceContainerCode ?? (
+              <span className="italic text-slate-400">Not set</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Qty input */}
+      <div className="border-t border-slate-100 p-5">
+        <div className="mb-3 text-xs font-medium text-slate-700">
+          Quantity to pick{' '}
+          <span className="font-normal text-slate-400">(required: {step.qtyRequired})</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setQtyActual((v) => String(Math.max(1, Number(v) - 1)))}
+            disabled={parsedQty <= 1 || execute.isPending}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+          >
+            −
+          </button>
+          <input
+            type="number"
+            min={1}
+            max={step.qtyRequired}
+            value={qtyActual}
+            onChange={(e) => setQtyActual(e.target.value)}
+            disabled={execute.isPending}
+            className="h-11 flex-1 rounded-xl border border-slate-300 text-center text-lg font-semibold outline-none focus:border-cyan-500 disabled:bg-slate-100"
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setQtyActual((v) => String(Math.min(step.qtyRequired, Number(v) + 1)))
+            }
+            disabled={parsedQty >= step.qtyRequired || execute.isPending}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+          >
+            +
+          </button>
+        </div>
+
+        {isUnderPick && (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Partial pick — less than required. This will be recorded as an exception.
+          </div>
+        )}
+
+        {execute.isError && (
+          <div className="mt-3 text-xs text-red-600">
+            {execute.error instanceof Error
+              ? execute.error.message
+              : 'Execution failed. Try again.'}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm */}
+      <div className="border-t border-slate-100 px-5 pb-5">
+        <button
+          type="button"
+          disabled={!isValidQty || execute.isPending}
+          onClick={handleConfirm}
+          className="w-full rounded-xl bg-cyan-600 py-3.5 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
+        >
+          {execute.isPending ? 'Confirming…' : 'Confirm pick'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Guided pick execution (navigation + step card) ────────────────────────────
+
+function GuidedPickExecution({
+  task,
+  pickContainerId,
+  taskId,
+  taskNumber
+}: {
+  task: PickTaskDetail;
+  pickContainerId: string;
+  taskId: string;
+  taskNumber: string;
+}) {
+  const steps = task.steps;
+
+  // Start at first pending step; fall back to 0
+  const [activeIndex, setActiveIndex] = useState<number>(() => {
+    const firstPending = steps.findIndex((s) => s.status === 'pending');
+    return firstPending >= 0 ? firstPending : 0;
+  });
+
+  const safeIndex = Math.min(activeIndex, Math.max(0, steps.length - 1));
+  const step = steps[safeIndex];
+  const isFirstStep = safeIndex === 0;
+  const isLastStep = safeIndex === steps.length - 1;
+
+  function handleExecuted() {
+    // Advance to next index; React Query will refresh statuses async
+    if (!isLastStep) {
+      setActiveIndex((i) => i + 1);
+    }
+  }
+
+  if (!step) return null;
+
+  return (
+    <div className="space-y-4">
+      {/* Step navigation row */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={isFirstStep}
+          onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-30"
+          aria-label="Previous step"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        {/* Step progress dots */}
+        <div className="flex flex-1 items-center justify-center gap-1.5 overflow-x-hidden">
+          {steps.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setActiveIndex(i)}
+              aria-label={`Go to step ${i + 1}: ${s.itemName}`}
+              className={`shrink-0 rounded-full transition-all ${
+                i === safeIndex
+                  ? 'h-2.5 w-2.5 bg-cyan-600'
+                  : s.status === 'picked' || s.status === 'partial'
+                    ? 'h-2 w-2 bg-emerald-400 hover:bg-emerald-500'
+                    : s.status === 'needs_replenishment'
+                      ? 'h-2 w-2 bg-amber-400 hover:bg-amber-500'
+                      : s.status === 'skipped' || s.status === 'exception'
+                        ? 'h-2 w-2 bg-slate-400 hover:bg-slate-500'
+                        : 'h-2 w-2 bg-slate-200 hover:bg-slate-300'
+              }`}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          disabled={isLastStep}
+          onClick={() => setActiveIndex((i) => Math.min(steps.length - 1, i + 1))}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-30"
+          aria-label="Next step"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Step counter label */}
+      <div className="text-center text-xs text-slate-500">
+        Step{' '}
+        <span className="font-semibold text-slate-900">{safeIndex + 1}</span>
+        {' '}of{' '}
+        <span className="font-semibold text-slate-900">{steps.length}</span>
+        {step.status !== 'pending' && (
+          <span
+            className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${getPickStepStatusColor(step.status)}`}
+          >
+            {getPickStepStatusLabel(step.status)}
+          </span>
+        )}
+      </div>
+
+      {/* Active step — key forces remount on step change, resetting local form state */}
+      <GuidedStepCard
+        key={step.id}
+        step={step}
+        pickContainerId={pickContainerId}
+        taskId={taskId}
+        taskNumber={taskNumber}
+        onExecuted={handleExecuted}
+      />
+    </div>
+  );
+}
+
+// ── List-mode step card ───────────────────────────────────────────────────────
 
 function StepCard({
   step,
@@ -282,7 +607,9 @@ function StepCard({
                     {step.sourceCellAddress}
                   </Link>
                 ) : (
-                  step.sourceCellAddress ?? step.sourceLocationCode ?? <span className="italic text-slate-400">Not allocated</span>
+                  step.sourceCellAddress ?? step.sourceLocationCode ?? (
+                    <span className="italic text-slate-400">Not allocated</span>
+                  )
                 )}
               </div>
             </div>
@@ -292,7 +619,9 @@ function StepCard({
                 Container
               </div>
               <div className="text-sm font-medium text-slate-900">
-                {step.sourceContainerCode ?? <span className="italic text-slate-400">Not allocated</span>}
+                {step.sourceContainerCode ?? (
+                  <span className="italic text-slate-400">Not allocated</span>
+                )}
               </div>
             </div>
           </div>
@@ -301,7 +630,8 @@ function StepCard({
           <div className="flex items-center gap-3">
             <label className="flex-1">
               <div className="mb-1 text-xs font-medium text-slate-700">
-                Qty to pick <span className="font-normal text-slate-400">(required: {step.qtyRequired})</span>
+                Qty to pick{' '}
+                <span className="font-normal text-slate-400">(required: {step.qtyRequired})</span>
               </div>
               <input
                 type="number"
@@ -392,7 +722,7 @@ function TaskCompleteBanner({ task }: { task: PickTaskDetail }) {
   );
 }
 
-// ── Blocked-only state banner ─────────────────────────────────────────────────
+// ── All-blocked banner ────────────────────────────────────────────────────────
 
 function AllBlockedBanner() {
   return (
@@ -408,6 +738,49 @@ function AllBlockedBanner() {
   );
 }
 
+// ── View mode toggle ──────────────────────────────────────────────────────────
+
+type ViewMode = 'guided' | 'list';
+
+function ViewModeToggle({
+  mode,
+  onChange
+}: {
+  mode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-slate-500">View:</span>
+      <div className="flex rounded-lg border border-slate-200 p-0.5">
+        <button
+          type="button"
+          onClick={() => onChange('guided')}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+            mode === 'guided'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Guided
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange('list')}
+          className={`flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition ${
+            mode === 'list'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <List className="h-3 w-3" />
+          List
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type PickContainer = { id: string; label: string; typeLabel: string | null };
@@ -416,8 +789,8 @@ export function PickTaskPage() {
   const { id: taskId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const [pickContainer, setPickContainer] = useState<PickContainer | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('guided');
 
-  // Origin context passed by the order drawer when navigating here
   const queryOrder = searchParams.get('order');
   const queryWave = searchParams.get('wave');
 
@@ -425,8 +798,6 @@ export function PickTaskPage() {
     pickTaskDetailQueryOptions(taskId ?? null)
   );
 
-  // Resolve orderId as early as possible so the order query fires immediately.
-  // queryOrder covers normal navigation (cache hit); task?.sourceId covers direct open.
   const preTaskOrderId =
     queryOrder ?? (task?.sourceType === 'order' ? task.sourceId : null);
   const { data: orderDetail } = useQuery(orderQueryOptions(preTaskOrderId));
@@ -450,10 +821,13 @@ export function PickTaskPage() {
   // ── Not found ──
   if (!task) {
     const notFoundBackPath =
-      queryWave && queryOrder ? `${waveDetailPath(queryWave)}?order=${queryOrder}`
-      : queryWave ? waveDetailPath(queryWave)
-      : queryOrder ? `${routes.operations}?order=${queryOrder}`
-      : routes.operations;
+      queryWave && queryOrder
+        ? `${waveDetailPath(queryWave)}?order=${queryOrder}`
+        : queryWave
+          ? waveDetailPath(queryWave)
+          : queryOrder
+            ? `${routes.operations}?order=${queryOrder}`
+            : routes.operations;
 
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
@@ -466,13 +840,12 @@ export function PickTaskPage() {
   }
 
   // ── Derive origin context ──
-  // URL params take priority; fall back to task.sourceType/sourceId
   const effectiveOrderId =
     queryOrder ?? (task.sourceType === 'order' ? task.sourceId : null);
   const effectiveWaveId =
     queryWave ?? (task.sourceType === 'wave' ? task.sourceId : null);
-  // Human-readable label from fetched order (cache hit in normal flow; one fetch on direct open)
-  const orderLabel = orderDetail?.externalNumber ?? (effectiveOrderId ? effectiveOrderId.slice(-8) : '—');
+  const orderLabel =
+    orderDetail?.externalNumber ?? (effectiveOrderId ? effectiveOrderId.slice(-8) : '—');
 
   // ── Back target ──
   const backPath =
@@ -485,9 +858,10 @@ export function PickTaskPage() {
           : routes.operations;
   const backLabel = effectiveWaveId ? 'Wave' : 'Operations';
 
-  const pct = task.totalSteps > 0
-    ? Math.round((task.completedSteps / task.totalSteps) * 100)
-    : 0;
+  const pct =
+    task.totalSteps > 0
+      ? Math.round((task.completedSteps / task.totalSteps) * 100)
+      : 0;
 
   const isTerminalTask =
     task.status === 'completed' || task.status === 'completed_with_exceptions';
@@ -500,10 +874,17 @@ export function PickTaskPage() {
     pendingSteps.length === 0 &&
     task.steps.some((s) => s.status === 'needs_replenishment');
 
-  // Show "Allocate steps" when any pending step has no source location yet
   const hasUnallocatedSteps =
     !isTerminalTask &&
-    task.steps.some((s) => s.status === 'pending' && s.sourceLocationId === null && s.sourceCellId === null);
+    task.steps.some(
+      (s) =>
+        s.status === 'pending' &&
+        s.sourceLocationId === null &&
+        s.sourceCellId === null
+    );
+
+  // Guided mode only makes sense when there are steps and a container is selected
+  const canUseGuidedMode = !isTerminalTask && Boolean(pickContainer) && task.steps.length > 0;
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
@@ -522,9 +903,7 @@ export function PickTaskPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-500">Order</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">
-              {orderLabel}
-            </div>
+            <div className="mt-1 text-lg font-semibold text-slate-900">{orderLabel}</div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getPickTaskStatusColor(task.status)}`}
@@ -537,9 +916,7 @@ export function PickTaskPage() {
                 </span>
               )}
             </div>
-            <div className="mt-1.5 font-mono text-xs text-slate-400">
-              {task.taskNumber}
-            </div>
+            <div className="mt-1.5 font-mono text-xs text-slate-400">{task.taskNumber}</div>
           </div>
 
           {/* Progress */}
@@ -568,12 +945,15 @@ export function PickTaskPage() {
               </div>
               {allocate.isError && (
                 <div className="mt-1 text-xs text-red-600">
-                  {allocate.error instanceof Error ? allocate.error.message : 'Allocation failed. Try again.'}
+                  {allocate.error instanceof Error
+                    ? allocate.error.message
+                    : 'Allocation failed. Try again.'}
                 </div>
               )}
               {allocate.isSuccess && (
                 <div className="mt-1 text-xs text-emerald-700">
-                  Allocated {allocate.data.allocated} step{allocate.data.allocated !== 1 ? 's' : ''}
+                  Allocated {allocate.data.allocated} step
+                  {allocate.data.allocated !== 1 ? 's' : ''}
                   {allocate.data.needsReplenishment > 0
                     ? ` · ${allocate.data.needsReplenishment} need replenishment`
                     : ''}
@@ -592,13 +972,13 @@ export function PickTaskPage() {
           </div>
         )}
 
-        {/* ── Completion banner (terminal task) ── */}
+        {/* ── Completion banner ── */}
         {isTerminalTask && <TaskCompleteBanner task={task} />}
 
         {/* ── All-blocked banner ── */}
         {allRemainingBlocked && <AllBlockedBanner />}
 
-        {/* ── Container setup (shown when no container chosen and task not done) ── */}
+        {/* ── Container setup ── */}
         {!isTerminalTask && !pickContainer && (
           <PickContainerSetup
             containers={containers}
@@ -607,31 +987,79 @@ export function PickTaskPage() {
           />
         )}
 
-        {/* ── Selected container chip ── */}
-        {pickContainer && !isTerminalTask && (
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
-            <div className="flex items-center gap-2 text-sm">
-              <Package className="h-4 w-4 text-slate-400" />
-              <div>
-                <div className="text-slate-500">Picking into container:</div>
-                <div className="font-medium text-slate-900">{pickContainer.label}</div>
-                {pickContainer.typeLabel && (
-                  <div className="text-slate-500">{pickContainer.typeLabel}</div>
-                )}
+        {/* ── Container chip + view toggle + steps ── */}
+        {!isTerminalTask && pickContainer && task.steps.length > 0 && (
+          <section className="space-y-4">
+            {/* Container chip */}
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
+              <div className="flex items-center gap-2 text-sm">
+                <Package className="h-4 w-4 text-slate-400" />
+                <div>
+                  <span className="text-slate-500">Picking into: </span>
+                  <span className="font-medium text-slate-900">{pickContainer.label}</span>
+                  {pickContainer.typeLabel && (
+                    <span className="ml-1 text-slate-500">· {pickContainer.typeLabel}</span>
+                  )}
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setPickContainer(null)}
+                className="text-xs text-slate-400 hover:text-slate-700"
+              >
+                Change
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setPickContainer(null)}
-              className="text-xs text-slate-400 hover:text-slate-700"
-            >
-              Change
-            </button>
-          </div>
+
+            {/* Mode toggle (only when there are steps to navigate) */}
+            {task.steps.length > 0 && (
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">
+                  Steps{' '}
+                  <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                    {task.steps.length}
+                  </span>
+                </div>
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+              </div>
+            )}
+
+            {/* ── Guided mode ── */}
+            {viewMode === 'guided' && canUseGuidedMode && (
+              <GuidedPickExecution
+                task={task}
+                pickContainerId={pickContainer.id}
+                taskId={task.id}
+                taskNumber={task.taskNumber}
+              />
+            )}
+
+            {/* ── List mode ── */}
+            {viewMode === 'list' && (
+              <div className="space-y-3">
+                {task.steps.map((step) => {
+                  const isActive = Boolean(pickContainer) && nextPendingStep?.id === step.id;
+                  return (
+                    <StepCard
+                      key={step.id}
+                      step={step}
+                      isActive={isActive}
+                      pickContainerId={pickContainer.id}
+                      taskId={task.id}
+                      taskNumber={task.taskNumber}
+                      onExecuted={() => {
+                        // Invalidation handled by useExecutePickStep onSuccess.
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </section>
         )}
 
-        {/* ── Steps list ── */}
-        {task.steps.length > 0 && (
+        {/* ── Steps list when no container selected (read-only preview) ── */}
+        {!isTerminalTask && !pickContainer && task.steps.length > 0 && (
           <section>
             <div className="mb-3 text-sm font-semibold text-slate-900">
               Steps{' '}
@@ -639,28 +1067,43 @@ export function PickTaskPage() {
                 {task.steps.length}
               </span>
             </div>
-
             <div className="space-y-3">
-              {task.steps.map((step) => {
-                const isActive =
-                  !isTerminalTask &&
-                  Boolean(pickContainer) &&
-                  nextPendingStep?.id === step.id;
+              {task.steps.map((step) => (
+                <StepCard
+                  key={step.id}
+                  step={step}
+                  isActive={false}
+                  pickContainerId=""
+                  taskId={task.id}
+                  taskNumber={task.taskNumber}
+                  onExecuted={() => {}}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-                return (
-                  <StepCard
-                    key={step.id}
-                    step={step}
-                    isActive={isActive}
-                    pickContainerId={pickContainer?.id ?? ''}
-                    taskId={task.id}
-                    taskNumber={task.taskNumber}
-                    onExecuted={() => {
-                      // Invalidation handled by useExecutePickStep onSuccess.
-                    }}
-                  />
-                );
-              })}
+        {/* ── Terminal task steps (list, read-only) ── */}
+        {isTerminalTask && task.steps.length > 0 && (
+          <section>
+            <div className="mb-3 text-sm font-semibold text-slate-900">
+              Steps{' '}
+              <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                {task.steps.length}
+              </span>
+            </div>
+            <div className="space-y-3">
+              {task.steps.map((step) => (
+                <StepCard
+                  key={step.id}
+                  step={step}
+                  isActive={false}
+                  pickContainerId=""
+                  taskId={task.id}
+                  taskNumber={task.taskNumber}
+                  onExecuted={() => {}}
+                />
+              ))}
             </div>
           </section>
         )}
