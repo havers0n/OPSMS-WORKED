@@ -31,17 +31,23 @@ afterEach(() => {
 describe('newEntityId', () => {
   it('uses crypto.randomUUID when available', () => {
     const expected = '11111111-1111-4111-8111-111111111111';
-    const randomUuidMock = vi.fn(() => expected);
-    const restoreRandomUUID = withCryptoMethodOverride('randomUUID', randomUuidMock);
-    const restoreGetRandomValues = withCryptoMethodOverride(
-      'getRandomValues',
-      vi.fn((array: Uint8Array) => array)
-    );
+    let randomUuidCalls = 0;
+    let getRandomValuesCalls = 0;
+    const randomUuid: Crypto['randomUUID'] = () => {
+      randomUuidCalls += 1;
+      return expected;
+    };
+    const getRandomValues: Crypto['getRandomValues'] = <T extends ArrayBufferView>(array: T) => {
+      getRandomValuesCalls += 1;
+      return array;
+    };
+    const restoreRandomUUID = withCryptoMethodOverride('randomUUID', randomUuid);
+    const restoreGetRandomValues = withCryptoMethodOverride('getRandomValues', getRandomValues);
 
     try {
       expect(newEntityId()).toBe(expected);
-      expect(randomUuidMock).toHaveBeenCalledTimes(1);
-      expect((globalThis.crypto.getRandomValues as unknown as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+      expect(randomUuidCalls).toBe(1);
+      expect(getRandomValuesCalls).toBe(0);
     } finally {
       restoreRandomUUID();
       restoreGetRandomValues();
@@ -50,18 +56,22 @@ describe('newEntityId', () => {
 
   it('uses getRandomValues to build UUID v4 when randomUUID is unavailable', () => {
     const restoreRandomUUID = withCryptoMethodOverride('randomUUID', undefined);
-    const getRandomValuesMock = vi.fn((array: Uint8Array) => {
-      for (let i = 0; i < array.length; i += 1) {
-        array[i] = i;
+    let getRandomValuesCalls = 0;
+    const getRandomValues: Crypto['getRandomValues'] = <T extends ArrayBufferView>(array: T) => {
+      getRandomValuesCalls += 1;
+      if (array instanceof Uint8Array) {
+        for (let i = 0; i < array.length; i += 1) {
+          array[i] = i;
+        }
       }
       return array;
-    });
-    const restoreGetRandomValues = withCryptoMethodOverride('getRandomValues', getRandomValuesMock);
+    };
+    const restoreGetRandomValues = withCryptoMethodOverride('getRandomValues', getRandomValues);
 
     try {
       const id = newEntityId();
       expect(id).toMatch(UUID_V4_REGEX);
-      expect(getRandomValuesMock).toHaveBeenCalledTimes(1);
+      expect(getRandomValuesCalls).toBe(1);
     } finally {
       restoreRandomUUID();
       restoreGetRandomValues();
