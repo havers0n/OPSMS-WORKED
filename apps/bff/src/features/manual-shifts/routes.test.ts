@@ -81,6 +81,8 @@ function createOrder(status: ManualShiftOrder['status']): ManualShiftOrder {
     lineId: ids.line,
     orderNumber: '502481',
     customerName: null,
+    pointName: 'ירושלים',
+    palletCount: null,
     pickerName: 'יהודה',
     checkerName: null,
     lineCount: 12,
@@ -119,8 +121,8 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
   const bulkResult: ManualShiftBulkAddResult = {
     createdCount: 2,
     rows: [
-      { raw: '502481', orderNumber: '502481', pickerName: null, lineCount: null, size: 'unknown' },
-      { raw: '502482, יהודה, 12', orderNumber: '502482', pickerName: 'יהודה', lineCount: 12, size: 'L' }
+      { raw: '502481', pointName: 'ירושלים', orderNumber: '502481', pickerName: null, lineCount: null, palletCount: null, size: 'unknown' },
+      { raw: '502482, יהודה, 12', pointName: 'סופר ספיר', orderNumber: '502482', pickerName: 'יהודה', lineCount: 12, palletCount: null, size: 'L' }
     ],
     skippedRows: []
   };

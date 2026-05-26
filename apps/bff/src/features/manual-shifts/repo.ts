@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ManualShiftDaySummaryByError,
   ManualShiftLine,
+  ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
@@ -35,6 +36,8 @@ type ManualShiftOrderRow = {
   line_id: string;
   order_number: string | null;
   customer_name: string | null;
+  point_name: string | null;
+  pallet_count: number | null;
   picker_name: string | null;
   checker_name: string | null;
   line_count: number | null;
@@ -77,12 +80,29 @@ type ManualShiftOrderErrorRow = {
   fixed_at: string | null;
 };
 
+type ManualShiftLineSummaryAggRow = {
+  line_id: string;
+  tenant_id: string;
+  shift_id: string;
+  name: string;
+  sort_order: number;
+  status: ManualShiftLine['status'];
+  created_at: string;
+  total_orders: number;
+  queued_orders: number;
+  picking_orders: number;
+  waiting_check_orders: number;
+  returned_orders: number;
+  done_orders: number;
+  error_count: number;
+};
+
 const sessionColumns =
   'id,tenant_id,date,name,status,created_by_name,created_at,closed_at';
 const lineColumns =
   'id,tenant_id,shift_id,name,sort_order,created_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,picker_name,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at';
 const eventColumns =
   'id,tenant_id,shift_id,line_id,order_id,event_type,actor_name,actor_profile_id,from_status,to_status,payload,created_at';
 const errorColumns =
@@ -113,6 +133,27 @@ function mapLineRow(row: ManualShiftLineRow, status: ManualShiftLine['status']):
   };
 }
 
+function mapLineSummaryAggRow(row: ManualShiftLineSummaryAggRow): ManualShiftLineSummary {
+  return {
+    line: {
+      id: row.line_id,
+      tenantId: row.tenant_id,
+      shiftId: row.shift_id,
+      name: row.name,
+      sortOrder: row.sort_order,
+      status: row.status,
+      createdAt: row.created_at
+    },
+    totalOrders: Number(row.total_orders ?? 0),
+    queuedOrders: Number(row.queued_orders ?? 0),
+    pickingOrders: Number(row.picking_orders ?? 0),
+    waitingCheckOrders: Number(row.waiting_check_orders ?? 0),
+    returnedOrders: Number(row.returned_orders ?? 0),
+    doneOrders: Number(row.done_orders ?? 0),
+    errorCount: Number(row.error_count ?? 0)
+  };
+}
+
 function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
   return {
     id: row.id,
@@ -121,6 +162,8 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     lineId: row.line_id,
     orderNumber: row.order_number,
     customerName: row.customer_name,
+    pointName: row.point_name,
+    palletCount: row.pallet_count !== null ? Number(row.pallet_count) : null,
     pickerName: row.picker_name,
     checkerName: row.checker_name,
     lineCount: row.line_count,
@@ -171,6 +214,8 @@ function mapErrorRow(row: ManualShiftOrderErrorRow): ManualShiftOrderError {
 export type ManualShiftOrderPatch = {
   orderNumber?: string | null;
   customerName?: string | null;
+  pointName?: string | null;
+  palletCount?: number | null;
   pickerName?: string | null;
   checkerName?: string | null;
   lineCount?: number | null;
@@ -195,6 +240,7 @@ export type ManualShiftsRepo = {
   }): Promise<ManualShiftSession>;
   closeShift(shiftId: string, closedAt: string): Promise<ManualShiftSession | null>;
   listShiftLines(shiftId: string): Promise<ManualShiftLineRow[]>;
+  listShiftLineSummaries(shiftId: string): Promise<ManualShiftLineSummary[]>;
   findLineById(lineId: string): Promise<ManualShiftLineRow | null>;
   createLine(input: {
     tenantId: string;
@@ -212,6 +258,8 @@ export type ManualShiftsRepo = {
     lineId: string;
     orderNumber: string | null;
     customerName: string | null;
+    pointName: string | null;
+    palletCount: number | null;
     pickerName: string | null;
     checkerName: string | null;
     lineCount: number | null;
@@ -332,6 +380,18 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return (data ?? []) as ManualShiftLineRow[];
     },
 
+    async listShiftLineSummaries(shiftId) {
+      const { data, error } = await supabase.rpc('manual_shift_list_line_summaries', {
+        p_shift_id: shiftId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as ManualShiftLineSummaryAggRow[]).map(mapLineSummaryAggRow);
+    },
+
     async findLineById(lineId) {
       const { data, error } = await supabase
         .from('manual_shift_lines')
@@ -435,6 +495,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           line_id: input.lineId,
           order_number: input.orderNumber,
           customer_name: input.customerName,
+          point_name: input.pointName,
+          pallet_count: input.palletCount,
           picker_name: input.pickerName,
           checker_name: input.checkerName,
           line_count: input.lineCount,
@@ -457,6 +519,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       const payload: Record<string, unknown> = {};
       if (patch.orderNumber !== undefined) payload.order_number = patch.orderNumber;
       if (patch.customerName !== undefined) payload.customer_name = patch.customerName;
+      if (patch.pointName !== undefined) payload.point_name = patch.pointName;
+      if (patch.palletCount !== undefined) payload.pallet_count = patch.palletCount;
       if (patch.pickerName !== undefined) payload.picker_name = patch.pickerName;
       if (patch.checkerName !== undefined) payload.checker_name = patch.checkerName;
       if (patch.lineCount !== undefined) payload.line_count = patch.lineCount;

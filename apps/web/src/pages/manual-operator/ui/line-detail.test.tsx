@@ -67,6 +67,8 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
     lineId: 'line-1',
     orderNumber: '502481',
     customerName: null,
+    pointName: 'ירושלים',
+    palletCount: null,
     pickerName: 'יהודה',
     checkerName: null,
     lineCount: 5,

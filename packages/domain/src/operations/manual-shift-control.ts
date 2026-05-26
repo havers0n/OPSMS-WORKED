@@ -72,6 +72,8 @@ export const manualShiftOrderSchema = z.object({
   lineId: z.string().uuid(),
   orderNumber: z.string().trim().min(1).nullable(),
   customerName: z.string().trim().min(1).nullable(),
+  pointName: z.string().trim().min(1).nullable(),
+  palletCount: z.number().min(0).nullable(),
   pickerName: z.string().trim().min(1).nullable(),
   checkerName: z.string().trim().min(1).nullable(),
   lineCount: z.number().int().positive().nullable(),
@@ -187,9 +189,11 @@ export type ManualShiftDaySummary = z.infer<typeof manualShiftDaySummarySchema>;
 
 export const manualShiftBulkAddInputRowSchema = z.object({
   raw: z.string(),
-  orderNumber: z.string().trim().min(1),
+  pointName: z.string().trim().min(1),
+  orderNumber: z.string().trim().min(1).nullable(),
   pickerName: z.string().trim().min(1).nullable(),
   lineCount: z.number().int().positive().nullable(),
+  palletCount: z.number().min(0).nullable(),
   size: manualShiftOrderSizeSchema
 });
 export type ManualShiftBulkAddInputRow = z.infer<typeof manualShiftBulkAddInputRowSchema>;

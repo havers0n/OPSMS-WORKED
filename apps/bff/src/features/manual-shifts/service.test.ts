@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderError,
   ManualShiftSession
@@ -45,6 +46,8 @@ function createOrder(
     tenantId: ids.tenant,
     shiftId: ids.shift,
     lineId: ids.line,
+    pointName: 'ירושלים',
+    palletCount: null,
     orderNumber: '502481',
     customerName: null,
     pickerName: 'יהודה',
@@ -141,6 +144,65 @@ function createRepo() {
     listShiftLines: vi.fn(async (shiftId: string) => {
       return state.lines.filter((line) => line.shift_id === shiftId) as never;
     }),
+    listShiftLineSummaries: vi.fn(async (shiftId: string) => {
+      const lineRows = state.lines.filter((line) => line.shift_id === shiftId);
+
+      const byLine = new Map<string, ManualShiftLineSummary>();
+      for (const row of lineRows) {
+        byLine.set(row.id, {
+          line: {
+            id: row.id,
+            tenantId: row.tenant_id,
+            shiftId: row.shift_id,
+            name: row.name,
+            sortOrder: row.sort_order,
+            status: 'open',
+            createdAt: row.created_at
+          },
+          totalOrders: 0,
+          queuedOrders: 0,
+          pickingOrders: 0,
+          waitingCheckOrders: 0,
+          returnedOrders: 0,
+          doneOrders: 0,
+          errorCount: 0
+        });
+      }
+
+      for (const order of state.orders) {
+        if (order.shiftId !== shiftId) continue;
+        const summary = byLine.get(order.lineId);
+        if (!summary) continue;
+        summary.totalOrders += 1;
+        if (order.status === 'queued') summary.queuedOrders += 1;
+        if (order.status === 'picking') summary.pickingOrders += 1;
+        if (order.status === 'waiting_check') summary.waitingCheckOrders += 1;
+        if (order.status === 'returned') summary.returnedOrders += 1;
+        if (order.status === 'done') summary.doneOrders += 1;
+      }
+
+      for (const error of state.errors) {
+        if (error.shiftId !== shiftId) continue;
+        const summary = byLine.get(error.lineId);
+        if (!summary) continue;
+        summary.errorCount += 1;
+      }
+
+      for (const summary of byLine.values()) {
+        const { totalOrders, queuedOrders, doneOrders } = summary;
+        summary.line.status =
+          totalOrders === 0 || queuedOrders === totalOrders
+            ? 'open'
+            : doneOrders === totalOrders
+              ? 'done'
+              : 'in_progress';
+      }
+
+      return Array.from(byLine.values()).sort((a, b) => {
+        if (a.line.sortOrder !== b.line.sortOrder) return a.line.sortOrder - b.line.sortOrder;
+        return a.line.createdAt.localeCompare(b.line.createdAt);
+      });
+    }),
     findLineById: vi.fn(async (lineId: string) => {
       return (state.lines.find((line) => line.id === lineId) ?? null) as never;
     }),
@@ -183,8 +245,10 @@ function createRepo() {
         tenantId: input.tenantId,
         shiftId: input.shiftId,
         lineId: input.lineId,
+        pointName: input.pointName,
         orderNumber: input.orderNumber,
         customerName: input.customerName,
+        palletCount: input.palletCount,
         pickerName: input.pickerName,
         checkerName: input.checkerName,
         lineCount: input.lineCount,
@@ -205,6 +269,8 @@ function createRepo() {
       }
 
       const nextOrder = { ...order };
+      if (patch.pointName !== undefined) nextOrder.pointName = patch.pointName;
+      if (patch.palletCount !== undefined) nextOrder.palletCount = patch.palletCount;
       if (patch.orderNumber !== undefined) nextOrder.orderNumber = patch.orderNumber;
       if (patch.customerName !== undefined) nextOrder.customerName = patch.customerName;
       if (patch.pickerName !== undefined) nextOrder.pickerName = patch.pickerName;
@@ -280,6 +346,49 @@ describe('manual shifts service', () => {
     });
   });
 
+  it('builds today line summaries via repo aggregate without loading full orders/errors', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({ id: ids.order, status: 'queued', lineId: ids.line }),
+      createOrder({ id: ids.orderTwo, status: 'picking', lineId: ids.line }),
+      createOrder({ id: ids.orderThree, status: 'done', lineId: ids.lineTwo })
+    );
+    state.errors.push(createError({ orderId: ids.orderTwo, lineId: ids.line }));
+
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const result = await service.getTodayShift(ids.tenant);
+
+    expect(result.shift).toMatchObject({ id: ids.shift, tenantId: ids.tenant, status: 'active' });
+    expect(result.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          line: expect.objectContaining({ id: ids.line, status: 'in_progress' }),
+          totalOrders: 2,
+          queuedOrders: 1,
+          pickingOrders: 1,
+          waitingCheckOrders: 0,
+          returnedOrders: 0,
+          doneOrders: 0,
+          errorCount: 1
+        }),
+        expect.objectContaining({
+          line: expect.objectContaining({ id: ids.lineTwo, status: 'done' }),
+          totalOrders: 1,
+          doneOrders: 1,
+          errorCount: 0
+        })
+      ])
+    );
+
+    expect(repo.listShiftLineSummaries).toHaveBeenCalledWith(ids.shift);
+    expect(repo.listShiftOrders).not.toHaveBeenCalled();
+    expect(repo.listShiftErrors).not.toHaveBeenCalled();
+  });
+
   it('rejects duplicate active shifts for the same tenant and local date', async () => {
     const { repo } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, {
@@ -309,6 +418,7 @@ describe('manual shifts service', () => {
     const order = await service.createOrder({
       tenantId: ids.tenant,
       lineId: ids.line,
+      pointName: 'סופר ספיר',
       orderNumber: '502500',
       pickerName: 'רפאל',
       lineCount: 4,
@@ -329,6 +439,38 @@ describe('manual shifts service', () => {
     });
   });
 
+  it('creates a manual order without orderNumber and preserves palletCount', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const order = await service.createOrder({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      pointName: 'ירושלים / רמי לוי רב-חן',
+      orderNumber: null,
+      palletCount: 2,
+      actor: {
+        actorProfileId: ids.actor,
+        actorName: 'Dispatcher'
+      }
+    });
+
+    expect(order.pointName).toBe('ירושלים / רמי לוי רב-חן');
+    expect(order.orderNumber).toBeNull();
+    expect(order.palletCount).toBe(2);
+    expect(state.events.at(-1)).toMatchObject({
+      eventType: 'created',
+      payload: expect.objectContaining({
+        pointName: 'ירושלים / רמי לוי רב-חן',
+        orderNumber: null,
+        palletCount: 2
+      })
+    });
+  });
+
   it('bulk creates orders from raw text, trims empty rows, skips malformed rows, and allows duplicates', async () => {
     const { repo } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, {
@@ -339,7 +481,7 @@ describe('manual shifts service', () => {
     const result = await service.bulkCreateOrders({
       tenantId: ids.tenant,
       lineId: ids.line,
-      rawText: '502481\n\n, יהודה\n502482, רפאל, 12\n502482, רפאל, 12',
+      rawText: 'ירושלים\n\n, יהודה\nסופר ספיר, רפאל, 12\nסופר ספיר, רפאל, 12',
       actor: {
         actorProfileId: ids.actor,
         actorName: 'Dispatcher'
@@ -349,6 +491,71 @@ describe('manual shifts service', () => {
     expect(result.createdCount).toBe(3);
     expect(result.skippedRows).toEqual([', יהודה']);
     expect(result.rows.map((row) => row.size)).toEqual(['unknown', 'L', 'L']);
+  });
+
+  it('bulk parser supports pointName only and pointName with picker, lineCount, palletCount', async () => {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const result = await service.bulkCreateOrders({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      rawText: 'ירושלים\nסופר ספיר קרית יובל / ירושלים, יהודה, 12, 2',
+      actor: {
+        actorProfileId: ids.actor,
+        actorName: 'Dispatcher'
+      }
+    });
+
+    expect(result.createdCount).toBe(2);
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        pointName: 'ירושלים',
+        orderNumber: null,
+        pickerName: null,
+        lineCount: null,
+        palletCount: null,
+        size: 'unknown'
+      }),
+      expect.objectContaining({
+        pointName: 'סופר ספיר קרית יובל / ירושלים',
+        orderNumber: null,
+        pickerName: 'יהודה',
+        lineCount: 12,
+        palletCount: 2,
+        size: 'L'
+      })
+    ]);
+  });
+
+  it('normalizes invalid palletCount in bulk rows to null', async () => {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const result = await service.bulkCreateOrders({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      rawText: 'סופר ספיר קרית יובל / ירושלים, יהודה, 12, -3',
+      actor: {
+        actorProfileId: ids.actor,
+        actorName: 'Dispatcher'
+      }
+    });
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({
+        pointName: 'סופר ספיר קרית יובל / ירושלים',
+        palletCount: null,
+        lineCount: 12,
+        size: 'L'
+      })
+    ]);
   });
 
   it('updates timestamps and writes an event for valid status transitions', async () => {

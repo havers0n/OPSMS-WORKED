@@ -181,11 +181,13 @@ export function registerManualShiftsRoutes(
     const order = await getManualShiftsService(auth).createOrder({
       tenantId,
       lineId,
+      pointName: body.pointName,
       orderNumber: body.orderNumber,
       customerName: body.customerName,
       pickerName: body.pickerName,
       checkerName: body.checkerName,
       lineCount: body.lineCount,
+      palletCount: body.palletCount,
       size: body.size,
       status: body.status,
       comment: body.comment,
@@ -229,11 +231,13 @@ export function registerManualShiftsRoutes(
     const order = await getManualShiftsService(auth).patchOrder({
       tenantId,
       orderId,
+      pointName: body.pointName,
       orderNumber: body.orderNumber,
       customerName: body.customerName,
       pickerName: body.pickerName,
       checkerName: body.checkerName,
       lineCount: body.lineCount,
+      palletCount: body.palletCount,
       size: body.size,
       comment: body.comment,
       actor: actorFromAuth(auth)

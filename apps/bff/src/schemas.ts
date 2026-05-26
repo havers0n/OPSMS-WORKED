@@ -402,22 +402,26 @@ export const patchManualShiftLineBodySchema = z.object({
 });
 
 export const createManualShiftOrderBodySchema = z.object({
+  pointName: z.string().trim().min(1),
   orderNumber: z.string().trim().min(1).nullable().optional(),
   customerName: z.string().trim().min(1).nullable().optional(),
   pickerName: z.string().trim().min(1).nullable().optional(),
   checkerName: z.string().trim().min(1).nullable().optional(),
   lineCount: z.number().int().positive().nullable().optional(),
+  palletCount: z.number().min(0).nullable().optional(),
   size: manualShiftOrderSizeSchema.optional(),
   status: manualShiftOrderStatusSchema.optional(),
   comment: z.string().trim().min(1).nullable().optional()
 });
 
 export const patchManualShiftOrderBodySchema = z.object({
+  pointName: z.string().trim().min(1).nullable().optional(),
   orderNumber: z.string().trim().min(1).nullable().optional(),
   customerName: z.string().trim().min(1).nullable().optional(),
   pickerName: z.string().trim().min(1).nullable().optional(),
   checkerName: z.string().trim().min(1).nullable().optional(),
   lineCount: z.number().int().positive().nullable().optional(),
+  palletCount: z.number().min(0).nullable().optional(),
   size: manualShiftOrderSizeSchema.optional(),
   comment: z.string().trim().min(1).nullable().optional()
 });
@@ -441,9 +445,11 @@ export const bulkCreateManualShiftOrdersBodySchema = z.union([
     rows: z.array(
       manualShiftBulkAddInputRowSchema.pick({
         raw: true,
+        pointName: true,
         orderNumber: true,
         pickerName: true,
         lineCount: true,
+        palletCount: true,
         size: true
       })
     ).min(1)

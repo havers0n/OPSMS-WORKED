@@ -52,11 +52,13 @@ export type ManualShiftsService = {
   createOrder(input: {
     tenantId: string;
     lineId: string;
+    pointName: string;
     orderNumber?: string | null;
     customerName?: string | null;
     pickerName?: string | null;
     checkerName?: string | null;
     lineCount?: number | null;
+    palletCount?: number | null;
     size?: ManualShiftOrderSize;
     status?: ManualShiftOrderStatus;
     comment?: string | null;
@@ -68,9 +70,11 @@ export type ManualShiftsService = {
     rawText?: string;
     rows?: Array<{
       raw: string;
-      orderNumber: string;
+      pointName: string;
+      orderNumber?: string | null;
       pickerName: string | null;
       lineCount: number | null;
+      palletCount?: number | null;
       size?: ManualShiftOrderSize;
     }>;
     actor: ActorContext;
@@ -78,11 +82,13 @@ export type ManualShiftsService = {
   patchOrder(input: {
     tenantId: string;
     orderId: string;
+    pointName?: string | null;
     orderNumber?: string | null;
     customerName?: string | null;
     pickerName?: string | null;
     checkerName?: string | null;
     lineCount?: number | null;
+    palletCount?: number | null;
     size?: ManualShiftOrderSize;
     comment?: string | null;
     actor: ActorContext;
@@ -134,6 +140,10 @@ function buildLineSummaries(lines: ManualShiftLine[], orders: ManualShiftOrder[]
   });
 }
 
+async function buildShiftLineSummariesLite(repo: ManualShiftsRepo, shiftId: string) {
+  return repo.listShiftLineSummaries(shiftId);
+}
+
 function deriveOrderSize(
   lineCount: number | null | undefined,
   explicitSize: ManualShiftOrderSize | undefined,
@@ -161,11 +171,12 @@ function parseBulkRows(rawText: string): ManualShiftBulkAddResult {
 
   for (const raw of rawRows) {
     const parts = raw.split(',').map((part) => part.trim());
-    const orderNumber = parts[0] ?? '';
+    const pointName = parts[0] ?? '';
     const pickerName = parts[1] ? parts[1] : null;
     const maybeLineCount = parts[2] ? Number(parts[2]) : null;
+    const maybePalletCount = parts[3] ? Number(parts[3]) : null;
 
-    if (!orderNumber) {
+    if (!pointName) {
       skippedRows.push(raw);
       continue;
     }
@@ -175,12 +186,19 @@ function parseBulkRows(rawText: string): ManualShiftBulkAddResult {
         ? maybeLineCount
         : null;
 
+    const palletCount =
+      maybePalletCount !== null && !isNaN(maybePalletCount) && maybePalletCount >= 0
+        ? maybePalletCount
+        : null;
+
     rows.push(
       manualShiftBulkAddInputRowSchema.parse({
         raw,
-        orderNumber,
+        pointName,
+        orderNumber: null,
         pickerName,
         lineCount,
+        palletCount,
         size: calculateSizeFromLineCount(lineCount)
       })
     );
@@ -240,9 +258,11 @@ export function createManualShiftsServiceFromRepo(
   }
 
   async function buildShiftLines(shiftId: string) {
-    const lineRows = await repo.listShiftLines(shiftId);
-    const orders = await repo.listShiftOrders(shiftId);
-    const errors = await repo.listShiftErrors(shiftId);
+    const [lineRows, orders, errors] = await Promise.all([
+      repo.listShiftLines(shiftId),
+      repo.listShiftOrders(shiftId),
+      repo.listShiftErrors(shiftId)
+    ]);
     const lines = lineRows.map((lineRow) =>
       mapManualShiftLineRowToDomain(lineRow, deriveManualShiftLineStatus(orders.filter((order) => order.lineId === lineRow.id)))
     );
@@ -264,7 +284,7 @@ export function createManualShiftsServiceFromRepo(
 
       return {
         shift,
-        lines: await buildShiftLines(shift.id)
+        lines: await buildShiftLineSummariesLite(repo, shift.id)
       };
     },
 
@@ -308,7 +328,7 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftNotFound(input.shiftId);
       }
 
-      return buildShiftLines(input.shiftId);
+      return buildShiftLineSummariesLite(repo, input.shiftId);
     },
 
     async createLine(input) {
@@ -376,8 +396,10 @@ export function createManualShiftsServiceFromRepo(
         tenantId: input.tenantId,
         shiftId: line.shift_id,
         lineId: line.id,
+        pointName: input.pointName,
         orderNumber: input.orderNumber ?? null,
         customerName: input.customerName ?? null,
+        palletCount: input.palletCount ?? null,
         pickerName: input.pickerName ?? null,
         checkerName: input.checkerName ?? null,
         lineCount: input.lineCount ?? null,
@@ -398,7 +420,9 @@ export function createManualShiftsServiceFromRepo(
         fromStatus: null,
         toStatus: order.status,
         payload: {
+          pointName: order.pointName,
           orderNumber: order.orderNumber,
+          palletCount: order.palletCount,
           lineCount: order.lineCount,
           size: order.size
         }
@@ -421,9 +445,11 @@ export function createManualShiftsServiceFromRepo(
             rows: input.rows.map((row) =>
               manualShiftBulkAddInputRowSchema.parse({
                 raw: row.raw,
-                orderNumber: row.orderNumber,
+                pointName: row.pointName,
+                orderNumber: row.orderNumber ?? null,
                 pickerName: row.pickerName,
                 lineCount: row.lineCount,
+                palletCount: row.palletCount ?? null,
                 size: calculateSizeFromLineCount(row.lineCount)
               })
             ),
@@ -438,11 +464,13 @@ export function createManualShiftsServiceFromRepo(
           tenantId: input.tenantId,
           shiftId: line.shift_id,
           lineId: line.id,
+          pointName: row.pointName,
           orderNumber: row.orderNumber,
           customerName: null,
           pickerName: row.pickerName,
           checkerName: null,
           lineCount: row.lineCount,
+          palletCount: row.palletCount,
           size: row.size,
           status: 'queued',
           startedAt: null,
@@ -483,11 +511,13 @@ export function createManualShiftsServiceFromRepo(
       await requireActiveShift(order.shiftId);
 
       const updated = await repo.updateOrder(input.orderId, {
+        pointName: input.pointName,
         orderNumber: input.orderNumber,
         customerName: input.customerName,
         pickerName: input.pickerName,
         checkerName: input.checkerName,
         lineCount: input.lineCount,
+        palletCount: input.palletCount,
         size: deriveOrderSize(input.lineCount, input.size, order.size),
         comment: input.comment
       });
@@ -507,10 +537,12 @@ export function createManualShiftsServiceFromRepo(
         fromStatus: null,
         toStatus: null,
         payload: {
+          pointName: updated.pointName,
           orderNumber: updated.orderNumber,
           pickerName: updated.pickerName,
           checkerName: updated.checkerName,
           lineCount: updated.lineCount,
+          palletCount: updated.palletCount,
           size: updated.size,
           comment: updated.comment
         }
