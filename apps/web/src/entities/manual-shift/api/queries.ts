@@ -2,7 +2,8 @@ import type {
   ManualShiftTodayResponse,
   ManualShiftOrder,
   ManualShiftPeopleSummary,
-  ManualShiftDaySummary
+  ManualShiftDaySummary,
+  ManualShiftWorker
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -13,6 +14,7 @@ export const manualShiftKeys = {
   lines: (shiftId: string) => [...manualShiftKeys.all, 'lines', shiftId] as const,
   lineOrders: (lineId: string) => [...manualShiftKeys.all, 'line-orders', lineId] as const,
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
+  workers: (shiftId: string) => [...manualShiftKeys.all, 'workers', shiftId] as const,
   peopleSummary: (shiftId: string) =>
     [...manualShiftKeys.all, 'people-summary', shiftId] as const,
   daySummary: (shiftId: string) => [...manualShiftKeys.all, 'day-summary', shiftId] as const
@@ -52,6 +54,19 @@ export function shiftOrdersQueryOptions(shiftId: string) {
     queryFn: () => fetchShiftOrders(shiftId),
     enabled: !!shiftId,
     staleTime: 10_000
+  });
+}
+
+async function fetchShiftWorkers(shiftId: string): Promise<ManualShiftWorker[]> {
+  return bffRequest<ManualShiftWorker[]>(`/api/manual-shifts/${shiftId}/workers`);
+}
+
+export function shiftWorkersQueryOptions(shiftId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.workers(shiftId),
+    queryFn: () => fetchShiftWorkers(shiftId),
+    enabled: !!shiftId,
+    staleTime: 30_000
   });
 }
 

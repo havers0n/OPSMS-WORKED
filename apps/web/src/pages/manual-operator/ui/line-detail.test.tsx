@@ -70,6 +70,7 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
     pointName: 'ירושלים',
     palletCount: null,
     pickerName: 'יהודה',
+    pickerWorkerId: null,
     checkerName: null,
     lineCount: 5,
     size: 'M',
@@ -114,6 +115,9 @@ async function renderWithShiftAndLines(
     }
     if (String(url).includes('/orders')) {
       return Promise.resolve(lineOrders);
+    }
+    if (String(url).includes('/workers')) {
+      return Promise.resolve([]);
     }
     return Promise.resolve({ shift: mockShift, lines: [lineSummary] });
   });
@@ -305,6 +309,9 @@ describe('PR4 – Line Detail & Manual Orders', () => {
         const method = (init as RequestInit | undefined)?.method;
         if (String(url).includes('/orders') && method === 'POST') {
           return Promise.resolve(newOrder);
+        }
+        if (String(url).includes('/workers')) {
+          return Promise.resolve([]);
         }
         if (String(url).includes('/orders')) {
           return Promise.resolve([]);
@@ -749,6 +756,9 @@ describe('PR4 – Line Detail & Manual Orders', () => {
         if (String(url).includes('/orders') && method === 'POST') {
           return Promise.resolve(newOrder);
         }
+        if (String(url).includes('/workers')) {
+          return Promise.resolve([]);
+        }
         if (String(url).includes('/orders')) {
           return Promise.resolve([]);
         }
@@ -795,6 +805,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
         if (String(url).includes('/orders') && method === 'POST') {
           return Promise.resolve(newOrder);
         }
+        if (String(url).includes('/workers')) return Promise.resolve([]);
         if (String(url).includes('/orders')) return Promise.resolve([]);
         return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
       });

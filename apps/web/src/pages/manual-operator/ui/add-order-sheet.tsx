@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
-import type { ManualShiftOrderSize } from '@wos/domain';
+import { ArrowRight, ChevronDown } from 'lucide-react';
+import type { ManualShiftOrderSize, ManualShiftWorker } from '@wos/domain';
+import { useQuery } from '@tanstack/react-query';
 import { useCreateManualShiftOrder } from '@/entities/manual-shift/api/mutations';
+import { shiftWorkersQueryOptions } from '@/entities/manual-shift/api/queries';
 
 interface AddOrderSheetProps {
   lineId: string;
+  shiftId: string;
   onClose: () => void;
 }
 
@@ -17,13 +20,18 @@ function calculateSize(lineCount: number): ManualShiftOrderSize {
   return 'XL';
 }
 
-export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
+export function AddOrderSheet({ lineId, shiftId, onClose }: AddOrderSheetProps) {
   const [pointName, setPointName] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
-  const [pickerName, setPickerName] = useState('');
+  const [pickerMode, setPickerMode] = useState<'worker' | 'free'>('worker');
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [freePickerName, setFreePickerName] = useState('');
   const [lineCountStr, setLineCountStr] = useState('');
   const [palletCountStr, setPalletCountStr] = useState('');
   const [manualSize, setManualSize] = useState<ManualShiftOrderSize | null>(null);
+
+  const { data: workers } = useQuery(shiftWorkersQueryOptions(shiftId));
+  const activeWorkers = (workers ?? []).filter((w) => w.active);
 
   const createOrder = useCreateManualShiftOrder(lineId);
 
@@ -31,6 +39,19 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
   const autoSize: ManualShiftOrderSize | null =
     lineCount != null && !isNaN(lineCount) && lineCount > 0 ? calculateSize(lineCount) : null;
   const effectiveSize = manualSize ?? autoSize;
+
+  const selectedWorker: ManualShiftWorker | null =
+    activeWorkers.find((w) => w.id === selectedWorkerId) ?? null;
+
+  const effectivePickerMode = activeWorkers.length === 0 ? 'free' : pickerMode;
+
+  const resolvedPickerName =
+    effectivePickerMode === 'worker'
+      ? (selectedWorker?.name ?? null)
+      : (freePickerName.trim() || null);
+
+  const resolvedPickerWorkerId =
+    effectivePickerMode === 'worker' ? selectedWorkerId : null;
 
   const canSubmit = pointName.trim().length > 0;
 
@@ -43,7 +64,8 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
       {
         pointName: pointName.trim(),
         orderNumber: orderNumber.trim() || null,
-        pickerName: pickerName.trim() || null,
+        pickerName: resolvedPickerName,
+        pickerWorkerId: resolvedPickerWorkerId,
         lineCount: lineCount != null && !isNaN(lineCount) && lineCount > 0 ? lineCount : null,
         palletCount,
         size: effectiveSize ?? undefined,
@@ -93,14 +115,43 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="font-bold text-gray-700">מלקט</label>
-          <input
-            type="text"
-            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg"
-            placeholder="שם המלקט (אופציונלי)"
-            value={pickerName}
-            onChange={e => setPickerName(e.target.value)}
-          />
+          <div className="flex items-center justify-between">
+            <label className="font-bold text-gray-700">מלקט</label>
+            {activeWorkers.length > 0 && (
+              <div className="flex gap-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPickerMode('worker')}
+                  className={`px-2 py-0.5 rounded-full font-medium transition-colors ${pickerMode === 'worker' ? 'bg-gray-900 text-white' : 'text-gray-500'}`}
+                >
+                  מרשימה
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPickerMode('free')}
+                  className={`px-2 py-0.5 rounded-full font-medium transition-colors ${pickerMode === 'free' ? 'bg-gray-900 text-white' : 'text-gray-500'}`}
+                >
+                  חופשי
+                </button>
+              </div>
+            )}
+          </div>
+
+          {(pickerMode === 'worker' && activeWorkers.length > 0) ? (
+            <WorkerPicker
+              workers={activeWorkers}
+              selectedId={selectedWorkerId}
+              onSelect={setSelectedWorkerId}
+            />
+          ) : (
+            <input
+              type="text"
+              className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg"
+              placeholder="שם המלקט (אופציונלי)"
+              value={freePickerName}
+              onChange={e => setFreePickerName(e.target.value)}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -175,6 +226,58 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function WorkerPicker({
+  workers,
+  selectedId,
+  onSelect
+}: {
+  workers: ManualShiftWorker[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = workers.find((w) => w.id === selectedId);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg flex items-center justify-between"
+      >
+        <span className={selected ? 'text-gray-900' : 'text-gray-400'}>
+          {selected ? selected.name : 'בחר מלקט (אופציונלי)'}
+        </span>
+        <ChevronDown size={20} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => { onSelect(null); setOpen(false); }}
+            className="w-full text-right px-4 py-3 text-sm text-gray-400 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100"
+          >
+            ללא מלקט
+          </button>
+          {workers.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              onClick={() => { onSelect(w.id); setOpen(false); }}
+              className={`w-full text-right px-4 py-3 font-bold text-base hover:bg-gray-50 active:bg-gray-100 ${
+                w.id === selectedId ? 'bg-blue-50 text-blue-700' : 'text-gray-900'
+              }`}
+            >
+              {w.name}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

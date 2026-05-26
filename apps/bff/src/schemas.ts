@@ -74,7 +74,9 @@ import {
   manualShiftBulkAddResultSchema,
   manualShiftOrderStatusSchema,
   manualShiftOrderSizeSchema,
-  manualShiftOrderErrorTypeSchema
+  manualShiftOrderErrorTypeSchema,
+  manualShiftWorkerSchema,
+  manualShiftWorkerRoleSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -401,11 +403,25 @@ export const patchManualShiftLineBodySchema = z.object({
   sortOrder: z.number().int().optional()
 });
 
+export const createManualShiftWorkerBodySchema = z.object({
+  name: z.string().trim().min(1),
+  role: manualShiftWorkerRoleSchema.default('picker'),
+  sortOrder: z.number().int().default(0)
+});
+
+export const patchManualShiftWorkerBodySchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  role: manualShiftWorkerRoleSchema.optional(),
+  active: z.boolean().optional(),
+  sortOrder: z.number().int().optional()
+});
+
 export const createManualShiftOrderBodySchema = z.object({
   pointName: z.string().trim().min(1),
   orderNumber: z.string().trim().min(1).nullable().optional(),
   customerName: z.string().trim().min(1).nullable().optional(),
   pickerName: z.string().trim().min(1).nullable().optional(),
+  pickerWorkerId: z.string().uuid().nullable().optional(),
   checkerName: z.string().trim().min(1).nullable().optional(),
   lineCount: z.number().int().positive().nullable().optional(),
   palletCount: z.number().min(0).nullable().optional(),
@@ -419,6 +435,7 @@ export const patchManualShiftOrderBodySchema = z.object({
   orderNumber: z.string().trim().min(1).nullable().optional(),
   customerName: z.string().trim().min(1).nullable().optional(),
   pickerName: z.string().trim().min(1).nullable().optional(),
+  pickerWorkerId: z.string().uuid().nullable().optional(),
   checkerName: z.string().trim().min(1).nullable().optional(),
   lineCount: z.number().int().positive().nullable().optional(),
   palletCount: z.number().min(0).nullable().optional(),
@@ -466,6 +483,8 @@ export const manualShiftPeopleSummaryResponseSchema = manualShiftPeopleSummarySc
 export const manualShiftDaySummaryResponseSchema = manualShiftDaySummarySchema;
 export const manualShiftOrdersResponseSchema = z.array(manualShiftOrderSchema);
 export const manualShiftBulkAddResponseSchema = manualShiftBulkAddResultSchema;
+export const manualShiftWorkerResponseSchema = manualShiftWorkerSchema;
+export const manualShiftWorkersResponseSchema = z.array(manualShiftWorkerSchema);
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 

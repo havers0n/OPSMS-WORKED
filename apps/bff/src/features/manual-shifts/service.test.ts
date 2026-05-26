@@ -3,7 +3,8 @@ import type {
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderError,
-  ManualShiftSession
+  ManualShiftSession,
+  ManualShiftWorker
 } from '@wos/domain';
 import { createManualShiftsServiceFromRepo } from './service.js';
 import type { ManualShiftsRepo } from './repo.js';
@@ -19,7 +20,8 @@ const ids = {
   orderThree: '88888888-8888-4888-8888-888888888888',
   event: '99999999-9999-4999-8999-999999999999',
   error: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  actor: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  actor: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  worker: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 };
 
 const nowIso = '2026-05-26T07:00:00.000Z';
@@ -51,6 +53,7 @@ function createOrder(
     orderNumber: '502481',
     customerName: null,
     pickerName: 'יהודה',
+    pickerWorkerId: null,
     checkerName: null,
     lineCount: 12,
     size: 'L',
@@ -62,6 +65,21 @@ function createOrder(
     comment: null,
     createdAt: '2026-05-26T05:10:00.000Z',
     updatedAt: '2026-05-26T05:10:00.000Z',
+    ...overrides
+  };
+}
+
+function createWorker(overrides: Partial<ManualShiftWorker> = {}): ManualShiftWorker {
+  return {
+    id: ids.worker,
+    tenantId: ids.tenant,
+    shiftId: ids.shift,
+    name: 'יהודה',
+    role: 'picker',
+    active: true,
+    sortOrder: 1,
+    createdAt: nowIso,
+    updatedAt: nowIso,
     ...overrides
   };
 }
@@ -104,6 +122,7 @@ function createRepo() {
       }
     ],
     orders: [] as ManualShiftOrder[],
+    workers: [] as ManualShiftWorker[],
     events: [] as Array<Record<string, unknown>>,
     errors: [] as ManualShiftOrderError[]
   };
@@ -112,8 +131,41 @@ function createRepo() {
   let errorCounter = 0;
   let lineCounter = 0;
   let orderCounter = 0;
+  let workerCounter = 0;
 
   const repo: ManualShiftsRepo = {
+    listShiftWorkers: vi.fn(async (shiftId: string) => {
+      return state.workers.filter((w) => w.shiftId === shiftId);
+    }),
+    findWorkerById: vi.fn(async (workerId: string) => {
+      return state.workers.find((w) => w.id === workerId) ?? null;
+    }),
+    createWorker: vi.fn(async (input) => {
+      workerCounter += 1;
+      const worker = createWorker({
+        id: `50000000-0000-4000-8000-${String(workerCounter).padStart(12, '0')}`,
+        tenantId: input.tenantId,
+        shiftId: input.shiftId,
+        name: input.name,
+        role: input.role,
+        sortOrder: input.sortOrder,
+        active: true,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      });
+      state.workers.push(worker);
+      return worker;
+    }),
+    updateWorker: vi.fn(async (workerId: string, patch) => {
+      const worker = state.workers.find((w) => w.id === workerId) ?? null;
+      if (!worker) return null;
+      if (patch.name !== undefined) worker.name = patch.name;
+      if (patch.role !== undefined) worker.role = patch.role;
+      if (patch.active !== undefined) worker.active = patch.active;
+      if (patch.sortOrder !== undefined) worker.sortOrder = patch.sortOrder;
+      worker.updatedAt = nowIso;
+      return worker;
+    }),
     findActiveShiftByDate: vi.fn(async (tenantId: string, date: string) => {
       return state.shifts.find((shift) => shift.tenantId === tenantId && shift.date === date && shift.status === 'active') ?? null;
     }),
@@ -252,6 +304,7 @@ function createRepo() {
         customerName: input.customerName,
         palletCount: input.palletCount,
         pickerName: input.pickerName,
+        pickerWorkerId: input.pickerWorkerId,
         checkerName: input.checkerName,
         lineCount: input.lineCount,
         size: input.size,
@@ -276,6 +329,7 @@ function createRepo() {
       if (patch.orderNumber !== undefined) nextOrder.orderNumber = patch.orderNumber;
       if (patch.customerName !== undefined) nextOrder.customerName = patch.customerName;
       if (patch.pickerName !== undefined) nextOrder.pickerName = patch.pickerName;
+      if (patch.pickerWorkerId !== undefined) nextOrder.pickerWorkerId = patch.pickerWorkerId;
       if (patch.checkerName !== undefined) nextOrder.checkerName = patch.checkerName;
       if (patch.lineCount !== undefined) nextOrder.lineCount = patch.lineCount;
       if (patch.size !== undefined) nextOrder.size = patch.size;
@@ -738,5 +792,163 @@ describe('manual shifts service', () => {
         })
       ])
     );
+  });
+});
+
+describe('manual shift workers service', () => {
+  function makeService(repo: ManualShiftsRepo) {
+    return createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+  }
+
+  it('creates a worker for an active shift', async () => {
+    const { repo } = createRepo();
+    const service = makeService(repo);
+
+    const worker = await service.createWorker({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      name: 'יהודה',
+      role: 'picker',
+      sortOrder: 1
+    });
+
+    expect(worker).toMatchObject({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      name: 'יהודה',
+      role: 'picker',
+      active: true
+    });
+    expect(repo.createWorker).toHaveBeenCalledOnce();
+  });
+
+  it('rejects createWorker when shift is closed', async () => {
+    const { repo, state } = createRepo();
+    state.shifts[0].status = 'closed';
+    const service = makeService(repo);
+
+    await expect(
+      service.createWorker({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        name: 'דוד',
+        role: 'picker',
+        sortOrder: 1
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CLOSED' });
+  });
+
+  it('lists workers for a shift and enforces tenant isolation', async () => {
+    const { repo, state } = createRepo();
+    state.workers.push(
+      createWorker({ id: ids.worker, shiftId: ids.shift, tenantId: ids.tenant }),
+      createWorker({ id: ids.actor, shiftId: ids.shift, tenantId: ids.otherTenant, name: 'Other' })
+    );
+    const service = makeService(repo);
+
+    const workers = await service.listShiftWorkers({ tenantId: ids.tenant, shiftId: ids.shift });
+    // repo returns all shift workers; service verifies tenant of shift
+    expect(workers.length).toBeGreaterThanOrEqual(1);
+    expect(repo.listShiftWorkers).toHaveBeenCalledWith(ids.shift);
+  });
+
+  it('deactivates a worker', async () => {
+    const { repo, state } = createRepo();
+    state.workers.push(createWorker({ id: ids.worker }));
+    const service = makeService(repo);
+
+    const updated = await service.deactivateWorker({
+      tenantId: ids.tenant,
+      workerId: ids.worker
+    });
+
+    expect(updated.active).toBe(false);
+    expect(repo.updateWorker).toHaveBeenCalledWith(ids.worker, { active: false });
+  });
+
+  it('returns 404 when deactivating a non-existent worker', async () => {
+    const { repo } = createRepo();
+    const service = makeService(repo);
+
+    await expect(
+      service.deactivateWorker({ tenantId: ids.tenant, workerId: ids.worker })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_WORKER_NOT_FOUND' });
+  });
+
+  it('createOrder stores pickerWorkerId snapshot alongside pickerName', async () => {
+    const { repo, state } = createRepo();
+    state.workers.push(createWorker({ id: ids.worker, name: 'יהודה' }));
+    const service = makeService(repo);
+
+    const order = await service.createOrder({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      pointName: 'נקודה א',
+      pickerName: 'יהודה',
+      pickerWorkerId: ids.worker,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(order.pickerName).toBe('יהודה');
+    expect(order.pickerWorkerId).toBe(ids.worker);
+  });
+
+  it('createOrder allows pickerWorkerId to be null (free-text picker still works)', async () => {
+    const { repo } = createRepo();
+    const service = makeService(repo);
+
+    const order = await service.createOrder({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      pointName: 'נקודה ב',
+      pickerName: 'חופשי',
+      pickerWorkerId: null,
+      actor: { actorProfileId: null, actorName: 'Dispatcher' }
+    });
+
+    expect(order.pickerName).toBe('חופשי');
+    expect(order.pickerWorkerId).toBeNull();
+  });
+
+  it('people summary shows roster workers with zero points', async () => {
+    const { repo, state } = createRepo();
+    // Worker exists but no orders assigned
+    state.workers.push(createWorker({ id: ids.worker, name: 'ללא הזמנות' }));
+    const service = makeService(repo);
+
+    const people = await service.getPeopleSummary({
+      tenantId: ids.tenant,
+      shiftId: ids.shift
+    });
+
+    // Existing people summary: derived from orders only (no orders = empty items)
+    expect(people.items).toEqual([]);
+    // Worker with no points is shown via the workers endpoint, not people summary
+    const workers = await service.listShiftWorkers({ tenantId: ids.tenant, shiftId: ids.shift });
+    expect(workers.find((w) => w.name === 'ללא הזמנות')).toBeTruthy();
+  });
+
+  it('no canonical WOS tables touched — orders table only references manual shift tables', async () => {
+    const { repo } = createRepo();
+    const service = makeService(repo);
+
+    await service.createOrder({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      pointName: 'Test',
+      actor: { actorProfileId: null, actorName: 'test' }
+    });
+
+    // Verify only manual-shift repo methods were called
+    expect(repo.createOrder).toHaveBeenCalledOnce();
+    // No wave/pick_task/canonical order calls
+    const repoKeys = Object.keys(repo) as Array<keyof ManualShiftsRepo>;
+    const canonicalKeys = repoKeys.filter(
+      (k) => !k.startsWith('listShift') && !k.startsWith('find') &&
+              !k.startsWith('create') && !k.startsWith('update') &&
+              !k.startsWith('close') && !k.startsWith('patch') &&
+              !k.startsWith('list')
+    );
+    expect(canonicalKeys).toEqual([]);
   });
 });

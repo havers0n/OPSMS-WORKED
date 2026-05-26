@@ -11,7 +11,9 @@ import type {
   ManualShiftOrderSize,
   ManualShiftPeopleSummary,
   ManualShiftSession,
-  ManualShiftTodayResponse
+  ManualShiftTodayResponse,
+  ManualShiftWorker,
+  ManualShiftWorkerRole
 } from '@wos/domain';
 import {
   calculateSizeFromLineCount,
@@ -27,7 +29,8 @@ import {
   manualShiftClosed,
   manualShiftLineNotFound,
   manualShiftNotFound,
-  manualShiftOrderNotFound
+  manualShiftOrderNotFound,
+  manualShiftWorkerNotFound
 } from './errors.js';
 import type { ManualShiftsRepo } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
@@ -41,6 +44,23 @@ type ActorContext = {
 };
 
 export type ManualShiftsService = {
+  listShiftWorkers(input: { tenantId: string; shiftId: string }): Promise<ManualShiftWorker[]>;
+  createWorker(input: {
+    tenantId: string;
+    shiftId: string;
+    name: string;
+    role: ManualShiftWorkerRole;
+    sortOrder: number;
+  }): Promise<ManualShiftWorker>;
+  patchWorker(input: {
+    tenantId: string;
+    workerId: string;
+    name?: string;
+    role?: ManualShiftWorkerRole;
+    active?: boolean;
+    sortOrder?: number;
+  }): Promise<ManualShiftWorker>;
+  deactivateWorker(input: { tenantId: string; workerId: string }): Promise<ManualShiftWorker>;
   getTodayShift(tenantId: string): Promise<ManualShiftTodayResponse>;
   createShift(input: { tenantId: string; date?: string; name: string; actor: ActorContext }): Promise<ManualShiftSession>;
   closeShift(input: { tenantId: string; shiftId: string }): Promise<ManualShiftSession>;
@@ -56,6 +76,7 @@ export type ManualShiftsService = {
     orderNumber?: string | null;
     customerName?: string | null;
     pickerName?: string | null;
+    pickerWorkerId?: string | null;
     checkerName?: string | null;
     lineCount?: number | null;
     palletCount?: number | null;
@@ -86,6 +107,7 @@ export type ManualShiftsService = {
     orderNumber?: string | null;
     customerName?: string | null;
     pickerName?: string | null;
+    pickerWorkerId?: string | null;
     checkerName?: string | null;
     lineCount?: number | null;
     palletCount?: number | null;
@@ -270,7 +292,46 @@ export function createManualShiftsServiceFromRepo(
     return buildLineSummaries(lines, orders, errors);
   }
 
+  async function requireWorker(workerId: string) {
+    const worker = await repo.findWorkerById(workerId);
+    if (!worker) throw manualShiftWorkerNotFound(workerId);
+    return worker;
+  }
+
   return {
+    async listShiftWorkers(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) throw manualShiftNotFound(input.shiftId);
+      return repo.listShiftWorkers(input.shiftId);
+    },
+
+    async createWorker(input) {
+      const shift = await requireActiveShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) throw manualShiftNotFound(input.shiftId);
+      return repo.createWorker(input);
+    },
+
+    async patchWorker(input) {
+      const worker = await requireWorker(input.workerId);
+      if (worker.tenantId !== input.tenantId) throw manualShiftWorkerNotFound(input.workerId);
+      const updated = await repo.updateWorker(input.workerId, {
+        name: input.name,
+        role: input.role,
+        active: input.active,
+        sortOrder: input.sortOrder
+      });
+      if (!updated) throw manualShiftWorkerNotFound(input.workerId);
+      return updated;
+    },
+
+    async deactivateWorker(input) {
+      const worker = await requireWorker(input.workerId);
+      if (worker.tenantId !== input.tenantId) throw manualShiftWorkerNotFound(input.workerId);
+      const updated = await repo.updateWorker(input.workerId, { active: false });
+      if (!updated) throw manualShiftWorkerNotFound(input.workerId);
+      return updated;
+    },
+
     async getTodayShift(tenantId) {
       const date = getTodayDate();
       const shift = await repo.findActiveShiftByDate(tenantId, date);
@@ -401,6 +462,7 @@ export function createManualShiftsServiceFromRepo(
         customerName: input.customerName ?? null,
         palletCount: input.palletCount ?? null,
         pickerName: input.pickerName ?? null,
+        pickerWorkerId: input.pickerWorkerId ?? null,
         checkerName: input.checkerName ?? null,
         lineCount: input.lineCount ?? null,
         size: deriveOrderSize(input.lineCount, input.size),
@@ -468,6 +530,7 @@ export function createManualShiftsServiceFromRepo(
           orderNumber: row.orderNumber,
           customerName: null,
           pickerName: row.pickerName,
+          pickerWorkerId: null,
           checkerName: null,
           lineCount: row.lineCount,
           palletCount: row.palletCount,
@@ -515,6 +578,7 @@ export function createManualShiftsServiceFromRepo(
         orderNumber: input.orderNumber,
         customerName: input.customerName,
         pickerName: input.pickerName,
+        pickerWorkerId: input.pickerWorkerId,
         checkerName: input.checkerName,
         lineCount: input.lineCount,
         palletCount: input.palletCount,

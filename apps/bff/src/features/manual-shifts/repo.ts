@@ -6,7 +6,9 @@ import type {
   ManualShiftOrder,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
-  ManualShiftSession
+  ManualShiftSession,
+  ManualShiftWorker,
+  ManualShiftWorkerRole
 } from '@wos/domain';
 
 type ManualShiftSessionRow = {
@@ -29,6 +31,18 @@ type ManualShiftLineRow = {
   created_at: string;
 };
 
+type ManualShiftWorkerRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  name: string;
+  role: ManualShiftWorkerRole;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 type ManualShiftOrderRow = {
   id: string;
   tenant_id: string;
@@ -39,6 +53,7 @@ type ManualShiftOrderRow = {
   point_name: string | null;
   pallet_count: number | null;
   picker_name: string | null;
+  picker_worker_id: string | null;
   checker_name: string | null;
   line_count: number | null;
   size: ManualShiftOrder['size'];
@@ -101,8 +116,10 @@ const sessionColumns =
   'id,tenant_id,date,name,status,created_by_name,created_at,closed_at';
 const lineColumns =
   'id,tenant_id,shift_id,name,sort_order,created_at';
+const workerColumns =
+  'id,tenant_id,shift_id,name,role,active,sort_order,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at';
 const eventColumns =
   'id,tenant_id,shift_id,line_id,order_id,event_type,actor_name,actor_profile_id,from_status,to_status,payload,created_at';
 const errorColumns =
@@ -154,6 +171,20 @@ function mapLineSummaryAggRow(row: ManualShiftLineSummaryAggRow): ManualShiftLin
   };
 }
 
+function mapWorkerRow(row: ManualShiftWorkerRow): ManualShiftWorker {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    name: row.name,
+    role: row.role,
+    active: row.active,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
   return {
     id: row.id,
@@ -165,6 +196,7 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     pointName: row.point_name,
     palletCount: row.pallet_count !== null ? Number(row.pallet_count) : null,
     pickerName: row.picker_name,
+    pickerWorkerId: row.picker_worker_id,
     checkerName: row.checker_name,
     lineCount: row.line_count,
     size: row.size,
@@ -217,6 +249,7 @@ export type ManualShiftOrderPatch = {
   pointName?: string | null;
   palletCount?: number | null;
   pickerName?: string | null;
+  pickerWorkerId?: string | null;
   checkerName?: string | null;
   lineCount?: number | null;
   size?: ManualShiftOrder['size'];
@@ -229,6 +262,21 @@ export type ManualShiftOrderPatch = {
 };
 
 export type ManualShiftsRepo = {
+  listShiftWorkers(shiftId: string): Promise<ManualShiftWorker[]>;
+  findWorkerById(workerId: string): Promise<ManualShiftWorker | null>;
+  createWorker(input: {
+    tenantId: string;
+    shiftId: string;
+    name: string;
+    role: ManualShiftWorkerRole;
+    sortOrder: number;
+  }): Promise<ManualShiftWorker>;
+  updateWorker(workerId: string, patch: {
+    name?: string;
+    role?: ManualShiftWorkerRole;
+    active?: boolean;
+    sortOrder?: number;
+  }): Promise<ManualShiftWorker | null>;
   findActiveShiftByDate(tenantId: string, date: string): Promise<ManualShiftSession | null>;
   findShiftById(shiftId: string): Promise<ManualShiftSession | null>;
   createShift(input: {
@@ -261,6 +309,7 @@ export type ManualShiftsRepo = {
     pointName: string | null;
     palletCount: number | null;
     pickerName: string | null;
+    pickerWorkerId: string | null;
     checkerName: string | null;
     lineCount: number | null;
     size: ManualShiftOrder['size'];
@@ -296,6 +345,64 @@ export type ManualShiftsRepo = {
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
   return {
+    async listShiftWorkers(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_workers')
+        .select(workerColumns)
+        .eq('shift_id', shiftId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftWorkerRow[]).map(mapWorkerRow);
+    },
+
+    async findWorkerById(workerId) {
+      const { data, error } = await supabase
+        .from('manual_shift_workers')
+        .select(workerColumns)
+        .eq('id', workerId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapWorkerRow(data as ManualShiftWorkerRow) : null;
+    },
+
+    async createWorker(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_workers')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          name: input.name,
+          role: input.role,
+          sort_order: input.sortOrder
+        })
+        .select(workerColumns)
+        .single();
+
+      if (error) throw error;
+      return mapWorkerRow(data as ManualShiftWorkerRow);
+    },
+
+    async updateWorker(workerId, patch) {
+      const payload: Record<string, unknown> = {};
+      if (patch.name !== undefined) payload.name = patch.name;
+      if (patch.role !== undefined) payload.role = patch.role;
+      if (patch.active !== undefined) payload.active = patch.active;
+      if (patch.sortOrder !== undefined) payload.sort_order = patch.sortOrder;
+
+      const { data, error } = await supabase
+        .from('manual_shift_workers')
+        .update(payload)
+        .eq('id', workerId)
+        .select(workerColumns)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapWorkerRow(data as ManualShiftWorkerRow) : null;
+    },
+
     async findActiveShiftByDate(tenantId, date) {
       const { data, error } = await supabase
         .from('manual_shift_sessions')
@@ -499,6 +606,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           point_name: input.pointName,
           pallet_count: input.palletCount,
           picker_name: input.pickerName,
+          picker_worker_id: input.pickerWorkerId,
           checker_name: input.checkerName,
           line_count: input.lineCount,
           size: input.size,
@@ -523,6 +631,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (patch.pointName !== undefined) payload.point_name = patch.pointName;
       if (patch.palletCount !== undefined) payload.pallet_count = patch.palletCount;
       if (patch.pickerName !== undefined) payload.picker_name = patch.pickerName;
+      if (patch.pickerWorkerId !== undefined) payload.picker_worker_id = patch.pickerWorkerId;
       if (patch.checkerName !== undefined) payload.checker_name = patch.checkerName;
       if (patch.lineCount !== undefined) payload.line_count = patch.lineCount;
       if (patch.size !== undefined) payload.size = patch.size;

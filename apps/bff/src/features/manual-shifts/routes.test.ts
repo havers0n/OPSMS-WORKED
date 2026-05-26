@@ -10,7 +10,8 @@ import type {
   ManualShiftOrderError,
   ManualShiftPeopleSummary,
   ManualShiftSession,
-  ManualShiftTodayResponse
+  ManualShiftTodayResponse,
+  ManualShiftWorker
 } from '@wos/domain';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import { ApiError } from '../../errors.js';
@@ -22,7 +23,8 @@ const ids = {
   user: '22222222-2222-4222-8222-222222222222',
   shift: '33333333-3333-4333-8333-333333333333',
   line: '44444444-4444-4444-8444-444444444444',
-  order: '55555555-5555-4555-8555-555555555555'
+  order: '55555555-5555-4555-8555-555555555555',
+  worker: '66666666-6666-4666-8666-666666666666'
 };
 
 const authContext = {
@@ -84,6 +86,7 @@ function createOrder(status: ManualShiftOrder['status']): ManualShiftOrder {
     pointName: 'ירושלים',
     palletCount: null,
     pickerName: 'יהודה',
+    pickerWorkerId: null,
     checkerName: null,
     lineCount: 12,
     size: 'L',
@@ -95,6 +98,20 @@ function createOrder(status: ManualShiftOrder['status']): ManualShiftOrder {
     comment: null,
     createdAt: '2026-05-26T07:15:00.000Z',
     updatedAt: '2026-05-26T07:20:00.000Z'
+  };
+}
+
+function createWorker(): ManualShiftWorker {
+  return {
+    id: ids.worker,
+    tenantId: ids.tenant,
+    shiftId: ids.shift,
+    name: 'יהודה',
+    role: 'picker',
+    active: true,
+    sortOrder: 1,
+    createdAt: '2026-05-26T07:00:00.000Z',
+    updatedAt: '2026-05-26T07:00:00.000Z'
   };
 }
 
@@ -145,6 +162,10 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
   };
 
   return {
+    listShiftWorkers: vi.fn(async () => [createWorker()]),
+    createWorker: vi.fn(async () => createWorker()),
+    patchWorker: vi.fn(async () => createWorker()),
+    deactivateWorker: vi.fn(async () => ({ ...createWorker(), active: false })),
     getTodayShift: vi.fn(async () => todayResponse),
     createShift: vi.fn(async () => createSession('active')),
     closeShift: vi.fn(async () => createSession('closed')),

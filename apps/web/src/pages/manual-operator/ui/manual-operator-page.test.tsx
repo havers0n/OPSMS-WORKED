@@ -176,6 +176,9 @@ describe('ManualOperatorPage', () => {
     };
 
     mockedBffRequest.mockImplementation((url: string) => {
+      if (url.includes('/workers')) {
+        return Promise.resolve([]);
+      }
       if (url.includes('/people-summary')) {
         return Promise.resolve({ shiftId: 'shift-1', items: [] });
       }
@@ -201,10 +204,10 @@ describe('ManualOperatorPage', () => {
       expect(screen.getByText('אין נקודות לבדיקה')).toBeTruthy();
     });
 
-    // Click People tab — should show empty people state
+    // Click People tab — should show empty roster state
     fireEvent.click(screen.getByRole('button', { name: 'עובדים' }));
     await waitFor(() => {
-      expect(screen.getByText('אין מלקטים פעילים')).toBeTruthy();
+      expect(screen.getByText('אין עובדים ברשימה')).toBeTruthy();
     });
 
     // Click Day tab — should show day summary with export button

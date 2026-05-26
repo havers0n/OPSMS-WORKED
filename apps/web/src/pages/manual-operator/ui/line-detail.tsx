@@ -137,7 +137,7 @@ export function LineDetail({ summary, onBack }: LineDetailProps) {
       )}
 
       {overlay === 'add-order' && (
-        <AddOrderSheet lineId={line.id} onClose={closeOverlay} />
+        <AddOrderSheet lineId={line.id} shiftId={line.shiftId} onClose={closeOverlay} />
       )}
 
       {overlay === 'bulk-paste' && (

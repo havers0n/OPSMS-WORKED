@@ -6,7 +6,9 @@ import type {
   ManualShiftBulkAddResult,
   ManualShiftOrderStatus,
   ManualShiftOrderErrorType,
-  ManualShiftOrderSize
+  ManualShiftOrderSize,
+  ManualShiftWorker,
+  ManualShiftWorkerRole
 } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -15,6 +17,22 @@ import { manualShiftKeys } from './queries';
 type CreateShiftInput = { name: string; date?: string };
 type CreateLineInput = { shiftId: string; name: string; sortOrder?: number };
 
+type CreateWorkerInput = {
+  shiftId: string;
+  name: string;
+  role?: ManualShiftWorkerRole;
+  sortOrder?: number;
+};
+
+type PatchWorkerInput = {
+  workerId: string;
+  shiftId: string;
+  name?: string;
+  role?: ManualShiftWorkerRole;
+  active?: boolean;
+  sortOrder?: number;
+};
+
 type CreateOrderInput = {
   lineId: string;
   pointName?: string | null;
@@ -22,6 +40,7 @@ type CreateOrderInput = {
   palletCount?: number | null;
   customerName?: string | null;
   pickerName?: string | null;
+  pickerWorkerId?: string | null;
   checkerName?: string | null;
   lineCount?: number | null;
   size?: ManualShiftOrderSize;
@@ -47,6 +66,20 @@ type CreateOrderErrorInput = {
   type: ManualShiftOrderErrorType;
   comment?: string;
 };
+
+async function createWorker({ shiftId, ...body }: CreateWorkerInput): Promise<ManualShiftWorker> {
+  return bffRequest<ManualShiftWorker>(`/api/manual-shifts/${shiftId}/workers`, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  });
+}
+
+async function patchWorker({ workerId, shiftId: _shiftId, ...body }: PatchWorkerInput): Promise<ManualShiftWorker> {
+  return bffRequest<ManualShiftWorker>(`/api/manual-shift-workers/${workerId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body)
+  });
+}
 
 async function createShift(input: CreateShiftInput): Promise<ManualShiftSession> {
   return bffRequest<ManualShiftSession>('/api/manual-shifts', {
@@ -97,6 +130,27 @@ async function createOrderError({
   return bffRequest<ManualShiftOrderError>(`/api/manual-shift-orders/${orderId}/errors`, {
     method: 'POST',
     body: JSON.stringify({ type, comment })
+  });
+}
+
+export function useCreateManualShiftWorker(shiftId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<CreateWorkerInput, 'shiftId'>) => createWorker({ ...input, shiftId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workers(shiftId) });
+    }
+  });
+}
+
+export function usePatchManualShiftWorker(shiftId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<PatchWorkerInput, 'shiftId'>) =>
+      patchWorker({ ...input, shiftId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workers(shiftId) });
+    }
   });
 }
 

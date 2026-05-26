@@ -39,3 +39,7 @@ export function invalidManualShiftOrderCreateStatus(status: string) {
     `Manual shift order cannot be created with initial status ${status}.`
   );
 }
+
+export function manualShiftWorkerNotFound(workerId: string) {
+  return new ApiError(404, 'MANUAL_SHIFT_WORKER_NOT_FOUND', `Manual shift worker ${workerId} was not found.`);
+}

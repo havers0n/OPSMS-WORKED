@@ -8,6 +8,7 @@ import {
   createManualShiftLineBodySchema,
   createManualShiftOrderBodySchema,
   createManualShiftOrderErrorBodySchema,
+  createManualShiftWorkerBodySchema,
   idResponseSchema,
   manualShiftDaySummaryResponseSchema,
   manualShiftLineResponseSchema,
@@ -19,8 +20,11 @@ import {
   manualShiftSessionResponseSchema,
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
+  manualShiftWorkerResponseSchema,
+  manualShiftWorkersResponseSchema,
   patchManualShiftLineBodySchema,
   patchManualShiftOrderBodySchema,
+  patchManualShiftWorkerBodySchema,
   transitionManualShiftOrderStatusBodySchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
@@ -185,6 +189,7 @@ export function registerManualShiftsRoutes(
       orderNumber: body.orderNumber,
       customerName: body.customerName,
       pickerName: body.pickerName,
+      pickerWorkerId: body.pickerWorkerId,
       checkerName: body.checkerName,
       lineCount: body.lineCount,
       palletCount: body.palletCount,
@@ -235,6 +240,7 @@ export function registerManualShiftsRoutes(
       orderNumber: body.orderNumber,
       customerName: body.customerName,
       pickerName: body.pickerName,
+      pickerWorkerId: body.pickerWorkerId,
       checkerName: body.checkerName,
       lineCount: body.lineCount,
       palletCount: body.palletCount,
@@ -284,6 +290,71 @@ export function registerManualShiftsRoutes(
 
     void reply.code(201);
     return parseOrThrow(manualShiftOrderErrorResponseSchema, error);
+  });
+
+  app.get('/api/manual-shifts/:shiftId/workers', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { shiftId: string }).shiftId
+    }).id;
+    const workers = await getManualShiftsService(auth).listShiftWorkers({ tenantId, shiftId });
+    return parseOrThrow(manualShiftWorkersResponseSchema, workers);
+  });
+
+  app.post('/api/manual-shifts/:shiftId/workers', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { shiftId: string }).shiftId
+    }).id;
+    const body = parseOrThrow(createManualShiftWorkerBodySchema, request.body);
+    const worker = await getManualShiftsService(auth).createWorker({
+      tenantId,
+      shiftId,
+      name: body.name,
+      role: body.role,
+      sortOrder: body.sortOrder
+    });
+
+    void reply.code(201);
+    return parseOrThrow(manualShiftWorkerResponseSchema, worker);
+  });
+
+  app.patch('/api/manual-shift-workers/:workerId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const workerId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { workerId: string }).workerId
+    }).id;
+    const body = parseOrThrow(patchManualShiftWorkerBodySchema, request.body);
+    const worker = await getManualShiftsService(auth).patchWorker({
+      tenantId,
+      workerId,
+      name: body.name,
+      role: body.role,
+      active: body.active,
+      sortOrder: body.sortOrder
+    });
+    return parseOrThrow(manualShiftWorkerResponseSchema, worker);
+  });
+
+  app.patch('/api/manual-shift-workers/:workerId/deactivate', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const workerId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { workerId: string }).workerId
+    }).id;
+    const worker = await getManualShiftsService(auth).deactivateWorker({ tenantId, workerId });
+    return parseOrThrow(manualShiftWorkerResponseSchema, worker);
   });
 
   app.get('/api/manual-shifts/:shiftId/people-summary', async (request, reply) => {

@@ -1,5 +1,28 @@
 import { z } from 'zod';
 
+export const manualShiftWorkerRoleSchema = z.enum(['picker', 'checker', 'packer', 'other']);
+export type ManualShiftWorkerRole = z.infer<typeof manualShiftWorkerRoleSchema>;
+
+export const MANUAL_SHIFT_WORKER_ROLE_LABELS: Record<ManualShiftWorkerRole, string> = {
+  picker: 'מלקט',
+  checker: 'בודק',
+  packer: 'אורז',
+  other: 'אחר'
+};
+
+export const manualShiftWorkerSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  name: z.string().trim().min(1),
+  role: manualShiftWorkerRoleSchema,
+  active: z.boolean(),
+  sortOrder: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+export type ManualShiftWorker = z.infer<typeof manualShiftWorkerSchema>;
+
 export const manualShiftSessionStatusSchema = z.enum(['active', 'closed']);
 export type ManualShiftSessionStatus = z.infer<typeof manualShiftSessionStatusSchema>;
 
@@ -75,6 +98,7 @@ export const manualShiftOrderSchema = z.object({
   pointName: z.string().trim().min(1).nullable(),
   palletCount: z.number().min(0).nullable(),
   pickerName: z.string().trim().min(1).nullable(),
+  pickerWorkerId: z.string().uuid().nullable(),
   checkerName: z.string().trim().min(1).nullable(),
   lineCount: z.number().int().positive().nullable(),
   size: manualShiftOrderSizeSchema,
