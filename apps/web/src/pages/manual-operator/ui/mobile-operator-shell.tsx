@@ -4,12 +4,17 @@ import type { ManualShiftSession } from '@wos/domain';
 
 export type OperatorTab = 'queue' | 'check' | 'people' | 'day';
 
+interface FabAction {
+  ariaLabel: string;
+  onClick: () => void;
+}
+
 interface MobileOperatorShellProps {
   children: ReactNode;
   activeTab: OperatorTab;
   onChangeTab: (tab: OperatorTab) => void;
   shift: ManualShiftSession | null;
-  onAddLine?: () => void;
+  fab?: FabAction;
 }
 
 export function MobileOperatorShell({
@@ -17,7 +22,7 @@ export function MobileOperatorShell({
   activeTab,
   onChangeTab,
   shift,
-  onAddLine
+  fab
 }: MobileOperatorShellProps) {
   const todayStr = new Intl.DateTimeFormat('he-IL', {
     weekday: 'long',
@@ -46,11 +51,11 @@ export function MobileOperatorShell({
         </main>
 
         {/* Floating Action Button */}
-        {onAddLine && (
+        {fab && (
           <button
-            onClick={onAddLine}
+            onClick={fab.onClick}
             className="absolute bottom-20 left-4 w-14 h-14 bg-gray-900 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform z-30"
-            aria-label="הוסף קו"
+            aria-label={fab.ariaLabel}
           >
             <Plus size={28} />
           </button>

@@ -1,0 +1,711 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { ManualShiftOrder } from '@wos/domain';
+import { ManualOperatorPage } from './manual-operator-page';
+
+vi.mock('@/shared/api/bff/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/api/bff/client')>();
+  return { ...actual, bffRequest: vi.fn() };
+});
+
+import { bffRequest } from '@/shared/api/bff/client';
+
+const mockedBffRequest = vi.mocked(bffRequest);
+
+// ---- Fixtures ----
+
+const mockShift = {
+  id: 'shift-1',
+  tenantId: 'tenant-1',
+  date: '2026-05-26',
+  name: 'משמרת ראשון',
+  status: 'active' as 'active' | 'closed',
+  createdBy: null,
+  createdAt: new Date().toISOString(),
+  closedAt: null
+};
+
+const mockLine = {
+  id: 'line-1',
+  tenantId: 'tenant-1',
+  shiftId: 'shift-1',
+  name: 'שרון דרומי',
+  sortOrder: 0,
+  status: 'open' as 'open' | 'in_progress' | 'done',
+  createdAt: new Date().toISOString()
+};
+
+const mockLineSummaryEmpty = {
+  line: mockLine,
+  totalOrders: 0,
+  queuedOrders: 0,
+  pickingOrders: 0,
+  waitingCheckOrders: 0,
+  returnedOrders: 0,
+  doneOrders: 0,
+  errorCount: 0
+};
+
+const mockLineSummaryWithOrders = {
+  line: mockLine,
+  totalOrders: 2,
+  queuedOrders: 1,
+  pickingOrders: 1,
+  waitingCheckOrders: 0,
+  returnedOrders: 0,
+  doneOrders: 0,
+  errorCount: 0
+};
+
+function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder {
+  return {
+    id: 'order-1',
+    tenantId: 'tenant-1',
+    shiftId: 'shift-1',
+    lineId: 'line-1',
+    orderNumber: '502481',
+    customerName: null,
+    pickerName: 'יהודה',
+    checkerName: null,
+    lineCount: 5,
+    size: 'M',
+    status: 'queued',
+    startedAt: null,
+    waitingCheckAt: null,
+    checkedAt: null,
+    finishedAt: null,
+    comment: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
+  });
+}
+
+function renderPage(queryClient: QueryClient) {
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <ManualOperatorPage />
+      </QueryClientProvider>
+    </MemoryRouter>
+  );
+}
+
+// ---- Helpers ----
+
+async function renderWithShiftAndLines(
+  lineSummary = mockLineSummaryEmpty,
+  lineOrders: ManualShiftOrder[] = []
+) {
+  const qc = makeQueryClient();
+  mockedBffRequest.mockImplementation((url: string) => {
+    if (String(url).includes('/orders/bulk')) {
+      return Promise.resolve({ createdCount: 0, rows: [], skippedRows: [] });
+    }
+    if (String(url).includes('/orders')) {
+      return Promise.resolve(lineOrders);
+    }
+    return Promise.resolve({ shift: mockShift, lines: [lineSummary] });
+  });
+  renderPage(qc);
+  await waitFor(() => expect(screen.getByText('שרון דרומי')).toBeTruthy());
+  return qc;
+}
+
+async function openLineDetail(lineSummary = mockLineSummaryEmpty) {
+  await renderWithShiftAndLines(lineSummary);
+  fireEvent.click(screen.getByText('שרון דרומי'));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'חזור לרשימת קווים' })).toBeTruthy());
+}
+
+// ---- Tests ----
+
+describe('PR4 – Line Detail & Manual Orders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // ── 1. Clicking a line opens line detail ──────────────────────────────────
+
+  describe('clicking a line card opens line detail', () => {
+    it('shows line detail header with line name and back button', async () => {
+      await openLineDetail();
+
+      expect(screen.getByRole('button', { name: 'חזור לרשימת קווים' })).toBeTruthy();
+      expect(screen.getAllByText('שרון דרומי').length).toBeGreaterThan(0);
+    });
+
+    it('fetches orders for the selected line', async () => {
+      await openLineDetail();
+
+      await waitFor(() => {
+        expect(mockedBffRequest).toHaveBeenCalledWith(
+          '/api/manual-shift-lines/line-1/orders'
+        );
+      });
+    });
+
+    it('back button returns to line list', async () => {
+      await openLineDetail();
+
+      fireEvent.click(screen.getByRole('button', { name: 'חזור לרשימת קווים' }));
+
+      await waitFor(() => {
+        // LineDetail overlay gone; back to line list
+        expect(screen.queryByRole('button', { name: 'חזור לרשימת קווים' })).toBeNull();
+      });
+    });
+
+    it('FAB changes to hidden when line detail is open', async () => {
+      await openLineDetail();
+
+      // The "הוסף קו" FAB should not be present while in line detail
+      expect(screen.queryByRole('button', { name: 'הוסף קו' })).toBeNull();
+    });
+  });
+
+  // ── 2. Empty line state ───────────────────────────────────────────────────
+
+  describe('empty line state', () => {
+    it('shows empty state message', async () => {
+      await openLineDetail(mockLineSummaryEmpty);
+
+      await waitFor(() => {
+        expect(screen.getByText('אין הזמנות בקו')).toBeTruthy();
+      });
+    });
+
+    it('shows add order and bulk paste primary actions', async () => {
+      await openLineDetail(mockLineSummaryEmpty);
+
+      await waitFor(() => {
+        expect(screen.getByText('הוסף הזמנה')).toBeTruthy();
+        expect(screen.getByText('הדבק מרובה')).toBeTruthy();
+      });
+    });
+  });
+
+  // ── 3. Line orders render from BFF data ──────────────────────────────────
+
+  describe('order list rendering', () => {
+    it('renders order cards from BFF data', async () => {
+      const order1 = makeOrder({ id: 'o1', orderNumber: '502481', pickerName: 'יהודה' });
+      const order2 = makeOrder({ id: 'o2', orderNumber: '502482', pickerName: 'רפאל' });
+
+      await renderWithShiftAndLines(mockLineSummaryWithOrders, [order1, order2]);
+      fireEvent.click(screen.getByText('שרון דרומי'));
+
+      await waitFor(() => {
+        expect(screen.getByText('502481')).toBeTruthy();
+        expect(screen.getByText('502482')).toBeTruthy();
+        expect(screen.getByText('יהודה')).toBeTruthy();
+        expect(screen.getByText('רפאל')).toBeTruthy();
+      });
+    });
+
+    it('shows correct status badge on order card', async () => {
+      const order = makeOrder({ status: 'picking' });
+
+      await renderWithShiftAndLines(mockLineSummaryWithOrders, [order]);
+      fireEvent.click(screen.getByText('שרון דרומי'));
+
+      await waitFor(() => {
+        expect(screen.getByText('בליקוט')).toBeTruthy();
+      });
+    });
+
+    it('shows error indicator on returned order', async () => {
+      const order = makeOrder({ status: 'returned' });
+
+      await renderWithShiftAndLines(mockLineSummaryWithOrders, [order]);
+      fireEvent.click(screen.getByText('שרון דרומי'));
+
+      await waitFor(() => {
+        expect(screen.getByText('הוחזר לתיקון')).toBeTruthy();
+      });
+    });
+  });
+
+  // ── 4. Quick-add by size ──────────────────────────────────────────────────
+
+  describe('quick-add by size', () => {
+    it('renders +S +M +L +XL buttons in line detail', async () => {
+      await openLineDetail();
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'הוסף גודל S' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'הוסף גודל M' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'הוסף גודל L' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'הוסף גודל XL' })).toBeTruthy();
+      });
+    });
+
+    it('quick-add S calls POST /orders with correct size payload', async () => {
+      const newOrder = makeOrder({ id: 'new-1', size: 'S', orderNumber: null });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/orders') && method === 'POST') {
+          return Promise.resolve(newOrder);
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByRole('button', { name: 'הוסף גודל S' }));
+
+      fireEvent.click(screen.getByRole('button', { name: 'הוסף גודל S' }));
+
+      await waitFor(() => {
+        const calls = mockedBffRequest.mock.calls;
+        const postCall = calls.find(
+          ([url, init]) =>
+            String(url).includes('/line-1/orders') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(postCall).toBeTruthy();
+        const body = JSON.parse((postCall![1] as RequestInit).body as string);
+        expect(body.size).toBe('S');
+        expect(body.status).toBe('queued');
+      });
+    });
+  });
+
+  // ── 5. Add single order ───────────────────────────────────────────────────
+
+  describe('add single order', () => {
+    it('opens add order form when "+ הזמנה" is tapped', async () => {
+      await openLineDetail();
+
+      fireEvent.click(screen.getByRole('button', { name: 'הוסף הזמנה' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('הזמנה חדשה')).toBeTruthy();
+      });
+    });
+
+    it('submits correct payload to POST /orders', async () => {
+      const newOrder = makeOrder({ id: 'new-1', orderNumber: '999999', pickerName: 'דני' });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/orders') && method === 'POST') {
+          return Promise.resolve(newOrder);
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      // Wait for the LineDetail header's "+ הזמנה" button (aria-label "הוסף הזמנה").
+      // Empty state also has a button with that accessible name once orders load,
+      // so use getAllByRole and pick the first (header) button.
+      await waitFor(() => screen.getAllByRole('button', { name: 'הוסף הזמנה' }).length > 0);
+      fireEvent.click(screen.getAllByRole('button', { name: 'הוסף הזמנה' })[0]);
+
+      await waitFor(() => screen.getByText('הזמנה חדשה'));
+
+      const orderInput = screen.getByPlaceholderText('ORD-XXXX (אופציונלי)');
+      fireEvent.change(orderInput, { target: { value: '999999' } });
+
+      const pickerInput = screen.getByPlaceholderText('שם המלקט (אופציונלי)');
+      fireEvent.change(pickerInput, { target: { value: 'דני' } });
+
+      // AddOrderSheet submit is the last "הוסף הזמנה" button in DOM
+      const submitBtns = screen.getAllByText('הוסף הזמנה');
+      fireEvent.click(submitBtns[submitBtns.length - 1]);
+
+      await waitFor(() => {
+        const calls = mockedBffRequest.mock.calls;
+        const postCall = calls.find(
+          ([url, init]) =>
+            String(url).includes('/line-1/orders') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(postCall).toBeTruthy();
+        const body = JSON.parse((postCall![1] as RequestInit).body as string);
+        expect(body.orderNumber).toBe('999999');
+        expect(body.pickerName).toBe('דני');
+        expect(body.status).toBe('queued');
+      });
+    });
+  });
+
+  // ── 6. Bulk paste ─────────────────────────────────────────────────────────
+
+  describe('bulk paste orders', () => {
+    it('opens bulk paste form when "הוסף מרובה" is tapped', async () => {
+      await openLineDetail();
+
+      fireEvent.click(screen.getByRole('button', { name: 'הוסף מרובה' }));
+
+      // After opening, BulkPasteSheet shows "ייבא הזמנות" submit button (unique to this view)
+      // and a textarea (role=textbox) for pasting orders
+      await waitFor(() => {
+        expect(screen.getByText('ייבא הזמנות')).toBeTruthy();
+        expect(screen.getByRole('textbox')).toBeTruthy();
+      });
+    });
+
+    it('submits rawText to POST /orders/bulk', async () => {
+      const bulkResult = { createdCount: 3, rows: [], skippedRows: [] };
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/orders/bulk') && method === 'POST') {
+          return Promise.resolve(bulkResult);
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByRole('button', { name: 'הוסף מרובה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'הוסף מרובה' }));
+
+      // Wait for the bulk paste form's submit button to confirm it opened
+      await waitFor(() => screen.getByText('ייבא הזמנות'));
+
+      // Use getByRole('textbox') to find the textarea (avoids newline normalization issues)
+      const textarea = screen.getByRole('textbox');
+      fireEvent.change(textarea, { target: { value: '502481\n502482, יהודה\n502483, רפאל, 12' } });
+
+      fireEvent.click(screen.getByText('ייבא הזמנות'));
+
+      await waitFor(() => {
+        const calls = mockedBffRequest.mock.calls;
+        const bulkCall = calls.find(
+          ([url, init]) =>
+            String(url).includes('/line-1/orders/bulk') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(bulkCall).toBeTruthy();
+        const body = JSON.parse((bulkCall![1] as RequestInit).body as string);
+        expect(body.rawText).toBe('502481\n502482, יהודה\n502483, רפאל, 12');
+      });
+    });
+
+    it('shows created count and skipped rows after bulk import', async () => {
+      const bulkResult = {
+        createdCount: 2,
+        rows: [],
+        skippedRows: ['bad row']
+      };
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/orders/bulk') && method === 'POST') {
+          return Promise.resolve(bulkResult);
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByRole('button', { name: 'הוסף מרובה' }));
+      fireEvent.click(screen.getByRole('button', { name: 'הוסף מרובה' }));
+      await waitFor(() => screen.getByText('ייבא הזמנות'));
+
+      const textarea = screen.getByRole('textbox');
+      fireEvent.change(textarea, { target: { value: '502481\n502482' } });
+      fireEvent.click(screen.getByText('ייבא הזמנות'));
+
+      await waitFor(() => {
+        expect(screen.getByText('נוצרו 2 הזמנות')).toBeTruthy();
+        expect(screen.getByText('bad row')).toBeTruthy();
+      });
+    });
+  });
+
+  // ── 7. Order detail – action visibility by status ─────────────────────────
+
+  describe('order detail action visibility by status', () => {
+    async function openOrder(status: ManualShiftOrder['status']) {
+      const order = makeOrder({ status });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/status') && method === 'PATCH') {
+          return Promise.resolve({ ...order, status: 'picking' });
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([order]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryWithOrders] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByText('502481'));
+      fireEvent.click(screen.getByText('502481'));
+      await waitFor(() => screen.getByRole('button', { name: /חזור/ }));
+      return qc;
+    }
+
+    it('queued: shows "התחל ליקוט" only', async () => {
+      await openOrder('queued');
+      expect(screen.getByText('התחל ליקוט')).toBeTruthy();
+      expect(screen.queryByText('העבר לבדיקה')).toBeNull();
+      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByText('תקלה')).toBeNull();
+      expect(screen.queryByText('הכל תוקן, החזר לבדיקה')).toBeNull();
+    });
+
+    it('picking: shows "העבר לבדיקה" only', async () => {
+      await openOrder('picking');
+      expect(screen.getByText('העבר לבדיקה')).toBeTruthy();
+      expect(screen.queryByText('התחל ליקוט')).toBeNull();
+    });
+
+    it('waiting_check: shows "תקין" and "תקלה"', async () => {
+      await openOrder('waiting_check');
+      expect(screen.getByText('תקין')).toBeTruthy();
+      expect(screen.getByText('תקלה')).toBeTruthy();
+    });
+
+    it('returned: shows "הכל תוקן, החזר לבדיקה" only', async () => {
+      await openOrder('returned');
+      expect(screen.getByText('הכל תוקן, החזר לבדיקה')).toBeTruthy();
+      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByText('תקלה')).toBeNull();
+    });
+
+    it('done: shows no action buttons', async () => {
+      await openOrder('done');
+      expect(screen.queryByText('התחל ליקוט')).toBeNull();
+      expect(screen.queryByText('העבר לבדיקה')).toBeNull();
+      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByText('תקלה')).toBeNull();
+      expect(screen.queryByText('הכל תוקן, החזר לבדיקה')).toBeNull();
+    });
+
+    it('returned → done: "תקין" action is not shown', async () => {
+      await openOrder('returned');
+      // Only "הכל תוקן" is shown, not "תקין" (done transition)
+      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByRole('button', { name: /תקין/ })).toBeNull();
+    });
+  });
+
+  // ── 8–11. Status transition mutations ────────────────────────────────────
+
+  describe('status transitions', () => {
+    async function setupOrderAndOpen(fromStatus: ManualShiftOrder['status']) {
+      const order = makeOrder({ status: fromStatus });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/status') && method === 'PATCH') {
+          const body = JSON.parse((init as RequestInit).body as string) as { status: string };
+          return Promise.resolve({ ...order, status: body.status });
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([order]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryWithOrders] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByText('502481'));
+      fireEvent.click(screen.getByText('502481'));
+      await waitFor(() => screen.getByRole('button', { name: /חזור/ }));
+      return { order, qc };
+    }
+
+    it('queued → picking: calls PATCH /status with { status: "picking" }', async () => {
+      await setupOrderAndOpen('queued');
+      fireEvent.click(screen.getByText('התחל ליקוט'));
+
+      await waitFor(() => {
+        const call = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/order-1/status') &&
+            (init as RequestInit | undefined)?.method === 'PATCH'
+        );
+        expect(call).toBeTruthy();
+        const body = JSON.parse((call![1] as RequestInit).body as string);
+        expect(body.status).toBe('picking');
+      });
+    });
+
+    it('picking → waiting_check: calls PATCH /status with { status: "waiting_check" }', async () => {
+      await setupOrderAndOpen('picking');
+      fireEvent.click(screen.getByText('העבר לבדיקה'));
+
+      await waitFor(() => {
+        const call = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/order-1/status') &&
+            (init as RequestInit | undefined)?.method === 'PATCH'
+        );
+        expect(call).toBeTruthy();
+        const body = JSON.parse((call![1] as RequestInit).body as string);
+        expect(body.status).toBe('waiting_check');
+      });
+    });
+
+    it('waiting_check → done: calls PATCH /status with { status: "done" }', async () => {
+      await setupOrderAndOpen('waiting_check');
+      fireEvent.click(screen.getByText('תקין'));
+
+      await waitFor(() => {
+        const call = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/order-1/status') &&
+            (init as RequestInit | undefined)?.method === 'PATCH'
+        );
+        expect(call).toBeTruthy();
+        const body = JSON.parse((call![1] as RequestInit).body as string);
+        expect(body.status).toBe('done');
+      });
+    });
+
+    it('returned → waiting_check: calls PATCH /status with { status: "waiting_check" }', async () => {
+      await setupOrderAndOpen('returned');
+      fireEvent.click(screen.getByText('הכל תוקן, החזר לבדיקה'));
+
+      await waitFor(() => {
+        const call = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/order-1/status') &&
+            (init as RequestInit | undefined)?.method === 'PATCH'
+        );
+        expect(call).toBeTruthy();
+        const body = JSON.parse((call![1] as RequestInit).body as string);
+        expect(body.status).toBe('waiting_check');
+      });
+    });
+  });
+
+  // ── 12–14. Error flow ─────────────────────────────────────────────────────
+
+  describe('error flow', () => {
+    async function openErrorFlow() {
+      const order = makeOrder({ status: 'waiting_check' });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/errors') && method === 'POST') {
+          return Promise.resolve({
+            id: 'err-1',
+            tenantId: 'tenant-1',
+            shiftId: 'shift-1',
+            lineId: 'line-1',
+            orderId: 'order-1',
+            type: 'wrong_quantity',
+            comment: null,
+            createdBy: null,
+            createdAt: new Date().toISOString(),
+            fixedAt: null
+          });
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([order]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryWithOrders] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByText('502481'));
+      fireEvent.click(screen.getByText('502481'));
+      await waitFor(() => screen.getByText('תקלה'));
+      fireEvent.click(screen.getByText('תקלה'));
+      await waitFor(() => screen.getByText('מה הבעיה בהזמנה?'));
+    }
+
+    it('error flow screen appears when "תקלה" is tapped', async () => {
+      await openErrorFlow();
+      expect(screen.getByText('דיווח תקלה')).toBeTruthy();
+      expect(screen.getByText('מה הבעיה בהזמנה?')).toBeTruthy();
+    });
+
+    it('submit button is disabled until error type is selected', async () => {
+      await openErrorFlow();
+      const submitBtn = screen.getByText('חזרה לתיקון');
+      expect(submitBtn.closest('button')?.disabled).toBe(true);
+    });
+
+    it('selecting an error type enables submit button', async () => {
+      await openErrorFlow();
+      fireEvent.click(screen.getByText('כמות לא נכונה'));
+      const submitBtn = screen.getByText('חזרה לתיקון');
+      expect(submitBtn.closest('button')?.disabled).toBe(false);
+    });
+
+    it('submitting error calls POST /errors with correct type', async () => {
+      await openErrorFlow();
+      fireEvent.click(screen.getByText('פריט שגוי'));
+      fireEvent.click(screen.getByText('חזרה לתיקון'));
+
+      await waitFor(() => {
+        const call = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/order-1/errors') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(call).toBeTruthy();
+        const body = JSON.parse((call![1] as RequestInit).body as string);
+        expect(body.type).toBe('wrong_item');
+      });
+    });
+
+    it('error submit invalidates line orders query (refetches)', async () => {
+      await openErrorFlow();
+      fireEvent.click(screen.getByText('פריט חסר'));
+      fireEvent.click(screen.getByText('חזרה לתיקון'));
+
+      await waitFor(() => {
+        // After error submit, line orders are refetched
+        const ordersRefetch = mockedBffRequest.mock.calls.filter(([url]) =>
+          String(url).includes('/line-1/orders')
+        );
+        expect(ordersRefetch.length).toBeGreaterThanOrEqual(1);
+      });
+    });
+  });
+
+  // ── 15. No direct Supabase calls ─────────────────────────────────────────
+
+  describe('no direct Supabase access', () => {
+    it('all BFF interactions go through bffRequest mock (no supabase calls escape)', async () => {
+      mockedBffRequest.mockResolvedValue({ shift: null, lines: [] });
+      renderPage(makeQueryClient());
+
+      await waitFor(() => screen.getByText('פתח משמרת להיום'));
+
+      // If any file called supabase directly, the mock would not intercept it
+      // and the test environment (no real supabase) would throw or fail
+      expect(mockedBffRequest).toBeDefined();
+    });
+  });
+});

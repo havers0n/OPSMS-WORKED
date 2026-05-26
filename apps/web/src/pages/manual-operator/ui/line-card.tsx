@@ -14,15 +14,24 @@ const LINE_STATUS_COLORS: Record<string, string> = {
 
 interface LineCardProps {
   summary: ManualShiftLineSummary;
+  onSelect?: (summary: ManualShiftLineSummary) => void;
 }
 
-export function LineCard({ summary }: LineCardProps) {
-  const { line, totalOrders, queuedOrders, pickingOrders, waitingCheckOrders, returnedOrders, doneOrders } = summary;
+export function LineCard({ summary, onSelect }: LineCardProps) {
+  const {
+    line,
+    totalOrders,
+    queuedOrders,
+    pickingOrders,
+    waitingCheckOrders,
+    returnedOrders,
+    doneOrders
+  } = summary;
   const statusLabel = LINE_STATUS_LABELS[line.status] ?? line.status;
   const statusColor = LINE_STATUS_COLORS[line.status] ?? 'bg-gray-100 text-gray-700 border-gray-200';
 
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-sm" dir="rtl">
+  const content = (
+    <>
       <div className="flex justify-between items-start gap-2">
         <span className="font-bold text-lg text-gray-900">{line.name}</span>
         <span className={`px-2.5 py-1 text-sm font-bold rounded-md border shrink-0 ${statusColor}`}>
@@ -32,16 +41,41 @@ export function LineCard({ summary }: LineCardProps) {
 
       {totalOrders > 0 ? (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-          <span className="text-gray-700">סה״כ: <strong>{totalOrders}</strong></span>
+          <span className="text-gray-700">
+            סה״כ: <strong>{totalOrders}</strong>
+          </span>
           {queuedOrders > 0 && <span className="text-gray-500">תור: {queuedOrders}</span>}
           {pickingOrders > 0 && <span className="text-blue-600">ליקוט: {pickingOrders}</span>}
-          {waitingCheckOrders > 0 && <span className="text-amber-600">בדיקה: {waitingCheckOrders}</span>}
+          {waitingCheckOrders > 0 && (
+            <span className="text-amber-600">בדיקה: {waitingCheckOrders}</span>
+          )}
           {returnedOrders > 0 && <span className="text-red-600">תיקון: {returnedOrders}</span>}
           {doneOrders > 0 && <span className="text-green-600">הסתיים: {doneOrders}</span>}
         </div>
       ) : (
         <div className="text-sm text-gray-400">אין הזמנות בקו זה</div>
       )}
+    </>
+  );
+
+  if (onSelect) {
+    return (
+      <button
+        onClick={() => onSelect(summary)}
+        className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-sm text-right w-full active:bg-gray-50 transition-colors"
+        dir="rtl"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3 shadow-sm"
+      dir="rtl"
+    >
+      {content}
     </div>
   );
 }
