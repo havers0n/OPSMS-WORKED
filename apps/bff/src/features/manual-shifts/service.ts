@@ -140,8 +140,8 @@ function buildLineSummaries(lines: ManualShiftLine[], orders: ManualShiftOrder[]
   });
 }
 
-async function buildShiftLineSummariesLite(repo: ManualShiftsRepo, shiftId: string) {
-  return repo.listShiftLineSummaries(shiftId);
+async function buildShiftLineSummariesLite(repo: ManualShiftsRepo, shiftId: string, tenantId: string) {
+  return repo.listShiftLineSummaries(shiftId, tenantId);
 }
 
 function deriveOrderSize(
@@ -284,7 +284,7 @@ export function createManualShiftsServiceFromRepo(
 
       return {
         shift,
-        lines: await buildShiftLineSummariesLite(repo, shift.id)
+        lines: await buildShiftLineSummariesLite(repo, shift.id, tenantId)
       };
     },
 
@@ -328,7 +328,7 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftNotFound(input.shiftId);
       }
 
-      return buildShiftLineSummariesLite(repo, input.shiftId);
+      return buildShiftLineSummariesLite(repo, input.shiftId, input.tenantId);
     },
 
     async createLine(input) {

@@ -240,7 +240,7 @@ export type ManualShiftsRepo = {
   }): Promise<ManualShiftSession>;
   closeShift(shiftId: string, closedAt: string): Promise<ManualShiftSession | null>;
   listShiftLines(shiftId: string): Promise<ManualShiftLineRow[]>;
-  listShiftLineSummaries(shiftId: string): Promise<ManualShiftLineSummary[]>;
+  listShiftLineSummaries(shiftId: string, tenantId: string): Promise<ManualShiftLineSummary[]>;
   findLineById(lineId: string): Promise<ManualShiftLineRow | null>;
   createLine(input: {
     tenantId: string;
@@ -380,9 +380,10 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return (data ?? []) as ManualShiftLineRow[];
     },
 
-    async listShiftLineSummaries(shiftId) {
+    async listShiftLineSummaries(shiftId, tenantId) {
       const { data, error } = await supabase.rpc('manual_shift_list_line_summaries', {
-        p_shift_id: shiftId
+        p_shift_id: shiftId,
+        p_tenant_id: tenantId
       });
 
       if (error) {

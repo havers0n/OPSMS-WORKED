@@ -144,8 +144,10 @@ function createRepo() {
     listShiftLines: vi.fn(async (shiftId: string) => {
       return state.lines.filter((line) => line.shift_id === shiftId) as never;
     }),
-    listShiftLineSummaries: vi.fn(async (shiftId: string) => {
-      const lineRows = state.lines.filter((line) => line.shift_id === shiftId);
+    listShiftLineSummaries: vi.fn(async (shiftId: string, tenantId: string) => {
+      const lineRows = state.lines.filter(
+        (line) => line.shift_id === shiftId && line.tenant_id === tenantId
+      );
 
       const byLine = new Map<string, ManualShiftLineSummary>();
       for (const row of lineRows) {
@@ -384,9 +386,38 @@ describe('manual shifts service', () => {
       ])
     );
 
-    expect(repo.listShiftLineSummaries).toHaveBeenCalledWith(ids.shift);
+    expect(repo.listShiftLineSummaries).toHaveBeenCalledWith(ids.shift, ids.tenant);
     expect(repo.listShiftOrders).not.toHaveBeenCalled();
     expect(repo.listShiftErrors).not.toHaveBeenCalled();
+  });
+
+  it('listShiftLines passes tenantId to repo.listShiftLineSummaries', async () => {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    await service.listShiftLines({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(repo.listShiftLineSummaries).toHaveBeenCalledWith(ids.shift, ids.tenant);
+  });
+
+  it('getTodayShift and listShiftLines never pass a foreign tenantId to repo.listShiftLineSummaries', async () => {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    await service.getTodayShift(ids.tenant);
+
+    const calls = vi.mocked(repo.listShiftLineSummaries).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [, calledTenantId] of calls) {
+      expect(calledTenantId).toBe(ids.tenant);
+      expect(calledTenantId).not.toBe(ids.otherTenant);
+    }
   });
 
   it('rejects duplicate active shifts for the same tenant and local date', async () => {
