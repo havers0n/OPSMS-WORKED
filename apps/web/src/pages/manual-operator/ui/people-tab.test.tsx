@@ -182,6 +182,38 @@ describe('PeopleTab', () => {
     });
   });
 
+  it('can reactivate an inactive worker', async () => {
+    const inactiveWorker = makeWorker({ active: false });
+    mockedBffRequest.mockImplementation((url: unknown, options?: unknown) => {
+      const u = String(url);
+      const method = (options as RequestInit | undefined)?.method;
+      if (u.includes('/manual-shift-workers/w1') && method === 'PATCH') {
+        return Promise.resolve(makeWorker({ active: true }));
+      }
+      if (u.includes('/workers')) return Promise.resolve([inactiveWorker]);
+      if (u.includes('/people-summary')) return Promise.resolve(makePeopleSummary([]));
+      return Promise.reject(new Error(`unexpected: ${u}`));
+    });
+
+    renderPeopleTab();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'החזר למשמרת' })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'החזר למשמרת' }));
+
+    await waitFor(() => {
+      const patchCall = mockedBffRequest.mock.calls.find(
+        ([u, opts]) =>
+          String(u).includes('/manual-shift-workers/w1') &&
+          (opts as RequestInit | undefined)?.method === 'PATCH'
+      );
+      expect(patchCall).toBeTruthy();
+      expect(JSON.parse((patchCall?.[1] as RequestInit).body as string)).toEqual({ active: true });
+    });
+  });
+
   it('renders multiple roster worker cards', async () => {
     const workers = [
       makeWorker({ id: 'w1', name: 'אלי' }),

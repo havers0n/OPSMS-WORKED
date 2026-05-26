@@ -1,11 +1,16 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, User, Plus, X } from 'lucide-react';
-import type { ManualShiftWorker, ManualShiftPeopleSummaryItem, ManualShiftWorkerRole } from '@wos/domain';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, Plus, User, X } from 'lucide-react';
+import type { ManualShiftPeopleSummaryItem, ManualShiftWorker, ManualShiftWorkerRole } from '@wos/domain';
 import { MANUAL_SHIFT_WORKER_ROLE_LABELS } from '@wos/domain';
-import { shiftWorkersQueryOptions, manualShiftKeys, peopleSummaryQueryOptions } from '@/entities/manual-shift/api/queries';
-import { useCreateManualShiftWorker } from '@/entities/manual-shift/api/mutations';
-import { bffRequest } from '@/shared/api/bff/client';
+import {
+  useCreateManualShiftWorker,
+  usePatchManualShiftWorker
+} from '@/entities/manual-shift/api/mutations';
+import {
+  peopleSummaryQueryOptions,
+  shiftWorkersQueryOptions
+} from '@/entities/manual-shift/api/queries';
 
 interface PeopleTabProps {
   shiftId: string;
@@ -17,7 +22,9 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
   const [showAddForm, setShowAddForm] = useState(false);
 
   const { data: workers, isLoading: workersLoading } = useQuery(shiftWorkersQueryOptions(shiftId));
-  const { data: peopleSummary, isLoading: summaryLoading } = useQuery(peopleSummaryQueryOptions(shiftId));
+  const { data: peopleSummary, isLoading: summaryLoading } = useQuery(
+    peopleSummaryQueryOptions(shiftId)
+  );
 
   const isLoading = workersLoading || summaryLoading;
 
@@ -31,16 +38,12 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
 
   const roster = workers ?? [];
   const summaryItems = peopleSummary?.items ?? [];
-
-  // Build merged view: roster workers + unregistered free-text names
   const summaryByName = new Map<string, ManualShiftPeopleSummaryItem>(
-    summaryItems.map((item) => [item.pickerName, item])
+    summaryItems.map(item => [item.pickerName, item])
   );
-
-  // Free-text names not matched to a roster worker
-  const unregisteredItems = summaryItems.filter((item) => {
-    return !roster.some((w) => w.name === item.pickerName);
-  });
+  const unregisteredItems = summaryItems.filter(
+    item => !roster.some(worker => worker.name === item.pickerName)
+  );
 
   return (
     <div className="flex flex-col gap-3 p-4" dir="rtl">
@@ -55,12 +58,7 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
         </button>
       </div>
 
-      {showAddForm && (
-        <AddWorkerForm
-          shiftId={shiftId}
-          onClose={() => setShowAddForm(false)}
-        />
-      )}
+      {showAddForm && <AddWorkerForm shiftId={shiftId} onClose={() => setShowAddForm(false)} />}
 
       {roster.length === 0 && summaryItems.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 px-8 text-center gap-4">
@@ -70,17 +68,14 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
         </div>
       )}
 
-      {roster.map((worker) => {
-        const summary = summaryByName.get(worker.name) ?? null;
-        return (
-          <WorkerCard
-            key={worker.id}
-            worker={worker}
-            summary={summary}
-            shiftId={shiftId}
-          />
-        );
-      })}
+      {roster.map(worker => (
+        <WorkerCard
+          key={worker.id}
+          worker={worker}
+          summary={summaryByName.get(worker.name) ?? null}
+          shiftId={shiftId}
+        />
+      ))}
 
       {unregisteredItems.length > 0 && (
         <>
@@ -89,8 +84,8 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
               לא ברשימה
             </p>
           </div>
-          {unregisteredItems.map((item, i) => (
-            <UnregisteredCard key={item.pickerName || i} item={item} />
+          {unregisteredItems.map((item, index) => (
+            <UnregisteredCard key={item.pickerName || index} item={item} />
           ))}
         </>
       )}
@@ -107,24 +102,22 @@ function WorkerCard({
   summary: ManualShiftPeopleSummaryItem | null;
   shiftId: string;
 }) {
-  const queryClient = useQueryClient();
-  const deactivate = useMutation({
-    mutationFn: () =>
-      bffRequest<ManualShiftWorker>(`/api/manual-shift-workers/${worker.id}/deactivate`, {
-        method: 'PATCH'
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workers(shiftId) });
-    }
-  });
-
+  const patchWorker = usePatchManualShiftWorker(shiftId);
   const name = worker.name;
   const roleLabel = MANUAL_SHIFT_WORKER_ROLE_LABELS[worker.role];
 
   return (
-    <div className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 ${!worker.active ? 'opacity-60' : 'border-gray-200'}`}>
+    <div
+      className={`bg-white border rounded-xl p-4 shadow-sm flex flex-col gap-3 ${
+        worker.active ? 'border-gray-200' : 'opacity-60 border-gray-200'
+      }`}
+    >
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-base shrink-0 ${worker.active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-base shrink-0 ${
+            worker.active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+          }`}
+        >
           {name.charAt(0)}
         </div>
         <div className="flex-1 min-w-0">
@@ -145,20 +138,28 @@ function WorkerCard({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {summary && summary.errorCount > 0 && (
             <span className="text-xs text-red-600 font-bold bg-red-50 border border-red-100 rounded-full px-2 py-0.5">
               {summary.errorCount} תקלות
             </span>
           )}
-          {worker.active && (
+          {worker.active ? (
             <button
-              onClick={() => deactivate.mutate()}
-              disabled={deactivate.isPending}
-              className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 transition-transform"
+              onClick={() => patchWorker.mutate({ workerId: worker.id, active: false })}
+              disabled={patchWorker.isPending}
+              className="p-1 text-gray-400 hover:text-gray-600 active:scale-90 transition-transform disabled:opacity-50"
               title="הסר מהמשמרת"
             >
               <X size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={() => patchWorker.mutate({ workerId: worker.id, active: true })}
+              disabled={patchWorker.isPending}
+              className="px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full disabled:opacity-50"
+            >
+              החזר למשמרת
             </button>
           )}
         </div>
@@ -209,13 +210,13 @@ function AddWorkerForm({ shiftId, onClose }: { shiftId: string; onClose: () => v
   const [role, setRole] = useState<ManualShiftWorkerRole>('picker');
   const createWorker = useCreateManualShiftWorker(shiftId);
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    createWorker.mutate(
-      { name: name.trim(), role },
-      { onSuccess: onClose }
-    );
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) {
+      return;
+    }
+
+    createWorker.mutate({ name: name.trim(), role }, { onSuccess: onClose });
   }
 
   return (
@@ -232,22 +233,22 @@ function AddWorkerForm({ shiftId, onClose }: { shiftId: string; onClose: () => v
           className="w-full bg-white border border-blue-200 rounded-xl px-4 py-3 font-bold text-base"
           placeholder="שם העובד"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={event => setName(event.target.value)}
           autoFocus
         />
         <div className="grid grid-cols-4 gap-1">
-          {ROLES.map((r) => (
+          {ROLES.map(currentRole => (
             <button
-              key={r}
+              key={currentRole}
               type="button"
-              onClick={() => setRole(r)}
+              onClick={() => setRole(currentRole)}
               className={`rounded-xl py-2 text-xs font-bold transition-colors ${
-                role === r
+                role === currentRole
                   ? 'bg-blue-700 text-white'
                   : 'bg-white text-gray-600 border border-gray-200 active:bg-gray-100'
               }`}
             >
-              {MANUAL_SHIFT_WORKER_ROLE_LABELS[r]}
+              {MANUAL_SHIFT_WORKER_ROLE_LABELS[currentRole]}
             </button>
           ))}
         </div>
