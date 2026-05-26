@@ -27,6 +27,7 @@ import { registerPickingExecutionRoutes } from './routes/picking-execution.route
 import { registerRackInspectorRoutes } from './routes/rack-inspector.routes.js';
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
 import { registerFloorRoutingRoutes } from './features/floor-routing/routes.js';
+import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
@@ -58,6 +59,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     getFloorsService,
     getProductsService,
     getProductLocationRolesService,
+    getManualShiftsService,
     getPickingPlanningPreviewService,
     getFloorRoutingService
   } = deps;
@@ -108,6 +110,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerOperationsCellsRoutes(app, { getAuthContext, getUserSupabase });
   registerFloorRoutingRoutes(app, { getAuthContext, getFloorRoutingService });
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
+  registerManualShiftsRoutes(app, { getAuthContext, getManualShiftsService });
 
   app.setErrorHandler((error, request, reply) => {
     const mappedSupabaseError = mapSupabaseError(error);

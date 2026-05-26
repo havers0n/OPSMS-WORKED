@@ -61,7 +61,20 @@ import {
   patchStoragePresetBodySchema,
   createContainerFromStoragePresetBodySchema,
   createContainerFromStoragePresetResultSchema,
-  setPreferredStoragePresetBodySchema
+  setPreferredStoragePresetBodySchema,
+  manualShiftSessionSchema,
+  manualShiftLineSchema,
+  manualShiftOrderSchema,
+  manualShiftOrderErrorSchema,
+  manualShiftLineSummarySchema,
+  manualShiftTodayResponseSchema as manualShiftTodayDtoSchema,
+  manualShiftPeopleSummarySchema,
+  manualShiftDaySummarySchema,
+  manualShiftBulkAddInputRowSchema,
+  manualShiftBulkAddResultSchema,
+  manualShiftOrderStatusSchema,
+  manualShiftOrderSizeSchema,
+  manualShiftOrderErrorTypeSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -370,6 +383,83 @@ export const patchLocationGeometryBodySchema = z.object({
   floorX: z.number().nullable(),
   floorY: z.number().nullable()
 });
+
+// Manual Shift Control
+
+export const createManualShiftBodySchema = z.object({
+  date: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1)
+});
+
+export const createManualShiftLineBodySchema = z.object({
+  name: z.string().trim().min(1),
+  sortOrder: z.number().int().default(0)
+});
+
+export const patchManualShiftLineBodySchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  sortOrder: z.number().int().optional()
+});
+
+export const createManualShiftOrderBodySchema = z.object({
+  orderNumber: z.string().trim().min(1).nullable().optional(),
+  customerName: z.string().trim().min(1).nullable().optional(),
+  pickerName: z.string().trim().min(1).nullable().optional(),
+  checkerName: z.string().trim().min(1).nullable().optional(),
+  lineCount: z.number().int().positive().nullable().optional(),
+  size: manualShiftOrderSizeSchema.optional(),
+  status: manualShiftOrderStatusSchema.optional(),
+  comment: z.string().trim().min(1).nullable().optional()
+});
+
+export const patchManualShiftOrderBodySchema = z.object({
+  orderNumber: z.string().trim().min(1).nullable().optional(),
+  customerName: z.string().trim().min(1).nullable().optional(),
+  pickerName: z.string().trim().min(1).nullable().optional(),
+  checkerName: z.string().trim().min(1).nullable().optional(),
+  lineCount: z.number().int().positive().nullable().optional(),
+  size: manualShiftOrderSizeSchema.optional(),
+  comment: z.string().trim().min(1).nullable().optional()
+});
+
+export const transitionManualShiftOrderStatusBodySchema = z.object({
+  status: manualShiftOrderStatusSchema
+});
+
+export const createManualShiftOrderErrorBodySchema = z.object({
+  type: manualShiftOrderErrorTypeSchema,
+  comment: z.string().trim().min(1).nullable().optional()
+});
+
+export const bulkCreateManualShiftOrdersBodySchema = z.union([
+  z.object({
+    rawText: z.string().trim().min(1),
+    rows: z.undefined().optional()
+  }),
+  z.object({
+    rawText: z.undefined().optional(),
+    rows: z.array(
+      manualShiftBulkAddInputRowSchema.pick({
+        raw: true,
+        orderNumber: true,
+        pickerName: true,
+        lineCount: true,
+        size: true
+      })
+    ).min(1)
+  })
+]);
+
+export const manualShiftSessionResponseSchema = manualShiftSessionSchema;
+export const manualShiftLineResponseSchema = manualShiftLineSchema;
+export const manualShiftOrderResponseSchema = manualShiftOrderSchema;
+export const manualShiftOrderErrorResponseSchema = manualShiftOrderErrorSchema;
+export const manualShiftLineSummaryResponseSchema = z.array(manualShiftLineSummarySchema);
+export const manualShiftTodayResponseSchema = manualShiftTodayDtoSchema;
+export const manualShiftPeopleSummaryResponseSchema = manualShiftPeopleSummarySchema;
+export const manualShiftDaySummaryResponseSchema = manualShiftDaySummarySchema;
+export const manualShiftOrdersResponseSchema = z.array(manualShiftOrderSchema);
+export const manualShiftBulkAddResponseSchema = manualShiftBulkAddResultSchema;
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 

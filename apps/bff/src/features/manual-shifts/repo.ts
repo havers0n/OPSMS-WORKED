@@ -1,0 +1,554 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
+  ManualShiftDaySummaryByError,
+  ManualShiftLine,
+  ManualShiftOrder,
+  ManualShiftOrderError,
+  ManualShiftOrderEvent,
+  ManualShiftSession
+} from '@wos/domain';
+
+type ManualShiftSessionRow = {
+  id: string;
+  tenant_id: string;
+  date: string;
+  name: string;
+  status: 'active' | 'closed';
+  created_by_name: string | null;
+  created_at: string;
+  closed_at: string | null;
+};
+
+type ManualShiftLineRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+};
+
+type ManualShiftOrderRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  order_number: string | null;
+  customer_name: string | null;
+  picker_name: string | null;
+  checker_name: string | null;
+  line_count: number | null;
+  size: ManualShiftOrder['size'];
+  status: ManualShiftOrder['status'];
+  started_at: string | null;
+  waiting_check_at: string | null;
+  checked_at: string | null;
+  finished_at: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ManualShiftOrderEventRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  order_id: string;
+  event_type: ManualShiftOrderEvent['eventType'];
+  actor_name: string | null;
+  actor_profile_id: string | null;
+  from_status: ManualShiftOrderEvent['fromStatus'];
+  to_status: ManualShiftOrderEvent['toStatus'];
+  payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
+type ManualShiftOrderErrorRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  order_id: string;
+  type: ManualShiftOrderError['type'];
+  comment: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  fixed_at: string | null;
+};
+
+const sessionColumns =
+  'id,tenant_id,date,name,status,created_by_name,created_at,closed_at';
+const lineColumns =
+  'id,tenant_id,shift_id,name,sort_order,created_at';
+const orderColumns =
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,picker_name,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at';
+const eventColumns =
+  'id,tenant_id,shift_id,line_id,order_id,event_type,actor_name,actor_profile_id,from_status,to_status,payload,created_at';
+const errorColumns =
+  'id,tenant_id,shift_id,line_id,order_id,type,comment,created_by_name,created_at,fixed_at';
+
+function mapSessionRow(row: ManualShiftSessionRow): ManualShiftSession {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    date: row.date,
+    name: row.name,
+    status: row.status,
+    createdBy: row.created_by_name,
+    createdAt: row.created_at,
+    closedAt: row.closed_at
+  };
+}
+
+function mapLineRow(row: ManualShiftLineRow, status: ManualShiftLine['status']): ManualShiftLine {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    name: row.name,
+    sortOrder: row.sort_order,
+    status,
+    createdAt: row.created_at
+  };
+}
+
+function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    orderNumber: row.order_number,
+    customerName: row.customer_name,
+    pickerName: row.picker_name,
+    checkerName: row.checker_name,
+    lineCount: row.line_count,
+    size: row.size,
+    status: row.status,
+    startedAt: row.started_at,
+    waitingCheckAt: row.waiting_check_at,
+    checkedAt: row.checked_at,
+    finishedAt: row.finished_at,
+    comment: row.comment,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapEventRow(row: ManualShiftOrderEventRow): ManualShiftOrderEvent {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    orderId: row.order_id,
+    eventType: row.event_type,
+    actorName: row.actor_name,
+    actorProfileId: row.actor_profile_id,
+    fromStatus: row.from_status,
+    toStatus: row.to_status,
+    payload: row.payload,
+    createdAt: row.created_at
+  };
+}
+
+function mapErrorRow(row: ManualShiftOrderErrorRow): ManualShiftOrderError {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    orderId: row.order_id,
+    type: row.type,
+    comment: row.comment,
+    createdBy: row.created_by_name,
+    createdAt: row.created_at,
+    fixedAt: row.fixed_at
+  };
+}
+
+export type ManualShiftOrderPatch = {
+  orderNumber?: string | null;
+  customerName?: string | null;
+  pickerName?: string | null;
+  checkerName?: string | null;
+  lineCount?: number | null;
+  size?: ManualShiftOrder['size'];
+  comment?: string | null;
+  status?: ManualShiftOrder['status'];
+  startedAt?: string | null;
+  waitingCheckAt?: string | null;
+  checkedAt?: string | null;
+  finishedAt?: string | null;
+};
+
+export type ManualShiftsRepo = {
+  findActiveShiftByDate(tenantId: string, date: string): Promise<ManualShiftSession | null>;
+  findShiftById(shiftId: string): Promise<ManualShiftSession | null>;
+  createShift(input: {
+    tenantId: string;
+    date: string;
+    name: string;
+    createdByProfileId: string | null;
+    createdByName: string | null;
+  }): Promise<ManualShiftSession>;
+  closeShift(shiftId: string, closedAt: string): Promise<ManualShiftSession | null>;
+  listShiftLines(shiftId: string): Promise<ManualShiftLineRow[]>;
+  findLineById(lineId: string): Promise<ManualShiftLineRow | null>;
+  createLine(input: {
+    tenantId: string;
+    shiftId: string;
+    name: string;
+    sortOrder: number;
+  }): Promise<ManualShiftLineRow>;
+  updateLine(lineId: string, patch: { name?: string; sortOrder?: number }): Promise<ManualShiftLineRow | null>;
+  listShiftOrders(shiftId: string): Promise<ManualShiftOrder[]>;
+  listLineOrders(lineId: string): Promise<ManualShiftOrder[]>;
+  findOrderById(orderId: string): Promise<ManualShiftOrder | null>;
+  createOrder(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    orderNumber: string | null;
+    customerName: string | null;
+    pickerName: string | null;
+    checkerName: string | null;
+    lineCount: number | null;
+    size: ManualShiftOrder['size'];
+    status: ManualShiftOrder['status'];
+    startedAt: string | null;
+    comment: string | null;
+  }): Promise<ManualShiftOrder>;
+  updateOrder(orderId: string, patch: ManualShiftOrderPatch): Promise<ManualShiftOrder | null>;
+  createOrderEvent(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    orderId: string;
+    eventType: ManualShiftOrderEvent['eventType'];
+    actorProfileId: string | null;
+    actorName: string | null;
+    fromStatus: ManualShiftOrderEvent['fromStatus'];
+    toStatus: ManualShiftOrderEvent['toStatus'];
+    payload: Record<string, unknown> | null;
+  }): Promise<ManualShiftOrderEvent>;
+  createOrderError(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    orderId: string;
+    type: ManualShiftOrderError['type'];
+    comment: string | null;
+    createdByProfileId: string | null;
+    createdByName: string | null;
+  }): Promise<ManualShiftOrderError>;
+  listShiftErrors(shiftId: string): Promise<ManualShiftOrderError[]>;
+};
+
+export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
+  return {
+    async findActiveShiftByDate(tenantId, date) {
+      const { data, error } = await supabase
+        .from('manual_shift_sessions')
+        .select(sessionColumns)
+        .eq('tenant_id', tenantId)
+        .eq('date', date)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapSessionRow(data as ManualShiftSessionRow) : null;
+    },
+
+    async findShiftById(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_sessions')
+        .select(sessionColumns)
+        .eq('id', shiftId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapSessionRow(data as ManualShiftSessionRow) : null;
+    },
+
+    async createShift(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_sessions')
+        .insert({
+          tenant_id: input.tenantId,
+          date: input.date,
+          name: input.name,
+          status: 'active',
+          created_by_profile_id: input.createdByProfileId,
+          created_by_name: input.createdByName
+        })
+        .select(sessionColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapSessionRow(data as ManualShiftSessionRow);
+    },
+
+    async closeShift(shiftId, closedAt) {
+      const { data, error } = await supabase
+        .from('manual_shift_sessions')
+        .update({
+          status: 'closed',
+          closed_at: closedAt
+        })
+        .eq('id', shiftId)
+        .select(sessionColumns)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapSessionRow(data as ManualShiftSessionRow) : null;
+    },
+
+    async listShiftLines(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_lines')
+        .select(lineColumns)
+        .eq('shift_id', shiftId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as ManualShiftLineRow[];
+    },
+
+    async findLineById(lineId) {
+      const { data, error } = await supabase
+        .from('manual_shift_lines')
+        .select(lineColumns)
+        .eq('id', lineId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return (data as ManualShiftLineRow | null) ?? null;
+    },
+
+    async createLine(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_lines')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          name: input.name,
+          sort_order: input.sortOrder
+        })
+        .select(lineColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data as ManualShiftLineRow;
+    },
+
+    async updateLine(lineId, patch) {
+      const payload: Record<string, unknown> = {};
+      if (patch.name !== undefined) payload.name = patch.name;
+      if (patch.sortOrder !== undefined) payload.sort_order = patch.sortOrder;
+
+      const { data, error } = await supabase
+        .from('manual_shift_lines')
+        .update(payload)
+        .eq('id', lineId)
+        .select(lineColumns)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return (data as ManualShiftLineRow | null) ?? null;
+    },
+
+    async listShiftOrders(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_orders')
+        .select(orderColumns)
+        .eq('shift_id', shiftId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as ManualShiftOrderRow[]).map(mapOrderRow);
+    },
+
+    async listLineOrders(lineId) {
+      const { data, error } = await supabase
+        .from('manual_shift_orders')
+        .select(orderColumns)
+        .eq('line_id', lineId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as ManualShiftOrderRow[]).map(mapOrderRow);
+    },
+
+    async findOrderById(orderId) {
+      const { data, error } = await supabase
+        .from('manual_shift_orders')
+        .select(orderColumns)
+        .eq('id', orderId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapOrderRow(data as ManualShiftOrderRow) : null;
+    },
+
+    async createOrder(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_orders')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          line_id: input.lineId,
+          order_number: input.orderNumber,
+          customer_name: input.customerName,
+          picker_name: input.pickerName,
+          checker_name: input.checkerName,
+          line_count: input.lineCount,
+          size: input.size,
+          status: input.status,
+          started_at: input.startedAt,
+          comment: input.comment
+        })
+        .select(orderColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapOrderRow(data as ManualShiftOrderRow);
+    },
+
+    async updateOrder(orderId, patch) {
+      const payload: Record<string, unknown> = {};
+      if (patch.orderNumber !== undefined) payload.order_number = patch.orderNumber;
+      if (patch.customerName !== undefined) payload.customer_name = patch.customerName;
+      if (patch.pickerName !== undefined) payload.picker_name = patch.pickerName;
+      if (patch.checkerName !== undefined) payload.checker_name = patch.checkerName;
+      if (patch.lineCount !== undefined) payload.line_count = patch.lineCount;
+      if (patch.size !== undefined) payload.size = patch.size;
+      if (patch.comment !== undefined) payload.comment = patch.comment;
+      if (patch.status !== undefined) payload.status = patch.status;
+      if (patch.startedAt !== undefined) payload.started_at = patch.startedAt;
+      if (patch.waitingCheckAt !== undefined) payload.waiting_check_at = patch.waitingCheckAt;
+      if (patch.checkedAt !== undefined) payload.checked_at = patch.checkedAt;
+      if (patch.finishedAt !== undefined) payload.finished_at = patch.finishedAt;
+
+      const { data, error } = await supabase
+        .from('manual_shift_orders')
+        .update(payload)
+        .eq('id', orderId)
+        .select(orderColumns)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapOrderRow(data as ManualShiftOrderRow) : null;
+    },
+
+    async createOrderEvent(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_events')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          line_id: input.lineId,
+          order_id: input.orderId,
+          event_type: input.eventType,
+          actor_profile_id: input.actorProfileId,
+          actor_name: input.actorName,
+          from_status: input.fromStatus,
+          to_status: input.toStatus,
+          payload: input.payload
+        })
+        .select(eventColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapEventRow(data as ManualShiftOrderEventRow);
+    },
+
+    async createOrderError(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_errors')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          line_id: input.lineId,
+          order_id: input.orderId,
+          type: input.type,
+          comment: input.comment,
+          created_by_profile_id: input.createdByProfileId,
+          created_by_name: input.createdByName
+        })
+        .select(errorColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapErrorRow(data as ManualShiftOrderErrorRow);
+    },
+
+    async listShiftErrors(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_errors')
+        .select(errorColumns)
+        .eq('shift_id', shiftId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as ManualShiftOrderErrorRow[]).map(mapErrorRow);
+    }
+  };
+}
+
+export function mapManualShiftLineRowToDomain(
+  row: ManualShiftLineRow,
+  status: ManualShiftLine['status']
+) {
+  return mapLineRow(row, status);
+}
