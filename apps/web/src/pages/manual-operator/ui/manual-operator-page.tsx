@@ -9,19 +9,14 @@ import { ShiftEmptyState } from './shift-empty-state';
 import { LineList } from './line-list';
 import { LineDetail } from './line-detail';
 import { AddLineSheet } from './add-line-sheet';
+import { CheckTab } from './check-tab';
+import { PeopleTab } from './people-tab';
+import { DayTab } from './day-tab';
 
 function MobileLoadingState() {
   return (
     <div className="flex items-center justify-center py-20" dir="rtl">
       <Loader2 size={32} className="animate-spin text-gray-400" />
-    </div>
-  );
-}
-
-function PlaceholderTab({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-3" dir="rtl">
-      <p className="text-gray-400 font-medium text-base">לשונית {label} בפיתוח</p>
     </div>
   );
 }
@@ -80,9 +75,9 @@ export function ManualOperatorPage() {
               )}
             </>
           )}
-          {activeTab === 'check' && <PlaceholderTab label="בדיקה" />}
-          {activeTab === 'people' && <PlaceholderTab label="עובדים" />}
-          {activeTab === 'day' && <PlaceholderTab label="יום" />}
+          {activeTab === 'check' && <CheckTab shiftId={shift.id} lines={lines} />}
+          {activeTab === 'people' && <PeopleTab shiftId={shift.id} />}
+          {activeTab === 'day' && <DayTab shiftId={shift.id} shiftName={shift.name} />}
         </>
       )}
 

@@ -149,7 +149,7 @@ describe('ManualOperatorPage', () => {
     expect(screen.getByText('משמרת ראשון')).toBeTruthy();
   });
 
-  it('switches to placeholder content when non-queue tab is clicked', async () => {
+  it('switches to real tab content when non-queue tab is clicked', async () => {
     const mockShift = {
       id: 'shift-1',
       tenantId: 'tenant-1',
@@ -161,7 +161,32 @@ describe('ManualOperatorPage', () => {
       closedAt: null
     };
 
-    mockedBffRequest.mockResolvedValue({ shift: mockShift, lines: [] });
+    const emptyDaySummary = {
+      shiftId: 'shift-1',
+      totalOrders: 0,
+      queuedOrders: 0,
+      pickingOrders: 0,
+      waitingCheckOrders: 0,
+      returnedOrders: 0,
+      doneOrders: 0,
+      errorsCount: 0,
+      byErrorType: [],
+      byLine: [],
+      byPicker: []
+    };
+
+    mockedBffRequest.mockImplementation((url: string) => {
+      if (url.includes('/people-summary')) {
+        return Promise.resolve({ shiftId: 'shift-1', items: [] });
+      }
+      if (url.includes('/day-summary')) {
+        return Promise.resolve(emptyDaySummary);
+      }
+      if (url.includes('/orders')) {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve({ shift: mockShift, lines: [] });
+    });
 
     renderPage(makeQueryClient());
 
@@ -170,17 +195,23 @@ describe('ManualOperatorPage', () => {
       expect(screen.getByText('אין קווים עדיין. לחץ על + להוסיף קו חדש.')).toBeTruthy();
     });
 
-    // Click Check tab
+    // Click Check tab — should show empty check state
     fireEvent.click(screen.getByRole('button', { name: 'בדיקה' }));
-    expect(screen.getByText('לשונית בדיקה בפיתוח')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('אין נקודות לבדיקה')).toBeTruthy();
+    });
 
-    // Click People tab
+    // Click People tab — should show empty people state
     fireEvent.click(screen.getByRole('button', { name: 'עובדים' }));
-    expect(screen.getByText('לשונית עובדים בפיתוח')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('אין מלקטים פעילים')).toBeTruthy();
+    });
 
-    // Click Day tab
+    // Click Day tab — should show day summary with export button
     fireEvent.click(screen.getByRole('button', { name: 'יום' }));
-    expect(screen.getByText('לשונית יום בפיתוח')).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText('סיכום יום')).toBeTruthy();
+    });
   });
 
   it('shows add line FAB only on queue tab when shift is active', async () => {
