@@ -16,7 +16,8 @@ async function fetchTodayShift(): Promise<ManualShiftTodayResponse> {
 export function todayShiftQueryOptions() {
   return queryOptions({
     queryKey: manualShiftKeys.today(),
-    queryFn: fetchTodayShift
+    queryFn: fetchTodayShift,
+    staleTime: 60_000
   });
 }
 
