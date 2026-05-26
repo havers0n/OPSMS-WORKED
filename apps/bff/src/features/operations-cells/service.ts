@@ -33,24 +33,41 @@ export async function listOperationsCellsRuntime({ supabase }: OperationsCellsSe
   }
 
   const cellIds = cells.map((cell) => cell.id);
-  const [occupancyRows, storageRowsRaw, pickStepsResult] = await Promise.all([
+
+  // Pick steps are queried in chunks to avoid URL length limits when there are
+  // many cells (PostgREST sends .in() as a GET query param; 1000+ UUIDs exceed
+  // the ~8 KB URL limit and return 400 "Bad Request").
+  const PICK_STEPS_CHUNK_SIZE = 100;
+  async function fetchPickStepsByCells(ids: string[]) {
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += PICK_STEPS_CHUNK_SIZE) {
+      chunks.push(ids.slice(i, i + PICK_STEPS_CHUNK_SIZE));
+    }
+    const results = await Promise.all(
+      chunks.map((chunk) =>
+        supabase
+          .from('pick_steps')
+          .select('source_cell_id,status')
+          .in('source_cell_id', chunk)
+          .in('status', [...activePickStepStatuses])
+      )
+    );
+    for (const result of results) {
+      if (result.error) throw result.error;
+    }
+    return results.flatMap((r) => r.data ?? []);
+  }
+
+  const [occupancyRows, storageRowsRaw, pickStepsData] = await Promise.all([
     locationReadRepo.listFloorLocationOccupancy(floorId),
     locationReadRepo.listFloorCellStorage(floorId),
-    supabase
-      .from('pick_steps')
-      .select('source_cell_id,status')
-      .in('source_cell_id', cellIds)
-      .in('status', [...activePickStepStatuses])
+    fetchPickStepsByCells(cellIds)
   ]);
-
-  if (pickStepsResult.error) {
-    throw pickStepsResult.error;
-  }
 
   const storageRows = await attachProductsToRows(supabase, (storageRowsRaw ?? []) as OperationsCellStorageRow[]);
 
   const pickActiveByCellId = new Set<string>();
-  for (const row of pickStepsResult.data ?? []) {
+  for (const row of pickStepsData) {
     if (typeof row.source_cell_id === 'string') {
       pickActiveByCellId.add(row.source_cell_id);
     }
