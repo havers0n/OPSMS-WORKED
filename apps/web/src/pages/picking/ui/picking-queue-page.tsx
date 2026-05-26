@@ -35,8 +35,8 @@ export function PickingQueuePage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-1 text-lg font-semibold text-slate-900">Picker queue</h1>
-      <p className="mb-4 text-sm text-slate-600">Available picking runs for orders and waves.</p>
+      <h1 className="mb-1 text-lg font-semibold text-slate-900">Tasks</h1>
+      <p className="mb-4 text-sm text-slate-600">Available picking tasks for orders and waves.</p>
       <div className="space-y-3" data-testid="picking-queue-list">
         {data.map((item) => (
           <button

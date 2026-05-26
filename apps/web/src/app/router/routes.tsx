@@ -52,7 +52,8 @@ export function AppRouter() {
           <Route path={routes.orderDetail} element={<OrderDetailPage />} />
           <Route path={routes.waveDetail} element={<WaveDetailPage />} />
           <Route path={routes.pickTaskDetail} element={<PickTaskPage />} />
-          <Route path={routes.pickingQueue} element={<PickingQueuePage />} />
+          <Route path={routes.tasks} element={<PickingQueuePage />} />
+          <Route path={routes.pickingQueue} element={<Navigate to={routes.tasks} replace />} />
           <Route path={routes.pickingRun} element={<PickingRunPage />} />
           {/* Legacy redirects */}
           <Route path={routes.orders} element={<Navigate to={routes.operations} replace />} />

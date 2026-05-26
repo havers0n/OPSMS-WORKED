@@ -9,6 +9,7 @@ export const routes = {
   orderDetail: '/operations/orders/:orderId',
   waveDetail: '/operations/waves/:id',
   pickTaskDetail: '/operations/pick-tasks/:id',
+  tasks: '/tasks',
   pickingQueue: '/picking',
   pickingRun: '/picking/run',
   orders: '/orders',
