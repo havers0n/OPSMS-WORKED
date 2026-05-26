@@ -20,6 +20,7 @@ import {
   manualShiftSessionResponseSchema,
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
+  manualShiftDeleteRestoreBodySchema,
   manualShiftWorkerResponseSchema,
   manualShiftWorkersResponseSchema,
   patchManualShiftLineBodySchema,
@@ -44,10 +45,10 @@ function requireTenant(auth: AuthenticatedRequestContext) {
   return auth.currentTenant.tenantId;
 }
 
-function actorFromAuth(auth: AuthenticatedRequestContext) {
+function actorFromAuth(auth: AuthenticatedRequestContext, actorNameOverride?: string) {
   return {
     actorProfileId: auth.user.id ?? null,
-    actorName: auth.displayName ?? auth.user.email ?? 'system'
+    actorName: actorNameOverride ?? auth.displayName ?? auth.user.email ?? 'system'
   };
 }
 
@@ -144,6 +145,44 @@ export function registerManualShiftsRoutes(
       lineId,
       name: body.name,
       sortOrder: body.sortOrder
+    });
+
+    return parseOrThrow(manualShiftLineResponseSchema, line);
+  });
+
+  app.patch('/api/manual-shift-lines/:lineId/delete', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const lineId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { lineId: string }).lineId
+    }).id;
+    const body = parseOrThrow(manualShiftDeleteRestoreBodySchema, request.body ?? {});
+    const line = await getManualShiftsService(auth).deleteLine({
+      tenantId,
+      lineId,
+      reason: body.reason,
+      actor: actorFromAuth(auth, body.actorName)
+    });
+
+    return parseOrThrow(manualShiftLineResponseSchema, line);
+  });
+
+  app.patch('/api/manual-shift-lines/:lineId/restore', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const lineId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { lineId: string }).lineId
+    }).id;
+    const body = parseOrThrow(manualShiftDeleteRestoreBodySchema, request.body ?? {});
+    const line = await getManualShiftsService(auth).restoreLine({
+      tenantId,
+      lineId,
+      reason: body.reason,
+      actor: actorFromAuth(auth, body.actorName)
     });
 
     return parseOrThrow(manualShiftLineResponseSchema, line);
@@ -247,6 +286,44 @@ export function registerManualShiftsRoutes(
       size: body.size,
       comment: body.comment,
       actor: actorFromAuth(auth)
+    });
+
+    return parseOrThrow(manualShiftOrderResponseSchema, order);
+  });
+
+  app.patch('/api/manual-shift-orders/:orderId/delete', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+    const body = parseOrThrow(manualShiftDeleteRestoreBodySchema, request.body ?? {});
+    const order = await getManualShiftsService(auth).deleteOrder({
+      tenantId,
+      orderId,
+      reason: body.reason,
+      actor: actorFromAuth(auth, body.actorName)
+    });
+
+    return parseOrThrow(manualShiftOrderResponseSchema, order);
+  });
+
+  app.patch('/api/manual-shift-orders/:orderId/restore', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+    const body = parseOrThrow(manualShiftDeleteRestoreBodySchema, request.body ?? {});
+    const order = await getManualShiftsService(auth).restoreOrder({
+      tenantId,
+      orderId,
+      reason: body.reason,
+      actor: actorFromAuth(auth, body.actorName)
     });
 
     return parseOrThrow(manualShiftOrderResponseSchema, order);

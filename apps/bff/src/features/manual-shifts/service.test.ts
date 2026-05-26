@@ -65,6 +65,10 @@ function createOrder(
     comment: null,
     createdAt: '2026-05-26T05:10:00.000Z',
     updatedAt: '2026-05-26T05:10:00.000Z',
+    deletedAt: null,
+    deletedByProfileId: null,
+    deletedByName: null,
+    deleteReason: null,
     ...overrides
   };
 }
@@ -110,7 +114,11 @@ function createRepo() {
         shift_id: ids.shift,
         name: 'Kav A',
         sort_order: 1,
-        created_at: '2026-05-26T05:05:00.000Z'
+        created_at: '2026-05-26T05:05:00.000Z',
+        deleted_at: null,
+        deleted_by_profile_id: null,
+        deleted_by_name: null,
+        delete_reason: null
       },
       {
         id: ids.lineTwo,
@@ -118,9 +126,24 @@ function createRepo() {
         shift_id: ids.shift,
         name: 'Kav B',
         sort_order: 2,
-        created_at: '2026-05-26T05:06:00.000Z'
+        created_at: '2026-05-26T05:06:00.000Z',
+        deleted_at: null,
+        deleted_by_profile_id: null,
+        deleted_by_name: null,
+        delete_reason: null
       }
-    ],
+    ] as Array<{
+      id: string;
+      tenant_id: string;
+      shift_id: string;
+      name: string;
+      sort_order: number;
+      created_at: string;
+      deleted_at: string | null;
+      deleted_by_profile_id: string | null;
+      deleted_by_name: string | null;
+      delete_reason: string | null;
+    }>,
     orders: [] as ManualShiftOrder[],
     workers: [] as ManualShiftWorker[],
     events: [] as Array<Record<string, unknown>>,
@@ -194,11 +217,11 @@ function createRepo() {
       return shift;
     }),
     listShiftLines: vi.fn(async (shiftId: string) => {
-      return state.lines.filter((line) => line.shift_id === shiftId) as never;
+      return state.lines.filter((line) => line.shift_id === shiftId && line.deleted_at === null) as never;
     }),
     listShiftLineSummaries: vi.fn(async (shiftId: string, tenantId: string) => {
       const lineRows = state.lines.filter(
-        (line) => line.shift_id === shiftId && line.tenant_id === tenantId
+        (line) => line.shift_id === shiftId && line.tenant_id === tenantId && line.deleted_at === null
       );
 
       const byLine = new Map<string, ManualShiftLineSummary>();
@@ -211,7 +234,11 @@ function createRepo() {
             name: row.name,
             sortOrder: row.sort_order,
             status: 'open',
-            createdAt: row.created_at
+            createdAt: row.created_at,
+            deletedAt: row.deleted_at,
+            deletedByProfileId: row.deleted_by_profile_id,
+            deletedByName: row.deleted_by_name,
+            deleteReason: row.delete_reason
           },
           totalOrders: 0,
           queuedOrders: 0,
@@ -224,7 +251,7 @@ function createRepo() {
       }
 
       for (const order of state.orders) {
-        if (order.shiftId !== shiftId) continue;
+        if (order.shiftId !== shiftId || order.deletedAt) continue;
         const summary = byLine.get(order.lineId);
         if (!summary) continue;
         summary.totalOrders += 1;
@@ -237,6 +264,7 @@ function createRepo() {
 
       for (const error of state.errors) {
         if (error.shiftId !== shiftId) continue;
+        if (!state.orders.some((order) => order.id === error.orderId && order.deletedAt === null)) continue;
         const summary = byLine.get(error.lineId);
         if (!summary) continue;
         summary.errorCount += 1;
@@ -268,7 +296,11 @@ function createRepo() {
         shift_id: input.shiftId,
         name: input.name,
         sort_order: input.sortOrder,
-        created_at: nowIso
+        created_at: nowIso,
+        deleted_at: null,
+        deleted_by_profile_id: null,
+        deleted_by_name: null,
+        delete_reason: null
       };
       state.lines.push(row);
       return row as never;
@@ -281,13 +313,17 @@ function createRepo() {
 
       if (patch.name !== undefined) line.name = patch.name;
       if (patch.sortOrder !== undefined) line.sort_order = patch.sortOrder;
+      if (patch.deletedAt !== undefined) line.deleted_at = patch.deletedAt;
+      if (patch.deletedByProfileId !== undefined) line.deleted_by_profile_id = patch.deletedByProfileId;
+      if (patch.deletedByName !== undefined) line.deleted_by_name = patch.deletedByName;
+      if (patch.deleteReason !== undefined) line.delete_reason = patch.deleteReason;
       return line as never;
     }),
     listShiftOrders: vi.fn(async (shiftId: string) => {
-      return state.orders.filter((order) => order.shiftId === shiftId);
+      return state.orders.filter((order) => order.shiftId === shiftId && order.deletedAt === null);
     }),
     listLineOrders: vi.fn(async (lineId: string) => {
-      return state.orders.filter((order) => order.lineId === lineId);
+      return state.orders.filter((order) => order.lineId === lineId && order.deletedAt === null);
     }),
     findOrderById: vi.fn(async (orderId: string) => {
       return state.orders.find((order) => order.id === orderId) ?? null;
@@ -339,6 +375,10 @@ function createRepo() {
       if (patch.waitingCheckAt !== undefined) nextOrder.waitingCheckAt = patch.waitingCheckAt;
       if (patch.checkedAt !== undefined) nextOrder.checkedAt = patch.checkedAt;
       if (patch.finishedAt !== undefined) nextOrder.finishedAt = patch.finishedAt;
+      if (patch.deletedAt !== undefined) nextOrder.deletedAt = patch.deletedAt;
+      if (patch.deletedByProfileId !== undefined) nextOrder.deletedByProfileId = patch.deletedByProfileId;
+      if (patch.deletedByName !== undefined) nextOrder.deletedByName = patch.deletedByName;
+      if (patch.deleteReason !== undefined) nextOrder.deleteReason = patch.deleteReason;
       nextOrder.updatedAt = nowIso;
 
       const index = state.orders.findIndex((entry) => entry.id === orderId);
@@ -358,6 +398,22 @@ function createRepo() {
         actorName: input.actorName,
         fromStatus: input.fromStatus,
         toStatus: input.toStatus,
+        payload: input.payload,
+        createdAt: nowIso
+      };
+      state.events.push(event);
+      return event as never;
+    }),
+    createLineEvent: vi.fn(async (input) => {
+      eventCounter += 1;
+      const event = {
+        id: `31000000-0000-4000-8000-${String(eventCounter).padStart(12, '0')}`,
+        tenantId: input.tenantId,
+        shiftId: input.shiftId,
+        lineId: input.lineId,
+        eventType: input.eventType,
+        actorProfileId: input.actorProfileId,
+        actorName: input.actorName,
         payload: input.payload,
         createdAt: nowIso
       };
@@ -792,6 +848,269 @@ describe('manual shifts service', () => {
         })
       ])
     );
+  });
+
+  it('soft-deletes a point, preserves the row, and writes a point_deleted event', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const deleted = await service.deleteOrder({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      reason: 'Duplicate point',
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(deleted.deletedAt).toBe(nowIso);
+    expect(deleted.deleteReason).toBe('Duplicate point');
+    expect(state.orders).toHaveLength(1);
+    expect(state.events.at(-1)).toMatchObject({
+      eventType: 'point_deleted',
+      orderId: ids.order,
+      fromStatus: 'waiting_check',
+      payload: { reason: 'Duplicate point' }
+    });
+  });
+
+  it('restores a point and writes a point_restored event', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({
+        id: ids.order,
+        deletedAt: '2026-05-26T06:50:00.000Z',
+        deletedByProfileId: ids.actor,
+        deletedByName: 'Dispatcher',
+        deleteReason: 'Duplicate point'
+      })
+    );
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const restored = await service.restoreOrder({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(restored.deletedAt).toBeNull();
+    expect(restored.deletedByProfileId).toBeNull();
+    expect(restored.deleteReason).toBeNull();
+    expect(state.events.at(-1)).toMatchObject({
+      eventType: 'point_restored',
+      orderId: ids.order,
+      toStatus: 'queued'
+    });
+  });
+
+  it('excludes deleted points from active list and summary reads', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({ id: ids.order, pickerName: 'יהודה', status: 'picking', lineId: ids.line }),
+      createOrder({
+        id: ids.orderTwo,
+        pickerName: 'יהודה',
+        status: 'waiting_check',
+        lineId: ids.line,
+        deletedAt: '2026-05-26T06:50:00.000Z',
+        deletedByProfileId: ids.actor,
+        deletedByName: 'Dispatcher',
+        deleteReason: 'Duplicate point'
+      }),
+      createOrder({ id: ids.orderThree, pickerName: 'רפאל', status: 'done', lineId: ids.lineTwo })
+    );
+    state.errors.push(
+      createError({ orderId: ids.orderTwo, lineId: ids.line, type: 'wrong_item' })
+    );
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    await expect(service.listShiftOrders({ tenantId: ids.tenant, shiftId: ids.shift })).resolves.toHaveLength(2);
+    await expect(service.listLineOrders({ tenantId: ids.tenant, lineId: ids.line })).resolves.toHaveLength(1);
+
+    const people = await service.getPeopleSummary({ tenantId: ids.tenant, shiftId: ids.shift });
+    const day = await service.getDaySummary({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(people.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pickerName: 'יהודה',
+          activeOrdersCount: 1,
+          waitingCheckCount: 0,
+          errorCount: 0
+        })
+      ])
+    );
+    expect(day).toMatchObject({
+      totalOrders: 2,
+      pickingOrders: 1,
+      waitingCheckOrders: 0,
+      doneOrders: 1,
+      errorsCount: 0
+    });
+    expect(day.byErrorType).toEqual([]);
+  });
+
+  it('deletes an empty line and writes a line_deleted event', async () => {
+    const { repo, state } = createRepo();
+    state.orders = [];
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const deleted = await service.deleteLine({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      reason: 'Empty line',
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(deleted.deletedAt).toBe(nowIso);
+    expect(state.events.at(-1)).toMatchObject({
+      eventType: 'line_deleted',
+      lineId: ids.line,
+      payload: { reason: 'Empty line' }
+    });
+  });
+
+  it('blocks line delete when non-deleted points exist', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order, lineId: ids.line }));
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    await expect(
+      service.deleteLine({
+        tenantId: ids.tenant,
+        lineId: ids.line,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_LINE_NOT_EMPTY' });
+  });
+
+  it('allows line delete when only deleted points remain and supports restore', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({
+        id: ids.order,
+        lineId: ids.line,
+        deletedAt: '2026-05-26T06:50:00.000Z',
+        deletedByProfileId: ids.actor,
+        deletedByName: 'Dispatcher',
+        deleteReason: 'Duplicate point'
+      })
+    );
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    const deleted = await service.deleteLine({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(deleted.deletedAt).toBe(nowIso);
+
+    const restored = await service.restoreLine({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(restored.deletedAt).toBeNull();
+    expect(state.events.at(-1)).toMatchObject({
+      eventType: 'line_restored',
+      lineId: ids.line
+    });
+  });
+
+  it('rejects point and line delete/restore on closed shifts', async () => {
+    const { repo, state } = createRepo();
+    state.shifts[0].status = 'closed';
+    state.orders.push(
+      createOrder({
+        id: ids.order,
+        deletedAt: '2026-05-26T06:50:00.000Z',
+        deletedByProfileId: ids.actor,
+        deletedByName: 'Dispatcher',
+        deleteReason: 'Duplicate point'
+      })
+    );
+    state.lines[0] = {
+      ...state.lines[0],
+      deleted_at: '2026-05-26T06:50:00.000Z',
+      deleted_by_profile_id: ids.actor,
+      deleted_by_name: 'Dispatcher',
+      delete_reason: 'Empty line'
+    };
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    await expect(
+      service.deleteOrder({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CLOSED' });
+    await expect(
+      service.restoreOrder({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CLOSED' });
+    await expect(
+      service.deleteLine({
+        tenantId: ids.tenant,
+        lineId: ids.line,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CLOSED' });
+    await expect(
+      service.restoreLine({
+        tenantId: ids.tenant,
+        lineId: ids.line,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CLOSED' });
+  });
+
+  it('enforces tenant isolation for point and line delete/restore', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order }));
+    const service = createManualShiftsServiceFromRepo(repo, {
+      getTodayDate: () => '2026-05-26',
+      getNowIso: () => nowIso
+    });
+
+    await expect(
+      service.deleteOrder({
+        tenantId: ids.otherTenant,
+        orderId: ids.order,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
+
+    await expect(
+      service.restoreLine({
+        tenantId: ids.otherTenant,
+        lineId: ids.line,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_LINE_NOT_FOUND' });
   });
 });
 

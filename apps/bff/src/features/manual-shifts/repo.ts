@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ManualShiftDaySummaryByError,
   ManualShiftLine,
+  ManualShiftLineEvent,
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderError,
@@ -29,6 +30,10 @@ type ManualShiftLineRow = {
   name: string;
   sort_order: number;
   created_at: string;
+  deleted_at: string | null;
+  deleted_by_profile_id: string | null;
+  deleted_by_name: string | null;
+  delete_reason: string | null;
 };
 
 type ManualShiftWorkerRow = {
@@ -65,6 +70,22 @@ type ManualShiftOrderRow = {
   comment: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
+  deleted_by_profile_id: string | null;
+  deleted_by_name: string | null;
+  delete_reason: string | null;
+};
+
+type ManualShiftLineEventRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  event_type: ManualShiftLineEvent['eventType'];
+  actor_name: string | null;
+  actor_profile_id: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
 };
 
 type ManualShiftOrderEventRow = {
@@ -103,6 +124,10 @@ type ManualShiftLineSummaryAggRow = {
   sort_order: number;
   status: ManualShiftLine['status'];
   created_at: string;
+  deleted_at: string | null;
+  deleted_by_profile_id: string | null;
+  deleted_by_name: string | null;
+  delete_reason: string | null;
   total_orders: number;
   queued_orders: number;
   picking_orders: number;
@@ -115,11 +140,13 @@ type ManualShiftLineSummaryAggRow = {
 const sessionColumns =
   'id,tenant_id,date,name,status,created_by_name,created_at,closed_at';
 const lineColumns =
-  'id,tenant_id,shift_id,name,sort_order,created_at';
+  'id,tenant_id,shift_id,name,sort_order,created_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
+const lineEventColumns =
+  'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
   'id,tenant_id,shift_id,line_id,order_id,event_type,actor_name,actor_profile_id,from_status,to_status,payload,created_at';
 const errorColumns =
@@ -146,7 +173,11 @@ function mapLineRow(row: ManualShiftLineRow, status: ManualShiftLine['status']):
     name: row.name,
     sortOrder: row.sort_order,
     status,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    deletedAt: row.deleted_at,
+    deletedByProfileId: row.deleted_by_profile_id,
+    deletedByName: row.deleted_by_name,
+    deleteReason: row.delete_reason
   };
 }
 
@@ -159,7 +190,11 @@ function mapLineSummaryAggRow(row: ManualShiftLineSummaryAggRow): ManualShiftLin
       name: row.name,
       sortOrder: row.sort_order,
       status: row.status,
-      createdAt: row.created_at
+      createdAt: row.created_at,
+      deletedAt: row.deleted_at,
+      deletedByProfileId: row.deleted_by_profile_id,
+      deletedByName: row.deleted_by_name,
+      deleteReason: row.delete_reason
     },
     totalOrders: Number(row.total_orders ?? 0),
     queuedOrders: Number(row.queued_orders ?? 0),
@@ -207,7 +242,25 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     finishedAt: row.finished_at,
     comment: row.comment,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    deletedByProfileId: row.deleted_by_profile_id,
+    deletedByName: row.deleted_by_name,
+    deleteReason: row.delete_reason
+  };
+}
+
+function mapLineEventRow(row: ManualShiftLineEventRow): ManualShiftLineEvent {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    eventType: row.event_type,
+    actorName: row.actor_name,
+    actorProfileId: row.actor_profile_id,
+    payload: row.payload,
+    createdAt: row.created_at
   };
 }
 
@@ -259,6 +312,19 @@ export type ManualShiftOrderPatch = {
   waitingCheckAt?: string | null;
   checkedAt?: string | null;
   finishedAt?: string | null;
+  deletedAt?: string | null;
+  deletedByProfileId?: string | null;
+  deletedByName?: string | null;
+  deleteReason?: string | null;
+};
+
+export type ManualShiftLinePatch = {
+  name?: string;
+  sortOrder?: number;
+  deletedAt?: string | null;
+  deletedByProfileId?: string | null;
+  deletedByName?: string | null;
+  deleteReason?: string | null;
 };
 
 export type ManualShiftsRepo = {
@@ -296,7 +362,7 @@ export type ManualShiftsRepo = {
     name: string;
     sortOrder: number;
   }): Promise<ManualShiftLineRow>;
-  updateLine(lineId: string, patch: { name?: string; sortOrder?: number }): Promise<ManualShiftLineRow | null>;
+  updateLine(lineId: string, patch: ManualShiftLinePatch): Promise<ManualShiftLineRow | null>;
   listShiftOrders(shiftId: string): Promise<ManualShiftOrder[]>;
   listLineOrders(lineId: string): Promise<ManualShiftOrder[]>;
   findOrderById(orderId: string): Promise<ManualShiftOrder | null>;
@@ -330,6 +396,15 @@ export type ManualShiftsRepo = {
     toStatus: ManualShiftOrderEvent['toStatus'];
     payload: Record<string, unknown> | null;
   }): Promise<ManualShiftOrderEvent>;
+  createLineEvent(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    eventType: ManualShiftLineEvent['eventType'];
+    actorProfileId: string | null;
+    actorName: string | null;
+    payload: Record<string, unknown> | null;
+  }): Promise<ManualShiftLineEvent>;
   createOrderError(input: {
     tenantId: string;
     shiftId: string;
@@ -477,6 +552,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .from('manual_shift_lines')
         .select(lineColumns)
         .eq('shift_id', shiftId)
+        .is('deleted_at', null)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
 
@@ -537,6 +613,10 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       const payload: Record<string, unknown> = {};
       if (patch.name !== undefined) payload.name = patch.name;
       if (patch.sortOrder !== undefined) payload.sort_order = patch.sortOrder;
+      if (patch.deletedAt !== undefined) payload.deleted_at = patch.deletedAt;
+      if (patch.deletedByProfileId !== undefined) payload.deleted_by_profile_id = patch.deletedByProfileId;
+      if (patch.deletedByName !== undefined) payload.deleted_by_name = patch.deletedByName;
+      if (patch.deleteReason !== undefined) payload.delete_reason = patch.deleteReason;
 
       const { data, error } = await supabase
         .from('manual_shift_lines')
@@ -557,6 +637,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .from('manual_shift_orders')
         .select(orderColumns)
         .eq('shift_id', shiftId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -571,6 +652,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .from('manual_shift_orders')
         .select(orderColumns)
         .eq('line_id', lineId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -641,6 +723,10 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (patch.waitingCheckAt !== undefined) payload.waiting_check_at = patch.waitingCheckAt;
       if (patch.checkedAt !== undefined) payload.checked_at = patch.checkedAt;
       if (patch.finishedAt !== undefined) payload.finished_at = patch.finishedAt;
+      if (patch.deletedAt !== undefined) payload.deleted_at = patch.deletedAt;
+      if (patch.deletedByProfileId !== undefined) payload.deleted_by_profile_id = patch.deletedByProfileId;
+      if (patch.deletedByName !== undefined) payload.deleted_by_name = patch.deletedByName;
+      if (patch.deleteReason !== undefined) payload.delete_reason = patch.deleteReason;
 
       const { data, error } = await supabase
         .from('manual_shift_orders')
@@ -679,6 +765,28 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return mapEventRow(data as ManualShiftOrderEventRow);
+    },
+
+    async createLineEvent(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_line_events')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          line_id: input.lineId,
+          event_type: input.eventType,
+          actor_profile_id: input.actorProfileId,
+          actor_name: input.actorName,
+          payload: input.payload
+        })
+        .select(lineEventColumns)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return mapLineEventRow(data as ManualShiftLineEventRow);
     },
 
     async createOrderError(input) {

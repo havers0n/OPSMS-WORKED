@@ -452,6 +452,11 @@ export const createManualShiftOrderErrorBodySchema = z.object({
   comment: z.string().trim().min(1).nullable().optional()
 });
 
+export const manualShiftDeleteRestoreBodySchema = z.object({
+  reason: z.string().trim().min(1).optional(),
+  actorName: z.string().trim().min(1).optional()
+});
+
 export const bulkCreateManualShiftOrdersBodySchema = z.union([
   z.object({
     rawText: z.string().trim().min(1),

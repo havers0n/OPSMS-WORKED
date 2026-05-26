@@ -61,9 +61,14 @@ export const manualShiftOrderEventTypeSchema = z.enum([
   'comment_updated',
   'picker_changed',
   'checker_changed',
-  'bulk_imported'
+  'bulk_imported',
+  'point_deleted',
+  'point_restored'
 ]);
 export type ManualShiftOrderEventType = z.infer<typeof manualShiftOrderEventTypeSchema>;
+
+export const manualShiftLineEventTypeSchema = z.enum(['line_deleted', 'line_restored']);
+export type ManualShiftLineEventType = z.infer<typeof manualShiftLineEventTypeSchema>;
 
 export const manualShiftSessionSchema = z.object({
   id: z.string().uuid(),
@@ -84,7 +89,11 @@ export const manualShiftLineSchema = z.object({
   name: z.string().trim().min(1),
   sortOrder: z.number().int(),
   status: manualShiftLineStatusSchema,
-  createdAt: z.string()
+  createdAt: z.string(),
+  deletedAt: z.string().nullable(),
+  deletedByProfileId: z.string().uuid().nullable(),
+  deletedByName: z.string().trim().min(1).nullable(),
+  deleteReason: z.string().trim().min(1).nullable()
 });
 export type ManualShiftLine = z.infer<typeof manualShiftLineSchema>;
 
@@ -109,9 +118,26 @@ export const manualShiftOrderSchema = z.object({
   finishedAt: z.string().nullable(),
   comment: z.string().trim().min(1).nullable(),
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  deletedAt: z.string().nullable(),
+  deletedByProfileId: z.string().uuid().nullable(),
+  deletedByName: z.string().trim().min(1).nullable(),
+  deleteReason: z.string().trim().min(1).nullable()
 });
 export type ManualShiftOrder = z.infer<typeof manualShiftOrderSchema>;
+
+export const manualShiftLineEventSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  lineId: z.string().uuid(),
+  eventType: manualShiftLineEventTypeSchema,
+  actorName: z.string().trim().min(1).nullable(),
+  actorProfileId: z.string().uuid().nullable(),
+  payload: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.string()
+});
+export type ManualShiftLineEvent = z.infer<typeof manualShiftLineEventSchema>;
 
 export const manualShiftOrderEventSchema = z.object({
   id: z.string().uuid(),

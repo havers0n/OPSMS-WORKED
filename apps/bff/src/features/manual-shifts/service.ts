@@ -27,6 +27,7 @@ import {
   invalidManualShiftOrderTransition,
   manualShiftAlreadyActive,
   manualShiftClosed,
+  manualShiftLineDeleteBlocked,
   manualShiftLineNotFound,
   manualShiftNotFound,
   manualShiftOrderNotFound,
@@ -67,6 +68,18 @@ export type ManualShiftsService = {
   listShiftLines(input: { tenantId: string; shiftId: string }): Promise<ManualShiftLineSummary[]>;
   createLine(input: { tenantId: string; shiftId: string; name: string; sortOrder: number }): Promise<ManualShiftLine>;
   patchLine(input: { tenantId: string; lineId: string; name?: string; sortOrder?: number }): Promise<ManualShiftLine>;
+  deleteLine(input: {
+    tenantId: string;
+    lineId: string;
+    reason?: string;
+    actor: ActorContext;
+  }): Promise<ManualShiftLine>;
+  restoreLine(input: {
+    tenantId: string;
+    lineId: string;
+    reason?: string;
+    actor: ActorContext;
+  }): Promise<ManualShiftLine>;
   listShiftOrders(input: { tenantId: string; shiftId: string }): Promise<ManualShiftOrder[]>;
   listLineOrders(input: { tenantId: string; lineId: string }): Promise<ManualShiftOrder[]>;
   createOrder(input: {
@@ -115,6 +128,18 @@ export type ManualShiftsService = {
     comment?: string | null;
     actor: ActorContext;
   }): Promise<ManualShiftOrder>;
+  deleteOrder(input: {
+    tenantId: string;
+    orderId: string;
+    reason?: string;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrder>;
+  restoreOrder(input: {
+    tenantId: string;
+    orderId: string;
+    reason?: string;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrder>;
   transitionOrderStatus(input: {
     tenantId: string;
     orderId: string;
@@ -142,9 +167,12 @@ function formatLocalDate(date: Date, timeZone: string) {
 }
 
 function buildLineSummaries(lines: ManualShiftLine[], orders: ManualShiftOrder[], errors: ManualShiftOrderError[]) {
+  const activeOrderIds = new Set(orders.map((order) => order.id));
   return lines.map<ManualShiftLineSummary>((line) => {
     const lineOrders = orders.filter((order) => order.lineId === line.id);
-    const lineErrors = errors.filter((error) => error.lineId === line.id);
+    const lineErrors = errors.filter(
+      (error) => error.lineId === line.id && activeOrderIds.has(error.orderId)
+    );
 
     return {
       line: {
@@ -404,7 +432,7 @@ export function createManualShiftsServiceFromRepo(
 
     async patchLine(input) {
       const line = await requireLine(input.lineId);
-      if (line.tenant_id !== input.tenantId) {
+      if (line.tenant_id !== input.tenantId || line.deleted_at) {
         throw manualShiftLineNotFound(input.lineId);
       }
 
@@ -423,6 +451,85 @@ export function createManualShiftsServiceFromRepo(
       return mapManualShiftLineRowToDomain(updated, deriveManualShiftLineStatus(orders));
     },
 
+    async deleteLine(input) {
+      const line = await requireLine(input.lineId);
+      if (line.tenant_id !== input.tenantId) {
+        throw manualShiftLineNotFound(input.lineId);
+      }
+
+      await requireActiveShift(line.shift_id);
+
+      if (line.deleted_at) {
+        return mapManualShiftLineRowToDomain(line, 'open');
+      }
+
+      const activeOrders = await repo.listLineOrders(input.lineId);
+      if (activeOrders.length > 0) {
+        throw manualShiftLineDeleteBlocked();
+      }
+
+      const updated = await repo.updateLine(input.lineId, {
+        deletedAt: getNowIso(),
+        deletedByProfileId: input.actor.actorProfileId,
+        deletedByName: input.actor.actorName,
+        deleteReason: input.reason ?? null
+      });
+
+      if (!updated) {
+        throw manualShiftLineNotFound(input.lineId);
+      }
+
+      await repo.createLineEvent({
+        tenantId: input.tenantId,
+        shiftId: updated.shift_id,
+        lineId: updated.id,
+        eventType: 'line_deleted',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        payload: input.reason ? { reason: input.reason } : null
+      });
+
+      return mapManualShiftLineRowToDomain(updated, 'open');
+    },
+
+    async restoreLine(input) {
+      const line = await requireLine(input.lineId);
+      if (line.tenant_id !== input.tenantId) {
+        throw manualShiftLineNotFound(input.lineId);
+      }
+
+      await requireActiveShift(line.shift_id);
+
+      if (!line.deleted_at) {
+        const orders = await repo.listLineOrders(input.lineId);
+        return mapManualShiftLineRowToDomain(line, deriveManualShiftLineStatus(orders));
+      }
+
+      const updated = await repo.updateLine(input.lineId, {
+        deletedAt: null,
+        deletedByProfileId: null,
+        deletedByName: null,
+        deleteReason: null
+      });
+
+      if (!updated) {
+        throw manualShiftLineNotFound(input.lineId);
+      }
+
+      await repo.createLineEvent({
+        tenantId: input.tenantId,
+        shiftId: updated.shift_id,
+        lineId: updated.id,
+        eventType: 'line_restored',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        payload: input.reason ? { reason: input.reason } : null
+      });
+
+      const orders = await repo.listLineOrders(input.lineId);
+      return mapManualShiftLineRowToDomain(updated, deriveManualShiftLineStatus(orders));
+    },
+
     async listShiftOrders(input) {
       const shift = await requireShift(input.shiftId);
       if (shift.tenantId !== input.tenantId) {
@@ -434,7 +541,7 @@ export function createManualShiftsServiceFromRepo(
 
     async listLineOrders(input) {
       const line = await requireLine(input.lineId);
-      if (line.tenant_id !== input.tenantId) {
+      if (line.tenant_id !== input.tenantId || line.deleted_at) {
         throw manualShiftLineNotFound(input.lineId);
       }
 
@@ -443,7 +550,7 @@ export function createManualShiftsServiceFromRepo(
 
     async createOrder(input) {
       const line = await requireLine(input.lineId);
-      if (line.tenant_id !== input.tenantId) {
+      if (line.tenant_id !== input.tenantId || line.deleted_at) {
         throw manualShiftLineNotFound(input.lineId);
       }
 
@@ -495,7 +602,7 @@ export function createManualShiftsServiceFromRepo(
 
     async bulkCreateOrders(input) {
       const line = await requireLine(input.lineId);
-      if (line.tenant_id !== input.tenantId) {
+      if (line.tenant_id !== input.tenantId || line.deleted_at) {
         throw manualShiftLineNotFound(input.lineId);
       }
 
@@ -567,7 +674,7 @@ export function createManualShiftsServiceFromRepo(
 
     async patchOrder(input) {
       const order = await requireOrder(input.orderId);
-      if (order.tenantId !== input.tenantId) {
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
         throw manualShiftOrderNotFound(input.orderId);
       }
 
@@ -615,9 +722,87 @@ export function createManualShiftsServiceFromRepo(
       return updated;
     },
 
-    async transitionOrderStatus(input) {
+    async deleteOrder(input) {
       const order = await requireOrder(input.orderId);
       if (order.tenantId !== input.tenantId) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await requireActiveShift(order.shiftId);
+
+      if (order.deletedAt) {
+        return order;
+      }
+
+      const updated = await repo.updateOrder(input.orderId, {
+        deletedAt: getNowIso(),
+        deletedByProfileId: input.actor.actorProfileId,
+        deletedByName: input.actor.actorName,
+        deleteReason: input.reason ?? null
+      });
+
+      if (!updated) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await repo.createOrderEvent({
+        tenantId: input.tenantId,
+        shiftId: updated.shiftId,
+        lineId: updated.lineId,
+        orderId: updated.id,
+        eventType: 'point_deleted',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: order.status,
+        toStatus: null,
+        payload: input.reason ? { reason: input.reason } : null
+      });
+
+      return updated;
+    },
+
+    async restoreOrder(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await requireActiveShift(order.shiftId);
+
+      if (!order.deletedAt) {
+        return order;
+      }
+
+      const updated = await repo.updateOrder(input.orderId, {
+        deletedAt: null,
+        deletedByProfileId: null,
+        deletedByName: null,
+        deleteReason: null
+      });
+
+      if (!updated) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await repo.createOrderEvent({
+        tenantId: input.tenantId,
+        shiftId: updated.shiftId,
+        lineId: updated.lineId,
+        orderId: updated.id,
+        eventType: 'point_restored',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: updated.status,
+        payload: input.reason ? { reason: input.reason } : null
+      });
+
+      return updated;
+    },
+
+    async transitionOrderStatus(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
         throw manualShiftOrderNotFound(input.orderId);
       }
 
@@ -676,7 +861,7 @@ export function createManualShiftsServiceFromRepo(
 
     async createOrderError(input) {
       const order = await requireOrder(input.orderId);
-      if (order.tenantId !== input.tenantId) {
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
         throw manualShiftOrderNotFound(input.orderId);
       }
 
@@ -725,6 +910,7 @@ export function createManualShiftsServiceFromRepo(
 
       const orders = await repo.listShiftOrders(input.shiftId);
       const errors = await repo.listShiftErrors(input.shiftId);
+      const activeOrderIds = new Set(orders.map((order) => order.id));
       const pickerNames = Array.from(
         new Set(orders.map((order) => order.pickerName).filter((name): name is string => Boolean(name)))
       );
@@ -743,7 +929,9 @@ export function createManualShiftsServiceFromRepo(
             waitingCheckCount: pickerOrders.filter((order) => order.status === 'waiting_check').length,
             returnedCount: pickerOrders.filter((order) => order.status === 'returned').length,
             doneCount: pickerOrders.filter((order) => order.status === 'done').length,
-            errorCount: errors.filter((error) => pickerOrderIds.has(error.orderId)).length,
+            errorCount: errors.filter(
+              (error) => activeOrderIds.has(error.orderId) && pickerOrderIds.has(error.orderId)
+            ).length,
             currentActiveOrder
           };
         })
@@ -758,6 +946,8 @@ export function createManualShiftsServiceFromRepo(
 
       const orders = await repo.listShiftOrders(input.shiftId);
       const errors = await repo.listShiftErrors(input.shiftId);
+      const activeOrderIds = new Set(orders.map((order) => order.id));
+      const activeErrors = errors.filter((error) => activeOrderIds.has(error.orderId));
       const lineSummaries = await buildShiftLines(input.shiftId);
       const pickerNames = Array.from(
         new Set(orders.map((order) => order.pickerName).filter((name): name is string => Boolean(name)))
@@ -770,13 +960,13 @@ export function createManualShiftsServiceFromRepo(
         waitingCheckOrders: orders.filter((order) => order.pickerName === pickerName && order.status === 'waiting_check').length,
         returnedOrders: orders.filter((order) => order.pickerName === pickerName && order.status === 'returned').length,
         doneOrders: orders.filter((order) => order.pickerName === pickerName && order.status === 'done').length,
-        errorCount: errors.filter((error) =>
+        errorCount: activeErrors.filter((error) =>
           orders.some((order) => order.id === error.orderId && order.pickerName === pickerName)
         ).length
       }));
 
       const errorCountByType = new Map<ManualShiftOrderError['type'], number>();
-      for (const error of errors) {
+      for (const error of activeErrors) {
         errorCountByType.set(error.type, (errorCountByType.get(error.type) ?? 0) + 1);
       }
 
@@ -788,7 +978,7 @@ export function createManualShiftsServiceFromRepo(
         waitingCheckOrders: orders.filter((order) => order.status === 'waiting_check').length,
         returnedOrders: orders.filter((order) => order.status === 'returned').length,
         doneOrders: orders.filter((order) => order.status === 'done').length,
-        errorsCount: errors.length,
+        errorsCount: activeErrors.length,
         byErrorType: Array.from(errorCountByType.entries()).map(([type, count]) => ({
           type,
           count

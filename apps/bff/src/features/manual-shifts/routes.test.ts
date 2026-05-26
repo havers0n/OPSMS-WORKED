@@ -71,7 +71,11 @@ function createLine(): ManualShiftLine {
     name: 'Kav A',
     sortOrder: 1,
     status: 'open',
-    createdAt: '2026-05-26T07:10:00.000Z'
+    createdAt: '2026-05-26T07:10:00.000Z',
+    deletedAt: null,
+    deletedByProfileId: null,
+    deletedByName: null,
+    deleteReason: null
   };
 }
 
@@ -97,7 +101,11 @@ function createOrder(status: ManualShiftOrder['status']): ManualShiftOrder {
     finishedAt: null,
     comment: null,
     createdAt: '2026-05-26T07:15:00.000Z',
-    updatedAt: '2026-05-26T07:20:00.000Z'
+    updatedAt: '2026-05-26T07:20:00.000Z',
+    deletedAt: null,
+    deletedByProfileId: null,
+    deletedByName: null,
+    deleteReason: null
   };
 }
 
@@ -172,11 +180,15 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     listShiftLines: vi.fn(async () => []),
     createLine: vi.fn(async () => createLine()),
     patchLine: vi.fn(async () => ({ ...createLine(), name: 'Kav A+', sortOrder: 2 })),
+    deleteLine: vi.fn(async () => ({ ...createLine(), deletedAt: '2026-05-26T08:00:00.000Z', deletedByProfileId: ids.user, deletedByName: 'Shift Dispatcher', deleteReason: 'cleanup' })),
+    restoreLine: vi.fn(async () => createLine()),
     listShiftOrders: vi.fn(async () => []),
     listLineOrders: vi.fn(async () => []),
     createOrder: vi.fn(async () => createOrder('queued')),
     bulkCreateOrders: vi.fn(async () => bulkResult),
     patchOrder: vi.fn(async () => ({ ...createOrder('queued'), comment: 'Updated' })),
+    deleteOrder: vi.fn(async () => ({ ...createOrder('queued'), deletedAt: '2026-05-26T08:00:00.000Z', deletedByProfileId: ids.user, deletedByName: 'Shift Dispatcher', deleteReason: 'cleanup' })),
+    restoreOrder: vi.fn(async () => createOrder('queued')),
     transitionOrderStatus: vi.fn(async () => createOrder('picking')),
     createOrderError: vi.fn(async () => createOrderError()),
     getPeopleSummary: vi.fn(async () => peopleSummary),
@@ -314,6 +326,57 @@ describe('manual shifts routes', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       code: 'MANUAL_SHIFT_INVALID_STATUS_TRANSITION'
+    });
+
+    await app.close();
+  });
+
+  it('deletes a manual point and forwards optional actorName/reason', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/manual-shift-orders/${ids.order}/delete`,
+      payload: {
+        reason: 'Duplicate point',
+        actorName: 'Override Actor'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(service.deleteOrder).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      reason: 'Duplicate point',
+      actor: {
+        actorProfileId: ids.user,
+        actorName: 'Override Actor'
+      }
+    });
+
+    await app.close();
+  });
+
+  it('restores a manual line and forwards auth actor when actorName is omitted', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/manual-shift-lines/${ids.line}/restore`,
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(service.restoreLine).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      lineId: ids.line,
+      reason: undefined,
+      actor: {
+        actorProfileId: ids.user,
+        actorName: 'Shift Dispatcher'
+      }
     });
 
     await app.close();

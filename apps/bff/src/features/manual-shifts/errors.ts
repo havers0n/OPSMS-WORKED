@@ -43,3 +43,11 @@ export function invalidManualShiftOrderCreateStatus(status: string) {
 export function manualShiftWorkerNotFound(workerId: string) {
   return new ApiError(404, 'MANUAL_SHIFT_WORKER_NOT_FOUND', `Manual shift worker ${workerId} was not found.`);
 }
+
+export function manualShiftLineDeleteBlocked() {
+  return new ApiError(
+    409,
+    'MANUAL_SHIFT_LINE_NOT_EMPTY',
+    'אי אפשר למחוק קו שיש בו נקודות. מחק או העבר את הנקודות קודם.'
+  );
+}

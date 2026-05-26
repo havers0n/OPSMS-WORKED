@@ -64,6 +64,7 @@ describe('manual shift control contracts', () => {
         pointName: 'ירושלים',
         palletCount: 2,
         pickerName: 'יהודה',
+        pickerWorkerId: null,
         checkerName: null,
         lineCount: 12,
         size: 'L',
@@ -74,7 +75,11 @@ describe('manual shift control contracts', () => {
         finishedAt: null,
         comment: null,
         createdAt: '2026-05-26T10:00:00.000Z',
-        updatedAt: '2026-05-26T10:00:00.000Z'
+        updatedAt: '2026-05-26T10:00:00.000Z',
+        deletedAt: null,
+        deletedByProfileId: null,
+        deletedByName: null,
+        deleteReason: null
       })
     ).toMatchObject({
       orderNumber: '502481',
@@ -107,7 +112,11 @@ describe('manual shift control contracts', () => {
               name: 'שרון דרומי',
               sortOrder: 1,
               status: 'in_progress',
-              createdAt: '2026-05-26T06:10:00.000Z'
+              createdAt: '2026-05-26T06:10:00.000Z',
+              deletedAt: null,
+              deletedByProfileId: null,
+              deletedByName: null,
+              deleteReason: null
             },
             totalOrders: 4,
             queuedOrders: 1,

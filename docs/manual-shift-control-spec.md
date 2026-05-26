@@ -79,6 +79,14 @@ Each future persisted transition is expected to:
 - Manual Shift Control must not require user/profile linkage for these fields.
 - Event records may later store actor name and/or actor profile id, but MVP manual order fields stay free-text.
 
+## Delete and Restore Semantics
+- Operational rows must not be hard-deleted in normal application flows.
+- Manual shift points (`ManualShiftOrder`) use soft delete and restore lifecycle fields.
+- Manual shift lines (`ManualShiftLine`) use soft delete and restore lifecycle fields.
+- Active operational reads exclude soft-deleted lines and points by default.
+- Errors and events attached to deleted points remain persisted for audit history, but they do not count in active summaries.
+- Line delete is allowed only when the line has zero non-deleted points.
+
 ## Size Rules
 - `1–3 = S`
 - `4–8 = M`
