@@ -448,6 +448,17 @@ export const executePickStepResponseSchema = z.object({
   movementId: z.string().uuid().nullable()
 });
 
+export const skipPickStepResponseSchema = z.object({
+  stepId: z.string().uuid(),
+  status: z.literal('skipped'),
+  qtyPicked: z.number().int().min(0),
+  taskId: z.string().uuid(),
+  taskStatus: z.enum(['in_progress', 'completed', 'completed_with_exceptions']),
+  orderStatus: z.string().nullable(),
+  waveStatus: z.string().nullable(),
+  movementId: z.null()
+});
+
 // ── Error ─────────────────────────────────────────────────────────────────────
 
 export const errorResponseSchema = z.object({

@@ -62,7 +62,9 @@ export const pickStepDetailSchema = pickStepSchema.extend({
   sourceCellAddress: z.string().nullable(),
   sourceContainerCode: z.string().nullable(),
   sourceFloorId: z.string().uuid().nullable(),
-  imageUrl: z.string().nullable()
+  imageUrl: z.string().nullable(),
+  /** Human-readable order number — populated when the task source is a wave */
+  orderNumber: z.string().nullable().optional()
 });
 export type PickStepDetail = z.infer<typeof pickStepDetailSchema>;
 

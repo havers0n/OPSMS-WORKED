@@ -1,4 +1,4 @@
-import { BarChart3, CheckSquare, Layers, LayoutGrid, Package, Settings2, X } from 'lucide-react';
+import { BarChart3, CheckSquare, Layers, LayoutGrid, Package, Settings2, ShoppingBasket, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
@@ -34,6 +34,20 @@ export function LeftDrawer() {
       description: t('app.navigation.products.description'),
       icon: Package,
       to: routes.products,
+      enabled: true
+    },
+    {
+      label: t('app.navigation.picking'),
+      description: t('app.navigation.picking.description'),
+      icon: ShoppingBasket,
+      to: routes.picking,
+      enabled: true
+    },
+    {
+      label: t('app.navigation.pickingPlan'),
+      description: t('app.navigation.pickingPlan.description'),
+      icon: ShoppingBasket,
+      to: routes.pickingPlan,
       enabled: true
     },
     {

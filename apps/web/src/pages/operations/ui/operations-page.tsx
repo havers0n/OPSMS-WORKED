@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ChevronRight, Package, RefreshCw, Waves as WavesIcon } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ChevronRight, Package, Play, RefreshCw, Waves as WavesIcon } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { OrderStatus, WaveStatus } from '@wos/domain';
 import { useCreateOrder, useTransitionOrderStatus } from '@/entities/order/api/mutations';
 import { ordersQueryOptions } from '@/entities/order/api/queries';
-import { getOrderStatusColor, getOrderStatusLabel, getPrimaryActionLabel, getProgressLabel, getPrimaryTransitionTarget } from '@/entities/order/lib/order-actions';
+import { getOrderStatusColor, getOrderStatusLabel, getPrimaryActionLabel, getProgressLabel, getPrimaryTransitionTarget, isActiveOrder } from '@/entities/order/lib/order-actions';
 import { useCreateWave, useTransitionWaveStatus } from '@/entities/wave/api/mutations';
 import { wavesQueryOptions } from '@/entities/wave/api/queries';
 import { getWaveStatusColor, getWaveStatusLabel, getWavePrimaryAction } from '@/entities/wave/lib/wave-actions';
@@ -14,6 +14,29 @@ import { OrderPreview } from '@/features/order-detail/ui/order-preview';
 import { useT } from '@/shared/i18n';
 
 // ── Wave workflow is now centralized in entities/wave/lib/wave-actions.ts ──
+
+// ── Mobile viewport detection ──────────────────────────────────────────────────
+
+const MOBILE_BREAKPOINT_PX = 640;
+
+function getIsMobileViewport() {
+  if (typeof window === 'undefined') return false;
+  if (window.innerWidth === 0) return false;
+  return window.innerWidth < MOBILE_BREAKPOINT_PX;
+}
+
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(getIsMobileViewport);
+  useEffect(() => {
+    const update = () => setIsMobile(getIsMobileViewport());
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return isMobile;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function WaveProgress({ readyOrders, totalOrders }: { readyOrders: number; totalOrders: number }) {
   const t = useT();
@@ -90,6 +113,12 @@ export function OperationsPage() {
   const selectedOrderId = searchParams.get('order');
   const [navigateToWave, setNavigateToWave] = useState<string | null>(null);
   const navigate = useNavigate();
+  const isMobileViewport = useIsMobileViewport();
+
+  const closeOrderPreview = useCallback(
+    () => setSearchParams((p) => { p.delete('order'); return p; }),
+    [setSearchParams]
+  );
 
   const { data: waves = [], isLoading: wavesLoading, refetch: refetchWaves, isRefetching: wavesRefetching } = useQuery(wavesQueryOptions());
   const { data: allOrders = [], isLoading: ordersLoading, refetch: refetchOrders, isRefetching: ordersRefetching } = useQuery(ordersQueryOptions());
@@ -294,7 +323,7 @@ export function OperationsPage() {
                           <td className="px-4 py-3 text-slate-600">{order.lineCount}</td>
                           <td className="px-4 py-3 text-slate-500">{getProgressLabel(order)}</td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                               {canTransition && target && (
                                 <button
                                   type="button"
@@ -303,6 +332,17 @@ export function OperationsPage() {
                                   className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                                 >
                                   {getPrimaryActionLabel(order.status, target)}
+                                </button>
+                              )}
+                              {isActiveOrder(order.status) && (
+                                <button
+                                  type="button"
+                                  title={t('operations.preview.action.startPicking')}
+                                  onClick={() => setSearchParams((p) => { p.set('order', order.id); return p; })}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700 hover:bg-cyan-100"
+                                >
+                                  <Play className="h-3 w-3" />
+                                  {t('operations.preview.action.pick')}
                                 </button>
                               )}
                             </div>
@@ -319,11 +359,32 @@ export function OperationsPage() {
         </div>
       </div>
 
-      {/* Order preview panel — in-flow sibling, not fixed overlay */}
+      {/* Order preview panel */}
       {selectedOrderId && (
-        <div className="m-4 ms-0 flex w-[360px] shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <OrderPreview orderId={selectedOrderId} onClose={() => setSearchParams((p) => { p.delete('order'); return p; })} />
-        </div>
+        isMobileViewport ? (
+          /* Mobile: full-screen overlay so main content stays full-width */
+          <div className="fixed inset-0 z-40 flex flex-col bg-white">
+            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+              <button
+                type="button"
+                onClick={closeOrderPreview}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Back to operations"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-medium text-slate-700">Order Details</span>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <OrderPreview orderId={selectedOrderId} onClose={closeOrderPreview} />
+            </div>
+          </div>
+        ) : (
+          /* Desktop: in-flow side panel */
+          <div className="m-4 ms-0 flex w-[360px] shrink-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <OrderPreview orderId={selectedOrderId} onClose={closeOrderPreview} />
+          </div>
+        )
       )}
 
       {showCreateWave && <CreateWaveModal onClose={() => setShowCreateWave(false)} onCreated={(id) => setNavigateToWave(id)} />}

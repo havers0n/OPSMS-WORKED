@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPickingServiceFromRepo } from './service.js';
-import type { PickingRepo, ExecutePickStepResult } from './repo.js';
+import type { PickingRepo, ExecutePickStepResult, SkipPickStepResult } from './repo.js';
 
 const ids = {
   task:      '11111111-1111-4111-8111-111111111111',
@@ -13,6 +13,7 @@ const ids = {
 const makeRepo = (overrides?: Partial<PickingRepo>): PickingRepo => ({
   allocatePickSteps: vi.fn(),
   executePickStep:   vi.fn(),
+  skipPickStep:      vi.fn(),
   ...overrides
 });
 
@@ -94,5 +95,49 @@ describe('picking service — executePickStep', () => {
         stepId: ids.step, qtyActual: 3, pickContainerId: ids.container, actorId: null
       })
     ).rejects.toThrow('inventory-gone');
+  });
+});
+
+// ── skipPickStep ──────────────────────────────────────────────────────────────
+
+describe('picking service — skipPickStep', () => {
+  const mockResult: SkipPickStepResult = {
+    stepId:      ids.step,
+    status:      'skipped',
+    qtyPicked:   0,
+    taskId:      ids.task,
+    taskStatus:  'in_progress',
+    orderStatus: null,
+    waveStatus:  null,
+    movementId:  null
+  };
+
+  it('delegates to repo with correct arguments', async () => {
+    const repo = makeRepo({ skipPickStep: vi.fn().mockResolvedValue(mockResult) });
+    const service = createPickingServiceFromRepo(repo);
+
+    const result = await service.skipPickStep({ stepId: ids.step, actorId: ids.actor });
+
+    expect(repo.skipPickStep).toHaveBeenCalledWith(ids.step, ids.actor);
+    expect(result).toEqual(mockResult);
+  });
+
+  it('passes null actorId through to repo', async () => {
+    const repo = makeRepo({ skipPickStep: vi.fn().mockResolvedValue(mockResult) });
+    const service = createPickingServiceFromRepo(repo);
+
+    await service.skipPickStep({ stepId: ids.step, actorId: null });
+
+    expect(repo.skipPickStep).toHaveBeenCalledWith(ids.step, null);
+  });
+
+  it('propagates repo errors unchanged', async () => {
+    const err = new Error('step-not-skippable');
+    const repo = makeRepo({ skipPickStep: vi.fn().mockRejectedValue(err) });
+    const service = createPickingServiceFromRepo(repo);
+
+    await expect(
+      service.skipPickStep({ stepId: ids.step, actorId: null })
+    ).rejects.toThrow('step-not-skippable');
   });
 });

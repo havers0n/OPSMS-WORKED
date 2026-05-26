@@ -32,6 +32,19 @@ const executePickStepRpcResultSchema = z.object({
 
 export type ExecutePickStepResult = z.infer<typeof executePickStepRpcResultSchema>;
 
+const skipPickStepRpcResultSchema = z.object({
+  stepId: z.string().uuid(),
+  status: z.literal('skipped'),
+  qtyPicked: z.number().int().min(0),
+  taskId: z.string().uuid(),
+  taskStatus: z.enum(['in_progress', 'completed', 'completed_with_exceptions']),
+  orderStatus: z.string().nullable(),
+  waveStatus: z.string().nullable(),
+  movementId: z.null()
+});
+
+export type SkipPickStepResult = z.infer<typeof skipPickStepRpcResultSchema>;
+
 export type PickingRepo = {
   allocatePickSteps(taskId: string): Promise<AllocationResult>;
   executePickStep(
@@ -40,6 +53,10 @@ export type PickingRepo = {
     pickContainerId: string,
     actorId: string | null
   ): Promise<ExecutePickStepResult>;
+  skipPickStep(
+    stepId: string,
+    actorId: string | null
+  ): Promise<SkipPickStepResult>;
 };
 
 // ── Error mapping ─────────────────────────────────────────────────────────────
@@ -103,6 +120,19 @@ export function createPickingRepo(supabase: SupabaseClient): PickingRepo {
       }
 
       return executePickStepRpcResultSchema.parse(data);
+    },
+
+    async skipPickStep(stepId, actorId) {
+      const { data, error } = await supabase.rpc('skip_pick_step', {
+        step_uuid:  stepId,
+        actor_uuid: actorId ?? null
+      });
+
+      if (error) {
+        throw mapExecutionRpcError(error, stepId) ?? error;
+      }
+
+      return skipPickStepRpcResultSchema.parse(data);
     }
   };
 }
