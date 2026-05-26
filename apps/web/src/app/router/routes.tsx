@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { AppShell } from '@/app/layouts/app-shell';
 import { ProtectedRoute } from '@/app/router/protected-route';
 import { LoginPage } from '@/pages/login/ui/login-page';
+import { ManualOperatorPage } from '@/pages/manual-operator/ui/manual-operator-page';
 import { OperationsPage } from '@/pages/operations/ui/operations-page';
 import { OrderDetailPage } from '@/pages/order-detail/ui/order-detail-page';
 import { ProductDetailPage } from '@/pages/product-detail/ui/product-detail-page';
@@ -37,6 +38,14 @@ export function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route path={routes.login} element={<LoginPage />} />
+        <Route
+          path={routes.operatorManual}
+          element={
+            <ProtectedRoute>
+              <ManualOperatorPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           element={
             <ProtectedRoute>
