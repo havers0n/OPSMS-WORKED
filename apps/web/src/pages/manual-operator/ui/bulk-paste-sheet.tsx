@@ -81,16 +81,17 @@ export function BulkPasteSheet({ lineId, onClose }: BulkPasteSheetProps) {
         <div className="flex flex-col gap-2">
           <label className="font-bold text-gray-700">הזן הזמנות (שורה אחת לכל הזמנה)</label>
           <p className="text-sm text-gray-500 leading-relaxed">
-            פורמט: מספר הזמנה, שם מלקט, מספר שורות
+            פורמט: נקודה, מלקט, מספר שורות, מספר משטחים
             <br />
             דוגמאות:
-            <span className="block font-mono text-gray-700 mt-1">502481</span>
-            <span className="block font-mono text-gray-700">502482, יהודה</span>
-            <span className="block font-mono text-gray-700">502483, רפאל, 12</span>
+            <span className="block font-mono text-gray-700 mt-1">ירושלים</span>
+            <span className="block font-mono text-gray-700">ירושלים, יהודה</span>
+            <span className="block font-mono text-gray-700">תל אביב, רפאל, 12</span>
+            <span className="block font-mono text-gray-700">תל אביב, רפאל, 12, 3</span>
           </p>
           <textarea
             className="w-full bg-gray-50 border border-gray-300 rounded-xl p-4 text-base font-mono min-h-[200px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            placeholder={'502481\n502482, יהודה\n502483, רפאל, 12'}
+            placeholder={'ירושלים\nירושלים, יהודה\nתל אביב, רפאל, 12'}
             value={rawText}
             onChange={e => setRawText(e.target.value)}
             dir="ltr"

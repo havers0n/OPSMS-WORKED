@@ -34,15 +34,15 @@ export function OrderCard({ order, onSelect }: OrderCardProps) {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="font-bold text-lg text-gray-900">
-              {order.orderNumber ?? 'ללא מספר'}
+              {order.pointName ?? 'ללא נקודה'}
             </span>
             {isError && <AlertCircle size={18} className="text-red-500" strokeWidth={2.5} />}
           </div>
           {order.pickerName && (
             <span className="text-gray-600 font-medium text-sm">{order.pickerName}</span>
           )}
-          {order.customerName && !order.pickerName && (
-            <span className="text-gray-500 text-sm">{order.customerName}</span>
+          {order.orderNumber && (
+            <span className="text-gray-400 text-xs">{order.orderNumber}</span>
           )}
         </div>
         <div className={`px-2.5 py-1 text-sm font-bold rounded-md border shrink-0 ${statusColor}`}>
@@ -63,6 +63,9 @@ export function OrderCard({ order, onSelect }: OrderCardProps) {
               </span>
             )}
           </div>
+        )}
+        {order.palletCount != null && (
+          <span className="text-gray-500 text-xs">{order.palletCount} משטחים</span>
         )}
         {order.size === 'unknown' && order.lineCount == null && (
           <span className="text-gray-400 text-xs">גודל לא ידוע</span>

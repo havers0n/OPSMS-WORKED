@@ -40,7 +40,10 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
           <ArrowRight size={24} />
         </button>
         <div className="flex-1">
-          <h2 className="font-bold text-xl">{order.orderNumber ?? 'ללא מספר'}</h2>
+          <h2 className="font-bold text-xl">{order.pointName ?? 'ללא נקודה'}</h2>
+          {order.orderNumber && (
+            <p className="text-sm text-gray-500 mt-0.5">{order.orderNumber}</p>
+          )}
         </div>
         <div className={`px-3 py-1.5 text-sm font-bold rounded-lg border shrink-0 ${statusColor}`}>
           {statusLabel}
@@ -51,26 +54,26 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
         {/* Main Info Card */}
         <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4 shadow-sm text-right">
-          {order.pickerName && (
+          {order.pointName && (
             <>
               <div className="flex items-center gap-3">
-                <User className="text-gray-400 shrink-0" size={20} />
+                <Package className="text-gray-400 shrink-0" size={20} />
                 <div className="flex flex-col">
-                  <span className="text-sm text-gray-500 font-medium">עובד מלקט</span>
-                  <span className="font-bold text-lg">{order.pickerName}</span>
+                  <span className="text-sm text-gray-500 font-medium">נקודה</span>
+                  <span className="font-bold text-lg">{order.pointName}</span>
                 </div>
               </div>
               <div className="h-px bg-gray-100" />
             </>
           )}
 
-          {order.customerName && (
+          {order.pickerName && (
             <>
               <div className="flex items-center gap-3">
                 <User className="text-gray-400 shrink-0" size={20} />
                 <div className="flex flex-col">
-                  <span className="text-sm text-gray-500 font-medium">לקוח</span>
-                  <span className="font-bold text-lg">{order.customerName}</span>
+                  <span className="text-sm text-gray-500 font-medium">מלקט</span>
+                  <span className="font-bold text-lg">{order.pickerName}</span>
                 </div>
               </div>
               <div className="h-px bg-gray-100" />
@@ -108,6 +111,19 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
               </div>
             )}
           </div>
+
+          {order.palletCount != null && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div className="flex items-center gap-3">
+                <Package className="text-gray-400 shrink-0" size={20} />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-500 font-medium">מספר משטחים</span>
+                  <span className="font-bold text-lg">{order.palletCount}</span>
+                </div>
+              </div>
+            </>
+          )}
 
           {order.comment && (
             <>

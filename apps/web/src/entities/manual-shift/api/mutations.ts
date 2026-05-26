@@ -17,7 +17,9 @@ type CreateLineInput = { shiftId: string; name: string; sortOrder?: number };
 
 type CreateOrderInput = {
   lineId: string;
+  pointName?: string | null;
   orderNumber?: string | null;
+  palletCount?: number | null;
   customerName?: string | null;
   pickerName?: string | null;
   checkerName?: string | null;

@@ -324,7 +324,11 @@ describe('PR4 – Line Detail & Manual Orders', () => {
 
       await waitFor(() => screen.getByText('הזמנה חדשה'));
 
-      const orderInput = screen.getByPlaceholderText('ORD-XXXX (אופציונלי)');
+      // Fill required pointName field
+      const pointInput = screen.getByPlaceholderText('שם הנקודה');
+      fireEvent.change(pointInput, { target: { value: 'ירושלים' } });
+
+      const orderInput = screen.getByPlaceholderText('קוד / מספר (אופציונלי)');
       fireEvent.change(orderInput, { target: { value: '999999' } });
 
       const pickerInput = screen.getByPlaceholderText('שם המלקט (אופציונלי)');
@@ -343,6 +347,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
         );
         expect(postCall).toBeTruthy();
         const body = JSON.parse((postCall![1] as RequestInit).body as string);
+        expect(body.pointName).toBe('ירושלים');
         expect(body.orderNumber).toBe('999999');
         expect(body.pickerName).toBe('דני');
         expect(body.status).toBe('queued');
@@ -708,6 +713,173 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       // If any file called supabase directly, the mock would not intercept it
       // and the test environment (no real supabase) would throw or fail
       expect(mockedBffRequest).toBeDefined();
+    });
+  });
+
+  // ── 16. Semantic label & field correctness ────────────────────────────────
+
+  describe('semantic label and field correctness', () => {
+    it('add order form shows נקודה label and disables submit when empty', async () => {
+      await openLineDetail();
+      fireEvent.click(screen.getAllByRole('button', { name: 'הוסף הזמנה' })[0]);
+
+      await waitFor(() => screen.getByText('הזמנה חדשה'));
+
+      expect(screen.getByText('נקודה')).toBeTruthy();
+
+      // Submit is disabled while pointName is empty
+      const submitBtns = screen.getAllByText('הוסף הזמנה');
+      const submitBtn = submitBtns[submitBtns.length - 1].closest('button');
+      expect(submitBtn?.disabled).toBe(true);
+    });
+
+    it('add order form shows optional label for orderNumber', async () => {
+      await openLineDetail();
+      fireEvent.click(screen.getAllByRole('button', { name: 'הוסף הזמנה' })[0]);
+
+      await waitFor(() => screen.getByText('הזמנה חדשה'));
+
+      expect(screen.getByText('קוד / מספר (אופציונלי)')).toBeTruthy();
+    });
+
+    it('add order form has מספר משטחים field that submits palletCount', async () => {
+      const newOrder = makeOrder({ id: 'new-2', pointName: 'תל אביב', palletCount: 3 });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/orders') && method === 'POST') {
+          return Promise.resolve(newOrder);
+        }
+        if (String(url).includes('/orders')) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getAllByRole('button', { name: 'הוסף הזמנה' }).length > 0);
+      fireEvent.click(screen.getAllByRole('button', { name: 'הוסף הזמנה' })[0]);
+
+      await waitFor(() => screen.getByText('הזמנה חדשה'));
+
+      expect(screen.getByText('מספר משטחים')).toBeTruthy();
+
+      fireEvent.change(screen.getByPlaceholderText('שם הנקודה'), {
+        target: { value: 'תל אביב' }
+      });
+      fireEvent.change(screen.getByPlaceholderText('מספר משטחים (אופציונלי)'), {
+        target: { value: '3' }
+      });
+
+      const submitBtns = screen.getAllByText('הוסף הזמנה');
+      fireEvent.click(submitBtns[submitBtns.length - 1]);
+
+      await waitFor(() => {
+        const postCall = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/line-1/orders') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(postCall).toBeTruthy();
+        const body = JSON.parse((postCall![1] as RequestInit).body as string);
+        expect(body.palletCount).toBe(3);
+      });
+    });
+
+    it('empty palletCount submits null not 0', async () => {
+      const newOrder = makeOrder({ id: 'new-3', pointName: 'חיפה', palletCount: null });
+      mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
+        const method = (init as RequestInit | undefined)?.method;
+        if (String(url).includes('/orders') && method === 'POST') {
+          return Promise.resolve(newOrder);
+        }
+        if (String(url).includes('/orders')) return Promise.resolve([]);
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryEmpty] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getAllByRole('button', { name: 'הוסף הזמנה' }).length > 0);
+      fireEvent.click(screen.getAllByRole('button', { name: 'הוסף הזמנה' })[0]);
+      await waitFor(() => screen.getByText('הזמנה חדשה'));
+
+      fireEvent.change(screen.getByPlaceholderText('שם הנקודה'), {
+        target: { value: 'חיפה' }
+      });
+      // palletCount left empty
+
+      const submitBtns = screen.getAllByText('הוסף הזמנה');
+      fireEvent.click(submitBtns[submitBtns.length - 1]);
+
+      await waitFor(() => {
+        const postCall = mockedBffRequest.mock.calls.find(
+          ([url, init]) =>
+            String(url).includes('/line-1/orders') &&
+            (init as RequestInit | undefined)?.method === 'POST'
+        );
+        expect(postCall).toBeTruthy();
+        const body = JSON.parse((postCall![1] as RequestInit).body as string);
+        expect(body.palletCount).toBeNull();
+      });
+    });
+
+    it('bulk paste instructions mention נקודה format', async () => {
+      await openLineDetail();
+      fireEvent.click(screen.getByRole('button', { name: 'הוסף מרובה' }));
+
+      await waitFor(() => screen.getByText('ייבא הזמנות'));
+
+      expect(screen.getByText(/נקודה/)).toBeTruthy();
+    });
+
+    it('order card renders pointName as primary title', async () => {
+      const order = makeOrder({ pointName: 'ירושלים', orderNumber: '502481' });
+      await renderWithShiftAndLines(mockLineSummaryWithOrders, [order]);
+      fireEvent.click(screen.getByText('שרון דרומי'));
+
+      await waitFor(() => {
+        // pointName is the large primary text
+        expect(screen.getByText('ירושלים')).toBeTruthy();
+        // orderNumber still shown as secondary
+        expect(screen.getByText('502481')).toBeTruthy();
+      });
+    });
+
+    it('order detail renders pointName and palletCount', async () => {
+      const order = makeOrder({ pointName: 'ירושלים', palletCount: 2, orderNumber: null });
+      mockedBffRequest.mockImplementation((url: string) => {
+        if (String(url).includes('/orders')) return Promise.resolve([order]);
+        return Promise.resolve({ shift: mockShift, lines: [mockLineSummaryWithOrders] });
+      });
+
+      const qc = makeQueryClient();
+      renderPage(qc);
+      await waitFor(() => screen.getByText('שרון דרומי'));
+      fireEvent.click(screen.getByText('שרון דרומי'));
+      await waitFor(() => screen.getByText('ירושלים'));
+      fireEvent.click(screen.getAllByText('ירושלים')[0]);
+      await waitFor(() => screen.getByRole('button', { name: /חזור/ }));
+
+      // pointName shown in detail
+      expect(screen.getAllByText('ירושלים').length).toBeGreaterThan(0);
+      // מספר משטחים label present
+      expect(screen.getByText('מספר משטחים')).toBeTruthy();
+      // palletCount value shown (may coexist with other "2" occurrences)
+      expect(screen.getAllByText('2').length).toBeGreaterThan(0);
+    });
+
+    it('add order form does not show שם לקוח or עובד מלקט as primary labels', async () => {
+      await openLineDetail();
+      fireEvent.click(screen.getAllByRole('button', { name: 'הוסף הזמנה' })[0]);
+
+      await waitFor(() => screen.getByText('הזמנה חדשה'));
+
+      expect(screen.queryByText('שם לקוח')).toBeNull();
+      expect(screen.queryByText('עובד מלקט')).toBeNull();
     });
   });
 });

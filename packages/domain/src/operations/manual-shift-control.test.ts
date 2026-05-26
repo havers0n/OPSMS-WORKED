@@ -61,6 +61,8 @@ describe('manual shift control contracts', () => {
         lineId: '945e796c-1fd6-471d-8992-a7810fd3567f',
         orderNumber: '502481',
         customerName: null,
+        pointName: 'ירושלים',
+        palletCount: 2,
         pickerName: 'יהודה',
         checkerName: null,
         lineCount: 12,
@@ -76,6 +78,8 @@ describe('manual shift control contracts', () => {
       })
     ).toMatchObject({
       orderNumber: '502481',
+      pointName: 'ירושלים',
+      palletCount: 2,
       size: 'L',
       pickerName: 'יהודה'
     });
@@ -159,10 +163,12 @@ describe('manual shift control contracts', () => {
         createdCount: 2,
         rows: [
           {
-            raw: '502482, יהודה, 3',
-            orderNumber: '502482',
+            raw: 'ירושלים, יהודה, 3',
+            pointName: 'ירושלים',
+            orderNumber: null,
             pickerName: 'יהודה',
             lineCount: 3,
+            palletCount: null,
             size: 'S'
           }
         ],
@@ -170,7 +176,7 @@ describe('manual shift control contracts', () => {
       })
     ).toMatchObject({
       createdCount: 2,
-      rows: [{ orderNumber: '502482', size: 'S' }]
+      rows: [{ pointName: 'ירושלים', orderNumber: null, size: 'S' }]
     });
   });
 });

@@ -18,28 +18,34 @@ function calculateSize(lineCount: number): ManualShiftOrderSize {
 }
 
 export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
+  const [pointName, setPointName] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [pickerName, setPickerName] = useState('');
-  const [customerName, setCustomerName] = useState('');
   const [lineCountStr, setLineCountStr] = useState('');
+  const [palletCountStr, setPalletCountStr] = useState('');
   const [manualSize, setManualSize] = useState<ManualShiftOrderSize | null>(null);
 
   const createOrder = useCreateManualShiftOrder(lineId);
 
-  const lineCount =
-    lineCountStr ? parseInt(lineCountStr, 10) : null;
+  const lineCount = lineCountStr ? parseInt(lineCountStr, 10) : null;
   const autoSize: ManualShiftOrderSize | null =
     lineCount != null && !isNaN(lineCount) && lineCount > 0 ? calculateSize(lineCount) : null;
   const effectiveSize = manualSize ?? autoSize;
 
+  const canSubmit = pointName.trim().length > 0;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
+    const palletRaw = palletCountStr !== '' ? parseFloat(palletCountStr) : null;
+    const palletCount = palletRaw != null && !isNaN(palletRaw) ? palletRaw : null;
     createOrder.mutate(
       {
+        pointName: pointName.trim(),
         orderNumber: orderNumber.trim() || null,
-        customerName: customerName.trim() || null,
         pickerName: pickerName.trim() || null,
         lineCount: lineCount != null && !isNaN(lineCount) && lineCount > 0 ? lineCount : null,
+        palletCount,
         size: effectiveSize ?? undefined,
         status: 'queued'
       },
@@ -64,11 +70,22 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
         className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 text-right"
       >
         <div className="flex flex-col gap-2">
-          <label className="font-bold text-gray-700">מספר הזמנה</label>
+          <label className="font-bold text-gray-700">נקודה</label>
           <input
             type="text"
             className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg"
-            placeholder="ORD-XXXX (אופציונלי)"
+            placeholder="שם הנקודה"
+            value={pointName}
+            onChange={e => setPointName(e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="font-bold text-gray-700">קוד / מספר (אופציונלי)</label>
+          <input
+            type="text"
+            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg"
+            placeholder="קוד / מספר (אופציונלי)"
             value={orderNumber}
             onChange={e => setOrderNumber(e.target.value)}
             dir="ltr"
@@ -76,24 +93,13 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="font-bold text-gray-700">עובד מלקט</label>
+          <label className="font-bold text-gray-700">מלקט</label>
           <input
             type="text"
             className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg"
             placeholder="שם המלקט (אופציונלי)"
             value={pickerName}
             onChange={e => setPickerName(e.target.value)}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="font-bold text-gray-700">שם לקוח</label>
-          <input
-            type="text"
-            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg"
-            placeholder="שם הלקוח (אופציונלי)"
-            value={customerName}
-            onChange={e => setCustomerName(e.target.value)}
           />
         </div>
 
@@ -147,10 +153,22 @@ export function AddOrderSheet({ lineId, onClose }: AddOrderSheetProps) {
           </div>
         </div>
 
+        <div className="flex flex-col gap-2">
+          <label className="font-bold text-gray-700">מספר משטחים</label>
+          <input
+            type="number"
+            min="0"
+            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-lg text-center"
+            placeholder="מספר משטחים (אופציונלי)"
+            value={palletCountStr}
+            onChange={e => setPalletCountStr(e.target.value)}
+          />
+        </div>
+
         <div className="pb-4">
           <button
             type="submit"
-            disabled={createOrder.isPending}
+            disabled={createOrder.isPending || !canSubmit}
             className="w-full bg-gray-900 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50"
           >
             {createOrder.isPending ? 'שומר...' : 'הוסף הזמנה'}
