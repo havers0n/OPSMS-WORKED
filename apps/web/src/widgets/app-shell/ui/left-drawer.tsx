@@ -1,4 +1,4 @@
-import { BarChart3, CheckSquare, Layers, LayoutGrid, Package, Settings2, ShoppingBasket, X } from 'lucide-react';
+import { BarChart3, CheckSquare, Layers, LayoutGrid, Package, Settings2, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
@@ -37,20 +37,6 @@ export function LeftDrawer() {
       enabled: true
     },
     {
-      label: t('app.navigation.picking'),
-      description: t('app.navigation.picking.description'),
-      icon: ShoppingBasket,
-      to: routes.picking,
-      enabled: true
-    },
-    {
-      label: t('app.navigation.pickingPlan'),
-      description: t('app.navigation.pickingPlan.description'),
-      icon: ShoppingBasket,
-      to: routes.pickingPlan,
-      enabled: true
-    },
-    {
       label: t('app.navigation.operations'),
       description: t('app.navigation.operations.description'),
       icon: Layers,
@@ -76,7 +62,7 @@ export function LeftDrawer() {
 
   return (
     <Drawer
-      className="w-56 max-w-none border-y-0 border-e border-e-slate-900/90 border-s-0 bg-slate-950 text-slate-200 [&_[role=separator]]:bg-slate-800"
+      className="w-56 max-w-none border-y-0 border-e border-e-slate-200 border-s-0 bg-white text-slate-800 [&_[role=separator]]:bg-slate-200"
       bodyClassName="px-2 py-2"
       header={
         <div className="flex items-center justify-between">
@@ -84,12 +70,12 @@ export function LeftDrawer() {
             <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300/80">
               {t('app.brand.short')}
             </div>
-            <div className="mt-0.5 text-sm font-semibold text-white">{t('app.brand.name')}</div>
+            <div className="mt-0.5 text-sm font-semibold text-slate-900">{t('app.brand.name')}</div>
           </div>
           <IconButton
             icon={<X className="h-4 w-4" />}
             onClick={toggle}
-            className="rounded-lg text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+            className="rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
           />
         </div>
       }
@@ -104,14 +90,14 @@ export function LeftDrawer() {
                 key={item.label}
                 type="button"
                 disabled
-                className="flex cursor-not-allowed items-center gap-3 rounded-xl border border-transparent px-2 py-2.5 text-start text-sm text-slate-500 opacity-70"
+                className="flex cursor-not-allowed items-center gap-3 rounded-xl border border-transparent px-2 py-2.5 text-start text-sm text-slate-400 opacity-80"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-slate-500">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{item.label}</span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-500">
+                  <span className="mt-0.5 block truncate text-xs text-slate-400">
                     {item.description}
                   </span>
                 </span>
@@ -127,8 +113,8 @@ export function LeftDrawer() {
                 [
                   'flex items-center gap-3 rounded-xl border px-2 py-2.5 text-start text-sm transition-all',
                   isActive
-                    ? 'border-cyan-400/20 bg-cyan-500/12 text-cyan-100'
-                    : 'border-transparent text-slate-400 hover:border-slate-800 hover:bg-slate-900/80 hover:text-slate-100'
+                    ? 'border-cyan-200 bg-cyan-50 text-slate-900'
+                    : 'border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
                 ].join(' ')
               }
             >
@@ -137,7 +123,7 @@ export function LeftDrawer() {
                   <span
                     className={[
                       'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                      isActive ? 'bg-cyan-500/18 text-cyan-200' : 'bg-slate-900 text-slate-500'
+                      isActive ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'
                     ].join(' ')}
                   >
                     <Icon className="h-4 w-4" />
