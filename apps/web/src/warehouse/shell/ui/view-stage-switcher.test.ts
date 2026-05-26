@@ -82,7 +82,7 @@ describe('ViewModeSwitcher view stages', () => {
     expect(text).not.toContain('Plan wave');
   });
 
-  it('renders routing tool substages for admins and dev-capable users', () => {
+  it('keeps routing tool substages hidden even for admins/dev-capable users', () => {
     routingToolsAccessMock.canAccessRoutingTools = true;
 
     act(() => {
@@ -96,8 +96,8 @@ describe('ViewModeSwitcher view stages', () => {
     const text = collectText(renderer!.toJSON());
     expect(text).toContain(translate('warehouse.view.stage.map'));
     expect(text).toContain(translate('warehouse.view.stage.pickingPlan'));
-    expect(text).toContain(translate('warehouse.view.stage.routeGraph'));
-    expect(text).toContain(translate('warehouse.view.stage.obstacleRoute'));
+    expect(text).not.toContain(translate('warehouse.view.stage.routeGraph'));
+    expect(text).not.toContain(translate('warehouse.view.stage.obstacleRoute'));
   });
 
   it('updates the active View stage without changing the top-level mode', () => {
@@ -122,58 +122,6 @@ describe('ViewModeSwitcher view stages', () => {
 
     expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
     expect(getWarehouseViewModeSnapshot().viewStage).toBe('picking-plan');
-  });
-
-  it('renders Route graph editor and activates route-graph', () => {
-    routingToolsAccessMock.canAccessRoutingTools = true;
-
-    act(() => {
-      warehouseViewModeActions.reset();
-      warehouseViewModeActions.setViewMode('view');
-    });
-
-    act(() => {
-      renderer = TestRenderer.create(createElement(ViewModeSwitcher));
-    });
-
-    const routeGraphLabel = translate('warehouse.view.stage.routeGraph');
-    const routeGraphButton = renderer!.root.find(
-      (instance) =>
-        instance.type === 'button' && instance.props.title === routeGraphLabel
-    );
-
-    act(() => {
-      routeGraphButton.props.onClick();
-    });
-
-    expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
-    expect(getWarehouseViewModeSnapshot().viewStage).toBe('route-graph');
-  });
-
-  it('renders Obstacle route test and activates obstacle-route', () => {
-    routingToolsAccessMock.canAccessRoutingTools = true;
-
-    act(() => {
-      warehouseViewModeActions.reset();
-      warehouseViewModeActions.setViewMode('view');
-    });
-
-    act(() => {
-      renderer = TestRenderer.create(createElement(ViewModeSwitcher));
-    });
-
-    const obstacleRouteLabel = translate('warehouse.view.stage.obstacleRoute');
-    const obstacleRouteButton = renderer!.root.find(
-      (instance) =>
-        instance.type === 'button' && instance.props.title === obstacleRouteLabel
-    );
-
-    act(() => {
-      obstacleRouteButton.props.onClick();
-    });
-
-    expect(getWarehouseViewModeSnapshot().viewMode).toBe('view');
-    expect(getWarehouseViewModeSnapshot().viewStage).toBe('obstacle-route');
   });
 
   it('resets a hidden routing tool stage to map', () => {
