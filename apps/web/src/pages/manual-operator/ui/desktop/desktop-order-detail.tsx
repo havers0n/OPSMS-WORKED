@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { OrderDetail } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftOrderStatus } from '@wos/domain';
 import { formatDateTimeHe } from '@/shared/lib/format-date-time';
@@ -6,6 +7,8 @@ interface DesktopOrderDetailProps {
   detail: OrderDetail | null;
   onClose: () => void;
 }
+
+const MISSING_VALUE = '—';
 
 const STATUS_LABEL: Record<ManualShiftOrderStatus, string> = {
   queued: 'בתור',
@@ -23,8 +26,9 @@ const STATUS_CLASS: Record<ManualShiftOrderStatus, string> = {
   done: 'bg-green-100 text-green-800'
 };
 
-function formatAge(seconds: number | null): string {
-  if (seconds === null) return '—';
+function formatAge(status: ManualShiftOrderStatus, seconds: number | null): string {
+  if (status === 'returned') return MISSING_VALUE;
+  if (seconds === null) return MISSING_VALUE;
   if (seconds < 60) return `${seconds}ש`;
   const m = Math.floor(seconds / 60);
   if (m < 60) return `${m}ד`;
@@ -33,12 +37,31 @@ function formatAge(seconds: number | null): string {
   return `${h}:${String(rem).padStart(2, '0')}`;
 }
 
-function Row({ label, value }: { label: string; value: string | number | null }) {
+function Row({
+  label,
+  value,
+  valueDir
+}: {
+  label: string;
+  value: string | number | null;
+  valueDir?: 'ltr' | 'rtl';
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-gray-100">
+    <div className="flex items-center justify-between gap-3 py-1.5">
       <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm text-gray-900 text-left break-all">{value ?? '—'}</span>
+      <span dir={valueDir} className="text-sm font-medium text-gray-900 text-left break-all">
+        {value ?? MISSING_VALUE}
+      </span>
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+      <h3 className="mb-1 text-xs font-semibold text-gray-700">{title}</h3>
+      <div className="space-y-1">{children}</div>
+    </section>
   );
 }
 
@@ -46,11 +69,11 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
   if (!detail) {
     return (
       <div className="p-4" dir="rtl">
-        <p className="text-sm text-gray-600 mb-3">ההזמנה שנבחרה אינה זמינה יותר.</p>
+        <p className="mb-3 text-sm text-gray-600">ההזמנה שנבחרה אינה זמינה יותר.</p>
         <button
           type="button"
           onClick={onClose}
-          className="px-3 py-2 rounded-lg bg-gray-900 text-white text-sm"
+          className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white"
         >
           סגור
         </button>
@@ -59,29 +82,46 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
   }
 
   return (
-    <div className="p-4 space-y-3" dir="rtl" data-testid="order-detail-view">
-      <div className="flex items-center justify-between">
-        <p className="text-lg font-bold text-gray-900">פרטי הזמנה</p>
-        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_CLASS[detail.status]}`}>
-          {STATUS_LABEL[detail.status]}
-        </span>
-      </div>
+    <div className="space-y-3 p-4" dir="rtl" data-testid="order-detail-view">
+      <header className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-base font-semibold text-gray-900">
+            {detail.pointName ?? detail.customerName ?? MISSING_VALUE}
+          </p>
+          <span
+            className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLASS[detail.status]}`}
+          >
+            {STATUS_LABEL[detail.status]}
+          </span>
+        </div>
+        {detail.orderNumber && <p className="text-xs text-gray-500">{detail.orderNumber}</p>}
+        <p className="text-sm text-gray-700">{detail.lineName ?? MISSING_VALUE}</p>
+      </header>
 
-      <Row label="קו" value={detail.lineName ?? '—'} />
-      <Row label="נקודה" value={detail.pointName} />
-      <Row label="לקוח" value={detail.customerName} />
-      <Row label="מספר הזמנה" value={detail.orderNumber} />
-      <Row label="מלקט" value={detail.pickerName ?? 'לא משויך'} />
-      <Row label="בודק" value={detail.checkerName} />
-      <Row label="גודל" value={detail.size} />
-      <Row label="שורות" value={detail.lineCount} />
-      <Row label="משטחים" value={detail.palletCount} />
-      <Row label="נוצרה" value={formatDateTimeHe(detail.createdAt)} />
-      <Row label="התחלת ליקוט" value={formatDateTimeHe(detail.startedAt)} />
-      <Row label="ממתין בדיקה" value={formatDateTimeHe(detail.waitingCheckAt)} />
-      <Row label="נבדק" value={formatDateTimeHe(detail.checkedAt)} />
-      <Row label="הסתיים" value={formatDateTimeHe(detail.finishedAt)} />
-      <Row label="גיל סטטוס" value={formatAge(detail.ageSeconds)} />
+      <Section title="פרטי הזמנה">
+        <Row label="קו" value={detail.lineName ?? MISSING_VALUE} />
+        <Row label="נקודה" value={detail.pointName ?? MISSING_VALUE} />
+        <Row label="לקוח" value={detail.customerName ?? MISSING_VALUE} />
+        <Row label="מספר הזמנה" value={detail.orderNumber ?? MISSING_VALUE} />
+        <Row label="סטטוס" value={STATUS_LABEL[detail.status]} />
+      </Section>
+
+      <Section title="עבודה">
+        <Row label="מלקט" value={detail.pickerName ?? MISSING_VALUE} />
+        <Row label="בודק" value={detail.checkerName ?? MISSING_VALUE} />
+        <Row label="גודל" value={detail.size ?? MISSING_VALUE} />
+        <Row label="שורות" value={detail.lineCount ?? MISSING_VALUE} />
+        <Row label="משטחים" value={detail.palletCount ?? MISSING_VALUE} />
+        <Row label="גיל סטטוס" value={formatAge(detail.status, detail.ageSeconds)} />
+      </Section>
+
+      <Section title="זמנים">
+        <Row label="נוצרה" value={formatDateTimeHe(detail.createdAt)} valueDir="ltr" />
+        <Row label="התחלת ליקוט" value={formatDateTimeHe(detail.startedAt)} valueDir="ltr" />
+        <Row label="ממתין בדיקה" value={formatDateTimeHe(detail.waitingCheckAt)} valueDir="ltr" />
+        <Row label="נבדק" value={formatDateTimeHe(detail.checkedAt)} valueDir="ltr" />
+        <Row label="הסתיים" value={formatDateTimeHe(detail.finishedAt)} valueDir="ltr" />
+      </Section>
     </div>
   );
 }

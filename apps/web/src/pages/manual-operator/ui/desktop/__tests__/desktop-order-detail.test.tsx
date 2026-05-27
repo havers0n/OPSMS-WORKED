@@ -7,13 +7,26 @@ import { mockOrderDetail } from './fixtures';
 describe('DesktopOrderDetail', () => {
   it('renders order detail fields', () => {
     render(<DesktopOrderDetail detail={mockOrderDetail} onClose={vi.fn()} />);
-    expect(screen.getByText('ORD-001')).toBeTruthy();
-    expect(screen.getByText('קו צפון')).toBeTruthy();
-    expect(screen.getByText('נקודה א')).toBeTruthy();
+    expect(screen.getAllByText('ORD-001').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('קו צפון').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('נקודה א').length).toBeGreaterThan(0);
     expect(screen.getByText('דוד')).toBeTruthy();
   });
 
-  it('renders localized timestamp and not raw ISO', () => {
+  it('renders status badge', () => {
+    render(<DesktopOrderDetail detail={mockOrderDetail} onClose={vi.fn()} />);
+    const statuses = screen.getAllByText('בליקוט');
+    expect(statuses.some((el) => el.className.includes('rounded-full'))).toBe(true);
+  });
+
+  it('renders section headings', () => {
+    render(<DesktopOrderDetail detail={mockOrderDetail} onClose={vi.fn()} />);
+    expect(screen.getByText('פרטי הזמנה')).toBeTruthy();
+    expect(screen.getByText('עבודה')).toBeTruthy();
+    expect(screen.getByText('זמנים')).toBeTruthy();
+  });
+
+  it('renders localized timestamp as DD.MM.YYYY · HH:mm with ltr direction and not raw ISO', () => {
     const rawIso = '2026-05-26T23:57:41.345065+00:00';
     const expected = formatDateTimeHe(rawIso);
     render(
@@ -23,7 +36,10 @@ describe('DesktopOrderDetail', () => {
       />
     );
 
-    expect(screen.getByText(expected)).toBeTruthy();
+    expect(expected).toMatch(/^\d{2}\.\d{2}\.\d{4} · \d{2}:\d{2}$/);
+
+    const timestampValue = screen.getByText(expected);
+    expect(timestampValue.getAttribute('dir')).toBe('ltr');
     expect(screen.queryByText(rawIso)).toBeNull();
   });
 
