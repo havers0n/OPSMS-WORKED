@@ -66,7 +66,7 @@ describe('ManualOperatorPage', () => {
       expect(screen.getByText('פתח משמרת להיום')).toBeTruthy();
     });
 
-    expect(screen.getByText('אין משמרת פעילה')).toBeTruthy();
+    expect(screen.getByText('אין משמרת')).toBeTruthy();
   });
 
   it('calls create shift mutation when button is clicked', async () => {
