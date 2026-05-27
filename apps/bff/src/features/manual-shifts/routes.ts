@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ManualShiftsService } from './service.js';
 import { ApiError } from '../../errors.js';
@@ -26,9 +27,11 @@ import {
   patchManualShiftLineBodySchema,
   patchManualShiftOrderBodySchema,
   patchManualShiftWorkerBodySchema,
-  transitionManualShiftOrderStatusBodySchema
+  transitionManualShiftOrderStatusBodySchema,
+  pickTaskDetailResponseSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
+import { createPickBridgeServiceFromSupabase } from './pick-bridge-service.js';
 
 type GetAuthContext = (
   request: FastifyRequest,
@@ -36,6 +39,7 @@ type GetAuthContext = (
 ) => Promise<AuthenticatedRequestContext | null>;
 
 type GetManualShiftsService = (context: AuthenticatedRequestContext) => ManualShiftsService;
+type GetUserSupabase = (context: AuthenticatedRequestContext) => SupabaseClient;
 
 function requireTenant(auth: AuthenticatedRequestContext) {
   if (!auth.currentTenant) {
@@ -57,9 +61,10 @@ export function registerManualShiftsRoutes(
   deps: {
     getAuthContext: GetAuthContext;
     getManualShiftsService: GetManualShiftsService;
+    getUserSupabase: GetUserSupabase;
   }
 ) {
-  const { getAuthContext, getManualShiftsService } = deps;
+  const { getAuthContext, getManualShiftsService, getUserSupabase } = deps;
 
   app.get('/api/manual-shifts/today', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
@@ -474,5 +479,27 @@ export function registerManualShiftsRoutes(
     }).id;
     const summary = await getManualShiftsService(auth).getDaySummary({ tenantId, shiftId });
     return parseOrThrow(manualShiftDaySummaryResponseSchema, summary);
+  });
+
+  // ── Pick bridge ──────────────────────────────────────────────────────────────
+
+  app.post('/api/manual-shifts/orders/:orderId/start-picking', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+
+    const supabase = getUserSupabase(auth);
+    const bridgeService = createPickBridgeServiceFromSupabase(supabase);
+    const detail = await bridgeService.startPicking({
+      tenantId,
+      orderId,
+      actor: actorFromAuth(auth)
+    });
+
+    return parseOrThrow(pickTaskDetailResponseSchema, detail);
   });
 }

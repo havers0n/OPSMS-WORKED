@@ -203,7 +203,8 @@ async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedReq
 
   registerManualShiftsRoutes(app, {
     getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => auth,
-    getManualShiftsService: () => service
+    getManualShiftsService: () => service,
+    getUserSupabase: () => ({} as never)
   });
 
   app.setErrorHandler((error, _request, reply) => {
