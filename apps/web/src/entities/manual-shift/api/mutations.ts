@@ -67,6 +67,19 @@ type CreateOrderErrorInput = {
   comment?: string;
 };
 
+type DeleteRestoreManualShiftInput = {
+  reason?: string;
+};
+
+type DeleteRestoreOrderContext = {
+  lineId: string;
+  shiftId: string;
+};
+
+type DeleteRestoreLineContext = {
+  shiftId: string;
+};
+
 async function createWorker({ shiftId, ...body }: CreateWorkerInput): Promise<ManualShiftWorker> {
   return bffRequest<ManualShiftWorker>(`/api/manual-shifts/${shiftId}/workers`, {
     method: 'POST',
@@ -131,6 +144,68 @@ async function createOrderError({
     method: 'POST',
     body: JSON.stringify({ type, comment })
   });
+}
+
+async function deleteManualShiftOrder(
+  orderId: string,
+  body: DeleteRestoreManualShiftInput
+): Promise<ManualShiftOrder> {
+  return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}/delete`, {
+    method: 'PATCH',
+    body: JSON.stringify(body)
+  });
+}
+
+async function restoreManualShiftOrder(
+  orderId: string,
+  body: DeleteRestoreManualShiftInput
+): Promise<ManualShiftOrder> {
+  return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}/restore`, {
+    method: 'PATCH',
+    body: JSON.stringify(body)
+  });
+}
+
+async function deleteManualShiftLine(
+  lineId: string,
+  body: DeleteRestoreManualShiftInput
+): Promise<ManualShiftLine> {
+  return bffRequest<ManualShiftLine>(`/api/manual-shift-lines/${lineId}/delete`, {
+    method: 'PATCH',
+    body: JSON.stringify(body)
+  });
+}
+
+async function restoreManualShiftLine(
+  lineId: string,
+  body: DeleteRestoreManualShiftInput
+): Promise<ManualShiftLine> {
+  return bffRequest<ManualShiftLine>(`/api/manual-shift-lines/${lineId}/restore`, {
+    method: 'PATCH',
+    body: JSON.stringify(body)
+  });
+}
+
+function invalidateOrderQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  lineId: string,
+  shiftId: string
+) {
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(lineId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(shiftId) });
+}
+
+function invalidateLineQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  lineId: string,
+  shiftId: string
+) {
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(lineId) });
 }
 
 export function useCreateManualShiftWorker(shiftId: string) {
@@ -220,6 +295,56 @@ export function useCreateManualShiftOrderError() {
         queryKey: manualShiftKeys.lineOrders(variables.lineId)
       });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+    }
+  });
+}
+
+export function useDeleteManualShiftOrder(
+  orderId: string,
+  context: DeleteRestoreOrderContext
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DeleteRestoreManualShiftInput = {}) =>
+      deleteManualShiftOrder(orderId, input),
+    onSuccess: () => {
+      invalidateOrderQueries(queryClient, context.lineId, context.shiftId);
+    }
+  });
+}
+
+export function useRestoreManualShiftOrder(
+  orderId: string,
+  context: DeleteRestoreOrderContext
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DeleteRestoreManualShiftInput = {}) =>
+      restoreManualShiftOrder(orderId, input),
+    onSuccess: () => {
+      invalidateOrderQueries(queryClient, context.lineId, context.shiftId);
+    }
+  });
+}
+
+export function useDeleteManualShiftLine(lineId: string, context: DeleteRestoreLineContext) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DeleteRestoreManualShiftInput = {}) =>
+      deleteManualShiftLine(lineId, input),
+    onSuccess: () => {
+      invalidateLineQueries(queryClient, lineId, context.shiftId);
+    }
+  });
+}
+
+export function useRestoreManualShiftLine(lineId: string, context: DeleteRestoreLineContext) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DeleteRestoreManualShiftInput = {}) =>
+      restoreManualShiftLine(lineId, input),
+    onSuccess: () => {
+      invalidateLineQueries(queryClient, lineId, context.shiftId);
     }
   });
 }

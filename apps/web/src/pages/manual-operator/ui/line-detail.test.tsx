@@ -34,7 +34,11 @@ const mockLine = {
   name: 'שרון דרומי',
   sortOrder: 0,
   status: 'open' as 'open' | 'in_progress' | 'done',
-  createdAt: new Date().toISOString()
+  createdAt: new Date().toISOString(),
+  deletedAt: null,
+  deletedByProfileId: null,
+  deletedByName: null,
+  deleteReason: null
 };
 
 const mockLineSummaryEmpty = {
@@ -82,6 +86,10 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
     comment: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    deletedAt: null,
+    deletedByProfileId: null,
+    deletedByName: null,
+    deleteReason: null,
     ...overrides
   };
 }

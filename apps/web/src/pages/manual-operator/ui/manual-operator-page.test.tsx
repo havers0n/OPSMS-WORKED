@@ -121,7 +121,11 @@ describe('ManualOperatorPage', () => {
       name: 'שרון דרומי',
       sortOrder: 0,
       status: 'open',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+      deletedByProfileId: null,
+      deletedByName: null,
+      deleteReason: null
     };
 
     mockedBffRequest.mockResolvedValue({

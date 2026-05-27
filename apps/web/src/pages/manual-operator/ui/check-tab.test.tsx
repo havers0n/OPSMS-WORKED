@@ -49,7 +49,11 @@ const baseOrder = {
   finishedAt: null,
   comment: null,
   createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
+  updatedAt: new Date().toISOString(),
+  deletedAt: null,
+  deletedByProfileId: null,
+  deletedByName: null,
+  deleteReason: null
 };
 
 describe('CheckTab', () => {
@@ -175,7 +179,11 @@ describe('CheckTab', () => {
       name: 'קו צפון',
       sortOrder: 0,
       status: 'in_progress' as const,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+      deletedByProfileId: null,
+      deletedByName: null,
+      deleteReason: null
     };
     const lines = [
       {

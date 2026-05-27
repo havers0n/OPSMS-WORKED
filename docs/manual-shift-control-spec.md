@@ -87,6 +87,13 @@ Each future persisted transition is expected to:
 - Errors and events attached to deleted points remain persisted for audit history, but they do not count in active summaries.
 - Line delete is allowed only when the line has zero non-deleted points.
 
+### Operator UI
+- Point delete is available only inside point detail, not on queue list cards and not via swipe.
+- Point delete requires a confirmation surface and may include an optional reason.
+- After point delete, the operator UI must offer an immediate undo action that calls the restore endpoint.
+- Line delete is available from line detail only.
+- If a line still has active points, UI must block delete and explain that points must be deleted or moved first.
+
 ## Size Rules
 - `1–3 = S`
 - `4–8 = M`

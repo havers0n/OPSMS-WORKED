@@ -1,18 +1,28 @@
 import { useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, Package, User, XCircle } from 'lucide-react';
-import { getOrderStatusColor, getOrderStatusLabel, getElapsedFromIso } from './order-utils';
-import { useUpdateManualShiftOrderStatus } from '@/entities/manual-shift/api/mutations';
+import {
+  useDeleteManualShiftOrder,
+  useUpdateManualShiftOrderStatus
+} from '@/entities/manual-shift/api/mutations';
+import { DeleteConfirmSheet } from './delete-confirm-sheet';
 import { ErrorFlow } from './error-flow';
+import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
 interface OrderDetailProps {
   order: ManualShiftOrder;
   onClose: () => void;
+  onDeleted: (order: ManualShiftOrder) => void;
 }
 
-export function OrderDetail({ order, onClose }: OrderDetailProps) {
+export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [showErrorFlow, setShowErrorFlow] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
+  const deleteOrder = useDeleteManualShiftOrder(order.id, {
+    lineId: order.lineId,
+    shiftId: order.shiftId
+  });
 
   const statusLabel = getOrderStatusLabel(order.status);
   const statusColor = getOrderStatusColor(order.status);
@@ -29,9 +39,20 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
     updateStatus.mutate({ orderId: order.id, lineId: order.lineId, status });
   }
 
+  function handleDelete(reason?: string) {
+    deleteOrder.mutate(
+      { reason },
+      {
+        onSuccess: deletedOrder => {
+          setShowDeleteConfirm(false);
+          onDeleted(deletedOrder);
+        }
+      }
+    );
+  }
+
   return (
     <div className="absolute inset-0 bg-white z-20 flex flex-col pb-16" dir="rtl">
-      {/* Header */}
       <header className="flex items-center gap-4 p-4 border-b border-gray-200 bg-gray-50 shrink-0">
         <button
           onClick={onClose}
@@ -41,18 +62,14 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
         </button>
         <div className="flex-1">
           <h2 className="font-bold text-xl">{order.pointName ?? 'ללא נקודה'}</h2>
-          {order.orderNumber && (
-            <p className="text-sm text-gray-500 mt-0.5">{order.orderNumber}</p>
-          )}
+          {order.orderNumber && <p className="text-sm text-gray-500 mt-0.5">{order.orderNumber}</p>}
         </div>
         <div className={`px-3 py-1.5 text-sm font-bold rounded-lg border shrink-0 ${statusColor}`}>
           {statusLabel}
         </div>
       </header>
 
-      {/* Content */}
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
-        {/* Main Info Card */}
         <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4 shadow-sm text-right">
           {order.pointName && (
             <>
@@ -94,7 +111,7 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
                   {order.lineCount != null ? (
                     <span>{order.lineCount} שורות</span>
                   ) : (
-                    <span className="text-gray-400">—</span>
+                    <span className="text-gray-400">-</span>
                   )}
                 </div>
               </div>
@@ -136,7 +153,6 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
           )}
         </div>
 
-        {/* Timestamps */}
         {(order.startedAt || order.waitingCheckAt || order.finishedAt) && (
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex flex-col gap-2 text-right">
             {order.startedAt && (
@@ -176,69 +192,89 @@ export function OrderDetail({ order, onClose }: OrderDetailProps) {
         )}
       </main>
 
-      {/* Action Footer — hidden for done orders */}
-      {order.status !== 'done' && (
-        <footer className="shrink-0 border-t border-gray-200 bg-white p-4 flex flex-col gap-3 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
-          {order.status === 'queued' && (
-            <button
-              onClick={() => transition('picking')}
-              disabled={updateStatus.isPending}
-              className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center"
-            >
-              {updateStatus.isPending ? '...' : 'התחל ליקוט'}
-            </button>
-          )}
-
-          {order.status === 'picking' && (
-            <button
-              onClick={() => transition('waiting_check')}
-              disabled={updateStatus.isPending}
-              className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center"
-            >
-              {updateStatus.isPending ? '...' : 'העבר לבדיקה'}
-            </button>
-          )}
-
-          {order.status === 'waiting_check' && (
-            <div className="flex gap-3">
+      <footer className="shrink-0 border-t border-gray-200 bg-white p-4 flex flex-col gap-3 shadow-[0_-4px_15px_rgba(0,0,0,0.05)]">
+        {order.status !== 'done' && (
+          <>
+            {order.status === 'queued' && (
               <button
-                onClick={() => setShowErrorFlow(true)}
+                onClick={() => transition('picking')}
                 disabled={updateStatus.isPending}
-                className="w-1/2 bg-red-100 text-red-700 border border-red-200 rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center"
               >
-                <XCircle size={24} />
-                תקלה
+                {updateStatus.isPending ? '...' : 'התחל ליקוט'}
               </button>
+            )}
+
+            {order.status === 'picking' && (
               <button
-                onClick={() => transition('done')}
+                onClick={() => transition('waiting_check')}
                 disabled={updateStatus.isPending}
-                className="w-1/2 bg-green-500 text-white border border-green-600 rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center"
               >
-                <CheckCircle size={24} />
-                תקין
+                {updateStatus.isPending ? '...' : 'העבר לבדיקה'}
               </button>
-            </div>
-          )}
+            )}
 
-          {order.status === 'returned' && (
-            <button
-              onClick={() => transition('waiting_check')}
-              disabled={updateStatus.isPending}
-              className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center"
-            >
-              {updateStatus.isPending ? '...' : 'הכל תוקן, החזר לבדיקה'}
-            </button>
-          )}
-        </footer>
-      )}
+            {order.status === 'waiting_check' && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowErrorFlow(true)}
+                  disabled={updateStatus.isPending}
+                  className="w-1/2 bg-red-100 text-red-700 border border-red-200 rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                >
+                  <XCircle size={24} />
+                  תקלה
+                </button>
+                <button
+                  onClick={() => transition('done')}
+                  disabled={updateStatus.isPending}
+                  className="w-1/2 bg-green-500 text-white border border-green-600 rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  <CheckCircle size={24} />
+                  תקין
+                </button>
+              </div>
+            )}
 
-      {/* Error flow overlay */}
+            {order.status === 'returned' && (
+              <button
+                onClick={() => transition('waiting_check')}
+                disabled={updateStatus.isPending}
+                className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center"
+              >
+                {updateStatus.isPending ? '...' : 'הכל תוקן, החזר לבדיקה'}
+              </button>
+            )}
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={deleteOrder.isPending}
+          className="w-full h-12 rounded-xl border border-red-300 bg-red-50 text-red-700 font-bold disabled:opacity-50"
+        >
+          {deleteOrder.isPending ? 'שומר...' : 'מחק נקודה'}
+        </button>
+      </footer>
+
       {showErrorFlow && (
         <ErrorFlow
           orderId={order.id}
           lineId={order.lineId}
           orderNumber={order.orderNumber}
           onClose={() => setShowErrorFlow(false)}
+        />
+      )}
+
+      {showDeleteConfirm && (
+        <DeleteConfirmSheet
+          title="מחיקת נקודה"
+          description="הנקודה תוסר מהרשימות הפעילות. אפשר לשחזר מיד אחרי המחיקה דרך כפתור בטל."
+          confirmLabel="מחק נקודה"
+          isPending={deleteOrder.isPending}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleDelete}
         />
       )}
     </div>
