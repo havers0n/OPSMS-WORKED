@@ -192,6 +192,9 @@ function createRepo() {
     findActiveShiftByDate: vi.fn(async (tenantId: string, date: string) => {
       return state.shifts.find((shift) => shift.tenantId === tenantId && shift.date === date && shift.status === 'active') ?? null;
     }),
+    findShiftByDate: vi.fn(async (tenantId: string, date: string) => {
+      return state.shifts.find((shift) => shift.tenantId === tenantId && shift.date === date) ?? null;
+    }),
     findShiftById: vi.fn(async (shiftId: string) => {
       return state.shifts.find((shift) => shift.id === shiftId) ?? null;
     }),
