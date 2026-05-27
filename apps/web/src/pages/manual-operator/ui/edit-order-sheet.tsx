@@ -46,6 +46,12 @@ export function EditOrderSheet({ order, onClose }: EditOrderSheetProps) {
   const [startedAtLocal, setStartedAtLocal] = useState(
     isoToDatetimeLocal(order.startedAt)
   );
+  const [finishedAtLocal, setFinishedAtLocal] = useState(
+    isoToDatetimeLocal(order.finishedAt)
+  );
+  const [checkedAtLocal, setCheckedAtLocal] = useState(
+    isoToDatetimeLocal(order.checkedAt)
+  );
   const [manualSize, setManualSize] = useState<ManualShiftOrderSize | null>(null);
 
   const patchOrder = usePatchManualShiftOrder();
@@ -71,6 +77,8 @@ export function EditOrderSheet({ order, onClose }: EditOrderSheetProps) {
         : null;
 
     const parsedStartedAt = startedAtLocal ? datetimeLocalToIso(startedAtLocal) : null;
+    const parsedFinishedAt = finishedAtLocal ? datetimeLocalToIso(finishedAtLocal) : null;
+    const parsedCheckedAt = checkedAtLocal ? datetimeLocalToIso(checkedAtLocal) : null;
 
     patchOrder.mutate(
       {
@@ -79,7 +87,9 @@ export function EditOrderSheet({ order, onClose }: EditOrderSheetProps) {
         shiftId: order.shiftId,
         lineCount: parsedLineCount,
         palletCount: parsedPalletCount,
-        startedAt: parsedStartedAt
+        startedAt: parsedStartedAt,
+        finishedAt: parsedFinishedAt,
+        checkedAt: parsedCheckedAt
       },
       { onSuccess: onClose }
     );
@@ -192,6 +202,54 @@ export function EditOrderSheet({ order, onClose }: EditOrderSheetProps) {
               className="text-xs text-red-500 font-medium self-start"
             >
               נקה זמן התחלה
+            </button>
+          )}
+        </div>
+
+        {/* Finished at */}
+        <div className="flex flex-col gap-2">
+          <label className="font-bold text-gray-700">זמן סיום הזמנה</label>
+          <p className="text-xs text-gray-400 -mt-1">
+            ידנית, אם הסיום חל לפני שהוקלד במערכת
+          </p>
+          <input
+            type="datetime-local"
+            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-base"
+            value={finishedAtLocal}
+            onChange={(e) => setFinishedAtLocal(e.target.value)}
+            dir="ltr"
+          />
+          {finishedAtLocal && (
+            <button
+              type="button"
+              onClick={() => setFinishedAtLocal('')}
+              className="text-xs text-red-500 font-medium self-start"
+            >
+              נקה זמן סיום
+            </button>
+          )}
+        </div>
+
+        {/* Checked at */}
+        <div className="flex flex-col gap-2">
+          <label className="font-bold text-gray-700">זמן בדיקה</label>
+          <p className="text-xs text-gray-400 -mt-1">
+            ידנית, אם הבדיקה התבצעה לפני שהוקלדה במערכת
+          </p>
+          <input
+            type="datetime-local"
+            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 h-14 font-bold text-base"
+            value={checkedAtLocal}
+            onChange={(e) => setCheckedAtLocal(e.target.value)}
+            dir="ltr"
+          />
+          {checkedAtLocal && (
+            <button
+              type="button"
+              onClick={() => setCheckedAtLocal('')}
+              className="text-xs text-red-500 font-medium self-start"
+            >
+              נקה זמן בדיקה
             </button>
           )}
         </div>

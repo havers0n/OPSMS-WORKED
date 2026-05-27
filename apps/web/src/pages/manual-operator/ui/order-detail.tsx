@@ -151,6 +151,40 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
               </div>
             </>
           )}
+          {order.checkedAt && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div className="flex items-center gap-3">
+                <Clock className="text-gray-400 shrink-0" size={20} />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-500 font-medium">זמן בדיקה</span>
+                  <span className="font-bold text-lg" dir="ltr">
+                    {new Date(order.checkedAt).toLocaleTimeString('he-IL', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+          {order.finishedAt && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div className="flex items-center gap-3">
+                <Clock className="text-gray-400 shrink-0" size={20} />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-500 font-medium">זמן סיום</span>
+                  <span className="font-bold text-lg" dir="ltr">
+                    {new Date(order.finishedAt).toLocaleTimeString('he-IL', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </main>
 
