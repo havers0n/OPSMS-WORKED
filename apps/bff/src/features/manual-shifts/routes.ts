@@ -70,6 +70,21 @@ export function registerManualShiftsRoutes(
     return parseOrThrow(manualShiftTodayResponseSchema, response);
   });
 
+  app.get('/api/manual-shifts/by-date', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const { date } = request.query as { date?: string };
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new ApiError(400, 'INVALID_DATE', 'Query param "date" must be in YYYY-MM-DD format.');
+    }
+
+    const response = await getManualShiftsService(auth).getShiftByDate(tenantId, date);
+    return parseOrThrow(manualShiftTodayResponseSchema, response);
+  });
+
   app.post('/api/manual-shifts', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
