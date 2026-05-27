@@ -44,6 +44,17 @@ export function manualShiftWorkerNotFound(workerId: string) {
   return new ApiError(404, 'MANUAL_SHIFT_WORKER_NOT_FOUND', `Manual shift worker ${workerId} was not found.`);
 }
 
+export function manualShiftPickerWorkerInvalid(
+  workerId: string,
+  reason: 'WRONG_TENANT' | 'WRONG_SHIFT' | 'INACTIVE'
+) {
+  return new ApiError(
+    422,
+    'MANUAL_SHIFT_PICKER_WORKER_INVALID',
+    `Manual shift worker ${workerId} cannot be assigned as picker (${reason}).`
+  );
+}
+
 export function manualShiftLineDeleteBlocked() {
   return new ApiError(
     409,

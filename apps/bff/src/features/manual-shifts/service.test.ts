@@ -1271,3 +1271,106 @@ describe('manual shift workers service', () => {
     expect(canonicalKeys).toEqual([]);
   });
 });
+
+describe('manual shift picker assignment patch', () => {
+  function makeService(repo: ManualShiftsRepo) {
+    return createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+  }
+
+  it('assigns/reassigns/free-text/clears picker and writes picker_changed payload', async () => {
+    const { repo, state } = createRepo();
+    const workerA = createWorker({ id: ids.worker, name: 'Worker A', active: true });
+    const workerB = createWorker({ id: ids.orderTwo, name: 'Worker B', active: true });
+    state.workers.push(workerA, workerB);
+    state.orders.push(createOrder({ id: ids.order, pickerName: null, pickerWorkerId: null }));
+    const service = makeService(repo);
+
+    const assigned = await service.patchOrder({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      pickerWorkerId: workerA.id,
+      pickerName: 'client mismatch',
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(assigned.pickerWorkerId).toBe(workerA.id);
+    expect(assigned.pickerName).toBe(workerA.name);
+
+    const reassigned = await service.patchOrder({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      pickerWorkerId: workerB.id,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(reassigned.pickerWorkerId).toBe(workerB.id);
+    expect(reassigned.pickerName).toBe(workerB.name);
+
+    const freeText = await service.patchOrder({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      pickerWorkerId: null,
+      pickerName: 'Free Text',
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(freeText.pickerWorkerId).toBeNull();
+    expect(freeText.pickerName).toBe('Free Text');
+
+    const cleared = await service.patchOrder({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      pickerWorkerId: null,
+      pickerName: null,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(cleared.pickerWorkerId).toBeNull();
+    expect(cleared.pickerName).toBeNull();
+
+    const pickerEvents = state.events.filter((event) => event.eventType === 'picker_changed');
+    expect(pickerEvents.length).toBe(4);
+    expect(pickerEvents[0]).toMatchObject({
+      payload: {
+        previousPickerName: null,
+        previousPickerWorkerId: null,
+        nextPickerName: 'Worker A',
+        nextPickerWorkerId: workerA.id
+      }
+    });
+  });
+
+  it('rejects inactive/wrong-shift/wrong-tenant picker worker assignments', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order }));
+    state.workers.push(
+      createWorker({ id: ids.worker, active: false }),
+      createWorker({ id: ids.orderTwo, shiftId: ids.lineTwo, active: true }),
+      createWorker({ id: ids.orderThree, tenantId: ids.otherTenant, active: true })
+    );
+    const service = makeService(repo);
+
+    await expect(
+      service.patchOrder({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        pickerWorkerId: ids.worker,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_PICKER_WORKER_INVALID' });
+
+    await expect(
+      service.patchOrder({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        pickerWorkerId: ids.orderTwo,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_PICKER_WORKER_INVALID' });
+
+    await expect(
+      service.patchOrder({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        pickerWorkerId: ids.orderThree,
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_PICKER_WORKER_INVALID' });
+  });
+});

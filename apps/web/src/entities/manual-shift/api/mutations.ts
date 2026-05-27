@@ -60,6 +60,14 @@ type UpdateOrderStatusInput = {
   status: ManualShiftOrderStatus;
 };
 
+type PatchOrderInput = {
+  orderId: string;
+  lineId: string;
+  shiftId: string;
+  pickerName?: string | null;
+  pickerWorkerId?: string | null;
+};
+
 type CreateOrderErrorInput = {
   orderId: string;
   lineId: string;
@@ -143,6 +151,19 @@ async function createOrderError({
   return bffRequest<ManualShiftOrderError>(`/api/manual-shift-orders/${orderId}/errors`, {
     method: 'POST',
     body: JSON.stringify({ type, comment })
+  });
+}
+
+async function patchOrder({
+  orderId,
+  lineId: _lineId,
+  shiftId: _shiftId,
+  pickerName,
+  pickerWorkerId
+}: PatchOrderInput): Promise<ManualShiftOrder> {
+  return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ pickerName, pickerWorkerId })
   });
 }
 
@@ -295,6 +316,16 @@ export function useCreateManualShiftOrderError() {
         queryKey: manualShiftKeys.lineOrders(variables.lineId)
       });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+    }
+  });
+}
+
+export function usePatchManualShiftOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: patchOrder,
+    onSuccess: (_data, variables) => {
+      invalidateOrderQueries(queryClient, variables.lineId, variables.shiftId);
     }
   });
 }

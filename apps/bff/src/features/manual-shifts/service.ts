@@ -31,6 +31,7 @@ import {
   manualShiftLineNotFound,
   manualShiftNotFound,
   manualShiftOrderNotFound,
+  manualShiftPickerWorkerInvalid,
   manualShiftWorkerNotFound
 } from './errors.js';
 import type { ManualShiftsRepo } from './repo.js';
@@ -680,12 +681,56 @@ export function createManualShiftsServiceFromRepo(
 
       await requireActiveShift(order.shiftId);
 
+      const hasPickerPatch =
+        input.pickerWorkerId !== undefined || input.pickerName !== undefined;
+      let nextPickerWorkerId = order.pickerWorkerId;
+      let nextPickerName = order.pickerName;
+
+      if (hasPickerPatch) {
+        if (input.pickerWorkerId !== undefined && input.pickerWorkerId !== null) {
+          const worker = await repo.findWorkerById(input.pickerWorkerId);
+          if (!worker) {
+            throw manualShiftWorkerNotFound(input.pickerWorkerId);
+          }
+          if (worker.tenantId !== input.tenantId) {
+            throw manualShiftPickerWorkerInvalid(worker.id, 'WRONG_TENANT');
+          }
+          if (worker.shiftId !== order.shiftId) {
+            throw manualShiftPickerWorkerInvalid(worker.id, 'WRONG_SHIFT');
+          }
+          if (!worker.active) {
+            throw manualShiftPickerWorkerInvalid(worker.id, 'INACTIVE');
+          }
+          nextPickerWorkerId = worker.id;
+          nextPickerName = worker.name;
+        } else if (
+          input.pickerWorkerId === null &&
+          input.pickerName !== undefined &&
+          input.pickerName !== null
+        ) {
+          nextPickerWorkerId = null;
+          nextPickerName = input.pickerName;
+        } else if (input.pickerWorkerId === null && input.pickerName === null) {
+          nextPickerWorkerId = null;
+          nextPickerName = null;
+        } else if (
+          input.pickerWorkerId === undefined &&
+          input.pickerName !== undefined
+        ) {
+          nextPickerWorkerId = null;
+          nextPickerName = input.pickerName;
+        } else if (input.pickerWorkerId === null && input.pickerName === undefined) {
+          nextPickerWorkerId = null;
+          nextPickerName = order.pickerName;
+        }
+      }
+
       const updated = await repo.updateOrder(input.orderId, {
         pointName: input.pointName,
         orderNumber: input.orderNumber,
         customerName: input.customerName,
-        pickerName: input.pickerName,
-        pickerWorkerId: input.pickerWorkerId,
+        pickerName: hasPickerPatch ? nextPickerName : input.pickerName,
+        pickerWorkerId: hasPickerPatch ? nextPickerWorkerId : input.pickerWorkerId,
         checkerName: input.checkerName,
         lineCount: input.lineCount,
         palletCount: input.palletCount,
@@ -697,27 +742,62 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftOrderNotFound(input.orderId);
       }
 
-      await repo.createOrderEvent({
-        tenantId: input.tenantId,
-        shiftId: updated.shiftId,
-        lineId: updated.lineId,
-        orderId: updated.id,
-        eventType: 'updated',
-        actorProfileId: input.actor.actorProfileId,
-        actorName: input.actor.actorName,
-        fromStatus: null,
-        toStatus: null,
-        payload: {
-          pointName: updated.pointName,
-          orderNumber: updated.orderNumber,
-          pickerName: updated.pickerName,
-          checkerName: updated.checkerName,
-          lineCount: updated.lineCount,
-          palletCount: updated.palletCount,
-          size: updated.size,
-          comment: updated.comment
-        }
-      });
+      const pickerChanged =
+        order.pickerWorkerId !== updated.pickerWorkerId || order.pickerName !== updated.pickerName;
+
+      if (pickerChanged) {
+        await repo.createOrderEvent({
+          tenantId: input.tenantId,
+          shiftId: updated.shiftId,
+          lineId: updated.lineId,
+          orderId: updated.id,
+          eventType: 'picker_changed',
+          actorProfileId: input.actor.actorProfileId,
+          actorName: input.actor.actorName,
+          fromStatus: null,
+          toStatus: null,
+          payload: {
+            previousPickerName: order.pickerName,
+            previousPickerWorkerId: order.pickerWorkerId,
+            nextPickerName: updated.pickerName,
+            nextPickerWorkerId: updated.pickerWorkerId
+          }
+        });
+      }
+
+      const hadNonPickerPatch =
+        input.pointName !== undefined ||
+        input.orderNumber !== undefined ||
+        input.customerName !== undefined ||
+        input.checkerName !== undefined ||
+        input.lineCount !== undefined ||
+        input.palletCount !== undefined ||
+        input.size !== undefined ||
+        input.comment !== undefined;
+
+      if (hadNonPickerPatch) {
+        await repo.createOrderEvent({
+          tenantId: input.tenantId,
+          shiftId: updated.shiftId,
+          lineId: updated.lineId,
+          orderId: updated.id,
+          eventType: 'updated',
+          actorProfileId: input.actor.actorProfileId,
+          actorName: input.actor.actorName,
+          fromStatus: null,
+          toStatus: null,
+          payload: {
+            pointName: updated.pointName,
+            orderNumber: updated.orderNumber,
+            pickerName: updated.pickerName,
+            checkerName: updated.checkerName,
+            lineCount: updated.lineCount,
+            palletCount: updated.palletCount,
+            size: updated.size,
+            comment: updated.comment
+          }
+        });
+      }
 
       return updated;
     },
