@@ -300,6 +300,7 @@ export function registerManualShiftsRoutes(
       palletCount: body.palletCount,
       size: body.size,
       comment: body.comment,
+      startedAt: body.startedAt,
       actor: actorFromAuth(auth)
     });
 
