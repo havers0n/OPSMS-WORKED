@@ -6,6 +6,7 @@ const UNASSIGNED_LABEL = 'לא משויך';
 interface DesktopPickerDetailProps {
   detail: PickerDetail;
   onClose: () => void;
+  onSelectOrder?: (orderId: string) => void;
 }
 
 function Kpi({ label, value }: { label: string; value: number }) {
@@ -17,7 +18,7 @@ function Kpi({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function DesktopPickerDetail({ detail, onClose }: DesktopPickerDetailProps) {
+export function DesktopPickerDetail({ detail, onClose, onSelectOrder }: DesktopPickerDetailProps) {
   if (!detail.summary) {
     return (
       <div className="p-4">
@@ -66,7 +67,7 @@ export function DesktopPickerDetail({ detail, onClose }: DesktopPickerDetailProp
         </div>
       )}
 
-      <DesktopDetailOrdersTable mode="picker" rows={detail.orders} />
+      <DesktopDetailOrdersTable mode="picker" rows={detail.orders} onSelectOrder={onSelectOrder} />
     </div>
   );
 }

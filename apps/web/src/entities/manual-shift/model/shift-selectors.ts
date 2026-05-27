@@ -375,6 +375,27 @@ export interface PickerDetail {
   lineBreakdown: PickerLineBreakdownEntry[];
 }
 
+export interface OrderDetail {
+  orderId: string;
+  status: ManualShiftOrderStatus;
+  lineId: string;
+  lineName: string | null;
+  pointName: string | null;
+  customerName: string | null;
+  orderNumber: string | null;
+  pickerName: string | null;
+  checkerName: string | null;
+  size: ManualShiftOrder['size'] | null;
+  lineCount: number | null;
+  palletCount: number | null;
+  createdAt: string;
+  startedAt: string | null;
+  waitingCheckAt: string | null;
+  checkedAt: string | null;
+  finishedAt: string | null;
+  ageSeconds: number | null;
+}
+
 const DETAIL_STATUS_PRIORITY: Record<ManualShiftOrderStatus, number> = {
   returned: 0,
   waiting_check: 1,
@@ -561,5 +582,38 @@ export function selectPickerDetail(
     summary,
     orders: rows,
     lineBreakdown
+  };
+}
+
+export function selectOrderDetail(
+  orderId: string,
+  orders: ManualShiftOrder[],
+  lineSummaries: LineSummary[],
+  now: Date = new Date()
+): OrderDetail | null {
+  const order = orders.find((item) => item.id === orderId);
+  if (!order) return null;
+
+  const lineName = lineSummaries.find((line) => line.lineId === order.lineId)?.lineName ?? null;
+
+  return {
+    orderId: order.id,
+    status: order.status,
+    lineId: order.lineId,
+    lineName,
+    pointName: order.pointName,
+    customerName: order.customerName,
+    orderNumber: order.orderNumber,
+    pickerName: order.pickerName,
+    checkerName: order.checkerName,
+    size: order.size ?? null,
+    lineCount: order.lineCount,
+    palletCount: order.palletCount,
+    createdAt: order.createdAt,
+    startedAt: order.startedAt,
+    waitingCheckAt: order.waitingCheckAt,
+    checkedAt: order.checkedAt,
+    finishedAt: order.finishedAt,
+    ageSeconds: toAgeSeconds(order, now.getTime())
   };
 }

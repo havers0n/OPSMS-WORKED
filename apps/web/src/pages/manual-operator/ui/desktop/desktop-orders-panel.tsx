@@ -3,6 +3,7 @@ import type { ActiveOrder, ActiveOrderStatus, LineSummary } from '@/entities/man
 interface DesktopOrdersPanelProps {
   orders: ActiveOrder[];
   lineSummaries: LineSummary[];
+  onSelectOrder?: (orderId: string) => void;
 }
 
 const STATUS_LABEL: Record<ActiveOrderStatus, string> = {
@@ -29,7 +30,7 @@ function formatAge(seconds: number | null): string {
   return `${h}:${String(rem).padStart(2, '0')}`;
 }
 
-export function DesktopOrdersPanel({ orders, lineSummaries }: DesktopOrdersPanelProps) {
+export function DesktopOrdersPanel({ orders, lineSummaries, onSelectOrder }: DesktopOrdersPanelProps) {
   const lineNameMap = new Map(lineSummaries.map((l) => [l.lineId, l.lineName]));
 
   if (orders.length === 0) {
@@ -59,7 +60,13 @@ export function DesktopOrdersPanel({ orders, lineSummaries }: DesktopOrdersPanel
         </thead>
         <tbody>
           {orders.map((order) => (
-            <tr key={order.orderId} className="border-b border-gray-50 hover:bg-gray-50">
+            <tr
+              key={order.orderId}
+              className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+              onClick={() => onSelectOrder?.(order.orderId)}
+              aria-label={`open-order-${order.orderId}`}
+              data-testid={`active-order-row-${order.orderId}`}
+            >
               <td className="px-3 py-2">
                 <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_CLASS[order.status]}`}>
                   {STATUS_LABEL[order.status]}

@@ -4,6 +4,7 @@ import { DesktopDetailOrdersTable } from './desktop-detail-orders-table';
 interface DesktopLineDetailProps {
   detail: LineDetail;
   onClose: () => void;
+  onSelectOrder?: (orderId: string) => void;
 }
 
 function Kpi({ label, value }: { label: string; value: number }) {
@@ -15,7 +16,7 @@ function Kpi({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function DesktopLineDetail({ detail, onClose }: DesktopLineDetailProps) {
+export function DesktopLineDetail({ detail, onClose, onSelectOrder }: DesktopLineDetailProps) {
   if (!detail.summary) {
     return (
       <div className="p-4">
@@ -56,7 +57,7 @@ export function DesktopLineDetail({ detail, onClose }: DesktopLineDetailProps) {
         <Kpi label="תקלות" value={line.errorCount} />
       </div>
 
-      <DesktopDetailOrdersTable mode="line" rows={detail.orders} />
+      <DesktopDetailOrdersTable mode="line" rows={detail.orders} onSelectOrder={onSelectOrder} />
     </div>
   );
 }

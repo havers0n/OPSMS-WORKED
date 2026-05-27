@@ -8,7 +8,8 @@ import {
   selectOrdersForLine,
   selectOrdersForPicker,
   selectLineDetail,
-  selectPickerDetail
+  selectPickerDetail,
+  selectOrderDetail
 } from './shift-selectors';
 import type { ManualShiftDaySummary, ManualShiftLineSummary, ManualShiftOrder } from '@wos/domain';
 
@@ -682,5 +683,46 @@ describe('detail selectors', () => {
     expect(detail.summary).toBeNull();
     expect(detail.orders).toEqual([]);
     expect(detail.lineBreakdown).toEqual([]);
+  });
+
+  it('selectOrderDetail returns null for stale order selection', () => {
+    const detail = selectOrderDetail('missing', [], []);
+    expect(detail).toBeNull();
+  });
+
+  it('selectOrderDetail maps line name and workload/status fields', () => {
+    const order = makeOrder({
+      id: 'o1',
+      lineId: LINE_A,
+      status: 'picking',
+      pointName: 'Point A',
+      customerName: 'Customer A',
+      orderNumber: 'ORD-1',
+      pickerName: 'Alice',
+      checkerName: 'Bob',
+      lineCount: 4,
+      palletCount: 2,
+      size: 'M',
+      startedAt: '2026-05-27T09:00:00.000Z'
+    });
+    const lines = selectLineSummaries([makeLineSummary(LINE_A, 'Route A')], [order]);
+    const detail = selectOrderDetail('o1', [order], lines, new Date('2026-05-27T10:00:00.000Z'));
+    expect(detail?.lineName).toBe('Route A');
+    expect(detail?.pickerName).toBe('Alice');
+    expect(detail?.checkerName).toBe('Bob');
+    expect(detail?.lineCount).toBe(4);
+    expect(detail?.status).toBe('picking');
+    expect(detail?.ageSeconds).toBe(3600);
+  });
+
+  it('selectOrderDetail keeps returned age null', () => {
+    const order = makeOrder({
+      id: 'r1',
+      lineId: LINE_A,
+      status: 'returned'
+    });
+    const lines = selectLineSummaries([makeLineSummary(LINE_A, 'Route A')], [order]);
+    const detail = selectOrderDetail('r1', [order], lines, new Date('2026-05-27T10:00:00.000Z'));
+    expect(detail?.ageSeconds).toBeNull();
   });
 });

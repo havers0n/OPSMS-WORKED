@@ -3,6 +3,7 @@ import type {
   ActiveOrder,
   CheckQueue,
   LineDetail,
+  OrderDetail,
   LineSummary,
   PickerDetail,
   PickerWorkload,
@@ -25,9 +26,11 @@ interface DesktopOperatorShellProps {
   checkQueue: CheckQueue;
   lineDetail: LineDetail | null;
   pickerDetail: PickerDetail | null;
-  selectedDetailType: 'line' | 'picker' | null;
+  orderDetail: OrderDetail | null;
+  selectedDetailType: 'line' | 'picker' | 'order' | null;
   onSelectLine: (lineId: string) => void;
   onSelectPicker: (pickerKey: string) => void;
+  onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
   onCreateShift: () => void;
   isCreatingShift: boolean;
@@ -68,9 +71,11 @@ export function DesktopOperatorShell({
   checkQueue,
   lineDetail,
   pickerDetail,
+  orderDetail,
   selectedDetailType,
   onSelectLine,
   onSelectPicker,
+  onSelectOrder,
   onCloseDetail,
   onCreateShift,
   isCreatingShift
@@ -99,6 +104,8 @@ export function DesktopOperatorShell({
             type: 'picker' as const,
             detail: pickerDetail ?? { summary: null, orders: [], lineBreakdown: [] }
           }
+        : selectedDetailType === 'order'
+          ? { type: 'order' as const, detail: orderDetail }
         : null;
 
   return (
@@ -126,7 +133,11 @@ export function DesktopOperatorShell({
         </aside>
 
         <main className="flex-1 bg-white overflow-y-auto min-w-0">
-          <DesktopOrdersPanel orders={activeOrders} lineSummaries={lineSummaries} />
+          <DesktopOrdersPanel
+            orders={activeOrders}
+            lineSummaries={lineSummaries}
+            onSelectOrder={onSelectOrder}
+          />
         </main>
 
         <aside className="w-72 bg-white overflow-y-auto shrink-0">
@@ -137,7 +148,7 @@ export function DesktopOperatorShell({
           />
         </aside>
 
-        <DesktopDetailDrawer state={drawerState} onClose={onCloseDetail} />
+        <DesktopDetailDrawer state={drawerState} onClose={onCloseDetail} onSelectOrder={onSelectOrder} />
       </div>
     </div>
   );

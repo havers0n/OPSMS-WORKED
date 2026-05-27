@@ -8,6 +8,7 @@ type DetailRow = LineDetailOrderRow | PickerDetailOrderRow;
 interface DesktopDetailOrdersTableProps {
   mode: DetailMode;
   rows: DetailRow[];
+  onSelectOrder?: (orderId: string) => void;
 }
 
 const STATUS_LABEL: Record<ManualShiftOrderStatus, string> = {
@@ -45,7 +46,7 @@ function renderPointCell(row: DetailRow) {
   );
 }
 
-export function DesktopDetailOrdersTable({ mode, rows }: DesktopDetailOrdersTableProps) {
+export function DesktopDetailOrdersTable({ mode, rows, onSelectOrder }: DesktopDetailOrdersTableProps) {
   if (rows.length === 0) {
     return (
       <div className="flex items-center justify-center h-24 px-4">
@@ -71,7 +72,13 @@ export function DesktopDetailOrdersTable({ mode, rows }: DesktopDetailOrdersTabl
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.orderId} className="border-b border-gray-50 hover:bg-gray-50">
+            <tr
+              key={row.orderId}
+              className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+              onClick={() => onSelectOrder?.(row.orderId)}
+              aria-label={`open-detail-order-${row.orderId}`}
+              data-testid={`detail-order-row-${row.orderId}`}
+            >
               <td className="px-3 py-2">
                 <span
                   className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_CLASS[row.status]}`}

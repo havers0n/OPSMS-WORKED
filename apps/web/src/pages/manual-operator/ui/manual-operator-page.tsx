@@ -15,7 +15,8 @@ import {
   selectPickerWorkloads,
   selectCheckQueue,
   selectLineDetail,
-  selectPickerDetail
+  selectPickerDetail,
+  selectOrderDetail
 } from '@/entities/manual-shift/model/shift-selectors';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
@@ -67,7 +68,10 @@ export function ManualOperatorPage() {
   const [showAddLine, setShowAddLine] = useState(false);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
   const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
-    { type: 'line'; lineId: string } | { type: 'picker'; pickerKey: string } | null
+    | { type: 'line'; lineId: string }
+    | { type: 'picker'; pickerKey: string }
+    | { type: 'order'; orderId: string }
+    | null
   >(null);
 
   const isToday = selectedDate === todayDate;
@@ -115,6 +119,10 @@ export function ManualOperatorPage() {
       lineSummaries
     );
   }, [selectedDesktopDetail, pickerWorkloads, shiftOrders, lineSummaries]);
+  const orderDetail = useMemo(() => {
+    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'order') return null;
+    return selectOrderDetail(selectedDesktopDetail.orderId, shiftOrders, lineSummaries);
+  }, [selectedDesktopDetail, shiftOrders, lineSummaries]);
 
   const createShift = useCreateShift();
 
@@ -130,9 +138,11 @@ export function ManualOperatorPage() {
         checkQueue={checkQueue}
         lineDetail={lineDetail}
         pickerDetail={pickerDetail}
+        orderDetail={orderDetail}
         selectedDetailType={selectedDesktopDetail?.type ?? null}
         onSelectLine={(lineId) => setSelectedDesktopDetail({ type: 'line', lineId })}
         onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
+        onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
         onCloseDetail={() => setSelectedDesktopDetail(null)}
         onCreateShift={() => createShift.mutate({ name: generateShiftName() })}
         isCreatingShift={createShift.isPending}
