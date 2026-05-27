@@ -110,7 +110,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerOperationsCellsRoutes(app, { getAuthContext, getUserSupabase });
   registerFloorRoutingRoutes(app, { getAuthContext, getFloorRoutingService });
   registerWavesRoutes(app, { getAuthContext, getUserSupabase, getWavesService });
-  registerManualShiftsRoutes(app, { getAuthContext, getManualShiftsService });
+  registerManualShiftsRoutes(app, { getAuthContext, getManualShiftsService, getUserSupabase });
 
   app.setErrorHandler((error, request, reply) => {
     const mappedSupabaseError = mapSupabaseError(error);

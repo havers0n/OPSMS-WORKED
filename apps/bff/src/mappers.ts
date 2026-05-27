@@ -1129,7 +1129,7 @@ export function mapPickTaskRowToDomain(
     id: string;
     task_number: string;
     tenant_id: string;
-    source_type: 'order' | 'wave';
+    source_type: 'order' | 'wave' | 'manual_shift_order';
     source_id: string;
     status: string;
     assigned_to: string | null;
@@ -1158,7 +1158,7 @@ export function mapPickTaskSummaryRowToDomain(row: {
   id: string;
   task_number: string;
   tenant_id: string;
-  source_type: 'order' | 'wave';
+  source_type: 'order' | 'wave' | 'manual_shift_order';
   source_id: string;
   status: string;
   assigned_to: string | null;

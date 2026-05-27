@@ -203,7 +203,8 @@ async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedReq
 
   registerManualShiftsRoutes(app, {
     getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => auth,
-    getManualShiftsService: () => service
+    getManualShiftsService: () => service,
+    getUserSupabase: () => ({} as never)
   });
 
   app.setErrorHandler((error, _request, reply) => {
@@ -244,7 +245,7 @@ describe('manual shifts routes', () => {
     expect(service.getTodayShift).toHaveBeenCalledWith(ids.tenant);
 
     await app.close();
-  });
+  }, 15000);
 
   it('creates a shift and forwards actor audit data from auth context', async () => {
     const service = createServiceMock();

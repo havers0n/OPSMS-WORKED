@@ -5,7 +5,7 @@ import { pickTaskDetailSchema } from '@wos/domain';
 // ── Column lists ──────────────────────────────────────────────────────────────
 
 const pickTaskColumns =
-  'id,task_number,tenant_id,source_type,source_id,status,assigned_to,started_at,completed_at,created_at';
+  'id,task_number,tenant_id,source_type,source_id,status,assigned_to,assigned_worker_id,started_at,completed_at,created_at';
 
 const pickStepColumns = [
   'id', 'task_id', 'tenant_id', 'order_id', 'order_line_id',
@@ -20,10 +20,11 @@ type PickTaskRow = {
   id: string;
   task_number: string;
   tenant_id: string;
-  source_type: 'order' | 'wave';
+  source_type: 'order' | 'wave' | 'manual_shift_order';
   source_id: string;
   status: string;
   assigned_to: string | null;
+  assigned_worker_id: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
@@ -266,6 +267,7 @@ export function createPickReadRepo(supabase: SupabaseClient): PickReadRepo {
         sourceId: task.source_id,
         status: task.status,
         assignedTo: task.assigned_to,
+        assignedWorkerId: task.assigned_worker_id,
         startedAt: task.started_at,
         completedAt: task.completed_at,
         createdAt: task.created_at,

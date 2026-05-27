@@ -55,6 +55,22 @@ export function manualShiftPickerWorkerInvalid(
   );
 }
 
+export function manualShiftOrderNoPickerWorker(orderId: string) {
+  return new ApiError(
+    422,
+    'MANUAL_SHIFT_ORDER_NO_PICKER_WORKER',
+    `Order ${orderId} has no picker worker assigned. Set pickerWorkerId before starting picking.`
+  );
+}
+
+export function manualShiftOrderNotPickable(orderId: string, status: string) {
+  return new ApiError(
+    409,
+    'MANUAL_SHIFT_ORDER_NOT_PICKABLE',
+    `Order ${orderId} cannot start picking from status '${status}'.`
+  );
+}
+
 export function manualShiftLineDeleteBlocked() {
   return new ApiError(
     409,
