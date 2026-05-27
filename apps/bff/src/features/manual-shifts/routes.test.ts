@@ -175,6 +175,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     patchWorker: vi.fn(async () => createWorker()),
     deactivateWorker: vi.fn(async () => ({ ...createWorker(), active: false })),
     getTodayShift: vi.fn(async () => todayResponse),
+    getShiftByDate: vi.fn(async () => todayResponse),
     createShift: vi.fn(async () => createSession('active')),
     closeShift: vi.fn(async () => createSession('closed')),
     listShiftLines: vi.fn(async () => []),
