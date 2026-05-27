@@ -11,11 +11,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "paths": {
-      "@wos/domain": ["packages/domain/src/index.ts"],
-      "@/*": ["apps/web/src/*"]
+      "@wos/domain": ["./packages/domain/src/index.ts"],
+      "@/*": ["./apps/web/src/*"]
     }
   }
 }
