@@ -906,12 +906,12 @@ export function createManualShiftsServiceFromRepo(
       }
 
       if (order.status === 'waiting_check' && input.status === 'done') {
-        patch.checkedAt = nowIso;
+        if (!order.checkedAt) patch.checkedAt = nowIso;
         patch.finishedAt = nowIso;
       }
 
       if (order.status === 'waiting_check' && input.status === 'returned') {
-        patch.checkedAt = nowIso;
+        if (!order.checkedAt) patch.checkedAt = nowIso;
       }
 
       if (order.status === 'returned' && input.status === 'waiting_check') {
@@ -960,7 +960,7 @@ export function createManualShiftsServiceFromRepo(
 
       await repo.updateOrder(order.id, {
         status: 'returned',
-        checkedAt: getNowIso()
+        ...(!order.checkedAt ? { checkedAt: getNowIso() } : {})
       });
 
       await repo.createOrderEvent({

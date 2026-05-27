@@ -1272,6 +1272,152 @@ describe('manual shift workers service', () => {
   });
 });
 
+describe('manual shift timestamp correctness (PR2)', () => {
+  // PR2 scope: checkedAt guard + documented fixedAt gap.
+  // checkedAt = first time a checker handled the order. Never overwritten once set.
+  // fixedAt on ManualShiftOrderError is NOT set in this PR — no updateOrderError repo method
+  // exists and the open-error identity problem is unsolved. Deferred to a later PR.
+
+  function makeService(getNowIso: () => string) {
+    const { repo, state } = createRepo();
+    return {
+      service: createManualShiftsServiceFromRepo(repo, { getNowIso }),
+      state
+    };
+  }
+
+  it('waiting_check → done sets checkedAt and finishedAt', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+
+    const order = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(order.checkedAt).toBe(nowIso);
+    expect(order.finishedAt).toBe(nowIso);
+  });
+
+  it('waiting_check → returned sets checkedAt', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+
+    const order = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'returned',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(order.checkedAt).toBe(nowIso);
+  });
+
+  it('waiting_check → done does not overwrite checkedAt if already set', async () => {
+    const firstCheckedAt = '2026-05-26T06:30:00.000Z';
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: firstCheckedAt }));
+
+    const order = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(order.checkedAt).toBe(firstCheckedAt);
+    expect(order.finishedAt).toBe(nowIso);
+  });
+
+  it('picking → waiting_check sets waitingCheckAt and does not set checkedAt', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'picking', startedAt: nowIso, checkedAt: null }));
+
+    const order = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'waiting_check',
+      actor: { actorProfileId: ids.actor, actorName: 'Picker' }
+    });
+
+    expect(order.waitingCheckAt).toBe(nowIso);
+    expect(order.checkedAt).toBeNull();
+  });
+
+  it('returned → waiting_check updates waitingCheckAt; fixedAt on open error is not stamped (deferred)', async () => {
+    const firstCheckedAt = '2026-05-26T06:30:00.000Z';
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'returned', checkedAt: firstCheckedAt }));
+
+    const order = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'waiting_check',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(order.waitingCheckAt).toBe(nowIso);
+    expect(order.checkedAt).toBe(firstCheckedAt);
+  });
+
+  it('createOrderError sets checkedAt on first error and does not overwrite on a subsequent error', async () => {
+    const firstTime = '2026-05-26T06:00:00.000Z';
+    let callCount = 0;
+    const { service, state } = makeService(() => (callCount++ === 0 ? firstTime : nowIso));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+
+    await service.createOrderError({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      type: 'missing_item',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(state.orders[0]?.checkedAt).toBe(firstTime);
+
+    await service.createOrderError({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      type: 'wrong_quantity',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(state.orders[0]?.checkedAt).toBe(firstTime);
+  });
+
+  it('waiting_check → returned → waiting_check → done preserves original checkedAt and sets finishedAt on done', async () => {
+    const firstCheckedAt = '2026-05-26T06:00:00.000Z';
+    let callCount = 0;
+    const { service, state } = makeService(() => (callCount++ === 0 ? firstCheckedAt : nowIso));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+
+    await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'returned',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(state.orders[0]?.checkedAt).toBe(firstCheckedAt);
+
+    await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'waiting_check',
+      actor: { actorProfileId: ids.actor, actorName: 'Picker' }
+    });
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(done.checkedAt).toBe(firstCheckedAt);
+    expect(done.finishedAt).toBe(nowIso);
+  });
+});
+
 describe('manual shift picker assignment patch', () => {
   function makeService(repo: ManualShiftsRepo) {
     return createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
