@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Calendar, CheckSquare, ListTodo, Plus, Users } from 'lucide-react';
+import { Calendar, CalendarDays, CheckSquare, ListTodo, Plus, Users } from 'lucide-react';
 import type { ManualShiftSession } from '@wos/domain';
 
 export type OperatorTab = 'queue' | 'check' | 'people' | 'day';
@@ -15,6 +15,18 @@ interface MobileOperatorShellProps {
   onChangeTab: (tab: OperatorTab) => void;
   shift: ManualShiftSession | null;
   fab?: FabAction;
+  selectedDate: string;
+  todayDate: string;
+  onOpenDatePicker: () => void;
+}
+
+function formatDisplayDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Intl.DateTimeFormat('he-IL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).format(new Date(y, m - 1, d));
 }
 
 export function MobileOperatorShell({
@@ -22,13 +34,13 @@ export function MobileOperatorShell({
   activeTab,
   onChangeTab,
   shift,
-  fab
+  fab,
+  selectedDate,
+  todayDate,
+  onOpenDatePicker
 }: MobileOperatorShellProps) {
-  const todayStr = new Intl.DateTimeFormat('he-IL', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long'
-  }).format(new Date());
+  const isToday = selectedDate === todayDate;
+  const displayDate = formatDisplayDate(selectedDate);
 
   return (
     <div className="min-h-screen bg-gray-100 flex justify-center text-gray-900" dir="rtl">
@@ -38,7 +50,21 @@ export function MobileOperatorShell({
         <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3 shrink-0">
           <div className="flex justify-between items-center">
             <h1 className="font-semibold text-lg tracking-tight">Artos Operator</h1>
-            <span className="text-sm text-gray-500 font-medium">{todayStr}</span>
+
+            {/* Clickable date → opens calendar */}
+            <button
+              onClick={onOpenDatePicker}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
+              aria-label="בחר תאריך"
+            >
+              {!isToday && (
+                <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">
+                  עבר
+                </span>
+              )}
+              <span className="text-sm text-gray-600 font-medium">{displayDate}</span>
+              <CalendarDays size={15} className="text-gray-400 shrink-0" />
+            </button>
           </div>
           {shift && (
             <div className="mt-1 text-sm text-gray-600 font-medium truncate">{shift.name}</div>

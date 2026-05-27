@@ -64,6 +64,7 @@ export type ManualShiftsService = {
   }): Promise<ManualShiftWorker>;
   deactivateWorker(input: { tenantId: string; workerId: string }): Promise<ManualShiftWorker>;
   getTodayShift(tenantId: string): Promise<ManualShiftTodayResponse>;
+  getShiftByDate(tenantId: string, date: string): Promise<ManualShiftTodayResponse>;
   createShift(input: { tenantId: string; date?: string; name: string; actor: ActorContext }): Promise<ManualShiftSession>;
   closeShift(input: { tenantId: string; shiftId: string }): Promise<ManualShiftSession>;
   listShiftLines(input: { tenantId: string; shiftId: string }): Promise<ManualShiftLineSummary[]>;
@@ -364,6 +365,22 @@ export function createManualShiftsServiceFromRepo(
     async getTodayShift(tenantId) {
       const date = getTodayDate();
       const shift = await repo.findActiveShiftByDate(tenantId, date);
+
+      if (!shift) {
+        return {
+          shift: null,
+          lines: []
+        };
+      }
+
+      return {
+        shift,
+        lines: await buildShiftLineSummariesLite(repo, shift.id, tenantId)
+      };
+    },
+
+    async getShiftByDate(tenantId, date) {
+      const shift = await repo.findShiftByDate(tenantId, date);
 
       if (!shift) {
         return {
