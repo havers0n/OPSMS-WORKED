@@ -11,6 +11,7 @@ import { bffRequest } from '@/shared/api/bff/client';
 export const manualShiftKeys = {
   all: ['manual-shift'] as const,
   today: () => [...manualShiftKeys.all, 'today'] as const,
+  byDate: (date: string) => [...manualShiftKeys.all, 'by-date', date] as const,
   lines: (shiftId: string) => [...manualShiftKeys.all, 'lines', shiftId] as const,
   lineOrders: (lineId: string) => [...manualShiftKeys.all, 'line-orders', lineId] as const,
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
@@ -29,6 +30,19 @@ export function todayShiftQueryOptions() {
     queryKey: manualShiftKeys.today(),
     queryFn: fetchTodayShift,
     staleTime: 60_000
+  });
+}
+
+async function fetchShiftByDate(date: string): Promise<ManualShiftTodayResponse> {
+  return bffRequest<ManualShiftTodayResponse>(`/api/manual-shifts/by-date?date=${date}`);
+}
+
+export function shiftByDateQueryOptions(date: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.byDate(date),
+    queryFn: () => fetchShiftByDate(date),
+    staleTime: 60_000,
+    enabled: !!date
   });
 }
 

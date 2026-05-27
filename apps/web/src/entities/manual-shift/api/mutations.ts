@@ -66,6 +66,11 @@ type PatchOrderInput = {
   shiftId: string;
   pickerName?: string | null;
   pickerWorkerId?: string | null;
+  lineCount?: number | null;
+  palletCount?: number | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  checkedAt?: string | null;
 };
 
 type CreateOrderErrorInput = {
@@ -159,11 +164,16 @@ async function patchOrder({
   lineId: _lineId,
   shiftId: _shiftId,
   pickerName,
-  pickerWorkerId
+  pickerWorkerId,
+  lineCount,
+  palletCount,
+  startedAt,
+  finishedAt,
+  checkedAt
 }: PatchOrderInput): Promise<ManualShiftOrder> {
   return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ pickerName, pickerWorkerId })
+    body: JSON.stringify({ pickerName, pickerWorkerId, lineCount, palletCount, startedAt, finishedAt, checkedAt })
   });
 }
 

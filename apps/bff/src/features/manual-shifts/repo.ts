@@ -344,6 +344,7 @@ export type ManualShiftsRepo = {
     sortOrder?: number;
   }): Promise<ManualShiftWorker | null>;
   findActiveShiftByDate(tenantId: string, date: string): Promise<ManualShiftSession | null>;
+  findShiftByDate(tenantId: string, date: string): Promise<ManualShiftSession | null>;
   findShiftById(shiftId: string): Promise<ManualShiftSession | null>;
   createShift(input: {
     tenantId: string;
@@ -491,6 +492,20 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         throw error;
       }
 
+      return data ? mapSessionRow(data as ManualShiftSessionRow) : null;
+    },
+
+    async findShiftByDate(tenantId, date) {
+      const { data, error } = await supabase
+        .from('manual_shift_sessions')
+        .select(sessionColumns)
+        .eq('tenant_id', tenantId)
+        .eq('date', date)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
       return data ? mapSessionRow(data as ManualShiftSessionRow) : null;
     },
 

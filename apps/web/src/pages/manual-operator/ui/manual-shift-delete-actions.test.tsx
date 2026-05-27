@@ -148,7 +148,7 @@ function setupBffMock({
     const path = String(url);
     const method = init?.method ?? 'GET';
 
-    if (path === '/api/manual-shifts/today') {
+    if (path === '/api/manual-shifts/today' || path.startsWith('/api/manual-shifts/by-date')) {
       return { shift, lines: [lineSummary] };
     }
     if (path === `/api/manual-shift-lines/${line.id}/orders`) {

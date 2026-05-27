@@ -64,6 +64,7 @@ export type ManualShiftsService = {
   }): Promise<ManualShiftWorker>;
   deactivateWorker(input: { tenantId: string; workerId: string }): Promise<ManualShiftWorker>;
   getTodayShift(tenantId: string): Promise<ManualShiftTodayResponse>;
+  getShiftByDate(tenantId: string, date: string): Promise<ManualShiftTodayResponse>;
   createShift(input: { tenantId: string; date?: string; name: string; actor: ActorContext }): Promise<ManualShiftSession>;
   closeShift(input: { tenantId: string; shiftId: string }): Promise<ManualShiftSession>;
   listShiftLines(input: { tenantId: string; shiftId: string }): Promise<ManualShiftLineSummary[]>;
@@ -127,6 +128,9 @@ export type ManualShiftsService = {
     palletCount?: number | null;
     size?: ManualShiftOrderSize;
     comment?: string | null;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    checkedAt?: string | null;
     actor: ActorContext;
   }): Promise<ManualShiftOrder>;
   deleteOrder(input: {
@@ -364,6 +368,22 @@ export function createManualShiftsServiceFromRepo(
     async getTodayShift(tenantId) {
       const date = getTodayDate();
       const shift = await repo.findActiveShiftByDate(tenantId, date);
+
+      if (!shift) {
+        return {
+          shift: null,
+          lines: []
+        };
+      }
+
+      return {
+        shift,
+        lines: await buildShiftLineSummariesLite(repo, shift.id, tenantId)
+      };
+    },
+
+    async getShiftByDate(tenantId, date) {
+      const shift = await repo.findShiftByDate(tenantId, date);
 
       if (!shift) {
         return {
@@ -735,7 +755,10 @@ export function createManualShiftsServiceFromRepo(
         lineCount: input.lineCount,
         palletCount: input.palletCount,
         size: deriveOrderSize(input.lineCount, input.size, order.size),
-        comment: input.comment
+        comment: input.comment,
+        startedAt: input.startedAt,
+        finishedAt: input.finishedAt,
+        checkedAt: input.checkedAt
       });
 
       if (!updated) {
@@ -773,7 +796,10 @@ export function createManualShiftsServiceFromRepo(
         input.lineCount !== undefined ||
         input.palletCount !== undefined ||
         input.size !== undefined ||
-        input.comment !== undefined;
+        input.comment !== undefined ||
+        input.startedAt !== undefined ||
+        input.finishedAt !== undefined ||
+        input.checkedAt !== undefined;
 
       if (hadNonPickerPatch) {
         await repo.createOrderEvent({

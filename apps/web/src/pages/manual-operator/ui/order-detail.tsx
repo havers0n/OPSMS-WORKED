@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
-import { ArrowRight, CheckCircle, Clock, Package, User, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, Clock, Package, Pencil, User, XCircle } from 'lucide-react';
 import {
   useDeleteManualShiftOrder,
   useUpdateManualShiftOrderStatus
 } from '@/entities/manual-shift/api/mutations';
 import { AssignPickerSheet } from './assign-picker-sheet';
 import { DeleteConfirmSheet } from './delete-confirm-sheet';
+import { EditOrderSheet } from './edit-order-sheet';
 import { ErrorFlow } from './error-flow';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
@@ -20,6 +21,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [showErrorFlow, setShowErrorFlow] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
+  const [showEditOrder, setShowEditOrder] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
   const deleteOrder = useDeleteManualShiftOrder(order.id, {
     lineId: order.lineId,
@@ -56,6 +58,14 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           <h2 className="font-bold text-xl">{order.pointName ?? 'ללא נקודה'}</h2>
           {order.orderNumber && <p className="text-sm text-gray-500 mt-0.5">{order.orderNumber}</p>}
         </div>
+        <button
+          type="button"
+          onClick={() => setShowEditOrder(true)}
+          className="p-2 -m-2 rounded-full active:bg-gray-200 transition-colors text-gray-500 shrink-0"
+          aria-label="עריכה"
+        >
+          <Pencil size={20} />
+        </button>
         <div className={`px-3 py-1.5 text-sm font-bold rounded-lg border shrink-0 ${statusColor}`}>
           {statusLabel}
         </div>
@@ -123,6 +133,58 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
               </div>
             </>
           )}
+
+          {order.startedAt && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div className="flex items-center gap-3">
+                <Clock className="text-gray-400 shrink-0" size={20} />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-500 font-medium">התחלת ליקוט</span>
+                  <span className="font-bold text-lg" dir="ltr">
+                    {new Date(order.startedAt).toLocaleTimeString('he-IL', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+          {order.checkedAt && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div className="flex items-center gap-3">
+                <Clock className="text-gray-400 shrink-0" size={20} />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-500 font-medium">זמן בדיקה</span>
+                  <span className="font-bold text-lg" dir="ltr">
+                    {new Date(order.checkedAt).toLocaleTimeString('he-IL', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+          {order.finishedAt && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <div className="flex items-center gap-3">
+                <Clock className="text-gray-400 shrink-0" size={20} />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-500 font-medium">זמן סיום</span>
+                  <span className="font-bold text-lg" dir="ltr">
+                    {new Date(order.finishedAt).toLocaleTimeString('he-IL', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </main>
 
@@ -185,6 +247,13 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
         <AssignPickerSheet
           order={order}
           onClose={() => setShowAssignPicker(false)}
+        />
+      )}
+
+      {showEditOrder && (
+        <EditOrderSheet
+          order={order}
+          onClose={() => setShowEditOrder(false)}
         />
       )}
     </div>
