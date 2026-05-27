@@ -13,7 +13,9 @@ import {
   selectLineSummaries,
   selectActiveOrders,
   selectPickerWorkloads,
-  selectCheckQueue
+  selectCheckQueue,
+  selectLineDetail,
+  selectPickerDetail
 } from '@/entities/manual-shift/model/shift-selectors';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
@@ -64,6 +66,9 @@ export function ManualOperatorPage() {
   const [activeTab, setActiveTab] = useState<OperatorTab>('queue');
   const [showAddLine, setShowAddLine] = useState(false);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
+  const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
+    { type: 'line'; lineId: string } | { type: 'picker'; pickerKey: string } | null
+  >(null);
 
   const isToday = selectedDate === todayDate;
 
@@ -97,6 +102,19 @@ export function ManualOperatorPage() {
   const activeOrders = useMemo(() => selectActiveOrders(shiftOrders), [shiftOrders]);
   const pickerWorkloads = useMemo(() => selectPickerWorkloads(shiftOrders), [shiftOrders]);
   const checkQueue = useMemo(() => selectCheckQueue(shiftOrders), [shiftOrders]);
+  const lineDetail = useMemo(() => {
+    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'line') return null;
+    return selectLineDetail(selectedDesktopDetail.lineId, lineSummaries, shiftOrders);
+  }, [selectedDesktopDetail, lineSummaries, shiftOrders]);
+  const pickerDetail = useMemo(() => {
+    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'picker') return null;
+    return selectPickerDetail(
+      selectedDesktopDetail.pickerKey,
+      pickerWorkloads,
+      shiftOrders,
+      lineSummaries
+    );
+  }, [selectedDesktopDetail, pickerWorkloads, shiftOrders, lineSummaries]);
 
   const createShift = useCreateShift();
 
@@ -110,6 +128,12 @@ export function ManualOperatorPage() {
         activeOrders={activeOrders}
         pickerWorkloads={pickerWorkloads}
         checkQueue={checkQueue}
+        lineDetail={lineDetail}
+        pickerDetail={pickerDetail}
+        selectedDetailType={selectedDesktopDetail?.type ?? null}
+        onSelectLine={(lineId) => setSelectedDesktopDetail({ type: 'line', lineId })}
+        onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
+        onCloseDetail={() => setSelectedDesktopDetail(null)}
         onCreateShift={() => createShift.mutate({ name: generateShiftName() })}
         isCreatingShift={createShift.isPending}
       />

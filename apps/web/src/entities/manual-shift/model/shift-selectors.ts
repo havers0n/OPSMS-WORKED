@@ -335,6 +335,54 @@ export interface ActiveOrder {
   ageSeconds: number | null;
 }
 
+export interface DetailOrderRowBase {
+  orderId: string;
+  status: ManualShiftOrderStatus;
+  pointName: string | null;
+  customerName: string | null;
+  orderNumber: string | null;
+  size: ManualShiftOrder['size'] | null;
+  lineCount: number | null;
+  palletCount: number | null;
+  ageSeconds: number | null;
+}
+
+export interface LineDetailOrderRow extends DetailOrderRowBase {
+  pickerName: string | null;
+}
+
+export interface PickerDetailOrderRow extends DetailOrderRowBase {
+  lineId: string;
+  lineName: string | null;
+}
+
+export interface LineDetail {
+  summary: LineSummary | null;
+  orders: LineDetailOrderRow[];
+}
+
+export interface PickerLineBreakdownEntry {
+  lineId: string;
+  lineName: string;
+  totalOrders: number;
+  totalLineCount: number;
+  totalPalletCount: number;
+}
+
+export interface PickerDetail {
+  summary: PickerWorkload | null;
+  orders: PickerDetailOrderRow[];
+  lineBreakdown: PickerLineBreakdownEntry[];
+}
+
+const DETAIL_STATUS_PRIORITY: Record<ManualShiftOrderStatus, number> = {
+  returned: 0,
+  waiting_check: 1,
+  picking: 2,
+  queued: 3,
+  done: 4
+};
+
 function isActiveStatus(status: ManualShiftOrderStatus): status is ActiveOrderStatus {
   return (
     status === 'queued' ||
@@ -354,9 +402,27 @@ function resolveStatusTimestamp(order: ManualShiftOrder): string | null {
       return order.waitingCheckAt;
     case 'returned':
       return null;
+    case 'done':
+      return order.finishedAt;
     default:
       return null;
   }
+}
+
+function toAgeSeconds(order: ManualShiftOrder, nowMs: number): number | null {
+  const ts = resolveStatusTimestamp(order);
+  return ts !== null ? Math.floor((nowMs - new Date(ts).getTime()) / 1000) : null;
+}
+
+function sortOrdersByOperationalAttention<T extends ManualShiftOrder>(orders: T[]): T[] {
+  return orders
+    .map((order, index) => ({ order, index }))
+    .sort((a, b) => {
+      const byStatus = DETAIL_STATUS_PRIORITY[a.order.status] - DETAIL_STATUS_PRIORITY[b.order.status];
+      if (byStatus !== 0) return byStatus;
+      return a.index - b.index;
+    })
+    .map(({ order }) => order);
 }
 
 export function selectActiveOrders(
@@ -370,8 +436,7 @@ export function selectActiveOrders(
     if (!isActiveStatus(order.status)) continue;
 
     const ts = resolveStatusTimestamp(order);
-    const ageSeconds =
-      ts !== null ? Math.floor((nowMs - new Date(ts).getTime()) / 1000) : null;
+    const ageSeconds = ts !== null ? Math.floor((nowMs - new Date(ts).getTime()) / 1000) : null;
 
     result.push({
       orderId: order.id,
@@ -387,4 +452,114 @@ export function selectActiveOrders(
   }
 
   return result;
+}
+
+export function selectOrdersForLine(lineId: string, orders: ManualShiftOrder[]): ManualShiftOrder[] {
+  return sortOrdersByOperationalAttention(orders.filter((order) => order.lineId === lineId));
+}
+
+export function selectOrdersForPicker(
+  pickerKey: string,
+  orders: ManualShiftOrder[]
+): ManualShiftOrder[] {
+  return sortOrdersByOperationalAttention(
+    orders.filter((order) => (order.pickerName ?? '__unassigned__') === pickerKey)
+  );
+}
+
+export function selectLineDetail(
+  lineId: string,
+  lineSummaries: LineSummary[],
+  orders: ManualShiftOrder[],
+  now: Date = new Date()
+): LineDetail {
+  const summary = lineSummaries.find((line) => line.lineId === lineId) ?? null;
+  if (!summary) {
+    return {
+      summary: null,
+      orders: []
+    };
+  }
+
+  const nowMs = now.getTime();
+  const rows: LineDetailOrderRow[] = selectOrdersForLine(lineId, orders).map((order) => ({
+    orderId: order.id,
+    status: order.status,
+    pointName: order.pointName,
+    customerName: order.customerName,
+    orderNumber: order.orderNumber,
+    pickerName: order.pickerName,
+    size: order.size ?? null,
+    lineCount: order.lineCount,
+    palletCount: order.palletCount,
+    ageSeconds: toAgeSeconds(order, nowMs)
+  }));
+
+  return {
+    summary,
+    orders: rows
+  };
+}
+
+export function selectPickerDetail(
+  pickerKey: string,
+  pickerWorkloads: PickerWorkload[],
+  orders: ManualShiftOrder[],
+  lineSummaries: LineSummary[],
+  now: Date = new Date()
+): PickerDetail {
+  const summary = pickerWorkloads.find((picker) => picker.pickerKey === pickerKey) ?? null;
+  if (!summary) {
+    return {
+      summary: null,
+      orders: [],
+      lineBreakdown: []
+    };
+  }
+
+  const lineNameById = new Map(lineSummaries.map((line) => [line.lineId, line.lineName]));
+  const filteredOrders = selectOrdersForPicker(pickerKey, orders);
+  const nowMs = now.getTime();
+  const rows: PickerDetailOrderRow[] = filteredOrders.map((order) => ({
+    orderId: order.id,
+    status: order.status,
+    lineId: order.lineId,
+    lineName: lineNameById.get(order.lineId) ?? null,
+    pointName: order.pointName,
+    customerName: order.customerName,
+    orderNumber: order.orderNumber,
+    size: order.size ?? null,
+    lineCount: order.lineCount,
+    palletCount: order.palletCount,
+    ageSeconds: toAgeSeconds(order, nowMs)
+  }));
+
+  const lineBreakdownMap = new Map<string, PickerLineBreakdownEntry>();
+  for (const order of filteredOrders) {
+    const existing = lineBreakdownMap.get(order.lineId);
+    if (existing) {
+      existing.totalOrders += 1;
+      existing.totalLineCount += order.lineCount ?? 0;
+      existing.totalPalletCount += order.palletCount ?? 0;
+      continue;
+    }
+
+    lineBreakdownMap.set(order.lineId, {
+      lineId: order.lineId,
+      lineName: lineNameById.get(order.lineId) ?? order.lineId,
+      totalOrders: 1,
+      totalLineCount: order.lineCount ?? 0,
+      totalPalletCount: order.palletCount ?? 0
+    });
+  }
+
+  const lineBreakdown = Array.from(lineBreakdownMap.values()).sort(
+    (a, b) => b.totalLineCount - a.totalLineCount
+  );
+
+  return {
+    summary,
+    orders: rows,
+    lineBreakdown
+  };
 }

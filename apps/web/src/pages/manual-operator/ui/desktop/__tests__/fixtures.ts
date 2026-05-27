@@ -3,7 +3,9 @@ import type {
   LineSummary,
   ActiveOrder,
   PickerWorkload,
-  CheckQueue
+  CheckQueue,
+  LineDetail,
+  PickerDetail
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftSession } from '@wos/domain';
 
@@ -165,4 +167,50 @@ export const emptyCheckQueue: CheckQueue = {
   orders: [],
   count: 0,
   oldestOrder: null
+};
+
+export const mockLineDetail: LineDetail = {
+  summary: mockLines[0],
+  orders: [
+    {
+      orderId: 'order-1',
+      status: 'returned',
+      pointName: 'נקודה א',
+      customerName: null,
+      orderNumber: 'ORD-001',
+      pickerName: 'דוד',
+      size: 'M',
+      lineCount: 5,
+      palletCount: 2,
+      ageSeconds: null
+    }
+  ]
+};
+
+export const mockPickerDetail: PickerDetail = {
+  summary: mockPickers[0],
+  orders: [
+    {
+      orderId: 'order-2',
+      status: 'picking',
+      lineId: 'line-1',
+      lineName: 'קו צפון',
+      pointName: 'נקודה ב',
+      customerName: null,
+      orderNumber: 'ORD-002',
+      size: 'L',
+      lineCount: 8,
+      palletCount: 1,
+      ageSeconds: 120
+    }
+  ],
+  lineBreakdown: [
+    {
+      lineId: 'line-1',
+      lineName: 'קו צפון',
+      totalOrders: 1,
+      totalLineCount: 8,
+      totalPalletCount: 1
+    }
+  ]
 };

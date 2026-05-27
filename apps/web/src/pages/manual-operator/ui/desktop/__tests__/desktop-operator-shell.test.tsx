@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DesktopOperatorShell } from '../desktop-operator-shell';
 import {
@@ -6,7 +6,9 @@ import {
   mockActiveOrders,
   mockCheckQueue,
   mockKpi,
+  mockLineDetail,
   mockLines,
+  mockPickerDetail,
   mockPickers,
   mockShift
 } from './fixtures';
@@ -19,6 +21,12 @@ const defaultProps = {
   activeOrders: mockActiveOrders,
   pickerWorkloads: mockPickers,
   checkQueue: emptyCheckQueue,
+  lineDetail: null,
+  pickerDetail: null,
+  selectedDetailType: null as 'line' | 'picker' | null,
+  onSelectLine: vi.fn(),
+  onSelectPicker: vi.fn(),
+  onCloseDetail: vi.fn(),
   onCreateShift: vi.fn(),
   isCreatingShift: false
 };
@@ -62,11 +70,8 @@ describe('DesktopOperatorShell', () => {
   it('renders all three panel sections', () => {
     render(<DesktopOperatorShell {...defaultProps} />);
 
-    // Line panel header
     expect(screen.getByText('קווים')).toBeTruthy();
-    // Orders panel header
     expect(screen.getByText(`הזמנות פעילות (${mockActiveOrders.length})`)).toBeTruthy();
-    // Picker panel header
     expect(screen.getByText('מלקטים')).toBeTruthy();
   });
 
@@ -79,7 +84,6 @@ describe('DesktopOperatorShell', () => {
   it('shows KPI skeleton when kpi is undefined', () => {
     render(<DesktopOperatorShell {...defaultProps} kpi={undefined} />);
 
-    // KPI row should not render; header still shows shift name
     expect(screen.getByText('משמרת בוקר')).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'סיכום משמרת' })).toBeNull();
   });
@@ -88,5 +92,44 @@ describe('DesktopOperatorShell', () => {
     render(<DesktopOperatorShell {...defaultProps} checkQueue={mockCheckQueue} />);
 
     expect(screen.getByText('1 ממתינים לבדיקה')).toBeTruthy();
+  });
+
+  it('renders line detail drawer when line detail is selected', () => {
+    render(
+      <DesktopOperatorShell
+        {...defaultProps}
+        selectedDetailType="line"
+        lineDetail={mockLineDetail}
+      />
+    );
+
+    expect(screen.getByText('פרטי קו')).toBeTruthy();
+  });
+
+  it('renders picker detail drawer when picker detail is selected', () => {
+    render(
+      <DesktopOperatorShell
+        {...defaultProps}
+        selectedDetailType="picker"
+        pickerDetail={mockPickerDetail}
+      />
+    );
+
+    expect(screen.getByText('פרטי מלקט')).toBeTruthy();
+  });
+
+  it('calls onCloseDetail when close button is clicked', () => {
+    const onCloseDetail = vi.fn();
+    render(
+      <DesktopOperatorShell
+        {...defaultProps}
+        onCloseDetail={onCloseDetail}
+        selectedDetailType="line"
+        lineDetail={mockLineDetail}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'סגור' }));
+    expect(onCloseDetail).toHaveBeenCalledOnce();
   });
 });

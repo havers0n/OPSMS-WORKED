@@ -2,6 +2,7 @@ import type { LineSummary } from '@/entities/manual-shift/model/shift-selectors'
 
 interface DesktopLinePanelProps {
   lines: LineSummary[];
+  onSelectLine?: (lineId: string) => void;
 }
 
 const STATUS_DOT: Record<string, string> = {
@@ -10,10 +11,15 @@ const STATUS_DOT: Record<string, string> = {
   done: 'bg-green-500'
 };
 
-function LineRow({ line }: { line: LineSummary }) {
+function LineRow({ line, onSelectLine }: { line: LineSummary; onSelectLine?: (lineId: string) => void }) {
   const donePercent = Math.min(100, line.donePercent);
   return (
-    <div className="px-3 py-3 border-b border-gray-100">
+    <button
+      type="button"
+      className="px-3 py-3 border-b border-gray-100 w-full text-right hover:bg-gray-50"
+      onClick={() => onSelectLine?.(line.lineId)}
+      aria-label={`פתח פרטי קו ${line.lineName}`}
+    >
       <div className="flex items-center gap-2 mb-1.5">
         <span
           className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[line.lineStatus] ?? 'bg-gray-300'}`}
@@ -33,24 +39,16 @@ function LineRow({ line }: { line: LineSummary }) {
         <div className="h-full bg-green-500 rounded-full" style={{ width: `${donePercent}%` }} />
       </div>
       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs mr-4">
-        {line.picking > 0 && (
-          <span className="text-blue-700">{line.picking} בליקוט</span>
-        )}
-        {line.waitingCheck > 0 && (
-          <span className="text-amber-700">{line.waitingCheck} בדיקה</span>
-        )}
-        {line.returned > 0 && (
-          <span className="text-red-600">{line.returned} הוחזר</span>
-        )}
-        {line.errorCount > 0 && (
-          <span className="text-rose-600">{line.errorCount} תקלות</span>
-        )}
+        {line.picking > 0 && <span className="text-blue-700">{line.picking} בליקוט</span>}
+        {line.waitingCheck > 0 && <span className="text-amber-700">{line.waitingCheck} בדיקה</span>}
+        {line.returned > 0 && <span className="text-red-600">{line.returned} הוחזר</span>}
+        {line.errorCount > 0 && <span className="text-rose-600">{line.errorCount} תקלות</span>}
       </div>
-    </div>
+    </button>
   );
 }
 
-export function DesktopLinePanel({ lines }: DesktopLinePanelProps) {
+export function DesktopLinePanel({ lines, onSelectLine }: DesktopLinePanelProps) {
   if (lines.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 px-4">
@@ -65,7 +63,7 @@ export function DesktopLinePanel({ lines }: DesktopLinePanelProps) {
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">קווים</p>
       </div>
       {lines.map((line) => (
-        <LineRow key={line.lineId} line={line} />
+        <LineRow key={line.lineId} line={line} onSelectLine={onSelectLine} />
       ))}
     </div>
   );

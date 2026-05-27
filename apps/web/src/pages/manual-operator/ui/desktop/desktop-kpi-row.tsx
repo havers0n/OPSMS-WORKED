@@ -27,16 +27,21 @@ function Divider() {
 export function DesktopKpiRow({ summary }: DesktopKpiRowProps) {
   return (
     <div className="flex items-center gap-2 overflow-x-auto" role="region" aria-label="סיכום משמרת">
-      <KpiChip label="סה״כ"    value={summary.totalOrders}  numClass="text-gray-900"   bgClass="bg-gray-50"  />
+      <KpiChip label="סה״כ" value={summary.totalOrders} numClass="text-gray-900" bgClass="bg-gray-50" />
       <Divider />
-      <KpiChip label="בתור"    value={summary.queued}        numClass="text-gray-600"   bgClass="bg-gray-50"  />
-      <KpiChip label="בליקוט"  value={summary.picking}       numClass="text-blue-700"   bgClass="bg-blue-50"  />
+      <KpiChip label="בתור" value={summary.queued} numClass="text-gray-600" bgClass="bg-gray-50" />
+      <KpiChip label="בליקוט" value={summary.picking} numClass="text-blue-700" bgClass="bg-blue-50" />
       <Divider />
-      <KpiChip label="בדיקה"   value={summary.waitingCheck}  numClass="text-amber-700"  bgClass="bg-amber-50" />
-      <KpiChip label="הוחזר"   value={summary.returned}      numClass="text-red-700"    bgClass="bg-red-50"   />
+      <KpiChip
+        label="בדיקה"
+        value={summary.waitingCheck}
+        numClass="text-amber-700"
+        bgClass="bg-amber-50"
+      />
+      <KpiChip label="הוחזר" value={summary.returned} numClass="text-red-700" bgClass="bg-red-50" />
       <Divider />
-      <KpiChip label="הסתיימו" value={summary.done}          numClass="text-green-700"  bgClass="bg-green-50" />
-      <KpiChip label="תקלות"   value={summary.errorsCount}   numClass="text-rose-700"   bgClass="bg-rose-50"  />
+      <KpiChip label="הסתיימו" value={summary.done} numClass="text-green-700" bgClass="bg-green-50" />
+      <KpiChip label="תקלות" value={summary.errorsCount} numClass="text-rose-700" bgClass="bg-rose-50" />
     </div>
   );
 }

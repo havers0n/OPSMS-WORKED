@@ -5,6 +5,7 @@ const UNASSIGNED_LABEL = 'לא משויך';
 interface DesktopPickerPanelProps {
   pickers: PickerWorkload[];
   checkQueue: CheckQueue;
+  onSelectPicker?: (pickerKey: string) => void;
 }
 
 function formatWaitingAge(seconds: number | null): string {
@@ -17,10 +18,21 @@ function formatWaitingAge(seconds: number | null): string {
   return `${h}:${String(rem).padStart(2, '0')}`;
 }
 
-function PickerRow({ picker }: { picker: PickerWorkload }) {
+function PickerRow({
+  picker,
+  onSelectPicker
+}: {
+  picker: PickerWorkload;
+  onSelectPicker?: (pickerKey: string) => void;
+}) {
   const name = picker.pickerName ?? UNASSIGNED_LABEL;
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
+    <button
+      type="button"
+      className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100 w-full text-right hover:bg-gray-50"
+      onClick={() => onSelectPicker?.(picker.pickerKey)}
+      aria-label={`פתח פרטי מלקט ${name}`}
+    >
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
         <p className="text-xs text-gray-500 mt-0.5">
@@ -34,11 +46,11 @@ function PickerRow({ picker }: { picker: PickerWorkload }) {
           {picker.waitingCheck}✓
         </span>
       )}
-    </div>
+    </button>
   );
 }
 
-export function DesktopPickerPanel({ pickers, checkQueue }: DesktopPickerPanelProps) {
+export function DesktopPickerPanel({ pickers, checkQueue, onSelectPicker }: DesktopPickerPanelProps) {
   return (
     <div>
       <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
@@ -50,8 +62,7 @@ export function DesktopPickerPanel({ pickers, checkQueue }: DesktopPickerPanelPr
           <p className="text-amber-800 font-bold text-sm">{checkQueue.count} ממתינים לבדיקה</p>
           {checkQueue.oldestOrder && (
             <p className="text-amber-600 text-xs mt-0.5">
-              ותיק:{' '}
-              {formatWaitingAge(checkQueue.oldestOrder.waitingSeconds)}
+              ותיק: {formatWaitingAge(checkQueue.oldestOrder.waitingSeconds)}
             </p>
           )}
         </div>
@@ -64,7 +75,7 @@ export function DesktopPickerPanel({ pickers, checkQueue }: DesktopPickerPanelPr
       ) : (
         <div className="mt-2">
           {pickers.map((picker) => (
-            <PickerRow key={picker.pickerKey} picker={picker} />
+            <PickerRow key={picker.pickerKey} picker={picker} onSelectPicker={onSelectPicker} />
           ))}
         </div>
       )}

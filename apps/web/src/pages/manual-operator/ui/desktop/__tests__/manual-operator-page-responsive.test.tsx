@@ -97,7 +97,7 @@ describe('ManualOperatorPage responsive rendering', () => {
       renderPage(makeQC());
 
       await waitFor(() => {
-        expect(screen.getByText('אין משמרת פעילה')).toBeTruthy();
+        expect(screen.getByText('אין משמרת')).toBeTruthy();
       });
     });
   });

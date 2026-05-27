@@ -4,7 +4,11 @@ import {
   selectLineSummaries,
   selectPickerWorkloads,
   selectCheckQueue,
-  selectActiveOrders
+  selectActiveOrders,
+  selectOrdersForLine,
+  selectOrdersForPicker,
+  selectLineDetail,
+  selectPickerDetail
 } from './shift-selectors';
 import type { ManualShiftDaySummary, ManualShiftLineSummary, ManualShiftOrder } from '@wos/domain';
 
@@ -606,5 +610,77 @@ describe('selectActiveOrders', () => {
     expect(statuses).toContain('picking');
     expect(statuses).toContain('waiting_check');
     expect(statuses).toContain('returned');
+  });
+});
+
+describe('detail selectors', () => {
+  it('selectOrdersForLine filters only selected line and sorts by attention priority', () => {
+    const orders = [
+      makeOrder({ id: 'd', lineId: LINE_A, status: 'done' }),
+      makeOrder({ id: 'q', lineId: LINE_A, status: 'queued' }),
+      makeOrder({ id: 'r', lineId: LINE_A, status: 'returned' }),
+      makeOrder({ id: 'w', lineId: LINE_A, status: 'waiting_check' }),
+      makeOrder({ id: 'p', lineId: LINE_A, status: 'picking' }),
+      makeOrder({ id: 'other', lineId: LINE_B, status: 'returned' })
+    ];
+    const result = selectOrdersForLine(LINE_A, orders);
+    expect(result.map((o) => o.id)).toEqual(['r', 'w', 'p', 'q', 'd']);
+  });
+
+  it('selectOrdersForPicker filters by same pickerKey semantics as picker workloads', () => {
+    const orders = [
+      makeOrder({ id: 'u1', pickerName: null }),
+      makeOrder({ id: 'u2', pickerName: null }),
+      makeOrder({ id: 'a1', pickerName: 'Alice' })
+    ];
+    const unassigned = selectOrdersForPicker('__unassigned__', orders);
+    const alice = selectOrdersForPicker('Alice', orders);
+    expect(unassigned.map((o) => o.id)).toEqual(['u1', 'u2']);
+    expect(alice.map((o) => o.id)).toEqual(['a1']);
+  });
+
+  it('selectLineDetail returns stale-safe state when line is missing', () => {
+    const detail = selectLineDetail('missing', [], [makeOrder({ id: 'o1' })]);
+    expect(detail.summary).toBeNull();
+    expect(detail.orders).toEqual([]);
+  });
+
+  it('selectLineDetail keeps returned age null and preserves nullable size', () => {
+    const byLine = [makeLineSummary(LINE_A, 'Route A')];
+    const lineSummaries = selectLineSummaries(byLine, [
+      makeOrder({ id: 'r1', lineId: LINE_A, status: 'returned' })
+    ]);
+    const detail = selectLineDetail(
+      LINE_A,
+      lineSummaries,
+      [makeOrder({ id: 'r1', lineId: LINE_A, status: 'returned' })],
+      new Date('2026-05-27T10:00:00.000Z')
+    );
+    expect(detail.orders[0].ageSeconds).toBeNull();
+    expect(detail.orders[0].size).toBe('unknown');
+  });
+
+  it('selectPickerDetail filters only selected picker bucket and returns line breakdown', () => {
+    const orders = [
+      makeOrder({ id: 'a1', pickerName: 'Alice', lineId: LINE_A, lineCount: 5, palletCount: 2 }),
+      makeOrder({ id: 'a2', pickerName: 'Alice', lineId: LINE_B, lineCount: 3, palletCount: 1 }),
+      makeOrder({ id: 'b1', pickerName: 'Bob', lineId: LINE_A, lineCount: 8, palletCount: 3 })
+    ];
+    const pickers = selectPickerWorkloads(orders);
+    const lines = selectLineSummaries(
+      [makeLineSummary(LINE_A, 'Route A'), makeLineSummary(LINE_B, 'Route B')],
+      orders
+    );
+    const detail = selectPickerDetail('Alice', pickers, orders, lines);
+    expect(detail.summary?.pickerName).toBe('Alice');
+    expect(detail.orders.map((o) => o.orderId)).toEqual(['a1', 'a2']);
+    expect(detail.lineBreakdown.map((l) => l.lineId)).toEqual([LINE_A, LINE_B]);
+  });
+
+  it('selectPickerDetail returns stale-safe state when picker bucket is missing', () => {
+    const detail = selectPickerDetail('missing', [], [makeOrder({ id: 'o1' })], []);
+    expect(detail.summary).toBeNull();
+    expect(detail.orders).toEqual([]);
+    expect(detail.lineBreakdown).toEqual([]);
   });
 });

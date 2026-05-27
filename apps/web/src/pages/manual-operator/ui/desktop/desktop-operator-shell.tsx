@@ -2,10 +2,13 @@ import type { ManualShiftSession } from '@wos/domain';
 import type {
   ActiveOrder,
   CheckQueue,
+  LineDetail,
   LineSummary,
+  PickerDetail,
   PickerWorkload,
   ShiftSummary
 } from '@/entities/manual-shift/model/shift-selectors';
+import { DesktopDetailDrawer } from './desktop-detail-drawer';
 import { DesktopEmptyState } from './desktop-empty-state';
 import { DesktopKpiRow } from './desktop-kpi-row';
 import { DesktopLinePanel } from './desktop-line-panel';
@@ -20,6 +23,12 @@ interface DesktopOperatorShellProps {
   activeOrders: ActiveOrder[];
   pickerWorkloads: PickerWorkload[];
   checkQueue: CheckQueue;
+  lineDetail: LineDetail | null;
+  pickerDetail: PickerDetail | null;
+  selectedDetailType: 'line' | 'picker' | null;
+  onSelectLine: (lineId: string) => void;
+  onSelectPicker: (pickerKey: string) => void;
+  onCloseDetail: () => void;
   onCreateShift: () => void;
   isCreatingShift: boolean;
 }
@@ -57,6 +66,12 @@ export function DesktopOperatorShell({
   activeOrders,
   pickerWorkloads,
   checkQueue,
+  lineDetail,
+  pickerDetail,
+  selectedDetailType,
+  onSelectLine,
+  onSelectPicker,
+  onCloseDetail,
   onCreateShift,
   isCreatingShift
 }: DesktopOperatorShellProps) {
@@ -75,6 +90,16 @@ export function DesktopOperatorShell({
       </div>
     );
   }
+
+  const drawerState =
+    selectedDetailType === 'line'
+      ? { type: 'line' as const, detail: lineDetail ?? { summary: null, orders: [] } }
+      : selectedDetailType === 'picker'
+        ? {
+            type: 'picker' as const,
+            detail: pickerDetail ?? { summary: null, orders: [], lineBreakdown: [] }
+          }
+        : null;
 
   return (
     <div className="flex flex-col h-dvh bg-gray-100 overflow-hidden" dir="rtl">
@@ -97,7 +122,7 @@ export function DesktopOperatorShell({
 
       <div className="flex flex-1 overflow-hidden gap-px">
         <aside className="w-72 bg-white overflow-y-auto shrink-0">
-          <DesktopLinePanel lines={lineSummaries} />
+          <DesktopLinePanel lines={lineSummaries} onSelectLine={onSelectLine} />
         </aside>
 
         <main className="flex-1 bg-white overflow-y-auto min-w-0">
@@ -105,8 +130,14 @@ export function DesktopOperatorShell({
         </main>
 
         <aside className="w-72 bg-white overflow-y-auto shrink-0">
-          <DesktopPickerPanel pickers={pickerWorkloads} checkQueue={checkQueue} />
+          <DesktopPickerPanel
+            pickers={pickerWorkloads}
+            checkQueue={checkQueue}
+            onSelectPicker={onSelectPicker}
+          />
         </aside>
+
+        <DesktopDetailDrawer state={drawerState} onClose={onCloseDetail} />
       </div>
     </div>
   );
