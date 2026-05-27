@@ -129,6 +129,8 @@ export type ManualShiftsService = {
     size?: ManualShiftOrderSize;
     comment?: string | null;
     startedAt?: string | null;
+    finishedAt?: string | null;
+    checkedAt?: string | null;
     actor: ActorContext;
   }): Promise<ManualShiftOrder>;
   deleteOrder(input: {
@@ -754,7 +756,9 @@ export function createManualShiftsServiceFromRepo(
         palletCount: input.palletCount,
         size: deriveOrderSize(input.lineCount, input.size, order.size),
         comment: input.comment,
-        startedAt: input.startedAt
+        startedAt: input.startedAt,
+        finishedAt: input.finishedAt,
+        checkedAt: input.checkedAt
       });
 
       if (!updated) {
@@ -793,7 +797,9 @@ export function createManualShiftsServiceFromRepo(
         input.palletCount !== undefined ||
         input.size !== undefined ||
         input.comment !== undefined ||
-        input.startedAt !== undefined;
+        input.startedAt !== undefined ||
+        input.finishedAt !== undefined ||
+        input.checkedAt !== undefined;
 
       if (hadNonPickerPatch) {
         await repo.createOrderEvent({
