@@ -11,7 +11,8 @@ export type PickBridgeRepo = {
     tenantId: string;
     sourceType: string;
     sourceId: string;
-    assignedTo: string;
+    assignedTo: string | null;
+    assignedWorkerId: string | null;
   }): Promise<{ id: string }>;
   createPickStep(input: {
     tenantId: string;
@@ -48,12 +49,23 @@ export function createPickBridgeRepo(supabase: SupabaseClient): PickBridgeRepo {
           source_type: input.sourceType,
           source_id: input.sourceId,
           assigned_to: input.assignedTo,
+          assigned_worker_id: input.assignedWorkerId,
           status: 'assigned'
         })
         .select('id')
         .single();
 
-      if (error) throw error;
+      if (error) {
+        // Source-level unique constraint can race under retries/concurrency.
+        // Resolve by returning the existing source task (idempotent behavior).
+        if ((error as { code?: string }).code === '23505') {
+          const existing = await this.findPickTaskBySource(input.sourceType, input.sourceId);
+          if (existing) {
+            return existing;
+          }
+        }
+        throw error;
+      }
       return data as { id: string };
     },
 

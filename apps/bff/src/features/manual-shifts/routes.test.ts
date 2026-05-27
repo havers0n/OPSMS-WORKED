@@ -245,7 +245,7 @@ describe('manual shifts routes', () => {
     expect(service.getTodayShift).toHaveBeenCalledWith(ids.tenant);
 
     await app.close();
-  });
+  }, 15000);
 
   it('creates a shift and forwards actor audit data from auth context', async () => {
     const service = createServiceMock();

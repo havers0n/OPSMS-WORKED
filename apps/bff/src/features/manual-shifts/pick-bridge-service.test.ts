@@ -50,7 +50,7 @@ function createOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrde
   };
 }
 
-function buildTaskDetail(taskId: string, orderId: string, assignedTo: string): PickTaskDetail {
+function buildTaskDetail(taskId: string, orderId: string, assignedTo: string | null): PickTaskDetail {
   return {
     id: taskId,
     taskNumber: 'TSK-000001',
@@ -120,7 +120,20 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     })),
     // Stubs for unused repo methods
     listShiftWorkers: vi.fn(async () => []),
-    findWorkerById: vi.fn(async () => null),
+    findWorkerById: vi.fn(async (workerId) => {
+      if (!order?.pickerWorkerId || workerId !== order.pickerWorkerId) return null;
+      return {
+        id: workerId,
+        tenantId: order.tenantId,
+        shiftId: order.shiftId,
+        name: order.pickerName ?? 'Worker',
+        role: 'picker' as const,
+        active: true,
+        sortOrder: 0,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      };
+    }),
     createWorker: vi.fn(async () => { throw new Error('not used'); }),
     updateWorker: vi.fn(async () => null),
     findActiveShiftByDate: vi.fn(async () => null),
@@ -143,9 +156,9 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
 }
 
 function createPickBridgeRepoMock(): PickBridgeRepo & {
-  _tasks: Array<{ id: string; sourceType: string; sourceId: string; assignedTo: string }>;
+  _tasks: Array<{ id: string; sourceType: string; sourceId: string; assignedTo: string | null; assignedWorkerId: string | null }>;
 } {
-  const tasks: Array<{ id: string; sourceType: string; sourceId: string; assignedTo: string }> = [];
+  const tasks: Array<{ id: string; sourceType: string; sourceId: string; assignedTo: string | null; assignedWorkerId: string | null }> = [];
   let taskCounter = 0;
 
   return {
@@ -159,7 +172,8 @@ function createPickBridgeRepoMock(): PickBridgeRepo & {
         id: `task-${String(taskCounter).padStart(4, '0')}`,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
-        assignedTo: input.assignedTo
+        assignedTo: input.assignedTo,
+        assignedWorkerId: input.assignedWorkerId
       };
       tasks.push(task);
       return task;
@@ -231,7 +245,7 @@ describe('PickBridgeService.startPicking', () => {
     );
   });
 
-  it('assignedTo equals order.pickerWorkerId', async () => {
+  it('assignment uses worker identity and not pickerName', async () => {
     const order = createOrder({ pickerWorkerId: ids.worker });
     const shiftsRepo = createManualShiftsRepoMock(order);
     const bridgeRepo = createPickBridgeRepoMock();
@@ -239,9 +253,39 @@ describe('PickBridgeService.startPicking', () => {
 
     const result = await service.startPicking({ tenantId: ids.tenant, orderId: ids.order, actor });
 
-    expect(result.assignedTo).toBe(ids.worker);
+    expect(result.assignedTo).toBeNull();
     expect(bridgeRepo.createPickTask).toHaveBeenCalledWith(
-      expect.objectContaining({ assignedTo: ids.worker })
+      expect.objectContaining({ assignedTo: null, assignedWorkerId: ids.worker })
+    );
+  });
+
+  it('does not move order status when task creation fails', async () => {
+    const order = createOrder({ status: 'queued' });
+    const shiftsRepo = createManualShiftsRepoMock(order);
+    const bridgeRepo = createPickBridgeRepoMock();
+    bridgeRepo.createPickTask = vi.fn(async () => {
+      throw new Error('insert failed');
+    });
+    const service = createPickBridgeService(shiftsRepo, bridgeRepo, { getNowIso: () => nowIso });
+
+    await expect(
+      service.startPicking({ tenantId: ids.tenant, orderId: ids.order, actor })
+    ).rejects.toThrow('insert failed');
+    expect(shiftsRepo.updateOrder).not.toHaveBeenCalled();
+    expect(shiftsRepo.createOrderEvent).not.toHaveBeenCalled();
+  });
+
+  it('creates a single pick step from the current manual shift order model', async () => {
+    const order = createOrder({ lineCount: 7, palletCount: null });
+    const shiftsRepo = createManualShiftsRepoMock(order);
+    const bridgeRepo = createPickBridgeRepoMock();
+    const service = createPickBridgeService(shiftsRepo, bridgeRepo, { getNowIso: () => nowIso });
+
+    await service.startPicking({ tenantId: ids.tenant, orderId: ids.order, actor });
+
+    expect(bridgeRepo.createPickStep).toHaveBeenCalledTimes(1);
+    expect(bridgeRepo.createPickStep).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: 'task-0001', sequenceNo: 1 })
     );
   });
 });

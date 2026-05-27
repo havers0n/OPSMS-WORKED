@@ -4,7 +4,9 @@ import { ApiError } from '../../errors.js';
 import {
   manualShiftOrderNoPickerWorker,
   manualShiftOrderNotFound,
-  manualShiftOrderNotPickable
+  manualShiftOrderNotPickable,
+  manualShiftPickerWorkerInvalid,
+  manualShiftWorkerNotFound
 } from './errors.js';
 import type { ManualShiftsRepo } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
@@ -42,9 +44,47 @@ export function createPickBridgeService(
         throw manualShiftOrderNoPickerWorker(input.orderId);
       }
 
-      // Idempotency: return existing task without changes
+      const worker = await manualShiftsRepo.findWorkerById(order.pickerWorkerId);
+      if (!worker) {
+        throw manualShiftWorkerNotFound(order.pickerWorkerId);
+      }
+      if (worker.tenantId !== input.tenantId) {
+        throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'WRONG_TENANT');
+      }
+      if (worker.shiftId !== order.shiftId) {
+        throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'WRONG_SHIFT');
+      }
+      if (!worker.active) {
+        throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'INACTIVE');
+      }
+
+      if (order.status !== 'queued' && order.status !== 'picking') {
+        throw manualShiftOrderNotPickable(input.orderId, order.status);
+      }
+
+      // Idempotency: return existing task without duplication.
       const existing = await pickBridgeRepo.findPickTaskBySource('manual_shift_order', order.id);
       if (existing) {
+        if (order.status === 'queued') {
+          const nowIso = getNowIso();
+          await manualShiftsRepo.updateOrder(order.id, {
+            status: 'picking',
+            startedAt: nowIso
+          });
+          await manualShiftsRepo.createOrderEvent({
+            tenantId: input.tenantId,
+            shiftId: order.shiftId,
+            lineId: order.lineId,
+            orderId: order.id,
+            eventType: 'status_changed',
+            actorProfileId: input.actor.actorProfileId,
+            actorName: input.actor.actorName,
+            fromStatus: 'queued',
+            toStatus: 'picking',
+            payload: null
+          });
+        }
+
         const detail = await pickBridgeRepo.findPickTaskDetail(existing.id);
         if (!detail) {
           throw new ApiError(500, 'PICK_TASK_INCONSISTENT', `Pick task ${existing.id} record is missing.`);
@@ -52,11 +92,31 @@ export function createPickBridgeService(
         return detail;
       }
 
-      if (order.status !== 'queued' && order.status !== 'picking') {
-        throw manualShiftOrderNotPickable(input.orderId, order.status);
-      }
+      // Create pick task
+      const task = await pickBridgeRepo.createPickTask({
+        tenantId: input.tenantId,
+        sourceType: 'manual_shift_order',
+        sourceId: order.id,
+        assignedTo: null,
+        assignedWorkerId: order.pickerWorkerId
+      });
 
-      // Transition order to picking if it is still queued
+      // Current model exposes one manual_shift_orders row per pickable unit of work,
+      // so the bridge generates a single step here.
+      const sku = (order.orderNumber ?? order.pointName ?? 'MANUAL').trim() || 'MANUAL';
+      const itemName = (order.pointName ?? order.orderNumber ?? 'Manual order').trim() || 'Manual order';
+      const qtyRequired = Math.max(order.palletCount ?? order.lineCount ?? 1, 1);
+
+      await pickBridgeRepo.createPickStep({
+        tenantId: input.tenantId,
+        taskId: task.id,
+        sequenceNo: 1,
+        sku,
+        itemName,
+        qtyRequired
+      });
+
+      // Best-effort sequencing: only flip order status after task/step creation succeeds.
       if (order.status === 'queued') {
         const nowIso = getNowIso();
         await manualShiftsRepo.updateOrder(order.id, {
@@ -76,28 +136,6 @@ export function createPickBridgeService(
           payload: null
         });
       }
-
-      // Create pick task
-      const task = await pickBridgeRepo.createPickTask({
-        tenantId: input.tenantId,
-        sourceType: 'manual_shift_order',
-        sourceId: order.id,
-        assignedTo: order.pickerWorkerId
-      });
-
-      // Generate one step from the order's available read model
-      const sku = (order.orderNumber ?? order.pointName ?? 'MANUAL').trim() || 'MANUAL';
-      const itemName = (order.pointName ?? order.orderNumber ?? 'Manual order').trim() || 'Manual order';
-      const qtyRequired = Math.max(order.palletCount ?? order.lineCount ?? 1, 1);
-
-      await pickBridgeRepo.createPickStep({
-        tenantId: input.tenantId,
-        taskId: task.id,
-        sequenceNo: 1,
-        sku,
-        itemName,
-        qtyRequired
-      });
 
       const detail = await pickBridgeRepo.findPickTaskDetail(task.id);
       if (!detail) {
