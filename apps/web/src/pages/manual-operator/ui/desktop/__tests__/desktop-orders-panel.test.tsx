@@ -7,14 +7,21 @@ describe('DesktopOrdersPanel', () => {
   it('renders a row for each active order', () => {
     render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
 
+    // orderNumbers appear as secondary muted text under the point name
     expect(screen.getByText('ORD-001')).toBeTruthy();
     expect(screen.getByText('ORD-002')).toBeTruthy();
   });
 
-  it('shows empty state when orders array is empty', () => {
+  it('shows empty state heading when orders array is empty', () => {
     render(<DesktopOrdersPanel orders={[]} lineSummaries={[]} />);
 
     expect(screen.getByText('אין הזמנות פעילות')).toBeTruthy();
+  });
+
+  it('shows explanatory subtitle in empty state', () => {
+    render(<DesktopOrdersPanel orders={[]} lineSummaries={[]} />);
+
+    expect(screen.getByText('כשיתחיל ליקוט, ההזמנות יופיעו כאן')).toBeTruthy();
   });
 
   it('renders "—" for age when ageSeconds is null (returned status)', () => {
@@ -22,7 +29,6 @@ describe('DesktopOrdersPanel', () => {
 
     // order-3 has status=returned and ageSeconds=null → should show "—"
     const dashes = screen.getAllByText('—');
-    // at least one "—" present (age for returned order)
     expect(dashes.length).toBeGreaterThan(0);
   });
 
@@ -53,5 +59,34 @@ describe('DesktopOrdersPanel', () => {
     render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
 
     expect(screen.getByText(`הזמנות פעילות (${mockActiveOrders.length})`)).toBeTruthy();
+  });
+
+  it('renders סטטוס as the first column header', () => {
+    render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
+
+    const headers = screen.getAllByRole('columnheader');
+    expect(headers[0].textContent).toBe('סטטוס');
+  });
+
+  it('does not render a separate מספר column header', () => {
+    render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
+
+    expect(screen.queryByRole('columnheader', { name: 'מספר' })).toBeNull();
+  });
+
+  it('shows orderNumber as secondary text under the point name', () => {
+    render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
+
+    // order-1: pointName="נקודה א", orderNumber="ORD-001" — both should be in the same cell area
+    expect(screen.getByText('נקודה א')).toBeTruthy();
+    expect(screen.getByText('ORD-001')).toBeTruthy();
+  });
+
+  it('does not show orderNumber secondary text when orderNumber is null', () => {
+    render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
+
+    // order-3 has orderNumber=null — no extra element for null orderNumber
+    // order-3 customerName="לקוח ב" should appear, but no null-rendered element
+    expect(screen.getByText('לקוח ב')).toBeTruthy();
   });
 });

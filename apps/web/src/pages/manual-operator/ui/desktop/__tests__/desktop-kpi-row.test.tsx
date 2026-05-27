@@ -22,10 +22,24 @@ describe('DesktopKpiRow', () => {
     expect(screen.getByText('סה״כ')).toBeTruthy();
     expect(screen.getByText('בתור')).toBeTruthy();
     expect(screen.getByText('בליקוט')).toBeTruthy();
-    expect(screen.getByText('ממתין')).toBeTruthy();
+    expect(screen.getByText('בדיקה')).toBeTruthy();
     expect(screen.getByText('הוחזר')).toBeTruthy();
-    expect(screen.getByText('הסתיים')).toBeTruthy();
+    expect(screen.getByText('הסתיימו')).toBeTruthy();
     expect(screen.getByText('תקלות')).toBeTruthy();
+  });
+
+  it('uses "בדיקה" label for waitingCheck, not "ממתין"', () => {
+    render(<DesktopKpiRow summary={mockKpi} />);
+
+    expect(screen.getByText('בדיקה')).toBeTruthy();
+    expect(screen.queryByText('ממתין')).toBeNull();
+  });
+
+  it('uses "הסתיימו" label for done, not "הסתיים"', () => {
+    render(<DesktopKpiRow summary={mockKpi} />);
+
+    expect(screen.getByText('הסתיימו')).toBeTruthy();
+    expect(screen.queryByText('הסתיים')).toBeNull();
   });
 
   it('renders zero values as "0" not blank', () => {

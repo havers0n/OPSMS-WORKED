@@ -64,4 +64,33 @@ describe('DesktopPickerPanel', () => {
 
     expect(screen.getByText('לא משויך')).toBeTruthy();
   });
+
+  it('shows totalLineCount as primary workload metric', () => {
+    render(<DesktopPickerPanel pickers={mockPickers} checkQueue={emptyCheckQueue} />);
+
+    // דוד has totalLineCount=30, שרה has totalLineCount=15
+    expect(screen.getByText(/30 שורות/)).toBeTruthy();
+    expect(screen.getByText(/15 שורות/)).toBeTruthy();
+  });
+
+  it('shows wipCount labeled as "פעיל" when wipCount is non-zero', () => {
+    render(<DesktopPickerPanel pickers={mockPickers} checkQueue={emptyCheckQueue} />);
+
+    // דוד has wipCount=5
+    expect(screen.getByText(/5 פעיל/)).toBeTruthy();
+  });
+
+  it('shows done count labeled as "הסתיימו" when done is non-zero', () => {
+    const pickerWithDone = [{ ...mockPickers[0], done: 3 }];
+    render(<DesktopPickerPanel pickers={pickerWithDone} checkQueue={emptyCheckQueue} />);
+
+    expect(screen.getByText(/3 הסתיימו/)).toBeTruthy();
+  });
+
+  it('does not show "הסתיימו" when done is zero', () => {
+    // mockPickers[1] (שרה) has done=0
+    render(<DesktopPickerPanel pickers={[mockPickers[1]]} checkQueue={emptyCheckQueue} />);
+
+    expect(screen.queryByText(/הסתיימו/)).toBeNull();
+  });
 });

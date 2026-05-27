@@ -29,13 +29,13 @@ function LoadingSkeleton() {
     <div className="flex flex-col h-full gap-4 p-6 animate-pulse" aria-label="טוען נתונים">
       <div className="flex gap-3">
         {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="h-12 w-14 bg-gray-200 rounded-lg" />
+          <div key={i} className="h-14 w-16 bg-gray-200 rounded-lg" />
         ))}
       </div>
       <div className="flex flex-1 gap-px">
-        <div className="w-60 bg-gray-100 rounded" />
+        <div className="w-72 bg-gray-100 rounded" />
         <div className="flex-1 bg-gray-100 rounded" />
-        <div className="w-64 bg-gray-100 rounded" />
+        <div className="w-72 bg-gray-100 rounded" />
       </div>
     </div>
   );
@@ -96,7 +96,7 @@ export function DesktopOperatorShell({
       </header>
 
       <div className="flex flex-1 overflow-hidden gap-px">
-        <aside className="w-60 bg-white overflow-y-auto shrink-0">
+        <aside className="w-72 bg-white overflow-y-auto shrink-0">
           <DesktopLinePanel lines={lineSummaries} />
         </aside>
 
@@ -104,7 +104,7 @@ export function DesktopOperatorShell({
           <DesktopOrdersPanel orders={activeOrders} lineSummaries={lineSummaries} />
         </main>
 
-        <aside className="w-64 bg-white overflow-y-auto shrink-0">
+        <aside className="w-72 bg-white overflow-y-auto shrink-0">
           <DesktopPickerPanel pickers={pickerWorkloads} checkQueue={checkQueue} />
         </aside>
       </div>

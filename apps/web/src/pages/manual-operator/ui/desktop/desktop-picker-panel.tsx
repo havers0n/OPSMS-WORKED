@@ -1,5 +1,7 @@
 import type { CheckQueue, PickerWorkload } from '@/entities/manual-shift/model/shift-selectors';
 
+const UNASSIGNED_LABEL = 'לא משויך';
+
 interface DesktopPickerPanelProps {
   pickers: PickerWorkload[];
   checkQueue: CheckQueue;
@@ -16,13 +18,15 @@ function formatWaitingAge(seconds: number | null): string {
 }
 
 function PickerRow({ picker }: { picker: PickerWorkload }) {
-  const name = picker.pickerName ?? 'לא משויך';
+  const name = picker.pickerName ?? UNASSIGNED_LABEL;
   return (
     <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
         <p className="text-xs text-gray-500 mt-0.5">
-          {picker.totalLineCount} שורות · {picker.wipCount} פעיל
+          {picker.totalLineCount} שורות
+          {picker.wipCount > 0 && <span> · {picker.wipCount} פעיל</span>}
+          {picker.done > 0 && <span> · {picker.done} הסתיימו</span>}
         </p>
       </div>
       {picker.waitingCheck > 0 && (
