@@ -1,0 +1,168 @@
+import type {
+  ShiftSummary,
+  LineSummary,
+  ActiveOrder,
+  PickerWorkload,
+  CheckQueue
+} from '@/entities/manual-shift/model/shift-selectors';
+import type { ManualShiftSession } from '@wos/domain';
+
+export const mockShift: ManualShiftSession = {
+  id: 'shift-1',
+  tenantId: 'tenant-1',
+  date: '2026-05-27',
+  name: 'משמרת בוקר',
+  status: 'active',
+  createdBy: null,
+  createdAt: new Date().toISOString(),
+  closedAt: null
+};
+
+export const mockKpi: ShiftSummary = {
+  totalOrders: 20,
+  queued: 5,
+  picking: 7,
+  waitingCheck: 3,
+  returned: 1,
+  done: 4,
+  errorsCount: 2,
+  donePercent: 20
+};
+
+export const mockLines: LineSummary[] = [
+  {
+    lineId: 'line-1',
+    lineName: 'קו צפון',
+    lineStatus: 'in_progress',
+    totalOrders: 10,
+    totalLineCount: 50,
+    totalPalletCount: 20,
+    queued: 3,
+    picking: 4,
+    waitingCheck: 2,
+    returned: 1,
+    done: 0,
+    errorCount: 1,
+    donePercent: 0,
+    wipCount: 7
+  },
+  {
+    lineId: 'line-2',
+    lineName: 'קו דרום',
+    lineStatus: 'open',
+    totalOrders: 10,
+    totalLineCount: 30,
+    totalPalletCount: 10,
+    queued: 10,
+    picking: 0,
+    waitingCheck: 0,
+    returned: 0,
+    done: 0,
+    errorCount: 0,
+    donePercent: 0,
+    wipCount: 0
+  }
+];
+
+export const mockActiveOrders: ActiveOrder[] = [
+  {
+    orderId: 'order-1',
+    orderNumber: 'ORD-001',
+    customerName: null,
+    pointName: 'נקודה א',
+    lineCount: 5,
+    pickerName: 'דוד',
+    lineId: 'line-1',
+    status: 'picking',
+    ageSeconds: 720
+  },
+  {
+    orderId: 'order-2',
+    orderNumber: 'ORD-002',
+    customerName: null,
+    pointName: null,
+    lineCount: null,
+    pickerName: null,
+    lineId: 'line-2',
+    status: 'queued',
+    ageSeconds: 60
+  },
+  {
+    orderId: 'order-3',
+    orderNumber: null,
+    customerName: 'לקוח ב',
+    pointName: null,
+    lineCount: 3,
+    pickerName: 'שרה',
+    lineId: 'line-1',
+    status: 'returned',
+    ageSeconds: null
+  }
+];
+
+export const mockPickers: PickerWorkload[] = [
+  {
+    pickerKey: 'דוד',
+    pickerName: 'דוד',
+    pickerWorkerId: 'w-1',
+    totalOrders: 5,
+    totalLineCount: 30,
+    totalPalletCount: 10,
+    queued: 0,
+    picking: 3,
+    waitingCheck: 1,
+    returned: 1,
+    done: 0,
+    wipCount: 5,
+    avgLinesPerOrder: 6.0
+  },
+  {
+    pickerKey: 'שרה',
+    pickerName: 'שרה',
+    pickerWorkerId: 'w-2',
+    totalOrders: 3,
+    totalLineCount: 15,
+    totalPalletCount: 5,
+    queued: 0,
+    picking: 2,
+    waitingCheck: 0,
+    returned: 1,
+    done: 0,
+    wipCount: 3,
+    avgLinesPerOrder: 5.0
+  }
+];
+
+export const mockCheckQueue: CheckQueue = {
+  orders: [
+    {
+      orderId: 'order-1',
+      orderNumber: 'ORD-001',
+      customerName: null,
+      pointName: 'נקודה א',
+      lineCount: 5,
+      pickerName: 'דוד',
+      lineId: 'line-1',
+      waitingCheckAt: new Date(Date.now() - 600_000).toISOString(),
+      waitingSeconds: 600
+    }
+  ],
+  count: 1,
+  oldestOrder: {
+    orderId: 'order-1',
+    orderNumber: 'ORD-001',
+    customerName: null,
+    pointName: 'נקודה א',
+    lineCount: 5,
+    pickerName: 'דוד',
+    lineId: 'line-1',
+    waitingCheckAt: new Date(Date.now() - 600_000).toISOString(),
+    waitingSeconds: 600
+  }
+};
+
+export const emptyCheckQueue: CheckQueue = {
+  orders: [],
+  count: 0,
+  oldestOrder: null
+};

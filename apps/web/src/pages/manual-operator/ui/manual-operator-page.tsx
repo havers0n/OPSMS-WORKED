@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary } from '@wos/domain';
-import { todayShiftQueryOptions } from '@/entities/manual-shift/api/queries';
+import {
+  todayShiftQueryOptions,
+  daySummaryQueryOptions,
+  shiftOrdersQueryOptions
+} from '@/entities/manual-shift/api/queries';
 import { useCreateShift } from '@/entities/manual-shift/api/mutations';
+import {
+  selectShiftSummary,
+  selectLineSummaries,
+  selectActiveOrders,
+  selectPickerWorkloads,
+  selectCheckQueue
+} from '@/entities/manual-shift/model/shift-selectors';
+import { useMediaQuery } from '@/shared/hooks/use-media-query';
+import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
 import { MobileOperatorShell, type OperatorTab } from './mobile-operator-shell';
 import { ShiftEmptyState } from './shift-empty-state';
 import { LineList } from './line-list';
@@ -31,6 +44,8 @@ function generateShiftName(): string {
 }
 
 export function ManualOperatorPage() {
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+
   const [activeTab, setActiveTab] = useState<OperatorTab>('queue');
   const [showAddLine, setShowAddLine] = useState(false);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
@@ -39,7 +54,47 @@ export function ManualOperatorPage() {
   const shift = todayData?.shift ?? null;
   const lines = todayData?.lines ?? [];
 
+  const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
+    ...daySummaryQueryOptions(shift?.id ?? ''),
+    enabled: !!shift?.id && isDesktop
+  });
+
+  const { data: shiftOrders = [] } = useQuery({
+    ...shiftOrdersQueryOptions(shift?.id ?? ''),
+    enabled: !!shift?.id && isDesktop
+  });
+
+  const byLine = daySummary?.byLine ?? lines;
+
+  const kpi = useMemo(
+    () => (daySummary ? selectShiftSummary(daySummary) : undefined),
+    [daySummary]
+  );
+  const lineSummaries = useMemo(
+    () => selectLineSummaries(byLine, shiftOrders),
+    [byLine, shiftOrders]
+  );
+  const activeOrders = useMemo(() => selectActiveOrders(shiftOrders), [shiftOrders]);
+  const pickerWorkloads = useMemo(() => selectPickerWorkloads(shiftOrders), [shiftOrders]);
+  const checkQueue = useMemo(() => selectCheckQueue(shiftOrders), [shiftOrders]);
+
   const createShift = useCreateShift();
+
+  if (isDesktop) {
+    return (
+      <DesktopOperatorShell
+        shift={shift}
+        isLoading={isLoading || (!!shift && isDaySummaryLoading)}
+        kpi={kpi}
+        lineSummaries={lineSummaries}
+        activeOrders={activeOrders}
+        pickerWorkloads={pickerWorkloads}
+        checkQueue={checkQueue}
+        onCreateShift={() => createShift.mutate({ name: generateShiftName() })}
+        isCreatingShift={createShift.isPending}
+      />
+    );
+  }
 
   const fab =
     shift && activeTab === 'queue' && !selectedLine
