@@ -7,8 +7,8 @@ import { RackSections } from './rack-sections';
 vi.mock('react-konva', () => ({
   Group: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Group', props, children),
-  Line: ({ children, ...props }: { children?: React.ReactNode }) =>
-    createElement('Line', props, children),
+  Shape: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Shape', props, children),
   Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Rect', props, children),
   Text: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -79,6 +79,66 @@ function getSectionNumberTexts(renderer: TestRenderer.ReactTestRenderer) {
   return renderer.root
     .findAll((node) => String(node.type) === 'Text' && /^\d+$/.test(String(node.props.text)))
     .map((node) => String(node.props.text));
+}
+
+type MockContextCall = {
+  fn: string;
+  args: unknown[];
+};
+
+function createMockCanvasContext() {
+  const calls: MockContextCall[] = [];
+  let strokeStyle: unknown;
+  let lineWidth: unknown;
+  const push = (fn: string, ...args: unknown[]) => calls.push({ fn, args });
+  return {
+    calls,
+    context: {
+      save: () => push('save'),
+      restore: () => push('restore'),
+      setLineDash: (...args: unknown[]) => push('setLineDash', ...args),
+      beginPath: () => push('beginPath'),
+      moveTo: (...args: unknown[]) => push('moveTo', ...args),
+      lineTo: (...args: unknown[]) => push('lineTo', ...args),
+      stroke: () => push('stroke'),
+      fillStrokeShape: (...args: unknown[]) => push('fillStrokeShape', ...args),
+      set strokeStyle(value: unknown) {
+        strokeStyle = value;
+        push('strokeStyle', value);
+      },
+      get strokeStyle() {
+        return strokeStyle;
+      },
+      set lineWidth(value: unknown) {
+        lineWidth = value;
+        push('lineWidth', value);
+      },
+      get lineWidth() {
+        return lineWidth;
+      }
+    }
+  };
+}
+
+function renderRackSections(props?: Partial<React.ComponentProps<typeof RackSections>>) {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      createElement(RackSections, {
+        geometry: baseGeometry,
+        faceA: createFace('face-a'),
+        faceB: null,
+        isSelected: false,
+        rackRotationDeg: 0,
+        showFaceToken: true,
+        showSectionNumbers: true,
+        faceTokenProminence: 'dominant',
+        sectionNumberProminence: 'dominant',
+        ...props
+      })
+    );
+  });
+  return renderer;
 }
 
 describe('RackSections numbering', () => {
@@ -266,5 +326,88 @@ describe('RackSections numbering', () => {
     for (const node of [...faceRotators, ...sectionRotators]) {
       expect(node.props.rotation).toBe(-90);
     }
+  });
+});
+
+describe('RackSections divider shapes', () => {
+  it('renders face A divider shape with unchanged coordinates/style and listening=false', () => {
+    const renderer = renderRackSections();
+    const shapes = renderer.root.findAll((node) => String(node.type) === 'Shape');
+
+    expect(shapes).toHaveLength(1);
+    const [shape] = shapes;
+    expect(shape.props.listening).toBe(false);
+    expect(shape.props.opacity).toBe(0.5);
+
+    const sceneFunc = shape.props.sceneFunc as (ctx: unknown, shapeNode: unknown) => void;
+    const { calls, context } = createMockCanvasContext();
+    const shapeNode = {};
+    sceneFunc(context, shapeNode);
+
+    expect(calls.find((c) => c.fn === 'setLineDash')?.args[0]).toEqual([4, 3]);
+    expect(calls.find((c) => c.fn === 'lineWidth')?.args[0]).toBe(1);
+
+    const moveCalls = calls.filter((c) => c.fn === 'moveTo').map((c) => c.args);
+    const lineCalls = calls.filter((c) => c.fn === 'lineTo').map((c) => c.args);
+    expect(moveCalls).toEqual([[100, 4]]);
+    expect(lineCalls).toEqual([[100, 76]]);
+  });
+
+  it('renders selected paired face A/B divider shapes with unchanged y-ranges and selected style', () => {
+    const faceA = createFace('face-a');
+    const faceB = { ...createFace('face-b'), side: 'B' as const };
+    const renderer = renderRackSections({
+      geometry: { ...baseGeometry, isPaired: true, spineY: 40 },
+      faceA,
+      faceB,
+      isSelected: true
+    });
+    const shapes = renderer.root.findAll((node) => String(node.type) === 'Shape');
+
+    expect(shapes).toHaveLength(2);
+    shapes.forEach((shape) => {
+      expect(shape.props.listening).toBe(false);
+      expect(shape.props.opacity).toBe(0.9);
+    });
+
+    const [faceAShape, faceBShape] = shapes;
+    const ctxA = createMockCanvasContext();
+    const ctxB = createMockCanvasContext();
+    const shapeNode = {};
+    (faceAShape.props.sceneFunc as (ctx: unknown, shapeNode: unknown) => void)(
+      ctxA.context,
+      shapeNode
+    );
+    (faceBShape.props.sceneFunc as (ctx: unknown, shapeNode: unknown) => void)(
+      ctxB.context,
+      shapeNode
+    );
+
+    expect(ctxA.calls.find((c) => c.fn === 'lineWidth')?.args[0]).toBe(1.5);
+    expect(ctxB.calls.find((c) => c.fn === 'lineWidth')?.args[0]).toBe(1.5);
+    expect(ctxA.calls.find((c) => c.fn === 'setLineDash')?.args[0]).toEqual([4, 3]);
+    expect(ctxB.calls.find((c) => c.fn === 'setLineDash')?.args[0]).toEqual([4, 3]);
+
+    const aMoveCalls = ctxA.calls.filter((c) => c.fn === 'moveTo').map((c) => c.args);
+    const aLineCalls = ctxA.calls.filter((c) => c.fn === 'lineTo').map((c) => c.args);
+    const bMoveCalls = ctxB.calls.filter((c) => c.fn === 'moveTo').map((c) => c.args);
+    const bLineCalls = ctxB.calls.filter((c) => c.fn === 'lineTo').map((c) => c.args);
+
+    expect(aMoveCalls).toEqual([[100, 4]]);
+    expect(aLineCalls).toEqual([[100, 36]]);
+    expect(bMoveCalls).toEqual([[100, 44]]);
+    expect(bLineCalls).toEqual([[100, 76]]);
+  });
+
+  it('does not render invalid face B divider shape for non-paired racks', () => {
+    const faceA = createFace('face-a');
+    const faceB = { ...createFace('face-b'), side: 'B' as const };
+    const renderer = renderRackSections({
+      geometry: { ...baseGeometry, isPaired: false },
+      faceA,
+      faceB
+    });
+    const shapes = renderer.root.findAll((node) => String(node.type) === 'Shape');
+    expect(shapes).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { Group, Line, Rect } from 'react-konva';
+import { Group, Rect, Shape } from 'react-konva';
 import { isRackFaceMirrored, type RackFace } from '@wos/domain';
 import { getSectionWidths, type CanvasRackGeometry } from '@/entities/layout-version/lib/canvas-geometry';
 import { FaceTokenRailLabel, SectionLabelOverlay } from './rack-label-overlays';
@@ -57,6 +57,10 @@ export function RackSections({
 
   const faceABottom = isPaired ? spineY : height;
   const faceBTop = spineY;
+  const dividerStrokeWidth = isSelected ? 1.5 : 1;
+  const dividerOpacity = isSelected ? 0.9 : 0.5;
+  const faceADividerXs = !lightweightVisuals ? faceAOffsets.slice(1, -1) : [];
+  const faceBDividerXs = isPaired && !lightweightVisuals ? faceBOffsets.slice(1, -1) : [];
 
   return (
     <Group listening={false} opacity={isPassive && !isSelected ? 0.45 : 1}>
@@ -82,16 +86,26 @@ export function RackSections({
         );
       })}
 
-      {!lightweightVisuals && faceAOffsets.slice(1, -1).map((x, i) => (
-        <Line
-          key={`sa-${i}`}
-          points={[x, 4, x, faceABottom - 4]}
-          stroke={divider}
-          strokeWidth={isSelected ? 1.5 : 1}
-          dash={[4, 3]}
-          opacity={isSelected ? 0.9 : 0.5}
+      {faceADividerXs.length > 0 && (
+        <Shape
+          listening={false}
+          opacity={dividerOpacity}
+          sceneFunc={(context, shape) => {
+            context.save();
+            context.strokeStyle = divider;
+            context.lineWidth = dividerStrokeWidth;
+            context.setLineDash([4, 3]);
+            faceADividerXs.forEach((x) => {
+              context.beginPath();
+              context.moveTo(x, 4);
+              context.lineTo(x, faceABottom - 4);
+              context.stroke();
+            });
+            context.restore();
+            context.fillStrokeShape(shape);
+          }}
         />
-      ))}
+      )}
 
       {isPaired && showFaceToken && (
         <FaceTokenRailLabel
@@ -155,16 +169,26 @@ export function RackSections({
         );
       })}
 
-      {isPaired && !lightweightVisuals && faceBOffsets.slice(1, -1).map((x, i) => (
-        <Line
-          key={`sb-${i}`}
-          points={[x, faceBTop + 4, x, height - 4]}
-          stroke={divider}
-          strokeWidth={isSelected ? 1.5 : 1}
-          dash={[4, 3]}
-          opacity={isSelected ? 0.9 : 0.5}
+      {faceBDividerXs.length > 0 && (
+        <Shape
+          listening={false}
+          opacity={dividerOpacity}
+          sceneFunc={(context, shape) => {
+            context.save();
+            context.strokeStyle = divider;
+            context.lineWidth = dividerStrokeWidth;
+            context.setLineDash([4, 3]);
+            faceBDividerXs.forEach((x) => {
+              context.beginPath();
+              context.moveTo(x, faceBTop + 4);
+              context.lineTo(x, height - 4);
+              context.stroke();
+            });
+            context.restore();
+            context.fillStrokeShape(shape);
+          }}
         />
-      ))}
+      )}
 
       {isPaired && faceB && showFaceToken && (
         <FaceTokenRailLabel
