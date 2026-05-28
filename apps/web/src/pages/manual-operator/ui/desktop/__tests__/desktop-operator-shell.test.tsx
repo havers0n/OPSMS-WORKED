@@ -31,7 +31,11 @@ const defaultProps = {
   onSelectOrder: vi.fn(),
   onCloseDetail: vi.fn(),
   onCreateShift: vi.fn(),
-  isCreatingShift: false
+  isCreatingShift: false,
+  selectedDate: '2026-05-28',
+  todayDate: '2026-05-29',
+  onChangeDate: vi.fn(),
+  onOpenDatePicker: vi.fn()
 };
 
 describe('DesktopOperatorShell', () => {
@@ -42,7 +46,8 @@ describe('DesktopOperatorShell', () => {
 
   it('renders empty state when shift is null', () => {
     render(<DesktopOperatorShell {...defaultProps} shift={null} isLoading={false} />);
-    expect(screen.getByRole('button')).toBeTruthy();
+    expect(screen.getAllByText('אין משמרת פעילה').length).toBeGreaterThan(0);
+    expect(screen.getByText('פתח משמרת להיום')).toBeTruthy();
   });
 
   it('passes check queue data to picker panel', () => {
@@ -113,5 +118,23 @@ describe('DesktopOperatorShell', () => {
     );
     fireEvent.click(screen.getByTestId(`detail-order-row-${mockPickerDetail.orders[0].orderId}`));
     expect(onSelectOrder).toHaveBeenCalledWith(mockPickerDetail.orders[0].orderId);
+  });
+
+  it('date navigation buttons call onChangeDate', () => {
+    const onChangeDate = vi.fn();
+    render(<DesktopOperatorShell {...defaultProps} onChangeDate={onChangeDate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'תאריך קודם' }));
+    fireEvent.click(screen.getByRole('button', { name: 'תאריך הבא' }));
+    fireEvent.click(screen.getByRole('button', { name: 'היום' }));
+    expect(onChangeDate).toHaveBeenCalledWith('2026-05-27');
+    expect(onChangeDate).toHaveBeenCalledWith('2026-05-29');
+    expect(onChangeDate).toHaveBeenCalledTimes(3);
+  });
+
+  it('clicking date label calls onOpenDatePicker', () => {
+    const onOpenDatePicker = vi.fn();
+    render(<DesktopOperatorShell {...defaultProps} onOpenDatePicker={onOpenDatePicker} />);
+    fireEvent.click(screen.getByRole('button', { name: 'פתח לוח שנה' }));
+    expect(onOpenDatePicker).toHaveBeenCalledOnce();
   });
 });

@@ -128,25 +128,39 @@ export function ManualOperatorPage() {
 
   if (isDesktop) {
     return (
-      <DesktopOperatorShell
-        shift={shift}
-        isLoading={isLoading || (!!shift && isDaySummaryLoading)}
-        kpi={kpi}
-        lineSummaries={lineSummaries}
-        activeOrders={activeOrders}
-        pickerWorkloads={pickerWorkloads}
-        checkQueue={checkQueue}
-        lineDetail={lineDetail}
-        pickerDetail={pickerDetail}
-        orderDetail={orderDetail}
-        selectedDetailType={selectedDesktopDetail?.type ?? null}
-        onSelectLine={(lineId) => setSelectedDesktopDetail({ type: 'line', lineId })}
-        onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
-        onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
-        onCloseDetail={() => setSelectedDesktopDetail(null)}
-        onCreateShift={() => createShift.mutate({ name: generateShiftName() })}
-        isCreatingShift={createShift.isPending}
-      />
+      <>
+        <DesktopOperatorShell
+          shift={shift}
+          isLoading={isLoading || (!!shift && isDaySummaryLoading)}
+          kpi={kpi}
+          lineSummaries={lineSummaries}
+          activeOrders={activeOrders}
+          pickerWorkloads={pickerWorkloads}
+          checkQueue={checkQueue}
+          lineDetail={lineDetail}
+          pickerDetail={pickerDetail}
+          orderDetail={orderDetail}
+          selectedDetailType={selectedDesktopDetail?.type ?? null}
+          onSelectLine={(lineId) => setSelectedDesktopDetail({ type: 'line', lineId })}
+          onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
+          onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
+          onCloseDetail={() => setSelectedDesktopDetail(null)}
+          onCreateShift={() => createShift.mutate({ name: generateShiftName() })}
+          isCreatingShift={createShift.isPending}
+          selectedDate={selectedDate}
+          todayDate={todayDate}
+          onChangeDate={handleSelectDate}
+          onOpenDatePicker={() => setShowDatePicker(true)}
+        />
+        {showDatePicker && (
+          <ShiftDatePicker
+            selectedDate={selectedDate}
+            todayDate={todayDate}
+            onSelect={handleSelectDate}
+            onClose={() => setShowDatePicker(false)}
+          />
+        )}
+      </>
     );
   }
 
@@ -164,6 +178,7 @@ export function ManualOperatorPage() {
     setSelectedDate(date);
     setActiveTab('queue');
     setSelectedLine(null);
+    setSelectedDesktopDetail(null);
   }
 
   return (
