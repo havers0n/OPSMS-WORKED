@@ -117,7 +117,8 @@ export const mockPickers: PickerWorkload[] = [
     returned: 1,
     done: 0,
     wipCount: 5,
-    avgLinesPerOrder: 6.0
+    avgLinesPerOrder: 6.0,
+    humanMinutes: null
   },
   {
     pickerKey: 'שרה',
@@ -132,7 +133,8 @@ export const mockPickers: PickerWorkload[] = [
     returned: 1,
     done: 0,
     wipCount: 3,
-    avgLinesPerOrder: 5.0
+    avgLinesPerOrder: 5.0,
+    humanMinutes: null
   }
 ];
 
