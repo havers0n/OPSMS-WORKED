@@ -33,8 +33,11 @@ import {
   MIN_CELL_H
 } from './rack-cell-geometry';
 import {
+  isCanvasRenderPipelineDiagnosticsEnabled,
   recordCanvasComponentRender,
   recordCanvasCullingMetrics,
+  recordCanvasCounter,
+  recordCanvasTiming,
   type CanvasDiagnosticsFlags
 } from '../canvas-diagnostics';
 import type { CanvasRenderMode } from '../canvas-render-mode';
@@ -163,6 +166,12 @@ function FaceCells({
     isInteractionLight || isRestoreBase ? 'off' : diagnosticsFlags.cellOverlays;
   const cellOverlaysOff = cellOverlaysMode === 'off';
 
+  const diagnosticsEnabled = isCanvasRenderPipelineDiagnosticsEnabled();
+  const geometryStartedAt = diagnosticsEnabled
+    ? typeof performance !== 'undefined'
+      ? performance.now()
+      : Date.now()
+    : 0;
   const faceCellGeometries = collectRenderedFaceCellGeometries({
     activeLevelIndex,
     bandH,
@@ -173,7 +182,19 @@ function FaceCells({
     semanticLevels,
     totalWidth
   });
+  if (diagnosticsEnabled) {
+    recordCanvasTiming(
+      'cell-geometry-calculation-ms',
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        geometryStartedAt
+    );
+  }
 
+  const cullingStartedAt = diagnosticsEnabled
+    ? typeof performance !== 'undefined'
+      ? performance.now()
+      : Date.now()
+    : 0;
   faceCellGeometries.forEach((faceCellGeometry) => {
     const {
       cell,
@@ -247,10 +268,18 @@ function FaceCells({
       visualState
     });
   });
+  if (diagnosticsEnabled) {
+    recordCanvasTiming(
+      'cell-culling-ms',
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        cullingStartedAt
+    );
+  }
   recordCanvasCullingMetrics(metricSourceId, {
     cellsTotal: faceCellGeometries.length,
     cellsRendered
   });
+  recordCanvasCounter('cell-overlay-rendered-cells', renderedCells.length);
 
   return (
     <Group listening={detailsEnabled && isInteractive}>

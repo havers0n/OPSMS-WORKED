@@ -7,6 +7,9 @@ import {
   recordCanvasCullingMetrics,
   recordCanvasCameraStoreUpdate,
   recordCanvasRenderMode,
+  recordCanvasDataSizes,
+  recordCanvasMode,
+  recordCanvasTiming,
   recordCanvasFullRestoreComplete,
   recordCanvasSettledFull,
   recordCanvasZoomDurableCommit,
@@ -157,6 +160,37 @@ describe('canvas render pipeline diagnostics', () => {
           causes: {
             stateUpdates: 1
           }
+        }
+      }
+    });
+  });
+
+  it('records mode, data-size, and timing metrics only when diagnostics are enabled', () => {
+    vi.stubGlobal('window', {});
+
+    recordCanvasMode('storage');
+    recordCanvasDataSizes({ rackCount: 10 });
+    recordCanvasTiming('grid-line-calculation-ms', 1.25);
+    expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toBeUndefined();
+
+    resetCanvasRenderPipelineDiagnostics();
+    recordCanvasMode('storage');
+    recordCanvasDataSizes({ rackCount: 10, visibleRackCount: 4 });
+    recordCanvasTiming('grid-line-calculation-ms', 1.25);
+
+    expect(window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__).toMatchObject({
+      mode: {
+        active: 'storage',
+        counts: { storage: 1 }
+      },
+      dataSizes: {
+        rackCount: 10,
+        visibleRackCount: 4
+      },
+      timings: {
+        'grid-line-calculation-ms': {
+          count: 1,
+          lastMs: 1.25
         }
       }
     });

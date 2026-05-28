@@ -171,7 +171,27 @@ type RenderPipelineDiagnostics = {
     RackLayer: RenderComponentMetrics;
     RackCells: RenderComponentMetrics;
     SelectionOverlayLayer: RenderComponentMetrics;
+    StorageNavigator: RenderComponentMetrics;
+    StorageInspectorV2: RenderComponentMetrics;
   };
+  mode: {
+    active: 'view' | 'storage' | 'layout' | 'unknown';
+    counts: Record<'view' | 'storage' | 'layout' | 'unknown', number>;
+  };
+  dataSizes: {
+    rackCount: number;
+    visibleRackCount: number;
+    publishedCellsTotal: number;
+    renderedCellsCount: number;
+    occupiedCellsCount: number;
+    runtimeCellsCount: number;
+    navigatorVisibleCellCount: number;
+  };
+  timings: Record<
+    string,
+    { count: number; totalMs: number; maxMs: number; lastMs: number }
+  >;
+  counters: Record<string, number>;
   konva: {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
@@ -967,8 +987,30 @@ async function startRenderPipelineProbe(
         RackBody: createComponentMetrics(),
         RackLayer: createComponentMetrics(),
         RackCells: createComponentMetrics(),
-        SelectionOverlayLayer: createComponentMetrics()
+        SelectionOverlayLayer: createComponentMetrics(),
+        StorageNavigator: createComponentMetrics(),
+        StorageInspectorV2: createComponentMetrics()
       },
+      mode: {
+        active: 'unknown',
+        counts: {
+          view: 0,
+          storage: 0,
+          layout: 0,
+          unknown: 0
+        }
+      },
+      dataSizes: {
+        rackCount: 0,
+        visibleRackCount: 0,
+        publishedCellsTotal: 0,
+        renderedCellsCount: 0,
+        occupiedCellsCount: 0,
+        runtimeCellsCount: 0,
+        navigatorVisibleCellCount: 0
+      },
+      timings: {},
+      counters: {},
       konva: {
         layerDrawCalls: 0,
         layerBatchDrawCalls: 0,

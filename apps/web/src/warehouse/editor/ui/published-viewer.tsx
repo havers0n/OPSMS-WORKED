@@ -15,6 +15,11 @@ import { EditorCanvas } from './editor-canvas';
 import { InspectorRouter } from './inspector-router';
 import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
+import {
+  markCanvasTimingEnd,
+  markCanvasTimingStart,
+  recordCanvasMode
+} from './canvas-diagnostics';
 import { ViewWorkspace } from './view-workspace';
 
 /**
@@ -32,7 +37,7 @@ import { ViewWorkspace } from './view-workspace';
 export function PublishedViewer() {
   const t = useT();
   const activeFloorId = useActiveFloorId();
-  const { data: workspace } = useFloorWorkspace(activeFloorId);
+  const { data: workspace, isLoading: workspaceLoading } = useFloorWorkspace(activeFloorId);
   const clearSelection = useClearSelection();
   const initializeDraft = useInitializeDraft();
   const resetDraft = useResetDraft();
@@ -46,6 +51,20 @@ export function PublishedViewer() {
   // Bootstrap the store from the published layout so the canvas renders racks.
   // Also reset editorMode to 'select' — the place tool is unavailable in read-only mode
   // and the mode may be stale from a prior WarehouseEditor session.
+  useEffect(() => {
+    if (!activeFloorId) return;
+    markCanvasTimingStart('workspace-query-resolve-ms');
+  }, [activeFloorId]);
+
+  useEffect(() => {
+    if (!activeFloorId || workspaceLoading) return;
+    markCanvasTimingEnd('workspace-query-resolve-ms');
+  }, [activeFloorId, workspaceLoading]);
+
+  useEffect(() => {
+    recordCanvasMode(viewMode === 'storage' ? 'storage' : viewMode === 'view' ? 'view' : 'layout');
+  }, [viewMode]);
+
   useEffect(() => {
     const readonlyLayout = workspace?.latestPublished ?? workspace?.activeDraft ?? null;
     if (readonlyLayout) {

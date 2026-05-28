@@ -38,7 +38,9 @@ export type CanvasRenderComponentName =
   | 'RackBody'
   | 'RackLayer'
   | 'RackCells'
-  | 'SelectionOverlayLayer';
+  | 'SelectionOverlayLayer'
+  | 'StorageNavigator'
+  | 'StorageInspectorV2';
 
 export type CanvasRenderCauseCounts = {
   stateUpdates: number;
@@ -97,6 +99,31 @@ export type CanvasRenderPipelineDiagnostics = {
   zoomTransientUpdates: number;
   zoomDurableCommits: number;
   components: Record<CanvasRenderComponentName, CanvasRenderComponentMetrics>;
+  mode: {
+    active: 'view' | 'storage' | 'layout' | 'unknown';
+    // Call-frequency counters: increments each time recordCanvasMode is called.
+    // Not a unique-session or screen-entry counter.
+    counts: Record<'view' | 'storage' | 'layout' | 'unknown', number>;
+  };
+  dataSizes: {
+    rackCount: number;
+    visibleRackCount: number;
+    publishedCellsTotal: number;
+    renderedCellsCount: number;
+    occupiedCellsCount: number;
+    runtimeCellsCount: number;
+    navigatorVisibleCellCount: number;
+  };
+  timings: Record<
+    string,
+    {
+      count: number;
+      totalMs: number;
+      maxMs: number;
+      lastMs: number;
+    }
+  >;
+  counters: Record<string, number>;
   konva: {
     layerDrawCalls: number;
     layerBatchDrawCalls: number;
@@ -144,6 +171,7 @@ declare global {
     __WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__?: boolean;
     __WOS_CANVAS_DISABLE_MANUAL_PAN_BATCH_DRAW__?: boolean;
     __WOS_CANVAS_KONVA_SOURCE__?: string | null;
+    __WOS_CANVAS_DIAGNOSTIC_MARKS__?: Record<string, number>;
   }
 }
 
@@ -275,7 +303,12 @@ export function recordCanvasCullingMetrics(
     cellsTotal: metrics.cellsTotal,
     cellsRendered: metrics.cellsRendered
   };
-  window.__WOS_CANVAS_CULLING_METRICS__ = summarizeCullingSources(sources);
+  const aggregated = summarizeCullingSources(sources);
+  window.__WOS_CANVAS_CULLING_METRICS__ = aggregated;
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (diagnostics) {
+    diagnostics.dataSizes.renderedCellsCount = aggregated.cellsRendered;
+  }
   window.dispatchEvent(new Event(CANVAS_CULLING_METRICS_EVENT));
 }
 
@@ -325,8 +358,30 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
       RackBody: createComponentMetrics(),
       RackLayer: createComponentMetrics(),
       RackCells: createComponentMetrics(),
-      SelectionOverlayLayer: createComponentMetrics()
+      SelectionOverlayLayer: createComponentMetrics(),
+      StorageNavigator: createComponentMetrics(),
+      StorageInspectorV2: createComponentMetrics()
     },
+    mode: {
+      active: 'unknown',
+      counts: {
+        view: 0,
+        storage: 0,
+        layout: 0,
+        unknown: 0
+      }
+    },
+    dataSizes: {
+      rackCount: 0,
+      visibleRackCount: 0,
+      publishedCellsTotal: 0,
+      renderedCellsCount: 0,
+      occupiedCellsCount: 0,
+      runtimeCellsCount: 0,
+      navigatorVisibleCellCount: 0
+    },
+    timings: {},
+    counters: {},
     konva: {
       layerDrawCalls: 0,
       layerBatchDrawCalls: 0,
@@ -356,6 +411,10 @@ function getActiveRenderPipelineDiagnostics(): CanvasRenderPipelineDiagnostics |
   if (typeof window === 'undefined') return null;
   const diagnostics = window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
   return diagnostics?.enabled ? diagnostics : null;
+}
+
+export function isCanvasRenderPipelineDiagnosticsEnabled() {
+  return getActiveRenderPipelineDiagnostics() !== null;
 }
 
 export function resetCanvasRenderPipelineDiagnostics() {
@@ -530,6 +589,60 @@ export function recordCanvasKonvaLayerDraw(
     diagnostics.konva.layerBatchDrawCallsByName[layerName] =
       (diagnostics.konva.layerBatchDrawCallsByName[layerName] ?? 0) + 1;
   }
+}
+
+export function recordCanvasMode(mode: 'view' | 'storage' | 'layout' | 'unknown') {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  // Call-frequency counter by mode. This captures instrumentation activity volume.
+  diagnostics.mode.active = mode;
+  diagnostics.mode.counts[mode] += 1;
+}
+
+export function recordCanvasDataSizes(
+  sizes: Partial<CanvasRenderPipelineDiagnostics['dataSizes']>
+) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  diagnostics.dataSizes = { ...diagnostics.dataSizes, ...sizes };
+}
+
+export function recordCanvasTiming(name: string, durationMs: number) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics || !Number.isFinite(durationMs) || durationMs < 0) return;
+  const previous = diagnostics.timings[name] ?? {
+    count: 0,
+    totalMs: 0,
+    maxMs: 0,
+    lastMs: 0
+  };
+  previous.count += 1;
+  previous.totalMs += durationMs;
+  previous.maxMs = Math.max(previous.maxMs, durationMs);
+  previous.lastMs = durationMs;
+  diagnostics.timings[name] = previous;
+}
+
+export function recordCanvasCounter(name: string, delta = 1) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return;
+  diagnostics.counters[name] = (diagnostics.counters[name] ?? 0) + delta;
+}
+
+export function markCanvasTimingStart(name: string) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics || typeof window === 'undefined') return;
+  window.__WOS_CANVAS_DIAGNOSTIC_MARKS__ ??= {};
+  window.__WOS_CANVAS_DIAGNOSTIC_MARKS__[name] = nowMs();
+}
+
+export function markCanvasTimingEnd(name: string) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics || typeof window === 'undefined') return;
+  const start = window.__WOS_CANVAS_DIAGNOSTIC_MARKS__?.[name];
+  if (typeof start !== 'number') return;
+  recordCanvasTiming(name, nowMs() - start);
+  delete window.__WOS_CANVAS_DIAGNOSTIC_MARKS__?.[name];
 }
 
 export function recordCanvasLayerNodeCount(

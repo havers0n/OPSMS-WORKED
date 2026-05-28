@@ -111,8 +111,12 @@ import { WallLayer } from './wall-layer';
 import { ZoneLayer } from './zone-layer';
 import { getWarehouseCanvasChromeTokens } from './shapes/warehouse-semantic-canvas-palette';
 import {
+  isCanvasRenderPipelineDiagnosticsEnabled,
   recordCanvasComponentRender,
+  recordCanvasDataSizes,
+  recordCanvasMode,
   recordCanvasRenderMode,
+  recordCanvasTiming,
   useCanvasDiagnosticsFlags
 } from './canvas-diagnostics';
 import type { CanvasRenderMode } from './canvas-render-mode';
@@ -135,6 +139,10 @@ export function EditorCanvas({
   onAddRack: () => void;
   onOpenInspector?: () => void;
 }) {
+  const mountStartMsRef = useRef(
+    typeof performance !== 'undefined' ? performance.now() : Date.now()
+  );
+  const canvasReadyRecordedRef = useRef(false);
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
   const viewStage = useViewStage();
@@ -475,6 +483,15 @@ export function EditorCanvas({
     return cancelRestoreFrames;
   }, [isInteractingWithCamera]);
   recordCanvasRenderMode(renderMode);
+  recordCanvasMode(
+    viewMode === 'view'
+      ? 'view'
+      : viewMode === 'storage'
+        ? 'storage'
+        : viewMode === 'layout'
+          ? 'layout'
+          : 'unknown'
+  );
 
   const effectiveSelectedCellId = isStorageV2Active
     ? storageFocusSelectedCellId
@@ -663,6 +680,13 @@ export function EditorCanvas({
       ),
     [canvasOffset, forcedVisibleRackIds, racks, viewport, zoom]
   );
+  recordCanvasDataSizes({
+    rackCount: racks.length,
+    visibleRackCount: visibleRacks.length,
+    publishedCellsTotal: publishedCellsById.size,
+    occupiedCellsCount: occupiedCellIds.size,
+    runtimeCellsCount: floorOperationsCellsById.size
+  });
   const pickingPlanningActivePackage = useMemo(
     () =>
       findPackageById(
@@ -1200,6 +1224,12 @@ export function EditorCanvas({
   }, [canSelectRack, hoveredRackId, setHoveredRackId]);
 
   const gridLineData = useMemo(() => {
+    const diagnosticsEnabled = isCanvasRenderPipelineDiagnosticsEnabled();
+    const startedAt = diagnosticsEnabled
+      ? typeof performance !== 'undefined'
+        ? performance.now()
+        : Date.now()
+      : 0;
     if (!viewport.width || !viewport.height) {
       const empty = {
         v: [] as number[],
@@ -1209,6 +1239,13 @@ export function EditorCanvas({
         startY: 0,
         endY: 0
       };
+      if (diagnosticsEnabled) {
+        recordCanvasTiming(
+          'grid-line-calculation-ms',
+          (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+            startedAt
+        );
+      }
       return { major: empty, minor: null as typeof empty | null };
     }
 
@@ -1229,12 +1266,31 @@ export function EditorCanvas({
       return { v, h, startX, endX, startY, endY };
     };
 
-    return {
+    const result = {
       major: calcGrid(MAJOR_GRID_SIZE),
       // Minor 1 m grid only visible when zoomed in enough
       minor: zoom >= MINOR_GRID_ZOOM_THRESHOLD ? calcGrid(GRID_SIZE) : null
     };
+    if (diagnosticsEnabled) {
+      recordCanvasTiming(
+        'grid-line-calculation-ms',
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+          startedAt
+      );
+    }
+    return result;
   }, [zoom, viewport.width, viewport.height, canvasOffset]);
+
+  useEffect(() => {
+    if (canvasReadyRecordedRef.current) return;
+    if (!layoutDraft || viewport.width <= 0 || viewport.height <= 0) return;
+    canvasReadyRecordedRef.current = true;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    recordCanvasTiming(
+      'mount-to-first-canvas-ready-ms',
+      now - mountStartMsRef.current
+    );
+  }, [layoutDraft, viewport.height, viewport.width]);
 
   // Alias for SnapGuides — always use major grid span as the guide extent
   const gridLines = gridLineData.major;

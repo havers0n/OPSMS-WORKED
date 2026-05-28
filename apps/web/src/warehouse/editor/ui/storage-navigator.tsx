@@ -13,6 +13,13 @@ import {
   useStorageFocusSelectCell,
   useStorageFocusSetActiveLevel,
 } from '../model/v2/v2-selectors';
+import {
+  isCanvasRenderPipelineDiagnosticsEnabled,
+  recordCanvasComponentRender,
+  recordCanvasDataSizes,
+  recordCanvasMode,
+  recordCanvasTiming
+} from './canvas-diagnostics';
 
 interface StorageNavigatorProps {
   workspace: FloorWorkspace | null;
@@ -94,7 +101,13 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   }, [availableFaces, faceFilter]);
 
   const visibleCells = useMemo(() => {
-    return cellsForLevel
+    const diagnosticsEnabled = isCanvasRenderPipelineDiagnosticsEnabled();
+    const startedAt = diagnosticsEnabled
+      ? typeof performance !== 'undefined'
+        ? performance.now()
+        : Date.now()
+      : 0;
+    const result = cellsForLevel
       .filter((cell) => {
         if (faceFilter === 'all') return true;
         return cell.address.parts.face === faceFilter;
@@ -109,7 +122,28 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
         if (searchQuery.trim() === '') return true;
         return cell.address.raw.toLowerCase().includes(searchQuery.trim().toLowerCase());
       });
+    if (diagnosticsEnabled) {
+      recordCanvasTiming(
+        'storage-navigator-visible-cells-derive-ms',
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+          startedAt
+      );
+    }
+    return result;
   }, [cellsForLevel, faceFilter, occupancyFilter, searchQuery, occupancyByCellId]);
+  recordCanvasMode('storage');
+  recordCanvasDataSizes({ navigatorVisibleCellCount: visibleCells.length });
+  recordCanvasComponentRender({
+    component: 'StorageNavigator',
+    snapshot: {
+      rackId,
+      activeLevel,
+      visibleCellCount: visibleCells.length,
+      cellsForLevelCount: cellsForLevel.length,
+      isCollapsed
+    },
+    propsKeys: ['rackId', 'activeLevel', 'visibleCellCount', 'cellsForLevelCount', 'isCollapsed']
+  });
 
   const filtersActive = faceFilter !== 'all' || occupancyFilter !== 'all' || searchQuery.trim() !== '';
   const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '-';

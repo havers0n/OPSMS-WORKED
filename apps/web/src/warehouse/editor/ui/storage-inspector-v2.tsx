@@ -94,6 +94,12 @@ import {
   inspectorShellClassName
 } from './storage-inspector-v2/shared';
 import { useT } from '@/shared/i18n';
+import {
+  markCanvasTimingEnd,
+  markCanvasTimingStart,
+  recordCanvasComponentRender,
+  recordCanvasMode
+} from './canvas-diagnostics';
 
 type Translator = ReturnType<typeof useT>;
 
@@ -471,6 +477,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [extractErrorMessage, setExtractErrorMessage] = useState<string | null>(null);
 
   const taskKindRef = useRef<TaskKind | null>(null);
+  const inspectorReadyCellIdRef = useRef<string | null>(null);
   taskKindRef.current = taskKind;
   const moveTaskRef = useRef<MoveTaskState | null>(null);
   moveTaskRef.current = moveTaskState;
@@ -515,6 +522,62 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     data: locationProductAssignments = [],
     isLoading: locationProductAssignmentsLoading
   } = useLocationProductAssignments(locationId);
+  recordCanvasMode('storage');
+  recordCanvasComponentRender({
+    component: 'StorageInspectorV2',
+    snapshot: {
+      cellId,
+      rackId,
+      activeLevel,
+      locationId,
+      storageLoading,
+      locationRefLoading,
+      storageRowsCount: storageRows.length
+    },
+    propsKeys: [
+      'cellId',
+      'rackId',
+      'activeLevel',
+      'locationId',
+      'storageLoading',
+      'locationRefLoading',
+      'storageRowsCount'
+    ]
+  });
+
+  useEffect(() => {
+    if (!cellId) {
+      inspectorReadyCellIdRef.current = null;
+      return;
+    }
+    // Canonical click-to-inspector-ready start marker: selection changed.
+    // This captures all selection entry points (navigator/canvas/deep-link path),
+    // and intentionally restarts timing when the selected cell changes.
+    inspectorReadyCellIdRef.current = null;
+    markCanvasTimingStart('click-to-inspector-ready-ms');
+    markCanvasTimingStart('inspector-location-ref-resolve-ms');
+    markCanvasTimingStart('inspector-storage-resolve-ms');
+    markCanvasTimingStart('inspector-derived-data-ms');
+  }, [cellId]);
+
+  useEffect(() => {
+    if (!cellId || locationRefLoading) return;
+    markCanvasTimingEnd('inspector-location-ref-resolve-ms');
+  }, [cellId, locationRefLoading]);
+
+  useEffect(() => {
+    if (!cellId || storageLoading) return;
+    markCanvasTimingEnd('inspector-storage-resolve-ms');
+  }, [cellId, storageLoading]);
+
+  useEffect(() => {
+    if (!cellId || !locationId) return;
+    if (locationRefLoading || storageLoading) return;
+    if (inspectorReadyCellIdRef.current === cellId) return;
+    inspectorReadyCellIdRef.current = cellId;
+    markCanvasTimingEnd('inspector-derived-data-ms');
+    markCanvasTimingEnd('click-to-inspector-ready-ms');
+  }, [cellId, locationId, locationRefLoading, storageLoading]);
   const createProductLocationRole = useCreateProductLocationRole();
   const deleteProductLocationRole = useDeleteProductLocationRole(locationId);
 
