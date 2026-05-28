@@ -1,6 +1,7 @@
 import { dirname } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { execFile as execFileCallback } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import {
   expect,
@@ -14,7 +15,8 @@ import {
 import { signInToWarehouse } from '../support/auth';
 import {
   buildDemoWarehouseRackPayloads,
-  demoWarehouseExpectedPreviewCellCount
+  demoWarehouseExpectedPreviewCellCount,
+  type DraftRackPayload
 } from '../support/demo-warehouse-layout';
 import {
   resetWarehouseData,
@@ -30,6 +32,8 @@ const RESTORE_STAGE_DIAGNOSTIC_DELAY_MS = 500;
 const ENABLE_PHASE_DIAGNOSTICS = process.env.DL1_PHASE_DIAGNOSTICS === '1';
 const INCLUDE_LOW_END_PROFILE =
   process.env.DL1_DIAGNOSTICS_INCLUDE_LOW_END === '1';
+const DIAGNOSTICS_NON_DESTRUCTIVE =
+  process.env.DL1_DIAGNOSTICS_NON_DESTRUCTIVE === '1';
 const DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 const DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
 const execFile = promisify(execFileCallback);
@@ -276,6 +280,9 @@ type KonvaPipelineProbeResult = {
   stagePositionCalls: number;
   nodeRequestDrawCalls: number;
   layerBatchDrawCalls: number;
+  batchDrawByLayer: Record<string, number>;
+  batchDrawByCallsite: Record<string, number>;
+  topBatchDrawCallsites: Array<{ callsite: string; count: number }>;
   layerDrawCalls: number;
   drawSceneCalls: number;
   drawHitCalls: number;
@@ -583,6 +590,65 @@ const selectedProfiles = DEVICE_PROFILES.filter((profile) =>
     'DL1_DIAGNOSTICS_PROFILES'
   ).includes(profile.name)
 );
+const NON_DESTRUCTIVE_RUN_SUFFIX = Math.floor(Date.now() / 1000).toString(36);
+
+function buildDiagnosticsSeedCodes(scenario: ScenarioName) {
+  const scenarioCode = scenario.replace('-', '_').toUpperCase();
+  if (!DIAGNOSTICS_NON_DESTRUCTIVE) {
+    return {
+      siteCode: `PERF_${scenarioCode}`,
+      siteName: `Performance ${scenario} Site`,
+      floorCode: 'DL1',
+      floorName: 'Demo Layout Floor'
+    };
+  }
+
+  return {
+    siteCode: `PERF_${scenarioCode}_${NON_DESTRUCTIVE_RUN_SUFFIX}`,
+    siteName: `Performance ${scenario} Site (non-destructive)`,
+    floorCode: 'DL1',
+    floorName: 'Demo Layout Floor'
+  };
+}
+
+function deterministicUuid(seed: string) {
+  const hex = createHash('md5').update(seed).digest('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function remapDraftRackIds(
+  racks: DraftRackPayload[],
+  seedPrefix: string
+): DraftRackPayload[] {
+  const idMap = new Map<string, string>();
+  const mapId = (id: string) => {
+    const existing = idMap.get(id);
+    if (existing) return existing;
+    const next = deterministicUuid(`dl1:${seedPrefix}:${id}`);
+    idMap.set(id, next);
+    return next;
+  };
+
+  return racks.map((rack) => ({
+    ...rack,
+    id: mapId(rack.id),
+    faces: rack.faces.map((face) => ({
+      ...face,
+      id: mapId(face.id),
+      mirrorSourceFaceId: face.mirrorSourceFaceId
+        ? mapId(face.mirrorSourceFaceId)
+        : null,
+      sections: face.sections.map((section) => ({
+        ...section,
+        id: mapId(section.id),
+        levels: section.levels.map((level) => ({
+          ...level,
+          id: mapId(level.id)
+        }))
+      }))
+    }))
+  }));
+}
 
 function percentile(values: number[], percentileValue: number) {
   if (values.length === 0) {
@@ -1190,6 +1256,17 @@ async function markRenderPipelinePhase(
 }
 
 async function startKonvaPipelineProbe(page: Page) {
+  await page.waitForFunction(
+    () => {
+      const global = window as Window & {
+        __WOS_CANVAS_STAGE__?: unknown;
+      };
+      return Boolean(global.__WOS_CANVAS_STAGE__);
+    },
+    undefined,
+    { timeout: 15000 }
+  );
+
   await page.evaluate(() => {
     type MutableKonvaProbeResult = KonvaPipelineProbeResult & {
       events: KonvaCallEvent[];
@@ -1248,6 +1325,9 @@ async function startKonvaPipelineProbe(page: Page) {
       stagePositionCalls: 0,
       nodeRequestDrawCalls: 0,
       layerBatchDrawCalls: 0,
+      batchDrawByLayer: {},
+      batchDrawByCallsite: {},
+      topBatchDrawCallsites: [],
       layerDrawCalls: 0,
       drawSceneCalls: 0,
       drawHitCalls: 0,
@@ -1273,6 +1353,8 @@ async function startKonvaPipelineProbe(page: Page) {
       traces: [],
       events: []
     };
+    const MAX_BATCH_DRAW_STACK_CAPTURES = 200;
+    let batchDrawStackCaptures = 0;
 
     let eventIndex = 0;
     let currentTraceId: number | null = null;
@@ -1313,6 +1395,18 @@ async function startKonvaPipelineProbe(page: Page) {
         : 'unknown';
     };
     const readSource = () => global.__WOS_CANVAS_KONVA_SOURCE__ ?? 'unknown';
+    const normalizeBatchDrawCallsite = (stack: string | undefined) => {
+      if (!stack) return 'unknown';
+      const lines = stack
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => !line.startsWith('Error'))
+        .filter((line) => !line.includes('wrappedKonvaProbeMethod'))
+        .filter((line) => !line.includes('startKonvaPipelineProbe'))
+        .filter((line) => !line.includes('playwright'));
+      return lines.slice(0, 3).join(' <- ') || 'unknown';
+    };
 
     const ensureTrace = () => {
       if (currentTraceId !== null) return currentTraceId;
@@ -1556,8 +1650,20 @@ async function startKonvaPipelineProbe(page: Page) {
       (original, self, args) => {
         ensureTrace();
         probe.layerBatchDrawCalls += 1;
+        const layerName = getLayerName(self) ?? 'unknown-layer';
+        probe.batchDrawByLayer[layerName] =
+          (probe.batchDrawByLayer[layerName] ?? 0) + 1;
+        if (batchDrawStackCaptures < MAX_BATCH_DRAW_STACK_CAPTURES) {
+          batchDrawStackCaptures += 1;
+          const callsite = normalizeBatchDrawCallsite(new Error().stack);
+          probe.batchDrawByCallsite[callsite] =
+            (probe.batchDrawByCallsite[callsite] ?? 0) + 1;
+        } else {
+          probe.batchDrawByCallsite.__stack_capture_limit__ =
+            (probe.batchDrawByCallsite.__stack_capture_limit__ ?? 0) + 1;
+        }
         record('Layer.batchDraw', {
-          layerName: getLayerName(self),
+          layerName,
           nodeType: self.getType?.() ?? 'Layer',
           detail: `_waitingForDraw=${String(self._waitingForDraw)}`
         });
@@ -1639,8 +1745,20 @@ async function startKonvaPipelineProbe(page: Page) {
         wrapProto(layer, 'batchDraw', (original, self, args) => {
           ensureTrace();
           probe.layerBatchDrawCalls += 1;
+          const layerName = getLayerName(self) ?? 'unknown-layer';
+          probe.batchDrawByLayer[layerName] =
+            (probe.batchDrawByLayer[layerName] ?? 0) + 1;
+          if (batchDrawStackCaptures < MAX_BATCH_DRAW_STACK_CAPTURES) {
+            batchDrawStackCaptures += 1;
+            const callsite = normalizeBatchDrawCallsite(new Error().stack);
+            probe.batchDrawByCallsite[callsite] =
+              (probe.batchDrawByCallsite[callsite] ?? 0) + 1;
+          } else {
+            probe.batchDrawByCallsite.__stack_capture_limit__ =
+              (probe.batchDrawByCallsite.__stack_capture_limit__ ?? 0) + 1;
+          }
           record('Layer.batchDraw', {
-            layerName: getLayerName(self),
+            layerName,
             nodeType: self.getType?.() ?? 'Layer',
             detail: `_waitingForDraw=${String(self._waitingForDraw)}`
           });
@@ -1979,6 +2097,12 @@ async function stopKonvaPipelineProbe(
       }
       return result;
     };
+    const topBatchDrawCallsites = Object.entries(
+      publicProbe.batchDrawByCallsite ?? {}
+    )
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([callsite, count]) => ({ callsite, count }));
 
     return {
       ...publicProbe,
@@ -2008,6 +2132,7 @@ async function stopKonvaPipelineProbe(
         typeof stage.getAttr === 'function'
           ? stage.getAttr('autoDrawEnabled')
           : probe.stageAutoDrawAttr,
+      topBatchDrawCallsites,
       layers: layerResults,
       rackLayerComposition
     };
@@ -2864,15 +2989,16 @@ async function runMeasuredScenario({
     const browserEnvironment = await getBrowserEnvironment(page);
     await startRenderPipelineProbe(page);
     const frameProbeId = await startFrameProbe(page);
+    const konvaProbeStartPromise = startKonvaPipelineProbe(page);
     await page.evaluate((url) => {
       window.history.pushState(null, '', url);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }, `/warehouse/view?floor=${floorId}`);
     await waitForWarehouseCanvas(page);
+    await konvaProbeStartPromise;
     if (runtimeOptions?.disableRackLayerHitGraph) {
       await setRackLayerHitGraphDisabled(page, true);
     }
-    await startKonvaPipelineProbe(page);
     const rawResult = await stopFrameProbe(page, frameProbeId);
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
@@ -3804,6 +3930,9 @@ test.describe('DL1 diagnostics harness', () => {
   test.setTimeout(Math.max(600000, aggregateTimeoutMs + phaseTimeoutMs));
 
   test.beforeEach(async () => {
+    if (DIAGNOSTICS_NON_DESTRUCTIVE) {
+      return;
+    }
     await resetWarehouseData();
   });
 
@@ -3811,12 +3940,20 @@ test.describe('DL1 diagnostics harness', () => {
     test(`dl1:${scenario} records report-only diagnostics`, async ({
       browser
     }, testInfo) => {
+      const seedCodes = buildDiagnosticsSeedCodes(scenario);
+      const rackPayloads = buildDemoWarehouseRackPayloads();
+      const seededRacks = DIAGNOSTICS_NON_DESTRUCTIVE
+        ? remapDraftRackIds(
+            rackPayloads,
+            `${scenario}:${NON_DESTRUCTIVE_RUN_SUFFIX}`
+          )
+        : rackPayloads;
       const { floor, layoutVersionId } = await seedExplicitDraftScenario({
-        siteCode: `PERF_${scenario.replace('-', '_').toUpperCase()}`,
-        siteName: `Performance ${scenario} Site`,
-        floorCode: 'DL1',
-        floorName: 'Demo Layout Floor',
-        racks: buildDemoWarehouseRackPayloads()
+        siteCode: seedCodes.siteCode,
+        siteName: seedCodes.siteName,
+        floorCode: seedCodes.floorCode,
+        floorName: seedCodes.floorName,
+        racks: seededRacks
       });
       const context = await browser.newContext();
       const entries: ReportEntry[] = [];
