@@ -18,6 +18,14 @@ function formatWaitingAge(seconds: number | null): string {
   return `${h}:${String(rem).padStart(2, '0')}`;
 }
 
+function formatHumanMinutes(minutes: number | null): string | null {
+  if (minutes === null) return null;
+  if (minutes < 60) return `${minutes}ד׳`;
+  const h = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  return rem === 0 ? `${h}ש׳` : `${h}ש׳ ${rem}ד׳`;
+}
+
 function PickerRow({
   picker,
   onSelectPicker
@@ -26,6 +34,7 @@ function PickerRow({
   onSelectPicker?: (pickerKey: string) => void;
 }) {
   const name = picker.pickerName ?? UNASSIGNED_LABEL;
+  const timeLabel = formatHumanMinutes(picker.humanMinutes);
   return (
     <button
       type="button"
@@ -39,6 +48,7 @@ function PickerRow({
           {picker.totalLineCount} שורות
           {picker.wipCount > 0 && <span> · {picker.wipCount} פעיל</span>}
           {picker.done > 0 && <span> · {picker.done} הסתיימו</span>}
+          {timeLabel !== null && <span> · ⏱ {timeLabel}</span>}
         </p>
       </div>
       {picker.waitingCheck > 0 && (
