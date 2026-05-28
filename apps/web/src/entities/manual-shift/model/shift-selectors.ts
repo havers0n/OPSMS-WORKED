@@ -182,10 +182,21 @@ export interface PickerWorkload {
   wipCount: number;
   /** One decimal. null when totalOrders is 0. */
   avgLinesPerOrder: number | null;
+  /**
+   * Total picking time in whole minutes.
+   * Completed cycles: waitingCheckAt - startedAt.
+   * In-progress (picking): now - startedAt.
+   * null when no timed picking data exists.
+   */
+  humanMinutes: number | null;
 }
 
-export function selectPickerWorkloads(orders: ManualShiftOrder[]): PickerWorkload[] {
+export function selectPickerWorkloads(
+  orders: ManualShiftOrder[],
+  now: Date = new Date()
+): PickerWorkload[] {
   const buckets = new Map<string, PickerWorkload>();
+  const nowMs = now.getTime();
 
   for (const order of orders) {
     const key = order.pickerName ?? '__unassigned__';
@@ -204,7 +215,8 @@ export function selectPickerWorkloads(orders: ManualShiftOrder[]): PickerWorkloa
         returned: 0,
         done: 0,
         wipCount: 0,
-        avgLinesPerOrder: null
+        avgLinesPerOrder: null,
+        humanMinutes: null
       });
     }
 
@@ -233,6 +245,19 @@ export function selectPickerWorkloads(orders: ManualShiftOrder[]): PickerWorkloa
 
     if (!bucket.pickerWorkerId && order.pickerWorkerId) {
       bucket.pickerWorkerId = order.pickerWorkerId;
+    }
+
+    if (order.startedAt) {
+      const endMs =
+        order.waitingCheckAt != null
+          ? new Date(order.waitingCheckAt).getTime()
+          : order.status === 'picking'
+            ? nowMs
+            : null;
+      if (endMs !== null) {
+        const mins = Math.max(0, Math.floor((endMs - new Date(order.startedAt).getTime()) / 60000));
+        bucket.humanMinutes = (bucket.humanMinutes ?? 0) + mins;
+      }
     }
   }
 

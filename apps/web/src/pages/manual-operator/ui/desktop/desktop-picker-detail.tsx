@@ -51,6 +51,9 @@ export function DesktopPickerDetail({ detail, onClose, onSelectOrder }: DesktopP
         <Kpi label="בדיקה" value={picker.waitingCheck} />
         <Kpi label="הוחזר" value={picker.returned} />
         <Kpi label="הסתיים" value={picker.done} />
+        {picker.humanMinutes != null && (
+          <Kpi label='חפ"א (דק׳)' value={picker.humanMinutes} />
+        )}
       </div>
 
       {detail.lineBreakdown.length > 0 && (

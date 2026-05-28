@@ -37,6 +37,16 @@ function formatAge(status: ManualShiftOrderStatus, seconds: number | null): stri
   return `${h}:${String(rem).padStart(2, '0')}`;
 }
 
+function diffMinutes(from: string | null, to: string | null): string {
+  if (!from || !to) return MISSING_VALUE;
+  const mins = Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 60000);
+  if (mins < 0) return MISSING_VALUE;
+  if (mins < 60) return `${mins}ד`;
+  const h = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return `${h}:${String(rem).padStart(2, '0')}`;
+}
+
 function Row({
   label,
   value,
@@ -121,6 +131,12 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
         <Row label="ממתין בדיקה" value={formatDateTimeHe(detail.waitingCheckAt)} valueDir="ltr" />
         <Row label="נבדק" value={formatDateTimeHe(detail.checkedAt)} valueDir="ltr" />
         <Row label="הסתיים" value={formatDateTimeHe(detail.finishedAt)} valueDir="ltr" />
+      </Section>
+
+      <Section title="משכי שלבים">
+        <Row label="זמן ליקוט" value={diffMinutes(detail.startedAt, detail.waitingCheckAt)} />
+        <Row label="המתנה לבדיקה" value={diffMinutes(detail.waitingCheckAt, detail.checkedAt)} />
+        <Row label="זמן אריזה" value={diffMinutes(detail.checkedAt, detail.finishedAt)} />
       </Section>
     </div>
   );

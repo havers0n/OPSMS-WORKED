@@ -387,6 +387,35 @@ describe('selectPickerWorkloads', () => {
     expect(w.returned).toBe(2);
     expect(w.wipCount).toBe(2);
   });
+
+  it('humanMinutes is null when no order has startedAt', () => {
+    const orders = [makeOrder({ id: 'o1', pickerName: 'Alice', status: 'done', startedAt: null })];
+    const [w] = selectPickerWorkloads(orders);
+    expect(w.humanMinutes).toBeNull();
+  });
+
+  it('humanMinutes sums completed picking cycles (waitingCheckAt - startedAt)', () => {
+    const start1 = '2024-01-01T08:00:00.000Z';
+    const end1 = '2024-01-01T08:30:00.000Z'; // 30 min
+    const start2 = '2024-01-01T09:00:00.000Z';
+    const end2 = '2024-01-01T09:20:00.000Z'; // 20 min
+    const orders = [
+      makeOrder({ id: 'o1', pickerName: 'Alice', status: 'waiting_check', startedAt: start1, waitingCheckAt: end1 }),
+      makeOrder({ id: 'o2', pickerName: 'Alice', status: 'done', startedAt: start2, waitingCheckAt: end2 })
+    ];
+    const [w] = selectPickerWorkloads(orders);
+    expect(w.humanMinutes).toBe(50);
+  });
+
+  it('humanMinutes includes in-progress order elapsed time', () => {
+    const start = '2024-01-01T10:00:00.000Z';
+    const now = new Date('2024-01-01T10:45:00.000Z'); // 45 min in
+    const orders = [
+      makeOrder({ id: 'o1', pickerName: 'Alice', status: 'picking', startedAt: start, waitingCheckAt: null })
+    ];
+    const [w] = selectPickerWorkloads(orders, now);
+    expect(w.humanMinutes).toBe(45);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
