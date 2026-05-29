@@ -1415,6 +1415,107 @@ describe('manual shift order check units', () => {
       })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CHECK_UNIT_INVALID_STATUS_TRANSITION' });
   });
+
+  it('rejects open -> returned transition without repair reason', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.transitionOrderCheckUnitStatus({
+        tenantId: ids.tenant,
+        checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        status: 'returned',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CHECK_UNIT_RETURNED_REASON_REQUIRED' });
+  });
+
+  it('open -> returned persists reason, returned -> open clears reason', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const returned = await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'returned',
+      reason: 'מוצר פגום',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(returned.reason).toBe('מוצר פגום');
+
+    const reopened = await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'open',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(reopened.reason).toBeNull();
+  });
+
+  it('returned -> checked preserves existing reason for audit context', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'בעיית אריזה',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const checked = await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(checked.reason).toBe('בעיית אריזה');
+  });
 });
 
 describe('manual shift timestamp correctness (PR2)', () => {

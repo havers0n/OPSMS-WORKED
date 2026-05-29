@@ -113,3 +113,11 @@ export function manualShiftOrderCheckUnitNumberConflict(orderId: string) {
     `Failed to allocate check unit number for order ${orderId}. Please retry.`
   );
 }
+
+export function manualShiftOrderCheckUnitReturnedReasonRequired(checkUnitId: string) {
+  return new ApiError(
+    422,
+    'MANUAL_SHIFT_CHECK_UNIT_RETURNED_REASON_REQUIRED',
+    `Manual shift order check unit ${checkUnitId} requires a repair reason when marked returned.`
+  );
+}

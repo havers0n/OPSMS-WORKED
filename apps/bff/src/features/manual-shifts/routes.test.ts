@@ -482,6 +482,22 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
+  it('rejects returned status transition without reason', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/manual-shift-check-units/f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57/status',
+      payload: { status: 'returned' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(service.transitionOrderCheckUnitStatus).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
   it('rejects requests when no tenant context is available', async () => {
     const service = createServiceMock();
     const app = await buildTestApp(service, {

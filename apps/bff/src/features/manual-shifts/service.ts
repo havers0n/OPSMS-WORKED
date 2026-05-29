@@ -38,6 +38,7 @@ import {
   manualShiftOrderCheckUnitNotFound,
   manualShiftOrderDoneBlockedByCheckUnits,
   manualShiftOrderCheckUnitNumberConflict,
+  manualShiftOrderCheckUnitReturnedReasonRequired,
   manualShiftPickerWorkerInvalid,
   manualShiftWorkerNotFound
 } from './errors.js';
@@ -750,10 +751,19 @@ export function createManualShiftsServiceFromRepo(
       }
 
       const nowIso = getNowIso();
+      const normalizedReason = input.reason?.trim() ?? null;
+      if (input.status === 'returned' && !normalizedReason) {
+        throw manualShiftOrderCheckUnitReturnedReasonRequired(input.checkUnitId);
+      }
       const patch: Parameters<ManualShiftsRepo['updateOrderCheckUnit']>[1] = {
         status: input.status,
         note: input.note,
-        reason: input.reason,
+        reason:
+          input.status === 'returned'
+            ? normalizedReason
+            : input.status === 'open'
+              ? null
+              : checkUnit.reason,
         updatedByProfileId: input.actor.actorProfileId,
         updatedByName: input.actor.actorName
       };

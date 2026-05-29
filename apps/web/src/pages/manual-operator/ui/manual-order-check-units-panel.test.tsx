@@ -21,7 +21,8 @@ function makeQC() {
 
 function makeCheckUnit(
   unitNumber: number,
-  status: ManualShiftOrderCheckUnit['status']
+  status: ManualShiftOrderCheckUnit['status'],
+  overrides: Partial<ManualShiftOrderCheckUnit> = {}
 ): ManualShiftOrderCheckUnit {
   return {
     id: `cu-${unitNumber}`,
@@ -37,7 +38,8 @@ function makeCheckUnit(
     returnedAt: null,
     voidedAt: null,
     createdAt: '2026-05-29T09:00:00.000Z',
-    updatedAt: '2026-05-29T09:00:00.000Z'
+    updatedAt: '2026-05-29T09:00:00.000Z',
+    ...overrides
   };
 }
 
@@ -248,15 +250,82 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
   });
 
+  it('returned -> open hides reason after server refresh', async () => {
+    let getCallCount = 0;
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
+        getCallCount += 1;
+        if (getCallCount === 1) return [makeCheckUnit(1, 'returned', { reason: 'מוצר פגום' })];
+        return [makeCheckUnit(1, 'open', { reason: null })];
+      }
+      if (path.includes('/api/manual-shift-check-units/cu-1/status') && method === 'PATCH') {
+        return makeCheckUnit(1, 'open', { reason: null });
+      }
+      return [];
+    });
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText('סיבת תיקון: מוצר פגום')).toBeTruthy());
+    fireEvent.click(screen.getByText('בטל תיקון'));
+    await waitFor(() => expect(screen.queryByText('סיבת תיקון: מוצר פגום')).toBeNull());
+  });
+
   it('returned state provides recovery actions and void is not the only escape', async () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned')]);
     renderPanel();
 
     await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.getByText('צור השלמה')).toBeTruthy();
     expect(screen.getByText('סמן כתוקן')).toBeTruthy();
     expect(screen.getByText('בטל תיקון')).toBeTruthy();
     expect(screen.getByText('בטל יחידה')).toBeTruthy();
     expect(screen.getAllByText('דורש תיקון').length).toBeGreaterThan(0);
+  });
+
+  it('returned unit displays repair reason when available', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned', { reason: 'מוצר פגום' })]);
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('סיבת תיקון: מוצר פגום')).toBeTruthy());
+  });
+
+  it('marking unit as returned exposes reason flow and requires reason selection', async () => {
+    mockedBffRequest
+      .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
+      .mockResolvedValueOnce(makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' }));
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText('דורש תיקון')).toBeTruthy());
+    fireEvent.click(screen.getByText('דורש תיקון'));
+    expect(screen.getByTestId('returned-reason-selector-cu-1')).toBeTruthy();
+
+    const submitReturned = screen.getByText('שמור תיקון') as HTMLButtonElement;
+    expect(submitReturned.disabled).toBe(true);
+    fireEvent.click(screen.getByText('חסר מוצר'));
+    expect(submitReturned.disabled).toBe(false);
+    fireEvent.click(submitReturned);
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'returned', note: undefined, reason: 'חסר מוצר' })
+      });
+    });
+  });
+
+  it('create completion action is placeholder and does not mutate unit status', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned')]);
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('צור השלמה')).toBeTruthy());
+
+    const createCompletionButton = screen.getByText('צור השלמה') as HTMLButtonElement;
+    expect(createCompletionButton.disabled).toBe(true);
+    fireEvent.click(createCompletionButton);
+
+    expect(
+      mockedBffRequest.mock.calls.some(([url, init]) => String(url).includes('/api/manual-shift-check-units/cu-1/status') && init?.method === 'PATCH')
+    ).toBe(false);
   });
 
   it('shows returned chip and keeps voided excluded from active count', async () => {

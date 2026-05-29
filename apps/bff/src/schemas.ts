@@ -471,6 +471,17 @@ export const transitionManualShiftOrderCheckUnitStatusBodySchema = z.object({
   status: manualShiftOrderCheckUnitStatusSchema,
   reason: z.string().trim().min(1).nullable().optional(),
   note: z.string().trim().min(1).nullable().optional()
+}).superRefine((value, ctx) => {
+  if (value.status === 'returned') {
+    const normalizedReason = value.reason?.trim();
+    if (!normalizedReason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reason'],
+        message: 'reason is required when status is returned'
+      });
+    }
+  }
 });
 
 export const manualShiftDeleteRestoreBodySchema = z.object({
