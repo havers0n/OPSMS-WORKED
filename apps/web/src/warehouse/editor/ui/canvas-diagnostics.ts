@@ -170,6 +170,7 @@ declare global {
     >;
     __WOS_CANVAS_STAGE__?: import('konva').default.Stage | null;
     __WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__?: boolean;
+    __WOS_CANVAS_KONVA_STARTUP_AUTODRAW_GATE_ENABLED__?: boolean;
     __WOS_CANVAS_DISABLE_MANUAL_PAN_BATCH_DRAW__?: boolean;
     __WOS_CANVAS_KONVA_SOURCE__?: string | null;
     __WOS_CANVAS_DIAGNOSTIC_MARKS__?: Record<string, number>;

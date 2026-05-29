@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
@@ -130,6 +130,14 @@ const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 const NONE_SELECTION: EditorSelection = { type: 'none' };
 const ZOOM_INTERACTION_IDLE_MS = 550;
 const noopSetHoveredRackId = () => undefined;
+const KONVA_STARTUP_AUTODRAW_LOCK_KEY = '__WOS_KONVA_STARTUP_AUTODRAW_LOCK__';
+const KONVA_STARTUP_AUTODRAW_GATE_ENABLED =
+  import.meta.env.VITE_WOS_KONVA_STARTUP_AUTODRAW_GATE === '1';
+
+type KonvaStartupAutoDrawLock = {
+  count: number;
+  previousAutoDrawEnabled: boolean;
+};
 
 export function EditorCanvas({
   workspace,
@@ -322,9 +330,49 @@ export function EditorCanvas({
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const [isMobileNavigateMode, setIsMobileNavigateMode] = useState(true);
+  const startupKonvaAutoDrawReleaseRef = useRef<(() => void) | null>(null);
+  const startupKonvaAutoDrawRestoredRef = useRef(false);
 
   useEffect(() => {
     recordRoutePreviewAppPhaseMark('editor-canvas:mount');
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!KONVA_STARTUP_AUTODRAW_GATE_ENABLED) return undefined;
+    if (typeof window === 'undefined') return undefined;
+    const windowWithLock = window as typeof window & {
+      [KONVA_STARTUP_AUTODRAW_LOCK_KEY]?: KonvaStartupAutoDrawLock;
+    };
+    const activeLock = windowWithLock[KONVA_STARTUP_AUTODRAW_LOCK_KEY];
+    if (!activeLock) {
+      windowWithLock[KONVA_STARTUP_AUTODRAW_LOCK_KEY] = {
+        count: 1,
+        previousAutoDrawEnabled: KonvaRuntime.autoDrawEnabled
+      };
+      KonvaRuntime.autoDrawEnabled = false;
+    } else {
+      activeLock.count += 1;
+    }
+
+    startupKonvaAutoDrawRestoredRef.current = false;
+    startupKonvaAutoDrawReleaseRef.current = () => {
+      if (startupKonvaAutoDrawRestoredRef.current) return;
+      startupKonvaAutoDrawRestoredRef.current = true;
+      const currentLock = windowWithLock[KONVA_STARTUP_AUTODRAW_LOCK_KEY];
+      if (!currentLock) {
+        return;
+      }
+      currentLock.count -= 1;
+      if (currentLock.count <= 0) {
+        KonvaRuntime.autoDrawEnabled = currentLock.previousAutoDrawEnabled;
+        delete windowWithLock[KONVA_STARTUP_AUTODRAW_LOCK_KEY];
+      }
+    };
+
+    return () => {
+      startupKonvaAutoDrawReleaseRef.current?.();
+      startupKonvaAutoDrawReleaseRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -332,6 +380,8 @@ export function EditorCanvas({
     window.__WOS_CANVAS_STAGE__ = stageRef.current;
     window.__WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__ =
       KonvaRuntime.autoDrawEnabled;
+    window.__WOS_CANVAS_KONVA_STARTUP_AUTODRAW_GATE_ENABLED__ =
+      KONVA_STARTUP_AUTODRAW_GATE_ENABLED;
     if (stageRef.current) {
       recordRoutePreviewAppPhaseMark('konva-stage:ref-available', {
         onceKey: 'konva-stage:ref-available'
@@ -1319,6 +1369,17 @@ export function EditorCanvas({
     if (!layoutDraft || viewport.width <= 0 || viewport.height <= 0) return;
     canvasReadyRecordedRef.current = true;
     recordRoutePreviewAppPhaseMark('canvas-stage:first-ready');
+    if (KONVA_STARTUP_AUTODRAW_GATE_ENABLED) {
+      startupKonvaAutoDrawReleaseRef.current?.();
+      startupKonvaAutoDrawReleaseRef.current = null;
+      const stage = stageRef.current;
+      if (stage) {
+        const layers = stage.getLayers();
+        for (const layer of layers) {
+          layer.batchDraw();
+        }
+      }
+    }
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     recordCanvasTiming(
       'mount-to-first-canvas-ready-ms',
