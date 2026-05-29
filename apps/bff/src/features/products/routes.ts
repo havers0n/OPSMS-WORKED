@@ -91,6 +91,19 @@ export function registerProductsRoutes(
     return parseOrThrow(productCatalogResponseSchema, catalog);
   });
 
+  app.post('/api/products/bulk-category', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = z.object({
+      productIds: z.array(z.string().uuid()).min(1).max(500),
+      category: z.string().trim().min(1).nullable()
+    }).parse(request.body);
+
+    const result = await getProductsService(auth).bulkSetCategory(body.productIds, body.category);
+    return result;
+  });
+
   app.patch('/api/products/:productId', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
