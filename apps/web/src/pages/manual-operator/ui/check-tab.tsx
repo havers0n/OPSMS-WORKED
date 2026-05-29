@@ -5,6 +5,7 @@ import type { ManualShiftOrder, ManualShiftLineSummary } from '@wos/domain';
 import { shiftOrdersQueryOptions, manualShiftKeys } from '@/entities/manual-shift/api/queries';
 import { useUpdateManualShiftOrderStatus } from '@/entities/manual-shift/api/mutations';
 import { ErrorFlow } from './error-flow';
+import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
 import { getElapsedFromIso } from './order-utils';
 
 interface CheckTabProps {
@@ -53,8 +54,8 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-4">
         <ClipboardCheck size={48} className="text-green-400" />
-        <p className="font-bold text-xl text-gray-700">אין נקודות לבדיקה</p>
-        <p className="text-gray-400 text-sm">כל ההזמנות נבדקו</p>
+        <p className="font-bold text-xl text-gray-700">??? ?????? ??????</p>
+        <p className="text-gray-400 text-sm">?? ??????? ?????</p>
       </div>
     );
   }
@@ -63,7 +64,7 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
     <div className="flex flex-col relative">
       <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 shrink-0">
         <p className="font-bold text-amber-800 text-base">
-          {waitingOrders.length} נקודות ממתינות לבדיקה
+          {waitingOrders.length} ?????? ??????? ??????
         </p>
       </div>
 
@@ -101,14 +102,18 @@ interface CheckOrderCardProps {
 }
 
 function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrderCardProps) {
+  const [hasCheckUnits, setHasCheckUnits] = useState(false);
+  const [canCloseOrder, setCanCloseOrder] = useState(true);
   const elapsed = getElapsedFromIso(order.waitingCheckAt ?? order.createdAt);
+  const doneDisabledByCheckUnits = hasCheckUnits && !canCloseOrder;
+  const doneDisabled = isPending || doneDisabledByCheckUnits;
 
   return (
     <div className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col gap-4 shadow-sm">
       <div className="flex flex-col gap-1">
         <div className="flex justify-between items-start gap-2">
           <span className="font-bold text-xl text-gray-900">
-            {order.pointName ?? 'ללא נקודה'}
+            {order.pointName ?? '??? ?????'}
           </span>
           {elapsed && (
             <div className="flex items-center gap-1 text-amber-600 text-sm shrink-0">
@@ -117,9 +122,9 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
             </div>
           )}
         </div>
-        {lineName && <span className="text-sm text-gray-500">קו: {lineName}</span>}
+        {lineName && <span className="text-sm text-gray-500">??: {lineName}</span>}
         {order.pickerName && (
-          <span className="text-gray-700 font-medium text-sm">מלקט: {order.pickerName}</span>
+          <span className="text-gray-700 font-medium text-sm">????: {order.pickerName}</span>
         )}
         {order.orderNumber && (
           <span className="text-gray-400 text-xs font-mono">{order.orderNumber}</span>
@@ -135,16 +140,26 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
         {order.lineCount != null && (
           <span className="flex items-center gap-1 text-gray-600">
             <Package size={14} />
-            {order.lineCount} שורות
+            {order.lineCount} ?????
           </span>
         )}
         {order.palletCount != null && (
-          <span className="text-gray-500 text-xs">{order.palletCount} משטחים</span>
+          <span className="text-gray-500 text-xs">{order.palletCount} ??????</span>
         )}
         {order.size === 'unknown' && order.lineCount == null && (
-          <span className="text-gray-400 text-xs">גודל לא ידוע</span>
+          <span className="text-gray-400 text-xs">???? ?? ????</span>
         )}
       </div>
+
+      <ManualOrderCheckUnitsPanel
+        orderId={order.id}
+        interactive
+        compact
+        onStateChange={(state) => {
+          setHasCheckUnits(state.hasUnits);
+          setCanCloseOrder(state.canCloseOrder);
+        }}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <button
@@ -153,17 +168,24 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           className="h-14 rounded-xl bg-red-50 border border-red-200 text-red-700 font-bold text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50"
         >
           <AlertTriangle size={20} />
-          תקלה
+          ????
         </button>
         <button
           onClick={onOK}
-          disabled={isPending}
+          disabled={doneDisabled}
+          title={doneDisabledByCheckUnits ? '???? ?? ?? ?????? ?????? ??????? ???? ????? ??????' : undefined}
           className="h-14 rounded-xl bg-green-600 text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50"
         >
           <CheckCircle size={20} />
-          {isPending ? '...' : 'תקין'}
+          {isPending ? '...' : '????'}
         </button>
       </div>
+
+      {doneDisabledByCheckUnits && (
+        <p className="text-sm text-amber-700" data-testid={`check-units-close-reason-${order.id}`}>
+          ???? ?? ?? ?????? ?????? ??????? ???? ????? ??????
+        </p>
+      )}
     </div>
   );
 }

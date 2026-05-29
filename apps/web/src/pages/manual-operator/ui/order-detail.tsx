@@ -1,21 +1,15 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, Package, Pencil, User, XCircle } from 'lucide-react';
-import { orderCheckUnitsQueryOptions } from '@/entities/manual-shift/api/queries';
 import {
   useDeleteManualShiftOrder,
   useUpdateManualShiftOrderStatus
 } from '@/entities/manual-shift/api/mutations';
-import {
-  useCreateManualShiftOrderCheckUnit,
-  useUpdateManualShiftOrderCheckUnitStatus
-} from '@/entities/manual-shift/api/mutations';
-import { summarizeManualShiftOrderCheckUnits } from '@/entities/manual-shift/model/shift-selectors';
 import { AssignPickerSheet } from './assign-picker-sheet';
 import { DeleteConfirmSheet } from './delete-confirm-sheet';
 import { EditOrderSheet } from './edit-order-sheet';
 import { ErrorFlow } from './error-flow';
+import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
 interface OrderDetailProps {
@@ -30,15 +24,10 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
-  const checkUnitsQuery = useQuery(orderCheckUnitsQueryOptions(order.id));
   const deleteOrder = useDeleteManualShiftOrder(order.id, {
     lineId: order.lineId,
     shiftId: order.shiftId
   });
-  const checkUnits = checkUnitsQuery.data ?? [];
-  const checkUnitProgress = summarizeManualShiftOrderCheckUnits(checkUnits);
-  const createCheckUnit = useCreateManualShiftOrderCheckUnit(order.id);
-  const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
 
   const statusLabel = getOrderStatusLabel(order.status);
   const statusColor = getOrderStatusColor(order.status);
@@ -58,21 +47,6 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
         }
       }
     );
-  }
-
-  function getRelevantTimestamp(
-    unit: (typeof checkUnits)[number]
-  ): { label: string; value: string } | null {
-    if (unit.status === 'checked' && unit.checkedAt) {
-      return { label: 'Checked', value: unit.checkedAt };
-    }
-    if (unit.status === 'returned' && unit.returnedAt) {
-      return { label: 'Returned', value: unit.returnedAt };
-    }
-    if (unit.status === 'voided' && unit.voidedAt) {
-      return { label: 'Voided', value: unit.voidedAt };
-    }
-    return null;
   }
 
   return (
@@ -214,117 +188,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           )}
         </div>
 
-        <section className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4 shadow-sm text-right">
-          <h3 className="font-bold text-lg">Check Units</h3>
-          {checkUnitsQuery.isLoading && (
-            <p className="text-sm text-gray-500" data-testid="check-units-loading">
-              Loading check units...
-            </p>
-          )}
-          {checkUnitsQuery.isError && (
-            <p className="text-sm text-red-600" data-testid="check-units-error">
-              Failed to load check units.
-            </p>
-          )}
-          {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length === 0 && (
-            <p className="text-sm text-gray-500" data-testid="check-units-empty">
-              No check units recorded yet.
-            </p>
-          )}
-          {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length > 0 && (
-            <>
-              <div className="grid grid-cols-2 gap-2 text-sm" data-testid="check-units-summary">
-                <div className="rounded-lg border border-gray-200 px-3 py-2">
-                  Checked / active: {checkUnitProgress.checkedUnits} / {checkUnitProgress.activeUnits}
-                </div>
-                <div className="rounded-lg border border-gray-200 px-3 py-2">
-                  Open: {checkUnitProgress.openUnits}
-                </div>
-                <div className="rounded-lg border border-gray-200 px-3 py-2">
-                  Returned: {checkUnitProgress.returnedUnits}
-                </div>
-                <div className="rounded-lg border border-gray-200 px-3 py-2 text-gray-500">
-                  Voided: {checkUnitProgress.voidedUnits}
-                </div>
-                <div className="rounded-lg border border-gray-200 px-3 py-2">
-                  Partially checked: {checkUnitProgress.partiallyChecked ? 'Yes' : 'No'}
-                </div>
-                <div className="rounded-lg border border-gray-200 px-3 py-2">
-                  Physically checked: {checkUnitProgress.physicallyChecked ? 'Yes' : 'No'}
-                </div>
-              </div>
-              <ul className="flex flex-col gap-2" data-testid="check-units-list">
-                {checkUnits.map((unit) => {
-                  const timestamp = getRelevantTimestamp(unit);
-                  const isVoided = unit.status === 'voided';
-                  return (
-                    <li
-                      key={unit.id}
-                      className={`rounded-xl border px-3 py-2 text-sm ${isVoided ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-200 bg-white'}`}
-                      data-testid={`check-unit-${unit.id}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold">Unit #{unit.unitNumber}</span>
-                        <span className="uppercase">{unit.status.replace('_', ' ')}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        {!isVoided && unit.status !== 'checked' && (
-                          <button
-                            type="button"
-                            onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'checked' })}
-                            className="px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-bold"
-                          >
-                            Mark checked
-                          </button>
-                        )}
-                        {!isVoided && unit.status !== 'returned' && (
-                          <button
-                            type="button"
-                            onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'returned' })}
-                            className="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm font-bold"
-                          >
-                            Needs fix
-                          </button>
-                        )}
-                        {!isVoided && (
-                          <button
-                            type="button"
-                            onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'voided' })}
-                            className="px-3 py-1 rounded-lg border border-red-300 text-red-700 text-sm font-bold"
-                          >
-                            Void
-                          </button>
-                        )}
-                        {/* Edit removed in PR4 - no note/reason editing in this scope */}
-                      </div>
-                      {unit.note && <p className="mt-1">Note: {unit.note}</p>}
-                      {unit.reason && <p className="mt-1">Reason: {unit.reason}</p>}
-                      {timestamp && (
-                        <p className="mt-1 text-xs" dir="ltr">
-                          {timestamp.label}:{' '}
-                          {new Date(timestamp.value).toLocaleTimeString('he-IL', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={() => createCheckUnit.mutate()}
-              className="w-full h-10 rounded-lg bg-gray-100 font-bold"
-              data-testid="create-check-unit"
-            >
-              Add check unit
-            </button>
-          </div>
-        </section>
+        <ManualOrderCheckUnitsPanel orderId={order.id} interactive />
       </main>
 
       <footer className="shrink-0 border-t border-gray-200 bg-white p-4 flex flex-col gap-3">
