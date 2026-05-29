@@ -160,6 +160,7 @@ export type ManualShiftsService = {
     size?: ManualShiftOrderSize;
     comment?: string | null;
     startedAt?: string | null;
+    waitingCheckAt?: string | null;
     finishedAt?: string | null;
     checkedAt?: string | null;
     actor: ActorContext;
@@ -998,6 +999,7 @@ export function createManualShiftsServiceFromRepo(
         size: deriveOrderSize(input.lineCount, input.size, order.size),
         comment: input.comment,
         startedAt: input.startedAt,
+        waitingCheckAt: input.waitingCheckAt,
         finishedAt: input.finishedAt,
         checkedAt: input.checkedAt
       });
@@ -1039,6 +1041,7 @@ export function createManualShiftsServiceFromRepo(
         input.size !== undefined ||
         input.comment !== undefined ||
         input.startedAt !== undefined ||
+        input.waitingCheckAt !== undefined ||
         input.finishedAt !== undefined ||
         input.checkedAt !== undefined;
 
@@ -1174,7 +1177,7 @@ export function createManualShiftsServiceFromRepo(
 
       if (order.status === 'waiting_check' && input.status === 'done') {
         const checkUnits = await repo.listOrderCheckUnits(order.id);
-        if (!canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits)) {
+        if (!canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits, order.palletCount)) {
           throw manualShiftOrderDoneBlockedByCheckUnits(order.id);
         }
         if (!order.checkedAt) patch.checkedAt = nowIso;

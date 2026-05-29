@@ -433,9 +433,10 @@ export function summarizeManualShiftOrderCheckUnits(
 }
 
 export function canCloseOrderFromCheckUnits(
-  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>,
+  expectedUnitsCount?: number | null
 ): boolean {
-  return domainCanTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits);
+  return domainCanTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits, expectedUnitsCount);
 }
 
 const DETAIL_STATUS_PRIORITY: Record<ManualShiftOrderStatus, number> = {

@@ -390,12 +390,25 @@ export function summarizeManualShiftOrderCheckUnits(
 }
 
 export function canTransitionManualShiftOrderToDoneWithCheckUnits(
-  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>,
+  expectedUnitsCount?: number | null
 ): boolean {
+  if (expectedUnitsCount == null || expectedUnitsCount <= 0) {
+    return false;
+  }
+
   if (checkUnits.length === 0) {
-    return true;
+    return false;
   }
 
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
+  if (progress.checkedUnits < expectedUnitsCount) {
+    return false;
+  }
+
+  if (progress.activeUnits < expectedUnitsCount) {
+    return false;
+  }
+
   return progress.activeUnits > 0 && progress.openUnits === 0 && progress.returnedUnits === 0;
 }

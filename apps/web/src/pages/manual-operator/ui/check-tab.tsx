@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, AlertTriangle, Clock, Package, Loader2, ClipboardCheck } from 'lucide-react';
 import type { ManualShiftOrder, ManualShiftLineSummary } from '@wos/domain';
@@ -20,8 +20,13 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
   const { data: orders = [], isLoading } = useQuery(shiftOrdersQueryOptions(shiftId));
   const updateStatus = useUpdateManualShiftOrderStatus();
 
-  const waitingOrders = orders.filter(o => o.status === 'waiting_check');
-  const lineNameMap = new Map(lines.map(ls => [ls.line.id, ls.line.name]));
+  const waitingOrders = orders.filter(
+    (o) =>
+      o.status === 'waiting_check' ||
+      o.status === 'returned' ||
+      (o.status === 'picking' && Boolean(o.waitingCheckAt))
+  );
+  const lineNameMap = new Map(lines.map((ls) => [ls.line.id, ls.line.name]));
 
   function invalidateSummaries() {
     void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(shiftId) });
@@ -63,13 +68,11 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
   return (
     <div className="flex flex-col relative">
       <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 shrink-0">
-        <p className="font-bold text-amber-800 text-base">
-          {waitingOrders.length} נקודות ממתינות לבדיקה
-        </p>
+        <p className="font-bold text-amber-800 text-base">{waitingOrders.length} נקודות ממתינות לבדיקה</p>
       </div>
 
       <div className="flex flex-col gap-3 p-4">
-        {waitingOrders.map(order => (
+        {waitingOrders.map((order) => (
           <CheckOrderCard
             key={order.id}
             order={order}
@@ -104,17 +107,25 @@ interface CheckOrderCardProps {
 function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrderCardProps) {
   const [hasCheckUnits, setHasCheckUnits] = useState(false);
   const [canCloseOrder, setCanCloseOrder] = useState(true);
+  const [checkedUnits, setCheckedUnits] = useState(0);
+
   const elapsed = getElapsedFromIso(order.waitingCheckAt ?? order.createdAt);
   const doneDisabledByCheckUnits = hasCheckUnits && !canCloseOrder;
-  const doneDisabled = isPending || doneDisabledByCheckUnits;
+  const doneDisabledByMissingExpected = order.palletCount == null || order.palletCount <= 0;
+  const doneDisabledByMissingUnits = order.palletCount != null && checkedUnits < order.palletCount;
+  const doneDisabledByStage = order.status !== 'waiting_check';
+  const doneDisabled =
+    isPending ||
+    doneDisabledByCheckUnits ||
+    doneDisabledByMissingExpected ||
+    doneDisabledByMissingUnits ||
+    doneDisabledByStage;
 
   return (
     <div className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col gap-4 shadow-sm">
       <div className="flex flex-col gap-1">
         <div className="flex justify-between items-start gap-2">
-          <span className="font-bold text-xl text-gray-900">
-            {order.pointName ?? 'ללא נקודה'}
-          </span>
+          <span className="font-bold text-xl text-gray-900">{order.pointName ?? 'ללא נקודה'}</span>
           {elapsed && (
             <div className="flex items-center gap-1 text-amber-600 text-sm shrink-0">
               <Clock size={14} />
@@ -123,19 +134,13 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           )}
         </div>
         {lineName && <span className="text-sm text-gray-500">קו: {lineName}</span>}
-        {order.pickerName && (
-          <span className="text-gray-700 font-medium text-sm">מלקט: {order.pickerName}</span>
-        )}
-        {order.orderNumber && (
-          <span className="text-gray-400 text-xs font-mono">{order.orderNumber}</span>
-        )}
+        {order.pickerName && <span className="text-gray-700 font-medium text-sm">מלקט: {order.pickerName}</span>}
+        {order.orderNumber && <span className="text-gray-400 text-xs font-mono">{order.orderNumber}</span>}
       </div>
 
       <div className="flex items-center gap-3 text-sm text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
         {order.size !== 'unknown' && (
-          <span className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded text-xs font-bold">
-            {order.size}
-          </span>
+          <span className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded text-xs font-bold">{order.size}</span>
         )}
         {order.lineCount != null && (
           <span className="flex items-center gap-1 text-gray-600">
@@ -143,21 +148,19 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
             {order.lineCount} שורות
           </span>
         )}
-        {order.palletCount != null && (
-          <span className="text-gray-500 text-xs">{order.palletCount} משטחים</span>
-        )}
-        {order.size === 'unknown' && order.lineCount == null && (
-          <span className="text-gray-400 text-xs">גודל לא ידוע</span>
-        )}
+        {order.palletCount != null && <span className="text-gray-500 text-xs">{order.palletCount} משטחים</span>}
       </div>
 
       <ManualOrderCheckUnitsPanel
         orderId={order.id}
         interactive
+        canInteract
+        expectedUnitsCount={order.palletCount}
         compact
         onStateChange={(state) => {
           setHasCheckUnits(state.hasUnits);
           setCanCloseOrder(state.canCloseOrder);
+          setCheckedUnits(state.checkedUnits);
         }}
       />
 
@@ -184,6 +187,21 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
       {doneDisabledByCheckUnits && (
         <p className="text-sm text-amber-700" data-testid={`check-units-close-reason-${order.id}`}>
           בדוק את כל יחידות הבדיקה הפעילות לפני סגירת ההזמנה
+        </p>
+      )}
+      {doneDisabledByMissingExpected && (
+        <p className="text-sm text-amber-700" data-testid={`check-missing-expected-close-reason-${order.id}`}>
+          לא ניתן לסגור כתקין ללא הצהרה על מספר היחידות שהגיעו לבדיקה.
+        </p>
+      )}
+      {doneDisabledByMissingUnits && (
+        <p className="text-sm text-amber-700" data-testid={`check-missing-units-close-reason-${order.id}`}>
+          חסרות יחידות בדיקה לפני סגירה כתקין
+        </p>
+      )}
+      {doneDisabledByStage && (
+        <p className="text-sm text-amber-700" data-testid={`check-stage-close-reason-${order.id}`}>
+          לא ניתן לסגור כתקין עד סיום מפורש של הליקוט/ההכנה.
         </p>
       )}
     </div>

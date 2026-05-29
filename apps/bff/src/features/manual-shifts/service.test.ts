@@ -1534,7 +1534,23 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
   it('waiting_check → done sets checkedAt and finishedAt', async () => {
     const { service, state } = makeService(() => nowIso);
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: null,
+      checkedAt: nowIso,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
 
     const order = await service.transitionOrderStatus({
       tenantId: ids.tenant,
@@ -1549,7 +1565,7 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
   it('blocks waiting_check → done when active check units include open', async () => {
     const { service, state } = makeService(() => nowIso);
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
     state.checkUnits.push({
       id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
       tenantId: ids.tenant,
@@ -1579,7 +1595,7 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
   it('blocks waiting_check → done when active check units include returned', async () => {
     const { service, state } = makeService(() => nowIso);
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
     state.checkUnits.push({
       id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
       tenantId: ids.tenant,
@@ -1609,7 +1625,7 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
   it('allows waiting_check → done when all active units are checked', async () => {
     const { service, state } = makeService(() => nowIso);
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
     state.checkUnits.push(
       {
         id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
@@ -1658,7 +1674,7 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
   it('waiting_check → returned sets checkedAt', async () => {
     const { service, state } = makeService(() => nowIso);
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 2 }));
 
     const order = await service.transitionOrderStatus({
       tenantId: ids.tenant,
@@ -1673,7 +1689,23 @@ describe('manual shift timestamp correctness (PR2)', () => {
   it('waiting_check → done does not overwrite checkedAt if already set', async () => {
     const firstCheckedAt = '2026-05-26T06:30:00.000Z';
     const { service, state } = makeService(() => nowIso);
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: firstCheckedAt }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: firstCheckedAt, palletCount: 1 }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: null,
+      checkedAt: firstCheckedAt,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
 
     const order = await service.transitionOrderStatus({
       tenantId: ids.tenant,
@@ -1721,7 +1753,7 @@ describe('manual shift timestamp correctness (PR2)', () => {
     const firstTime = '2026-05-26T06:00:00.000Z';
     let callCount = 0;
     const { service, state } = makeService(() => (callCount++ === 0 ? firstTime : nowIso));
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
 
     await service.createOrderError({
       tenantId: ids.tenant,
@@ -1744,7 +1776,23 @@ describe('manual shift timestamp correctness (PR2)', () => {
     const firstCheckedAt = '2026-05-26T06:00:00.000Z';
     let callCount = 0;
     const { service, state } = makeService(() => (callCount++ === 0 ? firstCheckedAt : nowIso));
-    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: null,
+      checkedAt: firstCheckedAt,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
 
     await service.transitionOrderStatus({
       tenantId: ids.tenant,

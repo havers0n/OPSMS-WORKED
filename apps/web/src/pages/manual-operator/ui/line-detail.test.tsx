@@ -493,15 +493,16 @@ describe('PR4 – Line Detail & Manual Orders', () => {
     it('queued: shows "התחל ליקוט" only', async () => {
       await openOrder('queued');
       expect(screen.getByText('התחל ליקוט')).toBeTruthy();
-      expect(screen.queryByText('העבר לבדיקה')).toBeNull();
+      expect(screen.queryByText('התחל בדיקה')).toBeNull();
       expect(screen.queryByText('תקין')).toBeNull();
       expect(screen.queryByText('תקלה')).toBeNull();
       expect(screen.queryByText('הכל תוקן, החזר לבדיקה')).toBeNull();
     });
 
-    it('picking: shows "העבר לבדיקה" only', async () => {
+    it('picking: shows both "התחל בדיקה" and "סיים ליקוט"', async () => {
       await openOrder('picking');
-      expect(screen.getByText('העבר לבדיקה')).toBeTruthy();
+      expect(screen.getByText('התחל בדיקה')).toBeTruthy();
+      expect(screen.getByText('סיים ליקוט')).toBeTruthy();
       expect(screen.queryByText('התחל ליקוט')).toBeNull();
     });
 
@@ -521,7 +522,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
     it('done: shows no action buttons', async () => {
       await openOrder('done');
       expect(screen.queryByText('התחל ליקוט')).toBeNull();
-      expect(screen.queryByText('העבר לבדיקה')).toBeNull();
+      expect(screen.queryByText('התחל בדיקה')).toBeNull();
       expect(screen.queryByText('תקין')).toBeNull();
       expect(screen.queryByText('תקלה')).toBeNull();
       expect(screen.queryByText('הכל תוקן, החזר לבדיקה')).toBeNull();
@@ -545,6 +546,13 @@ describe('PR4 – Line Detail & Manual Orders', () => {
         if (String(url).includes('/status') && method === 'PATCH') {
           const body = JSON.parse((init as RequestInit).body as string) as { status: string };
           return Promise.resolve({ ...order, status: body.status });
+        }
+        if (String(url).includes('/check-units')) {
+          return Promise.resolve([]);
+        }
+        if (String(url).includes('/api/manual-shift-orders/order-1') && method === 'PATCH') {
+          const body = JSON.parse((init as RequestInit).body as string) as { waitingCheckAt?: string };
+          return Promise.resolve({ ...order, waitingCheckAt: body.waitingCheckAt ?? order.waitingCheckAt });
         }
         if (String(url).includes('/orders')) {
           return Promise.resolve([order]);
@@ -578,19 +586,19 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       });
     });
 
-    it('picking → waiting_check: calls PATCH /status with { status: "waiting_check" }', async () => {
+    it('picking -> start check: calls PATCH /api/manual-shift-orders/:id with waitingCheckAt', async () => {
       await setupOrderAndOpen('picking');
-      fireEvent.click(screen.getByText('העבר לבדיקה'));
+      fireEvent.click(screen.getByText('התחל בדיקה'));
 
       await waitFor(() => {
         const call = mockedBffRequest.mock.calls.find(
           ([url, init]) =>
-            String(url).includes('/order-1/status') &&
+            String(url).includes('/api/manual-shift-orders/order-1') &&
             (init as RequestInit | undefined)?.method === 'PATCH'
         );
         expect(call).toBeTruthy();
         const body = JSON.parse((call![1] as RequestInit).body as string);
-        expect(body.status).toBe('waiting_check');
+        expect(typeof body.waitingCheckAt).toBe('string');
       });
     });
 
@@ -647,6 +655,9 @@ describe('PR4 – Line Detail & Manual Orders', () => {
             createdAt: new Date().toISOString(),
             fixedAt: null
           });
+        }
+        if (String(url).includes('/check-units')) {
+          return Promise.resolve([]);
         }
         if (String(url).includes('/orders')) {
           return Promise.resolve([order]);
@@ -902,3 +913,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
     });
   });
 });
+
+
+
+

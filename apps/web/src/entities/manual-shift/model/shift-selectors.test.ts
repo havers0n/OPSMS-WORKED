@@ -777,7 +777,7 @@ describe('manual shift order check unit aggregates', () => {
     expect(result.voidedUnits).toBe(0);
     expect(result.partiallyChecked).toBe(false);
     expect(result.physicallyChecked).toBe(false);
-    expect(canCloseOrderFromCheckUnits([])).toBe(true);
+    expect(canCloseOrderFromCheckUnits([], null)).toBe(false);
   });
 
   it('open only', () => {
@@ -799,14 +799,14 @@ describe('manual shift order check unit aggregates', () => {
     const result = summarizeManualShiftOrderCheckUnits([unit('checked'), unit('checked')]);
     expect(result.activeUnits).toBe(2);
     expect(result.physicallyChecked).toBe(true);
-    expect(canCloseOrderFromCheckUnits([unit('checked')])).toBe(true);
+    expect(canCloseOrderFromCheckUnits([unit('checked')], 1)).toBe(true);
   });
 
   it('returned blocks physically checked', () => {
     const result = summarizeManualShiftOrderCheckUnits([unit('checked'), unit('returned')]);
     expect(result.returnedUnits).toBe(1);
     expect(result.physicallyChecked).toBe(false);
-    expect(canCloseOrderFromCheckUnits([unit('checked'), unit('returned')])).toBe(false);
+    expect(canCloseOrderFromCheckUnits([unit('checked'), unit('returned')], 2)).toBe(false);
   });
 
   it('voided excluded from active progress', () => {
@@ -821,6 +821,6 @@ describe('manual shift order check unit aggregates', () => {
     expect(result.activeUnits).toBe(0);
     expect(result.voidedUnits).toBe(1);
     expect(result.physicallyChecked).toBe(false);
-    expect(canCloseOrderFromCheckUnits([unit('voided')])).toBe(false);
+    expect(canCloseOrderFromCheckUnits([unit('voided')], 1)).toBe(false);
   });
 });

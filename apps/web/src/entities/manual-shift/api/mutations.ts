@@ -71,6 +71,7 @@ type PatchOrderInput = {
   lineCount?: number | null;
   palletCount?: number | null;
   startedAt?: string | null;
+  waitingCheckAt?: string | null;
   finishedAt?: string | null;
   checkedAt?: string | null;
 };
@@ -223,12 +224,13 @@ async function patchOrder({
   lineCount,
   palletCount,
   startedAt,
+  waitingCheckAt,
   finishedAt,
   checkedAt
 }: PatchOrderInput): Promise<ManualShiftOrder> {
   return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ pickerName, pickerWorkerId, lineCount, palletCount, startedAt, finishedAt, checkedAt })
+    body: JSON.stringify({ pickerName, pickerWorkerId, lineCount, palletCount, startedAt, waitingCheckAt, finishedAt, checkedAt })
   });
 }
 

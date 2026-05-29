@@ -323,6 +323,7 @@ export function registerManualShiftsRoutes(
       size: body.size,
       comment: body.comment,
       startedAt: body.startedAt,
+      waitingCheckAt: body.waitingCheckAt,
       finishedAt: body.finishedAt,
       checkedAt: body.checkedAt,
       actor: actorFromAuth(auth)

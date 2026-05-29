@@ -235,8 +235,9 @@ describe('manual shift control contracts', () => {
     });
   });
 
-  it('allows done transition with legacy no-units behavior', () => {
-    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([])).toBe(true);
+  it('blocks done transition when expected count is missing', () => {
+    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([], null)).toBe(false);
+    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([{ status: 'checked' }], undefined)).toBe(false);
   });
 
   it('blocks done when active units include open or returned', () => {
@@ -244,22 +245,22 @@ describe('manual shift control contracts', () => {
       canTransitionManualShiftOrderToDoneWithCheckUnits([
         { status: 'checked' },
         { status: 'open' }
-      ])
+      ], 2)
     ).toBe(false);
     expect(
       canTransitionManualShiftOrderToDoneWithCheckUnits([
         { status: 'returned' }
-      ])
+      ], 1)
     ).toBe(false);
   });
 
-  it('allows done when all active units are checked', () => {
+  it('allows done when expected units are all checked and no open/returned', () => {
     expect(
       canTransitionManualShiftOrderToDoneWithCheckUnits([
         { status: 'checked' },
         { status: 'checked' },
         { status: 'voided' }
-      ])
+      ], 2)
     ).toBe(true);
   });
 
@@ -269,7 +270,15 @@ describe('manual shift control contracts', () => {
       { status: 'voided' }
     ]);
     expect(progress.physicallyChecked).toBe(false);
-    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([{ status: 'voided' }])).toBe(false);
+    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([{ status: 'voided' }], 1)).toBe(false);
+  });
+
+  it('blocks done when declared expected count is above checked units', () => {
+    expect(
+      canTransitionManualShiftOrderToDoneWithCheckUnits([
+        { status: 'checked' }
+      ], 2)
+    ).toBe(false);
   });
 });
 

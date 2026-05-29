@@ -17,9 +17,23 @@ const STATUS_LABELS = {
   voided: 'בוטל'
 } as const;
 
+const RETURN_REASON_OPTIONS = [
+  'חסר מוצר',
+  'כמות לא נכונה',
+  'מוצר לא נכון',
+  'מוצר פגום',
+  'בעיית אריזה',
+  'אחר'
+] as const;
+
 interface ManualOrderCheckUnitsPanelState {
   hasUnits: boolean;
   canCloseOrder: boolean;
+  checkedUnits: number;
+  activeUnits: number;
+  openUnits: number;
+  returnedUnits: number;
+  missingUnits: number;
   isLoading: boolean;
   isError: boolean;
 }
@@ -30,6 +44,7 @@ interface ManualOrderCheckUnitsPanelProps {
   canInteract?: boolean;
   disabledReason?: string;
   compact?: boolean;
+  expectedUnitsCount?: number | null;
   detailsDefaultOpen?: boolean;
   onStateChange?: (state: ManualOrderCheckUnitsPanelState) => void;
 }
@@ -40,6 +55,7 @@ export function ManualOrderCheckUnitsPanel({
   canInteract = true,
   disabledReason,
   compact = false,
+  expectedUnitsCount = null,
   detailsDefaultOpen,
   onStateChange
 }: ManualOrderCheckUnitsPanelProps) {
@@ -50,10 +66,13 @@ export function ManualOrderCheckUnitsPanel({
   const checkUnitsQuery = useQuery(orderCheckUnitsQueryOptions(orderId));
   const createCheckUnit = useCreateManualShiftOrderCheckUnit(orderId);
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
+  const [reasonDraftByUnitId, setReasonDraftByUnitId] = useState<Record<string, string>>({});
+  const [reasonSelectorUnitId, setReasonSelectorUnitId] = useState<string | null>(null);
   const checkUnits = checkUnitsQuery.data ?? [];
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
-  const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits);
+  const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits, expectedUnitsCount);
   const hasUnits = checkUnits.length > 0;
+  const missingUnits = expectedUnitsCount != null ? Math.max(expectedUnitsCount - progress.activeUnits, 0) : 0;
   const canPerformActions = interactive && canInteract;
   const showInteractionHint = interactive && !canInteract && Boolean(disabledReason);
   const createDisabled = !canPerformActions || createCheckUnit.isPending || isCreateCooldown;
@@ -70,10 +89,15 @@ export function ManualOrderCheckUnitsPanel({
     onStateChange?.({
       hasUnits,
       canCloseOrder,
+      checkedUnits: progress.checkedUnits,
+      activeUnits: progress.activeUnits,
+      openUnits: progress.openUnits,
+      returnedUnits: progress.returnedUnits,
+      missingUnits,
       isLoading: checkUnitsQuery.isLoading,
       isError: checkUnitsQuery.isError
     });
-  }, [onStateChange, hasUnits, canCloseOrder, checkUnitsQuery.isLoading, checkUnitsQuery.isError]);
+  }, [onStateChange, hasUnits, canCloseOrder, progress.checkedUnits, progress.activeUnits, progress.openUnits, progress.returnedUnits, missingUnits, checkUnitsQuery.isLoading, checkUnitsQuery.isError]);
 
   useEffect(() => {
     return () => {
@@ -132,7 +156,9 @@ export function ManualOrderCheckUnitsPanel({
             className={`flex ${compact ? 'flex-col gap-2' : 'items-center justify-between gap-3'} rounded-lg border border-gray-200 px-3 py-2`}
             data-testid="check-units-summary"
           >
-            <div className="font-semibold text-sm">נבדקו {progress.checkedUnits} מתוך {progress.activeUnits}</div>
+            <div className="font-semibold text-sm">
+              נבדקו {progress.checkedUnits} מתוך {expectedUnitsCount ?? progress.activeUnits}
+            </div>
             {statusChipLabel && (
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
@@ -166,11 +192,14 @@ export function ManualOrderCheckUnitsPanel({
             {checkUnits.map((unit) => {
               const isVoided = unit.status === 'voided';
               const statusActionDisabled = !canPerformActions || updateCheckUnitStatus.isPending;
-              function mutateStatus(status: 'open' | 'checked' | 'returned' | 'voided') {
+              function mutateStatus(
+                status: 'open' | 'checked' | 'returned' | 'voided',
+                reason?: string
+              ) {
                 if (statusActionDisabled || statusClickLockRef.current) return;
                 statusClickLockRef.current = true;
                 updateCheckUnitStatus.mutate(
-                  { checkUnitId: unit.id, status },
+                  { checkUnitId: unit.id, status, reason },
                   {
                     onSettled: () => {
                       statusClickLockRef.current = false;
@@ -204,6 +233,17 @@ export function ManualOrderCheckUnitsPanel({
                       {!isVoided && unit.status === 'returned' && (
                         <button
                           type="button"
+                          disabled
+                          title="השלמה עדיין לא מחוברת לשרת"
+                          className="px-3 py-1 rounded-lg bg-gray-100 text-gray-500 text-sm font-bold cursor-not-allowed"
+                          data-testid={`create-completion-${unit.id}`}
+                        >
+                          צור השלמה
+                        </button>
+                      )}
+                      {!isVoided && unit.status === 'returned' && (
+                        <button
+                          type="button"
                           onClick={() => mutateStatus('checked')}
                           disabled={statusActionDisabled}
                           className="px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-bold disabled:opacity-50"
@@ -224,7 +264,7 @@ export function ManualOrderCheckUnitsPanel({
                       {!isVoided && unit.status !== 'returned' && (
                         <button
                           type="button"
-                          onClick={() => mutateStatus('returned')}
+                          onClick={() => setReasonSelectorUnitId(unit.id)}
                           disabled={statusActionDisabled}
                           className="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm font-bold disabled:opacity-50"
                         >
@@ -243,12 +283,64 @@ export function ManualOrderCheckUnitsPanel({
                       )}
                     </div>
                   )}
+                  {!isVoided && unit.status !== 'returned' && reasonSelectorUnitId === unit.id && (
+                    <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2" data-testid={`returned-reason-selector-${unit.id}`}>
+                      <p className="text-xs font-semibold text-red-800">בחר סיבת תיקון לפני סימון "דורש תיקון"</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {RETURN_REASON_OPTIONS.map((reasonOption) => {
+                          const isSelected = reasonDraftByUnitId[unit.id] === reasonOption;
+                          return (
+                            <button
+                              key={reasonOption}
+                              type="button"
+                              onClick={() => setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: reasonOption }))}
+                              className={`px-2 py-1 rounded-md border text-xs font-bold ${
+                                isSelected ? 'border-red-400 bg-red-100 text-red-800' : 'border-red-200 bg-white text-red-700'
+                              }`}
+                            >
+                              {reasonOption}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const selectedReason = reasonDraftByUnitId[unit.id];
+                            if (!selectedReason) return;
+                            mutateStatus('returned', selectedReason);
+                            setReasonSelectorUnitId(null);
+                          }}
+                          disabled={statusActionDisabled || !reasonDraftByUnitId[unit.id]}
+                          className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-bold disabled:opacity-50"
+                        >
+                          שמור תיקון
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReasonSelectorUnitId(null)}
+                          className="px-3 py-1 rounded-lg bg-white border border-gray-300 text-xs font-bold"
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {unit.note && <p className="mt-1">הערה: {unit.note}</p>}
-                  {unit.reason && <p className="mt-1">סיבה: {unit.reason}</p>}
+                  {unit.reason && <p className="mt-1">סיבת תיקון: {unit.reason}</p>}
                 </li>
               );
             })}
           </ul>
+          {expectedUnitsCount != null && progress.checkedUnits < expectedUnitsCount && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="missing-check-units-message">
+              חסרות יחידות בדיקה לפני סגירה כתקין
+            </p>
+          )}
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            השלמה היא משימה נפרדת. אחרי השלמה יש לבדוק שוב.
+          </p>
         </>
       )}
 
