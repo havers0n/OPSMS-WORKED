@@ -43,6 +43,29 @@ export type CanvasRenderComponentName =
   | 'StorageNavigator'
   | 'StorageInspectorV2';
 
+export type RackLayerChildName =
+  | 'RackBody'
+  | 'RackSections'
+  | 'RackCells'
+  | 'SelectionOverlayLayer'
+  | 'InteractionRect';
+
+export type RackLayerChildProfilerMetrics = {
+  childName: RackLayerChildName;
+  rackId?: string;
+  renderCount: number;
+  totalActualDurationMs: number;
+  maxActualDurationMs: number;
+  lastActualDurationMs: number;
+  propChanges: Record<string, number>;
+  refChanges: Record<string, number>;
+};
+
+export type RackLayerChildProfiling = {
+  enabled: boolean;
+  childMetrics: Record<string, RackLayerChildProfilerMetrics>;
+};
+
 export type CanvasRenderCauseCounts = {
   stateUpdates: number;
   propsChanges: number;
@@ -198,6 +221,12 @@ declare global {
     /** Per-render event log for RackLayer. Populated when the render pipeline
      *  diagnostics are enabled. Capped at RACK_LAYER_RENDER_HISTORY_LIMIT entries. */
     __WOS_RACK_LAYER_RENDER_EVENTS__?: RackLayerRenderEvents;
+    /** Child-level profiler metrics for RackLayer subtrees. */
+    __WOS_RACK_LAYER_CHILD_PROFILING__?: RackLayerChildProfiling;
+    /** Per-render, per-face profiling entries for RackCells internal phases. */
+    __WOS_RACK_CELLS_INTERNAL_PROFILING__?: RackCellsInternalProfiling;
+    /** Memo comparator skip/render counts per FaceCells instance ("rackId:faceId"). */
+    __WOS_FACE_CELLS_MEMO_STATS__?: FaceCellsMemoStats;
   }
 }
 
@@ -476,6 +505,9 @@ export function resetCanvasRenderPipelineDiagnostics() {
     createCanvasRenderPipelineDiagnostics();
   g.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
   g.__WOS_RACK_LAYER_RENDER_EVENTS__ = { events: [] };
+  resetRackLayerChildProfiling();
+  resetRackCellsInternalProfiling();
+  resetFaceCellsMemoStats();
 }
 
 export function stopCanvasRenderPipelineDiagnostics() {
@@ -770,6 +802,372 @@ export function recordCanvasForceRenderReasons(
   if (!diagnostics) return;
 
   diagnostics.forceRenderReasons = counts;
+}
+
+export function recordRackLayerChildProfiler({
+  childName,
+  rackId,
+  actualDurationMs,
+  changedProps = []
+}: {
+  childName: RackLayerChildName;
+  rackId?: string;
+  actualDurationMs: number;
+  changedProps?: string[];
+}) {
+  if (!isCanvasRenderPipelineDiagnosticsEnabled()) return;
+
+  const g = getGlobal();
+  g.__WOS_RACK_LAYER_CHILD_PROFILING__ ??= {
+    enabled: true,
+    childMetrics: {}
+  };
+
+  const profiling = g.__WOS_RACK_LAYER_CHILD_PROFILING__;
+  if (!profiling) return;
+
+  const metricKey = rackId ? `${childName}:${rackId}` : childName;
+  const metric = profiling.childMetrics[metricKey] ?? {
+    childName,
+    rackId,
+    renderCount: 0,
+    totalActualDurationMs: 0,
+    maxActualDurationMs: 0,
+    lastActualDurationMs: 0,
+    propChanges: {},
+    refChanges: {}
+  };
+
+  metric.renderCount += 1;
+  metric.totalActualDurationMs += actualDurationMs;
+  metric.maxActualDurationMs = Math.max(metric.maxActualDurationMs, actualDurationMs);
+  metric.lastActualDurationMs = actualDurationMs;
+
+  for (const prop of changedProps) {
+    metric.propChanges[prop] = (metric.propChanges[prop] ?? 0) + 1;
+  }
+
+  profiling.childMetrics[metricKey] = metric;
+}
+
+export function resetRackLayerChildProfiling() {
+  const g = getGlobal();
+  g.__WOS_RACK_LAYER_CHILD_PROFILING__ = {
+    enabled: true,
+    childMetrics: {}
+  };
+}
+
+export function getRackLayerChildProfilingReport(): {
+  childMetrics: RackLayerChildProfilerMetrics[];
+  summary: string;
+} {
+  const g = getGlobal();
+  const profiling = g.__WOS_RACK_LAYER_CHILD_PROFILING__;
+  if (!profiling || !profiling.enabled) {
+    return {
+      childMetrics: [],
+      summary: 'RackLayer child profiling not enabled'
+    };
+  }
+
+  const metrics = Object.values(profiling.childMetrics);
+  if (metrics.length === 0) {
+    return {
+      childMetrics: [],
+      summary: 'No child metrics recorded'
+    };
+  }
+
+  // Sort by total duration descending to identify most expensive children
+  const sorted = [...metrics].sort(
+    (a, b) => b.totalActualDurationMs - a.totalActualDurationMs
+  );
+
+  let summary = '\n=== RackLayer Child Attribution Report ===\n';
+  summary += `Total children tracked: ${metrics.length}\n`;
+  summary += `Total time: ${sorted.reduce((sum, m) => sum + m.totalActualDurationMs, 0).toFixed(2)}ms\n\n`;
+
+  // Aggregate per-child metrics (sum across all instances)
+  const perChild: Record<string, { count: number; total: number; max: number; instances: number }> = {};
+  for (const metric of metrics) {
+    const key = metric.childName;
+    const entry = perChild[key] ?? { count: 0, total: 0, max: 0, instances: 0 };
+    entry.count += metric.renderCount;
+    entry.total += metric.totalActualDurationMs;
+    entry.max = Math.max(entry.max, metric.maxActualDurationMs);
+    entry.instances += 1;
+    perChild[key] = entry;
+  }
+
+  summary += '--- Per Child Type ---\n';
+  const sortedPerChild = Object.entries(perChild).sort((a, b) => b[1].total - a[1].total);
+  for (const [childName, stats] of sortedPerChild) {
+    const avgDuration = stats.total / stats.count;
+    summary += `${childName}:\n`;
+    summary += `  Total renders: ${stats.count} (across ${stats.instances} instances)\n`;
+    summary += `  Total duration: ${stats.total.toFixed(2)}ms\n`;
+    summary += `  Max duration: ${stats.max.toFixed(2)}ms\n`;
+    summary += `  Avg per render: ${avgDuration.toFixed(2)}ms\n`;
+    summary += `  % of total: ${((stats.total / sorted.reduce((sum, m) => sum + m.totalActualDurationMs, 0)) * 100).toFixed(1)}%\n`;
+    summary += '\n';
+  }
+
+  summary += '--- Per Instance ---\n';
+  for (const metric of sorted.slice(0, 20)) {
+    const avgDuration = metric.totalActualDurationMs / metric.renderCount;
+    summary += `${metric.childName}${metric.rackId ? `:${metric.rackId}` : ''}:\n`;
+    summary += `  Renders: ${metric.renderCount}\n`;
+    summary += `  Total duration: ${metric.totalActualDurationMs.toFixed(2)}ms\n`;
+    summary += `  Max duration: ${metric.maxActualDurationMs.toFixed(2)}ms\n`;
+    summary += `  Avg: ${avgDuration.toFixed(2)}ms\n`;
+    if (Object.keys(metric.propChanges).length > 0) {
+      summary += `  Changed refs: ${Object.entries(metric.propChanges)
+        .sort((a, b) => b[1] - a[1])
+        .map(([prop, count]) => `${prop}(${count})`)
+        .join(', ')}\n`;
+    }
+    summary += '\n';
+  }
+
+  return { childMetrics: sorted, summary };
+}
+
+// ---------------------------------------------------------------------------
+// RackCells internal per-render, per-phase profiling
+// ---------------------------------------------------------------------------
+
+/**
+ * One entry per FaceCells call that reaches the JSX render path (not early returns).
+ * Populated when __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ is enabled.
+ */
+export type RackCellsFaceRenderEntry = {
+  rackId: string;
+  faceId: string;
+  renderIndex: number;
+  triggerFlags: {
+    publishedCellsByStructure_changed: boolean;
+    occupiedCellIds_changed: boolean;
+    cellRuntimeById_changed: boolean;
+  };
+  cellsGeometry: number;
+  cellsRendered: number;
+  labelsCount: number;
+  geometryMs: number;
+  loopMs: number;
+  visualStateMs: number;
+  lookupMs: number;
+};
+
+export type RackCellsInternalProfiling = {
+  entries: RackCellsFaceRenderEntry[];
+};
+
+export function recordRackCellsFaceRender(entry: RackCellsFaceRenderEntry) {
+  if (!isCanvasRenderPipelineDiagnosticsEnabled()) return;
+  const g = getGlobal();
+  g.__WOS_RACK_CELLS_INTERNAL_PROFILING__ ??= { entries: [] };
+  g.__WOS_RACK_CELLS_INTERNAL_PROFILING__.entries.push(entry);
+}
+
+export function resetRackCellsInternalProfiling() {
+  const g = getGlobal();
+  g.__WOS_RACK_CELLS_INTERNAL_PROFILING__ = { entries: [] };
+}
+
+export function getRackCellsInternalProfilingReport(): {
+  entries: RackCellsFaceRenderEntry[];
+  summary: string;
+} {
+  const g = getGlobal();
+  const profiling = g.__WOS_RACK_CELLS_INTERNAL_PROFILING__;
+  if (!profiling || profiling.entries.length === 0) {
+    return {
+      entries: [],
+      summary: 'No RackCells internal profiling data. Enable render pipeline diagnostics first.'
+    };
+  }
+
+  const { entries } = profiling;
+  const totalEntries = entries.length;
+
+  // Aggregate per rackId
+  const byRack = new Map<
+    string,
+    {
+      faceEntries: RackCellsFaceRenderEntry[];
+      maxRenderIndex: number;
+    }
+  >();
+  for (const entry of entries) {
+    let rack = byRack.get(entry.rackId);
+    if (!rack) {
+      rack = { faceEntries: [], maxRenderIndex: 0 };
+      byRack.set(entry.rackId, rack);
+    }
+    rack.faceEntries.push(entry);
+    if (entry.renderIndex > rack.maxRenderIndex) rack.maxRenderIndex = entry.renderIndex;
+  }
+
+  let summary = '\n=== RackCells Internal Phase Profiling Report ===\n';
+  summary += `Total face renders recorded: ${totalEntries}\n\n`;
+
+  for (const [rackId, { faceEntries, maxRenderIndex }] of byRack) {
+    const totalGeometry = faceEntries.reduce((s, e) => s + e.geometryMs, 0);
+    const totalLoop = faceEntries.reduce((s, e) => s + e.loopMs, 0);
+    const totalVS = faceEntries.reduce((s, e) => s + e.visualStateMs, 0);
+    const totalLookup = faceEntries.reduce((s, e) => s + e.lookupMs, 0);
+    const totalPreRender = totalGeometry + totalLoop;
+    const maxCells = Math.max(...faceEntries.map((e) => e.cellsGeometry));
+    const maxRendered = Math.max(...faceEntries.map((e) => e.cellsRendered));
+    const maxLabels = Math.max(...faceEntries.map((e) => e.labelsCount));
+
+    summary += `Rack ${rackId}:\n`;
+    summary += `  Component renders: ${maxRenderIndex}, face render entries: ${faceEntries.length}\n`;
+    summary += `  Max cells in geometry: ${maxCells}, max rendered (post-cull): ${maxRendered}, max labels: ${maxLabels}\n`;
+    summary += `  Pre-render total: ${totalPreRender.toFixed(2)}ms\n`;
+    summary += `    geometry phase: ${totalGeometry.toFixed(2)}ms (${totalPreRender > 0 ? ((totalGeometry / totalPreRender) * 100).toFixed(0) : 0}%)\n`;
+    summary += `    loop phase:     ${totalLoop.toFixed(2)}ms (${totalPreRender > 0 ? ((totalLoop / totalPreRender) * 100).toFixed(0) : 0}%)\n`;
+    if (totalLoop > 0) {
+      const otherLoop = totalLoop - totalVS - totalLookup;
+      summary += `      └─ visual-state: ${totalVS.toFixed(2)}ms (${((totalVS / totalLoop) * 100).toFixed(0)}%)\n`;
+      summary += `      └─ lookups:      ${totalLookup.toFixed(2)}ms (${((totalLookup / totalLoop) * 100).toFixed(0)}%)\n`;
+      summary += `      └─ other (cull+build): ${otherLoop.toFixed(2)}ms (${((otherLoop / totalLoop) * 100).toFixed(0)}%)\n`;
+    }
+
+    // Trigger breakdown
+    const triggerGroups = new Map<string, number>();
+    for (const e of faceEntries) {
+      const key = [
+        e.triggerFlags.publishedCellsByStructure_changed && 'struct',
+        e.triggerFlags.occupiedCellIds_changed && 'occupied',
+        e.triggerFlags.cellRuntimeById_changed && 'runtime',
+      ].filter(Boolean).join('+') || 'none/mount';
+      triggerGroups.set(key, (triggerGroups.get(key) ?? 0) + 1);
+    }
+    summary += `  Triggers: ${[...triggerGroups.entries()].map(([k, v]) => `${k}(${v})`).join(', ')}\n`;
+    summary += '\n';
+  }
+
+  // Key questions
+  summary += '--- Key Questions ---\n';
+
+  const occupiedOnlyEntries = entries.filter(
+    (e) =>
+      e.triggerFlags.occupiedCellIds_changed &&
+      !e.triggerFlags.publishedCellsByStructure_changed &&
+      !e.triggerFlags.cellRuntimeById_changed
+  );
+  const runtimeOnlyEntries = entries.filter(
+    (e) =>
+      e.triggerFlags.cellRuntimeById_changed &&
+      !e.triggerFlags.publishedCellsByStructure_changed &&
+      !e.triggerFlags.occupiedCellIds_changed
+  );
+  const allWithLabels = entries.filter((e) => e.labelsCount > 0);
+
+  if (occupiedOnlyEntries.length > 0) {
+    const avgGeometry =
+      occupiedOnlyEntries.reduce((s, e) => s + e.geometryMs, 0) / occupiedOnlyEntries.length;
+    const avgLoop =
+      occupiedOnlyEntries.reduce((s, e) => s + e.loopMs, 0) / occupiedOnlyEntries.length;
+    summary += `occupiedCellIds-only renders (${occupiedOnlyEntries.length} face renders):\n`;
+    summary += `  → collectRenderedFaceCellGeometries re-runs: YES (avg ${avgGeometry.toFixed(2)}ms — wasted static work)\n`;
+    summary += `  → resolveCellVisualState re-runs: YES (avg loop ${avgLoop.toFixed(2)}ms)\n`;
+  }
+  if (runtimeOnlyEntries.length > 0) {
+    const avgGeometry =
+      runtimeOnlyEntries.reduce((s, e) => s + e.geometryMs, 0) / runtimeOnlyEntries.length;
+    summary += `cellRuntimeById-only renders (${runtimeOnlyEntries.length} face renders):\n`;
+    summary += `  → collectRenderedFaceCellGeometries re-runs: YES (avg ${avgGeometry.toFixed(2)}ms — wasted static work)\n`;
+  }
+
+  summary += `Labels: ${allWithLabels.length} of ${totalEntries} face renders had visible address labels\n`;
+
+  // Dominant phase across all entries
+  const grandGeometry = entries.reduce((s, e) => s + e.geometryMs, 0);
+  const grandLoop = entries.reduce((s, e) => s + e.loopMs, 0);
+  const grandVS = entries.reduce((s, e) => s + e.visualStateMs, 0);
+  const grandLookup = entries.reduce((s, e) => s + e.lookupMs, 0);
+  const grandPreRender = grandGeometry + grandLoop;
+  summary += `\nGlobal pre-render breakdown (all racks, all renders):\n`;
+  summary += `  geometry: ${grandGeometry.toFixed(2)}ms, loop: ${grandLoop.toFixed(2)}ms\n`;
+  summary += `  visual-state: ${grandVS.toFixed(2)}ms, lookups: ${grandLookup.toFixed(2)}ms\n`;
+  summary += `  Total pre-render JS: ${grandPreRender.toFixed(2)}ms\n`;
+  summary += `  (Remainder = React/Konva JSX reconciliation, not measured here)\n`;
+
+  return { entries, summary };
+}
+
+// ---------------------------------------------------------------------------
+// FaceCells memo comparator stats
+// ---------------------------------------------------------------------------
+
+export type FaceCellsMemoStats = {
+  /** Incremented when comparator returns true (render skipped). Key = "rackId:faceId". */
+  skips: Record<string, number>;
+  /** Incremented when comparator returns false (render proceeds). Key = "rackId:faceId". */
+  renders: Record<string, number>;
+  /** Total comparator invocations (skips + renders). */
+  comparatorCalls: number;
+};
+
+export function recordFaceCellsMemoSkip(key: string) {
+  const g = getGlobal();
+  const s = g.__WOS_FACE_CELLS_MEMO_STATS__;
+  if (!s) return;
+  s.comparatorCalls += 1;
+  s.skips[key] = (s.skips[key] ?? 0) + 1;
+}
+
+export function recordFaceCellsMemoRender(key: string) {
+  const g = getGlobal();
+  const s = g.__WOS_FACE_CELLS_MEMO_STATS__;
+  if (!s) return;
+  s.comparatorCalls += 1;
+  s.renders[key] = (s.renders[key] ?? 0) + 1;
+}
+
+export function resetFaceCellsMemoStats() {
+  const g = getGlobal();
+  g.__WOS_FACE_CELLS_MEMO_STATS__ = { skips: {}, renders: {}, comparatorCalls: 0 };
+}
+
+export function getFaceCellsMemoStatsReport(): { stats: FaceCellsMemoStats; summary: string } {
+  const g = getGlobal();
+  const stats = g.__WOS_FACE_CELLS_MEMO_STATS__;
+  if (!stats) {
+    return {
+      stats: { skips: {}, renders: {}, comparatorCalls: 0 },
+      summary: 'FaceCells memo stats not initialised (set __WOS_FACE_CELLS_MEMO_STATS__ before startup)'
+    };
+  }
+
+  const totalSkips = Object.values(stats.skips).reduce((s, n) => s + n, 0);
+  const totalRenders = Object.values(stats.renders).reduce((s, n) => s + n, 0);
+  const skipPct = stats.comparatorCalls > 0
+    ? ((totalSkips / stats.comparatorCalls) * 100).toFixed(1)
+    : 'N/A';
+
+  let summary = '\n=== FaceCells Memo Comparator Stats ===\n';
+  summary += `Comparator calls: ${stats.comparatorCalls}\n`;
+  summary += `Skipped (returned true):  ${totalSkips} (${skipPct}%)\n`;
+  summary += `Rendered (returned false): ${totalRenders}\n\n`;
+
+  const entries = [
+    ...Object.entries(stats.skips).map(([k, n]) => ({ key: k, skips: n, renders: stats.renders[k] ?? 0 })),
+    ...Object.keys(stats.renders)
+      .filter(k => !(k in stats.skips))
+      .map(k => ({ key: k, skips: 0, renders: stats.renders[k] }))
+  ].sort((a, b) => (b.skips + b.renders) - (a.skips + a.renders));
+
+  if (entries.length > 0) {
+    summary += '--- Per Face ---\n';
+    for (const { key, skips, renders } of entries) {
+      summary += `  ${key.slice(0, 20)}: skip=${skips} render=${renders}\n`;
+    }
+  }
+  return { stats, summary };
 }
 
 export function recordCanvasComponentRender({

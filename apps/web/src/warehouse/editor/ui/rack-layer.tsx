@@ -1,3 +1,35 @@
+/**
+ * RackLayer with child-level attribution diagnostics.
+ *
+ * DIAGNOSTICS USAGE:
+ * 1. Enable in DevTools console:
+ *    window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ = {
+ *      enabled: true,
+ *      // ... other properties (use getCanvasDiagnosticsFlags() for defaults)
+ *    }
+ *    window.__WOS_RACK_LAYER_CHILD_PROFILING__ = { enabled: true, childMetrics: {} }
+ *
+ * 2. Navigate to route or trigger canvas activity
+ *
+ * 3. Get report:
+ *    import { getRackLayerChildProfilingReport } from './canvas-diagnostics'
+ *    const { summary, childMetrics } = getRackLayerChildProfilingReport()
+ *    console.log(summary)
+ *
+ * 4. Analyze results:
+ *    - Which child (RackBody, RackSections, RackCells, SelectionOverlayLayer) is expensive?
+ *    - Does RackBody re-render when only occupiedCellIds_id changes? (indicates static geometry issue)
+ *    - Does RackCells re-render on cellRuntimeById_id? (expected for runtime state)
+ *
+ * Each child is wrapped with React.Profiler to measure:
+ * - renderCount: number of times this child re-rendered
+ * - actualDurationMs: total/max/last render time
+ * - propChanges: which reference-identity props changed (racks_id, cellRuntimeById_id, occupiedCellIds_id, etc.)
+ *
+ * This helps identify the target for the next optimization PR without first implementing
+ * visibleRacks stabilization or splitting RackLayer.
+ */
+
 import type {
   Cell,
   OperationsCellRuntime,
@@ -32,6 +64,11 @@ import {
   type CanvasDiagnosticsFlags,
   type CanvasForceRenderReason
 } from './canvas-diagnostics';
+import {
+  RackLayerChildProfiler,
+  RackLayerProfilingContextProvider,
+  type RackLayerRefIdentityChanges
+} from './rack-layer-child-profiler';
 import {
   isCanvasFullDetailRenderMode,
   isCanvasInteractionRenderMode,
@@ -296,6 +333,36 @@ export const RackLayer = memo(function RackLayer({
   const RackLayerComponent =
     diagnosticsFlags.rackLayerRenderer === 'fast-layer' ? FastLayer : Layer;
   const layerRef = useRef<Konva.Layer | null>(null);
+  const prevRefIdsRef = useRef<{
+    racks_id: number;
+    cellRuntimeById_id: number;
+    occupiedCellIds_id: number;
+    publishedCellsByStructure_id: number;
+    publishedCellsById_id: number;
+  } | null>(null);
+
+  const currentRefIds = {
+    racks_id: refId(racks),
+    cellRuntimeById_id: refId(cellRuntimeById),
+    occupiedCellIds_id: refId(occupiedCellIds),
+    publishedCellsByStructure_id: refId(publishedCellsByStructure),
+    publishedCellsById_id: refId(publishedCellsById)
+  };
+
+  const refIdentityChanges: RackLayerRefIdentityChanges = {
+    racks_id: !prevRefIdsRef.current || prevRefIdsRef.current.racks_id !== currentRefIds.racks_id,
+    cellRuntimeById_id:
+      !prevRefIdsRef.current || prevRefIdsRef.current.cellRuntimeById_id !== currentRefIds.cellRuntimeById_id,
+    occupiedCellIds_id:
+      !prevRefIdsRef.current || prevRefIdsRef.current.occupiedCellIds_id !== currentRefIds.occupiedCellIds_id,
+    publishedCellsByStructure_id:
+      !prevRefIdsRef.current || prevRefIdsRef.current.publishedCellsByStructure_id !== currentRefIds.publishedCellsByStructure_id,
+    publishedCellsById_id:
+      !prevRefIdsRef.current || prevRefIdsRef.current.publishedCellsById_id !== currentRefIds.publishedCellsById_id
+  };
+
+  prevRefIdsRef.current = currentRefIds;
+
   const forceRenderReasonCounts = createForceRenderReasonCounts();
   for (const rack of racks) {
     if (locateTargetRackId === rack.id) {
@@ -515,12 +582,13 @@ export const RackLayer = memo(function RackLayer({
   // This is necessary because RackCells.onCellClick only receives cellId.
 
   return (
-    <RackLayerComponent
-      ref={layerRef}
-      name="rack-base-layer"
-      listening={hitTestEnabled}
-    >
-      {racks.map((rack) => {
+    <RackLayerProfilingContextProvider refIdentityChanges={refIdentityChanges}>
+      <RackLayerComponent
+        ref={layerRef}
+        name="rack-base-layer"
+        listening={hitTestEnabled}
+      >
+        {racks.map((rack) => {
         const geometry = getRackGeometry(rack);
         const isSelected = overlaysEnabled && selectedRackIds.includes(rack.id);
         const forceRenderReason: CanvasForceRenderReason =
@@ -608,108 +676,119 @@ export const RackLayer = memo(function RackLayer({
               }
             }}
           >
-            {!isInteractionMode && !isRestoreBase && (
-              <Rect
-                x={0}
-                y={0}
-                width={geometry.width}
-                height={geometry.height}
-                fill="transparent"
-                wosRectRole="rack-interaction"
-              />
-            )}
+            <RackLayerChildProfiler childName="InteractionRect" rackId={rack.id}>
+              {!isInteractionMode && !isRestoreBase && (
+                <Rect
+                  x={0}
+                  y={0}
+                  width={geometry.width}
+                  height={geometry.height}
+                  fill="transparent"
+                  wosRectRole="rack-interaction"
+                />
+              )}
+            </RackLayerChildProfiler>
 
-            <RackBody
-              geometry={geometry}
-              displayCode={rack.displayCode}
-              rotationDeg={rack.rotationDeg}
-              isSelected={isSelected}
-              isHovered={isHovered}
-              isPassive={isRackPassive}
-              showRackCode={labelsEnabled && labelRevealPolicy.showRackCode}
-              rackCodeProminence={labelRevealPolicy.rackCodeProminence}
-              rackCodePlacement={labelRevealPolicy.rackCodePlacement}
-              disableStrokes={!overlaysEnabled}
-              isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
-              shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
-            />
-
-            {lod >= 1 && faceA && (
-              <RackSections
+            <RackLayerChildProfiler childName="RackBody" rackId={rack.id}>
+              <RackBody
                 geometry={geometry}
-                faceA={faceA}
-                faceB={geometry.isPaired ? effectiveFaceB : null}
+                displayCode={rack.displayCode}
+                rotationDeg={rack.rotationDeg}
                 isSelected={isSelected}
+                isHovered={isHovered}
                 isPassive={isRackPassive}
-                showFaceToken={labelsEnabled && labelRevealPolicy.showFaceToken}
-                showSectionNumbers={labelsEnabled && labelRevealPolicy.showSectionNumbers}
-                faceTokenProminence={labelRevealPolicy.faceTokenProminence}
-                sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
-                rackRotationDeg={rack.rotationDeg}
+                showRackCode={labelsEnabled && labelRevealPolicy.showRackCode}
+                rackCodeProminence={labelRevealPolicy.rackCodeProminence}
+                rackCodePlacement={labelRevealPolicy.rackCodePlacement}
                 disableStrokes={!overlaysEnabled}
                 isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
+                shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
               />
+            </RackLayerChildProfiler>
+
+            {lod >= 1 && faceA && (
+              <RackLayerChildProfiler childName="RackSections" rackId={rack.id}>
+                <RackSections
+                  geometry={geometry}
+                  faceA={faceA}
+                  faceB={geometry.isPaired ? effectiveFaceB : null}
+                  isSelected={isSelected}
+                  isPassive={isRackPassive}
+                  showFaceToken={labelsEnabled && labelRevealPolicy.showFaceToken}
+                  showSectionNumbers={labelsEnabled && labelRevealPolicy.showSectionNumbers}
+                  faceTokenProminence={labelRevealPolicy.faceTokenProminence}
+                  sectionNumberProminence={labelRevealPolicy.sectionNumberProminence}
+                  rackRotationDeg={rack.rotationDeg}
+                  disableStrokes={!overlaysEnabled}
+                  isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
+                />
+              </RackLayerChildProfiler>
             )}
 
             {renderCells && (lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
-              <RackCells
-                geometry={geometry}
-                rackId={rack.id}
-                faceA={faceA}
-                faceB={geometry.isPaired ? effectiveFaceB : null}
-                isSelected={isSelected}
-                activeLevelIndex={rack.id === primarySelectedRackId ? selectedRackActiveLevel : 0}
-                semanticLevels={semanticLevels}
-                publishedCellsByStructure={publishedCellsByStructure}
-                occupiedCellIds={occupiedCellIds}
-                cellRuntimeById={cellRuntimeById}
-                highlightedCellIds={
-                  overlaysEnabled ? baseHighlightedCellIds : EMPTY_CELL_IDS
-                }
-                diagnosticsFlags={diagnosticsFlags}
-                diagnosticsViewport={diagnosticsViewport}
-                isActivelyPanning={isActivelyPanning}
-                renderMode={renderMode}
-                forceRenderAllCells={shouldForceRenderAllCells}
-                isInteractive={hitTestEnabled && canSelectCells}
-                isWorkflowScope={isWorkflowScope}
-                isPassive={isRackPassive}
-                selectedCellId={
-                  selectionOverlayEnabled
-                    ? null
-                    : overlaysEnabled
-                      ? canvasSelectedCellId
-                      : null
-                }
-                locateTargetCellId={
-                  overlaysEnabled ? temporaryLocateTargetCellId : null
-                }
-                workflowSourceCellId={overlaysEnabled ? moveSourceCellId : null}
-                onCellClick={handleCellClick}
-                showCellNumbers={labelsEnabled && labelRevealPolicy.showCellNumbers}
-                cellNumberProminence={labelRevealPolicy.cellNumberProminence}
-                showFocusedFullAddress={labelsEnabled && labelRevealPolicy.showFocusedFullAddress}
-                rackRotationDeg={rack.rotationDeg}
-              />
+              <RackLayerChildProfiler childName="RackCells" rackId={rack.id}>
+                <RackCells
+                  geometry={geometry}
+                  rackId={rack.id}
+                  faceA={faceA}
+                  faceB={geometry.isPaired ? effectiveFaceB : null}
+                  isSelected={isSelected}
+                  activeLevelIndex={rack.id === primarySelectedRackId ? selectedRackActiveLevel : 0}
+                  semanticLevels={semanticLevels}
+                  publishedCellsByStructure={publishedCellsByStructure}
+                  occupiedCellIds={occupiedCellIds}
+                  cellRuntimeById={cellRuntimeById}
+                  highlightedCellIds={
+                    overlaysEnabled ? baseHighlightedCellIds : EMPTY_CELL_IDS
+                  }
+                  diagnosticsFlags={diagnosticsFlags}
+                  diagnosticsViewport={diagnosticsViewport}
+                  isActivelyPanning={isActivelyPanning}
+                  renderMode={renderMode}
+                  forceRenderAllCells={shouldForceRenderAllCells}
+                  isInteractive={hitTestEnabled && canSelectCells}
+                  isWorkflowScope={isWorkflowScope}
+                  isPassive={isRackPassive}
+                  selectedCellId={
+                    selectionOverlayEnabled
+                      ? null
+                      : overlaysEnabled
+                        ? canvasSelectedCellId
+                        : null
+                  }
+                  locateTargetCellId={
+                    overlaysEnabled ? temporaryLocateTargetCellId : null
+                  }
+                  workflowSourceCellId={overlaysEnabled ? moveSourceCellId : null}
+                  onCellClick={handleCellClick}
+                  showCellNumbers={labelsEnabled && labelRevealPolicy.showCellNumbers}
+                  cellNumberProminence={labelRevealPolicy.cellNumberProminence}
+                  showFocusedFullAddress={labelsEnabled && labelRevealPolicy.showFocusedFullAddress}
+                  rackRotationDeg={rack.rotationDeg}
+                />
+              </RackLayerChildProfiler>
             )}
           </Group>
         );
       })}
       {selectionOverlayEnabled && renderSelectionOverlay && (
-        <SelectionOverlayLayer
-          selectedCellId={canvasSelectedCellId}
-          highlightedCellId={singleOverlayHighlightedCellId}
-          racks={racks}
-          primarySelectedRackId={primarySelectedRackId}
-          selectedRackActiveLevel={selectedRackActiveLevel}
-          publishedCellsById={publishedCellsById}
-          publishedCellsByStructure={publishedCellsByStructure}
-          showFocusedFullAddress={
-            labelsEnabled && labelRevealPolicy.showFocusedFullAddress
-          }
-          isActivelyPanning={isActivelyPanning}
-        />
+        <RackLayerChildProfiler childName="SelectionOverlayLayer">
+          <SelectionOverlayLayer
+            selectedCellId={canvasSelectedCellId}
+            highlightedCellId={singleOverlayHighlightedCellId}
+            racks={racks}
+            primarySelectedRackId={primarySelectedRackId}
+            selectedRackActiveLevel={selectedRackActiveLevel}
+            publishedCellsById={publishedCellsById}
+            publishedCellsByStructure={publishedCellsByStructure}
+            showFocusedFullAddress={
+              labelsEnabled && labelRevealPolicy.showFocusedFullAddress
+            }
+            isActivelyPanning={isActivelyPanning}
+          />
+        </RackLayerChildProfiler>
       )}
-    </RackLayerComponent>
+      </RackLayerComponent>
+    </RackLayerProfilingContextProvider>
   );
 });

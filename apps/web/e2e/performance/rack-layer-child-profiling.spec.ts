@@ -59,6 +59,34 @@ interface RackLayerRenderEvent {
   changedKeys: string[];
 }
 
+interface RackCellsFaceRenderEntry {
+  rackId: string;
+  faceId: string;
+  renderIndex: number;
+  triggerFlags: {
+    publishedCellsByStructure_changed: boolean;
+    occupiedCellIds_changed: boolean;
+    cellRuntimeById_changed: boolean;
+  };
+  cellsGeometry: number;
+  cellsRendered: number;
+  labelsCount: number;
+  geometryMs: number;
+  loopMs: number;
+  visualStateMs: number;
+  lookupMs: number;
+}
+
+interface RackCellsInternalProfiling {
+  entries: RackCellsFaceRenderEntry[];
+}
+
+interface FaceCellsMemoStats {
+  skips: Record<string, number>;
+  renders: Record<string, number>;
+  comparatorCalls: number;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -138,6 +166,18 @@ async function enableDiagnosticsBeforeStartup(page: Page) {
     // Initialize render events
     g['__WOS_RACK_LAYER_RENDER_EVENTS__'] = { events: [] };
 
+    // Initialize RackCells internal phase profiling
+    g['__WOS_RACK_CELLS_INTERNAL_PROFILING__'] = {
+      entries: []
+    } as RackCellsInternalProfiling;
+
+    // Initialize FaceCells memo stats
+    g['__WOS_FACE_CELLS_MEMO_STATS__'] = {
+      skips: {},
+      renders: {},
+      comparatorCalls: 0
+    } as FaceCellsMemoStats;
+
     console.log('[WOS] Diagnostics armed before startup');
   });
 }
@@ -190,17 +230,23 @@ async function readChildProfilingMetrics(
   childProfiling: RackLayerChildProfilingData;
   renderPipelineDiagnostics: RenderPipelineDiagnosticsState | Record<string, unknown>;
   rackLayerRenderEvents: { events: RackLayerRenderEvent[] };
+  rackCellsInternalProfiling: RackCellsInternalProfiling;
+  faceCellsMemoStats: FaceCellsMemoStats;
 }> {
   return page.evaluate(() => {
     const g = window as unknown as {
       __WOS_RACK_LAYER_CHILD_PROFILING__?: RackLayerChildProfilingData;
       __WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__?: RenderPipelineDiagnosticsState;
       __WOS_RACK_LAYER_RENDER_EVENTS__?: { events: RackLayerRenderEvent[] };
+      __WOS_RACK_CELLS_INTERNAL_PROFILING__?: RackCellsInternalProfiling;
+      __WOS_FACE_CELLS_MEMO_STATS__?: FaceCellsMemoStats;
     };
     return {
       childProfiling: g.__WOS_RACK_LAYER_CHILD_PROFILING__ ?? { enabled: false, childMetrics: {} },
       renderPipelineDiagnostics: g.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ ?? {},
-      rackLayerRenderEvents: g.__WOS_RACK_LAYER_RENDER_EVENTS__ ?? { events: [] }
+      rackLayerRenderEvents: g.__WOS_RACK_LAYER_RENDER_EVENTS__ ?? { events: [] },
+      rackCellsInternalProfiling: g.__WOS_RACK_CELLS_INTERNAL_PROFILING__ ?? { entries: [] },
+      faceCellsMemoStats: g.__WOS_FACE_CELLS_MEMO_STATS__ ?? { skips: {}, renders: {}, comparatorCalls: 0 }
     };
   });
 }
@@ -275,7 +321,8 @@ test('RackLayer child profiling during route-preview startup (non-destructive)',
   await waitForCanvasReady(page);
 
   // ---------- Read diagnostics ----------
-  const { childProfiling, rackLayerRenderEvents } = await readChildProfilingMetrics(page);
+  const { childProfiling, rackLayerRenderEvents, rackCellsInternalProfiling, faceCellsMemoStats } =
+    await readChildProfilingMetrics(page);
 
   // ---------- Print summary ----------
   console.log('\n========================================');
@@ -394,9 +441,256 @@ test('RackLayer child profiling during route-preview startup (non-destructive)',
     console.log('No RackLayer render events captured.');
   }
 
+  // ---------- RackCells Internal Profiling Report ----------
+  console.log('\n========================================');
+  console.log('RackCells Internal Phase Profiling Report');
+  console.log('========================================\n');
+
+  const internalEntries = rackCellsInternalProfiling.entries ?? [];
+
+  if (internalEntries.length === 0) {
+    console.log('⚠️  No RackCells internal profiling entries collected.');
+    console.log('   Check that __WOS_RACK_CELLS_INTERNAL_PROFILING__ was initialised before startup.');
+  } else {
+    // Aggregate totals across all face renders
+    const totalGeometryMs = internalEntries.reduce((s, e) => s + e.geometryMs, 0);
+    const totalLoopMs     = internalEntries.reduce((s, e) => s + e.loopMs, 0);
+    const totalVSMs       = internalEntries.reduce((s, e) => s + e.visualStateMs, 0);
+    const totalLookupMs   = internalEntries.reduce((s, e) => s + e.lookupMs, 0);
+    const totalInternalJs = totalGeometryMs + totalLoopMs;
+
+    // RackCells React-Profiler total (from child profiler, summed across all instances)
+    const rackCellsProfilerTotal = perChild['RackCells']?.totalDuration ?? 0;
+    const jsxGapMs = Math.max(0, rackCellsProfilerTotal - totalInternalJs);
+    const internalPct = rackCellsProfilerTotal > 0
+      ? ((totalInternalJs / rackCellsProfilerTotal) * 100).toFixed(1)
+      : 'N/A';
+    const jsxPct = rackCellsProfilerTotal > 0
+      ? ((jsxGapMs / rackCellsProfilerTotal) * 100).toFixed(1)
+      : 'N/A';
+
+    console.log('--- Phase Totals (all racks, all renders) ---\n');
+    console.table([{
+      'RackCells Profiler Total (ms)': rackCellsProfilerTotal.toFixed(2),
+      'Pre-render JS Total (ms)':      totalInternalJs.toFixed(2),
+      '  geometry (ms)':               totalGeometryMs.toFixed(2),
+      '  loop (ms)':                   totalLoopMs.toFixed(2),
+      '    visual-state (ms)':         totalVSMs.toFixed(2),
+      '    lookups (ms)':              totalLookupMs.toFixed(2),
+      'JSX/Reconcile Gap (ms)':        jsxGapMs.toFixed(2),
+      'Pre-render JS %':               `${internalPct}%`,
+      'JSX/Reconcile %':               `${jsxPct}%`
+    }]);
+
+    // Per-rack breakdown
+    const byRack = new Map<string, RackCellsFaceRenderEntry[]>();
+    for (const e of internalEntries) {
+      const arr = byRack.get(e.rackId) ?? [];
+      arr.push(e);
+      byRack.set(e.rackId, arr);
+    }
+
+    console.log('\n--- Per-Rack Breakdown ---\n');
+    const perRackRows = [...byRack.entries()].map(([rackId, entries]) => {
+      const gMs   = entries.reduce((s, e) => s + e.geometryMs, 0);
+      const lMs   = entries.reduce((s, e) => s + e.loopMs, 0);
+      const vsMs  = entries.reduce((s, e) => s + e.visualStateMs, 0);
+      const lkMs  = entries.reduce((s, e) => s + e.lookupMs, 0);
+      const pre   = gMs + lMs;
+      // Child profiler value for this rackId
+      const profilerKey = `RackCells:${rackId}`;
+      const profilerMs  = (childProfiling.childMetrics?.[profilerKey]?.totalActualDurationMs ?? 0);
+      const gap = Math.max(0, profilerMs - pre);
+      const maxCells    = Math.max(...entries.map(e => e.cellsGeometry));
+      const maxRendered = Math.max(...entries.map(e => e.cellsRendered));
+      const maxLabels   = Math.max(...entries.map(e => e.labelsCount));
+      const renders     = Math.max(...entries.map(e => e.renderIndex));
+      return {
+        'rackId (short)':      rackId.slice(0, 8),
+        'renders':             renders,
+        'faceEntries':         entries.length,
+        'geometry (ms)':       gMs.toFixed(2),
+        'loop (ms)':           lMs.toFixed(2),
+        '  vs (ms)':           vsMs.toFixed(2),
+        '  lookup (ms)':       lkMs.toFixed(2),
+        'pre-render (ms)':     pre.toFixed(2),
+        'profiler (ms)':       profilerMs.toFixed(2),
+        'jsx gap (ms)':        gap.toFixed(2),
+        'maxCells':            maxCells,
+        'maxRendered':         maxRendered,
+        'maxLabels':           maxLabels
+      };
+    });
+    // Sort by profiler duration desc
+    perRackRows.sort((a, b) => parseFloat(b['profiler (ms)']) - parseFloat(a['profiler (ms)']));
+    console.table(perRackRows);
+
+    // Per-render cell and label counts (top 20 entries by cost)
+    console.log('\n--- Per-Face Render Entries (top 20 by pre-render cost) ---\n');
+    const topEntries = [...internalEntries]
+      .sort((a, b) => (b.geometryMs + b.loopMs) - (a.geometryMs + a.loopMs))
+      .slice(0, 20);
+    console.table(topEntries.map(e => ({
+      'rack (short)':    e.rackId.slice(0, 8),
+      'face':            e.faceId.slice(0, 8),
+      'render#':         e.renderIndex,
+      'cellsGeom':       e.cellsGeometry,
+      'cellsRendered':   e.cellsRendered,
+      'labels':          e.labelsCount,
+      'geometry (ms)':   e.geometryMs.toFixed(2),
+      'loop (ms)':       e.loopMs.toFixed(2),
+      'vs (ms)':         e.visualStateMs.toFixed(2),
+      'lookup (ms)':     e.lookupMs.toFixed(2),
+      'trigger':         [
+        e.triggerFlags.publishedCellsByStructure_changed && 'struct',
+        e.triggerFlags.occupiedCellIds_changed            && 'occupied',
+        e.triggerFlags.cellRuntimeById_changed            && 'runtime'
+      ].filter(Boolean).join('+') || 'none/mount'
+    })));
+
+    // --- Answered questions ---
+    console.log('\n--- Answered Questions ---\n');
+
+    // Q1: bottleneck
+    const jsxGapNum     = parseFloat(jsxPct);
+    const internalNum   = parseFloat(internalPct);
+    if (!isNaN(jsxGapNum) && !isNaN(internalNum)) {
+      const dominant = jsxGapNum > internalNum ? 'JSX/Konva element creation' : 'pre-render JS computation';
+      console.log(`Q1: Is the bottleneck mostly JS computation or JSX/Konva element creation?`);
+      console.log(`    → ${dominant} dominates`);
+      console.log(`       pre-render JS: ${internalPct}%  (geometry ${totalGeometryMs.toFixed(1)}ms + loop ${totalLoopMs.toFixed(1)}ms)`);
+      console.log(`       JSX/reconcile: ${jsxPct}%  (${jsxGapMs.toFixed(1)}ms)`);
+    }
+
+    // Q2: occupiedCellIds-only update recomputes geometry?
+    const occupiedOnlyEntries = internalEntries.filter(e =>
+      e.triggerFlags.occupiedCellIds_changed &&
+      !e.triggerFlags.publishedCellsByStructure_changed &&
+      !e.triggerFlags.cellRuntimeById_changed
+    );
+    console.log(`\nQ2: Does occupiedCellIds-only update recompute collectRenderedFaceCellGeometries?`);
+    if (occupiedOnlyEntries.length > 0) {
+      const avgGeom = occupiedOnlyEntries.reduce((s, e) => s + e.geometryMs, 0) / occupiedOnlyEntries.length;
+      console.log(`    → YES — ${occupiedOnlyEntries.length} face renders triggered; avg geometry: ${avgGeom.toFixed(2)}ms (wasted static work)`);
+    } else {
+      console.log(`    → No occupiedCellIds-only renders observed in this run`);
+    }
+
+    // Q3: cellRuntimeById-only update recomputes geometry?
+    const runtimeOnlyEntries = internalEntries.filter(e =>
+      e.triggerFlags.cellRuntimeById_changed &&
+      !e.triggerFlags.publishedCellsByStructure_changed &&
+      !e.triggerFlags.occupiedCellIds_changed
+    );
+    console.log(`\nQ3: Does cellRuntimeById-only update recompute geometry?`);
+    if (runtimeOnlyEntries.length > 0) {
+      const avgGeom = runtimeOnlyEntries.reduce((s, e) => s + e.geometryMs, 0) / runtimeOnlyEntries.length;
+      console.log(`    → YES — ${runtimeOnlyEntries.length} face renders triggered; avg geometry: ${avgGeom.toFixed(2)}ms (wasted static work)`);
+    } else {
+      console.log(`    → No cellRuntimeById-only renders observed in this run`);
+    }
+
+    // Q4: labels significant?
+    const entriesWithLabels = internalEntries.filter(e => e.labelsCount > 0);
+    const maxLabelCount = Math.max(...internalEntries.map(e => e.labelsCount), 0);
+    console.log(`\nQ4: Are labels a significant part of the cost?`);
+    console.log(`    → ${entriesWithLabels.length} of ${internalEntries.length} face renders had visible address labels (max ${maxLabelCount} per render)`);
+    if (entriesWithLabels.length === 0) {
+      console.log(`       Labels are NOT contributing to startup cost in this run`);
+    } else {
+      console.log(`       Labels present — check per-render loop cost for those entries`);
+    }
+  }
+
+  // ---------- FaceCells Memo Report (before/after) ----------
+  console.log('\n========================================');
+  console.log('FaceCells Memo Comparator Report (before → after)');
+  console.log('========================================\n');
+
+  // Baseline from the pre-memo run (hardcoded for comparison).
+  const BEFORE_FACE_RENDERS = 56;
+  const BEFORE_PROFILER_TOTAL_MS = 1329.5;
+  const BEFORE_JSX_GAP_MS = 1323.4;
+
+  const memoStats = faceCellsMemoStats;
+  const totalComparatorCalls = memoStats.comparatorCalls;
+  const totalSkips = Object.values(memoStats.skips).reduce((s, n) => s + n, 0);
+  const totalComparatorRenders = Object.values(memoStats.renders).reduce((s, n) => s + n, 0);
+
+  // FaceCells renders AFTER memo = mount renders (not through comparator) + comparator-returned-false
+  // Mount renders = entries with renderIndex === 1 (internalEntries declared earlier in the internal report)
+  const mountRenders = internalEntries.filter(e => e.renderIndex === 1).length;
+  const afterFaceRenders = mountRenders + totalComparatorRenders;
+
+  const afterProfilerTotal = (perChild['RackCells']?.totalDuration ?? 0);
+  const afterGeometryMs = internalEntries.reduce((s, e) => s + e.geometryMs, 0);
+  const afterLoopMs = internalEntries.reduce((s, e) => s + e.loopMs, 0);
+  const afterPreRenderJs = afterGeometryMs + afterLoopMs;
+  const afterJsxGap = Math.max(0, afterProfilerTotal - afterPreRenderJs);
+
+  const skipPct = totalComparatorCalls > 0
+    ? ((totalSkips / totalComparatorCalls) * 100).toFixed(1)
+    : 'N/A';
+  const faceRenderReduction = BEFORE_FACE_RENDERS > 0
+    ? (((BEFORE_FACE_RENDERS - afterFaceRenders) / BEFORE_FACE_RENDERS) * 100).toFixed(1)
+    : 'N/A';
+  const profilerReduction = BEFORE_PROFILER_TOTAL_MS > 0
+    ? (((BEFORE_PROFILER_TOTAL_MS - afterProfilerTotal) / BEFORE_PROFILER_TOTAL_MS) * 100).toFixed(1)
+    : 'N/A';
+
+  console.log('--- Summary ---\n');
+  console.table([{
+    'Metric':                   'FaceCells renders',
+    'Before memo':              BEFORE_FACE_RENDERS,
+    'After memo':               afterFaceRenders,
+    'Reduction':                `${faceRenderReduction}%`
+  }, {
+    'Metric':                   'RackCells profiler (ms)',
+    'Before memo':              BEFORE_PROFILER_TOTAL_MS.toFixed(2),
+    'After memo':               afterProfilerTotal.toFixed(2),
+    'Reduction':                `${profilerReduction}%`
+  }, {
+    'Metric':                   'JSX/Reconcile gap (ms)',
+    'Before memo':              BEFORE_JSX_GAP_MS.toFixed(2),
+    'After memo':               afterJsxGap.toFixed(2),
+    'Reduction':                afterJsxGap < BEFORE_JSX_GAP_MS
+      ? `${(((BEFORE_JSX_GAP_MS - afterJsxGap) / BEFORE_JSX_GAP_MS) * 100).toFixed(1)}%`
+      : '0%'
+  }]);
+
+  console.log(`\n--- Comparator Activity ---`);
+  console.log(`Total comparator calls: ${totalComparatorCalls}`);
+  console.log(`Skipped: ${totalSkips} (${skipPct}%)`);
+  console.log(`Rendered via comparator: ${totalComparatorRenders}`);
+  console.log(`Mount renders (not through comparator): ${mountRenders}`);
+
+  if (totalComparatorCalls > 0) {
+    console.log('\n--- Per-Face Comparator Counts (skip / render) ---');
+    const allKeys = new Set([...Object.keys(memoStats.skips), ...Object.keys(memoStats.renders)]);
+    const perFaceRows = [...allKeys].map(key => ({
+      'face (short)': key.slice(0, 24),
+      'skip': memoStats.skips[key] ?? 0,
+      'render': memoStats.renders[key] ?? 0
+    })).sort((a, b) => (b.skip + b.render) - (a.skip + a.render));
+    console.table(perFaceRows);
+  }
+
   console.log('\n========================================\n');
 
-  // Verify that we captured something
+  // ----- Assertions -----
   expect(metrics.length).toBeGreaterThan(0);
   expect(totalDurationMs).toBeGreaterThan(0);
+
+  // Verify memo is firing: comparator must have been called at least once
+  // (mount renders don't go through comparator, but subsequent ones do)
+  expect(totalComparatorCalls).toBeGreaterThan(0);
+
+  // Memo should skip at least some renders
+  expect(totalSkips).toBeGreaterThan(0);
+
+  // FaceCells renders should be fewer than the un-memoized baseline
+  expect(afterFaceRenders).toBeLessThan(BEFORE_FACE_RENDERS);
+
+  // RackCells profiler total should be meaningfully lower
+  expect(afterProfilerTotal).toBeLessThan(BEFORE_PROFILER_TOTAL_MS * 0.9);
 });
