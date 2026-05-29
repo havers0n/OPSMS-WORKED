@@ -1,6 +1,6 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildCellStructureKey,
   type Cell,
@@ -16,7 +16,9 @@ import {
 } from './rack-cells-visual-state';
 import {
   resetCanvasCullingMetrics,
-  type CanvasDiagnosticsFlags
+  resetFaceCellsMemoStats,
+  type CanvasDiagnosticsFlags,
+  type FaceCellsMemoStats
 } from '../canvas-diagnostics';
 
 vi.mock('react-konva', () => ({
@@ -1589,5 +1591,277 @@ describe('RackCells layered paint ownership', () => {
     expect(surfaceCells[0]?.visualState.opacity).toBe(0.18);
     expect(hitRects).toHaveLength(1);
     expect(hitRects[0]?.props.onClick).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FaceCells memo comparator — face semantic equality
+// ---------------------------------------------------------------------------
+
+describe('FaceCells memo comparator — face semantic equality', () => {
+  // Base face used across all cases
+  function makeTestFace(overrides?: Partial<RackFace>): RackFace {
+    return {
+      id: 'face-a',
+      side: 'A',
+      enabled: true,
+      slotNumberingDirection: 'ltr',
+      isMirrored: false,
+      mirrorSourceFaceId: null,
+      sections: [
+        {
+          // 'section-a' matches the hardcoded rackSectionId in createCellsMap so that
+          // faceCellIds is non-empty and the per-face runtime/occupancy checks fire.
+          id: 'section-a',
+          ordinal: 1,
+          length: 5,
+          levels: [{ id: 'lv-1', ordinal: 1, slotCount: 3 }]
+        }
+      ],
+      ...overrides
+    };
+  }
+
+  const BASE_CELLS = createCellsMap(['lv-1'], 3);
+
+  const BASE_PROPS = {
+    geometry,
+    rackId: 'rack-1',
+    faceB: null as RackFace | null,
+    isSelected: false,
+    rackRotationDeg: 0 as const,
+    activeLevelIndex: 0,
+    publishedCellsByStructure: BASE_CELLS,
+    isInteractive: false,
+    onCellClick: () => undefined,
+    showCellNumbers: false,
+    showFocusedFullAddress: false
+  };
+
+  function memoStats(): FaceCellsMemoStats {
+    const g = globalThis as typeof globalThis & { __WOS_FACE_CELLS_MEMO_STATS__?: FaceCellsMemoStats };
+    return g.__WOS_FACE_CELLS_MEMO_STATS__ ?? { skips: {}, renders: {}, comparatorCalls: 0 };
+  }
+
+  beforeEach(() => {
+    resetFaceCellsMemoStats();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('skips re-render when face object ref changes but semantic content is identical', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() }) // new ref, same content
+      );
+    });
+
+    const stats = memoStats();
+    expect(stats.skips['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+    expect(stats.renders['rack-1:face-a']).toBeUndefined();
+  });
+
+  it('re-renders when face.id changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace({ id: 'face-b' }) })
+      );
+    });
+
+    const stats = memoStats();
+    expect(stats.renders['rack-1:face-b']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when face.enabled changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace({ enabled: true }) })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace({ enabled: false }) })
+      );
+    });
+
+    const stats = memoStats();
+    expect(stats.renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when face.slotNumberingDirection changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace({ slotNumberingDirection: 'ltr' }) })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace({ slotNumberingDirection: 'rtl' }) })
+      );
+    });
+
+    const stats = memoStats();
+    expect(stats.renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when a section id changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, {
+          ...BASE_PROPS,
+          faceA: makeTestFace({
+            sections: [{ id: 'section-b', ordinal: 1, length: 5, levels: [{ id: 'lv-1', ordinal: 1, slotCount: 3 }] }]
+          })
+        })
+      );
+    });
+
+    expect(memoStats().renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when a section length changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, {
+          ...BASE_PROPS,
+          faceA: makeTestFace({
+            sections: [{ id: 'sec-1', ordinal: 1, length: 10, levels: [{ id: 'lv-1', ordinal: 1, slotCount: 3 }] }]
+          })
+        })
+      );
+    });
+
+    expect(memoStats().renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when level.slotCount changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, {
+          ...BASE_PROPS,
+          faceA: makeTestFace({
+            sections: [{ id: 'sec-1', ordinal: 1, length: 5, levels: [{ id: 'lv-1', ordinal: 1, slotCount: 5 }] }]
+          })
+        })
+      );
+    });
+
+    expect(memoStats().renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when level.ordinal changes', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace() })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, {
+          ...BASE_PROPS,
+          faceA: makeTestFace({
+            sections: [{ id: 'sec-1', ordinal: 1, length: 5, levels: [{ id: 'lv-1', ordinal: 2, slotCount: 3 }] }]
+          })
+        })
+      );
+    });
+
+    expect(memoStats().renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('re-renders when a cell runtime status changes for this face', () => {
+    const cellId = 'cell-lv-1-1';
+    const runtimeV1 = new Map([[cellId, { status: 'idle' } as OperationsCellRuntime]]);
+    const runtimeV2 = new Map([[cellId, { status: 'reserved' } as OperationsCellRuntime]]);
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace(), cellRuntimeById: runtimeV1 })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace(), cellRuntimeById: runtimeV2 })
+      );
+    });
+
+    expect(memoStats().renders['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+  });
+
+  it('skips re-render when runtime map ref changes but this face has no affected cells', () => {
+    const runtimeV1 = new Map([['other-rack-cell-99', { status: 'idle' } as OperationsCellRuntime]]);
+    const runtimeV2 = new Map([['other-rack-cell-99', { status: 'reserved' } as OperationsCellRuntime]]);
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace(), cellRuntimeById: runtimeV1 })
+      );
+    });
+    resetFaceCellsMemoStats();
+
+    act(() => {
+      renderer.update(
+        createElement(RackCells, { ...BASE_PROPS, faceA: makeTestFace(), cellRuntimeById: runtimeV2 })
+      );
+    });
+
+    const stats = memoStats();
+    expect(stats.skips['rack-1:face-a']).toBeGreaterThanOrEqual(1);
+    expect(stats.renders['rack-1:face-a']).toBeUndefined();
   });
 });

@@ -121,12 +121,44 @@ function semanticLevelsEqual(a: number[], b: number[]): boolean {
   return true;
 }
 
+/**
+ * Compares only the RackFace fields consumed by collectRenderedFaceCellGeometries:
+ *   id, enabled, slotNumberingDirection, and the structural identity of each
+ *   section (id/ordinal/length) and level (id/ordinal/slotCount).
+ *
+ * Deliberately excluded — not used inside FaceCells:
+ *   face.side          — faceTone is hardcoded per FaceCells instance in RackCells
+ *   isMirrored / mirrorSourceFaceId / relationshipMode — resolved upstream in
+ *                        effectiveFaceB; sections already encode the result
+ *   face.faceLength    — affects upstream geometry; captured in totalWidth/rackGeometry
+ *   level.structuralDefaultRole — layout metadata, never read by rendering
+ */
+function faceSemanticEqual(a: RackFace, b: RackFace): boolean {
+  if (a === b) return true;
+  if (a.id !== b.id) return false;
+  if (a.enabled !== b.enabled) return false;
+  if (a.slotNumberingDirection !== b.slotNumberingDirection) return false;
+  if (a.sections.length !== b.sections.length) return false;
+  for (let si = 0; si < a.sections.length; si++) {
+    const sa = a.sections[si]!;
+    const sb = b.sections[si]!;
+    if (sa.id !== sb.id || sa.ordinal !== sb.ordinal || sa.length !== sb.length) return false;
+    if (sa.levels.length !== sb.levels.length) return false;
+    for (let li = 0; li < sa.levels.length; li++) {
+      const la = sa.levels[li]!;
+      const lb = sb.levels[li]!;
+      if (la.id !== lb.id || la.ordinal !== lb.ordinal || la.slotCount !== lb.slotCount) return false;
+    }
+  }
+  return true;
+}
+
 function faceCellsPropsEqual(prev: FaceProps, next: FaceProps): boolean {
   const memoKey = `${next.rackId}:${next.face.id}`;
 
   // --- Scalar / flag props ---
   if (prev.rackId !== next.rackId) { recordFaceCellsMemoRender(memoKey); return false; }
-  if (prev.face !== next.face) { recordFaceCellsMemoRender(memoKey); return false; }
+  if (!faceSemanticEqual(prev.face, next.face)) { recordFaceCellsMemoRender(memoKey); return false; }
   if (prev.totalWidth !== next.totalWidth) { recordFaceCellsMemoRender(memoKey); return false; }
   if (prev.bandY !== next.bandY) { recordFaceCellsMemoRender(memoKey); return false; }
   if (prev.bandH !== next.bandH) { recordFaceCellsMemoRender(memoKey); return false; }

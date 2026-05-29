@@ -607,10 +607,11 @@ test('RackLayer child profiling during route-preview startup (non-destructive)',
   console.log('FaceCells Memo Comparator Report (before → after)');
   console.log('========================================\n');
 
-  // Baseline from the pre-memo run (hardcoded for comparison).
-  const BEFORE_FACE_RENDERS = 56;
-  const BEFORE_PROFILER_TOTAL_MS = 1329.5;
-  const BEFORE_JSX_GAP_MS = 1323.4;
+  // Baseline: after the reference-equality memo (FaceCells renders 56→31),
+  // before the faceSemanticEqual fix for racks_id churn (6 extra renders).
+  const BEFORE_FACE_RENDERS = 31;
+  const BEFORE_PROFILER_TOTAL_MS = 791.4;
+  const BEFORE_JSX_GAP_MS = 786.5;
 
   const memoStats = faceCellsMemoStats;
   const totalComparatorCalls = memoStats.comparatorCalls;
