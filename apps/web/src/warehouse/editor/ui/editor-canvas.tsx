@@ -300,7 +300,17 @@ export function EditorCanvas({
   }, [placementLayout, layoutDraft]);
   const obstacleRouteLayout = placementLayout ?? layoutDraft;
   const obstacleRouteObstacles = useMemo(
-    () => buildRouteObstaclesFromLayout(obstacleRouteLayout),
+    () => {
+      const layoutVersionId = obstacleRouteLayout?.layoutVersionId ?? 'none';
+      recordRoutePreviewAppPhaseMark('obstacle-derivation:start', {
+        onceKey: `obstacle-derivation:start:${layoutVersionId}`
+      });
+      const result = buildRouteObstaclesFromLayout(obstacleRouteLayout);
+      recordRoutePreviewAppPhaseMark('obstacle-derivation:end', {
+        onceKey: `obstacle-derivation:end:${layoutVersionId}`
+      });
+      return result;
+    },
     [obstacleRouteLayout]
   );
   const [obstacleRouteStart, setObstacleRouteStart] =
@@ -322,6 +332,11 @@ export function EditorCanvas({
     window.__WOS_CANVAS_STAGE__ = stageRef.current;
     window.__WOS_CANVAS_KONVA_AUTO_DRAW_ENABLED__ =
       KonvaRuntime.autoDrawEnabled;
+    if (stageRef.current) {
+      recordRoutePreviewAppPhaseMark('konva-stage:ref-available', {
+        onceKey: 'konva-stage:ref-available'
+      });
+    }
     return () => {
       if (window.__WOS_CANVAS_STAGE__ === stageRef.current) {
         window.__WOS_CANVAS_STAGE__ = null;
@@ -527,6 +542,11 @@ export function EditorCanvas({
         : NONE_SELECTION
     : selection;
 
+  const sceneModelLayoutVersionId =
+    (placementLayout ?? layoutDraft)?.layoutVersionId ?? 'none';
+  recordRoutePreviewAppPhaseMark('scene-model:derive:start', {
+    onceKey: `scene-model:derive:start:${sceneModelLayoutVersionId}`
+  });
   const scene = useCanvasSceneModel({
     activeTask,
     activeStorageWorkflow,
@@ -548,6 +568,9 @@ export function EditorCanvas({
     viewMode,
     workspace,
     zoom
+  });
+  recordRoutePreviewAppPhaseMark('scene-model:derive:end', {
+    onceKey: `scene-model:derive:end:${sceneModelLayoutVersionId}`
   });
   const {
     canSelectCells,

@@ -423,12 +423,39 @@ type RoutePreviewStartupDiagnostics = {
   longTasks: StartupLongTaskDetail[];
   phaseMarks: RoutePreviewStartupPhaseMark[];
   appPhaseMarks: RoutePreviewAppPhaseMark[];
+  canvasPhaseMarks: RoutePreviewAppPhaseMark[];
+  konvaPipeline: RoutePreviewStartupKonvaPipeline;
 };
 
 type RoutePreviewAppPhaseMark = {
   name: string;
   startTimeMs: number;
   relativeToProbeStartMs: number;
+};
+
+type RoutePreviewStartupKonvaEvent = {
+  index: number;
+  name: string;
+  source: string;
+  relativeStartMs: number;
+  durationMs: number | null;
+  layerName?: string;
+  nodeType?: string;
+  detail?: string;
+};
+
+type RoutePreviewStartupKonvaPipeline = {
+  startupWindowStartMs: number;
+  startupWindowEndMs: number;
+  eventCount: number;
+  drawSceneCalls: number;
+  drawHitCalls: number;
+  layerDrawCalls: number;
+  layerBatchDrawCalls: number;
+  stageBatchDrawCalls: number;
+  firstDrawSceneStartMs: number | null;
+  firstDrawSceneEndMs: number | null;
+  events: RoutePreviewStartupKonvaEvent[];
 };
 
 type BrowserEnvironment = {
@@ -3018,6 +3045,81 @@ async function measureZoomPhases(page: Page, guard: PageStabilityGuard) {
   return phases;
 }
 
+async function collectKonvaProbeEvents(page: Page): Promise<KonvaCallEvent[]> {
+  return page.evaluate(() => {
+    const global = window as unknown as {
+      __dl1KonvaProbe?: { events?: KonvaCallEvent[] };
+    };
+    const events = global.__dl1KonvaProbe?.events ?? [];
+    return events.map((event) => ({ ...event }));
+  });
+}
+
+function buildRoutePreviewStartupKonvaPipeline({
+  allEvents,
+  startupWindowStartMs,
+  startupWindowEndMs
+}: {
+  allEvents: KonvaCallEvent[];
+  startupWindowStartMs: number;
+  startupWindowEndMs: number;
+}): RoutePreviewStartupKonvaPipeline {
+  const startupEvents = allEvents.filter(
+    (event) =>
+      event.timeMs >= startupWindowStartMs && event.timeMs <= startupWindowEndMs
+  );
+  const eventDurations = new Map<number, number>();
+  for (let index = 0; index < startupEvents.length - 1; index += 1) {
+    const current = startupEvents[index];
+    const next = startupEvents[index + 1];
+    if (!current || !next) continue;
+    eventDurations.set(current.index, Math.max(0, round(next.timeMs - current.timeMs)));
+  }
+  const normalizedEvents: RoutePreviewStartupKonvaEvent[] = startupEvents.map(
+    (event) => ({
+      index: event.index,
+      name: event.name,
+      source: event.source,
+      relativeStartMs: round(event.timeMs - startupWindowStartMs),
+      durationMs: eventDurations.get(event.index) ?? null,
+      layerName: event.layerName,
+      nodeType: event.nodeType,
+      detail: event.detail
+    })
+  );
+  const firstDrawScene = startupEvents.find((event) => event.name === 'drawScene');
+  const firstDrawSceneEndMs =
+    firstDrawScene && eventDurations.has(firstDrawScene.index)
+      ? round(
+          firstDrawScene.timeMs -
+            startupWindowStartMs +
+            (eventDurations.get(firstDrawScene.index) ?? 0)
+        )
+      : null;
+
+  return {
+    startupWindowStartMs: round(startupWindowStartMs),
+    startupWindowEndMs: round(startupWindowEndMs),
+    eventCount: startupEvents.length,
+    drawSceneCalls: startupEvents.filter((event) => event.name === 'drawScene')
+      .length,
+    drawHitCalls: startupEvents.filter((event) => event.name === 'drawHit').length,
+    layerDrawCalls: startupEvents.filter((event) => event.name === 'Layer.draw')
+      .length,
+    layerBatchDrawCalls: startupEvents.filter(
+      (event) => event.name === 'Layer.batchDraw'
+    ).length,
+    stageBatchDrawCalls: startupEvents.filter(
+      (event) => event.name === 'Stage.batchDraw'
+    ).length,
+    firstDrawSceneStartMs: firstDrawScene
+      ? round(firstDrawScene.timeMs - startupWindowStartMs)
+      : null,
+    firstDrawSceneEndMs,
+    events: normalizedEvents
+  };
+}
+
 async function runMeasuredScenario({
   floorId,
   flags,
@@ -3096,6 +3198,8 @@ async function runMeasuredScenario({
         }))
         .sort((a, b) => a.startTimeMs - b.startTimeMs);
     }, startupProbeStartTimeMs);
+    const startupWindowEndMs = await readPerformanceNow(page);
+    const konvaStartupEvents = await collectKonvaProbeEvents(page);
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
@@ -3120,6 +3224,21 @@ async function runMeasuredScenario({
       `[route-preview steady] sampleDurationMs=${round(rawResult.sampleDurationMs)} targetDurationMs=${SAMPLE_DURATION_MS}`
     );
     const startupSummary = summarizeMetrics(startupRawResult);
+    const startupKonvaPipeline = buildRoutePreviewStartupKonvaPipeline({
+      allEvents: konvaStartupEvents,
+      startupWindowStartMs: startupProbeStartTimeMs,
+      startupWindowEndMs
+    });
+    const canvasPhaseMarks = appPhaseMarks.filter((mark) =>
+      [
+        'wos:route-preview:editor-canvas:',
+        'wos:route-preview:scene-model:',
+        'wos:route-preview:obstacle-derivation:',
+        'wos:route-preview:rack-layer:',
+        'wos:route-preview:konva-stage:',
+        'wos:route-preview:canvas-stage:'
+      ].some((prefix) => mark.name.startsWith(prefix))
+    );
     return {
       ...summarizeMetrics(rawResult),
       browserEnvironment,
@@ -3140,7 +3259,9 @@ async function runMeasuredScenario({
         startupWorstFrameMs: startupSummary.metrics.worstFrameMs,
         longTasks: startupLongTasks,
         phaseMarks,
-        appPhaseMarks
+        appPhaseMarks,
+        canvasPhaseMarks,
+        konvaPipeline: startupKonvaPipeline
       }
     };
   }
