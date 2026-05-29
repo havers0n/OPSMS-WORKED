@@ -12,6 +12,7 @@ export type ProductRow = {
   image_urls: unknown;
   image_files: unknown;
   is_active: boolean;
+  category: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -23,7 +24,7 @@ export type ProductAwareRow = {
 };
 
 export const productSelectColumns =
-  'id,source,external_product_id,sku,name,permalink,image_urls,image_files,is_active,created_at,updated_at';
+  'id,source,external_product_id,sku,name,permalink,image_urls,image_files,is_active,category,created_at,updated_at';
 
 const productIdSchema = z.string().uuid();
 

@@ -41,6 +41,14 @@ export type ManualShiftOrderStatus = z.infer<typeof manualShiftOrderStatusSchema
 export const manualShiftOrderSizeSchema = z.enum(['S', 'M', 'L', 'XL', 'unknown']);
 export type ManualShiftOrderSize = z.infer<typeof manualShiftOrderSizeSchema>;
 
+export const manualShiftOrderCheckUnitStatusSchema = z.enum([
+  'open',
+  'checked',
+  'returned',
+  'voided'
+]);
+export type ManualShiftOrderCheckUnitStatus = z.infer<typeof manualShiftOrderCheckUnitStatusSchema>;
+
 export const manualShiftOrderErrorTypeSchema = z.enum([
   'wrong_quantity',
   'wrong_item',
@@ -63,7 +71,10 @@ export const manualShiftOrderEventTypeSchema = z.enum([
   'checker_changed',
   'bulk_imported',
   'point_deleted',
-  'point_restored'
+  'point_restored',
+  'check_unit_created',
+  'check_unit_status_changed',
+  'check_unit_note_changed'
 ]);
 export type ManualShiftOrderEventType = z.infer<typeof manualShiftOrderEventTypeSchema>;
 
@@ -125,6 +136,24 @@ export const manualShiftOrderSchema = z.object({
   deleteReason: z.string().trim().min(1).nullable()
 });
 export type ManualShiftOrder = z.infer<typeof manualShiftOrderSchema>;
+
+export const manualShiftOrderCheckUnitSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  lineId: z.string().uuid(),
+  orderId: z.string().uuid(),
+  unitNumber: z.number().int().positive(),
+  status: manualShiftOrderCheckUnitStatusSchema,
+  note: z.string().trim().min(1).nullable(),
+  reason: z.string().trim().min(1).nullable(),
+  checkedAt: z.string().nullable(),
+  returnedAt: z.string().nullable(),
+  voidedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+export type ManualShiftOrderCheckUnit = z.infer<typeof manualShiftOrderCheckUnitSchema>;
 
 export const manualShiftLineEventSchema = z.object({
   id: z.string().uuid(),
@@ -255,6 +284,18 @@ export const manualShiftBulkAddResultSchema = z.object({
 });
 export type ManualShiftBulkAddResult = z.infer<typeof manualShiftBulkAddResultSchema>;
 
+export const manualShiftOrderCheckUnitProgressSchema = z.object({
+  totalUnits: z.number().int().min(0),
+  activeUnits: z.number().int().min(0),
+  checkedUnits: z.number().int().min(0),
+  openUnits: z.number().int().min(0),
+  returnedUnits: z.number().int().min(0),
+  voidedUnits: z.number().int().min(0),
+  physicallyChecked: z.boolean(),
+  partiallyChecked: z.boolean()
+});
+export type ManualShiftOrderCheckUnitProgress = z.infer<typeof manualShiftOrderCheckUnitProgressSchema>;
+
 const allowedManualShiftOrderTransitions: Record<
   ManualShiftOrderStatus,
   readonly ManualShiftOrderStatus[]
@@ -304,4 +345,57 @@ export function deriveManualShiftLineStatus(
   }
 
   return 'in_progress';
+}
+
+export function summarizeManualShiftOrderCheckUnits(
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+): ManualShiftOrderCheckUnitProgress {
+  let checkedUnits = 0;
+  let openUnits = 0;
+  let returnedUnits = 0;
+  let voidedUnits = 0;
+
+  for (const unit of checkUnits) {
+    switch (unit.status) {
+      case 'checked':
+        checkedUnits += 1;
+        break;
+      case 'open':
+        openUnits += 1;
+        break;
+      case 'returned':
+        returnedUnits += 1;
+        break;
+      case 'voided':
+        voidedUnits += 1;
+        break;
+    }
+  }
+
+  const totalUnits = checkUnits.length;
+  const activeUnits = checkedUnits + openUnits + returnedUnits;
+  const physicallyChecked = activeUnits > 0 && openUnits === 0 && returnedUnits === 0;
+  const partiallyChecked = checkedUnits > 0 && openUnits > 0;
+
+  return {
+    totalUnits,
+    activeUnits,
+    checkedUnits,
+    openUnits,
+    returnedUnits,
+    voidedUnits,
+    physicallyChecked,
+    partiallyChecked
+  };
+}
+
+export function canTransitionManualShiftOrderToDoneWithCheckUnits(
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+): boolean {
+  if (checkUnits.length === 0) {
+    return true;
+  }
+
+  const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
+  return progress.activeUnits > 0 && progress.openUnits === 0 && progress.returnedUnits === 0;
 }

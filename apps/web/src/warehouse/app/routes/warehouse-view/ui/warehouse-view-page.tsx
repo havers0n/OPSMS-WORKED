@@ -26,6 +26,7 @@ import { useSites } from '@/entities/site/api/use-sites';
 import { pickTaskDetailPath, routes } from '@/shared/config/routes';
 import { useT } from '@/shared/i18n';
 import { PublishedViewer } from '@/warehouse/editor/ui/published-viewer';
+import { recordRoutePreviewAppPhaseMark } from '@/warehouse/editor/ui/canvas-diagnostics';
 import { ViewTopBar } from '@/warehouse/viewer/ui/view-top-bar';
 import {
   getFloorDeepLinkAction,
@@ -108,6 +109,25 @@ export function WarehouseViewPage() {
     floorDeepLinkAction.type === 'select-site' ? floorDeepLinkAction.siteId : null;
   const floorDeepLinkActionFloorId =
     floorDeepLinkAction.type === 'select-floor' ? floorDeepLinkAction.floorId : null;
+
+  useEffect(() => {
+    recordRoutePreviewAppPhaseMark('warehouse-view-page:mount');
+  }, []);
+
+  useEffect(() => {
+    if (!targetFloorId) return;
+    recordRoutePreviewAppPhaseMark('deep-link-resolution:start', {
+      onceKey: `deep-link-resolution:start:${targetFloorId}`
+    });
+  }, [targetFloorId]);
+
+  useEffect(() => {
+    if (!targetFloorId) return;
+    if (floorDeepLinkResolution.status === 'resolving') return;
+    recordRoutePreviewAppPhaseMark('deep-link-resolution:end', {
+      onceKey: `deep-link-resolution:end:${targetFloorId}`
+    });
+  }, [floorDeepLinkResolution.status, targetFloorId]);
 
   // Auto-select first site if none selected
   useEffect(() => {
@@ -192,6 +212,11 @@ export function WarehouseViewPage() {
 
   useEffect(() => {
     if (publishedCellsQuery.isLoading) return;
+    if (publishedCellsQuery.data) {
+      recordRoutePreviewAppPhaseMark('published-cells-query:data-available', {
+        onceKey: `published-cells-query:data-available:${activeFloorId ?? 'none'}`
+      });
+    }
     setLocateFeedback((prev) => {
       if (locateDataGapReason) {
         if (prev.kind === 'error' && prev.message === locateDataGapReason) return prev;
@@ -202,7 +227,19 @@ export function WarehouseViewPage() {
       }
       return prev;
     });
-  }, [locateDataGapReason, publishedCellsQuery.isLoading]);
+  }, [
+    activeFloorId,
+    locateDataGapReason,
+    publishedCellsQuery.data,
+    publishedCellsQuery.isLoading
+  ]);
+
+  useEffect(() => {
+    if (!activeFloorId || !workspaceQuery.data) return;
+    recordRoutePreviewAppPhaseMark('workspace-query:data-available', {
+      onceKey: `workspace-query:data-available:${activeFloorId}`
+    });
+  }, [activeFloorId, workspaceQuery.data]);
 
   const handleLocateSubmit = useCallback((query: string) => {
     if (locateDataGapReason) {

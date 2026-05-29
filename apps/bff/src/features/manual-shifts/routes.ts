@@ -8,6 +8,7 @@ import {
   createManualShiftBodySchema,
   createManualShiftLineBodySchema,
   createManualShiftOrderBodySchema,
+  createManualShiftOrderCheckUnitBodySchema,
   createManualShiftOrderErrorBodySchema,
   createManualShiftWorkerBodySchema,
   idResponseSchema,
@@ -15,6 +16,8 @@ import {
   manualShiftLineResponseSchema,
   manualShiftLineSummaryResponseSchema,
   manualShiftOrderErrorResponseSchema,
+  manualShiftOrderCheckUnitResponseSchema,
+  manualShiftOrderCheckUnitsResponseSchema,
   manualShiftOrderResponseSchema,
   manualShiftOrdersResponseSchema,
   manualShiftPeopleSummaryResponseSchema,
@@ -26,7 +29,9 @@ import {
   manualShiftWorkersResponseSchema,
   patchManualShiftLineBodySchema,
   patchManualShiftOrderBodySchema,
+  patchManualShiftOrderCheckUnitBodySchema,
   patchManualShiftWorkerBodySchema,
+  transitionManualShiftOrderCheckUnitStatusBodySchema,
   transitionManualShiftOrderStatusBodySchema,
   pickTaskDetailResponseSchema
 } from '../../schemas.js';
@@ -232,6 +237,18 @@ export function registerManualShiftsRoutes(
     return parseOrThrow(manualShiftOrdersResponseSchema, orders);
   });
 
+  app.get('/api/manual-shift-orders/:orderId/check-units', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+    const checkUnits = await getManualShiftsService(auth).listOrderCheckUnits({ tenantId, orderId });
+    return parseOrThrow(manualShiftOrderCheckUnitsResponseSchema, checkUnits);
+  });
+
   app.post('/api/manual-shift-lines/:lineId/orders', async (request, reply) => {
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
@@ -312,6 +329,68 @@ export function registerManualShiftsRoutes(
     });
 
     return parseOrThrow(manualShiftOrderResponseSchema, order);
+  });
+
+  app.post('/api/manual-shift-orders/:orderId/check-units', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+    const body = parseOrThrow(createManualShiftOrderCheckUnitBodySchema, request.body ?? {});
+    const checkUnit = await getManualShiftsService(auth).createOrderCheckUnit({
+      tenantId,
+      orderId,
+      note: body.note,
+      reason: body.reason,
+      actor: actorFromAuth(auth)
+    });
+
+    void reply.code(201);
+    return parseOrThrow(manualShiftOrderCheckUnitResponseSchema, checkUnit);
+  });
+
+  app.patch('/api/manual-shift-check-units/:checkUnitId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const checkUnitId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { checkUnitId: string }).checkUnitId
+    }).id;
+    const body = parseOrThrow(patchManualShiftOrderCheckUnitBodySchema, request.body ?? {});
+    const checkUnit = await getManualShiftsService(auth).patchOrderCheckUnit({
+      tenantId,
+      checkUnitId,
+      note: body.note,
+      reason: body.reason,
+      actor: actorFromAuth(auth)
+    });
+
+    return parseOrThrow(manualShiftOrderCheckUnitResponseSchema, checkUnit);
+  });
+
+  app.patch('/api/manual-shift-check-units/:checkUnitId/status', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const checkUnitId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { checkUnitId: string }).checkUnitId
+    }).id;
+    const body = parseOrThrow(transitionManualShiftOrderCheckUnitStatusBodySchema, request.body);
+    const checkUnit = await getManualShiftsService(auth).transitionOrderCheckUnitStatus({
+      tenantId,
+      checkUnitId,
+      status: body.status,
+      reason: body.reason,
+      note: body.note,
+      actor: actorFromAuth(auth)
+    });
+
+    return parseOrThrow(manualShiftOrderCheckUnitResponseSchema, checkUnit);
   });
 
   app.patch('/api/manual-shift-orders/:orderId/delete', async (request, reply) => {

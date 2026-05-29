@@ -5,6 +5,8 @@ import type {
   ManualShiftLine,
   ManualShiftLineSummary,
   ManualShiftOrder,
+  ManualShiftOrderCheckUnit,
+  ManualShiftOrderCheckUnitStatus,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
   ManualShiftOrderStatus,
@@ -17,6 +19,7 @@ import type {
 } from '@wos/domain';
 import {
   calculateSizeFromLineCount,
+  canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
   deriveManualShiftLineStatus,
   manualShiftBulkAddInputRowSchema
@@ -24,6 +27,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   invalidManualShiftOrderCreateStatus,
+  invalidManualShiftOrderCheckUnitTransition,
   invalidManualShiftOrderTransition,
   manualShiftAlreadyActive,
   manualShiftClosed,
@@ -31,6 +35,9 @@ import {
   manualShiftLineNotFound,
   manualShiftNotFound,
   manualShiftOrderNotFound,
+  manualShiftOrderCheckUnitNotFound,
+  manualShiftOrderDoneBlockedByCheckUnits,
+  manualShiftOrderCheckUnitNumberConflict,
   manualShiftPickerWorkerInvalid,
   manualShiftWorkerNotFound
 } from './errors.js';
@@ -84,6 +91,29 @@ export type ManualShiftsService = {
   }): Promise<ManualShiftLine>;
   listShiftOrders(input: { tenantId: string; shiftId: string }): Promise<ManualShiftOrder[]>;
   listLineOrders(input: { tenantId: string; lineId: string }): Promise<ManualShiftOrder[]>;
+  listOrderCheckUnits(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderCheckUnit[]>;
+  createOrderCheckUnit(input: {
+    tenantId: string;
+    orderId: string;
+    note?: string | null;
+    reason?: string | null;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrderCheckUnit>;
+  patchOrderCheckUnit(input: {
+    tenantId: string;
+    checkUnitId: string;
+    note?: string | null;
+    reason?: string | null;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrderCheckUnit>;
+  transitionOrderCheckUnitStatus(input: {
+    tenantId: string;
+    checkUnitId: string;
+    status: ManualShiftOrderCheckUnitStatus;
+    reason?: string | null;
+    note?: string | null;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrderCheckUnit>;
   createOrder(input: {
     tenantId: string;
     lineId: string;
@@ -266,6 +296,23 @@ function parseBulkRows(rawText: string): ManualShiftBulkAddResult {
   };
 }
 
+const allowedManualShiftOrderCheckUnitTransitions: Record<
+  ManualShiftOrderCheckUnitStatus,
+  readonly ManualShiftOrderCheckUnitStatus[]
+> = {
+  open: ['checked', 'returned', 'voided'],
+  checked: ['voided'],
+  returned: ['open', 'checked', 'voided'],
+  voided: []
+};
+
+function canTransitionManualShiftOrderCheckUnitStatus(
+  from: ManualShiftOrderCheckUnitStatus,
+  to: ManualShiftOrderCheckUnitStatus
+) {
+  return allowedManualShiftOrderCheckUnitTransitions[from].includes(to);
+}
+
 export function createManualShiftsServiceFromRepo(
   repo: ManualShiftsRepo,
   options?: {
@@ -310,6 +357,15 @@ export function createManualShiftsServiceFromRepo(
     }
 
     return order;
+  }
+
+  async function requireCheckUnit(checkUnitId: string) {
+    const checkUnit = await repo.findOrderCheckUnitById(checkUnitId);
+    if (!checkUnit) {
+      throw manualShiftOrderCheckUnitNotFound(checkUnitId);
+    }
+
+    return checkUnit;
   }
 
   async function buildShiftLines(shiftId: string) {
@@ -567,6 +623,181 @@ export function createManualShiftsServiceFromRepo(
       }
 
       return repo.listLineOrders(input.lineId);
+    },
+
+    async listOrderCheckUnits(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      return repo.listOrderCheckUnits(input.orderId);
+    },
+
+    async createOrderCheckUnit(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await requireActiveShift(order.shiftId);
+
+      let created: ManualShiftOrderCheckUnit;
+      try {
+        created = await repo.createOrderCheckUnit({
+          tenantId: order.tenantId,
+          shiftId: order.shiftId,
+          lineId: order.lineId,
+          orderId: order.id,
+          status: 'open',
+          note: input.note ?? null,
+          reason: input.reason ?? null,
+          createdByProfileId: input.actor.actorProfileId,
+          createdByName: input.actor.actorName
+        });
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === 'MANUAL_SHIFT_ORDER_CHECK_UNIT_NUMBER_CONFLICT'
+        ) {
+          throw manualShiftOrderCheckUnitNumberConflict(order.id);
+        }
+        throw error;
+      }
+
+      await repo.createOrderEvent({
+        tenantId: order.tenantId,
+        shiftId: order.shiftId,
+        lineId: order.lineId,
+        orderId: order.id,
+        eventType: 'check_unit_created',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: null,
+        payload: {
+          checkUnitId: created.id,
+          unitNumber: created.unitNumber,
+          status: created.status,
+          note: created.note,
+          reason: created.reason
+        }
+      });
+
+      return created;
+    },
+
+    async patchOrderCheckUnit(input) {
+      const checkUnit = await requireCheckUnit(input.checkUnitId);
+      if (checkUnit.tenantId !== input.tenantId) {
+        throw manualShiftOrderCheckUnitNotFound(input.checkUnitId);
+      }
+
+      const order = await requireOrder(checkUnit.orderId);
+      if (order.deletedAt) {
+        throw manualShiftOrderNotFound(order.id);
+      }
+
+      await requireActiveShift(order.shiftId);
+
+      const updated = await repo.updateOrderCheckUnit(checkUnit.id, {
+        note: input.note,
+        reason: input.reason,
+        updatedByProfileId: input.actor.actorProfileId,
+        updatedByName: input.actor.actorName
+      });
+
+      if (!updated) {
+        throw manualShiftOrderCheckUnitNotFound(input.checkUnitId);
+      }
+
+      await repo.createOrderEvent({
+        tenantId: order.tenantId,
+        shiftId: order.shiftId,
+        lineId: order.lineId,
+        orderId: order.id,
+        eventType: 'check_unit_note_changed',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: null,
+        payload: {
+          checkUnitId: updated.id,
+          unitNumber: updated.unitNumber,
+          note: updated.note,
+          reason: updated.reason
+        }
+      });
+
+      return updated;
+    },
+
+    async transitionOrderCheckUnitStatus(input) {
+      const checkUnit = await requireCheckUnit(input.checkUnitId);
+      if (checkUnit.tenantId !== input.tenantId) {
+        throw manualShiftOrderCheckUnitNotFound(input.checkUnitId);
+      }
+
+      const order = await requireOrder(checkUnit.orderId);
+      if (order.deletedAt) {
+        throw manualShiftOrderNotFound(order.id);
+      }
+
+      await requireActiveShift(order.shiftId);
+
+      if (!canTransitionManualShiftOrderCheckUnitStatus(checkUnit.status, input.status)) {
+        throw invalidManualShiftOrderCheckUnitTransition(checkUnit.status, input.status);
+      }
+
+      const nowIso = getNowIso();
+      const patch: Parameters<ManualShiftsRepo['updateOrderCheckUnit']>[1] = {
+        status: input.status,
+        note: input.note,
+        reason: input.reason,
+        updatedByProfileId: input.actor.actorProfileId,
+        updatedByName: input.actor.actorName
+      };
+
+      if (input.status === 'checked') {
+        patch.checkedAt = nowIso;
+      }
+      if (input.status === 'returned') {
+        patch.returnedAt = nowIso;
+      }
+      if (input.status === 'voided') {
+        patch.voidedAt = nowIso;
+      }
+      if (input.status === 'open') {
+        patch.checkedAt = null;
+        patch.returnedAt = null;
+      }
+
+      const updated = await repo.updateOrderCheckUnit(checkUnit.id, patch);
+      if (!updated) {
+        throw manualShiftOrderCheckUnitNotFound(input.checkUnitId);
+      }
+
+      await repo.createOrderEvent({
+        tenantId: order.tenantId,
+        shiftId: order.shiftId,
+        lineId: order.lineId,
+        orderId: order.id,
+        eventType: 'check_unit_status_changed',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: null,
+        payload: {
+          checkUnitId: updated.id,
+          unitNumber: updated.unitNumber,
+          fromStatus: checkUnit.status,
+          toStatus: updated.status,
+          note: updated.note,
+          reason: updated.reason
+        }
+      });
+
+      return updated;
     },
 
     async createOrder(input) {
@@ -932,6 +1163,10 @@ export function createManualShiftsServiceFromRepo(
       }
 
       if (order.status === 'waiting_check' && input.status === 'done') {
+        const checkUnits = await repo.listOrderCheckUnits(order.id);
+        if (!canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits)) {
+          throw manualShiftOrderDoneBlockedByCheckUnits(order.id);
+        }
         if (!order.checkedAt) patch.checkedAt = nowIso;
         patch.finishedAt = nowIso;
       }

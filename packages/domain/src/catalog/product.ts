@@ -12,6 +12,7 @@ export const productSchema = z.object({
   imageUrls: productAssetListSchema,
   imageFiles: productAssetListSchema,
   isActive: z.boolean(),
+  category: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });

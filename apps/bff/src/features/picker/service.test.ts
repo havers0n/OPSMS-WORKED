@@ -83,6 +83,10 @@ function createManualRepoMock(): ManualShiftsRepo {
     updateLine: vi.fn(),
     listShiftOrders: vi.fn(),
     listLineOrders: vi.fn(),
+    listOrderCheckUnits: vi.fn(async () => []),
+    findOrderCheckUnitById: vi.fn(async () => null),
+    createOrderCheckUnit: vi.fn(),
+    updateOrderCheckUnit: vi.fn(async () => null),
     findOrderById: vi.fn(async () => ({
       id: ids.order,
       tenantId: ids.tenant,

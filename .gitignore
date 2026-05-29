@@ -22,6 +22,7 @@ apps/web/storybook-static/
 # AI agent artifacts
 .qwen/
 docs/commit-history/
+warehouse-picker-ui/
 
 # Test session artifacts
 .playwright-mcp/

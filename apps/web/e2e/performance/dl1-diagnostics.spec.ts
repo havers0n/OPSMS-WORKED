@@ -34,6 +34,8 @@ const INCLUDE_LOW_END_PROFILE =
   process.env.DL1_DIAGNOSTICS_INCLUDE_LOW_END === '1';
 const DIAGNOSTICS_NON_DESTRUCTIVE =
   process.env.DL1_DIAGNOSTICS_NON_DESTRUCTIVE === '1';
+const DIAGNOSTICS_KONVA_STACKS =
+  process.env.DL1_DIAGNOSTICS_KONVA_STACKS === '1';
 const DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 const DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
 const execFile = promisify(execFileCallback);
@@ -219,6 +221,9 @@ type KonvaCallEvent = {
   traceId: number | null;
   name: string;
   source: string;
+  sourceCategory?: string;
+  sourceFrame?: string;
+  sourceStack?: string[];
   timeMs: number;
   layerName?: string;
   nodeType?: string;
@@ -389,6 +394,89 @@ type ReportEntry = {
     layoutVersionId: string;
     expectedPreviewCellCount: number;
   };
+  routePreviewStartup?: RoutePreviewStartupDiagnostics;
+};
+
+type StartupLongTaskDetail = {
+  name: string;
+  startTimeMs: number;
+  relativeStartMs: number;
+  durationMs: number;
+};
+
+type RoutePreviewStartupPhaseMark = {
+  phase:
+    | 'probe-start'
+    | 'pushState-start'
+    | 'after-pushState-popstate'
+    | 'canvas-stable'
+    | 'steady-probe-start'
+    | 'steady-probe-end';
+  timeMs: number;
+  relativeToProbeStartMs: number;
+};
+
+type RoutePreviewStartupDiagnostics = {
+  metrics: Metrics;
+  startupTransitionMs: number;
+  startupSettleMs: number;
+  startupBeforeSettleMs: number;
+  steadySampleMs: number;
+  startupLongTaskCount: number;
+  startupLongTaskTotalMs: number;
+  startupWorstFrameMs: number;
+  longTasks: StartupLongTaskDetail[];
+  phaseMarks: RoutePreviewStartupPhaseMark[];
+  appPhaseMarks: RoutePreviewAppPhaseMark[];
+  canvasPhaseMarks: RoutePreviewAppPhaseMark[];
+  konvaPipeline: RoutePreviewStartupKonvaPipeline;
+};
+
+type RoutePreviewAppPhaseMark = {
+  name: string;
+  startTimeMs: number;
+  relativeToProbeStartMs: number;
+};
+
+type RoutePreviewStartupKonvaEvent = {
+  index: number;
+  name: string;
+  source: string;
+  sourceCategory?: string;
+  sourceFrame?: string;
+  sourceStack?: string[];
+  relativeStartMs: number;
+  durationMs: number | null;
+  layerName?: string;
+  nodeType?: string;
+  detail?: string;
+};
+
+type RoutePreviewStartupKonvaSourceGroup = {
+  eventType: string;
+  source: string;
+  sourceCategory: string;
+  sourceFrame: string;
+  layerName: string;
+  count: number;
+  firstRelativeStartMs: number;
+  lastRelativeStartMs: number;
+  totalDurationMs: number;
+};
+
+type RoutePreviewStartupKonvaPipeline = {
+  startupWindowStartMs: number;
+  startupWindowEndMs: number;
+  eventCount: number;
+  drawSceneCalls: number;
+  drawHitCalls: number;
+  layerDrawCalls: number;
+  layerBatchDrawCalls: number;
+  stageBatchDrawCalls: number;
+  firstDrawSceneStartMs: number | null;
+  firstDrawSceneEndMs: number | null;
+  events: RoutePreviewStartupKonvaEvent[];
+  sourceGroups: RoutePreviewStartupKonvaSourceGroup[];
 };
 
 type BrowserEnvironment = {
@@ -1267,7 +1355,7 @@ async function startKonvaPipelineProbe(page: Page) {
     { timeout: 15000 }
   );
 
-  await page.evaluate(() => {
+  await page.evaluate(({ stackCaptureEnabled }) => {
     type MutableKonvaProbeResult = KonvaPipelineProbeResult & {
       events: KonvaCallEvent[];
     };
@@ -1354,7 +1442,9 @@ async function startKonvaPipelineProbe(page: Page) {
       events: []
     };
     const MAX_BATCH_DRAW_STACK_CAPTURES = 200;
+    const MAX_EVENT_STACK_CAPTURES = 300;
     let batchDrawStackCaptures = 0;
+    let eventStackCaptures = 0;
 
     let eventIndex = 0;
     let currentTraceId: number | null = null;
@@ -1407,6 +1497,79 @@ async function startKonvaPipelineProbe(page: Page) {
         .filter((line) => !line.includes('playwright'));
       return lines.slice(0, 3).join(' <- ') || 'unknown';
     };
+    const sanitizeStackFrames = (stack: string | undefined) => {
+      if (!stack) return [];
+      return stack
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => !line.startsWith('Error'))
+        .filter((line) => !line.includes('wrappedKonvaProbeMethod'))
+        .filter((line) => !line.includes('startKonvaPipelineProbe'))
+        .filter((line) => !line.includes('captureSourceAttribution'))
+        .filter((line) => !line.includes('record ('))
+        .filter((line) => !line.includes('playwright'))
+        .slice(0, 4);
+    };
+    const normalizeSourceFrame = (frame: string | undefined) => {
+      if (!frame) return 'unknown';
+      return frame.replace(/^at\s+/, '').replace(/\?.*$/, '');
+    };
+    const classifySourceCategory = (
+      existingSource: string,
+      topFrame: string | undefined
+    ) => {
+      if (
+        existingSource !== 'unknown' &&
+        existingSource !== 'konva-scheduled-draw'
+      ) {
+        return existingSource;
+      }
+      const frame = topFrame ?? '';
+      if (frame.includes('use-canvas-viewport-controller')) {
+        return 'viewport-controller';
+      }
+      if (frame.includes('rack-layer.tsx')) return 'rack-layer';
+      if (frame.includes('selection-overlay-layer')) return 'selection-overlay';
+      if (frame.includes('rack-body.tsx')) return 'rack-body';
+      if (frame.includes('react-dom')) return 'react-commit';
+      if (frame.includes('._requestDraw')) return 'konva-node-request-draw';
+      if (frame.includes('._setAttr')) return 'konva-node-attr-set';
+      if (frame.includes('[as setPoints]')) return 'konva-line-set-points';
+      if (frame.includes('node_modules/konva') || frame.includes('Konva')) {
+        return 'konva-internal';
+      }
+      return existingSource === 'konva-scheduled-draw'
+        ? 'konva-scheduled-draw'
+        : 'unknown';
+    };
+    const captureSourceAttribution = () => {
+      if (!stackCaptureEnabled) {
+        return {
+          sourceCategory: classifySourceCategory(readSource(), undefined),
+          sourceFrame: undefined,
+          sourceStack: undefined
+        };
+      }
+      if (eventStackCaptures >= MAX_EVENT_STACK_CAPTURES) {
+        return {
+          sourceCategory: 'stack-capture-limit',
+          sourceFrame: 'stack-capture-limit',
+          sourceStack: undefined
+        };
+      }
+      eventStackCaptures += 1;
+      const frames = sanitizeStackFrames(new Error().stack);
+      const meaningfulFrame = frames.find(
+        (frame) => !frame.includes('eval at evaluate')
+      );
+      const topFrame = normalizeSourceFrame(meaningfulFrame ?? frames[0]);
+      return {
+        sourceCategory: classifySourceCategory(readSource(), topFrame),
+        sourceFrame: topFrame,
+        sourceStack: frames.length > 0 ? frames : undefined
+      };
+    };
 
     const ensureTrace = () => {
       if (currentTraceId !== null) return currentTraceId;
@@ -1423,11 +1586,16 @@ async function startKonvaPipelineProbe(page: Page) {
       details: Partial<Omit<KonvaCallEvent, 'index' | 'name' | 'timeMs'>> = {}
     ) => {
       const source = details.source ?? readSource();
+      const sourceCategory =
+        details.sourceCategory ?? classifySourceCategory(source, details.sourceFrame);
       const event: KonvaCallEvent = {
         index: eventIndex,
         traceId: currentTraceId,
         name,
         source,
+        sourceCategory,
+        sourceFrame: details.sourceFrame,
+        sourceStack: details.sourceStack,
         timeMs: Math.round(performance.now() * 100) / 100,
         layerName: details.layerName,
         nodeType: details.nodeType,
@@ -1663,6 +1831,7 @@ async function startKonvaPipelineProbe(page: Page) {
             (probe.batchDrawByCallsite.__stack_capture_limit__ ?? 0) + 1;
         }
         record('Layer.batchDraw', {
+          ...captureSourceAttribution(),
           layerName,
           nodeType: self.getType?.() ?? 'Layer',
           detail: `_waitingForDraw=${String(self._waitingForDraw)}`
@@ -1678,6 +1847,7 @@ async function startKonvaPipelineProbe(page: Page) {
         ensureTrace();
         probe.layerDrawCalls += 1;
         record('Layer.draw', {
+          ...captureSourceAttribution(),
           source:
             readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
           layerName: getLayerName(self),
@@ -1694,6 +1864,7 @@ async function startKonvaPipelineProbe(page: Page) {
         ensureTrace();
         probe.drawSceneCalls += 1;
         record('drawScene', {
+          ...captureSourceAttribution(),
           source:
             readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
           layerName: getLayerName(self),
@@ -1713,6 +1884,7 @@ async function startKonvaPipelineProbe(page: Page) {
         ensureTrace();
         probe.drawHitCalls += 1;
         record('drawHit', {
+          ...captureSourceAttribution(),
           source:
             readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
           layerName: getLayerName(self),
@@ -1758,6 +1930,7 @@ async function startKonvaPipelineProbe(page: Page) {
               (probe.batchDrawByCallsite.__stack_capture_limit__ ?? 0) + 1;
           }
           record('Layer.batchDraw', {
+            ...captureSourceAttribution(),
             layerName,
             nodeType: self.getType?.() ?? 'Layer',
             detail: `_waitingForDraw=${String(self._waitingForDraw)}`
@@ -1770,6 +1943,7 @@ async function startKonvaPipelineProbe(page: Page) {
           ensureTrace();
           probe.layerDrawCalls += 1;
           record('Layer.draw', {
+            ...captureSourceAttribution(),
             source:
               readSource() === 'unknown'
                 ? 'konva-scheduled-draw'
@@ -1822,7 +1996,7 @@ async function startKonvaPipelineProbe(page: Page) {
     }
 
     global.__dl1KonvaProbe = probe;
-  });
+  }, { stackCaptureEnabled: DIAGNOSTICS_KONVA_STACKS });
 }
 
 async function stopKonvaPipelineProbe(
@@ -2501,6 +2675,8 @@ async function waitForStableWarehouseCanvas(
   const timeoutMs = options.timeoutMs ?? 20000;
   const settleMs = options.settleMs ?? 650;
   const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  let settleWaitTotalMs = 0;
   let previous: WarehouseCanvasSnapshot | null = null;
   let last: WarehouseCanvasSnapshot | null = null;
 
@@ -2511,6 +2687,7 @@ async function waitForStableWarehouseCanvas(
   while (Date.now() < deadline) {
     const first = await readWarehouseCanvasSnapshot(page);
     await page.waitForTimeout(settleMs);
+    settleWaitTotalMs += settleMs;
     const second = await readWarehouseCanvasSnapshot(page);
     last = second;
 
@@ -2519,7 +2696,16 @@ async function waitForStableWarehouseCanvas(
       isUsableCanvasSnapshot(second) &&
       snapshotsEqual(first, second)
     ) {
-      return second;
+      const startupTransitionMs = Date.now() - startedAt;
+      return {
+        snapshot: second,
+        startupTransitionMs,
+        startupSettleMs: settleWaitTotalMs,
+        startupBeforeSettleMs: Math.max(
+          0,
+          startupTransitionMs - settleWaitTotalMs
+        )
+      };
     }
 
     previous = first;
@@ -2531,7 +2717,11 @@ async function waitForStableWarehouseCanvas(
 }
 
 async function waitForWarehouseCanvas(page: Page) {
-  await waitForStableWarehouseCanvas(page);
+  return waitForStableWarehouseCanvas(page);
+}
+
+async function readPerformanceNow(page: Page): Promise<number> {
+  return page.evaluate(() => performance.now());
 }
 
 async function getCanvasBox(page: Page) {
@@ -2962,6 +3152,122 @@ async function measureZoomPhases(page: Page, guard: PageStabilityGuard) {
   return phases;
 }
 
+async function collectKonvaProbeEvents(page: Page): Promise<KonvaCallEvent[]> {
+  return page.evaluate(() => {
+    const global = window as unknown as {
+      __dl1KonvaProbe?: { events?: KonvaCallEvent[] };
+    };
+    const events = global.__dl1KonvaProbe?.events ?? [];
+    return events.map((event) => ({ ...event }));
+  });
+}
+
+function buildRoutePreviewStartupKonvaPipeline({
+  allEvents,
+  startupWindowStartMs,
+  startupWindowEndMs
+}: {
+  allEvents: KonvaCallEvent[];
+  startupWindowStartMs: number;
+  startupWindowEndMs: number;
+}): RoutePreviewStartupKonvaPipeline {
+  const startupEvents = allEvents.filter(
+    (event) =>
+      event.timeMs >= startupWindowStartMs && event.timeMs <= startupWindowEndMs
+  );
+  const eventDurations = new Map<number, number>();
+  for (let index = 0; index < startupEvents.length - 1; index += 1) {
+    const current = startupEvents[index];
+    const next = startupEvents[index + 1];
+    if (!current || !next) continue;
+    eventDurations.set(current.index, Math.max(0, round(next.timeMs - current.timeMs)));
+  }
+  const normalizedEvents: RoutePreviewStartupKonvaEvent[] = startupEvents.map(
+    (event) => ({
+      index: event.index,
+      name: event.name,
+      source: event.source,
+      sourceCategory: event.sourceCategory,
+      sourceFrame: event.sourceFrame,
+      sourceStack: event.sourceStack,
+      relativeStartMs: round(event.timeMs - startupWindowStartMs),
+      durationMs: eventDurations.get(event.index) ?? null,
+      layerName: event.layerName,
+      nodeType: event.nodeType,
+      detail: event.detail
+    })
+  );
+  const groups = new Map<string, RoutePreviewStartupKonvaSourceGroup>();
+  for (const event of normalizedEvents) {
+    const sourceCategory = event.sourceCategory ?? 'unknown';
+    const sourceFrame = event.sourceFrame ?? 'unknown';
+    const layerName = event.layerName ?? 'unknown-layer';
+    const key = [
+      event.name,
+      event.source,
+      sourceCategory,
+      sourceFrame,
+      layerName
+    ].join('|');
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, {
+        eventType: event.name,
+        source: event.source,
+        sourceCategory,
+        sourceFrame,
+        layerName,
+        count: 1,
+        firstRelativeStartMs: event.relativeStartMs,
+        lastRelativeStartMs: event.relativeStartMs,
+        totalDurationMs: event.durationMs ?? 0
+      });
+      continue;
+    }
+    current.count += 1;
+    current.lastRelativeStartMs = event.relativeStartMs;
+    current.totalDurationMs += event.durationMs ?? 0;
+  }
+  const sourceGroups = [...groups.values()]
+    .map((group) => ({
+      ...group,
+      totalDurationMs: round(group.totalDurationMs)
+    }))
+    .sort((a, b) => b.count - a.count || a.firstRelativeStartMs - b.firstRelativeStartMs);
+  const firstDrawScene = startupEvents.find((event) => event.name === 'drawScene');
+  const firstDrawSceneEndMs =
+    firstDrawScene && eventDurations.has(firstDrawScene.index)
+      ? round(
+          firstDrawScene.timeMs -
+            startupWindowStartMs +
+            (eventDurations.get(firstDrawScene.index) ?? 0)
+        )
+      : null;
+
+  return {
+    startupWindowStartMs: round(startupWindowStartMs),
+    startupWindowEndMs: round(startupWindowEndMs),
+    eventCount: startupEvents.length,
+    drawSceneCalls: startupEvents.filter((event) => event.name === 'drawScene')
+      .length,
+    drawHitCalls: startupEvents.filter((event) => event.name === 'drawHit').length,
+    layerDrawCalls: startupEvents.filter((event) => event.name === 'Layer.draw')
+      .length,
+    layerBatchDrawCalls: startupEvents.filter(
+      (event) => event.name === 'Layer.batchDraw'
+    ).length,
+    stageBatchDrawCalls: startupEvents.filter(
+      (event) => event.name === 'Stage.batchDraw'
+    ).length,
+    firstDrawSceneStartMs: firstDrawScene
+      ? round(firstDrawScene.timeMs - startupWindowStartMs)
+      : null,
+    firstDrawSceneEndMs,
+    events: normalizedEvents,
+    sourceGroups
+  };
+}
+
 async function runMeasuredScenario({
   floorId,
   flags,
@@ -2978,7 +3284,16 @@ async function runMeasuredScenario({
   profile: DeviceProfile;
   runtimeOptions?: VariantRuntimeOptions;
   scenario: ScenarioName;
-}) {
+}): Promise<{
+  metrics: Metrics;
+  frameBuckets: FrameBuckets;
+  browserEnvironment: BrowserEnvironment;
+  cullingMetrics: CullingMetrics;
+  konvaPipeline: KonvaPipelineProbeResult;
+  phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>>;
+  renderPipeline: RenderPipelineDiagnostics;
+  routePreviewStartup?: RoutePreviewStartupDiagnostics;
+}> {
   await page.setViewportSize(profile.viewport);
   await setVariantRuntimeOptions(page, runtimeOptions);
 
@@ -2988,18 +3303,51 @@ async function runMeasuredScenario({
     await setVariantRuntimeOptions(page, runtimeOptions);
     const browserEnvironment = await getBrowserEnvironment(page);
     await startRenderPipelineProbe(page);
-    const frameProbeId = await startFrameProbe(page);
+    const phaseMarks: RoutePreviewStartupPhaseMark[] = [];
+    const startupProbeStartTimeMs = await readPerformanceNow(page);
+    const pushPhaseMark = async (phase: RoutePreviewStartupPhaseMark['phase']) => {
+      const now = await readPerformanceNow(page);
+      phaseMarks.push({
+        phase,
+        timeMs: round(now),
+        relativeToProbeStartMs: round(now - startupProbeStartTimeMs)
+      });
+    };
+    const startupProbeId = await startFrameProbe(page);
+    await pushPhaseMark('probe-start');
     const konvaProbeStartPromise = startKonvaPipelineProbe(page);
+    await pushPhaseMark('pushState-start');
     await page.evaluate((url) => {
       window.history.pushState(null, '', url);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }, `/warehouse/view?floor=${floorId}`);
-    await waitForWarehouseCanvas(page);
+    await pushPhaseMark('after-pushState-popstate');
+    const startupCanvasResult = await waitForWarehouseCanvas(page);
+    await pushPhaseMark('canvas-stable');
+    const startupRawResult = await stopFrameProbe(page, startupProbeId);
     await konvaProbeStartPromise;
+    await pushPhaseMark('steady-probe-start');
+    const steadyProbeId = await startFrameProbe(page);
+    await page.waitForTimeout(SAMPLE_DURATION_MS);
     if (runtimeOptions?.disableRackLayerHitGraph) {
       await setRackLayerHitGraphDisabled(page, true);
     }
-    const rawResult = await stopFrameProbe(page, frameProbeId);
+    const rawResult = await stopFrameProbe(page, steadyProbeId);
+    await pushPhaseMark('steady-probe-end');
+    const appPhaseMarks = await page.evaluate((probeStartTimeMs) => {
+      return performance
+        .getEntriesByType('mark')
+        .filter((entry) => entry.name.startsWith('wos:route-preview:'))
+        .map((entry) => ({
+          name: entry.name,
+          startTimeMs: Math.round(entry.startTime * 100) / 100,
+          relativeToProbeStartMs:
+            Math.round((entry.startTime - probeStartTimeMs) * 100) / 100
+        }))
+        .sort((a, b) => a.startTimeMs - b.startTimeMs);
+    }, startupProbeStartTimeMs);
+    const startupWindowEndMs = await readPerformanceNow(page);
+    const konvaStartupEvents = await collectKonvaProbeEvents(page);
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
@@ -3007,13 +3355,62 @@ async function runMeasuredScenario({
     }
     const cullingMetrics = await getCanvasCullingMetrics(page);
     await setVariantRuntimeOptions(page, undefined);
+    const startupLongTasks = startupRawResult.longTasks
+      .map((task) => ({
+        name: task.name,
+        startTimeMs: round(task.startTime),
+        relativeStartMs: round(task.startTime - startupProbeStartTimeMs),
+        durationMs: round(task.duration)
+      }))
+      .sort((a, b) => a.relativeStartMs - b.relativeStartMs);
+    startupLongTasks.forEach((task, index) => {
+      console.log(
+        `[route-preview startup] longTask[${index}] relativeStartMs=${task.relativeStartMs} durationMs=${task.durationMs} name=${task.name}`
+      );
+    });
+    console.log(
+      `[route-preview steady] sampleDurationMs=${round(rawResult.sampleDurationMs)} targetDurationMs=${SAMPLE_DURATION_MS}`
+    );
+    const startupSummary = summarizeMetrics(startupRawResult);
+    const startupKonvaPipeline = buildRoutePreviewStartupKonvaPipeline({
+      allEvents: konvaStartupEvents,
+      startupWindowStartMs: startupProbeStartTimeMs,
+      startupWindowEndMs
+    });
+    const canvasPhaseMarks = appPhaseMarks.filter((mark) =>
+      [
+        'wos:route-preview:editor-canvas:',
+        'wos:route-preview:scene-model:',
+        'wos:route-preview:obstacle-derivation:',
+        'wos:route-preview:rack-layer:',
+        'wos:route-preview:konva-stage:',
+        'wos:route-preview:canvas-stage:'
+      ].some((prefix) => mark.name.startsWith(prefix))
+    );
     return {
       ...summarizeMetrics(rawResult),
       browserEnvironment,
       cullingMetrics,
       konvaPipeline,
       phases: {},
-      renderPipeline
+      renderPipeline,
+      routePreviewStartup: {
+        metrics: startupSummary.metrics,
+        startupTransitionMs: round(startupCanvasResult.startupTransitionMs),
+        startupSettleMs: round(startupCanvasResult.startupSettleMs),
+        startupBeforeSettleMs: round(startupCanvasResult.startupBeforeSettleMs),
+        steadySampleMs: round(rawResult.sampleDurationMs),
+        startupLongTaskCount: startupLongTasks.length,
+        startupLongTaskTotalMs: round(
+          startupLongTasks.reduce((sum, task) => sum + task.durationMs, 0)
+        ),
+        startupWorstFrameMs: startupSummary.metrics.worstFrameMs,
+        longTasks: startupLongTasks,
+        phaseMarks,
+        appPhaseMarks,
+        canvasPhaseMarks,
+        konvaPipeline: startupKonvaPipeline
+      }
     };
   }
 
@@ -4019,7 +4416,8 @@ test.describe('DL1 diagnostics harness', () => {
                   layoutVersionId,
                   expectedPreviewCellCount:
                     demoWarehouseExpectedPreviewCellCount
-                }
+                },
+                routePreviewStartup: result.routePreviewStartup
               });
             }
           } finally {
@@ -4038,6 +4436,10 @@ test.describe('DL1 diagnostics harness', () => {
         generatedAt: new Date().toISOString(),
         sampleDurationMs: SAMPLE_DURATION_MS,
         scenario,
+        diagnosticsConfig: {
+          nonDestructive: DIAGNOSTICS_NON_DESTRUCTIVE,
+          konvaStackCaptureEnabled: DIAGNOSTICS_KONVA_STACKS
+        },
         buildIdentity,
         renderPipelineReport: buildRenderPipelineMarkdown(scenario, entries),
         entries
@@ -4113,6 +4515,18 @@ test.describe('DL1 diagnostics harness', () => {
             entry.konvaPipeline.shapeSceneDrawCostByRole['cell-base-batch']
               ?.totalMs ?? 0,
           longTaskCount: entry.metrics.longTaskCount,
+          startupTransitionMs:
+            entry.routePreviewStartup?.startupTransitionMs ?? null,
+          startupSettleMs: entry.routePreviewStartup?.startupSettleMs ?? null,
+          startupBeforeSettleMs:
+            entry.routePreviewStartup?.startupBeforeSettleMs ?? null,
+          steadySampleMs: entry.routePreviewStartup?.steadySampleMs ?? null,
+          startupLongTaskCount:
+            entry.routePreviewStartup?.startupLongTaskCount ?? null,
+          startupLongTaskTotalMs:
+            entry.routePreviewStartup?.startupLongTaskTotalMs ?? null,
+          startupWorstFrameMs:
+            entry.routePreviewStartup?.startupWorstFrameMs ?? null,
           cullingRatio: entry.cullingRatio,
           gt100MsPct:
             entry.frameBuckets.gt100To250Ms.percent +

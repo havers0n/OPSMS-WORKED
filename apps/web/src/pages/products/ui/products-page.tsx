@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { productCatalogQueryOptions } from '@/entities/product/api/queries';
+import { productCatalogQueryOptions, productCategoriesQueryOptions } from '@/entities/product/api/queries';
 import { productDetailPath } from '@/shared/config/routes';
 import { useT } from '@/shared/i18n';
 
@@ -12,13 +12,17 @@ export function ProductsPage() {
   const t = useT();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [category, setCategory] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { data: categoriesData } = useQuery(productCategoriesQueryOptions());
+  const categories = categoriesData ?? [];
   const { data, isLoading, isFetching, refetch } = useQuery(
     productCatalogQueryOptions({
       query: search,
       page,
-      pageSize
+      pageSize,
+      category
     })
   );
 
@@ -32,6 +36,11 @@ export function ProductsPage() {
 
   function openProduct(productId: string) {
     navigate(productDetailPath(productId), { state: { from: returnTo } });
+  }
+
+  function selectCategory(cat: string | null) {
+    setCategory(cat);
+    setPage(0);
   }
 
   return (
@@ -52,6 +61,37 @@ export function ProductsPage() {
             </div>
           </div>
         </header>
+
+        {/* Category tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 px-5 py-0 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => selectCategory(null)}
+            className={[
+              'whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors',
+              category === null
+                ? 'border-cyan-500 text-cyan-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            ].join(' ')}
+          >
+            Все
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => selectCategory(cat.name)}
+              className={[
+                'whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors',
+                category === cat.name
+                  ? 'border-cyan-500 text-cyan-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              ].join(' ')}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
 
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-3">
           <label className="relative min-w-[280px] flex-1">
@@ -90,10 +130,10 @@ export function ProductsPage() {
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="w-[32%] px-5 py-2.5">{t('products.table.name')}</th>
-                    <th className="w-[14%] px-4 py-2.5">{t('products.table.sku')}</th>
-                    <th className="w-[18%] px-4 py-2.5">{t('products.table.externalId')}</th>
-                    <th className="w-[14%] px-4 py-2.5">{t('products.table.source')}</th>
+                    <th className="w-[30%] px-5 py-2.5">{t('products.table.name')}</th>
+                    <th className="w-[12%] px-4 py-2.5">{t('products.table.sku')}</th>
+                    <th className="w-[14%] px-4 py-2.5">Категория</th>
+                    <th className="w-[16%] px-4 py-2.5">{t('products.table.externalId')}</th>
                     <th className="w-[10%] px-4 py-2.5">{t('products.table.status')}</th>
                     <th className="w-[11%] px-4 py-2.5">{t('products.table.updated')}</th>
                     <th className="w-[1%] px-4 py-2.5 text-right">{t('products.table.open')}</th>
@@ -110,10 +150,18 @@ export function ProductsPage() {
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-600">
                         {product.sku ?? '-'}
                       </td>
+                      <td className="px-4 py-2.5">
+                        {product.category ? (
+                          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                            {product.category}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-500">
                         {product.externalProductId}
                       </td>
-                      <td className="px-4 py-2.5 text-slate-600">{product.source}</td>
                       <td className="px-4 py-2.5">
                         <span
                           className={[

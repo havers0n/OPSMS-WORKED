@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculateSizeFromLineCount,
+  canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
   deriveManualShiftLineStatus,
   manualShiftBulkAddResultSchema,
   manualShiftDaySummarySchema,
+  manualShiftOrderCheckUnitSchema,
   manualShiftOrderSchema,
+  summarizeManualShiftOrderCheckUnits,
   manualShiftTodayResponseSchema
 } from './manual-shift-control';
 
@@ -188,4 +191,86 @@ describe('manual shift control contracts', () => {
       rows: [{ pointName: 'ירושלים', orderNumber: null, size: 'S' }]
     });
   });
+  it('parses manual shift order check unit schema', () => {
+    expect(
+      manualShiftOrderCheckUnitSchema.parse({
+        id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        tenantId: '4caa9e8d-4349-4623-ad98-9e2f2af193c0',
+        shiftId: '1e4a2d96-cd70-4881-a73e-aa0c086a9bc8',
+        lineId: '945e796c-1fd6-471d-8992-a7810fd3567f',
+        orderId: 'a89d5d4a-5f0c-44a7-b75f-eaf3138fbfbf',
+        unitNumber: 2,
+        status: 'open',
+        note: null,
+        reason: null,
+        checkedAt: null,
+        returnedAt: null,
+        voidedAt: null,
+        createdAt: '2026-05-26T10:00:00.000Z',
+        updatedAt: '2026-05-26T10:00:00.000Z'
+      })
+    ).toMatchObject({
+      unitNumber: 2,
+      status: 'open'
+    });
+  });
+
+  it('summarizes order check unit progress', () => {
+    const progress = summarizeManualShiftOrderCheckUnits([
+      { status: 'checked' },
+      { status: 'open' },
+      { status: 'returned' },
+      { status: 'voided' }
+    ]);
+
+    expect(progress).toEqual({
+      totalUnits: 4,
+      activeUnits: 3,
+      checkedUnits: 1,
+      openUnits: 1,
+      returnedUnits: 1,
+      voidedUnits: 1,
+      physicallyChecked: false,
+      partiallyChecked: true
+    });
+  });
+
+  it('allows done transition with legacy no-units behavior', () => {
+    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([])).toBe(true);
+  });
+
+  it('blocks done when active units include open or returned', () => {
+    expect(
+      canTransitionManualShiftOrderToDoneWithCheckUnits([
+        { status: 'checked' },
+        { status: 'open' }
+      ])
+    ).toBe(false);
+    expect(
+      canTransitionManualShiftOrderToDoneWithCheckUnits([
+        { status: 'returned' }
+      ])
+    ).toBe(false);
+  });
+
+  it('allows done when all active units are checked', () => {
+    expect(
+      canTransitionManualShiftOrderToDoneWithCheckUnits([
+        { status: 'checked' },
+        { status: 'checked' },
+        { status: 'voided' }
+      ])
+    ).toBe(true);
+  });
+
+  it('does not treat only-voided units as physically checked', () => {
+    const progress = summarizeManualShiftOrderCheckUnits([
+      { status: 'voided' },
+      { status: 'voided' }
+    ]);
+    expect(progress.physicallyChecked).toBe(false);
+    expect(canTransitionManualShiftOrderToDoneWithCheckUnits([{ status: 'voided' }])).toBe(false);
+  });
 });
+
+

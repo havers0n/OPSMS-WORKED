@@ -27,6 +27,7 @@ import {
   recordCanvasComponentRender,
   recordCanvasKonvaLayerDraw,
   recordCanvasRackLayerNodeCount,
+  recordRoutePreviewAppPhaseMark,
   type CanvasDiagnosticsFlags,
   type CanvasForceRenderReason
 } from './canvas-diagnostics';
@@ -318,10 +319,16 @@ export const RackLayer = memo(function RackLayer({
       const originalBatchDraw = layer.batchDraw.bind(layer);
       layer.draw = (...args: Parameters<Konva.Layer['draw']>) => {
         recordCanvasKonvaLayerDraw('draw', 'rack-base-layer');
+        recordRoutePreviewAppPhaseMark('rack-layer:first-draw-complete', {
+          onceKey: 'rack-layer:first-draw-complete'
+        });
         return originalDraw(...args);
       };
       layer.batchDraw = (...args: Parameters<Konva.Layer['batchDraw']>) => {
         recordCanvasKonvaLayerDraw('batchDraw', 'rack-base-layer');
+        recordRoutePreviewAppPhaseMark('rack-layer:first-batch-draw-complete', {
+          onceKey: 'rack-layer:first-batch-draw-complete'
+        });
         return originalBatchDraw(...args);
       };
       diagnosticLayer.__wosDrawDiagnosticsWrapped = true;
