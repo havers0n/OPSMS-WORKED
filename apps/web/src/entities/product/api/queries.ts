@@ -12,8 +12,15 @@ export type ProductCatalogPage = {
   offset: number;
 };
 
+export type ProductCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+};
+
 export const productKeys = {
   all: ['product'] as const,
+  categories: () => [...productKeys.all, 'categories'] as const,
   catalog: (query: string | null, page: number, pageSize: number, activeOnly: boolean, category: string | null) =>
     [...productKeys.all, 'catalog', query ?? 'browse', page, pageSize, activeOnly ? 'active' : 'all', category ?? 'all'] as const,
   search: (query: string | null) => [...productKeys.all, 'search', query ?? 'browse'] as const,
@@ -178,6 +185,14 @@ export function productPackagingLevelsQueryOptions(productId: string | null) {
     queryKey: productKeys.packagingLevels(productId),
     queryFn: () => fetchProductPackagingLevels(productId as string),
     enabled: Boolean(productId)
+  });
+}
+
+export function productCategoriesQueryOptions() {
+  return queryOptions({
+    queryKey: productKeys.categories(),
+    queryFn: () => bffRequest<ProductCategory[]>('/api/product-categories'),
+    staleTime: 5 * 60 * 1000
   });
 }
 

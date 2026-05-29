@@ -2,20 +2,11 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { productCatalogQueryOptions } from '@/entities/product/api/queries';
+import { productCatalogQueryOptions, productCategoriesQueryOptions } from '@/entities/product/api/queries';
 import { productDetailPath } from '@/shared/config/routes';
 import { useT } from '@/shared/i18n';
 
 const pageSize = 50;
-
-const CATEGORIES = [
-  'Палатки',
-  'Стулья',
-  'Мангалы',
-  'Столы',
-  'Бустеры',
-  'Контейнеры',
-] as const;
 
 export function ProductsPage() {
   const t = useT();
@@ -24,6 +15,8 @@ export function ProductsPage() {
   const [category, setCategory] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { data: categoriesData } = useQuery(productCategoriesQueryOptions());
+  const categories = categoriesData ?? [];
   const { data, isLoading, isFetching, refetch } = useQuery(
     productCatalogQueryOptions({
       query: search,
@@ -83,19 +76,19 @@ export function ProductsPage() {
           >
             Все
           </button>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <button
-              key={cat}
+              key={cat.id}
               type="button"
-              onClick={() => selectCategory(cat)}
+              onClick={() => selectCategory(cat.name)}
               className={[
                 'whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors',
-                category === cat
+                category === cat.name
                   ? 'border-cyan-500 text-cyan-700'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               ].join(' ')}
             >
-              {cat}
+              {cat.name}
             </button>
           ))}
         </div>

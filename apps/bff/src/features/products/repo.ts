@@ -55,7 +55,14 @@ export type CreatePackagingLevelData = {
 
 export type PatchPackagingLevelData = Partial<CreatePackagingLevelData>;
 
+export type ProductCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+};
+
 export type ProductsRepo = {
+  listCategories(): Promise<ProductCategory[]>;
   findById(productId: string): Promise<Product | null>;
   listActive(limit?: number): Promise<Product[]>;
   searchActive(query: string, limit?: number): Promise<Product[]>;
@@ -71,6 +78,22 @@ export type ProductsRepo = {
 
 export function createProductsRepo(supabase: SupabaseClient): ProductsRepo {
   return {
+    async listCategories() {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('id,name,sort_order')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      return ((data ?? []) as { id: string; name: string; sort_order: number }[]).map((row) => ({
+        id: row.id,
+        name: row.name,
+        sortOrder: row.sort_order
+      }));
+    },
+
     async findById(productId) {
       const { data, error } = await supabase
         .from('products')

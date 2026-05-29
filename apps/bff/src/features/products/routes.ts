@@ -47,6 +47,14 @@ export function registerProductsRoutes(
 ): void {
   const { getAuthContext, getProductsService } = deps;
 
+  // ── Categories ───────────────────────────────────────────────────────────
+
+  app.get('/api/product-categories', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    return getProductsService(auth).listCategories();
+  });
+
   // ── Catalog ──────────────────────────────────────────────────────────────
 
   app.get('/api/products', async (request, reply) => {
