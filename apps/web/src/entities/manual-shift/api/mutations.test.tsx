@@ -146,7 +146,7 @@ describe('manual shift order check unit mutations', () => {
     });
   });
 
-  it('invalidates order check-units and related order/shift summaries after check-unit mutation', async () => {
+  it('invalidates only order check-units after check-unit mutation', async () => {
     const { invalidateSpy, wrapper } = createWrapper();
     const { result } = renderHook(() => useUpdateManualShiftOrderCheckUnitStatus(), { wrapper });
 
@@ -155,9 +155,6 @@ describe('manual shift order check unit mutations', () => {
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.orderCheckUnits('o1') });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
   });
 });

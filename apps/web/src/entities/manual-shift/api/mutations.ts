@@ -286,13 +286,9 @@ function invalidateOrderQueries(
 
 function invalidateOrderCheckUnitQueries(
   queryClient: ReturnType<typeof useQueryClient>,
-  checkUnit: Pick<ManualShiftOrderCheckUnit, 'orderId' | 'lineId' | 'shiftId'>
+  checkUnit: Pick<ManualShiftOrderCheckUnit, 'orderId'>
 ) {
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.orderCheckUnits(checkUnit.orderId) });
-  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(checkUnit.lineId) });
-  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(checkUnit.shiftId) });
-  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(checkUnit.shiftId) });
-  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(checkUnit.shiftId) });
 }
 
 function invalidateLineQueries(
