@@ -95,7 +95,9 @@ describe('CheckTab', () => {
     });
 
     renderCheckTab();
-    await waitFor(() => expect(screen.getByText('Checked / active: 1 / 1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('נבדקו 1 מתוך 1')).toBeTruthy());
+    expect(screen.queryByText('נבדק חלקית: לא')).toBeNull();
+    expect(screen.queryByText('כל היחידות נבדקו: לא')).toBeNull();
   });
 
   it('shows empty state when no waiting_check orders', async () => {
@@ -162,6 +164,7 @@ describe('CheckTab', () => {
     renderCheckTab();
     await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
     await waitFor(() => expect(screen.getByTestId('check-units-close-reason-order-1')).toBeTruthy());
+    expect(screen.getByTestId('check-units-status-chip').textContent).toBe('דורש תיקון');
     const { doneButton } = getActionButtons();
     expect(doneButton.hasAttribute('disabled')).toBe(true);
   });

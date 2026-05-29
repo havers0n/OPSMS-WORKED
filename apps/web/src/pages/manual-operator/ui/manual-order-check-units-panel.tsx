@@ -28,6 +28,7 @@ interface ManualOrderCheckUnitsPanelProps {
   orderId: string;
   interactive?: boolean;
   compact?: boolean;
+  detailsDefaultOpen?: boolean;
   onStateChange?: (state: ManualOrderCheckUnitsPanelState) => void;
 }
 
@@ -35,6 +36,7 @@ export function ManualOrderCheckUnitsPanel({
   orderId,
   interactive = false,
   compact = false,
+  detailsDefaultOpen,
   onStateChange
 }: ManualOrderCheckUnitsPanelProps) {
   const checkUnitsQuery = useQuery(orderCheckUnitsQueryOptions(orderId));
@@ -44,6 +46,14 @@ export function ManualOrderCheckUnitsPanel({
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
   const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits);
   const hasUnits = checkUnits.length > 0;
+  const statusChipLabel =
+    progress.returnedUnits > 0
+      ? 'דורש תיקון'
+      : progress.physicallyChecked
+        ? 'כל היחידות נבדקו'
+        : progress.partiallyChecked
+          ? 'נבדק חלקית'
+          : null;
 
   useEffect(() => {
     onStateChange?.({
@@ -60,39 +70,55 @@ export function ManualOrderCheckUnitsPanel({
 
       {checkUnitsQuery.isLoading && (
         <p className="text-sm text-gray-500" data-testid="check-units-loading">
-          Loading check units...
+          טוען יחידות בדיקה...
         </p>
       )}
       {checkUnitsQuery.isError && (
         <p className="text-sm text-red-600" data-testid="check-units-error">
-          Failed to load check units.
+          שגיאה בטעינת יחידות בדיקה
         </p>
       )}
       {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length === 0 && (
         <p className="text-sm text-gray-500" data-testid="check-units-empty">
-          No check units recorded yet.
+          עדיין לא נוספו יחידות בדיקה
         </p>
       )}
       {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length > 0 && (
         <>
-          <div className={`grid ${compact ? 'grid-cols-2' : 'grid-cols-2'} gap-2 text-sm`} data-testid="check-units-summary">
-            <div className="rounded-lg border border-gray-200 px-3 py-2">
-              Checked / active: {progress.checkedUnits} / {progress.activeUnits}
-            </div>
-            <div className="rounded-lg border border-gray-200 px-3 py-2">Open: {progress.openUnits}</div>
-            <div className="rounded-lg border border-gray-200 px-3 py-2">
-              Returned: {progress.returnedUnits}
-            </div>
-            <div className="rounded-lg border border-gray-200 px-3 py-2 text-gray-500">
-              Voided: {progress.voidedUnits}
-            </div>
-            <div className="rounded-lg border border-gray-200 px-3 py-2">
-              Partially checked: {progress.partiallyChecked ? 'Yes' : 'No'}
-            </div>
-            <div className="rounded-lg border border-gray-200 px-3 py-2">
-              Physically checked: {progress.physicallyChecked ? 'Yes' : 'No'}
-            </div>
+          <div
+            className={`flex ${compact ? 'flex-col gap-2' : 'items-center justify-between gap-3'} rounded-lg border border-gray-200 px-3 py-2`}
+            data-testid="check-units-summary"
+          >
+            <div className="font-semibold text-sm">נבדקו {progress.checkedUnits} מתוך {progress.activeUnits}</div>
+            {statusChipLabel && (
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
+                  statusChipLabel === 'דורש תיקון'
+                    ? 'bg-red-100 text-red-700'
+                    : statusChipLabel === 'כל היחידות נבדקו'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-amber-100 text-amber-700'
+                }`}
+                data-testid="check-units-status-chip"
+              >
+                {statusChipLabel}
+              </span>
+            )}
           </div>
+
+          <details
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
+            open={detailsDefaultOpen ?? !compact}
+            data-testid="check-units-details"
+          >
+            <summary className="cursor-pointer font-medium select-none">פרטים</summary>
+            <div className="mt-2 flex flex-col gap-1 text-gray-700">
+              <div>ממתינות לבדיקה: {progress.openUnits}</div>
+              <div>דורשות תיקון: {progress.returnedUnits}</div>
+              <div>בוטלו: {progress.voidedUnits}</div>
+            </div>
+          </details>
+
           <ul className="flex flex-col gap-2" data-testid="check-units-list">
             {checkUnits.map((unit) => {
               const isVoided = unit.status === 'voided';
@@ -102,19 +128,20 @@ export function ManualOrderCheckUnitsPanel({
                   className={`rounded-xl border px-3 py-2 text-sm ${isVoided ? 'border-gray-200 bg-gray-50 text-gray-500' : 'border-gray-200 bg-white'}`}
                   data-testid={`check-unit-${unit.id}`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">Unit #{unit.unitNumber}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">יחידה #{unit.unitNumber}</span>
+                    <span className="text-gray-400">·</span>
                     <span>{STATUS_LABELS[unit.status]}</span>
                   </div>
                   {interactive && (
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className={`flex gap-2 mt-2 ${compact ? 'flex-wrap' : 'flex-wrap'}`}>
                       {!isVoided && unit.status !== 'checked' && (
                         <button
                           type="button"
                           onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'checked' })}
                           className="px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-bold"
                         >
-                          Mark checked
+                          סמן כנבדק
                         </button>
                       )}
                       {!isVoided && unit.status !== 'returned' && (
@@ -123,7 +150,7 @@ export function ManualOrderCheckUnitsPanel({
                           onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'returned' })}
                           className="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm font-bold"
                         >
-                          Needs fix
+                          דורש תיקון
                         </button>
                       )}
                       {!isVoided && (
@@ -132,13 +159,13 @@ export function ManualOrderCheckUnitsPanel({
                           onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'voided' })}
                           className="px-3 py-1 rounded-lg border border-red-300 text-red-700 text-sm font-bold"
                         >
-                          Void
+                          בטל יחידה
                         </button>
                       )}
                     </div>
                   )}
-                  {unit.note && <p className="mt-1">Note: {unit.note}</p>}
-                  {unit.reason && <p className="mt-1">Reason: {unit.reason}</p>}
+                  {unit.note && <p className="mt-1">הערה: {unit.note}</p>}
+                  {unit.reason && <p className="mt-1">סיבה: {unit.reason}</p>}
                 </li>
               );
             })}
@@ -151,7 +178,7 @@ export function ManualOrderCheckUnitsPanel({
           <button
             type="button"
             onClick={() => createCheckUnit.mutate({})}
-            className="w-full h-10 rounded-lg bg-gray-100 font-bold"
+            className={`w-full rounded-lg font-bold ${hasUnits ? 'h-10 bg-gray-100' : 'h-12 bg-blue-600 text-white text-base'}`}
             data-testid="create-check-unit"
           >
             הוסף יחידת בדיקה

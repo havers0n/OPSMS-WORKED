@@ -105,7 +105,7 @@ describe('OrderDetail check-units section', () => {
   it('shows empty state when no check units exist', async () => {
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('No check units recorded yet.')).toBeTruthy();
+      expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy();
     });
   });
 
@@ -118,11 +118,11 @@ describe('OrderDetail check-units section', () => {
 
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('Unit #1')).toBeTruthy();
-      expect(screen.getByText('Unit #2')).toBeTruthy();
-      expect(screen.getByText('Unit #3')).toBeTruthy();
-      expect(screen.getByText('Note: Needs recount')).toBeTruthy();
-      expect(screen.getByText('Reason: Damaged wrap')).toBeTruthy();
+      expect(screen.getByText('יחידה #1')).toBeTruthy();
+      expect(screen.getByText('יחידה #2')).toBeTruthy();
+      expect(screen.getByText('יחידה #3')).toBeTruthy();
+      expect(screen.getByText('הערה: Needs recount')).toBeTruthy();
+      expect(screen.getByText('סיבה: Damaged wrap')).toBeTruthy();
     });
   });
 
@@ -130,19 +130,21 @@ describe('OrderDetail check-units section', () => {
     mockedBffRequest.mockResolvedValueOnce([makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'open')]);
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('Checked / active: 1 / 2')).toBeTruthy();
-      expect(screen.getByText('Partially checked: Yes')).toBeTruthy();
-      expect(screen.getByText('Physically checked: No')).toBeTruthy();
+      expect(screen.getByText('נבדקו 1 מתוך 2')).toBeTruthy();
+      expect(screen.getByText('נבדק חלקית')).toBeTruthy();
     });
+    expect(screen.queryByText('נבדק חלקית: לא')).toBeNull();
+    expect(screen.queryByText('כל היחידות נבדקו: לא')).toBeNull();
   });
 
   it('shows physically checked when all active units are checked', async () => {
     mockedBffRequest.mockResolvedValueOnce([makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'checked')]);
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('Physically checked: Yes')).toBeTruthy();
-      expect(screen.getByText('Open: 0')).toBeTruthy();
-      expect(screen.getByText('Returned: 0')).toBeTruthy();
+      expect(screen.getByText('כל היחידות נבדקו')).toBeTruthy();
+      expect(screen.getByText('פרטים')).toBeTruthy();
+      expect(screen.getByText('ממתינות לבדיקה: 0')).toBeTruthy();
+      expect(screen.getByText('דורשות תיקון: 0')).toBeTruthy();
     });
   });
 
@@ -150,9 +152,10 @@ describe('OrderDetail check-units section', () => {
     mockedBffRequest.mockResolvedValueOnce([makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'returned')]);
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('Returned: 1')).toBeTruthy();
-      expect(screen.getByText('Physically checked: No')).toBeTruthy();
+      expect(screen.getByTestId('check-units-status-chip').textContent).toBe('דורש תיקון');
+      expect(screen.getByText('דורשות תיקון: 1')).toBeTruthy();
     });
+    expect(screen.queryByText('כל היחידות נבדקו: לא')).toBeNull();
   });
 
   it('excludes voided units from active count', async () => {
@@ -162,9 +165,9 @@ describe('OrderDetail check-units section', () => {
     ]);
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('Checked / active: 1 / 1')).toBeTruthy();
-      expect(screen.getByText('Voided: 1')).toBeTruthy();
-      expect(screen.getByText('Reason: Duplicate')).toBeTruthy();
+      expect(screen.getByText('נבדקו 1 מתוך 1')).toBeTruthy();
+      expect(screen.getByText('בוטלו: 1')).toBeTruthy();
+      expect(screen.getByText('סיבה: Duplicate')).toBeTruthy();
     });
   });
 
@@ -186,7 +189,7 @@ describe('OrderDetail check-units section', () => {
       (resolvePromise as unknown as (value: ManualShiftOrderCheckUnit[]) => void)([]);
     }
     await waitFor(() => {
-      expect(screen.getByText('No check units recorded yet.')).toBeTruthy();
+      expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy();
     });
 
     mockedBffRequest.mockRejectedValueOnce(new Error('network error'));
@@ -234,7 +237,7 @@ describe('OrderDetail check-units section', () => {
     // mark open unit as checked
     mockedBffRequest.mockResolvedValueOnce(makeCheckUnit(1, 'checked'));
     const unit1 = await screen.findByTestId('check-unit-55555555-5555-4555-8555-555555555551');
-    const markButton = Array.from(unit1.querySelectorAll('button')).find((b) => b.textContent?.includes('Mark checked'));
+    const markButton = Array.from(unit1.querySelectorAll('button')).find((b) => b.textContent?.includes('סמן כנבדק'));
     expect(markButton).toBeTruthy();
     if (markButton) fireEvent.click(markButton);
     await waitFor(() => {
@@ -247,7 +250,7 @@ describe('OrderDetail check-units section', () => {
     // mark checked unit as returned (needs fix)
     mockedBffRequest.mockResolvedValueOnce(makeCheckUnit(2, 'returned'));
     const unit2 = await screen.findByTestId('check-unit-55555555-5555-4555-8555-555555555552');
-    const needsFixButton = Array.from(unit2.querySelectorAll('button')).find((b) => b.textContent?.includes('Needs fix'));
+    const needsFixButton = Array.from(unit2.querySelectorAll('button')).find((b) => b.textContent?.includes('דורש תיקון'));
     expect(needsFixButton).toBeTruthy();
     if (needsFixButton) fireEvent.click(needsFixButton);
     await waitFor(() => {
@@ -258,6 +261,6 @@ describe('OrderDetail check-units section', () => {
     });
 
     // voided unit should not show active actions
-    expect(screen.getByText('Unit #3').parentElement?.parentElement?.className).toContain('bg-gray-50');
+    expect(screen.getByText('יחידה #3').parentElement?.parentElement?.className).toContain('bg-gray-50');
   });
 });

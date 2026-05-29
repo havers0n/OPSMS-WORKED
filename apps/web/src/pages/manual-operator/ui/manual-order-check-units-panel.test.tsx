@@ -57,18 +57,23 @@ describe('ManualOrderCheckUnitsPanel', () => {
   it('renders empty state', async () => {
     mockedBffRequest.mockResolvedValue([]);
     renderPanel();
-    await waitFor(() => expect(screen.getByText('No check units recorded yet.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy());
   });
 
   it('renders summary and unit list', async () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'open')]);
     renderPanel();
     await waitFor(() => {
-      expect(screen.getByText('Checked / active: 1 / 2')).toBeTruthy();
+      expect(screen.getByText('נבדקו 1 מתוך 2')).toBeTruthy();
+      expect(screen.getByTestId('check-units-status-chip')).toBeTruthy();
+      expect(screen.getByText('נבדק חלקית')).toBeTruthy();
+      expect(screen.getByText('פרטים')).toBeTruthy();
       expect(screen.getByTestId('check-units-list')).toBeTruthy();
-      expect(screen.getByText('Unit #1')).toBeTruthy();
-      expect(screen.getByText('Unit #2')).toBeTruthy();
+      expect(screen.getByText('יחידה #1')).toBeTruthy();
+      expect(screen.getByText('יחידה #2')).toBeTruthy();
     });
+    expect(screen.queryByText('נבדק חלקית: לא')).toBeNull();
+    expect(screen.queryByText('כל היחידות נבדקו: לא')).toBeNull();
   });
 
   it('add unit calls create mutation', async () => {
@@ -91,8 +96,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
       .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
       .mockResolvedValueOnce(makeCheckUnit(1, 'checked'));
     renderPanel();
-    await waitFor(() => expect(screen.getByText('Mark checked')).toBeTruthy());
-    fireEvent.click(screen.getByText('Mark checked'));
+    await waitFor(() => expect(screen.getByText('סמן כנבדק')).toBeTruthy());
+    fireEvent.click(screen.getByText('סמן כנבדק'));
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
         method: 'PATCH',
@@ -106,8 +111,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
       .mockResolvedValueOnce([makeCheckUnit(1, 'checked')])
       .mockResolvedValueOnce(makeCheckUnit(1, 'returned'));
     renderPanel();
-    await waitFor(() => expect(screen.getByText('Needs fix')).toBeTruthy());
-    fireEvent.click(screen.getByText('Needs fix'));
+    await waitFor(() => expect(screen.getByText('דורש תיקון')).toBeTruthy());
+    fireEvent.click(screen.getByText('דורש תיקון'));
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
         method: 'PATCH',
@@ -121,8 +126,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
       .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
       .mockResolvedValueOnce(makeCheckUnit(1, 'voided'));
     renderPanel();
-    await waitFor(() => expect(screen.getByText('Void')).toBeTruthy());
-    fireEvent.click(screen.getByText('Void'));
+    await waitFor(() => expect(screen.getByText('בטל יחידה')).toBeTruthy());
+    fireEvent.click(screen.getByText('בטל יחידה'));
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
         method: 'PATCH',
@@ -134,9 +139,28 @@ describe('ManualOrderCheckUnitsPanel', () => {
   it('voided units show no active actions', async () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'voided')]);
     renderPanel();
-    await waitFor(() => expect(screen.getByText('Unit #1')).toBeTruthy());
-    expect(screen.queryByText('Mark checked')).toBeNull();
-    expect(screen.queryByText('Needs fix')).toBeNull();
-    expect(screen.queryByText('Void')).toBeNull();
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.queryByText('סמן כנבדק')).toBeNull();
+    expect(screen.queryByText('דורש תיקון')).toBeNull();
+    expect(screen.queryByText('בטל יחידה')).toBeNull();
+  });
+
+  it('shows returned chip and keeps voided excluded from active count', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'returned'), makeCheckUnit(3, 'voided')]);
+    renderPanel();
+    await waitFor(() => {
+      expect(screen.getByText('נבדקו 1 מתוך 2')).toBeTruthy();
+      expect(screen.getByTestId('check-units-status-chip').textContent).toBe('דורש תיקון');
+    });
+  });
+
+  it('no-units state shows dominant add button and no metrics', async () => {
+    mockedBffRequest.mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy());
+    const addButton = screen.getByTestId('create-check-unit');
+    expect(addButton.className).toContain('bg-blue-600');
+    expect(screen.queryByTestId('check-units-summary')).toBeNull();
+    expect(screen.queryByTestId('check-units-details')).toBeNull();
   });
 });
