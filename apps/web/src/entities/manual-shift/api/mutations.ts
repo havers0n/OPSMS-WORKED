@@ -8,6 +8,8 @@ import type {
   ManualShiftOrderErrorType,
   ManualShiftOrderSize,
   ManualShiftOrderCheckUnit,
+  ManualShiftOrderAshlama,
+  ManualShiftOrderAshlamaStatus,
   ManualShiftOrderCheckUnitStatus,
   ManualShiftWorker,
   ManualShiftWorkerRole
@@ -100,6 +102,17 @@ type PatchOrderCheckUnitInput = {
   checkUnitId: string;
   note?: string | null;
   reason?: string | null;
+};
+
+type CreateOrderAshlamaInput = {
+  orderId: string;
+  checkUnitId: string;
+  text: string;
+};
+
+type PatchOrderAshlamaInput = {
+  ashlamaId: string;
+  status: ManualShiftOrderAshlamaStatus;
 };
 
 type DeleteRestoreManualShiftInput = {
@@ -215,6 +228,27 @@ async function patchOrderCheckUnit({
   });
 }
 
+async function createOrderAshlama({
+  orderId,
+  checkUnitId,
+  text
+}: CreateOrderAshlamaInput): Promise<ManualShiftOrderAshlama> {
+  return bffRequest<ManualShiftOrderAshlama>(`/api/manual-shift-orders/${orderId}/ashlamot`, {
+    method: 'POST',
+    body: JSON.stringify({ checkUnitId, text })
+  });
+}
+
+async function patchOrderAshlama({
+  ashlamaId,
+  status
+}: PatchOrderAshlamaInput): Promise<ManualShiftOrderAshlama> {
+  return bffRequest<ManualShiftOrderAshlama>(`/api/manual-shift-ashlamot/${ashlamaId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  });
+}
+
 async function patchOrder({
   orderId,
   lineId: _lineId,
@@ -291,6 +325,13 @@ function invalidateOrderCheckUnitQueries(
   checkUnit: Pick<ManualShiftOrderCheckUnit, 'orderId'>
 ) {
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.orderCheckUnits(checkUnit.orderId) });
+}
+
+function invalidateOrderAshlamaQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orderId: string
+) {
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.orderAshlamot(orderId) });
 }
 
 function invalidateLineQueries(
@@ -421,6 +462,27 @@ export function usePatchManualShiftOrderCheckUnit() {
     mutationFn: patchOrderCheckUnit,
     onSuccess: (checkUnit) => {
       invalidateOrderCheckUnitQueries(queryClient, checkUnit);
+    }
+  });
+}
+
+export function useCreateManualShiftOrderAshlama(orderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<CreateOrderAshlamaInput, 'orderId'>) =>
+      createOrderAshlama({ ...input, orderId }),
+    onSuccess: () => {
+      invalidateOrderAshlamaQueries(queryClient, orderId);
+    }
+  });
+}
+
+export function usePatchManualShiftOrderAshlama(orderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: patchOrderAshlama,
+    onSuccess: () => {
+      invalidateOrderAshlamaQueries(queryClient, orderId);
     }
   });
 }

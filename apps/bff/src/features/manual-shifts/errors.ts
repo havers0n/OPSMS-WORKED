@@ -106,6 +106,14 @@ export function manualShiftOrderDoneBlockedByCheckUnits(orderId: string) {
   );
 }
 
+export function manualShiftOrderDoneBlockedByOpenAshlama(orderId: string) {
+  return new ApiError(
+    409,
+    'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_OPEN_ASHLAMA',
+    `Order ${orderId} cannot be moved to done while open ashlama exists.`
+  );
+}
+
 export function manualShiftOrderCheckUnitNumberConflict(orderId: string) {
   return new ApiError(
     409,
@@ -119,5 +127,37 @@ export function manualShiftOrderCheckUnitReturnedReasonRequired(checkUnitId: str
     422,
     'MANUAL_SHIFT_CHECK_UNIT_RETURNED_REASON_REQUIRED',
     `Manual shift order check unit ${checkUnitId} requires a repair reason when marked returned.`
+  );
+}
+
+export function manualShiftAshlamaRequiresReturnedCheckUnit(checkUnitId: string) {
+  return new ApiError(
+    422,
+    'MANUAL_SHIFT_ASHLAMA_REQUIRES_RETURNED_CHECK_UNIT',
+    `Ashlama can be created only for returned check unit ${checkUnitId}.`
+  );
+}
+
+export function manualShiftAshlamaRequiresMissingProductReason(checkUnitId: string) {
+  return new ApiError(
+    422,
+    'MANUAL_SHIFT_ASHLAMA_REQUIRES_MISSING_PRODUCT_REASON',
+    `Ashlama can be created only when check unit ${checkUnitId} reason is חסר מוצר.`
+  );
+}
+
+export function manualShiftAshlamaDuplicateOpenForCheckUnit(checkUnitId: string) {
+  return new ApiError(
+    409,
+    'MANUAL_SHIFT_ASHLAMA_DUPLICATE_OPEN_FOR_CHECK_UNIT',
+    `Open ashlama already exists for check unit ${checkUnitId}.`
+  );
+}
+
+export function manualShiftAshlamaCheckUnitOrderMismatch(checkUnitId: string, orderId: string) {
+  return new ApiError(
+    422,
+    'MANUAL_SHIFT_ASHLAMA_CHECK_UNIT_ORDER_MISMATCH',
+    `Check unit ${checkUnitId} does not belong to order ${orderId}.`
   );
 }

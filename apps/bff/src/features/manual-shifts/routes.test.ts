@@ -7,6 +7,7 @@ import type {
   ManualShiftDaySummary,
   ManualShiftLine,
   ManualShiftOrder,
+  ManualShiftOrderAshlama,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderError,
   ManualShiftPeopleSummary,
@@ -188,6 +189,18 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     byLine: [],
     byPicker: []
   };
+  const ashlama: ManualShiftOrderAshlama = {
+    id: 'a9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+    tenantId: ids.tenant,
+    shiftId: ids.shift,
+    lineId: ids.line,
+    orderId: ids.order,
+    checkUnitId: createCheckUnit().id,
+    status: 'open',
+    text: 'missing item',
+    createdAt: '2026-05-26T07:00:00.000Z',
+    updatedAt: '2026-05-26T07:30:00.000Z'
+  };
 
   return {
     listShiftWorkers: vi.fn(async () => [createWorker()]),
@@ -206,6 +219,9 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     listShiftOrders: vi.fn(async () => []),
     listLineOrders: vi.fn(async () => []),
     listOrderCheckUnits: vi.fn(async () => [createCheckUnit()]),
+    listOrderAshlamot: vi.fn(async () => [ashlama]),
+    createOrderAshlama: vi.fn(async () => ashlama),
+    patchOrderAshlamaStatus: vi.fn(async () => ({ ...ashlama, status: 'done' as const })),
     createOrderCheckUnit: vi.fn(async () => createCheckUnit()),
     patchOrderCheckUnit: vi.fn(async () => ({ ...createCheckUnit(), note: 'updated' })),
     transitionOrderCheckUnitStatus: vi.fn(async () => createCheckUnit('checked')),

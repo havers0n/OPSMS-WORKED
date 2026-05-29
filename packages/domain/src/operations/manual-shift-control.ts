@@ -49,6 +49,9 @@ export const manualShiftOrderCheckUnitStatusSchema = z.enum([
 ]);
 export type ManualShiftOrderCheckUnitStatus = z.infer<typeof manualShiftOrderCheckUnitStatusSchema>;
 
+export const manualShiftOrderAshlamaStatusSchema = z.enum(['open', 'done', 'cancelled']);
+export type ManualShiftOrderAshlamaStatus = z.infer<typeof manualShiftOrderAshlamaStatusSchema>;
+
 export const manualShiftOrderErrorTypeSchema = z.enum([
   'wrong_quantity',
   'wrong_item',
@@ -154,6 +157,20 @@ export const manualShiftOrderCheckUnitSchema = z.object({
   updatedAt: z.string()
 });
 export type ManualShiftOrderCheckUnit = z.infer<typeof manualShiftOrderCheckUnitSchema>;
+
+export const manualShiftOrderAshlamaSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  lineId: z.string().uuid(),
+  orderId: z.string().uuid(),
+  checkUnitId: z.string().uuid(),
+  status: manualShiftOrderAshlamaStatusSchema,
+  text: z.string().trim().min(1),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+export type ManualShiftOrderAshlama = z.infer<typeof manualShiftOrderAshlamaSchema>;
 
 export const manualShiftLineEventSchema = z.object({
   id: z.string().uuid(),

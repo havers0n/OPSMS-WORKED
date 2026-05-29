@@ -7,6 +7,7 @@ import type {
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderError,
+  ManualShiftOrderAshlama,
   ManualShiftOrderEvent,
   ManualShiftSession,
   ManualShiftWorker,
@@ -100,6 +101,19 @@ type ManualShiftOrderCheckUnitRow = {
   updated_at: string;
 };
 
+type ManualShiftOrderAshlamaRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  order_id: string;
+  check_unit_id: string;
+  status: ManualShiftOrderAshlama['status'];
+  text: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type ManualShiftLineEventRow = {
   id: string;
   tenant_id: string;
@@ -171,6 +185,8 @@ const orderColumns =
   'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
+const ashlamaColumns =
+  'id,tenant_id,shift_id,line_id,order_id,check_unit_id,status,text,created_at,updated_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
@@ -306,6 +322,21 @@ function mapCheckUnitRow(row: ManualShiftOrderCheckUnitRow): ManualShiftOrderChe
   };
 }
 
+function mapAshlamaRow(row: ManualShiftOrderAshlamaRow): ManualShiftOrderAshlama {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    orderId: row.order_id,
+    checkUnitId: row.check_unit_id,
+    status: row.status,
+    text: row.text,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 function mapLineEventRow(row: ManualShiftLineEventRow): ManualShiftLineEvent {
   return {
     id: row.id,
@@ -435,7 +466,9 @@ export type ManualShiftsRepo = {
   listLineOrders(lineId: string): Promise<ManualShiftOrder[]>;
   findOrderById(orderId: string): Promise<ManualShiftOrder | null>;
   listOrderCheckUnits(orderId: string): Promise<ManualShiftOrderCheckUnit[]>;
+  listOrderAshlamot(orderId: string): Promise<ManualShiftOrderAshlama[]>;
   findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
+  findOrderAshlamaById(ashlamaId: string): Promise<ManualShiftOrderAshlama | null>;
   createOrderCheckUnit(input: {
     tenantId: string;
     shiftId: string;
@@ -451,6 +484,25 @@ export type ManualShiftsRepo = {
     checkUnitId: string,
     patch: ManualShiftOrderCheckUnitPatch
   ): Promise<ManualShiftOrderCheckUnit | null>;
+  createOrderAshlama(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    orderId: string;
+    checkUnitId: string;
+    status: ManualShiftOrderAshlama['status'];
+    text: string;
+    createdByProfileId: string | null;
+    createdByName: string | null;
+  }): Promise<ManualShiftOrderAshlama>;
+  updateOrderAshlama(
+    ashlamaId: string,
+    patch: {
+      status?: ManualShiftOrderAshlama['status'];
+      updatedByProfileId?: string | null;
+      updatedByName?: string | null;
+    }
+  ): Promise<ManualShiftOrderAshlama | null>;
   createOrder(input: {
     tenantId: string;
     shiftId: string;
@@ -804,6 +856,28 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return data ? mapCheckUnitRow(data as ManualShiftOrderCheckUnitRow) : null;
     },
 
+    async listOrderAshlamot(orderId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_ashlamot')
+        .select(ashlamaColumns)
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftOrderAshlamaRow[]).map(mapAshlamaRow);
+    },
+
+    async findOrderAshlamaById(ashlamaId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_ashlamot')
+        .select(ashlamaColumns)
+        .eq('id', ashlamaId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapAshlamaRow(data as ManualShiftOrderAshlamaRow) : null;
+    },
+
     async createOrderCheckUnit(input) {
       for (let attempt = 1; attempt <= CHECK_UNIT_NUMBER_RETRY_LIMIT; attempt += 1) {
         const { count, error: countError } = await supabase
@@ -877,6 +951,46 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return data ? mapCheckUnitRow(data as ManualShiftOrderCheckUnitRow) : null;
+    },
+
+    async createOrderAshlama(input) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_ashlamot')
+        .insert({
+          tenant_id: input.tenantId,
+          shift_id: input.shiftId,
+          line_id: input.lineId,
+          order_id: input.orderId,
+          check_unit_id: input.checkUnitId,
+          status: input.status,
+          text: input.text,
+          created_by_profile_id: input.createdByProfileId,
+          created_by_name: input.createdByName,
+          updated_by_profile_id: input.createdByProfileId,
+          updated_by_name: input.createdByName
+        })
+        .select(ashlamaColumns)
+        .single();
+
+      if (error) throw error;
+      return mapAshlamaRow(data as ManualShiftOrderAshlamaRow);
+    },
+
+    async updateOrderAshlama(ashlamaId, patch) {
+      const payload: Record<string, unknown> = {};
+      if (patch.status !== undefined) payload.status = patch.status;
+      if (patch.updatedByProfileId !== undefined) payload.updated_by_profile_id = patch.updatedByProfileId;
+      if (patch.updatedByName !== undefined) payload.updated_by_name = patch.updatedByName;
+
+      const { data, error } = await supabase
+        .from('manual_shift_order_ashlamot')
+        .update(payload)
+        .eq('id', ashlamaId)
+        .select(ashlamaColumns)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapAshlamaRow(data as ManualShiftOrderAshlamaRow) : null;
     },
 
     async createOrder(input) {

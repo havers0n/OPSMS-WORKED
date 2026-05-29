@@ -1,8 +1,10 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { orderCheckUnitsQueryOptions } from '@/entities/manual-shift/api/queries';
+import { orderAshlamotQueryOptions, orderCheckUnitsQueryOptions } from '@/entities/manual-shift/api/queries';
 import {
+  useCreateManualShiftOrderAshlama,
   useCreateManualShiftOrderCheckUnit,
+  usePatchManualShiftOrderAshlama,
   useUpdateManualShiftOrderCheckUnitStatus
 } from '@/entities/manual-shift/api/mutations';
 import {
@@ -65,12 +67,28 @@ export function ManualOrderCheckUnitsPanel({
   const [isCreateCooldown, setIsCreateCooldown] = useState(false);
   const checkUnitsQuery = useQuery(orderCheckUnitsQueryOptions(orderId));
   const createCheckUnit = useCreateManualShiftOrderCheckUnit(orderId);
+  const ashlamotQuery = useQuery(orderAshlamotQueryOptions(orderId));
+  const createAshlama = useCreateManualShiftOrderAshlama(orderId);
+  const patchAshlama = usePatchManualShiftOrderAshlama(orderId);
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
   const [reasonDraftByUnitId, setReasonDraftByUnitId] = useState<Record<string, string>>({});
   const [reasonSelectorUnitId, setReasonSelectorUnitId] = useState<string | null>(null);
+  const [ashlamaDialogCheckUnitId, setAshlamaDialogCheckUnitId] = useState<string | null>(null);
+  const [ashlamaDraftText, setAshlamaDraftText] = useState('');
   const checkUnits = checkUnitsQuery.data ?? [];
+  const ashlamot = Array.isArray(ashlamotQuery.data) ? ashlamotQuery.data : [];
+  const ashlamaByCheckUnitId = new Map(
+    ashlamot
+      .filter(
+        (ashlama) =>
+          typeof ashlama.checkUnitId === 'string' &&
+          (ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled')
+      )
+      .map((ashlama) => [ashlama.checkUnitId, ashlama] as const)
+  );
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
-  const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits, expectedUnitsCount);
+  const hasOpenAshlama = ashlamot.some((ashlama) => ashlama.status === 'open');
+  const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits, expectedUnitsCount) && !hasOpenAshlama;
   const hasUnits = checkUnits.length > 0;
   const missingUnits = expectedUnitsCount != null ? Math.max(expectedUnitsCount - progress.activeUnits, 0) : 0;
   const canPerformActions = interactive && canInteract;
@@ -233,9 +251,12 @@ export function ManualOrderCheckUnitsPanel({
                       {!isVoided && unit.status === 'returned' && (
                         <button
                           type="button"
-                          disabled
-                          title="השלמה עדיין לא מחוברת לשרת"
-                          className="px-3 py-1 rounded-lg bg-gray-100 text-gray-500 text-sm font-bold cursor-not-allowed"
+                          onClick={() => {
+                            setAshlamaDialogCheckUnitId(unit.id);
+                            setAshlamaDraftText('');
+                          }}
+                          disabled={statusActionDisabled || createAshlama.isPending}
+                          className="px-3 py-1 rounded-lg bg-blue-100 text-blue-800 text-sm font-bold disabled:opacity-50"
                           data-testid={`create-completion-${unit.id}`}
                         >
                           צור השלמה
@@ -329,6 +350,37 @@ export function ManualOrderCheckUnitsPanel({
                   )}
                   {unit.note && <p className="mt-1">הערה: {unit.note}</p>}
                   {unit.reason && <p className="mt-1">סיבת תיקון: {unit.reason}</p>}
+                  {unit.status === 'returned' && (
+                    <p className="mt-1 text-xs font-semibold text-blue-800">
+                      {(() => {
+                        const ashlama = ashlamaByCheckUnitId.get(unit.id);
+                        if (!ashlama) return 'השלמה לא נפתחה';
+                        if (ashlama.status === 'open') return 'השלמה פתוחה';
+                        if (ashlama.status === 'done') return 'השלמה הושלמה — יש לבדוק שוב';
+                        return 'השלמה בוטלה';
+                      })()}
+                    </p>
+                  )}
+                  {unit.status === 'returned' && ashlamaByCheckUnitId.get(unit.id)?.status === 'open' && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => patchAshlama.mutate({ ashlamaId: ashlamaByCheckUnitId.get(unit.id)!.id, status: 'done' })}
+                        className="px-3 py-1 rounded-lg bg-green-100 text-green-800 text-xs font-bold disabled:opacity-50"
+                        disabled={patchAshlama.isPending}
+                      >
+                        סמן השלמה כהושלמה
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => patchAshlama.mutate({ ashlamaId: ashlamaByCheckUnitId.get(unit.id)!.id, status: 'cancelled' })}
+                        className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs font-bold disabled:opacity-50"
+                        disabled={patchAshlama.isPending}
+                      >
+                        בטל השלמה
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}
@@ -341,6 +393,11 @@ export function ManualOrderCheckUnitsPanel({
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             השלמה היא משימה נפרדת. אחרי השלמה יש לבדוק שוב.
           </p>
+          {hasOpenAshlama && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="open-ashlama-block-message">
+              לא ניתן לסגור כתקין כל עוד קיימת השלמה פתוחה בהזמנה.
+            </p>
+          )}
         </>
       )}
 
@@ -360,6 +417,51 @@ export function ManualOrderCheckUnitsPanel({
           >
             הוסף יחידת בדיקה
           </button>
+        </div>
+      )}
+      {ashlamaDialogCheckUnitId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" data-testid="ashlama-dialog">
+          <div className="w-full max-w-md rounded-2xl bg-white p-4 text-right shadow-lg">
+            <h4 className="text-lg font-bold">יצירת השלמה</h4>
+            <label className="mt-3 block text-sm font-medium">מה צריך להשלים?</label>
+            <textarea
+              value={ashlamaDraftText}
+              onChange={(event) => setAshlamaDraftText(event.target.value)}
+              className="mt-1 h-28 w-full rounded-lg border border-gray-300 p-2"
+            />
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const text = ashlamaDraftText.trim();
+                  if (!text) return;
+                  createAshlama.mutate(
+                    { checkUnitId: ashlamaDialogCheckUnitId, text },
+                    {
+                      onSuccess: () => {
+                        setAshlamaDialogCheckUnitId(null);
+                        setAshlamaDraftText('');
+                      }
+                    }
+                  );
+                }}
+                disabled={!ashlamaDraftText.trim() || createAshlama.isPending}
+                className="px-3 py-1 rounded-lg bg-blue-600 text-white text-sm font-bold disabled:opacity-50"
+              >
+                צור השלמה
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAshlamaDialogCheckUnitId(null);
+                  setAshlamaDraftText('');
+                }}
+                className="px-3 py-1 rounded-lg border border-gray-300 bg-white text-sm font-bold"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

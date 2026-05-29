@@ -6,6 +6,8 @@ import type {
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
+  ManualShiftOrderAshlama,
+  ManualShiftOrderAshlamaStatus,
   ManualShiftOrderCheckUnitStatus,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
@@ -37,8 +39,13 @@ import {
   manualShiftOrderNotFound,
   manualShiftOrderCheckUnitNotFound,
   manualShiftOrderDoneBlockedByCheckUnits,
+  manualShiftOrderDoneBlockedByOpenAshlama,
   manualShiftOrderCheckUnitNumberConflict,
   manualShiftOrderCheckUnitReturnedReasonRequired,
+  manualShiftAshlamaRequiresReturnedCheckUnit,
+  manualShiftAshlamaRequiresMissingProductReason,
+  manualShiftAshlamaDuplicateOpenForCheckUnit,
+  manualShiftAshlamaCheckUnitOrderMismatch,
   manualShiftPickerWorkerInvalid,
   manualShiftWorkerNotFound
 } from './errors.js';
@@ -93,6 +100,20 @@ export type ManualShiftsService = {
   listShiftOrders(input: { tenantId: string; shiftId: string }): Promise<ManualShiftOrder[]>;
   listLineOrders(input: { tenantId: string; lineId: string }): Promise<ManualShiftOrder[]>;
   listOrderCheckUnits(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderCheckUnit[]>;
+  listOrderAshlamot(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderAshlama[]>;
+  createOrderAshlama(input: {
+    tenantId: string;
+    orderId: string;
+    checkUnitId: string;
+    text: string;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrderAshlama>;
+  patchOrderAshlamaStatus(input: {
+    tenantId: string;
+    ashlamaId: string;
+    status: ManualShiftOrderAshlamaStatus;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrderAshlama>;
   createOrderCheckUnit(input: {
     tenantId: string;
     orderId: string;
@@ -634,6 +655,70 @@ export function createManualShiftsServiceFromRepo(
       }
 
       return repo.listOrderCheckUnits(input.orderId);
+    },
+
+    async listOrderAshlamot(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+      return repo.listOrderAshlamot(input.orderId);
+    },
+
+    async createOrderAshlama(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      const checkUnit = await requireCheckUnit(input.checkUnitId);
+      if (checkUnit.tenantId !== input.tenantId) {
+        throw manualShiftOrderCheckUnitNotFound(input.checkUnitId);
+      }
+      if (checkUnit.orderId !== order.id) {
+        throw manualShiftAshlamaCheckUnitOrderMismatch(input.checkUnitId, order.id);
+      }
+      if (checkUnit.status !== 'returned') {
+        throw manualShiftAshlamaRequiresReturnedCheckUnit(input.checkUnitId);
+      }
+      if ((checkUnit.reason ?? '').trim() !== 'חסר מוצר') {
+        throw manualShiftAshlamaRequiresMissingProductReason(input.checkUnitId);
+      }
+
+      await requireActiveShift(order.shiftId);
+      const existing = await repo.listOrderAshlamot(order.id);
+      if (existing.some((ashlama) => ashlama.checkUnitId === checkUnit.id && ashlama.status === 'open')) {
+        throw manualShiftAshlamaDuplicateOpenForCheckUnit(checkUnit.id);
+      }
+
+      return repo.createOrderAshlama({
+        tenantId: order.tenantId,
+        shiftId: order.shiftId,
+        lineId: order.lineId,
+        orderId: order.id,
+        checkUnitId: checkUnit.id,
+        status: 'open',
+        text: input.text.trim(),
+        createdByProfileId: input.actor.actorProfileId,
+        createdByName: input.actor.actorName
+      });
+    },
+
+    async patchOrderAshlamaStatus(input) {
+      const ashlama = await repo.findOrderAshlamaById(input.ashlamaId);
+      if (!ashlama || ashlama.tenantId !== input.tenantId) {
+        throw manualShiftOrderNotFound(input.ashlamaId);
+      }
+      await requireActiveShift(ashlama.shiftId);
+      const updated = await repo.updateOrderAshlama(input.ashlamaId, {
+        status: input.status,
+        updatedByProfileId: input.actor.actorProfileId,
+        updatedByName: input.actor.actorName
+      });
+      if (!updated) {
+        throw manualShiftOrderNotFound(input.ashlamaId);
+      }
+      return updated;
     },
 
     async createOrderCheckUnit(input) {
@@ -1179,6 +1264,10 @@ export function createManualShiftsServiceFromRepo(
         const checkUnits = await repo.listOrderCheckUnits(order.id);
         if (!canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits, order.palletCount)) {
           throw manualShiftOrderDoneBlockedByCheckUnits(order.id);
+        }
+        const ashlamot = await repo.listOrderAshlamot(order.id);
+        if (ashlamot.some((ashlama) => ashlama.status === 'open')) {
+          throw manualShiftOrderDoneBlockedByOpenAshlama(order.id);
         }
         if (!order.checkedAt) patch.checkedAt = nowIso;
         patch.finishedAt = nowIso;

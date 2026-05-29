@@ -3,6 +3,7 @@ import type {
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
+  ManualShiftOrderAshlama,
   ManualShiftOrderError,
   ManualShiftSession,
   ManualShiftWorker
@@ -148,6 +149,7 @@ function createRepo() {
     orders: [] as ManualShiftOrder[],
     workers: [] as ManualShiftWorker[],
     checkUnits: [] as ManualShiftOrderCheckUnit[],
+    ashlamot: [] as ManualShiftOrderAshlama[],
     events: [] as Array<Record<string, unknown>>,
     errors: [] as ManualShiftOrderError[]
   };
@@ -342,6 +344,14 @@ function createRepo() {
     findOrderCheckUnitById: vi.fn(async (checkUnitId: string) => {
       return state.checkUnits.find((unit) => unit.id === checkUnitId) ?? null;
     }),
+    listOrderAshlamot: vi.fn(async (orderId: string) => {
+      return state.ashlamot
+        .filter((ashlama) => ashlama.orderId === orderId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }),
+    findOrderAshlamaById: vi.fn(async (ashlamaId: string) => {
+      return state.ashlamot.find((ashlama) => ashlama.id === ashlamaId) ?? null;
+    }),
     createOrderCheckUnit: vi.fn(async (input) => {
       checkUnitCounter += 1;
       const orderUnits = state.checkUnits.filter((unit) => unit.orderId === input.orderId);
@@ -382,6 +392,29 @@ function createRepo() {
       const idx = state.checkUnits.findIndex((entry) => entry.id === checkUnitId);
       state.checkUnits[idx] = next;
       return next;
+    }),
+    createOrderAshlama: vi.fn(async (input) => {
+      const ashlama: ManualShiftOrderAshlama = {
+        id: `22000000-0000-4000-8000-${String(state.ashlamot.length + 1).padStart(12, '0')}`,
+        tenantId: input.tenantId,
+        shiftId: input.shiftId,
+        lineId: input.lineId,
+        orderId: input.orderId,
+        checkUnitId: input.checkUnitId,
+        status: input.status,
+        text: input.text,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      };
+      state.ashlamot.push(ashlama);
+      return ashlama;
+    }),
+    updateOrderAshlama: vi.fn(async (ashlamaId: string, patch) => {
+      const ashlama = state.ashlamot.find((entry) => entry.id === ashlamaId) ?? null;
+      if (!ashlama) return null;
+      if (patch.status !== undefined) ashlama.status = patch.status;
+      ashlama.updatedAt = nowIso;
+      return ashlama;
     }),
     createOrder: vi.fn(async (input) => {
       orderCounter += 1;
@@ -1518,6 +1551,180 @@ describe('manual shift order check units', () => {
   });
 });
 
+describe('manual shift ashlama constraints', () => {
+  it('creates ashlama only for returned check unit with reason חסר מוצר', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'חסר מוצר',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const ashlama = await service.createOrderAshlama({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      text: 'להוסיף מוצר',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(ashlama.status).toBe('open');
+    expect(ashlama.text).toBe('להוסיף מוצר');
+  });
+
+  it('rejects ashlama when check unit is not returned', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: 'חסר מוצר',
+      checkedAt: nowIso,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    await expect(
+      service.createOrderAshlama({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        text: 'להוסיף מוצר',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_REQUIRES_RETURNED_CHECK_UNIT' });
+  });
+
+  it('rejects ashlama when checkUnit reason is not חסר מוצר', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'מוצר פגום',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    await expect(
+      service.createOrderAshlama({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        text: 'להוסיף מוצר',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_REQUIRES_MISSING_PRODUCT_REASON' });
+  });
+
+  it('rejects ashlama when checkUnit does not belong to order', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.orders.push(createOrder({ id: ids.orderTwo, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.orderTwo,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'חסר מוצר',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.createOrderAshlama({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        text: 'להוסיף מוצר',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_CHECK_UNIT_ORDER_MISMATCH' });
+  });
+
+  it('rejects duplicate open ashlama for same check unit', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'חסר מוצר',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    state.ashlamot.push({
+      id: '24fd43e8-c4ff-41ab-bdc1-79bc6d53cd62',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'open',
+      text: 'existing',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.createOrderAshlama({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        text: 'להוסיף מוצר',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_DUPLICATE_OPEN_FOR_CHECK_UNIT' });
+  });
+});
+
 describe('manual shift timestamp correctness (PR2)', () => {
   // PR2 scope: checkedAt guard + documented fixedAt gap.
   // checkedAt = first time a checker handled the order. Never overwritten once set.
@@ -1621,6 +1828,48 @@ describe('manual shift timestamp correctness (PR2)', () => {
         actor: { actorProfileId: ids.actor, actorName: 'Checker' }
       })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_CHECK_UNITS' });
+  });
+
+  it('blocks waiting_check → done when order has open ashlama', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: null,
+      checkedAt: nowIso,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    state.ashlamot.push({
+      id: '24fd43e8-c4ff-41ab-bdc1-79bc6d53cd62',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'open',
+      text: 'bring missing product',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.transitionOrderStatus({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        status: 'done',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_OPEN_ASHLAMA' });
   });
 
   it('allows waiting_check → done when all active units are checked', async () => {

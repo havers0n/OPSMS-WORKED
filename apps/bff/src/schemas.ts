@@ -67,6 +67,8 @@ import {
   manualShiftOrderSchema,
   manualShiftOrderErrorSchema,
   manualShiftOrderCheckUnitSchema,
+  manualShiftOrderAshlamaSchema,
+  manualShiftOrderAshlamaStatusSchema,
   manualShiftOrderCheckUnitStatusSchema,
   manualShiftLineSummarySchema,
   manualShiftTodayResponseSchema as manualShiftTodayDtoSchema,
@@ -485,6 +487,15 @@ export const transitionManualShiftOrderCheckUnitStatusBodySchema = z.object({
   }
 });
 
+export const createManualShiftOrderAshlamaBodySchema = z.object({
+  checkUnitId: z.string().uuid(),
+  text: z.string().trim().min(1)
+});
+
+export const patchManualShiftOrderAshlamaBodySchema = z.object({
+  status: manualShiftOrderAshlamaStatusSchema
+});
+
 export const manualShiftDeleteRestoreBodySchema = z.object({
   reason: z.string().trim().min(1).optional(),
   actorName: z.string().trim().min(1).optional()
@@ -517,6 +528,8 @@ export const manualShiftOrderResponseSchema = manualShiftOrderSchema;
 export const manualShiftOrderErrorResponseSchema = manualShiftOrderErrorSchema;
 export const manualShiftOrderCheckUnitResponseSchema = manualShiftOrderCheckUnitSchema;
 export const manualShiftOrderCheckUnitsResponseSchema = z.array(manualShiftOrderCheckUnitSchema);
+export const manualShiftOrderAshlamaResponseSchema = manualShiftOrderAshlamaSchema;
+export const manualShiftOrderAshlamotResponseSchema = z.array(manualShiftOrderAshlamaSchema);
 export const manualShiftLineSummaryResponseSchema = z.array(manualShiftLineSummarySchema);
 export const manualShiftTodayResponseSchema = manualShiftTodayDtoSchema;
 export const manualShiftPeopleSummaryResponseSchema = manualShiftPeopleSummarySchema;

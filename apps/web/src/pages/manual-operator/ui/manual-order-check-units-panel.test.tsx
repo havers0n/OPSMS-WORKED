@@ -314,18 +314,45 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
   });
 
-  it('create completion action is placeholder and does not mutate unit status', async () => {
-    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned')]);
+  it('create completion requires non-empty text and posts ashlama', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'returned')];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
+        return {
+          id: 'ash-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: 'cu-1',
+          status: 'open',
+          text: 'להשלים מוצר חסר',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        };
+      }
+      return [];
+    });
     renderPanel();
     await waitFor(() => expect(screen.getByText('צור השלמה')).toBeTruthy());
 
-    const createCompletionButton = screen.getByText('צור השלמה') as HTMLButtonElement;
-    expect(createCompletionButton.disabled).toBe(true);
-    fireEvent.click(createCompletionButton);
+    fireEvent.click(screen.getByText('צור השלמה'));
+    const dialog = screen.getByTestId('ashlama-dialog');
+    const confirm = dialog.querySelector('button.bg-blue-600') as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים מוצר חסר' } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
 
-    expect(
-      mockedBffRequest.mock.calls.some(([url, init]) => String(url).includes('/api/manual-shift-check-units/cu-1/status') && init?.method === 'PATCH')
-    ).toBe(false);
+    await waitFor(() =>
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
+        method: 'POST',
+        body: JSON.stringify({ checkUnitId: 'cu-1', text: 'להשלים מוצר חסר' })
+      })
+    );
   });
 
   it('shows returned chip and keeps voided excluded from active count', async () => {

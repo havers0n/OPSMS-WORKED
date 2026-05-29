@@ -121,6 +121,33 @@ describe('CheckTab expected units close guard', () => {
     expect(getDoneButton().disabled).toBe(false);
   });
 
+  it('open ashlama blocks done even when units are checked', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'checked')];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot')) {
+        return [{
+          id: 'ash-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: 'cu-1',
+          status: 'open',
+          text: 'missing item',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }];
+      }
+      return [];
+    });
+
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByTestId('open-ashlama-block-message')).toBeTruthy());
+    expect(getDoneButton().disabled).toBe(true);
+  });
+
   it('palletCount=2, one checked + one open -> blocked', async () => {
     mockedBffRequest.mockImplementation(async (url) => {
       const path = String(url);
