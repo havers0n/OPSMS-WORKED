@@ -117,6 +117,7 @@ import {
   recordCanvasMode,
   recordCanvasRenderMode,
   recordCanvasTiming,
+  recordRoutePreviewAppPhaseMark,
   useCanvasDiagnosticsFlags
 } from './canvas-diagnostics';
 import type { CanvasRenderMode } from './canvas-render-mode';
@@ -311,6 +312,10 @@ export function EditorCanvas({
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const [isMobileNavigateMode, setIsMobileNavigateMode] = useState(true);
+
+  useEffect(() => {
+    recordRoutePreviewAppPhaseMark('editor-canvas:mount');
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -646,6 +651,11 @@ export function EditorCanvas({
     shouldShowStorageCellBar
   } = scene.hud;
   const { walls, zones } = scene.layers;
+
+  useEffect(() => {
+    if (!layoutDraft) return;
+    recordRoutePreviewAppPhaseMark('scene-model:ready');
+  }, [layoutDraft]);
   const canvasChromeTokens = getWarehouseCanvasChromeTokens();
   // Temporary bounded bridge for this PR only: move-target is the only runtime
   // source currently mapped into the canvas-local locate-target channel.
@@ -1285,6 +1295,7 @@ export function EditorCanvas({
     if (canvasReadyRecordedRef.current) return;
     if (!layoutDraft || viewport.width <= 0 || viewport.height <= 0) return;
     canvasReadyRecordedRef.current = true;
+    recordRoutePreviewAppPhaseMark('canvas-stage:first-ready');
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     recordCanvasTiming(
       'mount-to-first-canvas-ready-ms',

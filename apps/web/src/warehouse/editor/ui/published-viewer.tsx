@@ -18,6 +18,7 @@ import { ToolRail } from './tool-rail';
 import {
   markCanvasTimingEnd,
   markCanvasTimingStart,
+  recordRoutePreviewAppPhaseMark,
   recordCanvasMode
 } from './canvas-diagnostics';
 import { ViewWorkspace } from './view-workspace';
@@ -48,6 +49,10 @@ export function PublishedViewer() {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const inspectorWidth = viewMode === 'layout' ? 560 : 320;
 
+  useEffect(() => {
+    recordRoutePreviewAppPhaseMark('published-viewer:mount');
+  }, []);
+
   // Bootstrap the store from the published layout so the canvas renders racks.
   // Also reset editorMode to 'select' — the place tool is unavailable in read-only mode
   // and the mode may be stale from a prior WarehouseEditor session.
@@ -68,7 +73,14 @@ export function PublishedViewer() {
   useEffect(() => {
     const readonlyLayout = workspace?.latestPublished ?? workspace?.activeDraft ?? null;
     if (readonlyLayout) {
+      const layoutVersionId = readonlyLayout.layoutVersionId;
+      recordRoutePreviewAppPhaseMark('initialize-draft:start', {
+        onceKey: `initialize-draft:start:${layoutVersionId}`
+      });
       initializeDraft(readonlyLayout);
+      recordRoutePreviewAppPhaseMark('initialize-draft:end', {
+        onceKey: `initialize-draft:end:${layoutVersionId}`
+      });
       setEditorMode('select');
     }
   }, [initializeDraft, setEditorMode, workspace?.activeDraft, workspace?.latestPublished]);

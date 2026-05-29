@@ -31,6 +31,7 @@ export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
 export const CANVAS_DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
 export const CANVAS_CULLING_METRICS_EVENT = 'wos:canvas-culling-metrics-change';
 export const CANVAS_DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
+const ROUTE_PREVIEW_APP_PHASE_MARK_PREFIX = 'wos:route-preview:';
 
 export type CanvasRenderComponentName =
   | 'EditorCanvas'
@@ -172,6 +173,7 @@ declare global {
     __WOS_CANVAS_DISABLE_MANUAL_PAN_BATCH_DRAW__?: boolean;
     __WOS_CANVAS_KONVA_SOURCE__?: string | null;
     __WOS_CANVAS_DIAGNOSTIC_MARKS__?: Record<string, number>;
+    __WOS_ROUTE_PREVIEW_APP_PHASE_MARKS__?: Record<string, number>;
   }
 }
 
@@ -643,6 +645,24 @@ export function markCanvasTimingEnd(name: string) {
   if (typeof start !== 'number') return;
   recordCanvasTiming(name, nowMs() - start);
   delete window.__WOS_CANVAS_DIAGNOSTIC_MARKS__?.[name];
+}
+
+export function recordRoutePreviewAppPhaseMark(
+  name: string,
+  options?: { onceKey?: string }
+) {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics || typeof window === 'undefined') return;
+  if (typeof performance === 'undefined' || typeof performance.mark !== 'function') {
+    return;
+  }
+
+  const markName = `${ROUTE_PREVIEW_APP_PHASE_MARK_PREFIX}${name}`;
+  const onceKey = options?.onceKey ?? markName;
+  window.__WOS_ROUTE_PREVIEW_APP_PHASE_MARKS__ ??= {};
+  if (window.__WOS_ROUTE_PREVIEW_APP_PHASE_MARKS__[onceKey]) return;
+  window.__WOS_ROUTE_PREVIEW_APP_PHASE_MARKS__[onceKey] = nowMs();
+  performance.mark(markName);
 }
 
 export function recordCanvasLayerNodeCount(

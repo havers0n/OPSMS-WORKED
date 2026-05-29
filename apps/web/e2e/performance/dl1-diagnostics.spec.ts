@@ -422,6 +422,13 @@ type RoutePreviewStartupDiagnostics = {
   startupWorstFrameMs: number;
   longTasks: StartupLongTaskDetail[];
   phaseMarks: RoutePreviewStartupPhaseMark[];
+  appPhaseMarks: RoutePreviewAppPhaseMark[];
+};
+
+type RoutePreviewAppPhaseMark = {
+  name: string;
+  startTimeMs: number;
+  relativeToProbeStartMs: number;
 };
 
 type BrowserEnvironment = {
@@ -3077,6 +3084,18 @@ async function runMeasuredScenario({
     }
     const rawResult = await stopFrameProbe(page, steadyProbeId);
     await pushPhaseMark('steady-probe-end');
+    const appPhaseMarks = await page.evaluate((probeStartTimeMs) => {
+      return performance
+        .getEntriesByType('mark')
+        .filter((entry) => entry.name.startsWith('wos:route-preview:'))
+        .map((entry) => ({
+          name: entry.name,
+          startTimeMs: Math.round(entry.startTime * 100) / 100,
+          relativeToProbeStartMs:
+            Math.round((entry.startTime - probeStartTimeMs) * 100) / 100
+        }))
+        .sort((a, b) => a.startTimeMs - b.startTimeMs);
+    }, startupProbeStartTimeMs);
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
@@ -3120,7 +3139,8 @@ async function runMeasuredScenario({
         ),
         startupWorstFrameMs: startupSummary.metrics.worstFrameMs,
         longTasks: startupLongTasks,
-        phaseMarks
+        phaseMarks,
+        appPhaseMarks
       }
     };
   }
