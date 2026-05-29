@@ -6,8 +6,8 @@ import type {
   ManualShiftOrderCheckUnit
 } from '@wos/domain';
 import {
-  summarizeManualShiftOrderCheckUnits as summarizeManualShiftOrderCheckUnitsDomain,
-  canTransitionManualShiftOrderToDoneWithCheckUnits
+  summarizeManualShiftOrderCheckUnits as domainSummarizeManualShiftOrderCheckUnits,
+  canTransitionManualShiftOrderToDoneWithCheckUnits as domainCanTransitionManualShiftOrderToDoneWithCheckUnits
 } from '@wos/domain';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -429,13 +429,13 @@ export interface OrderDetail {
 export function summarizeManualShiftOrderCheckUnits(
   checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
 ) {
-  return summarizeManualShiftOrderCheckUnitsDomain(checkUnits);
+  return domainSummarizeManualShiftOrderCheckUnits(checkUnits);
 }
 
 export function canCloseOrderFromCheckUnits(
   checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
 ): boolean {
-  return canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits);
+  return domainCanTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits);
 }
 
 const DETAIL_STATUS_PRIORITY: Record<ManualShiftOrderStatus, number> = {
