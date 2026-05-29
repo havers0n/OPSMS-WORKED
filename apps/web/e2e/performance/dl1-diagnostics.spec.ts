@@ -34,6 +34,8 @@ const INCLUDE_LOW_END_PROFILE =
   process.env.DL1_DIAGNOSTICS_INCLUDE_LOW_END === '1';
 const DIAGNOSTICS_NON_DESTRUCTIVE =
   process.env.DL1_DIAGNOSTICS_NON_DESTRUCTIVE === '1';
+const DIAGNOSTICS_KONVA_STACKS =
+  process.env.DL1_DIAGNOSTICS_KONVA_STACKS === '1';
 const DIAGNOSTICS_STORAGE_KEY = '__WOS_CANVAS_PERF_DIAGNOSTICS__';
 const DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
 const execFile = promisify(execFileCallback);
@@ -219,6 +221,9 @@ type KonvaCallEvent = {
   traceId: number | null;
   name: string;
   source: string;
+  sourceCategory?: string;
+  sourceFrame?: string;
+  sourceStack?: string[];
   timeMs: number;
   layerName?: string;
   nodeType?: string;
@@ -437,11 +442,26 @@ type RoutePreviewStartupKonvaEvent = {
   index: number;
   name: string;
   source: string;
+  sourceCategory?: string;
+  sourceFrame?: string;
+  sourceStack?: string[];
   relativeStartMs: number;
   durationMs: number | null;
   layerName?: string;
   nodeType?: string;
   detail?: string;
+};
+
+type RoutePreviewStartupKonvaSourceGroup = {
+  eventType: string;
+  source: string;
+  sourceCategory: string;
+  sourceFrame: string;
+  layerName: string;
+  count: number;
+  firstRelativeStartMs: number;
+  lastRelativeStartMs: number;
+  totalDurationMs: number;
 };
 
 type RoutePreviewStartupKonvaPipeline = {
@@ -456,6 +476,7 @@ type RoutePreviewStartupKonvaPipeline = {
   firstDrawSceneStartMs: number | null;
   firstDrawSceneEndMs: number | null;
   events: RoutePreviewStartupKonvaEvent[];
+  sourceGroups: RoutePreviewStartupKonvaSourceGroup[];
 };
 
 type BrowserEnvironment = {
@@ -1334,7 +1355,7 @@ async function startKonvaPipelineProbe(page: Page) {
     { timeout: 15000 }
   );
 
-  await page.evaluate(() => {
+  await page.evaluate(({ stackCaptureEnabled }) => {
     type MutableKonvaProbeResult = KonvaPipelineProbeResult & {
       events: KonvaCallEvent[];
     };
@@ -1421,7 +1442,9 @@ async function startKonvaPipelineProbe(page: Page) {
       events: []
     };
     const MAX_BATCH_DRAW_STACK_CAPTURES = 200;
+    const MAX_EVENT_STACK_CAPTURES = 300;
     let batchDrawStackCaptures = 0;
+    let eventStackCaptures = 0;
 
     let eventIndex = 0;
     let currentTraceId: number | null = null;
@@ -1474,6 +1497,79 @@ async function startKonvaPipelineProbe(page: Page) {
         .filter((line) => !line.includes('playwright'));
       return lines.slice(0, 3).join(' <- ') || 'unknown';
     };
+    const sanitizeStackFrames = (stack: string | undefined) => {
+      if (!stack) return [];
+      return stack
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => !line.startsWith('Error'))
+        .filter((line) => !line.includes('wrappedKonvaProbeMethod'))
+        .filter((line) => !line.includes('startKonvaPipelineProbe'))
+        .filter((line) => !line.includes('captureSourceAttribution'))
+        .filter((line) => !line.includes('record ('))
+        .filter((line) => !line.includes('playwright'))
+        .slice(0, 4);
+    };
+    const normalizeSourceFrame = (frame: string | undefined) => {
+      if (!frame) return 'unknown';
+      return frame.replace(/^at\s+/, '').replace(/\?.*$/, '');
+    };
+    const classifySourceCategory = (
+      existingSource: string,
+      topFrame: string | undefined
+    ) => {
+      if (
+        existingSource !== 'unknown' &&
+        existingSource !== 'konva-scheduled-draw'
+      ) {
+        return existingSource;
+      }
+      const frame = topFrame ?? '';
+      if (frame.includes('use-canvas-viewport-controller')) {
+        return 'viewport-controller';
+      }
+      if (frame.includes('rack-layer.tsx')) return 'rack-layer';
+      if (frame.includes('selection-overlay-layer')) return 'selection-overlay';
+      if (frame.includes('rack-body.tsx')) return 'rack-body';
+      if (frame.includes('react-dom')) return 'react-commit';
+      if (frame.includes('._requestDraw')) return 'konva-node-request-draw';
+      if (frame.includes('._setAttr')) return 'konva-node-attr-set';
+      if (frame.includes('[as setPoints]')) return 'konva-line-set-points';
+      if (frame.includes('node_modules/konva') || frame.includes('Konva')) {
+        return 'konva-internal';
+      }
+      return existingSource === 'konva-scheduled-draw'
+        ? 'konva-scheduled-draw'
+        : 'unknown';
+    };
+    const captureSourceAttribution = () => {
+      if (!stackCaptureEnabled) {
+        return {
+          sourceCategory: classifySourceCategory(readSource(), undefined),
+          sourceFrame: undefined,
+          sourceStack: undefined
+        };
+      }
+      if (eventStackCaptures >= MAX_EVENT_STACK_CAPTURES) {
+        return {
+          sourceCategory: 'stack-capture-limit',
+          sourceFrame: 'stack-capture-limit',
+          sourceStack: undefined
+        };
+      }
+      eventStackCaptures += 1;
+      const frames = sanitizeStackFrames(new Error().stack);
+      const meaningfulFrame = frames.find(
+        (frame) => !frame.includes('eval at evaluate')
+      );
+      const topFrame = normalizeSourceFrame(meaningfulFrame ?? frames[0]);
+      return {
+        sourceCategory: classifySourceCategory(readSource(), topFrame),
+        sourceFrame: topFrame,
+        sourceStack: frames.length > 0 ? frames : undefined
+      };
+    };
 
     const ensureTrace = () => {
       if (currentTraceId !== null) return currentTraceId;
@@ -1490,11 +1586,16 @@ async function startKonvaPipelineProbe(page: Page) {
       details: Partial<Omit<KonvaCallEvent, 'index' | 'name' | 'timeMs'>> = {}
     ) => {
       const source = details.source ?? readSource();
+      const sourceCategory =
+        details.sourceCategory ?? classifySourceCategory(source, details.sourceFrame);
       const event: KonvaCallEvent = {
         index: eventIndex,
         traceId: currentTraceId,
         name,
         source,
+        sourceCategory,
+        sourceFrame: details.sourceFrame,
+        sourceStack: details.sourceStack,
         timeMs: Math.round(performance.now() * 100) / 100,
         layerName: details.layerName,
         nodeType: details.nodeType,
@@ -1730,6 +1831,7 @@ async function startKonvaPipelineProbe(page: Page) {
             (probe.batchDrawByCallsite.__stack_capture_limit__ ?? 0) + 1;
         }
         record('Layer.batchDraw', {
+          ...captureSourceAttribution(),
           layerName,
           nodeType: self.getType?.() ?? 'Layer',
           detail: `_waitingForDraw=${String(self._waitingForDraw)}`
@@ -1745,6 +1847,7 @@ async function startKonvaPipelineProbe(page: Page) {
         ensureTrace();
         probe.layerDrawCalls += 1;
         record('Layer.draw', {
+          ...captureSourceAttribution(),
           source:
             readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
           layerName: getLayerName(self),
@@ -1761,6 +1864,7 @@ async function startKonvaPipelineProbe(page: Page) {
         ensureTrace();
         probe.drawSceneCalls += 1;
         record('drawScene', {
+          ...captureSourceAttribution(),
           source:
             readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
           layerName: getLayerName(self),
@@ -1780,6 +1884,7 @@ async function startKonvaPipelineProbe(page: Page) {
         ensureTrace();
         probe.drawHitCalls += 1;
         record('drawHit', {
+          ...captureSourceAttribution(),
           source:
             readSource() === 'unknown' ? 'konva-scheduled-draw' : readSource(),
           layerName: getLayerName(self),
@@ -1825,6 +1930,7 @@ async function startKonvaPipelineProbe(page: Page) {
               (probe.batchDrawByCallsite.__stack_capture_limit__ ?? 0) + 1;
           }
           record('Layer.batchDraw', {
+            ...captureSourceAttribution(),
             layerName,
             nodeType: self.getType?.() ?? 'Layer',
             detail: `_waitingForDraw=${String(self._waitingForDraw)}`
@@ -1837,6 +1943,7 @@ async function startKonvaPipelineProbe(page: Page) {
           ensureTrace();
           probe.layerDrawCalls += 1;
           record('Layer.draw', {
+            ...captureSourceAttribution(),
             source:
               readSource() === 'unknown'
                 ? 'konva-scheduled-draw'
@@ -1889,7 +1996,7 @@ async function startKonvaPipelineProbe(page: Page) {
     }
 
     global.__dl1KonvaProbe = probe;
-  });
+  }, { stackCaptureEnabled: DIAGNOSTICS_KONVA_STACKS });
 }
 
 async function stopKonvaPipelineProbe(
@@ -3080,6 +3187,9 @@ function buildRoutePreviewStartupKonvaPipeline({
       index: event.index,
       name: event.name,
       source: event.source,
+      sourceCategory: event.sourceCategory,
+      sourceFrame: event.sourceFrame,
+      sourceStack: event.sourceStack,
       relativeStartMs: round(event.timeMs - startupWindowStartMs),
       durationMs: eventDurations.get(event.index) ?? null,
       layerName: event.layerName,
@@ -3087,6 +3197,43 @@ function buildRoutePreviewStartupKonvaPipeline({
       detail: event.detail
     })
   );
+  const groups = new Map<string, RoutePreviewStartupKonvaSourceGroup>();
+  for (const event of normalizedEvents) {
+    const sourceCategory = event.sourceCategory ?? 'unknown';
+    const sourceFrame = event.sourceFrame ?? 'unknown';
+    const layerName = event.layerName ?? 'unknown-layer';
+    const key = [
+      event.name,
+      event.source,
+      sourceCategory,
+      sourceFrame,
+      layerName
+    ].join('|');
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, {
+        eventType: event.name,
+        source: event.source,
+        sourceCategory,
+        sourceFrame,
+        layerName,
+        count: 1,
+        firstRelativeStartMs: event.relativeStartMs,
+        lastRelativeStartMs: event.relativeStartMs,
+        totalDurationMs: event.durationMs ?? 0
+      });
+      continue;
+    }
+    current.count += 1;
+    current.lastRelativeStartMs = event.relativeStartMs;
+    current.totalDurationMs += event.durationMs ?? 0;
+  }
+  const sourceGroups = [...groups.values()]
+    .map((group) => ({
+      ...group,
+      totalDurationMs: round(group.totalDurationMs)
+    }))
+    .sort((a, b) => b.count - a.count || a.firstRelativeStartMs - b.firstRelativeStartMs);
   const firstDrawScene = startupEvents.find((event) => event.name === 'drawScene');
   const firstDrawSceneEndMs =
     firstDrawScene && eventDurations.has(firstDrawScene.index)
@@ -3116,7 +3263,8 @@ function buildRoutePreviewStartupKonvaPipeline({
       ? round(firstDrawScene.timeMs - startupWindowStartMs)
       : null,
     firstDrawSceneEndMs,
-    events: normalizedEvents
+    events: normalizedEvents,
+    sourceGroups
   };
 }
 
@@ -4288,6 +4436,10 @@ test.describe('DL1 diagnostics harness', () => {
         generatedAt: new Date().toISOString(),
         sampleDurationMs: SAMPLE_DURATION_MS,
         scenario,
+        diagnosticsConfig: {
+          nonDestructive: DIAGNOSTICS_NON_DESTRUCTIVE,
+          konvaStackCaptureEnabled: DIAGNOSTICS_KONVA_STACKS
+        },
         buildIdentity,
         renderPipelineReport: buildRenderPipelineMarkdown(scenario, entries),
         entries
