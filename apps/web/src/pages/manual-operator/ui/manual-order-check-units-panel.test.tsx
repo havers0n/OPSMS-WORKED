@@ -428,6 +428,213 @@ describe('ManualOrderCheckUnitsPanel', () => {
     expect(screen.queryByTestId('order-ashlamot-section')).toBeNull();
   });
 
+  it('"הוסף השלמה" is visible when ashlamot list is empty', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
+      return [];
+    });
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('add-order-ashlama')).toBeTruthy());
+    expect(screen.queryByTestId('order-ashlamot-section')).toBeNull();
+  });
+
+  it('creating manual ashlama posts checkUnitId:null and text', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
+        return {
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        };
+      }
+      return [];
+    });
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('add-order-ashlama')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('add-order-ashlama'));
+
+    const dialog = screen.getByTestId('ashlama-dialog');
+    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים ידנית' } });
+    fireEvent.click(screen.getAllByText('צור השלמה')[0] as HTMLButtonElement);
+
+    await waitFor(() =>
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
+        method: 'POST',
+        body: JSON.stringify({ checkUnitId: null, text: 'להשלים ידנית' })
+      })
+    );
+  });
+
+  it('manual ashlama section appears only when at least one manual item exists', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') {
+        return [{
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        }];
+      }
+      return [];
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('order-ashlamot-section')).toBeTruthy());
+    expect(screen.getByText('השלמה ידנית')).toBeTruthy();
+  });
+
+  it('open manual ashlama exposes done and cancel actions', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') {
+        return [{
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        }];
+      }
+      return [];
+    });
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('סמן כהושלם')).toBeTruthy());
+    expect(screen.getByText('בטל השלמה')).toBeTruthy();
+  });
+
+  it('marking manual ashlama done calls status mutation', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') {
+        return [{
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        }];
+      }
+      if (path.includes('/api/manual-shift-ashlamot/ash-manual-1') && method === 'PATCH') {
+        return {
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'done',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:10:00.000Z'
+        };
+      }
+      return [];
+    });
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('סמן כהושלם')).toBeTruthy());
+    fireEvent.click(screen.getByText('סמן כהושלם'));
+    await waitFor(() =>
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-ashlamot/ash-manual-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'done' })
+      })
+    );
+  });
+
+  it('cancelling manual ashlama calls status mutation', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') {
+        return [{
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        }];
+      }
+      if (path.includes('/api/manual-shift-ashlamot/ash-manual-1') && method === 'PATCH') {
+        return {
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'cancelled',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:10:00.000Z'
+        };
+      }
+      return [];
+    });
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('בטל השלמה')).toBeTruthy());
+    fireEvent.click(screen.getByText('בטל השלמה'));
+    await waitFor(() =>
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-ashlamot/ash-manual-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' })
+      })
+    );
+  });
+
   it('no-units state shows dominant add button and no metrics', async () => {
     mockedBffRequest.mockResolvedValue([]);
     renderPanel();

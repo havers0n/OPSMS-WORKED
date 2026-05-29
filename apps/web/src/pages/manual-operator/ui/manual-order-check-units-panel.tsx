@@ -4,6 +4,7 @@ import { orderAshlamotQueryOptions, orderCheckUnitsQueryOptions } from '@/entiti
 import {
   useCreateManualShiftOrderAshlama,
   useCreateManualShiftOrderCheckUnit,
+  usePatchManualShiftOrderAshlama,
   useUpdateManualShiftOrderCheckUnitStatus
 } from '@/entities/manual-shift/api/mutations';
 import {
@@ -151,6 +152,7 @@ export function ManualOrderCheckUnitsPanel({
   const createCheckUnit = useCreateManualShiftOrderCheckUnit(orderId);
   const ashlamotQuery = useQuery(orderAshlamotQueryOptions(orderId));
   const createAshlama = useCreateManualShiftOrderAshlama(orderId);
+  const patchAshlama = usePatchManualShiftOrderAshlama(orderId);
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
   const [reasonDraftByUnitId, setReasonDraftByUnitId] = useState<Record<string, string>>({});
   const [reasonSelectorUnitId, setReasonSelectorUnitId] = useState<string | null>(null);
@@ -168,8 +170,10 @@ export function ManualOrderCheckUnitsPanel({
       )
       .map((ashlama) => [ashlama.checkUnitId, ashlama] as const)
   );
-  const orderLevelAshlamot = ashlamot.filter(
-    (ashlama) => ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled'
+  const manualOrderLevelAshlamot = ashlamot.filter(
+    (ashlama) =>
+      ashlama.source === 'manual' &&
+      (ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled')
   );
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
   const hasOpenAshlama = ashlamot.some((ashlama) => ashlama.status === 'open');
@@ -245,6 +249,23 @@ export function ManualOrderCheckUnitsPanel({
   return (
     <section className={`bg-white border border-gray-200 rounded-2xl ${compact ? 'p-3' : 'p-5'} flex flex-col gap-3 text-right`}>
       <h3 className={`${compact ? 'text-base' : 'text-lg'} font-bold`}>יחידות בדיקה</h3>
+      {interactive && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setIsAshlamaDialogOpen(true);
+              setAshlamaDialogCheckUnitId(null);
+              setAshlamaDraftText('');
+            }}
+            disabled={!canPerformActions || createAshlama.isPending}
+            className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
+            data-testid="add-order-ashlama"
+          >
+            הוסף השלמה
+          </button>
+        </div>
+      )}
 
       {checkUnitsQuery.isLoading && (
         <p className="text-sm text-gray-500" data-testid="check-units-loading">
@@ -487,38 +508,48 @@ export function ManualOrderCheckUnitsPanel({
               );
             })}
           </ul>
-          {orderLevelAshlamot.length > 0 && (
-            <div className="rounded-lg border border-gray-200 px-3 py-2" data-testid="order-ashlamot-section">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-semibold">השלמות להזמנה</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAshlamaDialogOpen(true);
-                  setAshlamaDialogCheckUnitId(null);
-                  setAshlamaDraftText('');
-                }}
-                disabled={!canPerformActions || createAshlama.isPending}
-                className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
-              >
-                הוסף השלמה
-              </button>
-            </div>
-            <ul className="flex flex-col gap-1 text-xs">
-              {orderLevelAshlamot.map((ashlama) => (
-                <li key={ashlama.id} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">
-                  <span className="font-semibold">
-                    {ashlama.status === 'open' ? 'פתוחה' : ashlama.status === 'done' ? 'הושלמה' : 'בוטלה'}
-                  </span>
-                  <span className="mx-1 text-gray-400">·</span>
-                  <span>{ashlama.text}</span>
-                  {ashlama.source === 'manual' && <span className="mx-1 text-gray-500">(ידני)</span>}
-                </li>
-              ))}
-            </ul>
-            </div>
-          )}
         </>
+      )}
+
+      {manualOrderLevelAshlamot.length > 0 && (
+        <div className="rounded-lg border border-gray-200 px-3 py-2" data-testid="order-ashlamot-section">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold">השלמות להזמנה</p>
+          </div>
+          <ul className="flex flex-col gap-1 text-xs">
+            {manualOrderLevelAshlamot.map((ashlama) => (
+              <li key={ashlama.id} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">
+                <span className="font-semibold text-gray-700">השלמה ידנית</span>
+                <span className="mx-1 text-gray-400">·</span>
+                <span className="font-semibold">
+                  {ashlama.status === 'open' ? 'פתוחה' : ashlama.status === 'done' ? 'הושלמה' : 'בוטלה'}
+                </span>
+                <span className="mx-1 text-gray-400">·</span>
+                <span>{ashlama.text}</span>
+                {ashlama.status === 'open' && interactive && (
+                  <span className="ms-2 inline-flex gap-2 align-middle">
+                    <button
+                      type="button"
+                      onClick={() => patchAshlama.mutate({ ashlamaId: ashlama.id, status: 'done' })}
+                      disabled={!canPerformActions || patchAshlama.isPending}
+                      className="rounded-md border border-green-300 bg-white px-2 py-0.5 text-[11px] font-bold text-green-700 disabled:opacity-50"
+                    >
+                      סמן כהושלם
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => patchAshlama.mutate({ ashlamaId: ashlama.id, status: 'cancelled' })}
+                      disabled={!canPerformActions || patchAshlama.isPending}
+                      className="rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] font-bold text-red-700 disabled:opacity-50"
+                    >
+                      בטל השלמה
+                    </button>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {interactive && (
@@ -548,6 +579,7 @@ export function ManualOrderCheckUnitsPanel({
               value={ashlamaDraftText}
               onChange={(event) => setAshlamaDraftText(event.target.value)}
               className="mt-1 h-28 w-full rounded-lg border border-gray-300 p-2"
+              placeholder="מה צריך להשלים?"
             />
             <div className="mt-3 flex gap-2">
               <button

@@ -145,7 +145,36 @@ describe('CheckTab expected units close guard', () => {
     });
 
     renderCheckTab();
-    await waitFor(() => expect(screen.getByTestId('open-ashlama-block-message')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('check-units-close-reason-order-1')).toBeTruthy());
+    expect(screen.getByText('בדוק את כל יחידות הבדיקה הפעילות לפני סגירת ההזמנה')).toBeTruthy();
+    expect(getDoneButton().disabled).toBe(true);
+  });
+
+  it('open manual ashlama blocks done even when units are checked', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'checked')];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot')) {
+        return [{
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'manual ashlama',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }];
+      }
+      return [];
+    });
+
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByTestId('check-units-close-reason-order-1')).toBeTruthy());
     expect(getDoneButton().disabled).toBe(true);
   });
 
