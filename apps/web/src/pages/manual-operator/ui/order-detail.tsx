@@ -9,6 +9,7 @@ import { AssignPickerSheet } from './assign-picker-sheet';
 import { DeleteConfirmSheet } from './delete-confirm-sheet';
 import { EditOrderSheet } from './edit-order-sheet';
 import { ErrorFlow } from './error-flow';
+import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
 interface OrderDetailProps {
@@ -186,6 +187,8 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             </>
           )}
         </div>
+
+        <ManualOrderCheckUnitsPanel orderId={order.id} interactive />
       </main>
 
       <footer className="shrink-0 border-t border-gray-200 bg-white p-4 flex flex-col gap-3">

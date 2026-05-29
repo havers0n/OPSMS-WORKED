@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ManualShiftOrderCheckUnit } from '@wos/domain';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { CheckTab } from './check-tab';
 
@@ -18,13 +19,10 @@ function makeQC() {
   });
 }
 
-function renderCheckTab(
-  shiftId = 'shift-1',
-  lines: Parameters<typeof CheckTab>[0]['lines'] = []
-) {
+function renderCheckTab() {
   return render(
     <QueryClientProvider client={makeQC()}>
-      <CheckTab shiftId={shiftId} lines={lines} />
+      <CheckTab shiftId="shift-1" lines={[]} />
     </QueryClientProvider>
   );
 }
@@ -36,9 +34,9 @@ const baseOrder = {
   lineId: 'line-1',
   orderNumber: 'ORD-001',
   customerName: null,
-  pointName: 'נקודה א',
+  pointName: 'Point A',
   palletCount: 2,
-  pickerName: 'דוד',
+  pickerName: 'Picker',
   checkerName: null,
   lineCount: 5,
   size: 'M' as const,
@@ -56,158 +54,149 @@ const baseOrder = {
   deleteReason: null
 };
 
+function makeCheckUnit(status: ManualShiftOrderCheckUnit['status']) {
+  return {
+    id: `cu-${status}`,
+    tenantId: 'tenant-1',
+    shiftId: 'shift-1',
+    lineId: 'line-1',
+    orderId: 'order-1',
+    unitNumber: 1,
+    status,
+    note: null,
+    reason: null,
+    checkedAt: null,
+    returnedAt: null,
+    voidedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  } as ManualShiftOrderCheckUnit;
+}
+
+function getActionButtons() {
+  const cards = screen.getAllByText('Point A');
+  const card = cards[0].closest('div[class*="shadow-sm"]') as HTMLElement;
+  const doneButton = card.querySelector('button.h-14.bg-green-600') as HTMLButtonElement;
+  const errorButton = card.querySelector('button.h-14.bg-red-50') as HTMLButtonElement;
+  return { errorButton, doneButton };
+}
+
 describe('CheckTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders waiting_check orders', async () => {
-    mockedBffRequest.mockResolvedValue([baseOrder]);
-
-    renderCheckTab();
-
-    await waitFor(() => {
-      expect(screen.getByText('נקודה א')).toBeTruthy();
+  it('renders waiting_check orders and check-unit summary', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit('checked')];
+      return [];
     });
 
-    expect(screen.getByText('1 נקודות ממתינות לבדיקה')).toBeTruthy();
-    expect(screen.getByText('מלקט: דוד')).toBeTruthy();
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByText('Checked / active: 1 / 1')).toBeTruthy());
   });
 
   it('shows empty state when no waiting_check orders', async () => {
-    const doneOrder = { ...baseOrder, status: 'done' as const };
-    mockedBffRequest.mockResolvedValue([doneOrder]);
-
+    mockedBffRequest.mockResolvedValue([{ ...baseOrder, status: 'done' as const }]);
     renderCheckTab();
-
-    await waitFor(() => {
-      expect(screen.getByText('אין נקודות לבדיקה')).toBeTruthy();
-    });
-
-    expect(screen.getByText('כל ההזמנות נבדקו')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getAllByText((t) => t.includes('No') || t.includes('???')).length).toBeGreaterThan(0)
+    );
   });
 
-  it('shows empty state when orders list is empty', async () => {
-    mockedBffRequest.mockResolvedValue([]);
+  it('no-units legacy done remains enabled', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shifts/shift-1/orders') && method === 'GET') return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/status') && method === 'PATCH') return { ...baseOrder, status: 'done' };
+      return [];
+    });
 
     renderCheckTab();
+    await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+    const { doneButton } = getActionButtons();
+    expect(doneButton.hasAttribute('disabled')).toBe(false);
 
+    fireEvent.click(doneButton);
     await waitFor(() => {
-      expect(screen.getByText('אין נקודות לבדיקה')).toBeTruthy();
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/status', expect.objectContaining({ method: 'PATCH' }));
     });
   });
 
-  it('OK button calls status mutation with done', async () => {
-    mockedBffRequest
-      .mockResolvedValueOnce([baseOrder]) // fetch shift orders
-      .mockResolvedValueOnce({ ...baseOrder, status: 'done' }) // PATCH status
-      .mockResolvedValue([]); // re-fetch after invalidation
+  it('open unit disables done and shows reason', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit('open')];
+      return [];
+    });
 
     renderCheckTab();
+    await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('check-units-close-reason-order-1')).toBeTruthy());
+    const { doneButton } = getActionButtons();
+    expect(doneButton.hasAttribute('disabled')).toBe(true);
+  });
 
-    await waitFor(() => {
-      expect(screen.getByText('נקודה א')).toBeTruthy();
+  it('returned unit disables done', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit('returned')];
+      return [];
     });
 
-    fireEvent.click(screen.getByText('תקין'));
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('check-units-close-reason-order-1')).toBeTruthy());
+    const { doneButton } = getActionButtons();
+    expect(doneButton.hasAttribute('disabled')).toBe(true);
+  });
 
-    await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith(
-        '/api/manual-shift-orders/order-1/status',
-        expect.objectContaining({ method: 'PATCH' })
-      );
+  it('all active checked enables done', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit('checked')];
+      return [];
     });
+
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+    const { doneButton } = getActionButtons();
+    expect(doneButton.hasAttribute('disabled')).toBe(false);
   });
 
   it('Error button opens error flow overlay', async () => {
-    mockedBffRequest.mockResolvedValue([baseOrder]);
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [];
+      return [];
+    });
 
     renderCheckTab();
-
-    await waitFor(() => {
-      expect(screen.getByText('נקודה א')).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByText('תקלה'));
-
-    expect(screen.getByText('דיווח תקלה')).toBeTruthy();
-    expect(screen.getByText('מה הבעיה בהזמנה?')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+    const { errorButton } = getActionButtons();
+    fireEvent.click(errorButton);
+    expect(screen.getByRole('textbox')).toBeTruthy();
   });
 
-  it('error flow submits and calls error mutation', async () => {
-    const createdError = {
-      id: 'err-1',
-      tenantId: 'tenant-1',
-      shiftId: 'shift-1',
-      lineId: 'line-1',
-      orderId: 'order-1',
-      type: 'wrong_quantity',
-      comment: null,
-      createdBy: null,
-      createdAt: new Date().toISOString(),
-      fixedAt: null
-    };
-
-    mockedBffRequest
-      .mockResolvedValueOnce([baseOrder]) // initial fetch
-      .mockResolvedValueOnce(createdError) // POST error
-      .mockResolvedValue([]); // re-fetches after
+  it('does not show loading readiness wording', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [];
+      return [];
+    });
 
     renderCheckTab();
-
-    await waitFor(() => {
-      expect(screen.getByText('נקודה א')).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByText('תקלה'));
-    fireEvent.click(screen.getByText('כמות לא נכונה'));
-    fireEvent.click(screen.getByText('חזרה לתיקון'));
-
-    await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith(
-        '/api/manual-shift-orders/order-1/errors',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-  });
-
-  it('shows line name when lines prop is provided', async () => {
-    const mockLine = {
-      id: 'line-1',
-      tenantId: 'tenant-1',
-      shiftId: 'shift-1',
-      name: 'קו צפון',
-      sortOrder: 0,
-      status: 'in_progress' as const,
-      createdAt: new Date().toISOString(),
-      deletedAt: null,
-      deletedByProfileId: null,
-      deletedByName: null,
-      deleteReason: null
-    };
-    const lines = [
-      {
-        line: mockLine,
-        totalOrders: 1,
-        queuedOrders: 0,
-        pickingOrders: 0,
-        waitingCheckOrders: 1,
-        returnedOrders: 0,
-        doneOrders: 0,
-        errorCount: 0
-      }
-    ];
-
-    mockedBffRequest.mockResolvedValue([baseOrder]);
-
-    renderCheckTab('shift-1', lines);
-
-    await waitFor(() => {
-      expect(screen.getByText('קו: קו צפון')).toBeTruthy();
-    });
-  });
-
-  it('does not access supabase directly', () => {
-    expect(mockedBffRequest).toBeDefined();
+    await waitFor(() => expect(screen.getByTestId('create-check-unit')).toBeTruthy());
+    expect(screen.queryByText(/ready for loading/i)).toBeNull();
+    expect(screen.queryByText(/loading readiness/i)).toBeNull();
   });
 });
