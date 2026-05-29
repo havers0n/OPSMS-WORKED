@@ -102,7 +102,7 @@ describe('CheckTab', () => {
     mockedBffRequest.mockResolvedValue([{ ...baseOrder, status: 'done' as const }]);
     renderCheckTab();
     await waitFor(() =>
-      expect(screen.getAllByText((t) => t.includes('No') || t.includes('???')).length).toBeGreaterThan(0)
+      expect(screen.getByText('אין נקודות לבדיקה')).toBeTruthy()
     );
   });
 
@@ -118,6 +118,11 @@ describe('CheckTab', () => {
 
     renderCheckTab();
     await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+
+    // Assert real Hebrew text for error/OK buttons
+    expect(screen.getByText('תקין')).toBeTruthy();
+    expect(screen.getByText('תקלה')).toBeTruthy();
+
     const { doneButton } = getActionButtons();
     expect(doneButton.hasAttribute('disabled')).toBe(false);
 
@@ -138,6 +143,10 @@ describe('CheckTab', () => {
     renderCheckTab();
     await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
     await waitFor(() => expect(screen.getByTestId('check-units-close-reason-order-1')).toBeTruthy());
+
+    // Assert real Hebrew text for close reason
+    expect(screen.getByText('בדוק את כל יחידות הבדיקה הפעילות לפני סגירת ההזמנה')).toBeTruthy();
+
     const { doneButton } = getActionButtons();
     expect(doneButton.hasAttribute('disabled')).toBe(true);
   });
@@ -198,5 +207,21 @@ describe('CheckTab', () => {
     await waitFor(() => expect(screen.getByTestId('create-check-unit')).toBeTruthy());
     expect(screen.queryByText(/ready for loading/i)).toBeNull();
     expect(screen.queryByText(/loading readiness/i)).toBeNull();
+  });
+
+  it('anti-regression: rendered Check tab must not contain obvious corrupted placeholder text like "???"', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [baseOrder];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit('open')];
+      return [];
+    });
+
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByText('Point A')).toBeTruthy());
+
+    // Verify no text elements in the entire document contain "???"
+    const allTextElements = screen.queryAllByText((t) => t.includes('???'));
+    expect(allTextElements.length).toBe(0);
   });
 });

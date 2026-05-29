@@ -183,7 +183,7 @@ describe('OrderDetail check-units section', () => {
     });
 
     if (resolvePromise) {
-      resolvePromise([]);
+      (resolvePromise as unknown as (value: ManualShiftOrderCheckUnit[]) => void)([]);
     }
     await waitFor(() => {
       expect(screen.getByText('No check units recorded yet.')).toBeTruthy();
@@ -213,7 +213,7 @@ describe('OrderDetail check-units section', () => {
         // return a simple updated unit object; tests assert the request rather than response
         return { id: path.split('/').pop(), unitNumber: 1, status: 'checked' };
       }
-      return [] as any;
+      return [];
     });
 
     renderDetail();

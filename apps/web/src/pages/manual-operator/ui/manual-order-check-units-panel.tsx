@@ -150,7 +150,7 @@ export function ManualOrderCheckUnitsPanel({
         <div className="mt-1">
           <button
             type="button"
-            onClick={() => createCheckUnit.mutate()}
+            onClick={() => createCheckUnit.mutate({})}
             className="w-full h-10 rounded-lg bg-gray-100 font-bold"
             data-testid="create-check-unit"
           >
