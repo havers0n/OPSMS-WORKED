@@ -55,6 +55,15 @@ export function registerProductsRoutes(
     return getProductsService(auth).listCategories();
   });
 
+  app.post('/api/product-categories', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = z.object({ name: z.string().trim().min(1) }).parse(request.body);
+    const category = await getProductsService(auth).createCategory(body.name);
+    return reply.code(201).send(category);
+  });
+
   // ── Catalog ──────────────────────────────────────────────────────────────
 
   app.get('/api/products', async (request, reply) => {
@@ -80,6 +89,23 @@ export function registerProductsRoutes(
     });
 
     return parseOrThrow(productCatalogResponseSchema, catalog);
+  });
+
+  app.patch('/api/products/:productId', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const productId = parseProductId(request);
+    const body = z.object({ category: z.string().trim().min(1).nullable() }).parse(request.body);
+
+    try {
+      const product = await getProductsService(auth).patchProduct(productId, { category: body.category });
+      return parseOrThrow(productResponseSchema, product);
+    } catch (err) {
+      const mapped = mapSupabaseError(err);
+      if (mapped) throw mapped;
+      throw err;
+    }
   });
 
   app.get('/api/products/search', async (request, reply) => {
