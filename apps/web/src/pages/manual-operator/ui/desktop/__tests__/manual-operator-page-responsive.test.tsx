@@ -146,7 +146,7 @@ describe('ManualOperatorPage responsive rendering', () => {
       renderPage(makeQC());
 
       await waitFor(() => {
-        expect(screen.getByText('אין משמרת פעילה')).toBeTruthy();
+        expect(screen.getAllByText('אין משמרת פעילה').length).toBeGreaterThan(0);
         // Desktop empty state has subtitle text
         expect(screen.getByText('פתח משמרת כדי להתחיל לעקוב אחר ההזמנות')).toBeTruthy();
       });
