@@ -2,7 +2,12 @@ import type {
   ManualShiftDaySummary,
   ManualShiftLineSummary,
   ManualShiftOrder,
-  ManualShiftOrderStatus
+  ManualShiftOrderStatus,
+  ManualShiftOrderCheckUnit
+} from '@wos/domain';
+import {
+  summarizeManualShiftOrderCheckUnits as summarizeManualShiftOrderCheckUnitsDomain,
+  canTransitionManualShiftOrderToDoneWithCheckUnits
 } from '@wos/domain';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -419,6 +424,18 @@ export interface OrderDetail {
   checkedAt: string | null;
   finishedAt: string | null;
   ageSeconds: number | null;
+}
+
+export function summarizeManualShiftOrderCheckUnits(
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+) {
+  return summarizeManualShiftOrderCheckUnitsDomain(checkUnits);
+}
+
+export function canCloseOrderFromCheckUnits(
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+): boolean {
+  return canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits);
 }
 
 const DETAIL_STATUS_PRIORITY: Record<ManualShiftOrderStatus, number> = {

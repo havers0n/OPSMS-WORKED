@@ -3,9 +3,16 @@ import {
   manualShiftKeys,
   todayShiftQueryOptions,
   shiftOrdersQueryOptions,
+  orderCheckUnitsQueryOptions,
   peopleSummaryQueryOptions,
   daySummaryQueryOptions
 } from './queries';
+import { bffRequest } from '@/shared/api/bff/client';
+import { vi } from 'vitest';
+
+vi.mock('@/shared/api/bff/client', () => ({
+  bffRequest: vi.fn(async () => [])
+}));
 
 const SHIFT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const SHIFT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -39,6 +46,14 @@ describe('manualShiftKeys', () => {
     expect(manualShiftKeys.peopleSummary(SHIFT_A)).toEqual([
       'manual-shift',
       'people-summary',
+      SHIFT_A
+    ]);
+  });
+
+  it('orderCheckUnits key is scoped to orderId', () => {
+    expect(manualShiftKeys.orderCheckUnits(SHIFT_A)).toEqual([
+      'manual-shift',
+      'order-check-units',
       SHIFT_A
     ]);
   });
@@ -100,6 +115,25 @@ describe('peopleSummaryQueryOptions', () => {
 
   it('is disabled when shiftId is empty', () => {
     expect(peopleSummaryQueryOptions('').enabled).toBe(false);
+  });
+});
+
+describe('orderCheckUnitsQueryOptions', () => {
+  it('uses the orderCheckUnits query key', () => {
+    expect(orderCheckUnitsQueryOptions(SHIFT_A).queryKey).toEqual([
+      'manual-shift',
+      'order-check-units',
+      SHIFT_A
+    ]);
+  });
+
+  it('calls check-units endpoint in queryFn', async () => {
+    await orderCheckUnitsQueryOptions(SHIFT_A).queryFn({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(`/api/manual-shift-orders/${SHIFT_A}/check-units`);
+  });
+
+  it('is disabled when orderId is empty', () => {
+    expect(orderCheckUnitsQueryOptions('').enabled).toBe(false);
   });
 });
 

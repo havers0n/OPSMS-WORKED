@@ -7,6 +7,8 @@ import type {
   ManualShiftOrderStatus,
   ManualShiftOrderErrorType,
   ManualShiftOrderSize,
+  ManualShiftOrderCheckUnit,
+  ManualShiftOrderCheckUnitStatus,
   ManualShiftWorker,
   ManualShiftWorkerRole
 } from '@wos/domain';
@@ -78,6 +80,25 @@ type CreateOrderErrorInput = {
   lineId: string;
   type: ManualShiftOrderErrorType;
   comment?: string;
+};
+
+type CreateOrderCheckUnitInput = {
+  orderId: string;
+  note?: string | null;
+  reason?: string | null;
+};
+
+type UpdateOrderCheckUnitStatusInput = {
+  checkUnitId: string;
+  status: ManualShiftOrderCheckUnitStatus;
+  note?: string | null;
+  reason?: string | null;
+};
+
+type PatchOrderCheckUnitInput = {
+  checkUnitId: string;
+  note?: string | null;
+  reason?: string | null;
 };
 
 type DeleteRestoreManualShiftInput = {
@@ -159,6 +180,40 @@ async function createOrderError({
   });
 }
 
+async function createOrderCheckUnit({
+  orderId,
+  note,
+  reason
+}: CreateOrderCheckUnitInput): Promise<ManualShiftOrderCheckUnit> {
+  return bffRequest<ManualShiftOrderCheckUnit>(`/api/manual-shift-orders/${orderId}/check-units`, {
+    method: 'POST',
+    body: JSON.stringify({ note, reason })
+  });
+}
+
+async function updateOrderCheckUnitStatus({
+  checkUnitId,
+  status,
+  note,
+  reason
+}: UpdateOrderCheckUnitStatusInput): Promise<ManualShiftOrderCheckUnit> {
+  return bffRequest<ManualShiftOrderCheckUnit>(`/api/manual-shift-check-units/${checkUnitId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, note, reason })
+  });
+}
+
+async function patchOrderCheckUnit({
+  checkUnitId,
+  note,
+  reason
+}: PatchOrderCheckUnitInput): Promise<ManualShiftOrderCheckUnit> {
+  return bffRequest<ManualShiftOrderCheckUnit>(`/api/manual-shift-check-units/${checkUnitId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ note, reason })
+  });
+}
+
 async function patchOrder({
   orderId,
   lineId: _lineId,
@@ -227,6 +282,17 @@ function invalidateOrderQueries(
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(shiftId) });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(shiftId) });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(shiftId) });
+}
+
+function invalidateOrderCheckUnitQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  checkUnit: Pick<ManualShiftOrderCheckUnit, 'orderId' | 'lineId' | 'shiftId'>
+) {
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.orderCheckUnits(checkUnit.orderId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(checkUnit.lineId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(checkUnit.shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(checkUnit.shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(checkUnit.shiftId) });
 }
 
 function invalidateLineQueries(
@@ -326,6 +392,37 @@ export function useCreateManualShiftOrderError() {
         queryKey: manualShiftKeys.lineOrders(variables.lineId)
       });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+    }
+  });
+}
+
+export function useCreateManualShiftOrderCheckUnit(orderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Omit<CreateOrderCheckUnitInput, 'orderId'> = {}) =>
+      createOrderCheckUnit({ ...input, orderId }),
+    onSuccess: (checkUnit) => {
+      invalidateOrderCheckUnitQueries(queryClient, checkUnit);
+    }
+  });
+}
+
+export function useUpdateManualShiftOrderCheckUnitStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateOrderCheckUnitStatus,
+    onSuccess: (checkUnit) => {
+      invalidateOrderCheckUnitQueries(queryClient, checkUnit);
+    }
+  });
+}
+
+export function usePatchManualShiftOrderCheckUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: patchOrderCheckUnit,
+    onSuccess: (checkUnit) => {
+      invalidateOrderCheckUnitQueries(queryClient, checkUnit);
     }
   });
 }

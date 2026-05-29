@@ -1,6 +1,7 @@
 import type {
   ManualShiftTodayResponse,
   ManualShiftOrder,
+  ManualShiftOrderCheckUnit,
   ManualShiftPeopleSummary,
   ManualShiftDaySummary,
   ManualShiftWorker
@@ -15,6 +16,7 @@ export const manualShiftKeys = {
   lines: (shiftId: string) => [...manualShiftKeys.all, 'lines', shiftId] as const,
   lineOrders: (lineId: string) => [...manualShiftKeys.all, 'line-orders', lineId] as const,
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
+  orderCheckUnits: (orderId: string) => [...manualShiftKeys.all, 'order-check-units', orderId] as const,
   workers: (shiftId: string) => [...manualShiftKeys.all, 'workers', shiftId] as const,
   peopleSummary: (shiftId: string) =>
     [...manualShiftKeys.all, 'people-summary', shiftId] as const,
@@ -67,6 +69,19 @@ export function shiftOrdersQueryOptions(shiftId: string) {
     queryKey: manualShiftKeys.shiftOrders(shiftId),
     queryFn: () => fetchShiftOrders(shiftId),
     enabled: !!shiftId,
+    staleTime: 10_000
+  });
+}
+
+async function fetchOrderCheckUnits(orderId: string): Promise<ManualShiftOrderCheckUnit[]> {
+  return bffRequest<ManualShiftOrderCheckUnit[]>(`/api/manual-shift-orders/${orderId}/check-units`);
+}
+
+export function orderCheckUnitsQueryOptions(orderId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.orderCheckUnits(orderId),
+    queryFn: () => fetchOrderCheckUnits(orderId),
+    enabled: !!orderId,
     staleTime: 10_000
   });
 }

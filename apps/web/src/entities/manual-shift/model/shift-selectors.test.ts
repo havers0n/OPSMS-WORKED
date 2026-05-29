@@ -9,9 +9,16 @@ import {
   selectOrdersForPicker,
   selectLineDetail,
   selectPickerDetail,
-  selectOrderDetail
+  selectOrderDetail,
+  summarizeManualShiftOrderCheckUnits,
+  canCloseOrderFromCheckUnits
 } from './shift-selectors';
-import type { ManualShiftDaySummary, ManualShiftLineSummary, ManualShiftOrder } from '@wos/domain';
+import type {
+  ManualShiftDaySummary,
+  ManualShiftLineSummary,
+  ManualShiftOrder,
+  ManualShiftOrderCheckUnit
+} from '@wos/domain';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures
@@ -753,5 +760,67 @@ describe('detail selectors', () => {
     const lines = selectLineSummaries([makeLineSummary(LINE_A, 'Route A')], [order]);
     const detail = selectOrderDetail('r1', [order], lines, new Date('2026-05-27T10:00:00.000Z'));
     expect(detail?.ageSeconds).toBeNull();
+  });
+});
+
+describe('manual shift order check unit aggregates', () => {
+  function unit(status: ManualShiftOrderCheckUnit['status']): Pick<ManualShiftOrderCheckUnit, 'status'> {
+    return { status };
+  }
+
+  it('no units', () => {
+    const result = summarizeManualShiftOrderCheckUnits([]);
+    expect(result.activeUnits).toBe(0);
+    expect(result.openUnits).toBe(0);
+    expect(result.checkedUnits).toBe(0);
+    expect(result.returnedUnits).toBe(0);
+    expect(result.voidedUnits).toBe(0);
+    expect(result.partiallyChecked).toBe(false);
+    expect(result.physicallyChecked).toBe(false);
+    expect(canCloseOrderFromCheckUnits([])).toBe(true);
+  });
+
+  it('open only', () => {
+    const result = summarizeManualShiftOrderCheckUnits([unit('open')]);
+    expect(result.activeUnits).toBe(1);
+    expect(result.openUnits).toBe(1);
+    expect(result.checkedUnits).toBe(0);
+    expect(result.partiallyChecked).toBe(false);
+    expect(result.physicallyChecked).toBe(false);
+  });
+
+  it('checked + open => partially checked', () => {
+    const result = summarizeManualShiftOrderCheckUnits([unit('checked'), unit('open')]);
+    expect(result.partiallyChecked).toBe(true);
+    expect(result.physicallyChecked).toBe(false);
+  });
+
+  it('all active checked => physically checked', () => {
+    const result = summarizeManualShiftOrderCheckUnits([unit('checked'), unit('checked')]);
+    expect(result.activeUnits).toBe(2);
+    expect(result.physicallyChecked).toBe(true);
+    expect(canCloseOrderFromCheckUnits([unit('checked')])).toBe(true);
+  });
+
+  it('returned blocks physically checked', () => {
+    const result = summarizeManualShiftOrderCheckUnits([unit('checked'), unit('returned')]);
+    expect(result.returnedUnits).toBe(1);
+    expect(result.physicallyChecked).toBe(false);
+    expect(canCloseOrderFromCheckUnits([unit('checked'), unit('returned')])).toBe(false);
+  });
+
+  it('voided excluded from active progress', () => {
+    const result = summarizeManualShiftOrderCheckUnits([unit('checked'), unit('voided')]);
+    expect(result.activeUnits).toBe(1);
+    expect(result.voidedUnits).toBe(1);
+    expect(result.physicallyChecked).toBe(true);
+  });
+
+  it('only voided does not count as physically checked', () => {
+    const result = summarizeManualShiftOrderCheckUnits([unit('voided')]);
+    expect(result.activeUnits).toBe(0);
+    expect(result.voidedUnits).toBe(1);
+    expect(result.physicallyChecked).toBe(false);
+    expect(canCloseOrderFromCheckUnits([unit('voided')])).toBe(false);
   });
 });
