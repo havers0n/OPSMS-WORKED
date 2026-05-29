@@ -204,6 +204,7 @@ export function mapProductRowToDomain(row: ProductRow): Product {
     imageUrls: normalizeStringArray(row.image_urls),
     imageFiles: normalizeStringArray(row.image_files),
     isActive: row.is_active,
+    category: row.category ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   });

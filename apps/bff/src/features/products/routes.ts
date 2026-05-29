@@ -58,9 +58,8 @@ export function registerProductsRoutes(
         query: z.string().trim().optional(),
         limit: z.coerce.number().int().min(1).max(100).optional(),
         offset: z.coerce.number().int().min(0).optional(),
-        activeOnly: z
-          .union([z.literal('true'), z.literal('false')])
-          .optional()
+        activeOnly: z.union([z.literal('true'), z.literal('false')]).optional(),
+        category: z.string().trim().optional()
       })
       .parse(request.query);
 
@@ -68,7 +67,8 @@ export function registerProductsRoutes(
       query: queryParams.query ?? '',
       limit: queryParams.limit ?? 50,
       offset: queryParams.offset ?? 0,
-      activeOnly: queryParams.activeOnly === 'true'
+      activeOnly: queryParams.activeOnly === 'true',
+      category: queryParams.category ?? null
     });
 
     return parseOrThrow(productCatalogResponseSchema, catalog);

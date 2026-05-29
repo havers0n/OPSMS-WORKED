@@ -16,6 +16,7 @@ export type ProductCatalogQuery = {
   limit: number;
   offset: number;
   activeOnly: boolean;
+  category?: string | null;
 };
 
 export type ProductCatalogPage = {
@@ -144,6 +145,12 @@ export function createProductsRepo(supabase: SupabaseClient): ProductsRepo {
       if (args.activeOnly) {
         itemsRequest = itemsRequest.eq('is_active', true);
         totalRequest = totalRequest.eq('is_active', true);
+      }
+
+      if (args.category) {
+        itemsRequest = itemsRequest.eq('category', args.category);
+        totalRequest = totalRequest.eq('category', args.category);
+        activeTotalRequest = activeTotalRequest.eq('category', args.category);
       }
 
       if (normalizedQuery.length > 0) {
