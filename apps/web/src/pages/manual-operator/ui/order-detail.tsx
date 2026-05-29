@@ -183,6 +183,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
         <ManualOrderCheckUnitsPanel
           orderId={order.id}
           interactive
+          compact
           canInteract={canInteractWithCheckUnits}
           expectedUnitsCount={order.palletCount}
           disabledReason="התחל בדיקה כדי להתחיל לבדוק יחידות"

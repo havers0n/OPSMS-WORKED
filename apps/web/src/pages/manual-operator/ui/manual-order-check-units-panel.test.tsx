@@ -79,13 +79,16 @@ describe('ManualOrderCheckUnitsPanel', () => {
     renderPanel();
     await waitFor(() => {
       expect(screen.getByText('נבדקו 1 מתוך 2')).toBeTruthy();
+      expect(screen.getByText('פתוחות 1')).toBeTruthy();
+      expect(screen.getByText('תיקון 0')).toBeTruthy();
       expect(screen.getByTestId('check-units-status-chip')).toBeTruthy();
       expect(screen.getByText('נבדק חלקית')).toBeTruthy();
       expect(screen.getByText('פרטים')).toBeTruthy();
       expect(screen.getByTestId('check-units-list')).toBeTruthy();
-      expect(screen.getByText('יחידה #1')).toBeTruthy();
-      expect(screen.getByText('יחידה #2')).toBeTruthy();
+      expect(screen.getByText('#1')).toBeTruthy();
+      expect(screen.getByText('#2')).toBeTruthy();
     });
+    expect((screen.getByTestId('check-units-details') as HTMLDetailsElement).open).toBe(false);
   });
 
   it('stage-gating disables actions and shows reason when canInteract=false', async () => {
@@ -95,7 +98,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
       disabledReason: 'העבר את ההזמנה לבדיקה כדי להתחיל לבדוק יחידות'
     });
 
-    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.getByTestId('check-units-disabled-reason')).toBeTruthy();
 
     const createButton = screen.getByTestId('create-check-unit') as HTMLButtonElement;
@@ -103,6 +106,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
 
     const checkButton = screen.getByText('יחידה תקינה') as HTMLButtonElement;
     const returnedButton = screen.getByText('תקלה') as HTMLButtonElement;
+    fireEvent.click(screen.getByText('עוד'));
     const voidButton = screen.getByText('בטל יחידה') as HTMLButtonElement;
     expect(checkButton.disabled).toBe(true);
     expect(returnedButton.disabled).toBe(true);
@@ -210,7 +214,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
   it('voided units show no active actions', async () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'voided')]);
     renderPanel();
-    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.queryByText('יחידה תקינה')).toBeNull();
     expect(screen.queryByText('תקלה')).toBeNull();
     expect(screen.queryByText('עוד')).toBeNull();
@@ -278,7 +282,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned', { reason: 'כמות לא נכונה' })]);
     renderPanel();
 
-    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.queryByText('צור השלמה')).toBeNull();
     expect(screen.getByText('יחידה תקינה')).toBeTruthy();
     fireEvent.click(screen.getByText('עוד'));
@@ -320,7 +324,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
       return [];
     });
     renderPanel();
-    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.getByText('יש השלמה פתוחה. השלם ואז סמן יחידה תקינה')).toBeTruthy();
   });
 
@@ -359,7 +363,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
       return [];
     });
     renderPanel();
-    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.queryByTestId('create-completion-cu-1')).toBeNull();
     expect(screen.getByTestId('create-completion-cu-2')).toBeTruthy();
   });
@@ -424,7 +428,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
       return [];
     });
     renderPanel();
-    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.queryByTestId('order-ashlamot-section')).toBeNull();
   });
 
@@ -506,7 +510,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('order-ashlamot-section')).toBeTruthy());
-    expect(screen.getByText('השלמה ידנית')).toBeTruthy();
+    expect(screen.getByText('השלמה')).toBeTruthy();
   });
 
   it('open manual ashlama exposes done and cancel actions', async () => {
