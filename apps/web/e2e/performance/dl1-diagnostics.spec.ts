@@ -389,6 +389,39 @@ type ReportEntry = {
     layoutVersionId: string;
     expectedPreviewCellCount: number;
   };
+  routePreviewStartup?: RoutePreviewStartupDiagnostics;
+};
+
+type StartupLongTaskDetail = {
+  name: string;
+  startTimeMs: number;
+  relativeStartMs: number;
+  durationMs: number;
+};
+
+type RoutePreviewStartupPhaseMark = {
+  phase:
+    | 'probe-start'
+    | 'pushState-start'
+    | 'after-pushState-popstate'
+    | 'canvas-stable'
+    | 'steady-probe-start'
+    | 'steady-probe-end';
+  timeMs: number;
+  relativeToProbeStartMs: number;
+};
+
+type RoutePreviewStartupDiagnostics = {
+  metrics: Metrics;
+  startupTransitionMs: number;
+  startupSettleMs: number;
+  startupBeforeSettleMs: number;
+  steadySampleMs: number;
+  startupLongTaskCount: number;
+  startupLongTaskTotalMs: number;
+  startupWorstFrameMs: number;
+  longTasks: StartupLongTaskDetail[];
+  phaseMarks: RoutePreviewStartupPhaseMark[];
 };
 
 type BrowserEnvironment = {
@@ -2501,6 +2534,8 @@ async function waitForStableWarehouseCanvas(
   const timeoutMs = options.timeoutMs ?? 20000;
   const settleMs = options.settleMs ?? 650;
   const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  let settleWaitTotalMs = 0;
   let previous: WarehouseCanvasSnapshot | null = null;
   let last: WarehouseCanvasSnapshot | null = null;
 
@@ -2511,6 +2546,7 @@ async function waitForStableWarehouseCanvas(
   while (Date.now() < deadline) {
     const first = await readWarehouseCanvasSnapshot(page);
     await page.waitForTimeout(settleMs);
+    settleWaitTotalMs += settleMs;
     const second = await readWarehouseCanvasSnapshot(page);
     last = second;
 
@@ -2519,7 +2555,16 @@ async function waitForStableWarehouseCanvas(
       isUsableCanvasSnapshot(second) &&
       snapshotsEqual(first, second)
     ) {
-      return second;
+      const startupTransitionMs = Date.now() - startedAt;
+      return {
+        snapshot: second,
+        startupTransitionMs,
+        startupSettleMs: settleWaitTotalMs,
+        startupBeforeSettleMs: Math.max(
+          0,
+          startupTransitionMs - settleWaitTotalMs
+        )
+      };
     }
 
     previous = first;
@@ -2531,7 +2576,11 @@ async function waitForStableWarehouseCanvas(
 }
 
 async function waitForWarehouseCanvas(page: Page) {
-  await waitForStableWarehouseCanvas(page);
+  return waitForStableWarehouseCanvas(page);
+}
+
+async function readPerformanceNow(page: Page): Promise<number> {
+  return page.evaluate(() => performance.now());
 }
 
 async function getCanvasBox(page: Page) {
@@ -2978,7 +3027,16 @@ async function runMeasuredScenario({
   profile: DeviceProfile;
   runtimeOptions?: VariantRuntimeOptions;
   scenario: ScenarioName;
-}) {
+}): Promise<{
+  metrics: Metrics;
+  frameBuckets: FrameBuckets;
+  browserEnvironment: BrowserEnvironment;
+  cullingMetrics: CullingMetrics;
+  konvaPipeline: KonvaPipelineProbeResult;
+  phases: Partial<Record<DiagnosticsMeasuredPhase, PhaseReport>>;
+  renderPipeline: RenderPipelineDiagnostics;
+  routePreviewStartup?: RoutePreviewStartupDiagnostics;
+}> {
   await page.setViewportSize(profile.viewport);
   await setVariantRuntimeOptions(page, runtimeOptions);
 
@@ -2988,18 +3046,37 @@ async function runMeasuredScenario({
     await setVariantRuntimeOptions(page, runtimeOptions);
     const browserEnvironment = await getBrowserEnvironment(page);
     await startRenderPipelineProbe(page);
-    const frameProbeId = await startFrameProbe(page);
+    const phaseMarks: RoutePreviewStartupPhaseMark[] = [];
+    const startupProbeStartTimeMs = await readPerformanceNow(page);
+    const pushPhaseMark = async (phase: RoutePreviewStartupPhaseMark['phase']) => {
+      const now = await readPerformanceNow(page);
+      phaseMarks.push({
+        phase,
+        timeMs: round(now),
+        relativeToProbeStartMs: round(now - startupProbeStartTimeMs)
+      });
+    };
+    const startupProbeId = await startFrameProbe(page);
+    await pushPhaseMark('probe-start');
     const konvaProbeStartPromise = startKonvaPipelineProbe(page);
+    await pushPhaseMark('pushState-start');
     await page.evaluate((url) => {
       window.history.pushState(null, '', url);
       window.dispatchEvent(new PopStateEvent('popstate'));
     }, `/warehouse/view?floor=${floorId}`);
-    await waitForWarehouseCanvas(page);
+    await pushPhaseMark('after-pushState-popstate');
+    const startupCanvasResult = await waitForWarehouseCanvas(page);
+    await pushPhaseMark('canvas-stable');
+    const startupRawResult = await stopFrameProbe(page, startupProbeId);
     await konvaProbeStartPromise;
+    await pushPhaseMark('steady-probe-start');
+    const steadyProbeId = await startFrameProbe(page);
+    await page.waitForTimeout(SAMPLE_DURATION_MS);
     if (runtimeOptions?.disableRackLayerHitGraph) {
       await setRackLayerHitGraphDisabled(page, true);
     }
-    const rawResult = await stopFrameProbe(page, frameProbeId);
+    const rawResult = await stopFrameProbe(page, steadyProbeId);
+    await pushPhaseMark('steady-probe-end');
     const renderPipeline = await stopRenderPipelineProbe(page);
     const konvaPipeline = await stopKonvaPipelineProbe(page);
     if (runtimeOptions?.disableRackLayerHitGraph) {
@@ -3007,13 +3084,44 @@ async function runMeasuredScenario({
     }
     const cullingMetrics = await getCanvasCullingMetrics(page);
     await setVariantRuntimeOptions(page, undefined);
+    const startupLongTasks = startupRawResult.longTasks
+      .map((task) => ({
+        name: task.name,
+        startTimeMs: round(task.startTime),
+        relativeStartMs: round(task.startTime - startupProbeStartTimeMs),
+        durationMs: round(task.duration)
+      }))
+      .sort((a, b) => a.relativeStartMs - b.relativeStartMs);
+    startupLongTasks.forEach((task, index) => {
+      console.log(
+        `[route-preview startup] longTask[${index}] relativeStartMs=${task.relativeStartMs} durationMs=${task.durationMs} name=${task.name}`
+      );
+    });
+    console.log(
+      `[route-preview steady] sampleDurationMs=${round(rawResult.sampleDurationMs)} targetDurationMs=${SAMPLE_DURATION_MS}`
+    );
+    const startupSummary = summarizeMetrics(startupRawResult);
     return {
       ...summarizeMetrics(rawResult),
       browserEnvironment,
       cullingMetrics,
       konvaPipeline,
       phases: {},
-      renderPipeline
+      renderPipeline,
+      routePreviewStartup: {
+        metrics: startupSummary.metrics,
+        startupTransitionMs: round(startupCanvasResult.startupTransitionMs),
+        startupSettleMs: round(startupCanvasResult.startupSettleMs),
+        startupBeforeSettleMs: round(startupCanvasResult.startupBeforeSettleMs),
+        steadySampleMs: round(rawResult.sampleDurationMs),
+        startupLongTaskCount: startupLongTasks.length,
+        startupLongTaskTotalMs: round(
+          startupLongTasks.reduce((sum, task) => sum + task.durationMs, 0)
+        ),
+        startupWorstFrameMs: startupSummary.metrics.worstFrameMs,
+        longTasks: startupLongTasks,
+        phaseMarks
+      }
     };
   }
 
@@ -4019,7 +4127,8 @@ test.describe('DL1 diagnostics harness', () => {
                   layoutVersionId,
                   expectedPreviewCellCount:
                     demoWarehouseExpectedPreviewCellCount
-                }
+                },
+                routePreviewStartup: result.routePreviewStartup
               });
             }
           } finally {
@@ -4113,6 +4222,18 @@ test.describe('DL1 diagnostics harness', () => {
             entry.konvaPipeline.shapeSceneDrawCostByRole['cell-base-batch']
               ?.totalMs ?? 0,
           longTaskCount: entry.metrics.longTaskCount,
+          startupTransitionMs:
+            entry.routePreviewStartup?.startupTransitionMs ?? null,
+          startupSettleMs: entry.routePreviewStartup?.startupSettleMs ?? null,
+          startupBeforeSettleMs:
+            entry.routePreviewStartup?.startupBeforeSettleMs ?? null,
+          steadySampleMs: entry.routePreviewStartup?.steadySampleMs ?? null,
+          startupLongTaskCount:
+            entry.routePreviewStartup?.startupLongTaskCount ?? null,
+          startupLongTaskTotalMs:
+            entry.routePreviewStartup?.startupLongTaskTotalMs ?? null,
+          startupWorstFrameMs:
+            entry.routePreviewStartup?.startupWorstFrameMs ?? null,
           cullingRatio: entry.cullingRatio,
           gt100MsPct:
             entry.frameBuckets.gt100To250Ms.percent +
