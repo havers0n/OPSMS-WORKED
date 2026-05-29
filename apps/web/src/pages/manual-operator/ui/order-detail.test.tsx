@@ -121,8 +121,8 @@ describe('OrderDetail check-units section', () => {
     });
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByText('סמן כנבדק') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByText('דורש תיקון') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('יחידה תקינה') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('תקלה') as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByText('בטל יחידה') as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -138,7 +138,7 @@ describe('OrderDetail check-units section', () => {
     await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByText('סמן כנבדק') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByText('יחידה תקינה') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('picking completion requires confirmation: cancel does not mutate', async () => {
@@ -217,6 +217,24 @@ describe('OrderDetail check-units section', () => {
     await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByText('סמן כנבדק') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByText('יחידה תקינה') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('shows one canonical finalize blocking reason and disables תקין', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [makeCheckUnit(1, 'checked')];
+      if (path.includes('/ashlamot') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'waiting_check', palletCount: 2 }));
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+
+    expect(screen.getByText('לא ניתן לסגור: חסרות יחידות לבדיקה')).toBeTruthy();
+    expect(screen.queryByText('לא ניתן לסגור: יש השלמה פתוחה')).toBeNull();
+    const doneButton = screen.getByRole('button', { name: /סגור כתקין/ }) as HTMLButtonElement;
+    expect(doneButton.disabled).toBe(true);
   });
 });

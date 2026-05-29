@@ -101,8 +101,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
     const createButton = screen.getByTestId('create-check-unit') as HTMLButtonElement;
     expect(createButton.disabled).toBe(true);
 
-    const checkButton = screen.getByText('סמן כנבדק') as HTMLButtonElement;
-    const returnedButton = screen.getByText('דורש תיקון') as HTMLButtonElement;
+    const checkButton = screen.getByText('יחידה תקינה') as HTMLButtonElement;
+    const returnedButton = screen.getByText('תקלה') as HTMLButtonElement;
     const voidButton = screen.getByText('בטל יחידה') as HTMLButtonElement;
     expect(checkButton.disabled).toBe(true);
     expect(returnedButton.disabled).toBe(true);
@@ -190,9 +190,9 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
 
     renderPanel();
-    await waitFor(() => expect(screen.getByText('סמן כנבדק')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('יחידה תקינה')).toBeTruthy());
 
-    const checkButton = screen.getByText('סמן כנבדק');
+    const checkButton = screen.getByText('יחידה תקינה');
     fireEvent.click(checkButton);
     fireEvent.click(checkButton);
 
@@ -211,9 +211,9 @@ describe('ManualOrderCheckUnitsPanel', () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'voided')]);
     renderPanel();
     await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
-    expect(screen.queryByText('סמן כנבדק')).toBeNull();
-    expect(screen.queryByText('דורש תיקון')).toBeNull();
-    expect(screen.queryByText('בטל יחידה')).toBeNull();
+    expect(screen.queryByText('יחידה תקינה')).toBeNull();
+    expect(screen.queryByText('תקלה')).toBeNull();
+    expect(screen.queryByText('עוד')).toBeNull();
   });
 
   it('returned unit can be marked fixed (returned -> checked)', async () => {
@@ -222,8 +222,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
       .mockResolvedValueOnce(makeCheckUnit(1, 'checked'));
     renderPanel();
 
-    await waitFor(() => expect(screen.getByText('סמן כתוקן')).toBeTruthy());
-    fireEvent.click(screen.getByText('סמן כתוקן'));
+    await waitFor(() => expect(screen.getByText('יחידה תקינה')).toBeTruthy());
+    fireEvent.click(screen.getByText('יחידה תקינה'));
 
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
@@ -239,8 +239,9 @@ describe('ManualOrderCheckUnitsPanel', () => {
       .mockResolvedValueOnce(makeCheckUnit(1, 'open'));
     renderPanel();
 
-    await waitFor(() => expect(screen.getByText('בטל תיקון')).toBeTruthy());
-    fireEvent.click(screen.getByText('בטל תיקון'));
+    await waitFor(() => expect(screen.getByText('עוד')).toBeTruthy());
+    fireEvent.click(screen.getByText('עוד'));
+    fireEvent.click(screen.getByText('החזר לבדיקה'));
 
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
@@ -268,18 +269,20 @@ describe('ManualOrderCheckUnitsPanel', () => {
     renderPanel();
 
     await waitFor(() => expect(screen.getByText('סיבת תיקון: מוצר פגום')).toBeTruthy());
-    fireEvent.click(screen.getByText('בטל תיקון'));
+    fireEvent.click(screen.getByText('עוד'));
+    fireEvent.click(screen.getByText('החזר לבדיקה'));
     await waitFor(() => expect(screen.queryByText('סיבת תיקון: מוצר פגום')).toBeNull());
   });
 
-  it('returned state provides recovery actions and void is not the only escape', async () => {
-    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned')]);
+  it('returned state does not expose all actions simultaneously', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned', { reason: 'כמות לא נכונה' })]);
     renderPanel();
 
     await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
-    expect(screen.getByText('צור השלמה')).toBeTruthy();
-    expect(screen.getByText('סמן כתוקן')).toBeTruthy();
-    expect(screen.getByText('בטל תיקון')).toBeTruthy();
+    expect(screen.queryByText('צור השלמה')).toBeNull();
+    expect(screen.getByText('יחידה תקינה')).toBeTruthy();
+    fireEvent.click(screen.getByText('עוד'));
+    expect(screen.getByText('החזר לבדיקה')).toBeTruthy();
     expect(screen.getByText('בטל יחידה')).toBeTruthy();
     expect(screen.getAllByText('דורש תיקון').length).toBeGreaterThan(0);
   });
@@ -290,14 +293,45 @@ describe('ManualOrderCheckUnitsPanel', () => {
     await waitFor(() => expect(screen.getByText('סיבת תיקון: מוצר פגום')).toBeTruthy());
   });
 
+  it('returned unit with open completion shows compact next-step instruction', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
+        return [makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' })];
+      }
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') {
+        return [
+          {
+            id: 'ash-1',
+            tenantId: 'tenant-1',
+            shiftId: 'shift-1',
+            lineId: 'line-1',
+            orderId: 'order-1',
+            checkUnitId: 'cu-1',
+            source: 'check_unit',
+            status: 'open',
+            text: 'להשלים מוצר חסר',
+            createdAt: '2026-05-29T09:00:00.000Z',
+            updatedAt: '2026-05-29T09:00:00.000Z'
+          }
+        ];
+      }
+      return [];
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.getByText('יש השלמה פתוחה. השלם ואז סמן יחידה תקינה')).toBeTruthy();
+  });
+
   it('marking unit as returned exposes reason flow and requires reason selection', async () => {
     mockedBffRequest
       .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
       .mockResolvedValueOnce(makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' }));
     renderPanel();
 
-    await waitFor(() => expect(screen.getByText('דורש תיקון')).toBeTruthy());
-    fireEvent.click(screen.getByText('דורש תיקון'));
+    await waitFor(() => expect(screen.getByText('תקלה')).toBeTruthy());
+    fireEvent.click(screen.getByText('תקלה'));
     expect(screen.getByTestId('returned-reason-selector-cu-1')).toBeTruthy();
 
     const submitReturned = screen.getByText('שמור תיקון') as HTMLButtonElement;
@@ -314,11 +348,27 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
   });
 
+  it('create completion appears only for missing-product returned unit', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
+        return [makeCheckUnit(1, 'returned', { reason: 'כמות לא נכונה' }), makeCheckUnit(2, 'returned', { reason: 'חסר מוצר' })];
+      }
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
+      return [];
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.queryByTestId('create-completion-cu-1')).toBeNull();
+    expect(screen.getByTestId('create-completion-cu-2')).toBeTruthy();
+  });
+
   it('create completion requires non-empty text and posts ashlama', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
-      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'returned')];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' })];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
         return {
@@ -365,41 +415,17 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
   });
 
-  it('creates manual order-level ashlama with text', async () => {
+  it('empty completion block is hidden when no completions exist', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
       if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'checked')];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
-      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
-        return {
-          id: 'ash-manual-1',
-          tenantId: 'tenant-1',
-          shiftId: 'shift-1',
-          lineId: 'line-1',
-          orderId: 'order-1',
-          checkUnitId: null,
-          source: 'manual',
-          status: 'open',
-          text: 'להשלים ידנית',
-          createdAt: '2026-05-29T09:00:00.000Z',
-          updatedAt: '2026-05-29T09:00:00.000Z'
-        };
-      }
       return [];
     });
     renderPanel();
-    await waitFor(() => expect(screen.getByText('הוסף השלמה')).toBeTruthy());
-    fireEvent.click(screen.getByText('הוסף השלמה'));
-    const dialog = screen.getByTestId('ashlama-dialog');
-    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים ידנית' } });
-    fireEvent.click(screen.getByText('צור השלמה'));
-    await waitFor(() =>
-      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
-        method: 'POST',
-        body: JSON.stringify({ checkUnitId: null, text: 'להשלים ידנית' })
-      })
-    );
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.queryByTestId('order-ashlamot-section')).toBeNull();
   });
 
   it('no-units state shows dominant add button and no metrics', async () => {

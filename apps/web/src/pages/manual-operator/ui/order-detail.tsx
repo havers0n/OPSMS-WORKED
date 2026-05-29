@@ -28,6 +28,8 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   );
   const [checkUnitsActiveCount, setCheckUnitsActiveCount] = useState(0);
   const [checkUnitsCheckedCount, setCheckUnitsCheckedCount] = useState(0);
+  const [checkUnitsBlockingReason, setCheckUnitsBlockingReason] = useState<string | null>(null);
+  const [canCloseOrderFromCheckUnits, setCanCloseOrderFromCheckUnits] = useState(true);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
@@ -187,6 +189,8 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           onStateChange={(state) => {
             setCheckUnitsActiveCount(state.activeUnits);
             setCheckUnitsCheckedCount(state.checkedUnits);
+            setCheckUnitsBlockingReason(state.blockingReason);
+            setCanCloseOrderFromCheckUnits(state.canCloseOrder);
           }}
         />
         {order.status === 'picking' && isCheckActive && (
@@ -215,13 +219,20 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
               </div>
             )}
             {order.status === 'waiting_check' && (
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-2">
+                {checkUnitsBlockingReason && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {checkUnitsBlockingReason}
+                  </p>
+                )}
+                <div className="flex gap-3">
                 <button onClick={() => setShowErrorFlow(true)} disabled={updateStatus.isPending} className="w-1/2 bg-red-100 text-red-700 border border-red-200 rounded-xl h-14 font-bold text-lg flex items-center justify-center gap-2">
                   <XCircle size={24} /> תקלה
                 </button>
-                <button onClick={() => transition('done')} disabled={updateStatus.isPending} className="w-1/2 bg-green-500 text-white border border-green-600 rounded-xl h-14 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
-                  <CheckCircle size={24} /> תקין
+                <button onClick={() => transition('done')} disabled={updateStatus.isPending || !canCloseOrderFromCheckUnits} className="w-1/2 bg-green-500 text-white border border-green-600 rounded-xl h-14 font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                  <CheckCircle size={24} /> סגור כתקין
                 </button>
+                </div>
               </div>
             )}
             {order.status === 'returned' && (
