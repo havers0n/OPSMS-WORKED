@@ -134,6 +134,21 @@ export function usePatchProductCategory() {
   });
 }
 
+export function useBulkSetProductCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ productIds, category }: { productIds: string[]; category: string | null }) =>
+      bffRequest<{ updatedCount: number }>('/api/products/bulk-category', {
+        method: 'POST',
+        body: JSON.stringify({ productIds, category })
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: productKeys.all });
+    }
+  });
+}
+
 export function useCreateProductCategory() {
   const queryClient = useQueryClient();
 

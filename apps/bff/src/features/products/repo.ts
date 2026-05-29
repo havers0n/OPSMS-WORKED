@@ -65,6 +65,7 @@ export type ProductsRepo = {
   listCategories(): Promise<ProductCategory[]>;
   createCategory(name: string): Promise<ProductCategory>;
   patchProduct(productId: string, patch: { category: string | null }): Promise<Product>;
+  bulkSetCategory(productIds: string[], category: string | null): Promise<{ updatedCount: number }>;
   findById(productId: string): Promise<Product | null>;
   listActive(limit?: number): Promise<Product[]>;
   searchActive(query: string, limit?: number): Promise<Product[]>;
@@ -94,6 +95,18 @@ export function createProductsRepo(supabase: SupabaseClient): ProductsRepo {
         name: row.name,
         sortOrder: row.sort_order
       }));
+    },
+
+    async bulkSetCategory(productIds, category) {
+      if (productIds.length === 0) return { updatedCount: 0 };
+
+      const { error, count } = await supabase
+        .from('products')
+        .update({ category })
+        .in('id', productIds);
+
+      if (error) throw error;
+      return { updatedCount: count ?? productIds.length };
     },
 
     async createCategory(name) {

@@ -21,6 +21,7 @@ export type ProductsService = {
   listCategories(): Promise<ProductCategory[]>;
   createCategory(name: string): Promise<ProductCategory>;
   patchProduct(productId: string, patch: { category: string | null }): Promise<Product>;
+  bulkSetCategory(productIds: string[], category: string | null): Promise<{ updatedCount: number }>;
   findCatalog(args: ProductCatalogQuery): Promise<ProductCatalogPage>;
   searchActive(query: string, limit?: number): Promise<Product[]>;
   listActive(limit?: number): Promise<Product[]>;
@@ -93,6 +94,7 @@ export function createProductsServiceFromRepo(repo: ProductsRepo): ProductsServi
     listCategories: () => repo.listCategories(),
     createCategory: (name) => repo.createCategory(name),
     patchProduct: (productId, patch) => repo.patchProduct(productId, patch),
+    bulkSetCategory: (productIds, category) => repo.bulkSetCategory(productIds, category),
     findCatalog: (args) => repo.findCatalog(args),
     searchActive: (query, limit) => repo.searchActive(query, limit),
     listActive: (limit) => repo.listActive(limit),
