@@ -106,7 +106,7 @@ type PatchOrderCheckUnitInput = {
 
 type CreateOrderAshlamaInput = {
   orderId: string;
-  checkUnitId: string;
+  checkUnitId?: string | null;
   text: string;
 };
 

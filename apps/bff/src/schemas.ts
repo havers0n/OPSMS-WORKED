@@ -488,7 +488,7 @@ export const transitionManualShiftOrderCheckUnitStatusBodySchema = z.object({
 });
 
 export const createManualShiftOrderAshlamaBodySchema = z.object({
-  checkUnitId: z.string().uuid(),
+  checkUnitId: z.string().uuid().nullable().optional(),
   text: z.string().trim().min(1)
 });
 

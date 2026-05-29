@@ -107,7 +107,8 @@ type ManualShiftOrderAshlamaRow = {
   shift_id: string;
   line_id: string;
   order_id: string;
-  check_unit_id: string;
+  check_unit_id: string | null;
+  source: ManualShiftOrderAshlama['source'];
   status: ManualShiftOrderAshlama['status'];
   text: string;
   created_at: string;
@@ -186,7 +187,7 @@ const orderColumns =
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
-  'id,tenant_id,shift_id,line_id,order_id,check_unit_id,status,text,created_at,updated_at';
+  'id,tenant_id,shift_id,line_id,order_id,check_unit_id,source,status,text,created_at,updated_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
@@ -330,6 +331,7 @@ function mapAshlamaRow(row: ManualShiftOrderAshlamaRow): ManualShiftOrderAshlama
     lineId: row.line_id,
     orderId: row.order_id,
     checkUnitId: row.check_unit_id,
+    source: row.source,
     status: row.status,
     text: row.text,
     createdAt: row.created_at,
@@ -489,7 +491,8 @@ export type ManualShiftsRepo = {
     shiftId: string;
     lineId: string;
     orderId: string;
-    checkUnitId: string;
+    checkUnitId: string | null;
+    source: ManualShiftOrderAshlama['source'];
     status: ManualShiftOrderAshlama['status'];
     text: string;
     createdByProfileId: string | null;
@@ -962,6 +965,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           line_id: input.lineId,
           order_id: input.orderId,
           check_unit_id: input.checkUnitId,
+          source: input.source,
           status: input.status,
           text: input.text,
           created_by_profile_id: input.createdByProfileId,

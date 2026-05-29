@@ -328,6 +328,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
           lineId: 'line-1',
           orderId: 'order-1',
           checkUnitId: 'cu-1',
+          source: 'check_unit',
           status: 'open',
           text: 'להשלים מוצר חסר',
           createdAt: '2026-05-29T09:00:00.000Z',
@@ -362,6 +363,43 @@ describe('ManualOrderCheckUnitsPanel', () => {
       expect(screen.getByText('נבדקו 1 מתוך 2')).toBeTruthy();
       expect(screen.getByTestId('check-units-status-chip').textContent).toBe('דורש תיקון');
     });
+  });
+
+  it('creates manual order-level ashlama with text', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'checked')];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
+        return {
+          id: 'ash-manual-1',
+          tenantId: 'tenant-1',
+          shiftId: 'shift-1',
+          lineId: 'line-1',
+          orderId: 'order-1',
+          checkUnitId: null,
+          source: 'manual',
+          status: 'open',
+          text: 'להשלים ידנית',
+          createdAt: '2026-05-29T09:00:00.000Z',
+          updatedAt: '2026-05-29T09:00:00.000Z'
+        };
+      }
+      return [];
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('הוסף השלמה')).toBeTruthy());
+    fireEvent.click(screen.getByText('הוסף השלמה'));
+    const dialog = screen.getByTestId('ashlama-dialog');
+    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים ידנית' } });
+    fireEvent.click(screen.getByText('צור השלמה'));
+    await waitFor(() =>
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
+        method: 'POST',
+        body: JSON.stringify({ checkUnitId: null, text: 'להשלים ידנית' })
+      })
+    );
   });
 
   it('no-units state shows dominant add button and no metrics', async () => {

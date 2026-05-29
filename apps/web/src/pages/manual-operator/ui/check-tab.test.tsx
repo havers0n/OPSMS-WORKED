@@ -134,6 +134,7 @@ describe('CheckTab expected units close guard', () => {
           lineId: 'line-1',
           orderId: 'order-1',
           checkUnitId: 'cu-1',
+          source: 'check_unit',
           status: 'open',
           text: 'missing item',
           createdAt: new Date().toISOString(),

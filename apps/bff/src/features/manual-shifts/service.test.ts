@@ -401,6 +401,7 @@ function createRepo() {
         lineId: input.lineId,
         orderId: input.orderId,
         checkUnitId: input.checkUnitId,
+        source: input.source,
         status: input.status,
         text: input.text,
         createdAt: nowIso,
@@ -1552,6 +1553,23 @@ describe('manual shift order check units', () => {
 });
 
 describe('manual shift ashlama constraints', () => {
+  it('creates manual order-level ashlama without checkUnitId', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+
+    const ashlama = await service.createOrderAshlama({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      text: 'השלמה ידנית',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(ashlama.checkUnitId).toBeNull();
+    expect(ashlama.source).toBe('manual');
+    expect(ashlama.status).toBe('open');
+  });
+
   it('creates ashlama only for returned check unit with reason חסר מוצר', async () => {
     const { repo, state } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
@@ -1583,6 +1601,7 @@ describe('manual shift ashlama constraints', () => {
 
     expect(ashlama.status).toBe('open');
     expect(ashlama.text).toBe('להוסיף מוצר');
+    expect(ashlama.source).toBe('check_unit');
   });
 
   it('rejects ashlama when check unit is not returned', async () => {
@@ -1707,6 +1726,7 @@ describe('manual shift ashlama constraints', () => {
       lineId: ids.line,
       orderId: ids.order,
       checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      source: 'check_unit',
       status: 'open',
       text: 'existing',
       createdAt: nowIso,
@@ -1856,6 +1876,7 @@ describe('manual shift timestamp correctness (PR2)', () => {
       lineId: ids.line,
       orderId: ids.order,
       checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      source: 'check_unit',
       status: 'open',
       text: 'bring missing product',
       createdAt: nowIso,
@@ -1870,6 +1891,92 @@ describe('manual shift timestamp correctness (PR2)', () => {
         actor: { actorProfileId: ids.actor, actorName: 'Checker' }
       })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_OPEN_ASHLAMA' });
+  });
+
+  it('blocks waiting_check → done when order has open manual ashlama', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: null,
+      checkedAt: nowIso,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    state.ashlamot.push({
+      id: '54fd43e8-c4ff-41ab-bdc1-79bc6d53cd62',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: null,
+      source: 'manual',
+      status: 'open',
+      text: 'manual completion',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.transitionOrderStatus({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        status: 'done',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_OPEN_ASHLAMA' });
+  });
+
+  it('allows waiting_check → done when manual ashlama is done', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null, palletCount: 1 }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: null,
+      checkedAt: nowIso,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+    state.ashlamot.push({
+      id: '64fd43e8-c4ff-41ab-bdc1-79bc6d53cd62',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: null,
+      source: 'manual',
+      status: 'done',
+      text: 'manual completion',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(done.status).toBe('done');
   });
 
   it('allows waiting_check → done when all active units are checked', async () => {

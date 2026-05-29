@@ -73,6 +73,7 @@ export function ManualOrderCheckUnitsPanel({
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
   const [reasonDraftByUnitId, setReasonDraftByUnitId] = useState<Record<string, string>>({});
   const [reasonSelectorUnitId, setReasonSelectorUnitId] = useState<string | null>(null);
+  const [isAshlamaDialogOpen, setIsAshlamaDialogOpen] = useState(false);
   const [ashlamaDialogCheckUnitId, setAshlamaDialogCheckUnitId] = useState<string | null>(null);
   const [ashlamaDraftText, setAshlamaDraftText] = useState('');
   const checkUnits = checkUnitsQuery.data ?? [];
@@ -85,6 +86,9 @@ export function ManualOrderCheckUnitsPanel({
           (ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled')
       )
       .map((ashlama) => [ashlama.checkUnitId, ashlama] as const)
+  );
+  const orderLevelAshlamot = ashlamot.filter(
+    (ashlama) => ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled'
   );
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
   const hasOpenAshlama = ashlamot.some((ashlama) => ashlama.status === 'open');
@@ -252,6 +256,7 @@ export function ManualOrderCheckUnitsPanel({
                         <button
                           type="button"
                           onClick={() => {
+                            setIsAshlamaDialogOpen(true);
                             setAshlamaDialogCheckUnitId(unit.id);
                             setAshlamaDraftText('');
                           }}
@@ -393,6 +398,41 @@ export function ManualOrderCheckUnitsPanel({
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             השלמה היא משימה נפרדת. אחרי השלמה יש לבדוק שוב.
           </p>
+          <div className="rounded-lg border border-gray-200 px-3 py-2" data-testid="order-ashlamot-section">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-sm font-semibold">השלמות להזמנה</p>
+              {interactive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAshlamaDialogOpen(true);
+                    setAshlamaDialogCheckUnitId(null);
+                    setAshlamaDraftText('');
+                  }}
+                  disabled={!canPerformActions || createAshlama.isPending}
+                  className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
+                >
+                  הוסף השלמה
+                </button>
+              )}
+            </div>
+            {orderLevelAshlamot.length === 0 ? (
+              <p className="text-xs text-gray-500">אין השלמות להזמנה זו</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-xs">
+                {orderLevelAshlamot.map((ashlama) => (
+                  <li key={ashlama.id} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1">
+                    <span className="font-semibold">
+                      {ashlama.status === 'open' ? 'פתוחה' : ashlama.status === 'done' ? 'הושלמה' : 'בוטלה'}
+                    </span>
+                    <span className="mx-1 text-gray-400">·</span>
+                    <span>{ashlama.text}</span>
+                    {ashlama.source === 'manual' && <span className="mx-1 text-gray-500">(ידני)</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           {hasOpenAshlama && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="open-ashlama-block-message">
               לא ניתן לסגור כתקין כל עוד קיימת השלמה פתוחה בהזמנה.
@@ -419,7 +459,7 @@ export function ManualOrderCheckUnitsPanel({
           </button>
         </div>
       )}
-      {ashlamaDialogCheckUnitId && (
+      {isAshlamaDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" data-testid="ashlama-dialog">
           <div className="w-full max-w-md rounded-2xl bg-white p-4 text-right shadow-lg">
             <h4 className="text-lg font-bold">יצירת השלמה</h4>
@@ -439,6 +479,7 @@ export function ManualOrderCheckUnitsPanel({
                     { checkUnitId: ashlamaDialogCheckUnitId, text },
                     {
                       onSuccess: () => {
+                        setIsAshlamaDialogOpen(false);
                         setAshlamaDialogCheckUnitId(null);
                         setAshlamaDraftText('');
                       }
@@ -453,6 +494,7 @@ export function ManualOrderCheckUnitsPanel({
               <button
                 type="button"
                 onClick={() => {
+                  setIsAshlamaDialogOpen(false);
                   setAshlamaDialogCheckUnitId(null);
                   setAshlamaDraftText('');
                 }}

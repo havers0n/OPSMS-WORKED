@@ -196,6 +196,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     lineId: ids.line,
     orderId: ids.order,
     checkUnitId: createCheckUnit().id,
+    source: 'check_unit',
     status: 'open',
     text: 'missing item',
     createdAt: '2026-05-26T07:00:00.000Z',
