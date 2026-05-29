@@ -5,12 +5,19 @@ import type {
   ManualShiftLineEvent,
   ManualShiftLineSummary,
   ManualShiftOrder,
+  ManualShiftOrderCheckUnit,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
   ManualShiftSession,
   ManualShiftWorker,
   ManualShiftWorkerRole
 } from '@wos/domain';
+
+type PostgrestLikeError = {
+  code?: string;
+  message?: string;
+  details?: string;
+};
 
 type ManualShiftSessionRow = {
   id: string;
@@ -74,6 +81,23 @@ type ManualShiftOrderRow = {
   deleted_by_profile_id: string | null;
   deleted_by_name: string | null;
   delete_reason: string | null;
+};
+
+type ManualShiftOrderCheckUnitRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  order_id: string;
+  unit_number: number;
+  status: ManualShiftOrderCheckUnit['status'];
+  note: string | null;
+  reason: string | null;
+  checked_at: string | null;
+  returned_at: string | null;
+  voided_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type ManualShiftLineEventRow = {
@@ -145,12 +169,25 @@ const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,created_at,updated_at';
 const orderColumns =
   'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
+const checkUnitColumns =
+  'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
   'id,tenant_id,shift_id,line_id,order_id,event_type,actor_name,actor_profile_id,from_status,to_status,payload,created_at';
 const errorColumns =
   'id,tenant_id,shift_id,line_id,order_id,type,comment,created_by_name,created_at,fixed_at';
+
+const CHECK_UNIT_NUMBER_RETRY_LIMIT = 3;
+const CHECK_UNIT_ORDER_NUMBER_CONSTRAINT = 'manual_shift_order_check_units_order_id_unit_number_key';
+
+function isCheckUnitNumberUniqueConflict(error: unknown): boolean {
+  const candidate = error as PostgrestLikeError | null;
+  if (!candidate || typeof candidate !== 'object') return false;
+  if (candidate.code !== '23505') return false;
+  const haystack = `${candidate.message ?? ''} ${candidate.details ?? ''}`;
+  return haystack.includes(CHECK_UNIT_ORDER_NUMBER_CONSTRAINT);
+}
 
 function mapSessionRow(row: ManualShiftSessionRow): ManualShiftSession {
   return {
@@ -250,6 +287,25 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
   };
 }
 
+function mapCheckUnitRow(row: ManualShiftOrderCheckUnitRow): ManualShiftOrderCheckUnit {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    orderId: row.order_id,
+    unitNumber: row.unit_number,
+    status: row.status,
+    note: row.note,
+    reason: row.reason,
+    checkedAt: row.checked_at,
+    returnedAt: row.returned_at,
+    voidedAt: row.voided_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 function mapLineEventRow(row: ManualShiftLineEventRow): ManualShiftLineEvent {
   return {
     id: row.id,
@@ -318,6 +374,17 @@ export type ManualShiftOrderPatch = {
   deleteReason?: string | null;
 };
 
+export type ManualShiftOrderCheckUnitPatch = {
+  status?: ManualShiftOrderCheckUnit['status'];
+  note?: string | null;
+  reason?: string | null;
+  checkedAt?: string | null;
+  returnedAt?: string | null;
+  voidedAt?: string | null;
+  updatedByProfileId?: string | null;
+  updatedByName?: string | null;
+};
+
 export type ManualShiftLinePatch = {
   name?: string;
   sortOrder?: number;
@@ -367,6 +434,23 @@ export type ManualShiftsRepo = {
   listShiftOrders(shiftId: string): Promise<ManualShiftOrder[]>;
   listLineOrders(lineId: string): Promise<ManualShiftOrder[]>;
   findOrderById(orderId: string): Promise<ManualShiftOrder | null>;
+  listOrderCheckUnits(orderId: string): Promise<ManualShiftOrderCheckUnit[]>;
+  findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
+  createOrderCheckUnit(input: {
+    tenantId: string;
+    shiftId: string;
+    lineId: string;
+    orderId: string;
+    status: ManualShiftOrderCheckUnit['status'];
+    note: string | null;
+    reason: string | null;
+    createdByProfileId: string | null;
+    createdByName: string | null;
+  }): Promise<ManualShiftOrderCheckUnit>;
+  updateOrderCheckUnit(
+    checkUnitId: string,
+    patch: ManualShiftOrderCheckUnitPatch
+  ): Promise<ManualShiftOrderCheckUnit | null>;
   createOrder(input: {
     tenantId: string;
     shiftId: string;
@@ -689,6 +773,110 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return data ? mapOrderRow(data as ManualShiftOrderRow) : null;
+    },
+
+    async listOrderCheckUnits(orderId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_check_units')
+        .select(checkUnitColumns)
+        .eq('order_id', orderId)
+        .order('unit_number', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return ((data ?? []) as ManualShiftOrderCheckUnitRow[]).map(mapCheckUnitRow);
+    },
+
+    async findOrderCheckUnitById(checkUnitId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_check_units')
+        .select(checkUnitColumns)
+        .eq('id', checkUnitId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapCheckUnitRow(data as ManualShiftOrderCheckUnitRow) : null;
+    },
+
+    async createOrderCheckUnit(input) {
+      for (let attempt = 1; attempt <= CHECK_UNIT_NUMBER_RETRY_LIMIT; attempt += 1) {
+        const { count, error: countError } = await supabase
+          .from('manual_shift_order_check_units')
+          .select('id', { count: 'exact', head: true })
+          .eq('order_id', input.orderId);
+
+        if (countError) {
+          throw countError;
+        }
+
+        const nextUnitNumber = (count ?? 0) + 1;
+
+        const { data, error } = await supabase
+          .from('manual_shift_order_check_units')
+          .insert({
+            tenant_id: input.tenantId,
+            shift_id: input.shiftId,
+            line_id: input.lineId,
+            order_id: input.orderId,
+            unit_number: nextUnitNumber,
+            status: input.status,
+            note: input.note,
+            reason: input.reason,
+            created_by_profile_id: input.createdByProfileId,
+            created_by_name: input.createdByName,
+            updated_by_profile_id: input.createdByProfileId,
+            updated_by_name: input.createdByName
+          })
+          .select(checkUnitColumns)
+          .single();
+
+        if (!error) {
+          return mapCheckUnitRow(data as ManualShiftOrderCheckUnitRow);
+        }
+
+        if (!isCheckUnitNumberUniqueConflict(error)) {
+          throw error;
+        }
+
+        if (attempt === CHECK_UNIT_NUMBER_RETRY_LIMIT) {
+          const wrapped = new Error('MANUAL_SHIFT_ORDER_CHECK_UNIT_NUMBER_CONFLICT');
+          (wrapped as Error & { cause?: unknown }).cause = error;
+          throw wrapped;
+        }
+      }
+
+      throw new Error('MANUAL_SHIFT_ORDER_CHECK_UNIT_NUMBER_CONFLICT');
+    },
+
+    async updateOrderCheckUnit(checkUnitId, patch) {
+      const payload: Record<string, unknown> = {};
+      if (patch.status !== undefined) payload.status = patch.status;
+      if (patch.note !== undefined) payload.note = patch.note;
+      if (patch.reason !== undefined) payload.reason = patch.reason;
+      if (patch.checkedAt !== undefined) payload.checked_at = patch.checkedAt;
+      if (patch.returnedAt !== undefined) payload.returned_at = patch.returnedAt;
+      if (patch.voidedAt !== undefined) payload.voided_at = patch.voidedAt;
+      if (patch.updatedByProfileId !== undefined) payload.updated_by_profile_id = patch.updatedByProfileId;
+      if (patch.updatedByName !== undefined) payload.updated_by_name = patch.updatedByName;
+
+      const { data, error } = await supabase
+        .from('manual_shift_order_check_units')
+        .update(payload)
+        .eq('id', checkUnitId)
+        .select(checkUnitColumns)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      return data ? mapCheckUnitRow(data as ManualShiftOrderCheckUnitRow) : null;
     },
 
     async createOrder(input) {

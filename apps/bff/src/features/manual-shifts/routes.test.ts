@@ -7,6 +7,7 @@ import type {
   ManualShiftDaySummary,
   ManualShiftLine,
   ManualShiftOrder,
+  ManualShiftOrderCheckUnit,
   ManualShiftOrderError,
   ManualShiftPeopleSummary,
   ManualShiftSession,
@@ -138,6 +139,25 @@ function createOrderError(): ManualShiftOrderError {
   };
 }
 
+function createCheckUnit(status: ManualShiftOrderCheckUnit['status'] = 'open'): ManualShiftOrderCheckUnit {
+  return {
+    id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+    tenantId: ids.tenant,
+    shiftId: ids.shift,
+    lineId: ids.line,
+    orderId: ids.order,
+    unitNumber: 1,
+    status,
+    note: null,
+    reason: null,
+    checkedAt: status === 'checked' ? '2026-05-26T07:30:00.000Z' : null,
+    returnedAt: status === 'returned' ? '2026-05-26T07:30:00.000Z' : null,
+    voidedAt: status === 'voided' ? '2026-05-26T07:30:00.000Z' : null,
+    createdAt: '2026-05-26T07:00:00.000Z',
+    updatedAt: '2026-05-26T07:30:00.000Z'
+  };
+}
+
 function createServiceMock(overrides: Partial<ManualShiftsService> = {}): ManualShiftsService {
   const todayResponse: ManualShiftTodayResponse = {
     shift: null,
@@ -185,6 +205,10 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     restoreLine: vi.fn(async () => createLine()),
     listShiftOrders: vi.fn(async () => []),
     listLineOrders: vi.fn(async () => []),
+    listOrderCheckUnits: vi.fn(async () => [createCheckUnit()]),
+    createOrderCheckUnit: vi.fn(async () => createCheckUnit()),
+    patchOrderCheckUnit: vi.fn(async () => ({ ...createCheckUnit(), note: 'updated' })),
+    transitionOrderCheckUnitStatus: vi.fn(async () => createCheckUnit('checked')),
     createOrder: vi.fn(async () => createOrder('queued')),
     bulkCreateOrders: vi.fn(async () => bulkResult),
     patchOrder: vi.fn(async () => ({ ...createOrder('queued'), comment: 'Updated' })),
@@ -375,6 +399,80 @@ describe('manual shifts routes', () => {
       tenantId: ids.tenant,
       lineId: ids.line,
       reason: undefined,
+      actor: {
+        actorProfileId: ids.user,
+        actorName: 'Shift Dispatcher'
+      }
+    });
+
+    await app.close();
+  });
+
+  it('lists order check units', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shift-orders/${ids.order}/check-units`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject([
+      { orderId: ids.order, unitNumber: 1, status: 'open' }
+    ]);
+    expect(service.listOrderCheckUnits).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      orderId: ids.order
+    });
+
+    await app.close();
+  });
+
+  it('creates order check unit', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/manual-shift-orders/${ids.order}/check-units`,
+      payload: { note: 'first pallet', reason: null }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ orderId: ids.order, status: 'open' });
+    expect(service.createOrderCheckUnit).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      note: 'first pallet',
+      reason: null,
+      actor: {
+        actorProfileId: ids.user,
+        actorName: 'Shift Dispatcher'
+      }
+    });
+
+    await app.close();
+  });
+
+  it('transitions order check unit status', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/manual-shift-check-units/f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57/status',
+      payload: { status: 'checked', reason: 'ok' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: 'checked' });
+    expect(service.transitionOrderCheckUnitStatus).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'checked',
+      reason: 'ok',
+      note: undefined,
       actor: {
         actorProfileId: ids.user,
         actorName: 'Shift Dispatcher'

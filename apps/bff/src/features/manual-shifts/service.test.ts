@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   ManualShiftLineSummary,
   ManualShiftOrder,
+  ManualShiftOrderCheckUnit,
   ManualShiftOrderError,
   ManualShiftSession,
   ManualShiftWorker
@@ -146,6 +147,7 @@ function createRepo() {
     }>,
     orders: [] as ManualShiftOrder[],
     workers: [] as ManualShiftWorker[],
+    checkUnits: [] as ManualShiftOrderCheckUnit[],
     events: [] as Array<Record<string, unknown>>,
     errors: [] as ManualShiftOrderError[]
   };
@@ -155,6 +157,7 @@ function createRepo() {
   let lineCounter = 0;
   let orderCounter = 0;
   let workerCounter = 0;
+  let checkUnitCounter = 0;
 
   const repo: ManualShiftsRepo = {
     listShiftWorkers: vi.fn(async (shiftId: string) => {
@@ -330,6 +333,55 @@ function createRepo() {
     }),
     findOrderById: vi.fn(async (orderId: string) => {
       return state.orders.find((order) => order.id === orderId) ?? null;
+    }),
+    listOrderCheckUnits: vi.fn(async (orderId: string) => {
+      return state.checkUnits
+        .filter((unit) => unit.orderId === orderId)
+        .sort((a, b) => a.unitNumber - b.unitNumber);
+    }),
+    findOrderCheckUnitById: vi.fn(async (checkUnitId: string) => {
+      return state.checkUnits.find((unit) => unit.id === checkUnitId) ?? null;
+    }),
+    createOrderCheckUnit: vi.fn(async (input) => {
+      checkUnitCounter += 1;
+      const orderUnits = state.checkUnits.filter((unit) => unit.orderId === input.orderId);
+      const unit: ManualShiftOrderCheckUnit = {
+        id: `21000000-0000-4000-8000-${String(checkUnitCounter).padStart(12, '0')}`,
+        tenantId: input.tenantId,
+        shiftId: input.shiftId,
+        lineId: input.lineId,
+        orderId: input.orderId,
+        unitNumber: orderUnits.length + 1,
+        status: input.status,
+        note: input.note,
+        reason: input.reason,
+        checkedAt: null,
+        returnedAt: null,
+        voidedAt: null,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      };
+      state.checkUnits.push(unit);
+      return unit;
+    }),
+    updateOrderCheckUnit: vi.fn(async (checkUnitId: string, patch) => {
+      const unit = state.checkUnits.find((entry) => entry.id === checkUnitId) ?? null;
+      if (!unit) {
+        return null;
+      }
+
+      const next = { ...unit };
+      if (patch.status !== undefined) next.status = patch.status;
+      if (patch.note !== undefined) next.note = patch.note;
+      if (patch.reason !== undefined) next.reason = patch.reason;
+      if (patch.checkedAt !== undefined) next.checkedAt = patch.checkedAt;
+      if (patch.returnedAt !== undefined) next.returnedAt = patch.returnedAt;
+      if (patch.voidedAt !== undefined) next.voidedAt = patch.voidedAt;
+      next.updatedAt = nowIso;
+
+      const idx = state.checkUnits.findIndex((entry) => entry.id === checkUnitId);
+      state.checkUnits[idx] = next;
+      return next;
     }),
     createOrder: vi.fn(async (input) => {
       orderCounter += 1;
@@ -1275,6 +1327,96 @@ describe('manual shift workers service', () => {
   });
 });
 
+describe('manual shift order check units', () => {
+  it('creates and lists check units', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+
+    const created = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      note: 'first pallet',
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(created.unitNumber).toBe(1);
+    expect(created.status).toBe('open');
+
+    const listed = await service.listOrderCheckUnits({ tenantId: ids.tenant, orderId: ids.order });
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe(created.id);
+  });
+
+  it('transitions check unit status and emits audit event', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const updated = await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(updated.status).toBe('checked');
+    expect(updated.checkedAt).toBe(nowIso);
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'check_unit_status_changed'
+      })
+    );
+  });
+
+  it('rejects invalid check unit transitions', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'voided',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.transitionOrderCheckUnitStatus({
+        tenantId: ids.tenant,
+        checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        status: 'checked',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_CHECK_UNIT_INVALID_STATUS_TRANSITION' });
+  });
+});
+
 describe('manual shift timestamp correctness (PR2)', () => {
   // PR2 scope: checkedAt guard + documented fixedAt gap.
   // checkedAt = first time a checker handled the order. Never overwritten once set.
@@ -1302,6 +1444,115 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
     expect(order.checkedAt).toBe(nowIso);
     expect(order.finishedAt).toBe(nowIso);
+  });
+
+  it('blocks waiting_check → done when active check units include open', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.transitionOrderStatus({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        status: 'done',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_CHECK_UNITS' });
+  });
+
+  it('blocks waiting_check → done when active check units include returned', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.checkUnits.push({
+      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'needs repack',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await expect(
+      service.transitionOrderStatus({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        status: 'done',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_CHECK_UNITS' });
+  });
+
+  it('allows waiting_check → done when all active units are checked', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', checkedAt: null }));
+    state.checkUnits.push(
+      {
+        id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        unitNumber: 1,
+        status: 'checked',
+        note: null,
+        reason: null,
+        checkedAt: nowIso,
+        returnedAt: null,
+        voidedAt: null,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      },
+      {
+        id: '82f58cf5-3cb5-4546-b028-cf2869f8160b',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        unitNumber: 2,
+        status: 'voided',
+        note: null,
+        reason: null,
+        checkedAt: null,
+        returnedAt: null,
+        voidedAt: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso
+      }
+    );
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(done.status).toBe('done');
+    expect(done.finishedAt).toBe(nowIso);
   });
 
   it('waiting_check → returned sets checkedAt', async () => {
