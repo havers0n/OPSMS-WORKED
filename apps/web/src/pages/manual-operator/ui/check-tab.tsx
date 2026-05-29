@@ -54,8 +54,8 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-4">
         <ClipboardCheck size={48} className="text-green-400" />
-        <p className="font-bold text-xl text-gray-700">??? ?????? ??????</p>
-        <p className="text-gray-400 text-sm">?? ??????? ?????</p>
+        <p className="font-bold text-xl text-gray-700">אין נקודות לבדיקה</p>
+        <p className="text-gray-400 text-sm">כל ההזמנות נבדקו</p>
       </div>
     );
   }
@@ -64,7 +64,7 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
     <div className="flex flex-col relative">
       <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 shrink-0">
         <p className="font-bold text-amber-800 text-base">
-          {waitingOrders.length} ?????? ??????? ??????
+          {waitingOrders.length} נקודות ממתינות לבדיקה
         </p>
       </div>
 
@@ -113,7 +113,7 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
       <div className="flex flex-col gap-1">
         <div className="flex justify-between items-start gap-2">
           <span className="font-bold text-xl text-gray-900">
-            {order.pointName ?? '??? ?????'}
+            {order.pointName ?? 'ללא נקודה'}
           </span>
           {elapsed && (
             <div className="flex items-center gap-1 text-amber-600 text-sm shrink-0">
@@ -122,9 +122,9 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
             </div>
           )}
         </div>
-        {lineName && <span className="text-sm text-gray-500">??: {lineName}</span>}
+        {lineName && <span className="text-sm text-gray-500">קו: {lineName}</span>}
         {order.pickerName && (
-          <span className="text-gray-700 font-medium text-sm">????: {order.pickerName}</span>
+          <span className="text-gray-700 font-medium text-sm">מלקט: {order.pickerName}</span>
         )}
         {order.orderNumber && (
           <span className="text-gray-400 text-xs font-mono">{order.orderNumber}</span>
@@ -140,14 +140,14 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
         {order.lineCount != null && (
           <span className="flex items-center gap-1 text-gray-600">
             <Package size={14} />
-            {order.lineCount} ?????
+            {order.lineCount} שורות
           </span>
         )}
         {order.palletCount != null && (
-          <span className="text-gray-500 text-xs">{order.palletCount} ??????</span>
+          <span className="text-gray-500 text-xs">{order.palletCount} משטחים</span>
         )}
         {order.size === 'unknown' && order.lineCount == null && (
-          <span className="text-gray-400 text-xs">???? ?? ????</span>
+          <span className="text-gray-400 text-xs">גודל לא ידוע</span>
         )}
       </div>
 
@@ -168,22 +168,22 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           className="h-14 rounded-xl bg-red-50 border border-red-200 text-red-700 font-bold text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50"
         >
           <AlertTriangle size={20} />
-          ????
+          תקלה
         </button>
         <button
           onClick={onOK}
           disabled={doneDisabled}
-          title={doneDisabledByCheckUnits ? '???? ?? ?? ?????? ?????? ??????? ???? ????? ??????' : undefined}
+          title={doneDisabledByCheckUnits ? 'בדוק את כל יחידות הבדיקה הפעילות לפני סגירת ההזמנה' : undefined}
           className="h-14 rounded-xl bg-green-600 text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-50"
         >
           <CheckCircle size={20} />
-          {isPending ? '...' : '????'}
+          {isPending ? '...' : 'תקין'}
         </button>
       </div>
 
       {doneDisabledByCheckUnits && (
         <p className="text-sm text-amber-700" data-testid={`check-units-close-reason-${order.id}`}>
-          ???? ?? ?? ?????? ?????? ??????? ???? ????? ??????
+          בדוק את כל יחידות הבדיקה הפעילות לפני סגירת ההזמנה
         </p>
       )}
     </div>
