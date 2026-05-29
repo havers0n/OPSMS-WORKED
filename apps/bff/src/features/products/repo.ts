@@ -63,6 +63,8 @@ export type ProductCategory = {
 
 export type ProductsRepo = {
   listCategories(): Promise<ProductCategory[]>;
+  createCategory(name: string): Promise<ProductCategory>;
+  patchProduct(productId: string, patch: { category: string | null }): Promise<Product>;
   findById(productId: string): Promise<Product | null>;
   listActive(limit?: number): Promise<Product[]>;
   searchActive(query: string, limit?: number): Promise<Product[]>;
@@ -92,6 +94,33 @@ export function createProductsRepo(supabase: SupabaseClient): ProductsRepo {
         name: row.name,
         sortOrder: row.sort_order
       }));
+    },
+
+    async createCategory(name) {
+      const { data, error } = await supabase
+        .from('product_categories')
+        .insert({ name, sort_order: 0 })
+        .select('id,name,sort_order')
+        .single();
+
+      if (error) throw error;
+      const row = data as { id: string; name: string; sort_order: number };
+      return { id: row.id, name: row.name, sortOrder: row.sort_order };
+    },
+
+    async patchProduct(productId, patch) {
+      const updates: Record<string, unknown> = {};
+      if ('category' in patch) updates.category = patch.category;
+
+      const { data, error } = await supabase
+        .from('products')
+        .update(updates)
+        .eq('id', productId)
+        .select(productSelectColumns)
+        .single();
+
+      if (error) throw error;
+      return mapProductRowToDomain(data as ProductRow);
     },
 
     async findById(productId) {

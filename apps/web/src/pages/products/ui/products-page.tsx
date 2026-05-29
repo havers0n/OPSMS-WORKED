@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, RefreshCw, Search } from 'lucide-react';
+import { ChevronRight, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { productCatalogQueryOptions, productCategoriesQueryOptions } from '@/entities/product/api/queries';
+import { useCreateProductCategory } from '@/entities/product/api/mutations';
 import { productDetailPath } from '@/shared/config/routes';
 import { useT } from '@/shared/i18n';
 
@@ -13,17 +14,19 @@ export function ProductsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [category, setCategory] = useState<string | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const addInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+
   const { data: categoriesData } = useQuery(productCategoriesQueryOptions());
   const categories = categoriesData ?? [];
+
+  const createCategoryMutation = useCreateProductCategory();
+
   const { data, isLoading, isFetching, refetch } = useQuery(
-    productCatalogQueryOptions({
-      query: search,
-      page,
-      pageSize,
-      category
-    })
+    productCatalogQueryOptions({ query: search, page, pageSize, category })
   );
 
   const products = data?.items ?? [];
@@ -43,9 +46,30 @@ export function ProductsPage() {
     setPage(0);
   }
 
+  function openAddCategory() {
+    setAddingCategory(true);
+    setNewCategoryName('');
+    setTimeout(() => addInputRef.current?.focus(), 0);
+  }
+
+  async function saveNewCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    await createCategoryMutation.mutateAsync(name);
+    setAddingCategory(false);
+    setNewCategoryName('');
+  }
+
+  function cancelAddCategory() {
+    setAddingCategory(false);
+    setNewCategoryName('');
+  }
+
   return (
     <section className="flex h-full w-full flex-1 overflow-hidden">
       <div className="m-4 flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+        {/* Header */}
         <header className="border-b border-slate-200 px-5 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -63,7 +87,7 @@ export function ProductsPage() {
         </header>
 
         {/* Category tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 px-5 py-0 scrollbar-none">
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 px-5 scrollbar-none">
           <button
             type="button"
             onClick={() => selectCategory(null)}
@@ -74,8 +98,9 @@ export function ProductsPage() {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             ].join(' ')}
           >
-            Все
+            {t('products.category.all')}
           </button>
+
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -91,8 +116,50 @@ export function ProductsPage() {
               {cat.name}
             </button>
           ))}
+
+          {/* Add category inline form */}
+          {addingCategory ? (
+            <div className="ml-2 flex items-center gap-1 py-2">
+              <input
+                ref={addInputRef}
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveNewCategory();
+                  if (e.key === 'Escape') cancelAddCategory();
+                }}
+                placeholder={t('products.category.addPlaceholder')}
+                className="h-7 w-40 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-cyan-500"
+              />
+              <button
+                type="button"
+                onClick={() => void saveNewCategory()}
+                disabled={createCategoryMutation.isPending || !newCategoryName.trim()}
+                className="h-7 rounded-md bg-cyan-600 px-2.5 text-xs font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
+              >
+                {t('products.category.save')}
+              </button>
+              <button
+                type="button"
+                onClick={cancelAddCategory}
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={openAddCategory}
+              className="ml-2 flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t('products.category.addButton')}
+            </button>
+          )}
         </div>
 
+        {/* Search / Refresh */}
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-3">
           <label className="relative min-w-[280px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -116,6 +183,7 @@ export function ProductsPage() {
           </button>
         </div>
 
+        {/* Table */}
         <div className="flex-1 overflow-auto">
           {isLoading ? (
             <div className="flex h-40 items-center justify-center">
@@ -130,9 +198,9 @@ export function ProductsPage() {
               <table className="min-w-full divide-y divide-slate-200 text-sm">
                 <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                   <tr>
-                    <th className="w-[30%] px-5 py-2.5">{t('products.table.name')}</th>
+                    <th className="w-[28%] px-5 py-2.5">{t('products.table.name')}</th>
                     <th className="w-[12%] px-4 py-2.5">{t('products.table.sku')}</th>
-                    <th className="w-[14%] px-4 py-2.5">Категория</th>
+                    <th className="w-[14%] px-4 py-2.5">{t('products.table.category')}</th>
                     <th className="w-[16%] px-4 py-2.5">{t('products.table.externalId')}</th>
                     <th className="w-[10%] px-4 py-2.5">{t('products.table.status')}</th>
                     <th className="w-[11%] px-4 py-2.5">{t('products.table.updated')}</th>
@@ -156,7 +224,7 @@ export function ProductsPage() {
                             {product.category}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-xs text-slate-400">{t('products.category.none')}</span>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-500">

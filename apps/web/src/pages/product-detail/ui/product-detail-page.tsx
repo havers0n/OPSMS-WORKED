@@ -1,7 +1,10 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { routes } from '@/shared/config/routes';
+import { productCategoriesQueryOptions } from '@/entities/product/api/queries';
+import { usePatchProductCategory } from '@/entities/product/api/mutations';
 import { useProductDetailPageModel } from '../model/use-product-detail-page-model';
 import { ProductMediaSection } from './product-media-section';
 import { ProductPackagingSection } from './product-packaging-section';
@@ -190,6 +193,9 @@ export function ProductDetailPage() {
 
   const model = useProductDetailPageModel(productId ?? null);
   const [boardMode, setBoardMode] = useState<UnitProfileWorkspaceMode>('read');
+  const { data: categoriesData } = useQuery(productCategoriesQueryOptions());
+  const categories = categoriesData ?? [];
+  const patchCategoryMutation = usePatchProductCategory();
   const selectedArea: UnitProfileWorkspaceSelection =
     boardMode === 'edit-product-facts'
       ? 'product-facts'
@@ -371,6 +377,32 @@ export function ProductDetailPage() {
                   <span className="rounded-full border border-slate-200 bg-white px-2 py-1">
                     Default pick UOM: {model.defaultPickLevel?.code ?? 'Not set'}
                   </span>
+                </div>
+
+                {/* Category selector */}
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">Category:</span>
+                  <select
+                    value={model.product.category ?? ''}
+                    disabled={patchCategoryMutation.isPending}
+                    onChange={(e) => {
+                      void patchCategoryMutation.mutateAsync({
+                        productId: productId as string,
+                        category: e.target.value || null
+                      });
+                    }}
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-cyan-400 disabled:opacity-60"
+                  >
+                    <option value="">— Not set</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  {patchCategoryMutation.isPending && (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                  )}
                 </div>
               </div>
 

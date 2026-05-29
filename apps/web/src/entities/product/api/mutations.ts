@@ -1,7 +1,7 @@
-import type { ProductPackagingLevel, ProductUnitProfile, StoragePreset } from '@wos/domain';
+import type { Product, ProductPackagingLevel, ProductUnitProfile, StoragePreset } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
-import { productKeys } from './queries';
+import { productKeys, type ProductCategory } from './queries';
 
 export type UpsertProductUnitProfileBody = {
   unitWeightG?: number | null;
@@ -114,6 +114,37 @@ export function useCreateProductStoragePreset() {
       void queryClient.invalidateQueries({
         queryKey: productKeys.storagePresets(variables.productId)
       });
+    }
+  });
+}
+
+export function usePatchProductCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ productId, category }: { productId: string; category: string | null }) =>
+      bffRequest<Product>(`/api/products/${productId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ category })
+      }),
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.productId) });
+      void queryClient.invalidateQueries({ queryKey: productKeys.all });
+    }
+  });
+}
+
+export function useCreateProductCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) =>
+      bffRequest<ProductCategory>('/api/product-categories', {
+        method: 'POST',
+        body: JSON.stringify({ name })
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: productKeys.categories() });
     }
   });
 }
