@@ -12,10 +12,17 @@ export type ProductCatalogPage = {
   offset: number;
 };
 
+export type ProductCategory = {
+  id: string;
+  name: string;
+  sortOrder: number;
+};
+
 export const productKeys = {
   all: ['product'] as const,
-  catalog: (query: string | null, page: number, pageSize: number, activeOnly: boolean) =>
-    [...productKeys.all, 'catalog', query ?? 'browse', page, pageSize, activeOnly ? 'active' : 'all'] as const,
+  categories: () => [...productKeys.all, 'categories'] as const,
+  catalog: (query: string | null, page: number, pageSize: number, activeOnly: boolean, category: string | null) =>
+    [...productKeys.all, 'catalog', query ?? 'browse', page, pageSize, activeOnly ? 'active' : 'all', category ?? 'all'] as const,
   search: (query: string | null) => [...productKeys.all, 'search', query ?? 'browse'] as const,
   detail: (productId: string | null) => [...productKeys.all, 'detail', productId ?? 'none'] as const,
   unitProfile: (productId: string | null) => [...productKeys.all, 'unit-profile', productId ?? 'none'] as const,
@@ -38,6 +45,7 @@ async function fetchProductCatalog(args: {
   page: number;
   pageSize: number;
   activeOnly: boolean;
+  category: string | null;
 }) {
   const searchParams = new URLSearchParams();
 
@@ -48,6 +56,10 @@ async function fetchProductCatalog(args: {
   searchParams.set('limit', String(args.pageSize));
   searchParams.set('offset', String(args.page * args.pageSize));
   searchParams.set('activeOnly', String(args.activeOnly));
+
+  if (args.category) {
+    searchParams.set('category', args.category);
+  }
 
   const suffix = searchParams.toString();
   return bffRequest<ProductCatalogPage>(`/api/products${suffix.length > 0 ? `?${suffix}` : ''}`);
@@ -130,15 +142,17 @@ export function productCatalogQueryOptions(args: {
   page: number;
   pageSize: number;
   activeOnly?: boolean;
+  category?: string | null;
 }) {
   return queryOptions({
-    queryKey: productKeys.catalog(args.query, args.page, args.pageSize, args.activeOnly ?? false),
+    queryKey: productKeys.catalog(args.query, args.page, args.pageSize, args.activeOnly ?? false, args.category ?? null),
     queryFn: () =>
       fetchProductCatalog({
         query: args.query ?? '',
         page: args.page,
         pageSize: args.pageSize,
-        activeOnly: args.activeOnly ?? false
+        activeOnly: args.activeOnly ?? false,
+        category: args.category ?? null
       })
   });
 }
@@ -171,6 +185,14 @@ export function productPackagingLevelsQueryOptions(productId: string | null) {
     queryKey: productKeys.packagingLevels(productId),
     queryFn: () => fetchProductPackagingLevels(productId as string),
     enabled: Boolean(productId)
+  });
+}
+
+export function productCategoriesQueryOptions() {
+  return queryOptions({
+    queryKey: productKeys.categories(),
+    queryFn: () => bffRequest<ProductCategory[]>('/api/product-categories'),
+    staleTime: 5 * 60 * 1000
   });
 }
 

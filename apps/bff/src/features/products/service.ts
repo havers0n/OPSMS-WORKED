@@ -4,6 +4,7 @@ import {
   createProductsRepo,
   type ProductCatalogQuery,
   type ProductCatalogPage,
+  type ProductCategory,
   type UpsertUnitProfileData,
   type CreatePackagingLevelData,
   type PatchPackagingLevelData,
@@ -17,6 +18,7 @@ import {
 } from './packaging-validation.js';
 
 export type ProductsService = {
+  listCategories(): Promise<ProductCategory[]>;
   findCatalog(args: ProductCatalogQuery): Promise<ProductCatalogPage>;
   searchActive(query: string, limit?: number): Promise<Product[]>;
   listActive(limit?: number): Promise<Product[]>;
@@ -86,6 +88,7 @@ export function createProductsServiceFromRepo(repo: ProductsRepo): ProductsServi
   }
 
   return {
+    listCategories: () => repo.listCategories(),
     findCatalog: (args) => repo.findCatalog(args),
     searchActive: (query, limit) => repo.searchActive(query, limit),
     listActive: (limit) => repo.listActive(limit),
