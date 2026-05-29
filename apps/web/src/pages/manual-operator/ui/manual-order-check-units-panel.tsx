@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { orderCheckUnitsQueryOptions } from '@/entities/manual-shift/api/queries';
 import {
@@ -27,6 +27,8 @@ interface ManualOrderCheckUnitsPanelState {
 interface ManualOrderCheckUnitsPanelProps {
   orderId: string;
   interactive?: boolean;
+  canInteract?: boolean;
+  disabledReason?: string;
   compact?: boolean;
   detailsDefaultOpen?: boolean;
   onStateChange?: (state: ManualOrderCheckUnitsPanelState) => void;
@@ -35,10 +37,16 @@ interface ManualOrderCheckUnitsPanelProps {
 export function ManualOrderCheckUnitsPanel({
   orderId,
   interactive = false,
+  canInteract = true,
+  disabledReason,
   compact = false,
   detailsDefaultOpen,
   onStateChange
 }: ManualOrderCheckUnitsPanelProps) {
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const createClickLockRef = useRef(false);
+  const statusClickLockRef = useRef(false);
+  const [isCreateCooldown, setIsCreateCooldown] = useState(false);
   const checkUnitsQuery = useQuery(orderCheckUnitsQueryOptions(orderId));
   const createCheckUnit = useCreateManualShiftOrderCheckUnit(orderId);
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
@@ -46,6 +54,9 @@ export function ManualOrderCheckUnitsPanel({
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
   const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits);
   const hasUnits = checkUnits.length > 0;
+  const canPerformActions = interactive && canInteract;
+  const showInteractionHint = interactive && !canInteract && Boolean(disabledReason);
+  const createDisabled = !canPerformActions || createCheckUnit.isPending || isCreateCooldown;
   const statusChipLabel =
     progress.returnedUnits > 0
       ? 'דורש תיקון'
@@ -63,6 +74,38 @@ export function ManualOrderCheckUnitsPanel({
       isError: checkUnitsQuery.isError
     });
   }, [onStateChange, hasUnits, canCloseOrder, checkUnitsQuery.isLoading, checkUnitsQuery.isError]);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current);
+      }
+    };
+  }, []);
+
+  function handleCreateCheckUnit() {
+    if (createDisabled || createClickLockRef.current) return;
+    createClickLockRef.current = true;
+    createCheckUnit.mutate(
+      {},
+      {
+        onSuccess: () => {
+          setIsCreateCooldown(true);
+          if (cooldownTimerRef.current) {
+            clearTimeout(cooldownTimerRef.current);
+          }
+          cooldownTimerRef.current = setTimeout(() => {
+            setIsCreateCooldown(false);
+            createClickLockRef.current = false;
+            cooldownTimerRef.current = null;
+          }, 800);
+        },
+        onError: () => {
+          createClickLockRef.current = false;
+        }
+      }
+    );
+  }
 
   return (
     <section className={`bg-white border border-gray-200 rounded-2xl ${compact ? 'p-3' : 'p-5'} flex flex-col gap-3 text-right`}>
@@ -122,6 +165,19 @@ export function ManualOrderCheckUnitsPanel({
           <ul className="flex flex-col gap-2" data-testid="check-units-list">
             {checkUnits.map((unit) => {
               const isVoided = unit.status === 'voided';
+              const statusActionDisabled = !canPerformActions || updateCheckUnitStatus.isPending;
+              function mutateStatus(status: 'open' | 'checked' | 'returned' | 'voided') {
+                if (statusActionDisabled || statusClickLockRef.current) return;
+                statusClickLockRef.current = true;
+                updateCheckUnitStatus.mutate(
+                  { checkUnitId: unit.id, status },
+                  {
+                    onSettled: () => {
+                      statusClickLockRef.current = false;
+                    }
+                  }
+                );
+              }
               return (
                 <li
                   key={unit.id}
@@ -135,20 +191,42 @@ export function ManualOrderCheckUnitsPanel({
                   </div>
                   {interactive && (
                     <div className={`flex gap-2 mt-2 ${compact ? 'flex-wrap' : 'flex-wrap'}`}>
-                      {!isVoided && unit.status !== 'checked' && (
+                      {!isVoided && unit.status !== 'checked' && unit.status !== 'returned' && (
                         <button
                           type="button"
-                          onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'checked' })}
-                          className="px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-bold"
+                          onClick={() => mutateStatus('checked')}
+                          disabled={statusActionDisabled}
+                          className="px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-bold disabled:opacity-50"
                         >
                           סמן כנבדק
+                        </button>
+                      )}
+                      {!isVoided && unit.status === 'returned' && (
+                        <button
+                          type="button"
+                          onClick={() => mutateStatus('checked')}
+                          disabled={statusActionDisabled}
+                          className="px-3 py-1 rounded-lg bg-green-500 text-white text-sm font-bold disabled:opacity-50"
+                        >
+                          סמן כתוקן
+                        </button>
+                      )}
+                      {!isVoided && unit.status === 'returned' && (
+                        <button
+                          type="button"
+                          onClick={() => mutateStatus('open')}
+                          disabled={statusActionDisabled}
+                          className="px-3 py-1 rounded-lg bg-amber-100 text-amber-800 text-sm font-bold disabled:opacity-50"
+                        >
+                          בטל תיקון
                         </button>
                       )}
                       {!isVoided && unit.status !== 'returned' && (
                         <button
                           type="button"
-                          onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'returned' })}
-                          className="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm font-bold"
+                          onClick={() => mutateStatus('returned')}
+                          disabled={statusActionDisabled}
+                          className="px-3 py-1 rounded-lg bg-red-100 text-red-700 text-sm font-bold disabled:opacity-50"
                         >
                           דורש תיקון
                         </button>
@@ -156,8 +234,9 @@ export function ManualOrderCheckUnitsPanel({
                       {!isVoided && (
                         <button
                           type="button"
-                          onClick={() => updateCheckUnitStatus.mutate({ checkUnitId: unit.id, status: 'voided' })}
-                          className="px-3 py-1 rounded-lg border border-red-300 text-red-700 text-sm font-bold"
+                          onClick={() => mutateStatus('voided')}
+                          disabled={statusActionDisabled}
+                          className="px-3 py-1 rounded-lg border border-red-300 text-red-700 text-sm font-bold disabled:opacity-50"
                         >
                           בטל יחידה
                         </button>
@@ -175,10 +254,16 @@ export function ManualOrderCheckUnitsPanel({
 
       {interactive && (
         <div className="mt-1">
+          {showInteractionHint && (
+            <p className="mb-2 text-sm text-amber-700" data-testid="check-units-disabled-reason">
+              {disabledReason}
+            </p>
+          )}
           <button
             type="button"
-            onClick={() => createCheckUnit.mutate({})}
-            className={`w-full rounded-lg font-bold ${hasUnits ? 'h-10 bg-gray-100' : 'h-12 bg-blue-600 text-white text-base'}`}
+            onClick={handleCreateCheckUnit}
+            disabled={createDisabled}
+            className={`w-full rounded-lg font-bold ${hasUnits ? 'h-10 bg-gray-100' : 'h-12 bg-blue-600 text-white text-base'} disabled:opacity-50`}
             data-testid="create-check-unit"
           >
             הוסף יחידת בדיקה
@@ -188,4 +273,3 @@ export function ManualOrderCheckUnitsPanel({
     </section>
   );
 }
-

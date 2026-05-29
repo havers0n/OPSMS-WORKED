@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+﻿import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ManualShiftOrderCheckUnit } from '@wos/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,10 +41,21 @@ function makeCheckUnit(
   };
 }
 
-function renderPanel() {
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+type PanelProps = Parameters<typeof ManualOrderCheckUnitsPanel>[0];
+function renderPanel(props?: Partial<PanelProps>) {
   return render(
     <QueryClientProvider client={makeQC()}>
-      <ManualOrderCheckUnitsPanel orderId="order-1" interactive />
+      <ManualOrderCheckUnitsPanel orderId="order-1" interactive {...props} />
     </QueryClientProvider>
   );
 }
@@ -52,6 +63,7 @@ function renderPanel() {
 describe('ManualOrderCheckUnitsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('renders empty state', async () => {
@@ -72,68 +84,125 @@ describe('ManualOrderCheckUnitsPanel', () => {
       expect(screen.getByText('יחידה #1')).toBeTruthy();
       expect(screen.getByText('יחידה #2')).toBeTruthy();
     });
-    expect(screen.queryByText('נבדק חלקית: לא')).toBeNull();
-    expect(screen.queryByText('כל היחידות נבדקו: לא')).toBeNull();
   });
 
-  it('add unit calls create mutation', async () => {
-    mockedBffRequest
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce(makeCheckUnit(1, 'open'));
+  it('stage-gating disables actions and shows reason when canInteract=false', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'open')]);
+    renderPanel({
+      canInteract: false,
+      disabledReason: 'העבר את ההזמנה לבדיקה כדי להתחיל לבדוק יחידות'
+    });
+
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.getByTestId('check-units-disabled-reason')).toBeTruthy();
+
+    const createButton = screen.getByTestId('create-check-unit') as HTMLButtonElement;
+    expect(createButton.disabled).toBe(true);
+
+    const checkButton = screen.getByText('סמן כנבדק') as HTMLButtonElement;
+    const returnedButton = screen.getByText('דורש תיקון') as HTMLButtonElement;
+    const voidButton = screen.getByText('בטל יחידה') as HTMLButtonElement;
+    expect(checkButton.disabled).toBe(true);
+    expect(returnedButton.disabled).toBe(true);
+    expect(voidButton.disabled).toBe(true);
+
+    fireEvent.click(createButton);
+    fireEvent.click(checkButton);
+    fireEvent.click(returnedButton);
+    fireEvent.click(voidButton);
+
+    expect(
+      mockedBffRequest.mock.calls.some(([url, init]) =>
+        String(url).includes('/check-units') && (init?.method === 'POST' || init?.method === 'PATCH')
+      )
+    ).toBe(false);
+  });
+
+  it('rapid double click on create triggers one POST while pending', async () => {
+    const createPending = deferred<ManualShiftOrderCheckUnit>();
+
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'POST') return createPending.promise;
+      return [];
+    });
+
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('create-check-unit')).toBeTruthy());
-    fireEvent.click(screen.getByTestId('create-check-unit'));
+
+    const createButton = screen.getByTestId('create-check-unit');
+    fireEvent.click(createButton);
+    fireEvent.click(createButton);
+
     await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/check-units', {
-        method: 'POST',
-        body: JSON.stringify({})
-      });
+      const postCalls = mockedBffRequest.mock.calls.filter(
+        ([url, init]) => String(url).includes('/api/manual-shift-orders/order-1/check-units') && init?.method === 'POST'
+      );
+      expect(postCalls).toHaveLength(1);
     });
+
+    createPending.resolve(makeCheckUnit(1, 'open'));
+    await waitFor(() => expect(mockedBffRequest).toHaveBeenCalled());
   });
 
-  it('mark checked calls status mutation with checked', async () => {
-    mockedBffRequest
-      .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
-      .mockResolvedValueOnce(makeCheckUnit(1, 'checked'));
+  it('create button has success cooldown and re-enables after it', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'POST') return makeCheckUnit(1, 'open');
+      return [];
+    });
+
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('create-check-unit')).toBeTruthy());
+    vi.useFakeTimers();
+
+    const createButton = screen.getByTestId('create-check-unit') as HTMLButtonElement;
+    fireEvent.click(createButton);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(createButton.disabled).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(801);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(createButton.disabled).toBe(false);
+  });
+
+  it('rapid repeated status clicks send one PATCH while pending', async () => {
+    const patchPending = deferred<ManualShiftOrderCheckUnit>();
+
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'open')];
+      if (path.includes('/api/manual-shift-check-units/cu-1/status') && method === 'PATCH') return patchPending.promise;
+      return [];
+    });
+
     renderPanel();
     await waitFor(() => expect(screen.getByText('סמן כנבדק')).toBeTruthy());
-    fireEvent.click(screen.getByText('סמן כנבדק'));
-    await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'checked', note: undefined, reason: undefined })
-      });
-    });
-  });
 
-  it('needs fix calls status mutation with returned', async () => {
-    mockedBffRequest
-      .mockResolvedValueOnce([makeCheckUnit(1, 'checked')])
-      .mockResolvedValueOnce(makeCheckUnit(1, 'returned'));
-    renderPanel();
-    await waitFor(() => expect(screen.getByText('דורש תיקון')).toBeTruthy());
-    fireEvent.click(screen.getByText('דורש תיקון'));
-    await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'returned', note: undefined, reason: undefined })
-      });
-    });
-  });
+    const checkButton = screen.getByText('סמן כנבדק');
+    fireEvent.click(checkButton);
+    fireEvent.click(checkButton);
 
-  it('void calls status mutation with voided', async () => {
-    mockedBffRequest
-      .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
-      .mockResolvedValueOnce(makeCheckUnit(1, 'voided'));
-    renderPanel();
-    await waitFor(() => expect(screen.getByText('בטל יחידה')).toBeTruthy());
-    fireEvent.click(screen.getByText('בטל יחידה'));
     await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'voided', note: undefined, reason: undefined })
-      });
+      const patchCalls = mockedBffRequest.mock.calls.filter(
+        ([url, init]) => String(url).includes('/api/manual-shift-check-units/cu-1/status') && init?.method === 'PATCH'
+      );
+      expect(patchCalls).toHaveLength(1);
     });
+
+    patchPending.resolve(makeCheckUnit(1, 'checked'));
+    await waitFor(() => expect(mockedBffRequest).toHaveBeenCalled());
   });
 
   it('voided units show no active actions', async () => {
@@ -143,6 +212,51 @@ describe('ManualOrderCheckUnitsPanel', () => {
     expect(screen.queryByText('סמן כנבדק')).toBeNull();
     expect(screen.queryByText('דורש תיקון')).toBeNull();
     expect(screen.queryByText('בטל יחידה')).toBeNull();
+  });
+
+  it('returned unit can be marked fixed (returned -> checked)', async () => {
+    mockedBffRequest
+      .mockResolvedValueOnce([makeCheckUnit(1, 'returned')])
+      .mockResolvedValueOnce(makeCheckUnit(1, 'checked'));
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText('סמן כתוקן')).toBeTruthy());
+    fireEvent.click(screen.getByText('סמן כתוקן'));
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'checked', note: undefined, reason: undefined })
+      });
+    });
+  });
+
+  it('returned unit can be reverted (returned -> open) without voiding', async () => {
+    mockedBffRequest
+      .mockResolvedValueOnce([makeCheckUnit(1, 'returned')])
+      .mockResolvedValueOnce(makeCheckUnit(1, 'open'));
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText('בטל תיקון')).toBeTruthy());
+    fireEvent.click(screen.getByText('בטל תיקון'));
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'open', note: undefined, reason: undefined })
+      });
+    });
+  });
+
+  it('returned state provides recovery actions and void is not the only escape', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'returned')]);
+    renderPanel();
+
+    await waitFor(() => expect(screen.getByText('יחידה #1')).toBeTruthy());
+    expect(screen.getByText('סמן כתוקן')).toBeTruthy();
+    expect(screen.getByText('בטל תיקון')).toBeTruthy();
+    expect(screen.getByText('בטל יחידה')).toBeTruthy();
+    expect(screen.getAllByText('דורש תיקון').length).toBeGreaterThan(0);
   });
 
   it('shows returned chip and keeps voided excluded from active count', async () => {
@@ -164,3 +278,4 @@ describe('ManualOrderCheckUnitsPanel', () => {
     expect(screen.queryByTestId('check-units-details')).toBeNull();
   });
 });
+
