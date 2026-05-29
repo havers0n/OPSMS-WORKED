@@ -28,6 +28,7 @@ import {
   recordCanvasKonvaLayerDraw,
   recordCanvasRackLayerNodeCount,
   recordRoutePreviewAppPhaseMark,
+  refId,
   type CanvasDiagnosticsFlags,
   type CanvasForceRenderReason
 } from './canvas-diagnostics';
@@ -373,7 +374,12 @@ export const RackLayer = memo(function RackLayer({
       'highlightedCellCount',
       'highlightedCellFirstId',
       'overlayHighlightedCellCount',
-      'baseHighlightedCellCount'
+      'baseHighlightedCellCount',
+      'racks_id',
+      'cellRuntimeById_id',
+      'occupiedCellIds_id',
+      'publishedCellsByStructure_id',
+      'publishedCellsById_id'
     ],
     snapshot: {
       rackIds: racks.map((rack) => rack.id).join('|'),
@@ -409,7 +415,14 @@ export const RackLayer = memo(function RackLayer({
       highlightedCellCount: highlightedCellIds.size,
       highlightedCellFirstId,
       overlayHighlightedCellCount: singleOverlayHighlightedCellId ? 1 : 0,
-      baseHighlightedCellCount: baseHighlightedCellIds.size
+      baseHighlightedCellCount: baseHighlightedCellIds.size,
+      // Reference-identity tokens: change when the object reference changes
+      // even if the logical content is the same (detects array/Map/Set churn).
+      racks_id: refId(racks),
+      cellRuntimeById_id: refId(cellRuntimeById),
+      occupiedCellIds_id: refId(occupiedCellIds),
+      publishedCellsByStructure_id: refId(publishedCellsByStructure),
+      publishedCellsById_id: refId(publishedCellsById)
     }
   });
 

@@ -55,6 +55,26 @@ export type CanvasRenderComponentMetrics = {
   changedKeys: Record<string, number>;
 };
 
+/**
+ * One entry per render of a tracked component, stored in chronological order.
+ * Used to compare individual render snapshots (e.g. mount vs update#1).
+ * Only populated when __WOS_RACK_LAYER_RENDER_EVENTS__ is initialised.
+ */
+export type CanvasRenderEvent = {
+  renderIndex: number;
+  snapshot: Record<string, unknown>;
+  changedKeys: string[];
+};
+
+/**
+ * Exposed on window.__WOS_RACK_LAYER_RENDER_EVENTS__ so tests and DevTools
+ * snippets can inspect the per-render sequence for RackLayer.
+ * Length is capped at RACK_LAYER_RENDER_HISTORY_LIMIT to avoid unbounded growth.
+ */
+export type RackLayerRenderEvents = {
+  events: CanvasRenderEvent[];
+};
+
 export type CanvasForceRenderReason =
   | 'none'
   | 'selection'
@@ -175,7 +195,38 @@ declare global {
     __WOS_CANVAS_KONVA_SOURCE__?: string | null;
     __WOS_CANVAS_DIAGNOSTIC_MARKS__?: Record<string, number>;
     __WOS_ROUTE_PREVIEW_APP_PHASE_MARKS__?: Record<string, number>;
+    /** Per-render event log for RackLayer. Populated when the render pipeline
+     *  diagnostics are enabled. Capped at RACK_LAYER_RENDER_HISTORY_LIMIT entries. */
+    __WOS_RACK_LAYER_RENDER_EVENTS__?: RackLayerRenderEvents;
   }
+}
+
+/**
+ * Returns the global object that holds WOS diagnostic properties.
+ * Uses `window` in browser/jsdom, falls back to `globalThis` in node
+ * (e.g. vitest unit-test runs without jsdom).
+ */
+function getGlobal(): Partial<Window> {
+  return (typeof window !== 'undefined' ? window : globalThis) as unknown as Partial<Window>;
+}
+
+/**
+ * Returns a stable integer ID for any object reference.
+ * Two calls with the same reference return the same integer.
+ * Two calls with different references return different integers.
+ * Used to add reference-identity snapshot keys to component diagnostics
+ * so that `changedKeys` shows when an array/Map/Set prop changed identity
+ * even if its logical value (e.g. serialised IDs string) didn't change.
+ */
+const _refIdMap = new WeakMap<object, number>();
+let _refIdCounter = 0;
+export function refId(obj: object): number {
+  let id = _refIdMap.get(obj);
+  if (id === undefined) {
+    id = ++_refIdCounter;
+    _refIdMap.set(obj, id);
+  }
+  return id;
 }
 
 function resolveOption<T extends string>(
@@ -411,8 +462,7 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
 }
 
 function getActiveRenderPipelineDiagnostics(): CanvasRenderPipelineDiagnostics | null {
-  if (typeof window === 'undefined') return null;
-  const diagnostics = window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
+  const diagnostics = getGlobal().__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
   return diagnostics?.enabled ? diagnostics : null;
 }
 
@@ -421,16 +471,15 @@ export function isCanvasRenderPipelineDiagnosticsEnabled() {
 }
 
 export function resetCanvasRenderPipelineDiagnostics() {
-  if (typeof window === 'undefined') return;
-
-  window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ =
+  const g = getGlobal();
+  g.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__ =
     createCanvasRenderPipelineDiagnostics();
-  window.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
+  g.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = {};
+  g.__WOS_RACK_LAYER_RENDER_EVENTS__ = { events: [] };
 }
 
 export function stopCanvasRenderPipelineDiagnostics() {
-  if (typeof window === 'undefined') return;
-  const diagnostics = window.__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
+  const diagnostics = getGlobal().__WOS_CANVAS_RENDER_PIPELINE_DIAGNOSTICS__;
   if (diagnostics) {
     diagnostics.enabled = false;
   }
@@ -743,12 +792,15 @@ export function recordCanvasComponentRender({
     diagnostics.components[component] ??
     (diagnostics.components[component] = createComponentMetrics());
   const snapshotKey = `${component}:${instanceId}`;
+  const g = getGlobal();
   const prevSnapshots =
-    window.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ ?? {};
-  window.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = prevSnapshots;
+    g.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ ?? {};
+  g.__WOS_CANVAS_RENDER_PIPELINE_PREV_SNAPSHOTS__ = prevSnapshots;
   const prev = prevSnapshots[snapshotKey];
 
   metrics.renders += 1;
+
+  const changedKeysForRender: string[] = [];
 
   if (prev) {
     const changedKeys = Object.keys(snapshot).filter(
@@ -756,6 +808,7 @@ export function recordCanvasComponentRender({
     );
     for (const key of changedKeys) {
       metrics.changedKeys[key] = (metrics.changedKeys[key] ?? 0) + 1;
+      changedKeysForRender.push(key);
     }
 
     const changedState = changedKeys.some((key) => stateKeys.includes(key));
@@ -770,6 +823,17 @@ export function recordCanvasComponentRender({
   }
 
   prevSnapshots[snapshotKey] = snapshot;
+
+  if (component === 'RackLayer') {
+    const store = getGlobal().__WOS_RACK_LAYER_RENDER_EVENTS__;
+    if (store) {
+      store.events.push({
+        renderIndex: metrics.renders,
+        snapshot,
+        changedKeys: changedKeysForRender
+      });
+    }
+  }
 }
 
 export function useCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {

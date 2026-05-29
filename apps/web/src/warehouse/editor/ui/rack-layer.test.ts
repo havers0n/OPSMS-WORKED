@@ -1,6 +1,6 @@
 import React, { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   buildCellStructureKey,
   type Cell,
@@ -9,6 +9,10 @@ import {
 } from '@wos/domain';
 import { RackLayer } from './rack-layer';
 import type { CanvasRenderMode } from './canvas-render-mode';
+import {
+  resetCanvasRenderPipelineDiagnostics,
+  type RackLayerRenderEvents
+} from './canvas-diagnostics';
 
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -1319,5 +1323,119 @@ describe('RackLayer storage interaction depth', () => {
 
     expect(onV2StorageCellSelect).not.toHaveBeenCalled();
     expect(onV2StorageRackSelect).toHaveBeenCalledWith({ rackId: 'rack-1' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-render rackIds identity analysis
+// ---------------------------------------------------------------------------
+
+describe('RackLayer update#1 rackIds identity', () => {
+  beforeEach(() => {
+    // Initialise the per-render event store so recordCanvasComponentRender
+    // appends to __WOS_RACK_LAYER_RENDER_EVENTS__.
+    resetCanvasRenderPipelineDiagnostics();
+  });
+
+  it('rackIds string is unchanged when the same racks are passed as a new structuredClone array (array identity churn)', () => {
+    // Simulate the initializeDraft scenario: same logical racks, but
+    // the store rebuilds the array via structuredClone, giving every
+    // element a fresh object reference.
+
+    const racks = [createRack('rack-1', 0), createRack('rack-2', 10)];
+    const rackLookup = Object.fromEntries(
+      racks.map((rack) => [rack.id, rack])
+    ) as Record<string, Rack>;
+
+    const baseProps = {
+      activeCellRackId: null,
+      canSelectCells: false,
+      canSelectRack: true,
+      canvasSelectedCellId: null,
+      cellRuntimeById: new Map(),
+      clearHighlightedCellIds: () => undefined,
+      diagnosticsFlags: {
+        labels: 'normal' as const,
+        grid: 'normal' as const,
+        hitTest: 'normal' as const,
+        cells: 'normal' as const,
+        cellOverlays: 'normal' as const,
+        enableProductionCellCulling: true,
+        rackLayerRenderer: 'layer' as const,
+        rackBodyShell: 'normal' as const
+      },
+      diagnosticsViewport: {
+        canvasOffset: { x: 0, y: 0 },
+        viewport: { width: 1200, height: 800 },
+        zoom: 1.5
+      },
+      isActivelyPanning: false,
+      labelsDeferred: false,
+      highlightedCellIds: new Set<string>(),
+      hoveredRackId: null,
+      isLayoutEditable: true,
+      isLayoutMode: true,
+      isPlacing: false,
+      isRackPassiveScopeActive: false,
+      isStorageMode: false,
+      isViewMode: false,
+      isWorkflowScope: false,
+      lod: 2 as const,
+      zoom: 1.5,
+      minRackDistance: 0,
+      moveSourceCellId: null,
+      moveSourceRackId: null,
+      temporaryLocateTargetCellId: null,
+      occupiedCellIds: new Set<string>(),
+      publishedCellsById: new Map(),
+      publishedCellsByStructure: new Map(),
+      primarySelectedRackId: null,
+      rackLookup,
+      racks,
+      selectedRackActiveLevel: 0,
+      selectedRackIds: [],
+      setHighlightedCellIds: () => undefined,
+      setHoveredRackId: () => undefined,
+      setPlacementMoveTargetCellId: () => undefined,
+      setSelectedCellId: () => undefined,
+      setSelectedRackId: () => undefined,
+      setSelectedRackIds: () => undefined,
+      setSnapGuides: () => undefined,
+      toggleRackSelection: () => undefined,
+      updateRackPosition: () => undefined
+    };
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+
+    // Render#1 (mount)
+    act(() => {
+      renderer = TestRenderer.create(createElement(RackLayer, baseProps));
+    });
+
+    // Render#2: new array with same-ID racks, as if rebuilt by structuredClone
+    // (all element references are new, but IDs/geometry are identical)
+    const clonedRacks = structuredClone(racks);
+    act(() => {
+      renderer.update(createElement(RackLayer, { ...baseProps, racks: clonedRacks }));
+    });
+
+    const store = (globalThis as typeof globalThis & {
+      __WOS_RACK_LAYER_RENDER_EVENTS__?: RackLayerRenderEvents;
+    }).__WOS_RACK_LAYER_RENDER_EVENTS__;
+
+    expect(store).toBeDefined();
+    const events = store!.events;
+    expect(events.length).toBeGreaterThanOrEqual(2);
+
+    const mountRackIds  = events[0]?.snapshot['rackIds'] as string;
+    const update1RackIds = events[1]?.snapshot['rackIds'] as string;
+    const update1Changed = events[1]?.changedKeys ?? [];
+
+    // The visible rack IDs and order are the same — array identity churn confirmed.
+    expect(mountRackIds).toBe(update1RackIds);
+
+    // 'rackIds' must NOT appear in changedKeys because the string is equal.
+    // If this fails, update#1 is a real visible rack-set change, not churn.
+    expect(update1Changed).not.toContain('rackIds');
   });
 });
