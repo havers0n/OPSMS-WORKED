@@ -371,6 +371,7 @@ export function useCreateShift() {
     mutationFn: createShift,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: [...manualShiftKeys.all, 'by-date'] });
     }
   });
 }
@@ -382,6 +383,7 @@ export function useCreateLine(shiftId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(shiftId) });
+      void queryClient.invalidateQueries({ queryKey: [...manualShiftKeys.all, 'by-date'] });
     }
   });
 }
