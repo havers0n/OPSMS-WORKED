@@ -1599,6 +1599,21 @@ describe('RackCells layered paint ownership', () => {
 // ---------------------------------------------------------------------------
 
 describe('FaceCells memo comparator — face semantic equality', () => {
+  function makeRuntimeCell(status: OperationsCellRuntime['status'], cellId: string): OperationsCellRuntime {
+    return {
+      status,
+      cellId,
+      quarantined: status === 'quarantined',
+      reserved: status === 'reserved',
+      stocked: status === 'stocked' || status === 'pick_active',
+      totalQuantity: 1,
+      cellAddress: `ADDR-${cellId}`,
+      pickActive: status === 'pick_active',
+      containerCount: 0,
+      containers: []
+    };
+  }
+
   // Base face used across all cases
   function makeTestFace(overrides?: Partial<RackFace>): RackFace {
     return {
@@ -1822,8 +1837,8 @@ describe('FaceCells memo comparator — face semantic equality', () => {
 
   it('re-renders when a cell runtime status changes for this face', () => {
     const cellId = 'cell-lv-1-1';
-    const runtimeV1 = new Map([[cellId, { status: 'idle' } as OperationsCellRuntime]]);
-    const runtimeV2 = new Map([[cellId, { status: 'reserved' } as OperationsCellRuntime]]);
+    const runtimeV1 = new Map([[cellId, makeRuntimeCell('empty', cellId)]]);
+    const runtimeV2 = new Map([[cellId, makeRuntimeCell('reserved', cellId)]]);
 
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1843,8 +1858,8 @@ describe('FaceCells memo comparator — face semantic equality', () => {
   });
 
   it('skips re-render when runtime map ref changes but this face has no affected cells', () => {
-    const runtimeV1 = new Map([['other-rack-cell-99', { status: 'idle' } as OperationsCellRuntime]]);
-    const runtimeV2 = new Map([['other-rack-cell-99', { status: 'reserved' } as OperationsCellRuntime]]);
+    const runtimeV1 = new Map([['other-rack-cell-99', makeRuntimeCell('empty', 'other-rack-cell-99')]]);
+    const runtimeV2 = new Map([['other-rack-cell-99', makeRuntimeCell('reserved', 'other-rack-cell-99')]]);
 
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {

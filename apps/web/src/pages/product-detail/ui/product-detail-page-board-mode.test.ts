@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import TestRenderer, { act } from 'react-test-renderer';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Product, ProductPackagingLevel, ProductUnitProfile } from '@wos/domain';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -39,6 +40,7 @@ function makeProduct(): Product {
     imageUrls: [],
     imageFiles: [],
     isActive: true,
+    category: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z'
   };
@@ -181,15 +183,31 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
   return node.children?.map((child) => (typeof child === 'string' ? child : flattenText(child))).join(' ') ?? '';
 }
 
+function renderWithQueryClient(Component: React.ComponentType) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false }
+    }
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        React.createElement(Component)
+      )
+    );
+  });
+  return renderer;
+}
+
 describe('ProductDetailPage board modes', () => {
   it('shows the board by default without duplicating old read-only sections', async () => {
     mockState.model = makeModel();
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
 
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('Unit Profile');
@@ -202,11 +220,7 @@ describe('ProductDetailPage board modes', () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -231,11 +245,7 @@ describe('ProductDetailPage board modes', () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -264,11 +274,7 @@ describe('ProductDetailPage board modes', () => {
     });
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -295,11 +301,7 @@ describe('ProductDetailPage board modes', () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -324,11 +326,7 @@ describe('ProductDetailPage board modes', () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -354,11 +352,7 @@ describe('ProductDetailPage board modes', () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -383,11 +377,7 @@ describe('ProductDetailPage board modes', () => {
     });
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -412,11 +402,7 @@ describe('ProductDetailPage board modes', () => {
     const model = makeModel();
     mockState.model = model;
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root
         .findAllByType('button')
@@ -437,11 +423,7 @@ describe('ProductDetailPage board modes', () => {
   it('clicking create storage preset opens the existing storage create surface inside the workbench', async () => {
     mockState.model = makeModel({ storagePresetsQuery: queryResult([]) });
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
     });
@@ -468,11 +450,7 @@ describe('ProductDetailPage board modes', () => {
       createStoragePresetMutation: createMutation
     });
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
     });
@@ -504,11 +482,7 @@ describe('ProductDetailPage board modes', () => {
       createStoragePresetMutation: createMutation
     });
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
     });
@@ -538,11 +512,7 @@ describe('ProductDetailPage board modes', () => {
   it('cancel from storage preset creation returns to the read workspace', async () => {
     mockState.model = makeModel({ storagePresetsQuery: queryResult([]) });
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
     act(() => {
       renderer.root.findByProps({ children: 'Create storage preset' }).props.onClick();
     });
@@ -562,11 +532,7 @@ describe('ProductDetailPage board modes', () => {
       packagingLevelsQuery: queryResult([makeLevel({ canStore: false })])
     });
     const { ProductDetailPage } = await loadPage();
-    let renderer!: TestRenderer.ReactTestRenderer;
-
-    act(() => {
-      renderer = TestRenderer.create(React.createElement(ProductDetailPage));
-    });
+    const renderer = renderWithQueryClient(ProductDetailPage);
 
     const createButton = renderer.root.findByProps({ children: 'Create storage preset' });
     expect(createButton.props.disabled).toBe(true);

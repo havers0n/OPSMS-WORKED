@@ -128,7 +128,9 @@ describe('orderCheckUnitsQueryOptions', () => {
   });
 
   it('calls check-units endpoint in queryFn', async () => {
-    await orderCheckUnitsQueryOptions(SHIFT_A).queryFn({} as never);
+    const queryFn = orderCheckUnitsQueryOptions(SHIFT_A).queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
     expect(bffRequest).toHaveBeenCalledWith(`/api/manual-shift-orders/${SHIFT_A}/check-units`);
   });
 
