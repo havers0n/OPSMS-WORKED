@@ -443,6 +443,10 @@ export function useCreateManualShiftOrderCheckUnit(orderId: string) {
     mutationFn: (input: Omit<CreateOrderCheckUnitInput, 'orderId'> = {}) =>
       createOrderCheckUnit({ ...input, orderId }),
     onSuccess: (checkUnit) => {
+      queryClient.setQueryData<ManualShiftOrderCheckUnit[]>(
+        manualShiftKeys.orderCheckUnits(checkUnit.orderId),
+        (prev) => (prev ? [...prev, checkUnit] : [checkUnit])
+      );
       invalidateOrderCheckUnitQueries(queryClient, checkUnit);
     }
   });

@@ -71,7 +71,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
   it('renders empty state', async () => {
     mockedBffRequest.mockResolvedValue([]);
     renderPanel();
-    await waitFor(() => expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('עדיין לא נוספו משטחים')).toBeTruthy());
   });
 
   it('renders summary and unit list', async () => {
@@ -104,7 +104,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     const createButton = screen.getByTestId('create-check-unit') as HTMLButtonElement;
     expect(createButton.disabled).toBe(true);
 
-    const checkButton = screen.getByText('יחידה תקינה') as HTMLButtonElement;
+    const checkButton = screen.getByText('משטח תקין') as HTMLButtonElement;
     const returnedButton = screen.getByText('תקלה') as HTMLButtonElement;
     fireEvent.click(screen.getByText('עוד'));
     const voidButton = screen.getByText('בטל יחידה') as HTMLButtonElement;
@@ -194,9 +194,9 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
 
     renderPanel();
-    await waitFor(() => expect(screen.getByText('יחידה תקינה')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('משטח תקין')).toBeTruthy());
 
-    const checkButton = screen.getByText('יחידה תקינה');
+    const checkButton = screen.getByText('משטח תקין');
     fireEvent.click(checkButton);
     fireEvent.click(checkButton);
 
@@ -211,13 +211,15 @@ describe('ManualOrderCheckUnitsPanel', () => {
     await waitFor(() => expect(mockedBffRequest).toHaveBeenCalled());
   });
 
-  it('voided units show no active actions', async () => {
+  it('voided units are hidden from the list', async () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'voided')]);
     renderPanel();
-    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
-    expect(screen.queryByText('יחידה תקינה')).toBeNull();
+    // checkUnits.length > 0 so the summary section renders, but the filtered list is empty
+    await waitFor(() => expect(screen.getByTestId('check-units-list')).toBeTruthy());
+    // No unit row rendered — #1 is voided and filtered out
+    expect(screen.queryByText('#1')).toBeNull();
+    expect(screen.queryByText('משטח תקין')).toBeNull();
     expect(screen.queryByText('תקלה')).toBeNull();
-    expect(screen.queryByText('עוד')).toBeNull();
   });
 
   it('returned unit can be marked fixed (returned -> checked)', async () => {
@@ -226,8 +228,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
       .mockResolvedValueOnce(makeCheckUnit(1, 'checked'));
     renderPanel();
 
-    await waitFor(() => expect(screen.getByText('יחידה תקינה')).toBeTruthy());
-    fireEvent.click(screen.getByText('יחידה תקינה'));
+    await waitFor(() => expect(screen.getByText('משטח תקין')).toBeTruthy());
+    fireEvent.click(screen.getByText('משטח תקין'));
 
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
@@ -284,7 +286,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
 
     await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
     expect(screen.queryByText('צור השלמה')).toBeNull();
-    expect(screen.getByText('יחידה תקינה')).toBeTruthy();
+    expect(screen.getByText('משטח תקין')).toBeTruthy();
     fireEvent.click(screen.getByText('עוד'));
     expect(screen.getByText('החזר לבדיקה')).toBeTruthy();
     expect(screen.getByText('בטל יחידה')).toBeTruthy();
@@ -325,7 +327,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
     renderPanel();
     await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
-    expect(screen.getByText('יש השלמה פתוחה. השלם ואז סמן יחידה תקינה')).toBeTruthy();
+    expect(screen.getByText('יש השלמה פתוחה. השלם ואז סמן משטח תקין')).toBeTruthy();
   });
 
   it('marking unit as returned exposes reason flow and requires reason selection', async () => {
@@ -352,12 +354,12 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
   });
 
-  it('create completion appears only for missing-product returned unit', async () => {
+  it('create completion appears only for מוצר אזל returned unit', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
       if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
-        return [makeCheckUnit(1, 'returned', { reason: 'כמות לא נכונה' }), makeCheckUnit(2, 'returned', { reason: 'חסר מוצר' })];
+        return [makeCheckUnit(1, 'returned', { reason: 'כמות לא נכונה' }), makeCheckUnit(2, 'returned', { reason: 'מוצר אזל' })];
       }
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
       return [];
@@ -372,7 +374,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
-      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' })];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'returned', { reason: 'מוצר אזל' })];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
         return {
@@ -397,15 +399,15 @@ describe('ManualOrderCheckUnitsPanel', () => {
     fireEvent.click(screen.getByText('צור השלמה'));
     const dialog = screen.getByTestId('ashlama-dialog');
     const confirm = dialog.querySelector('button.bg-blue-600') as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
-    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים מוצר חסר' } });
+    // Dialog pre-fills text for מוצר אזל, so confirm is already enabled
     expect(confirm.disabled).toBe(false);
+    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים מוצר אזל' } });
     fireEvent.click(confirm);
 
     await waitFor(() =>
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
         method: 'POST',
-        body: JSON.stringify({ checkUnitId: 'cu-1', text: 'להשלים מוצר חסר' })
+        body: JSON.stringify({ checkUnitId: 'cu-1', text: 'להשלים מוצר אזל' })
       })
     );
   });
@@ -642,11 +644,62 @@ describe('ManualOrderCheckUnitsPanel', () => {
   it('no-units state shows dominant add button and no metrics', async () => {
     mockedBffRequest.mockResolvedValue([]);
     renderPanel();
-    await waitFor(() => expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('עדיין לא נוספו משטחים')).toBeTruthy());
     const addButton = screen.getByTestId('create-check-unit');
     expect(addButton.className).toContain('bg-blue-600');
     expect(screen.queryByTestId('check-units-summary')).toBeNull();
     expect(screen.queryByTestId('check-units-details')).toBeNull();
+  });
+
+  it('unit list and summary are populated from the same server-backed query', async () => {
+    mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'open'), makeCheckUnit(2, 'open')]);
+    renderPanel({ expectedUnitsCount: 2 });
+
+    // Both unit rows appear in the list (server-backed)
+    await waitFor(() => {
+      expect(screen.getByTestId('check-units-list')).toBeTruthy();
+      expect(screen.getByText('#1')).toBeTruthy();
+      expect(screen.getByText('#2')).toBeTruthy();
+    });
+    // Summary reflects the same data - 0 checked out of 2 expected
+    expect(screen.getByTestId('check-units-summary').textContent).toContain('נבדקו 0 מתוך 2');
+    expect(screen.getByTestId('check-units-summary').textContent).toContain('פתוחות 2');
+  });
+
+  it('adding a third unit via POST appears in list without duplicates after server refetch', async () => {
+    const unit3 = makeCheckUnit(3, 'open');
+    let getCallCount = 0;
+
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
+        getCallCount += 1;
+        if (getCallCount === 1) return [makeCheckUnit(1, 'open'), makeCheckUnit(2, 'open')];
+        return [makeCheckUnit(1, 'open'), makeCheckUnit(2, 'open'), unit3];
+      }
+      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'POST') {
+        return unit3;
+      }
+      if (path.includes('/api/manual-shift-orders/order-1/ashlamot')) return [];
+      return [];
+    });
+
+    renderPanel({ expectedUnitsCount: 2 });
+    await waitFor(() => expect(screen.getByText('#2')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('create-check-unit'));
+
+    // After server refetch, unit #3 appears
+    await waitFor(() => expect(screen.getByText('#3')).toBeTruthy());
+
+    // No duplicates — exactly one row per unit number
+    expect(screen.getAllByText('#1')).toHaveLength(1);
+    expect(screen.getAllByText('#2')).toHaveLength(1);
+    expect(screen.getAllByText('#3')).toHaveLength(1);
+
+    // Summary updated to reflect 3 active units
+    expect(screen.getByTestId('check-units-summary').textContent).toContain('פתוחות 3');
   });
 });
 

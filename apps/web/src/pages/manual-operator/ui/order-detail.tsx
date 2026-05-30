@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
-import { ArrowRight, CheckCircle, Clock, Package, Pencil, User, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, Clock, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
 import {
   useDeleteManualShiftOrder,
   usePatchManualShiftOrder,
@@ -105,6 +105,15 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
         </div>
         <button
           type="button"
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={deleteOrder.isPending}
+          className="p-2 -m-2 rounded-full active:bg-gray-200 transition-colors text-red-500 shrink-0"
+          aria-label="מחיקה"
+        >
+          <Trash2 size={20} />
+        </button>
+        <button
+          type="button"
           onClick={() => setShowEditOrder(true)}
           className="p-2 -m-2 rounded-full active:bg-gray-200 transition-colors text-gray-500 shrink-0"
           aria-label="עריכה"
@@ -118,29 +127,24 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
 
       <main className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
         <div className="bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4 shadow-sm text-right">
-          <div className="flex items-center gap-3">
-            <Package className="text-gray-400 shrink-0" size={20} />
-            <div className="flex flex-col">
-              <span className="text-sm text-gray-500 font-medium">נקודה</span>
-              <span className="font-bold text-lg">{order.pointName ?? 'ללא נקודה'}</span>
-            </div>
-          </div>
-          <div className="h-px bg-gray-100" />
-
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <User className="text-gray-400 shrink-0" size={20} />
+              <Package className="text-gray-400 shrink-0" size={20} />
               <div className="flex flex-col">
-                <span className="text-sm text-gray-500 font-medium">מלקט</span>
-                <span className="font-bold text-lg">{order.pickerName ?? 'ללא מלקט'}</span>
+                <span className="text-sm text-gray-500 font-medium">נקודה</span>
+                <span className="font-bold text-lg">{order.pointName ?? 'ללא נקודה'}</span>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setShowAssignPicker(true)}
-              className="h-10 rounded-lg border border-gray-300 px-3 text-sm font-bold"
+              className="flex items-center gap-2"
             >
-              {order.pickerName ? 'שנה מלקט' : 'הקצה מלקט'}
+              <div className="flex flex-col items-end">
+                <span className="text-sm text-gray-500 font-medium">מלקט</span>
+                <span className="font-bold text-lg">{order.pickerName ?? 'ללא מלקט'}</span>
+              </div>
+              <User className="text-gray-400 shrink-0" size={20} />
             </button>
           </div>
           <div className="h-px bg-gray-100" />
@@ -149,12 +153,18 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             <div className="flex items-center gap-3">
               <Package className="text-gray-400 shrink-0" size={20} />
               <div className="flex flex-col">
-                <span className="text-sm text-gray-500 font-medium">גודל ושורות</span>
+                <span className="text-sm text-gray-500 font-medium">שורות ליקוט</span>
                 <div className="flex items-center gap-2 font-bold text-lg">
                   {order.size !== 'unknown' && <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-sm">{order.size}</span>}
                   {order.lineCount != null ? <span>{order.lineCount} שורות</span> : <span className="text-gray-400">-</span>}
                 </div>
               </div>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-sm text-gray-500 font-medium">מס.משטחים</span>
+              <span className="font-bold text-lg">
+                {checkUnitsActiveCount > 0 ? checkUnitsActiveCount : (order.palletCount ?? '-')}
+              </span>
             </div>
             {elapsed && (
               <div className="flex flex-col items-end border-r border-gray-100 pr-5">
@@ -165,19 +175,6 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
               </div>
             )}
           </div>
-
-          {order.palletCount != null && (
-            <>
-              <div className="h-px bg-gray-100" />
-              <div className="flex items-center gap-3">
-                <Package className="text-gray-400 shrink-0" size={20} />
-                <div className="flex flex-col">
-                  <span className="text-sm text-gray-500 font-medium">מספר משטחים</span>
-                  <span className="font-bold text-lg">{order.palletCount}</span>
-                </div>
-              </div>
-            </>
-          )}
         </div>
 
         <ManualOrderCheckUnitsPanel
@@ -253,9 +250,6 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             )}
           </>
         )}
-        <button type="button" onClick={() => setShowDeleteConfirm(true)} disabled={deleteOrder.isPending} className="w-full h-12 rounded-xl border border-red-300 bg-red-50 text-red-700 font-bold disabled:opacity-50">
-          {deleteOrder.isPending ? 'שומר...' : 'מחק נקודה'}
-        </button>
       </footer>
 
       {showErrorFlow && (
