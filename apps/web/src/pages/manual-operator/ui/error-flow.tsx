@@ -108,7 +108,7 @@ export function ErrorFlow({ orderId, lineId, orderNumber, onClose }: ErrorFlowPr
               : 'bg-gray-200 text-gray-400'
           }`}
         >
-          {createError.isPending ? 'שולח...' : 'חזרה לתיקון'}
+          {createError.isPending ? 'שולח...' : 'דווח תקלה'}
         </button>
       </footer>
     </div>

@@ -102,6 +102,7 @@ describe('DayTab', () => {
     // labels present
     expect(screen.getByText('סה״כ נקודות')).toBeTruthy();
     expect(screen.getByText('הסתיימו')).toBeTruthy();
+    expect(screen.getByText('הוחזרו לתיקון')).toBeTruthy();
   });
 
   it('renders error breakdown by type', async () => {

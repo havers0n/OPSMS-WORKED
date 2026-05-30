@@ -63,7 +63,7 @@ export function DayTab({ shiftId, shiftName }: DayTabProps) {
           <TotalCell label="סה״כ נקודות" value={summary.totalOrders} />
           <TotalCell label="הסתיימו" value={summary.doneOrders} color="green" />
           <TotalCell label="ממתינות בדיקה" value={summary.waitingCheckOrders} color="amber" />
-          <TotalCell label="הוחזרו" value={summary.returnedOrders} color="red" />
+          <TotalCell label="הוחזרו לתיקון" value={summary.returnedOrders} color="red" />
           <TotalCell label="בליקוט" value={summary.pickingOrders} color="blue" />
           <TotalCell label="בתור" value={summary.queuedOrders} />
         </div>
@@ -104,7 +104,7 @@ export function DayTab({ shiftId, shiftName }: DayTabProps) {
                     <span className="text-amber-600">בדיקה: {ls.waitingCheckOrders}</span>
                   )}
                   {ls.returnedOrders > 0 && (
-                    <span className="text-red-600">הוחזר: {ls.returnedOrders}</span>
+                    <span className="text-red-600">הוחזרו לתיקון: {ls.returnedOrders}</span>
                   )}
                   {ls.errorCount > 0 && (
                     <span className="text-red-500">תקלות: {ls.errorCount}</span>

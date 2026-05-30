@@ -699,25 +699,26 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       await openErrorFlow();
       expect(screen.getByText('דיווח תקלה')).toBeTruthy();
       expect(screen.getByText('מה הבעיה בהזמנה?')).toBeTruthy();
+      expect(screen.queryByText('חזרה לתיקון')).toBeNull();
     });
 
     it('submit button is disabled until error type is selected', async () => {
       await openErrorFlow();
-      const submitBtn = screen.getByText('חזרה לתיקון');
+      const submitBtn = screen.getByText('דווח תקלה');
       expect(submitBtn.closest('button')?.disabled).toBe(true);
     });
 
     it('selecting an error type enables submit button', async () => {
       await openErrorFlow();
       fireEvent.click(screen.getByText('כמות לא נכונה'));
-      const submitBtn = screen.getByText('חזרה לתיקון');
+      const submitBtn = screen.getByText('דווח תקלה');
       expect(submitBtn.closest('button')?.disabled).toBe(false);
     });
 
     it('submitting error calls POST /errors with correct type', async () => {
       await openErrorFlow();
       fireEvent.click(screen.getByText('פריט שגוי'));
-      fireEvent.click(screen.getByText('חזרה לתיקון'));
+      fireEvent.click(screen.getByText('דווח תקלה'));
 
       await waitFor(() => {
         const call = mockedBffRequest.mock.calls.find(
@@ -734,7 +735,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
     it('error submit invalidates line orders query (refetches)', async () => {
       await openErrorFlow();
       fireEvent.click(screen.getByText('פריט חסר'));
-      fireEvent.click(screen.getByText('חזרה לתיקון'));
+      fireEvent.click(screen.getByText('דווח תקלה'));
 
       await waitFor(() => {
         // After error submit, line orders are refetched
