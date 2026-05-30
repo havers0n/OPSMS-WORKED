@@ -214,7 +214,17 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
                 <button onClick={startCheck} disabled={patchOrder.isPending || isCheckActive} className="w-1/2 bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
                   {patchOrder.isPending ? '...' : isCheckActive ? 'הבדיקה התחילה' : 'התחל בדיקה'}
                 </button>
-                <button onClick={() => setShowCompletePickingConfirm(true)} disabled={updateStatus.isPending} className="w-1/2 bg-amber-500 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
+                <button
+                  onClick={() => {
+                    if (order.palletCount != null && order.palletCount > 0) {
+                      transition('waiting_check');
+                    } else {
+                      setShowCompletePickingConfirm(true);
+                    }
+                  }}
+                  disabled={updateStatus.isPending}
+                  className="w-1/2 bg-amber-500 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50"
+                >
                   {updateStatus.isPending ? '...' : 'סיים ליקוט'}
                 </button>
               </div>
@@ -289,7 +299,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-2">
               <p className="text-sm text-gray-700">כמה יחידות / משטחים הגיעו לבדיקה?</p>
-              <p className="text-xs text-gray-500">יחידות בדיקה קיימות: {checkUnitsActiveCount}</p>
+              <p className="text-xs text-gray-500">משטחים קיימים: {checkUnitsActiveCount}</p>
               <p className="text-xs text-gray-500">נבדקו: {checkUnitsCheckedCount}</p>
               <label className="text-sm font-medium text-gray-700" htmlFor="declared-arrived-units">
                 מספר יחידות / משטחים שהגיעו

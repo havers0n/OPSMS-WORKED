@@ -196,7 +196,7 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
       )}
       {doneDisabledByMissingUnits && (
         <p className="text-sm text-amber-700" data-testid={`check-missing-units-close-reason-${order.id}`}>
-          חסרות יחידות בדיקה לפני סגירה כתקין
+          חסרים משטחים לפני סגירה כתקין
         </p>
       )}
       {doneDisabledByStage && (

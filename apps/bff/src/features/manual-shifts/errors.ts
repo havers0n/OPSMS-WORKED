@@ -142,7 +142,7 @@ export function manualShiftAshlamaRequiresMissingProductReason(checkUnitId: stri
   return new ApiError(
     422,
     'MANUAL_SHIFT_ASHLAMA_REQUIRES_MISSING_PRODUCT_REASON',
-    `Ashlama can be created only when check unit ${checkUnitId} reason is חסר מוצר.`
+    `Ashlama can be created only when check unit ${checkUnitId} reason is מוצר אזל.`
   );
 }
 

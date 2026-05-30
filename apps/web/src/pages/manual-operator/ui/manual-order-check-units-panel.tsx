@@ -14,6 +14,7 @@ import {
 
 const RETURN_REASON_OPTIONS = [
   'חסר מוצר',
+  'מוצר אזל',
   'כמות לא נכונה',
   'מוצר לא נכון',
   'מוצר פגום',
@@ -42,7 +43,7 @@ function getCheckUnitUiState(input: {
   completionStatus?: UnitCompletionSubstate;
 }): CheckUnitUiState {
   const completionSubstate = input.completionStatus ?? 'none';
-  const canCreateCompletion = input.status === 'returned' && (input.reason ?? '').trim() === 'חסר מוצר';
+  const canCreateCompletion = input.status === 'returned' && (input.reason ?? '').trim() === 'מוצר אזל';
   if (input.status === 'voided') {
     return {
       badgeLabel: 'בוטל',
@@ -182,10 +183,11 @@ export function ManualOrderCheckUnitsPanel({
     hasOpenAshlama
       ? 'לא ניתן לסגור: יש השלמה פתוחה'
       : expectedUnitsCount != null && progress.checkedUnits < expectedUnitsCount
-        ? 'לא ניתן לסגור: חסרות יחידות לבדיקה'
+        ? 'לא ניתן לסגור: חסרים משטחים לבדיקה'
         : null;
   const hasUnits = checkUnits.length > 0;
   const missingUnits = expectedUnitsCount != null ? Math.max(expectedUnitsCount - progress.activeUnits, 0) : 0;
+  const batchCreateCount = progress.activeUnits === 0 && missingUnits > 1 ? missingUnits : 1;
   const canPerformActions = interactive && canInteract;
   const showInteractionHint = interactive && !canInteract && Boolean(disabledReason);
   const createDisabled = !canPerformActions || createCheckUnit.isPending || isCreateCooldown;
@@ -222,34 +224,50 @@ export function ManualOrderCheckUnitsPanel({
     };
   }, []);
 
-  function handleCreateCheckUnit() {
+  const bulkAllOkLockRef = useRef(false);
+  const canBulkApprove =
+    canPerformActions &&
+    progress.openUnits > 1 &&
+    progress.returnedUnits === 0 &&
+    !updateCheckUnitStatus.isPending &&
+    !bulkAllOkLockRef.current;
+
+  async function handleBulkApprove() {
+    if (!canBulkApprove || bulkAllOkLockRef.current) return;
+    bulkAllOkLockRef.current = true;
+    const openUnits = checkUnits.filter((u) => u.status === 'open');
+    try {
+      for (const unit of openUnits) {
+        await updateCheckUnitStatus.mutateAsync({ checkUnitId: unit.id, status: 'checked' });
+      }
+    } finally {
+      bulkAllOkLockRef.current = false;
+    }
+  }
+
+  async function handleCreateCheckUnit() {
     if (createDisabled || createClickLockRef.current) return;
     createClickLockRef.current = true;
-    createCheckUnit.mutate(
-      {},
-      {
-        onSuccess: () => {
-          setIsCreateCooldown(true);
-          if (cooldownTimerRef.current) {
-            clearTimeout(cooldownTimerRef.current);
-          }
-          cooldownTimerRef.current = setTimeout(() => {
-            setIsCreateCooldown(false);
-            createClickLockRef.current = false;
-            cooldownTimerRef.current = null;
-          }, 800);
-        },
-        onError: () => {
-          createClickLockRef.current = false;
-        }
+    try {
+      for (let i = 0; i < batchCreateCount; i++) {
+        await createCheckUnit.mutateAsync({});
       }
-    );
+      setIsCreateCooldown(true);
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = setTimeout(() => {
+        setIsCreateCooldown(false);
+        createClickLockRef.current = false;
+        cooldownTimerRef.current = null;
+      }, 800);
+    } catch {
+      createClickLockRef.current = false;
+    }
   }
 
   return (
     <section className={`bg-white border border-gray-200 rounded-2xl ${compact ? 'p-3' : 'p-4'} flex flex-col gap-3 text-right`}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className={`${compact ? 'text-base' : 'text-lg'} font-bold`}>יחידות בדיקה</h3>
+        <h3 className={`${compact ? 'text-base' : 'text-lg'} font-bold`}>משטחים</h3>
         {interactive && (
           <button
             type="button"
@@ -269,17 +287,17 @@ export function ManualOrderCheckUnitsPanel({
 
       {checkUnitsQuery.isLoading && (
         <p className="text-sm text-gray-500" data-testid="check-units-loading">
-          טוען יחידות בדיקה...
+          טוען משטחים...
         </p>
       )}
       {checkUnitsQuery.isError && (
         <p className="text-sm text-red-600" data-testid="check-units-error">
-          שגיאה בטעינת יחידות בדיקה
+          שגיאה בטעינת משטחים
         </p>
       )}
       {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length === 0 && (
         <p className="text-sm text-gray-500" data-testid="check-units-empty">
-          עדיין לא נוספו יחידות בדיקה
+          עדיין לא נוספו משטחים
         </p>
       )}
       {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length > 0 && (
@@ -314,13 +332,12 @@ export function ManualOrderCheckUnitsPanel({
             <summary className="cursor-pointer font-medium select-none text-gray-600">פרטים</summary>
             <div className="mt-2 flex flex-col gap-1 text-gray-600">
               <div>בוטלו: {progress.voidedUnits}</div>
-              <div>חסרות יחידות: {missingUnits}</div>
+              <div>חסרים משטחים: {missingUnits}</div>
             </div>
           </details>
 
           <ul className="divide-y divide-gray-100 border-y border-gray-100" data-testid="check-units-list">
-            {checkUnits.map((unit) => {
-              const isVoided = unit.status === 'voided';
+            {checkUnits.filter((unit) => unit.status !== 'voided').map((unit) => {
               const isProblemUnit = unit.status === 'returned';
               const statusActionDisabled = !canPerformActions || updateCheckUnitStatus.isPending;
               const completionStatus = ashlamaByCheckUnitId.get(unit.id)?.status ?? 'none';
@@ -347,7 +364,7 @@ export function ManualOrderCheckUnitsPanel({
               return (
                 <li
                   key={unit.id}
-                  className={`px-1 py-2 text-sm ${isVoided ? 'text-gray-500' : 'text-gray-800'}`}
+                  className="px-1 py-2 text-sm text-gray-800"
                   data-testid={`check-unit-${unit.id}`}
                 >
                   <div className={`flex items-center justify-between gap-2 ${isProblemUnit ? 'mb-2' : ''}`}>
@@ -364,23 +381,23 @@ export function ManualOrderCheckUnitsPanel({
                   </div>
                   {interactive && (
                     <div className={`flex flex-wrap items-center gap-2 ${isProblemUnit ? '' : 'mt-1'}`}>
-                      {!isVoided && unitUiState.primaryAction === 'mark_checked' && (
+                      {unitUiState.primaryAction === 'mark_checked' && (
                         <button
                           type="button"
                           onClick={() => mutateStatus('checked')}
                           disabled={statusActionDisabled}
                           className="h-9 rounded-lg bg-green-500 px-3 text-sm font-bold text-white disabled:opacity-50"
                         >
-                          יחידה תקינה
+                          משטח תקין
                         </button>
                       )}
-                      {!isVoided && unitUiState.primaryAction === 'create_completion' && (
+                      {unitUiState.primaryAction === 'create_completion' && (
                         <button
                           type="button"
                           onClick={() => {
                             setIsAshlamaDialogOpen(true);
                             setAshlamaDialogCheckUnitId(unit.id);
-                            setAshlamaDraftText('');
+                            setAshlamaDraftText(`מוצר אזל – משטח #${unit.unitNumber}`);
                           }}
                           disabled={statusActionDisabled || createAshlama.isPending}
                           className="h-9 rounded-lg bg-blue-100 px-3 text-sm font-bold text-blue-800 disabled:opacity-50"
@@ -389,17 +406,17 @@ export function ManualOrderCheckUnitsPanel({
                           צור השלמה
                         </button>
                       )}
-                      {!isVoided && unitUiState.secondaryActions.includes('mark_checked') && (
+                      {unitUiState.secondaryActions.includes('mark_checked') && (
                         <button
                           type="button"
                           onClick={() => mutateStatus('checked')}
                           disabled={statusActionDisabled}
                           className="h-9 rounded-lg border border-green-300 bg-white px-3 text-sm font-bold text-green-700 disabled:opacity-50"
                         >
-                          יחידה תקינה
+                          משטח תקין
                         </button>
                       )}
-                      {!isVoided && unitUiState.secondaryActions.includes('mark_returned') && (
+                      {unitUiState.secondaryActions.includes('mark_returned') && (
                         <button
                           type="button"
                           onClick={() => setReasonSelectorUnitId(unit.id)}
@@ -409,13 +426,13 @@ export function ManualOrderCheckUnitsPanel({
                           תקלה
                         </button>
                       )}
-                      {!isVoided && unitUiState.secondaryActions.includes('status_open_completion') && (
-                        <p className="px-2 py-1 text-xs font-semibold text-amber-700">יש השלמה פתוחה. השלם ואז סמן יחידה תקינה</p>
+                      {unitUiState.secondaryActions.includes('status_open_completion') && (
+                        <p className="px-2 py-1 text-xs font-semibold text-amber-700">יש השלמה פתוחה. השלם ואז סמן משטח תקין</p>
                       )}
-                      {!isVoided && unitUiState.secondaryActions.includes('status_done_completion') && (
+                      {unitUiState.secondaryActions.includes('status_done_completion') && (
                         <p className="px-2 py-1 text-xs font-semibold text-green-700">ההשלמה מוכנה לבדיקה חוזרת</p>
                       )}
-                      {!isVoided && unitUiState.overflowActions.length > 0 && (
+                      {unitUiState.overflowActions.length > 0 && (
                         <details className="relative" data-testid={`overflow-menu-${unit.id}`}>
                           <summary className="list-none cursor-pointer rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-bold text-gray-700">
                             עוד
@@ -446,7 +463,7 @@ export function ManualOrderCheckUnitsPanel({
                       )}
                     </div>
                   )}
-                  {!isVoided && unit.status !== 'returned' && reasonSelectorUnitId === unit.id && (
+                  {unit.status !== 'returned' && reasonSelectorUnitId === unit.id && (
                     <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2" data-testid={`returned-reason-selector-${unit.id}`}>
                       <p className="text-xs font-semibold text-red-800">בחר סיבת תיקון לפני סימון "דורש תיקון"</p>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -496,7 +513,7 @@ export function ManualOrderCheckUnitsPanel({
                       {unit.note && <p className="mt-1 text-xs text-red-800">הערה: {unit.note}</p>}
                       {unit.status === 'returned' && unitUiState.completionSubstate === 'none' && (
                         <p className="mt-1 text-xs font-semibold text-blue-800">
-                          {unitUiState.canCreateCompletion ? 'אפשר לפתוח השלמה' : 'לא ניתן לפתוח השלמה ליחידה זו'}
+                          {unitUiState.canCreateCompletion ? 'אפשר לפתוח השלמה' : 'לא ניתן לפתוח השלמה למשטח זה'}
                         </p>
                       )}
                     </div>
@@ -556,6 +573,17 @@ export function ManualOrderCheckUnitsPanel({
               {disabledReason}
             </p>
           )}
+          {canBulkApprove && (
+            <button
+              type="button"
+              onClick={handleBulkApprove}
+              disabled={updateCheckUnitStatus.isPending}
+              className="w-full h-12 rounded-lg bg-green-600 text-white font-bold text-base disabled:opacity-50"
+              data-testid="bulk-approve-units"
+            >
+              כל המשטחים תקינים
+            </button>
+          )}
           <button
             type="button"
             onClick={handleCreateCheckUnit}
@@ -563,7 +591,7 @@ export function ManualOrderCheckUnitsPanel({
             className={`w-full rounded-lg font-bold ${hasUnits ? 'h-10 bg-gray-100' : 'h-12 bg-blue-600 text-white text-base'} disabled:opacity-50`}
             data-testid="create-check-unit"
           >
-            הוסף יחידת בדיקה
+            {batchCreateCount > 1 ? `הוסף ${batchCreateCount} משטחים` : 'הוסף משטח'}
           </button>
         </div>
       )}

@@ -685,7 +685,7 @@ export function createManualShiftsServiceFromRepo(
         if (checkUnit.status !== 'returned') {
           throw manualShiftAshlamaRequiresReturnedCheckUnit(normalizedCheckUnitId);
         }
-        if ((checkUnit.reason ?? '').trim() !== 'חסר מוצר') {
+        if ((checkUnit.reason ?? '').trim() !== 'מוצר אזל') {
           throw manualShiftAshlamaRequiresMissingProductReason(normalizedCheckUnitId);
         }
         const existing = await repo.listOrderAshlamot(order.id);
