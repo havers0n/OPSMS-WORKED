@@ -24,9 +24,10 @@ export interface ShiftSummary {
   errorsCount: number;
   /** Integer 0-100. 0 when totalOrders is 0. */
   donePercent: number;
+  totalPalletCount: number;
 }
 
-export function selectShiftSummary(daySummary: ManualShiftDaySummary): ShiftSummary {
+export function selectShiftSummary(daySummary: ManualShiftDaySummary, orders: ManualShiftOrder[] = []): ShiftSummary {
   const {
     totalOrders,
     queuedOrders,
@@ -44,7 +45,8 @@ export function selectShiftSummary(daySummary: ManualShiftDaySummary): ShiftSumm
     returned: returnedOrders,
     done: doneOrders,
     errorsCount,
-    donePercent: totalOrders > 0 ? Math.round((doneOrders / totalOrders) * 100) : 0
+    donePercent: totalOrders > 0 ? Math.round((doneOrders / totalOrders) * 100) : 0,
+    totalPalletCount: orders.reduce((sum, o) => sum + (o.palletCount ?? 0), 0)
   };
 }
 

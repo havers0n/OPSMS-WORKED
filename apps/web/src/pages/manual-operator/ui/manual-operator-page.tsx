@@ -96,8 +96,8 @@ export function ManualOperatorPage() {
   const byLine = daySummary?.byLine ?? lines;
 
   const kpi = useMemo(
-    () => (daySummary ? selectShiftSummary(daySummary) : undefined),
-    [daySummary]
+    () => (daySummary ? selectShiftSummary(daySummary, shiftOrders) : undefined),
+    [daySummary, shiftOrders]
   );
   const lineSummaries = useMemo(
     () => selectLineSummaries(byLine, shiftOrders),

@@ -42,6 +42,8 @@ export function DesktopKpiRow({ summary }: DesktopKpiRowProps) {
       <Divider />
       <KpiChip label="הסתיימו" value={summary.done} numClass="text-green-700" bgClass="bg-green-50" />
       <KpiChip label="תקלות" value={summary.errorsCount} numClass="text-rose-700" bgClass="bg-rose-50" />
+      <Divider />
+      <KpiChip label="משטחים" value={summary.totalPalletCount} numClass="text-gray-900" bgClass="bg-gray-50" />
     </div>
   );
 }
