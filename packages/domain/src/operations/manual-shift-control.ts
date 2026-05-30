@@ -79,7 +79,9 @@ export const manualShiftOrderEventTypeSchema = z.enum([
   'point_restored',
   'check_unit_created',
   'check_unit_status_changed',
-  'check_unit_note_changed'
+  'check_unit_note_changed',
+  'ashlama_created',
+  'ashlama_status_changed'
 ]);
 export type ManualShiftOrderEventType = z.infer<typeof manualShiftOrderEventTypeSchema>;
 

@@ -703,7 +703,7 @@ export function createManualShiftsServiceFromRepo(
         source = 'check_unit';
       }
 
-      return repo.createOrderAshlama({
+      const created = await repo.createOrderAshlama({
         tenantId: order.tenantId,
         shiftId: order.shiftId,
         lineId: order.lineId,
@@ -715,6 +715,27 @@ export function createManualShiftsServiceFromRepo(
         createdByProfileId: input.actor.actorProfileId,
         createdByName: input.actor.actorName
       });
+
+      await repo.createOrderEvent({
+        tenantId: order.tenantId,
+        shiftId: order.shiftId,
+        lineId: order.lineId,
+        orderId: order.id,
+        eventType: 'ashlama_created',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: null,
+        payload: {
+          ashlamaId: created.id,
+          source: created.source,
+          checkUnitId: created.checkUnitId,
+          status: created.status,
+          text: created.text
+        }
+      });
+
+      return created;
     },
 
     async patchOrderAshlamaStatus(input) {
@@ -723,6 +744,7 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftOrderNotFound(input.ashlamaId);
       }
       await requireActiveShift(ashlama.shiftId);
+      const previousStatus = ashlama.status;
       const updated = await repo.updateOrderAshlama(input.ashlamaId, {
         status: input.status,
         updatedByProfileId: input.actor.actorProfileId,
@@ -731,6 +753,26 @@ export function createManualShiftsServiceFromRepo(
       if (!updated) {
         throw manualShiftOrderNotFound(input.ashlamaId);
       }
+
+      await repo.createOrderEvent({
+        tenantId: ashlama.tenantId,
+        shiftId: ashlama.shiftId,
+        lineId: ashlama.lineId,
+        orderId: ashlama.orderId,
+        eventType: 'ashlama_status_changed',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: null,
+        payload: {
+          ashlamaId: updated.id,
+          source: updated.source,
+          checkUnitId: updated.checkUnitId,
+          fromStatus: previousStatus,
+          toStatus: updated.status
+        }
+      });
+
       return updated;
     },
 

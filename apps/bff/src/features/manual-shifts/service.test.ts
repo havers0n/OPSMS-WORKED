@@ -1699,6 +1699,115 @@ describe('manual shift ashlama constraints', () => {
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_CHECK_UNIT_ORDER_MISMATCH' });
   });
 
+  it('creates manual ashlama and emits ashlama_created event with source=manual', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+
+    const ashlama = await service.createOrderAshlama({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      text: 'השלמה ידנית',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'ashlama_created',
+        orderId: ids.order,
+        fromStatus: null,
+        toStatus: null,
+        payload: expect.objectContaining({
+          ashlamaId: ashlama.id,
+          source: 'manual',
+          checkUnitId: null
+        })
+      })
+    );
+  });
+
+  it('creates check-unit-linked ashlama and emits ashlama_created event with source=check_unit and checkUnitId', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'returned',
+      note: null,
+      reason: 'מוצר אזל',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const ashlama = await service.createOrderAshlama({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      checkUnitId,
+      text: 'להוסיף מוצר',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'ashlama_created',
+        payload: expect.objectContaining({
+          source: 'check_unit',
+          checkUnitId
+        })
+      })
+    );
+    expect(ashlama.source).toBe('check_unit');
+  });
+
+  it('status transition open → done emits ashlama_status_changed with fromStatus and toStatus in payload', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const ashlamaId = '24fd43e8-c4ff-41ab-bdc1-79bc6d53cd62';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.ashlamot.push({
+      id: ashlamaId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: null,
+      source: 'manual',
+      status: 'open',
+      text: 'השלמה',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await service.patchOrderAshlamaStatus({
+      tenantId: ids.tenant,
+      ashlamaId,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'ashlama_status_changed',
+        orderId: ids.order,
+        fromStatus: null,
+        toStatus: null,
+        payload: expect.objectContaining({
+          fromStatus: 'open',
+          toStatus: 'done'
+        })
+      })
+    );
+  });
+
   it('rejects duplicate open ashlama for same check unit', async () => {
     const { repo, state } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
