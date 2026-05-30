@@ -245,6 +245,21 @@ describe('CheckTab expected units close guard', () => {
     expect(getDoneButton().disabled).toBe(true);
   });
 
+  it('palletCount=3, activeUnits=0 (all voided) -> shows 0, not 3', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      const path = String(url);
+      if (path.includes('/api/manual-shifts/shift-1/orders')) return [{ ...baseOrder, palletCount: 3 }];
+      if (path.includes('/api/manual-shift-orders/order-1/check-units')) {
+        return [makeCheckUnit(1, 'voided'), makeCheckUnit(2, 'voided'), makeCheckUnit(3, 'voided')];
+      }
+      return [];
+    });
+
+    renderCheckTab();
+    await waitFor(() => expect(screen.getByText('0 משטחים')).toBeTruthy());
+    expect(screen.queryByText('3 משטחים')).toBeNull();
+  });
+
   it('error button opens error flow overlay', async () => {
     mockedBffRequest.mockImplementation(async (url) => {
       const path = String(url);

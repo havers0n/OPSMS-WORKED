@@ -4,7 +4,6 @@ import { orderAshlamotQueryOptions, orderCheckUnitsQueryOptions } from '@/entiti
 import {
   useCreateManualShiftOrderAshlama,
   useCreateManualShiftOrderCheckUnit,
-  usePatchManualShiftOrderAshlama,
   useUpdateManualShiftOrderCheckUnitStatus
 } from '@/entities/manual-shift/api/mutations';
 import {
@@ -13,7 +12,7 @@ import {
 } from '@/entities/manual-shift/model/shift-selectors';
 
 const RETURN_REASON_OPTIONS = [
-  'חסר מוצר',
+  'שכח לשים',
   'מוצר אזל',
   'כמות לא נכונה',
   'מוצר לא נכון',
@@ -43,7 +42,7 @@ function getCheckUnitUiState(input: {
   completionStatus?: UnitCompletionSubstate;
 }): CheckUnitUiState {
   const completionSubstate = input.completionStatus ?? 'none';
-  const canCreateCompletion = input.status === 'returned' && (input.reason ?? '').trim() === 'מוצר אזל';
+  const canCreateCompletion = false;
   if (input.status === 'voided') {
     return {
       badgeLabel: 'בוטל',
@@ -67,11 +66,12 @@ function getCheckUnitUiState(input: {
     };
   }
   if (input.status === 'checked') {
+    const isAzalLog = (input.reason ?? '').trim() === 'מוצר אזל';
     return {
-      badgeLabel: 'תקין',
-      badgeSeverity: 'success',
+      badgeLabel: isAzalLog ? 'מוצר אזל' : 'תקין',
+      badgeSeverity: isAzalLog ? 'neutral' : 'success',
       primaryAction: null,
-      secondaryActions: ['mark_returned'],
+      secondaryActions: isAzalLog ? [] : ['mark_returned'],
       overflowActions: ['mark_voided'],
       completionSubstate,
       canCreateCompletion: false
@@ -153,10 +153,11 @@ export function ManualOrderCheckUnitsPanel({
   const createCheckUnit = useCreateManualShiftOrderCheckUnit(orderId);
   const ashlamotQuery = useQuery(orderAshlamotQueryOptions(orderId));
   const createAshlama = useCreateManualShiftOrderAshlama(orderId);
-  const patchAshlama = usePatchManualShiftOrderAshlama(orderId);
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
   const [reasonDraftByUnitId, setReasonDraftByUnitId] = useState<Record<string, string>>({});
   const [reasonSelectorUnitId, setReasonSelectorUnitId] = useState<string | null>(null);
+  const [azalNoteDraft, setAzalNoteDraft] = useState('');
+  const [azalAshlamaText, setAzalAshlamaText] = useState('');
   const [isAshlamaDialogOpen, setIsAshlamaDialogOpen] = useState(false);
   const [ashlamaDialogCheckUnitId, setAshlamaDialogCheckUnitId] = useState<string | null>(null);
   const [ashlamaDraftText, setAshlamaDraftText] = useState('');
@@ -170,11 +171,6 @@ export function ManualOrderCheckUnitsPanel({
           (ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled')
       )
       .map((ashlama) => [ashlama.checkUnitId, ashlama] as const)
-  );
-  const manualOrderLevelAshlamot = ashlamot.filter(
-    (ashlama) =>
-      ashlama.source === 'manual' &&
-      (ashlama.status === 'open' || ashlama.status === 'done' || ashlama.status === 'cancelled')
   );
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
   const hasOpenAshlama = ashlamot.some((ashlama) => ashlama.status === 'open');
@@ -348,12 +344,13 @@ export function ManualOrderCheckUnitsPanel({
               });
               function mutateStatus(
                 status: 'open' | 'checked' | 'returned' | 'voided',
-                reason?: string
+                reason?: string,
+                note?: string
               ) {
                 if (statusActionDisabled || statusClickLockRef.current) return;
                 statusClickLockRef.current = true;
                 updateCheckUnitStatus.mutate(
-                  { checkUnitId: unit.id, status, reason },
+                  { checkUnitId: unit.id, status, reason, note },
                   {
                     onSettled: () => {
                       statusClickLockRef.current = false;
@@ -389,21 +386,6 @@ export function ManualOrderCheckUnitsPanel({
                           className="h-9 rounded-lg bg-green-500 px-3 text-sm font-bold text-white disabled:opacity-50"
                         >
                           משטח תקין
-                        </button>
-                      )}
-                      {unitUiState.primaryAction === 'create_completion' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsAshlamaDialogOpen(true);
-                            setAshlamaDialogCheckUnitId(unit.id);
-                            setAshlamaDraftText(`מוצר אזל – משטח #${unit.unitNumber}`);
-                          }}
-                          disabled={statusActionDisabled || createAshlama.isPending}
-                          className="h-9 rounded-lg bg-blue-100 px-3 text-sm font-bold text-blue-800 disabled:opacity-50"
-                          data-testid={`create-completion-${unit.id}`}
-                        >
-                          צור השלמה
                         </button>
                       )}
                       {unitUiState.secondaryActions.includes('mark_checked') && (
@@ -465,15 +447,19 @@ export function ManualOrderCheckUnitsPanel({
                   )}
                   {unit.status !== 'returned' && reasonSelectorUnitId === unit.id && (
                     <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2" data-testid={`returned-reason-selector-${unit.id}`}>
-                      <p className="text-xs font-semibold text-red-800">בחר סיבת תיקון לפני סימון "דורש תיקון"</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <p className="text-xs font-semibold text-red-800 mb-2">בחר סיבת תיקון</p>
+                      <div className="flex flex-wrap gap-2">
                         {RETURN_REASON_OPTIONS.map((reasonOption) => {
                           const isSelected = reasonDraftByUnitId[unit.id] === reasonOption;
                           return (
                             <button
                               key={reasonOption}
                               type="button"
-                              onClick={() => setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: reasonOption }))}
+                              onClick={() => {
+                                setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: reasonOption }));
+                                setAzalNoteDraft('');
+                                setAzalAshlamaText('');
+                              }}
                               className={`px-2 py-1 rounded-md border text-xs font-bold ${
                                 isSelected ? 'border-red-400 bg-red-100 text-red-800' : 'border-red-200 bg-white text-red-700'
                               }`}
@@ -483,38 +469,94 @@ export function ManualOrderCheckUnitsPanel({
                           );
                         })}
                       </div>
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const selectedReason = reasonDraftByUnitId[unit.id];
-                            if (!selectedReason) return;
-                            mutateStatus('returned', selectedReason);
-                            setReasonSelectorUnitId(null);
-                          }}
-                          disabled={statusActionDisabled || !reasonDraftByUnitId[unit.id]}
-                          className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-bold disabled:opacity-50"
-                        >
-                          שמור תיקון
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setReasonSelectorUnitId(null)}
-                          className="px-3 py-1 rounded-lg bg-white border border-gray-300 text-xs font-bold"
-                        >
-                          ביטול
-                        </button>
-                      </div>
+
+                      {reasonDraftByUnitId[unit.id] === 'מוצר אזל' ? (
+                        <div className="mt-3 flex flex-col gap-2">
+                          <div className="rounded-lg border border-orange-200 bg-white p-3">
+                            <p className="text-xs font-bold text-orange-700 mb-1.5">מוצר אזל – אין צורך בהשלמה</p>
+                            <textarea
+                              value={azalNoteDraft}
+                              onChange={(e) => setAzalNoteDraft(e.target.value)}
+                              placeholder="מה המוצר? (אופציונלי)"
+                              rows={2}
+                              className="w-full text-xs border border-orange-200 rounded p-1.5 bg-orange-50 resize-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                mutateStatus('checked', 'מוצר אזל', azalNoteDraft.trim() || undefined);
+                                setReasonSelectorUnitId(null);
+                                setAzalNoteDraft('');
+                              }}
+                              disabled={statusActionDisabled}
+                              className="mt-2 w-full h-8 rounded-lg bg-orange-600 text-white text-xs font-bold disabled:opacity-50"
+                            >
+                              שמור – מוצר אזל
+                            </button>
+                          </div>
+                          <div className="rounded-lg border border-blue-200 bg-white p-3">
+                            <p className="text-xs font-bold text-blue-700 mb-1.5">יש להשלים – צור השלמה</p>
+                            <textarea
+                              value={azalAshlamaText}
+                              onChange={(e) => setAzalAshlamaText(e.target.value)}
+                              placeholder="מה צריך להביא? (חובה)"
+                              rows={2}
+                              className="w-full text-xs border border-blue-200 rounded p-1.5 bg-blue-50 resize-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                mutateStatus('checked', 'מוצר אזל');
+                                createAshlama.mutate({ checkUnitId: null, text: azalAshlamaText.trim() });
+                                setReasonSelectorUnitId(null);
+                                setAzalAshlamaText('');
+                              }}
+                              disabled={statusActionDisabled || !azalAshlamaText.trim() || createAshlama.isPending}
+                              className="mt-2 w-full h-8 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
+                            >
+                              צור השלמה
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setReasonSelectorUnitId(null); setAzalNoteDraft(''); setAzalAshlamaText(''); }}
+                            className="w-full h-8 rounded-lg bg-white border border-gray-300 text-xs font-bold"
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const selectedReason = reasonDraftByUnitId[unit.id];
+                              if (!selectedReason) return;
+                              mutateStatus('returned', selectedReason);
+                              setReasonSelectorUnitId(null);
+                            }}
+                            disabled={statusActionDisabled || !reasonDraftByUnitId[unit.id]}
+                            className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-bold disabled:opacity-50"
+                          >
+                            שמור תיקון
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReasonSelectorUnitId(null)}
+                            className="px-3 py-1 rounded-lg bg-white border border-gray-300 text-xs font-bold"
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                   {isProblemUnit && (
                     <div className="rounded-lg bg-red-50 px-2 py-2">
                       {unit.reason && <p className="text-xs text-red-800">סיבת תיקון: {unit.reason}</p>}
                       {unit.note && <p className="mt-1 text-xs text-red-800">הערה: {unit.note}</p>}
-                      {unit.status === 'returned' && unitUiState.completionSubstate === 'none' && (
-                        <p className="mt-1 text-xs font-semibold text-blue-800">
-                          {unitUiState.canCreateCompletion ? 'אפשר לפתוח השלמה' : 'לא ניתן לפתוח השלמה למשטח זה'}
-                        </p>
+                      {unit.status === 'returned' && unitUiState.completionSubstate === 'none' && unitUiState.canCreateCompletion && (
+                        <p className="mt-1 text-xs font-semibold text-blue-800">אפשר לפתוח השלמה</p>
                       )}
                     </div>
                   )}
@@ -525,46 +567,6 @@ export function ManualOrderCheckUnitsPanel({
         </>
       )}
 
-      {manualOrderLevelAshlamot.length > 0 && (
-        <div className="px-1 py-1" data-testid="order-ashlamot-section">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold">{manualOrderLevelAshlamot.some((item) => item.status === 'open') ? 'השלמות פתוחות' : 'השלמות'}</p>
-          </div>
-          <ul className="divide-y divide-gray-100 border-y border-gray-100 text-xs">
-            {manualOrderLevelAshlamot.map((ashlama) => (
-              <li key={ashlama.id} className="px-1 py-2">
-                <span className="font-semibold text-gray-700">השלמה</span>
-                <span className="mx-1 text-gray-400">·</span>
-                <span className="font-semibold">
-                  {ashlama.status === 'open' ? 'פתוחה' : ashlama.status === 'done' ? 'הושלמה' : 'בוטלה'}
-                </span>
-                <span className="mx-1 text-gray-400">·</span>
-                <span>{ashlama.text}</span>
-                {ashlama.status === 'open' && interactive && (
-                  <span className="ms-2 inline-flex gap-2 align-middle">
-                    <button
-                      type="button"
-                      onClick={() => patchAshlama.mutate({ ashlamaId: ashlama.id, status: 'done' })}
-                      disabled={!canPerformActions || patchAshlama.isPending}
-                      className="rounded-md border border-green-300 bg-white px-2 py-0.5 text-[11px] font-bold text-green-700 disabled:opacity-50"
-                    >
-                      סמן כהושלם
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => patchAshlama.mutate({ ashlamaId: ashlama.id, status: 'cancelled' })}
-                      disabled={!canPerformActions || patchAshlama.isPending}
-                      className="rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] font-bold text-red-700 disabled:opacity-50"
-                    >
-                      בטל השלמה
-                    </button>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {interactive && (
         <div className="mt-1">

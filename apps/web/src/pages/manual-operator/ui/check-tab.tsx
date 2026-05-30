@@ -6,6 +6,7 @@ import { shiftOrdersQueryOptions, manualShiftKeys } from '@/entities/manual-shif
 import { useUpdateManualShiftOrderStatus } from '@/entities/manual-shift/api/mutations';
 import { ErrorFlow } from './error-flow';
 import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
+import { OrderAshlamotSection } from './order-ashlamot-section';
 import { getElapsedFromIso } from './order-utils';
 
 interface CheckTabProps {
@@ -108,7 +109,8 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
   const [hasCheckUnits, setHasCheckUnits] = useState(false);
   const [canCloseOrder, setCanCloseOrder] = useState(true);
   const [checkedUnits, setCheckedUnits] = useState(0);
-  const [activeUnits, setActiveUnits] = useState(0);
+  const [activeUnits, setActiveUnits] = useState<number | null>(null);
+  const [hasOpenAshlama, setHasOpenAshlama] = useState(false);
 
   const elapsed = getElapsedFromIso(order.waitingCheckAt ?? order.createdAt);
   const doneDisabledByCheckUnits = hasCheckUnits && !canCloseOrder;
@@ -149,10 +151,16 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
             {order.lineCount} שורות
           </span>
         )}
-        {(activeUnits > 0 || order.palletCount != null) && (
-          <span className="text-gray-500 text-xs">{activeUnits > 0 ? activeUnits : order.palletCount} משטחים</span>
+        {(activeUnits !== null || order.palletCount != null) && (
+          <span className="text-gray-500 text-xs">{activeUnits ?? order.palletCount} משטחים</span>
         )}
       </div>
+
+      <OrderAshlamotSection
+        orderId={order.id}
+        interactive
+        canInteract
+      />
 
       <ManualOrderCheckUnitsPanel
         orderId={order.id}
@@ -164,7 +172,8 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           setHasCheckUnits(state.hasUnits);
           setCanCloseOrder(state.canCloseOrder);
           setCheckedUnits(state.checkedUnits);
-          setActiveUnits(state.activeUnits);
+          setHasOpenAshlama(state.hasOpenAshlama);
+          if (!state.isLoading) setActiveUnits(state.activeUnits);
         }}
       />
 

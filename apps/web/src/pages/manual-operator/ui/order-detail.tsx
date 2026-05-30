@@ -11,6 +11,7 @@ import { DeleteConfirmSheet } from './delete-confirm-sheet';
 import { EditOrderSheet } from './edit-order-sheet';
 import { ErrorFlow } from './error-flow';
 import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
+import { OrderAshlamotSection } from './order-ashlamot-section';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
 interface OrderDetailProps {
@@ -26,10 +27,11 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [declaredArrivedUnits, setDeclaredArrivedUnits] = useState<string>(
     order.palletCount != null ? String(order.palletCount) : ''
   );
-  const [checkUnitsActiveCount, setCheckUnitsActiveCount] = useState(0);
+  const [checkUnitsActiveCount, setCheckUnitsActiveCount] = useState<number | null>(null);
   const [checkUnitsCheckedCount, setCheckUnitsCheckedCount] = useState(0);
   const [checkUnitsBlockingReason, setCheckUnitsBlockingReason] = useState<string | null>(null);
   const [canCloseOrderFromCheckUnits, setCanCloseOrderFromCheckUnits] = useState(true);
+  const [hasOpenAshlama, setHasOpenAshlama] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
@@ -163,7 +165,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             <div className="flex flex-col items-center">
               <span className="text-sm text-gray-500 font-medium">מס.משטחים</span>
               <span className="font-bold text-lg">
-                {checkUnitsActiveCount > 0 ? checkUnitsActiveCount : (order.palletCount ?? '-')}
+                {checkUnitsActiveCount ?? order.palletCount ?? '-'}
               </span>
             </div>
             {elapsed && (
@@ -177,6 +179,12 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           </div>
         </div>
 
+        <OrderAshlamotSection
+          orderId={order.id}
+          interactive
+          canInteract={canInteractWithCheckUnits}
+        />
+
         <ManualOrderCheckUnitsPanel
           orderId={order.id}
           interactive
@@ -185,10 +193,11 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           expectedUnitsCount={order.palletCount}
           disabledReason="התחל בדיקה כדי להתחיל לבדוק יחידות"
           onStateChange={(state) => {
-            setCheckUnitsActiveCount(state.activeUnits);
+            if (!state.isLoading) setCheckUnitsActiveCount(state.activeUnits);
             setCheckUnitsCheckedCount(state.checkedUnits);
             setCheckUnitsBlockingReason(state.blockingReason);
             setCanCloseOrderFromCheckUnits(state.canCloseOrder);
+            setHasOpenAshlama(state.hasOpenAshlama);
           }}
         />
         {order.status === 'picking' && isCheckActive && (
@@ -293,7 +302,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-2">
               <p className="text-sm text-gray-700">כמה יחידות / משטחים הגיעו לבדיקה?</p>
-              <p className="text-xs text-gray-500">משטחים קיימים: {checkUnitsActiveCount}</p>
+              <p className="text-xs text-gray-500">משטחים קיימים: {checkUnitsActiveCount ?? '-'}</p>
               <p className="text-xs text-gray-500">נבדקו: {checkUnitsCheckedCount}</p>
               <label className="text-sm font-medium text-gray-700" htmlFor="declared-arrived-units">
                 מספר יחידות / משטחים שהגיעו
