@@ -1570,7 +1570,7 @@ describe('manual shift ashlama constraints', () => {
     expect(ashlama.status).toBe('open');
   });
 
-  it('creates ashlama only for returned check unit with reason חסר מוצר', async () => {
+  it('creates ashlama only for returned check unit with reason מוצר אזל', async () => {
     const { repo, state } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
     state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
@@ -1583,7 +1583,7 @@ describe('manual shift ashlama constraints', () => {
       unitNumber: 1,
       status: 'returned',
       note: null,
-      reason: 'חסר מוצר',
+      reason: 'מוצר אזל',
       checkedAt: null,
       returnedAt: nowIso,
       voidedAt: null,
@@ -1617,7 +1617,7 @@ describe('manual shift ashlama constraints', () => {
       unitNumber: 1,
       status: 'checked',
       note: null,
-      reason: 'חסר מוצר',
+      reason: 'מוצר אזל',
       checkedAt: nowIso,
       returnedAt: null,
       voidedAt: null,
@@ -1680,7 +1680,7 @@ describe('manual shift ashlama constraints', () => {
       unitNumber: 1,
       status: 'returned',
       note: null,
-      reason: 'חסר מוצר',
+      reason: 'מוצר אזל',
       checkedAt: null,
       returnedAt: nowIso,
       voidedAt: null,
@@ -1712,7 +1712,7 @@ describe('manual shift ashlama constraints', () => {
       unitNumber: 1,
       status: 'returned',
       note: null,
-      reason: 'חסר מוצר',
+      reason: 'מוצר אזל',
       checkedAt: null,
       returnedAt: nowIso,
       voidedAt: null,
