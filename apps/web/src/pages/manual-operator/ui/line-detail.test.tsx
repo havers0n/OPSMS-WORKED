@@ -494,7 +494,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       await openOrder('queued');
       expect(screen.getByText('התחל ליקוט')).toBeTruthy();
       expect(screen.queryByText('התחל בדיקה')).toBeNull();
-      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByRole('button', { name: /סגור כתקין/ })).toBeNull();
       expect(screen.queryByText('תקלה')).toBeNull();
       expect(screen.queryByText('הכל תוקן, החזר לבדיקה')).toBeNull();
     });
@@ -506,16 +506,16 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       expect(screen.queryByText('התחל ליקוט')).toBeNull();
     });
 
-    it('waiting_check: shows "תקין" and "תקלה"', async () => {
+    it('waiting_check: shows "סגור כתקין" and "תקלה"', async () => {
       await openOrder('waiting_check');
-      expect(screen.getByText('תקין')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /סגור כתקין/ })).toBeTruthy();
       expect(screen.getByText('תקלה')).toBeTruthy();
     });
 
     it('returned: shows "הכל תוקן, החזר לבדיקה" only', async () => {
       await openOrder('returned');
       expect(screen.getByText('הכל תוקן, החזר לבדיקה')).toBeTruthy();
-      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByRole('button', { name: /סגור כתקין/ })).toBeNull();
       expect(screen.queryByText('תקלה')).toBeNull();
     });
 
@@ -523,16 +523,15 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       await openOrder('done');
       expect(screen.queryByText('התחל ליקוט')).toBeNull();
       expect(screen.queryByText('התחל בדיקה')).toBeNull();
-      expect(screen.queryByText('תקין')).toBeNull();
+      expect(screen.queryByRole('button', { name: /סגור כתקין/ })).toBeNull();
       expect(screen.queryByText('תקלה')).toBeNull();
       expect(screen.queryByText('הכל תוקן, החזר לבדיקה')).toBeNull();
     });
 
-    it('returned → done: "תקין" action is not shown', async () => {
+    it('returned → done: "סגור כתקין" action is not shown', async () => {
       await openOrder('returned');
-      // Only "הכל תוקן" is shown, not "תקין" (done transition)
-      expect(screen.queryByText('תקין')).toBeNull();
-      expect(screen.queryByRole('button', { name: /תקין/ })).toBeNull();
+      // Only "הכל תוקן" is shown, not "סגור כתקין" (done transition)
+      expect(screen.queryByRole('button', { name: /סגור כתקין/ })).toBeNull();
     });
   });
 
@@ -540,7 +539,23 @@ describe('PR4 – Line Detail & Manual Orders', () => {
 
   describe('status transitions', () => {
     async function setupOrderAndOpen(fromStatus: ManualShiftOrder['status']) {
-      const order = makeOrder({ status: fromStatus });
+      const order = makeOrder({ status: fromStatus, palletCount: 1 });
+      const checkedUnit = {
+        id: '00000000-0000-0000-0000-000000000001',
+        tenantId: 'tenant-1',
+        shiftId: 'shift-1',
+        lineId: 'line-1',
+        orderId: 'order-1',
+        unitNumber: 1,
+        status: 'checked' as const,
+        note: null,
+        reason: null,
+        checkedAt: '2026-01-01T00:00:00.000Z',
+        returnedAt: null,
+        voidedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      };
       mockedBffRequest.mockImplementation((url: string, init?: unknown) => {
         const method = (init as RequestInit | undefined)?.method;
         if (String(url).includes('/status') && method === 'PATCH') {
@@ -548,7 +563,7 @@ describe('PR4 – Line Detail & Manual Orders', () => {
           return Promise.resolve({ ...order, status: body.status });
         }
         if (String(url).includes('/check-units')) {
-          return Promise.resolve([]);
+          return Promise.resolve([checkedUnit]);
         }
         if (String(url).includes('/api/manual-shift-orders/order-1') && method === 'PATCH') {
           const body = JSON.parse((init as RequestInit).body as string) as { waitingCheckAt?: string };
@@ -604,7 +619,11 @@ describe('PR4 – Line Detail & Manual Orders', () => {
 
     it('waiting_check → done: calls PATCH /status with { status: "done" }', async () => {
       await setupOrderAndOpen('waiting_check');
-      fireEvent.click(screen.getByText('תקין'));
+      // Wait for check-units query to resolve so the button becomes enabled
+      await waitFor(() =>
+        expect((screen.getByRole('button', { name: /סגור כתקין/ }) as HTMLButtonElement).disabled).toBe(false)
+      );
+      fireEvent.click(screen.getByRole('button', { name: /סגור כתקין/ }));
 
       await waitFor(() => {
         const call = mockedBffRequest.mock.calls.find(
