@@ -13,6 +13,8 @@ declare
   default_tenant_uuid uuid;
   pallet_type_uuid    uuid;
   order_uuid          uuid := gen_random_uuid();
+  order_b_uuid        uuid := gen_random_uuid();
+  order_c_uuid        uuid := gen_random_uuid();
   container_a_uuid    uuid;
   container_b_uuid    uuid;
   task_a_uuid         uuid;
@@ -61,7 +63,10 @@ begin
   end if;
 
   insert into public.orders (id, tenant_id, external_number, status)
-  values (order_uuid, default_tenant_uuid, 'PR10-ORDER', 'draft');
+  values
+    (order_uuid,   default_tenant_uuid, 'PR10-ORDER-A', 'draft'),
+    (order_b_uuid, default_tenant_uuid, 'PR10-ORDER-B', 'draft'),
+    (order_c_uuid, default_tenant_uuid, 'PR10-ORDER-C', 'draft');
 
   insert into public.containers (tenant_id, external_code, container_type_id)
   values
@@ -96,8 +101,8 @@ begin
 
   insert into public.pick_tasks (tenant_id, source_type, source_id, status)
   values
-    (default_tenant_uuid, 'order', order_uuid, 'ready'),
-    (default_tenant_uuid, 'order', order_uuid, 'assigned');
+    (default_tenant_uuid, 'order', order_uuid,   'ready'),
+    (default_tenant_uuid, 'order', order_b_uuid, 'assigned');
 
   select id, task_number
     into task_a_uuid, task_a_number
@@ -110,7 +115,7 @@ begin
     into task_b_uuid, task_b_number
   from public.pick_tasks
   where tenant_id = default_tenant_uuid
-    and source_id = order_uuid
+    and source_id = order_b_uuid
     and status = 'assigned';
 
   if task_a_number is null or task_a_number !~ '^TSK-[0-9]{6}$' then
@@ -136,7 +141,7 @@ begin
 
   begin
     insert into public.pick_tasks (tenant_id, source_type, source_id, status, task_number)
-    values (default_tenant_uuid, 'order', order_uuid, 'completed', task_a_number);
+    values (default_tenant_uuid, 'order', order_c_uuid, 'completed', task_a_number);
     raise exception 'Expected duplicate pick_tasks.task_number to violate uniqueness.';
   exception
     when unique_violation then
