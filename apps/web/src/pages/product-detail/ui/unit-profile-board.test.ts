@@ -22,6 +22,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     imageUrls: [],
     imageFiles: [],
     isActive: overrides.isActive ?? true,
+    category: overrides.category ?? null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z'
   };

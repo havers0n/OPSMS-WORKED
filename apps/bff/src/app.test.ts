@@ -129,6 +129,7 @@ const productRows = [
     image_urls: ['https://artos.co.il/wp-content/uploads/2026/01/in-ear-soumd-pic@4x-8-scaled.png'],
     image_files: ['artos_assets/images/19917_00_07a809fd58.png'],
     is_active: true,
+    category: null,
     created_at: '2026-01-16T16:19:05.000Z',
     updated_at: '2026-01-16T16:19:05.000Z'
   },
@@ -142,6 +143,7 @@ const productRows = [
     image_urls: ['https://artos.co.il/wp-content/uploads/2026/01/poker-set-1.png'],
     image_files: ['artos_assets/images/19898_00_72ebdbaba2.png'],
     is_active: true,
+    category: null,
     created_at: '2026-01-16T16:19:05.000Z',
     updated_at: '2026-01-16T16:19:05.000Z'
   }
@@ -157,6 +159,7 @@ const productResponses = productRows.map((row) => ({
   imageUrls: row.image_urls,
   imageFiles: row.image_files,
   isActive: row.is_active,
+  category: row.category,
   createdAt: row.created_at,
   updatedAt: row.updated_at
 }));

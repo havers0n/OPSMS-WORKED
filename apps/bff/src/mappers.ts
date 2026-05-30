@@ -148,6 +148,7 @@ type ProductRow = {
   image_urls: unknown;
   image_files: unknown;
   is_active: boolean;
+  category: string | null;
   created_at: string;
   updated_at: string;
 };

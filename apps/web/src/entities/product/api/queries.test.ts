@@ -3,8 +3,8 @@ import { productKeys } from './queries';
 
 describe('productKeys', () => {
   it('keeps catalog keys stable across pagination and filters', () => {
-    expect(productKeys.catalog('gloves', 0, 50, false)).toEqual(['product', 'catalog', 'gloves', 0, 50, 'all']);
-    expect(productKeys.catalog(null, 1, 25, true)).toEqual(['product', 'catalog', 'browse', 1, 25, 'active']);
+    expect(productKeys.catalog('gloves', 0, 50, false, null)).toEqual(['product', 'catalog', 'gloves', 0, 50, 'all', 'all']);
+    expect(productKeys.catalog(null, 1, 25, true, null)).toEqual(['product', 'catalog', 'browse', 1, 25, 'active', 'all']);
   });
 
   it('keeps product search keys stable across searches', () => {

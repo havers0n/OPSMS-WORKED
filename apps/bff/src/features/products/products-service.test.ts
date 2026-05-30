@@ -20,6 +20,7 @@ const fakeProduct: Product = {
   imageUrls: [],
   imageFiles: [],
   isActive: true,
+  category: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
 };
@@ -53,6 +54,10 @@ const cartonLevel = makeLevel({ id: level2Id, code: 'CTN', name: 'Carton', baseU
 
 function makeRepo(overrides: Partial<ProductsRepo> = {}): ProductsRepo {
   return {
+    listCategories:            vi.fn().mockResolvedValue([]),
+    createCategory:            vi.fn(),
+    patchProduct:              vi.fn().mockResolvedValue(fakeProduct),
+    bulkSetCategory:           vi.fn().mockResolvedValue({ updatedCount: 0 }),
     findById:                 vi.fn().mockResolvedValue(fakeProduct),
     listActive:               vi.fn().mockResolvedValue([]),
     searchActive:             vi.fn().mockResolvedValue([]),

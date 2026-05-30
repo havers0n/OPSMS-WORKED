@@ -165,6 +165,7 @@ function makeProduct(id: string, sku: string, name: string): Product {
     imageUrls: [],
     imageFiles: [],
     isActive: true,
+    category: null,
     createdAt: '2026-04-01T08:00:00.000Z',
     updatedAt: '2026-04-01T08:00:00.000Z'
   };

@@ -17,6 +17,7 @@ const product = {
   imageUrls: ['https://artos.co.il/wp-content/uploads/2026/01/in-ear-soumd-pic@4x-8-scaled.png'],
   imageFiles: ['artos_assets/images/19917_00_07a809fd58.png'],
   isActive: true,
+  category: null,
   createdAt: '2026-01-16T16:19:05.000Z',
   updatedAt: '2026-01-16T16:19:05.000Z'
 };

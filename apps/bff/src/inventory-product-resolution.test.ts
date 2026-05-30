@@ -12,6 +12,7 @@ const productRows: ProductRow[] = [
     image_urls: ['https://artos.co.il/wp-content/uploads/2026/01/in-ear-soumd-pic@4x-8-scaled.png'],
     image_files: ['artos_assets/images/19917_00_07a809fd58.png'],
     is_active: true,
+    category: null,
     created_at: '2026-01-16T16:19:05.000Z',
     updated_at: '2026-01-16T16:19:05.000Z'
   }

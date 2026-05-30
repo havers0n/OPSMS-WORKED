@@ -194,6 +194,7 @@ function makeProduct(overrides: Partial<Product> & { id: string; name: string })
     imageUrls: overrides.imageUrls ?? [],
     imageFiles: overrides.imageFiles ?? [],
     isActive: overrides.isActive ?? true,
+    category: overrides.category ?? null,
     createdAt: overrides.createdAt ?? '2026-01-01T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-01-01T00:00:00.000Z'
   };
