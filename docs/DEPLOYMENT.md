@@ -334,19 +334,14 @@ Requires `apps/bff/.env.local` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KE
 Sync runs automatically via GitHub Actions once per day (02:15 UTC).
 Manual trigger: **Actions → Sync products → Run workflow**.
 
-The workflow SSHs into the VPS and runs:
+The workflow SSHs into the VPS and passes the key via `docker exec` stdin, not via CLI arguments. The key is injected only into that one-off process and is never persisted on the VPS.
 
-```bash
-docker exec -e SUPABASE_SERVICE_ROLE_KEY="..." wos-bff-1 npm run sync:products
-```
+**Required repository secrets (Settings → Secrets and variables → Actions):**
 
-The key is injected only into that one-off process and is never persisted on the VPS.
-
-**Required repository secret:**
-
-| Secret | Where |
+| Secret | Purpose |
 |---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | Settings → Secrets and variables → Actions |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key for the sync script |
+| `VPS_SSH_FINGERPRINT` | VPS host fingerprint — prevents SSH MITM during sync |
 
 Security rules — `SUPABASE_SERVICE_ROLE_KEY` must never appear in:
 

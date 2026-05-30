@@ -31,6 +31,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
           envs: SUPABASE_SERVICE_ROLE_KEY
           script: |
             set -e
@@ -46,9 +47,12 @@ jobs:
               exit 1
             }
 
-            docker exec \
-              -e SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
-              wos-bff-1 \
-              npm run sync:products
+            docker exec -i wos-bff-1 sh -lc '
+              IFS= read -r SUPABASE_SERVICE_ROLE_KEY
+              export SUPABASE_SERVICE_ROLE_KEY
+              exec npm run sync:products
+            ' <<EOF
+            ${SUPABASE_SERVICE_ROLE_KEY}
+            EOF
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
