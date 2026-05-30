@@ -10,7 +10,8 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "sync:products": "node --env-file=.env.local --import tsx/esm src/scripts/sync-products.ts"
+    "sync:products": "node dist/apps/bff/src/scripts/sync-products.js",
+    "sync:products:local": "node --env-file=.env.local --import tsx/esm src/scripts/sync-products.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",

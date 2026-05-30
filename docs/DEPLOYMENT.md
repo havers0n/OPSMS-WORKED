@@ -317,10 +317,46 @@ Dry run:
 13. Test one read-only warehouse/product/operations flow.
 14. Record issues, target commit, rollback commit, and final health status.
 
-## 12. What Is Intentionally Postponed
+## 12. WooCommerce Product Sync
 
-- GitHub Actions CD
-- SSH deploy workflow
+Product sync pulls all products from artos.co.il and upserts them into Supabase.
+
+**Local development:**
+
+```bash
+npm run sync:products:local --workspace=@wos/bff
+```
+
+Requires `apps/bff/.env.local` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+
+**Production:**
+
+Sync runs automatically via GitHub Actions once per day (02:15 UTC).
+Manual trigger: **Actions → Sync products → Run workflow**.
+
+The workflow SSHs into the VPS and runs:
+
+```bash
+docker exec -e SUPABASE_SERVICE_ROLE_KEY="..." wos-bff-1 npm run sync:products
+```
+
+The key is injected only into that one-off process and is never persisted on the VPS.
+
+**Required repository secret:**
+
+| Secret | Where |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Settings → Secrets and variables → Actions |
+
+Security rules — `SUPABASE_SERVICE_ROLE_KEY` must never appear in:
+
+- `VITE_*` variables or frontend bundles
+- Docker image layers or Compose files
+- Regular BFF container environment
+- Logs, docs, or committed env files
+
+## 13. What Is Intentionally Postponed
+
 - image registry publishing
 - automatic migrations
 - E2E deployment gate

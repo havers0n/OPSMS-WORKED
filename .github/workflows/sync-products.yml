@@ -1,0 +1,54 @@
+name: Sync products
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 02:15 UTC = 04:15 Israel winter (UTC+2) / 05:15 Israel summer (UTC+3, DST)
+    - cron: "15 2 * * *"
+
+permissions: {}
+
+jobs:
+  sync:
+    name: Sync WooCommerce products into Supabase
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Verify SUPABASE_SERVICE_ROLE_KEY is set
+        run: |
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || {
+            echo "::error::Required secret SUPABASE_SERVICE_ROLE_KEY is missing or empty."
+            echo "::error::Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          }
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Run product sync on VPS
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: SUPABASE_SERVICE_ROLE_KEY
+          script: |
+            set -e
+
+            running=$(docker inspect -f '{{.State.Running}}' wos-bff-1 2>/dev/null || echo "false")
+            if [ "$running" != "true" ]; then
+              echo "ERROR: container wos-bff-1 is not running or does not exist" >&2
+              exit 1
+            fi
+
+            test -n "${SUPABASE_SERVICE_ROLE_KEY:-}" || {
+              echo "ERROR: SUPABASE_SERVICE_ROLE_KEY was not received by the remote host" >&2
+              exit 1
+            }
+
+            docker exec \
+              -e SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY" \
+              wos-bff-1 \
+              npm run sync:products
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

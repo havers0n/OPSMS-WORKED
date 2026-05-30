@@ -140,7 +140,8 @@ describe('selectShiftSummary', () => {
       returned: 1,
       done: 3,
       errorsCount: 2,
-      donePercent: 30
+      donePercent: 30,
+      totalPalletCount: 0
     });
   });
 

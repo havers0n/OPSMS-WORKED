@@ -29,7 +29,8 @@ export const mockKpi: ShiftSummary = {
   returned: 1,
   done: 4,
   errorsCount: 2,
-  donePercent: 20
+  donePercent: 20,
+  totalPalletCount: 0
 };
 
 export const mockLines: LineSummary[] = [
