@@ -685,7 +685,8 @@ export function createManualShiftsServiceFromRepo(
         if (checkUnit.status !== 'returned') {
           throw manualShiftAshlamaRequiresReturnedCheckUnit(normalizedCheckUnitId);
         }
-        if ((checkUnit.reason ?? '').trim() !== 'מוצר אזל') {
+        const ashlamaEligibleReasons = ['מוצר אזל', 'שכח לשים'];
+        if (!ashlamaEligibleReasons.includes((checkUnit.reason ?? '').trim())) {
           throw manualShiftAshlamaRequiresMissingProductReason(normalizedCheckUnitId);
         }
         const existing = await repo.listOrderAshlamot(order.id);
@@ -857,8 +858,8 @@ export function createManualShiftsServiceFromRepo(
         status: input.status,
         note: input.note,
         reason:
-          input.status === 'returned'
-            ? normalizedReason
+          input.status === 'returned' || input.status === 'checked' || input.status === 'voided'
+            ? (normalizedReason ?? checkUnit.reason)
             : input.status === 'open'
               ? null
               : checkUnit.reason,
