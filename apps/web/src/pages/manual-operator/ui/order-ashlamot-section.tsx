@@ -20,7 +20,7 @@ export function OrderAshlamotSection({ orderId, interactive = false, canInteract
   const canPerformActions = interactive && canInteract;
 
   return (
-    <div className="flex flex-col gap-2" data-testid="order-open-ashlamot">
+    <div className="flex flex-col gap-2" data-testid="order-ashlamot-section">
       {openAshlamot.map((ashlama) => (
         <div
           key={ashlama.id}

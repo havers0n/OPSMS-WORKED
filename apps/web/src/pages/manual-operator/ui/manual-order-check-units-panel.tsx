@@ -25,6 +25,7 @@ type UnitPrimaryAction = 'mark_checked' | 'mark_open' | 'create_completion' | nu
 type UnitSecondaryAction = 'mark_returned' | 'mark_checked' | 'status_open_completion' | 'status_done_completion';
 type UnitOverflowAction = 'mark_open' | 'mark_voided';
 type UnitCompletionSubstate = 'none' | 'open' | 'done' | 'cancelled';
+type StockoutFlowStep = 'choose-outcome' | 'report-only' | 'create-ashlama';
 
 interface CheckUnitUiState {
   badgeLabel: string;
@@ -155,6 +156,7 @@ export function ManualOrderCheckUnitsPanel({
   const createAshlama = useCreateManualShiftOrderAshlama(orderId);
   const updateCheckUnitStatus = useUpdateManualShiftOrderCheckUnitStatus();
   const [reasonDraftByUnitId, setReasonDraftByUnitId] = useState<Record<string, string>>({});
+  const [stockoutStepByUnitId, setStockoutStepByUnitId] = useState<Record<string, StockoutFlowStep | undefined>>({});
   const [reasonSelectorUnitId, setReasonSelectorUnitId] = useState<string | null>(null);
   const [azalNoteDraft, setAzalNoteDraft] = useState('');
   const [azalAshlamaText, setAzalAshlamaText] = useState('');
@@ -401,7 +403,11 @@ export function ManualOrderCheckUnitsPanel({
                       {unitUiState.secondaryActions.includes('mark_returned') && (
                         <button
                           type="button"
-                          onClick={() => setReasonSelectorUnitId(unit.id)}
+                          onClick={() => {
+                            setReasonSelectorUnitId(unit.id);
+                            setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: '' }));
+                            setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: undefined }));
+                          }}
                           disabled={statusActionDisabled}
                           className="h-9 rounded-lg bg-red-100 px-3 text-sm font-bold text-red-700 disabled:opacity-50"
                         >
@@ -447,83 +453,141 @@ export function ManualOrderCheckUnitsPanel({
                   )}
                   {unit.status !== 'returned' && reasonSelectorUnitId === unit.id && (
                     <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2" data-testid={`returned-reason-selector-${unit.id}`}>
-                      <p className="text-xs font-semibold text-red-800 mb-2">בחר סיבת תיקון</p>
-                      <div className="flex flex-wrap gap-2">
-                        {RETURN_REASON_OPTIONS.map((reasonOption) => {
-                          const isSelected = reasonDraftByUnitId[unit.id] === reasonOption;
-                          return (
-                            <button
-                              key={reasonOption}
-                              type="button"
-                              onClick={() => {
-                                setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: reasonOption }));
-                                setAzalNoteDraft('');
-                                setAzalAshlamaText('');
-                              }}
-                              className={`px-2 py-1 rounded-md border text-xs font-bold ${
-                                isSelected ? 'border-red-400 bg-red-100 text-red-800' : 'border-red-200 bg-white text-red-700'
-                              }`}
-                            >
-                              {reasonOption}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {reasonDraftByUnitId[unit.id] !== 'מוצר אזל' && (
+                        <>
+                          <p className="text-xs font-semibold text-red-800 mb-2">בחר סיבת תיקון</p>
+                          <div className="flex flex-wrap gap-2">
+                            {RETURN_REASON_OPTIONS.map((reasonOption) => {
+                              const isSelected = reasonDraftByUnitId[unit.id] === reasonOption;
+                              return (
+                                <button
+                                  key={reasonOption}
+                                  type="button"
+                                  onClick={() => {
+                                    setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: reasonOption }));
+                                    setAzalNoteDraft('');
+                                    setAzalAshlamaText('');
+                                    if (reasonOption === 'מוצר אזל') {
+                                      setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: 'choose-outcome' }));
+                                    } else {
+                                      setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: undefined }));
+                                    }
+                                  }}
+                                  className={`px-2 py-1 rounded-md border text-xs font-bold ${
+                                    isSelected ? 'border-red-400 bg-red-100 text-red-800' : 'border-red-200 bg-white text-red-700'
+                                  }`}
+                                >
+                                  {reasonOption}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
 
                       {reasonDraftByUnitId[unit.id] === 'מוצר אזל' ? (
-                        <div className="mt-3 flex flex-col gap-2">
-                          <div className="rounded-lg border border-orange-200 bg-white p-3">
-                            <p className="text-xs font-bold text-orange-700 mb-1.5">מוצר אזל – אין צורך בהשלמה</p>
-                            <textarea
-                              value={azalNoteDraft}
-                              onChange={(e) => setAzalNoteDraft(e.target.value)}
-                              placeholder="מה המוצר? (אופציונלי)"
-                              rows={2}
-                              className="w-full text-xs border border-orange-200 rounded p-1.5 bg-orange-50 resize-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                mutateStatus('checked', 'מוצר אזל', azalNoteDraft.trim() || undefined);
-                                setReasonSelectorUnitId(null);
-                                setAzalNoteDraft('');
-                              }}
-                              disabled={statusActionDisabled}
-                              className="mt-2 w-full h-8 rounded-lg bg-orange-600 text-white text-xs font-bold disabled:opacity-50"
-                            >
-                              שמור – מוצר אזל
-                            </button>
-                          </div>
-                          <div className="rounded-lg border border-blue-200 bg-white p-3">
-                            <p className="text-xs font-bold text-blue-700 mb-1.5">יש להשלים – צור השלמה</p>
-                            <textarea
-                              value={azalAshlamaText}
-                              onChange={(e) => setAzalAshlamaText(e.target.value)}
-                              placeholder="מה צריך להביא? (חובה)"
-                              rows={2}
-                              className="w-full text-xs border border-blue-200 rounded p-1.5 bg-blue-50 resize-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                mutateStatus('checked', 'מוצר אזל');
-                                createAshlama.mutate({ checkUnitId: null, text: azalAshlamaText.trim() });
-                                setReasonSelectorUnitId(null);
-                                setAzalAshlamaText('');
-                              }}
-                              disabled={statusActionDisabled || !azalAshlamaText.trim() || createAshlama.isPending}
-                              className="mt-2 w-full h-8 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
-                            >
-                              צור השלמה
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => { setReasonSelectorUnitId(null); setAzalNoteDraft(''); setAzalAshlamaText(''); }}
-                            className="w-full h-8 rounded-lg bg-white border border-gray-300 text-xs font-bold"
-                          >
-                            ביטול
-                          </button>
+                        <div className="mt-2 flex flex-col gap-2">
+                          {stockoutStepByUnitId[unit.id] === 'choose-outcome' && (
+                            <div className="flex flex-col gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
+                              <p className="text-sm font-bold text-orange-800">המוצר אזל</p>
+                              <p className="text-xs font-semibold text-orange-700 mb-1">מה צריך לעשות?</p>
+                              <div className="flex flex-col gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: 'report-only' }))}
+                                  className="flex flex-col items-center justify-center rounded-xl border border-orange-200 bg-white p-3 text-center"
+                                >
+                                  <span className="text-sm font-bold text-orange-800">דיווח בלבד</span>
+                                  <span className="text-[10px] text-orange-600">המוצר נגמר במלאי</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: 'create-ashlama' }))}
+                                  className="flex flex-col items-center justify-center rounded-xl border border-blue-200 bg-white p-3 text-center"
+                                >
+                                  <span className="text-sm font-bold text-blue-800">צור השלמה</span>
+                                  <span className="text-[10px] text-blue-600">צריך להשלים את ההזמנה</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReasonDraftByUnitId((prev) => ({ ...prev, [unit.id]: '' }));
+                                    setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: undefined }));
+                                  }}
+                                  className="mt-1 text-xs font-bold text-gray-500 underline"
+                                >
+                                  חזרה לסיבות
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {stockoutStepByUnitId[unit.id] === 'report-only' && (
+                            <div className="rounded-lg border border-orange-200 bg-white p-3">
+                              <p className="text-xs font-bold text-orange-700 mb-1.5">איזה מוצר אזל?</p>
+                              <textarea
+                                value={azalNoteDraft}
+                                onChange={(e) => setAzalNoteDraft(e.target.value)}
+                                placeholder="מה המוצר? (אופציונלי)"
+                                rows={2}
+                                className="w-full text-xs border border-orange-200 rounded p-1.5 bg-orange-50 resize-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  mutateStatus('checked', 'מוצר אזל', azalNoteDraft.trim() || undefined);
+                                  setReasonSelectorUnitId(null);
+                                  setAzalNoteDraft('');
+                                  setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: undefined }));
+                                }}
+                                disabled={statusActionDisabled}
+                                className="mt-2 w-full h-8 rounded-lg bg-orange-600 text-white text-xs font-bold disabled:opacity-50"
+                              >
+                                דווח על מוצר שאזל
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: 'choose-outcome' }))}
+                                className="mt-2 w-full h-8 rounded-lg bg-white border border-gray-300 text-xs font-bold"
+                              >
+                                חזרה
+                              </button>
+                            </div>
+                          )}
+
+                          {stockoutStepByUnitId[unit.id] === 'create-ashlama' && (
+                            <div className="rounded-lg border border-blue-200 bg-white p-3">
+                              <p className="text-xs font-bold text-blue-700 mb-1.5">מה צריך להשלים?</p>
+                              <textarea
+                                value={azalAshlamaText}
+                                onChange={(e) => setAzalAshlamaText(e.target.value)}
+                                placeholder="מה צריך להביא? (חובה)"
+                                rows={2}
+                                className="w-full text-xs border border-blue-200 rounded p-1.5 bg-blue-50 resize-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  mutateStatus('checked', 'מוצר אזל');
+                                  createAshlama.mutate({ checkUnitId: null, text: azalAshlamaText.trim() });
+                                  setReasonSelectorUnitId(null);
+                                  setAzalAshlamaText('');
+                                  setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: undefined }));
+                                }}
+                                disabled={statusActionDisabled || !azalAshlamaText.trim() || createAshlama.isPending}
+                                className="mt-2 w-full h-8 rounded-lg bg-blue-600 text-white text-xs font-bold disabled:opacity-50"
+                              >
+                                צור השלמה
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: 'choose-outcome' }))}
+                                className="mt-2 w-full h-8 rounded-lg bg-white border border-gray-300 text-xs font-bold"
+                              >
+                                חזרה
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="mt-2 flex gap-2">

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ManualShiftOrderCheckUnit } from '@wos/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
+import { OrderAshlamotSection } from './order-ashlamot-section';
 
 vi.mock('@/shared/api/bff/client', async importOriginal => {
   const actual = await importOriginal<typeof import('@/shared/api/bff/client')>();
@@ -57,7 +58,10 @@ type PanelProps = Parameters<typeof ManualOrderCheckUnitsPanel>[0];
 function renderPanel(props?: Partial<PanelProps>) {
   return render(
     <QueryClientProvider client={makeQC()}>
-      <ManualOrderCheckUnitsPanel orderId="order-1" interactive {...props} />
+      <div className="flex flex-col gap-4">
+        <ManualOrderCheckUnitsPanel orderId="order-1" interactive {...props} />
+        <OrderAshlamotSection orderId="order-1" interactive {...props} />
+      </div>
     </QueryClientProvider>
   );
 }
@@ -304,7 +308,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
       const path = String(url);
       const method = init?.method ?? 'GET';
       if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
-        return [makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' })];
+        return [makeCheckUnit(1, 'returned', { reason: 'מוצר אזל' })];
       }
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') {
         return [
@@ -333,7 +337,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
   it('marking unit as returned exposes reason flow and requires reason selection', async () => {
     mockedBffRequest
       .mockResolvedValueOnce([makeCheckUnit(1, 'open')])
-      .mockResolvedValueOnce(makeCheckUnit(1, 'returned', { reason: 'חסר מוצר' }));
+      .mockResolvedValueOnce(makeCheckUnit(1, 'returned', { reason: 'מוצר פגום' }));
     renderPanel();
 
     await waitFor(() => expect(screen.getByText('תקלה')).toBeTruthy());
@@ -342,39 +346,25 @@ describe('ManualOrderCheckUnitsPanel', () => {
 
     const submitReturned = screen.getByText('שמור תיקון') as HTMLButtonElement;
     expect(submitReturned.disabled).toBe(true);
-    fireEvent.click(screen.getByText('חסר מוצר'));
+    fireEvent.click(screen.getByText('מוצר פגום'));
     expect(submitReturned.disabled).toBe(false);
     fireEvent.click(submitReturned);
 
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-check-units/cu-1/status', {
         method: 'PATCH',
-        body: JSON.stringify({ status: 'returned', note: undefined, reason: 'חסר מוצר' })
+        body: JSON.stringify({ status: 'returned', note: undefined, reason: 'מוצר פגום' })
       });
     });
   });
 
-  it('create completion appears only for מוצר אזל returned unit', async () => {
+  it('create completion flow works for מוצר אזל', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
       if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') {
-        return [makeCheckUnit(1, 'returned', { reason: 'כמות לא נכונה' }), makeCheckUnit(2, 'returned', { reason: 'מוצר אזל' })];
+        return [makeCheckUnit(1, 'open')];
       }
-      if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
-      return [];
-    });
-    renderPanel();
-    await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
-    expect(screen.queryByTestId('create-completion-cu-1')).toBeNull();
-    expect(screen.getByTestId('create-completion-cu-2')).toBeTruthy();
-  });
-
-  it('create completion requires non-empty text and posts ashlama', async () => {
-    mockedBffRequest.mockImplementation(async (url, init) => {
-      const path = String(url);
-      const method = init?.method ?? 'GET';
-      if (path.includes('/api/manual-shift-orders/order-1/check-units') && method === 'GET') return [makeCheckUnit(1, 'returned', { reason: 'מוצר אזל' })];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'GET') return [];
       if (path.includes('/api/manual-shift-orders/order-1/ashlamot') && method === 'POST') {
         return {
@@ -394,20 +384,22 @@ describe('ManualOrderCheckUnitsPanel', () => {
       return [];
     });
     renderPanel();
-    await waitFor(() => expect(screen.getByText('צור השלמה')).toBeTruthy());
-
+    await waitFor(() => expect(screen.getByText('תקלה')).toBeTruthy());
+    fireEvent.click(screen.getByText('תקלה'));
+    fireEvent.click(screen.getByText('מוצר אזל'));
+    
+    expect(screen.getByText('מה צריך לעשות?')).toBeTruthy();
     fireEvent.click(screen.getByText('צור השלמה'));
-    const dialog = screen.getByTestId('ashlama-dialog');
-    const confirm = dialog.querySelector('button.bg-blue-600') as HTMLButtonElement;
-    // Dialog pre-fills text for מוצר אזל, so confirm is already enabled
-    expect(confirm.disabled).toBe(false);
-    fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים מוצר אזל' } });
-    fireEvent.click(confirm);
+
+    expect(screen.getByText('מה צריך להשלים?')).toBeTruthy();
+    const submit = screen.getByText('צור השלמה');
+    fireEvent.change(screen.getByPlaceholderText('מה צריך להביא? (חובה)'), { target: { value: 'להשלים מוצר אזל' } });
+    fireEvent.click(submit);
 
     await waitFor(() =>
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
         method: 'POST',
-        body: JSON.stringify({ checkUnitId: 'cu-1', text: 'להשלים מוצר אזל' })
+        body: JSON.stringify({ checkUnitId: null, text: 'להשלים מוצר אזל' })
       })
     );
   });
@@ -480,6 +472,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     fireEvent.change(dialog.querySelector('textarea') as HTMLTextAreaElement, { target: { value: 'להשלים ידנית' } });
     fireEvent.click(screen.getAllByText('צור השלמה')[0] as HTMLButtonElement);
 
+
     await waitFor(() =>
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
         method: 'POST',
@@ -512,7 +505,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('order-ashlamot-section')).toBeTruthy());
-    expect(screen.getByText('השלמה')).toBeTruthy();
+    expect(screen.getByText('השלמה פתוחה')).toBeTruthy();
   });
 
   it('open manual ashlama exposes done and cancel actions', async () => {
@@ -539,8 +532,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
 
     renderPanel();
-    await waitFor(() => expect(screen.getByText('סמן כהושלם')).toBeTruthy());
-    expect(screen.getByText('בטל השלמה')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(/הושלם/)).toBeTruthy());
+    expect(screen.getByText('בטל')).toBeTruthy();
   });
 
   it('marking manual ashlama done calls status mutation', async () => {
@@ -582,8 +575,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
 
     renderPanel();
-    await waitFor(() => expect(screen.getByText('סמן כהושלם')).toBeTruthy());
-    fireEvent.click(screen.getByText('סמן כהושלם'));
+    await waitFor(() => expect(screen.getByText('הושלם ✓')).toBeTruthy());
+    fireEvent.click(screen.getByText('הושלם ✓'));
     await waitFor(() =>
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-ashlamot/ash-manual-1', {
         method: 'PATCH',
@@ -631,8 +624,8 @@ describe('ManualOrderCheckUnitsPanel', () => {
     });
 
     renderPanel();
-    await waitFor(() => expect(screen.getByText('בטל השלמה')).toBeTruthy());
-    fireEvent.click(screen.getByText('בטל השלמה'));
+    await waitFor(() => expect(screen.getByText('בטל')).toBeTruthy());
+    fireEvent.click(screen.getByText('בטל'));
     await waitFor(() =>
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-ashlamot/ash-manual-1', {
         method: 'PATCH',
