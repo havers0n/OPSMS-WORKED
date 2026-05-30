@@ -31,7 +31,6 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [checkUnitsCheckedCount, setCheckUnitsCheckedCount] = useState(0);
   const [checkUnitsBlockingReason, setCheckUnitsBlockingReason] = useState<string | null>(null);
   const [canCloseOrderFromCheckUnits, setCanCloseOrderFromCheckUnits] = useState(true);
-  const [hasOpenAshlama, setHasOpenAshlama] = useState(false);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
@@ -197,7 +196,6 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             setCheckUnitsCheckedCount(state.checkedUnits);
             setCheckUnitsBlockingReason(state.blockingReason);
             setCanCloseOrderFromCheckUnits(state.canCloseOrder);
-            setHasOpenAshlama(state.hasOpenAshlama);
           }}
         />
         {order.status === 'picking' && isCheckActive && (

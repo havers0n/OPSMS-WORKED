@@ -110,7 +110,6 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
   const [canCloseOrder, setCanCloseOrder] = useState(true);
   const [checkedUnits, setCheckedUnits] = useState(0);
   const [activeUnits, setActiveUnits] = useState<number | null>(null);
-  const [hasOpenAshlama, setHasOpenAshlama] = useState(false);
 
   const elapsed = getElapsedFromIso(order.waitingCheckAt ?? order.createdAt);
   const doneDisabledByCheckUnits = hasCheckUnits && !canCloseOrder;
@@ -172,7 +171,6 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           setHasCheckUnits(state.hasUnits);
           setCanCloseOrder(state.canCloseOrder);
           setCheckedUnits(state.checkedUnits);
-          setHasOpenAshlama(state.hasOpenAshlama);
           if (!state.isLoading) setActiveUnits(state.activeUnits);
         }}
       />
