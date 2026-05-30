@@ -469,6 +469,7 @@ export type ManualShiftsRepo = {
   findOrderById(orderId: string): Promise<ManualShiftOrder | null>;
   listOrderCheckUnits(orderId: string): Promise<ManualShiftOrderCheckUnit[]>;
   listOrderAshlamot(orderId: string): Promise<ManualShiftOrderAshlama[]>;
+  listOrderEvents(orderId: string): Promise<ManualShiftOrderEvent[]>;
   findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
   findOrderAshlamaById(ashlamaId: string): Promise<ManualShiftOrderAshlama | null>;
   createOrderCheckUnit(input: {
@@ -868,6 +869,17 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (error) throw error;
       return ((data ?? []) as ManualShiftOrderAshlamaRow[]).map(mapAshlamaRow);
+    },
+
+    async listOrderEvents(orderId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_events')
+        .select(eventColumns)
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftOrderEventRow[]).map(mapEventRow);
     },
 
     async findOrderAshlamaById(ashlamaId) {

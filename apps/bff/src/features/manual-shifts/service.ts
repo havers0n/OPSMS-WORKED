@@ -101,6 +101,7 @@ export type ManualShiftsService = {
   listLineOrders(input: { tenantId: string; lineId: string }): Promise<ManualShiftOrder[]>;
   listOrderCheckUnits(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderCheckUnit[]>;
   listOrderAshlamot(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderAshlama[]>;
+  listOrderEvents(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderEvent[]>;
   createOrderAshlama(input: {
     tenantId: string;
     orderId: string;
@@ -663,6 +664,14 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftOrderNotFound(input.orderId);
       }
       return repo.listOrderAshlamot(input.orderId);
+    },
+
+    async listOrderEvents(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+      return repo.listOrderEvents(input.orderId);
     },
 
     async createOrderAshlama(input) {

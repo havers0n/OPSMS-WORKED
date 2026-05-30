@@ -239,3 +239,138 @@ describe('OrderDetail check-units section', () => {
     expect(doneButton.disabled).toBe(true);
   });
 });
+
+describe('OrderDetail history', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows history trigger row and opens overlay on click', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.includes('/events') && method === 'GET') {
+        return [
+          {
+            id: 'e1111111-1111-4111-8111-111111111111',
+            tenantId: '22222222-2222-4222-8222-222222222222',
+            shiftId: '33333333-3333-4333-8333-333333333333',
+            lineId: '44444444-4444-4444-8444-444444444444',
+            orderId: '11111111-1111-4111-8111-111111111111',
+            eventType: 'created',
+            actorName: 'Dispatcher',
+            actorProfileId: null,
+            fromStatus: null,
+            toStatus: null,
+            payload: null,
+            createdAt: '2026-05-26T07:00:00.000Z'
+          }
+        ];
+      }
+      return [];
+    });
+
+    renderDetail();
+
+    expect(screen.getByText('היסטוריית הזמנה')).toBeTruthy();
+    expect(screen.getByText('צפה בפעולות שבוצעו בהזמנה')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('היסטוריית הזמנה'));
+
+    await waitFor(() => {
+      expect(screen.getByText('הזמנה נוצרה')).toBeTruthy();
+    });
+
+    expect(
+      mockedBffRequest.mock.calls.some(([url, init]) =>
+        String(url).includes('/events') && (init?.method ?? 'GET') === 'GET'
+      )
+    ).toBe(true);
+  });
+
+  it('does not fetch events before overlay is opened', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText('היסטוריית הזמנה')).toBeTruthy();
+    });
+
+    expect(
+      mockedBffRequest.mock.calls.some(([url]) => String(url).includes('/events'))
+    ).toBe(false);
+  });
+
+  it('overlay closes when back button is pressed', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      if (String(url).includes('/events')) return [];
+      return [];
+    });
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('היסטוריית הזמנה')).toBeTruthy());
+    fireEvent.click(screen.getByText('היסטוריית הזמנה'));
+    await waitFor(() => expect(screen.getByLabelText('סגור היסטוריה')).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('סגור היסטוריה'));
+    await waitFor(() => expect(screen.queryByLabelText('סגור היסטוריה')).toBeNull());
+  });
+
+  it('renders actor name when available', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      if (String(url).includes('/events')) return [
+        {
+          id: 'e1111111-1111-4111-8111-111111111111',
+          tenantId: '22222222-2222-4222-8222-222222222222',
+          shiftId: '33333333-3333-4333-8333-333333333333',
+          lineId: '44444444-4444-4444-8444-444444444444',
+          orderId: '11111111-1111-4111-8111-111111111111',
+          eventType: 'created',
+          actorName: 'Dispatcher',
+          actorProfileId: null,
+          fromStatus: null,
+          toStatus: null,
+          payload: null,
+          createdAt: '2026-05-26T07:00:00.000Z'
+        }
+      ];
+      return [];
+    });
+    renderDetail();
+    fireEvent.click(await screen.findByText('היסטוריית הזמנה'));
+    await waitFor(() => expect(screen.getByText('Dispatcher')).toBeTruthy());
+    expect(screen.queryByText('2026-05-26T07:00:00.000Z')).toBeNull();
+  });
+
+  it('does not render raw payload JSON', async () => {
+    mockedBffRequest.mockImplementation(async (url) => {
+      if (String(url).includes('/events')) return [
+        {
+          id: 'e2222222-2222-4222-8222-222222222222',
+          tenantId: '22222222-2222-4222-8222-222222222222',
+          shiftId: '33333333-3333-4333-8333-333333333333',
+          lineId: '44444444-4444-4444-8444-444444444444',
+          orderId: '11111111-1111-4111-8111-111111111111',
+          eventType: 'check_unit_created',
+          actorName: null,
+          actorProfileId: null,
+          fromStatus: null,
+          toStatus: null,
+          payload: { checkUnitId: 'cu-1', unitNumber: 1, status: 'open' },
+          createdAt: '2026-05-26T07:05:00.000Z'
+        }
+      ];
+      return [];
+    });
+    renderDetail();
+    fireEvent.click(await screen.findByText('היסטוריית הזמנה'));
+    await waitFor(() => expect(screen.getByText('יחידת בדיקה נוספה')).toBeTruthy());
+    expect(screen.queryByText('cu-1')).toBeNull();
+    expect(screen.queryByText('checkUnitId')).toBeNull();
+  });
+});

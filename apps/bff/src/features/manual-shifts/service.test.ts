@@ -349,6 +349,11 @@ function createRepo() {
         .filter((ashlama) => ashlama.orderId === orderId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }),
+    listOrderEvents: vi.fn(async (orderId: string) => {
+      return state.events
+        .filter((e) => e['orderId'] === orderId)
+        .sort((a, b) => String(b['createdAt']).localeCompare(String(a['createdAt']))) as never;
+    }),
     findOrderAshlamaById: vi.fn(async (ashlamaId: string) => {
       return state.ashlamot.find((ashlama) => ashlama.id === ashlamaId) ?? null;
     }),
@@ -2386,5 +2391,44 @@ describe('manual shift picker assignment patch', () => {
         actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
       })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_PICKER_WORKER_INVALID' });
+  });
+});
+
+describe('listOrderEvents access control', () => {
+  const nowIso = '2026-05-26T07:00:00.000Z';
+
+  function makeService(repo: ReturnType<typeof createRepo>['repo']) {
+    return createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+  }
+
+  it('returns events for a valid order', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order }));
+    const event = { orderId: ids.order, createdAt: nowIso } as never;
+    state.events.push(event);
+    const service = makeService(repo);
+
+    const result = await service.listOrderEvents({ tenantId: ids.tenant, orderId: ids.order });
+    expect(result).toHaveLength(1);
+  });
+
+  it('rejects a foreign tenant', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order }));
+    const service = makeService(repo);
+
+    await expect(
+      service.listOrderEvents({ tenantId: ids.otherTenant, orderId: ids.order })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
+  });
+
+  it('rejects a deleted order', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order, deletedAt: nowIso }));
+    const service = makeService(repo);
+
+    await expect(
+      service.listOrderEvents({ tenantId: ids.tenant, orderId: ids.order })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
   });
 });

@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
-import { ArrowRight, CheckCircle, Clock, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, Clock, History, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
 import {
   useDeleteManualShiftOrder,
   usePatchManualShiftOrder,
@@ -12,6 +12,7 @@ import { EditOrderSheet } from './edit-order-sheet';
 import { ErrorFlow } from './error-flow';
 import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
 import { OrderAshlamotSection } from './order-ashlamot-section';
+import { OrderHistoryOverlay } from './order-history-overlay';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
 interface OrderDetailProps {
@@ -33,6 +34,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [canCloseOrderFromCheckUnits, setCanCloseOrderFromCheckUnits] = useState(true);
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
   const patchOrder = usePatchManualShiftOrder();
   const deleteOrder = useDeleteManualShiftOrder(order.id, {
@@ -203,6 +205,18 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             הבדיקה פעילה במקביל לליקוט. סגירה כתקין חסומה עד לסיום מפורש של הליקוט (העברה ל"ממתין לבדיקה").
           </p>
         )}
+
+        <button
+          type="button"
+          onClick={() => setShowHistory(true)}
+          className="flex items-center justify-between w-full rounded-2xl border border-gray-200 bg-white p-4 text-right shadow-sm active:bg-gray-50 transition-colors"
+        >
+          <div className="flex flex-col gap-0.5">
+            <span className="font-semibold text-gray-900">היסטוריית הזמנה</span>
+            <span className="text-sm text-gray-500">צפה בפעולות שבוצעו בהזמנה</span>
+          </div>
+          <History size={20} className="text-gray-400 shrink-0" />
+        </button>
       </main>
 
       <footer className="shrink-0 border-t border-gray-200 bg-white p-4 flex flex-col gap-3">
@@ -345,6 +359,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
 
       {showAssignPicker && <AssignPickerSheet order={order} onClose={() => setShowAssignPicker(false)} />}
       {showEditOrder && <EditOrderSheet order={order} onClose={() => setShowEditOrder(false)} />}
+      {showHistory && <OrderHistoryOverlay orderId={order.id} onClose={() => setShowHistory(false)} />}
     </div>
   );
 }

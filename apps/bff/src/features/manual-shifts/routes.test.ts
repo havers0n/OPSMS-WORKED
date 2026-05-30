@@ -10,6 +10,7 @@ import type {
   ManualShiftOrderAshlama,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderError,
+  ManualShiftOrderEvent,
   ManualShiftPeopleSummary,
   ManualShiftSession,
   ManualShiftTodayResponse,
@@ -159,6 +160,23 @@ function createCheckUnit(status: ManualShiftOrderCheckUnit['status'] = 'open'): 
   };
 }
 
+function createEvent() {
+  return {
+    id: 'e9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+    tenantId: ids.tenant,
+    shiftId: ids.shift,
+    lineId: ids.line,
+    orderId: ids.order,
+    eventType: 'created' as const,
+    actorName: 'Shift Dispatcher',
+    actorProfileId: ids.user,
+    fromStatus: null,
+    toStatus: null,
+    payload: null,
+    createdAt: '2026-05-26T07:15:00.000Z'
+  };
+}
+
 function createServiceMock(overrides: Partial<ManualShiftsService> = {}): ManualShiftsService {
   const todayResponse: ManualShiftTodayResponse = {
     shift: null,
@@ -221,6 +239,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     listLineOrders: vi.fn(async () => []),
     listOrderCheckUnits: vi.fn(async () => [createCheckUnit()]),
     listOrderAshlamot: vi.fn(async () => [ashlama]),
+    listOrderEvents: vi.fn(async () => [createEvent()]),
     createOrderAshlama: vi.fn(async () => ashlama),
     patchOrderAshlamaStatus: vi.fn(async () => ({ ...ashlama, status: 'done' as const })),
     createOrderCheckUnit: vi.fn(async () => createCheckUnit()),
@@ -439,6 +458,27 @@ describe('manual shifts routes', () => {
       { orderId: ids.order, unitNumber: 1, status: 'open' }
     ]);
     expect(service.listOrderCheckUnits).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      orderId: ids.order
+    });
+
+    await app.close();
+  });
+
+  it('lists order events', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shift-orders/${ids.order}/events`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject([
+      { orderId: ids.order, eventType: 'created', actorName: 'Shift Dispatcher' }
+    ]);
+    expect(service.listOrderEvents).toHaveBeenCalledWith({
       tenantId: ids.tenant,
       orderId: ids.order
     });

@@ -3,6 +3,7 @@ import type {
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderAshlama,
+  ManualShiftOrderEvent,
   ManualShiftPeopleSummary,
   ManualShiftDaySummary,
   ManualShiftWorker
@@ -19,6 +20,7 @@ export const manualShiftKeys = {
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
   orderCheckUnits: (orderId: string) => [...manualShiftKeys.all, 'order-check-units', orderId] as const,
   orderAshlamot: (orderId: string) => [...manualShiftKeys.all, 'order-ashlamot', orderId] as const,
+  orderEvents: (orderId: string) => [...manualShiftKeys.all, 'order-events', orderId] as const,
   workers: (shiftId: string) => [...manualShiftKeys.all, 'workers', shiftId] as const,
   peopleSummary: (shiftId: string) =>
     [...manualShiftKeys.all, 'people-summary', shiftId] as const,
@@ -98,6 +100,19 @@ export function orderAshlamotQueryOptions(orderId: string) {
     queryFn: () => fetchOrderAshlamot(orderId),
     enabled: !!orderId,
     staleTime: 10_000
+  });
+}
+
+async function fetchOrderEvents(orderId: string): Promise<ManualShiftOrderEvent[]> {
+  return bffRequest<ManualShiftOrderEvent[]>(`/api/manual-shift-orders/${orderId}/events`);
+}
+
+export function orderEventsQueryOptions(orderId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: manualShiftKeys.orderEvents(orderId),
+    queryFn: () => fetchOrderEvents(orderId),
+    enabled: enabled && !!orderId,
+    staleTime: 30_000
   });
 }
 

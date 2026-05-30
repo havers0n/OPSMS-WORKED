@@ -159,7 +159,8 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     createOrder: vi.fn(async () => { throw new Error('not used'); }),
     createOrderError: vi.fn(async () => { throw new Error('not used'); }),
     createLineEvent: vi.fn(async () => { throw new Error('not used'); }),
-    listShiftErrors: vi.fn(async () => [])
+    listShiftErrors: vi.fn(async () => []),
+    listOrderEvents: vi.fn(async () => [])
   };
 }
 
