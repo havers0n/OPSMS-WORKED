@@ -13,6 +13,11 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "npm run test:e2e --workspace @wos/web",
+    "verify:web:quick": "npm run lint --workspace @wos/web && npm run typecheck --workspace @wos/web",
+    "verify:bff:quick": "npm run lint --workspace @wos/bff && npm run typecheck --workspace @wos/bff",
+    "verify:domain:quick": "npm run lint --workspace @wos/domain && npm run typecheck --workspace @wos/domain",
+    "verify:quick": "npm run verify:web:quick && npm run verify:bff:quick && npm run verify:domain:quick",
+    "agent:preflight": "powershell -ExecutionPolicy Bypass -File ./scripts/agent-preflight.ps1",
     "products:generate-seed": "node apps/supabase/scripts/generate-products-catalog-seed.mjs",
     "gen:types": "supabase gen types typescript --workdir apps/supabase --local --schema public 2>/dev/null > apps/web/src/shared/api/supabase/types.ts"
   },
