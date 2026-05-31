@@ -402,7 +402,7 @@ export function useCanvasViewportController({
   // with individual selectors so this hook only re-renders when values change.
   const offsetX = useCameraStore((s) => s.offsetX);
   const offsetY = useCameraStore((s) => s.offsetY);
-  // Stable object reference — only changes when the underlying values change,
+  // Stable object reference - only changes when the underlying values change,
   // matching the previous useState behaviour.
   const canvasOffset = useMemo<CanvasOffset>(
     () => ({ x: offsetX, y: offsetY }),
@@ -422,6 +422,7 @@ export function useCanvasViewportController({
   const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchPanActiveRef = useRef(false);
   const touchPanStartRef = useRef<ScreenPoint | null>(null);
+  const desktopPanThresholdCrossedRef = useRef(false);
   const pinchStartDistRef = useRef<number | null>(null);
   const lastTapRef = useRef<{ time: number; point: ScreenPoint } | null>(null);
 
@@ -733,7 +734,7 @@ export function useCanvasViewportController({
       if (blockMousePan) return;
       const stage = stageRef.current;
       if (!stage) return;
-      // Only pan on empty canvas — let clicks on shapes reach Konva normally.
+      // Only pan on empty canvas - let clicks on shapes reach Konva normally.
       const box = stage.container().getBoundingClientRect();
       const hit = stage.getIntersection({
         x: event.clientX - box.left,
@@ -745,7 +746,8 @@ export function useCanvasViewportController({
       cancelInertia();
       commitTransformOnlyZoom();
       isPanningRef.current = true;
-      // Snapshot current offset at pan start via getState() — avoids stale closures
+      desktopPanThresholdCrossedRef.current = false;
+      // Snapshot current offset at pan start via getState() - avoids stale closures
       // without needing a ref that mirrors the store value.
       const { offsetX: ox, offsetY: oy } = useCameraStore.getState();
       startTransformOnlyPan({
@@ -767,6 +769,14 @@ export function useCanvasViewportController({
       if (!isPanningRef.current) return;
       const stage = stageRef.current;
       if (!stage) return;
+      if (!desktopPanThresholdCrossedRef.current) {
+        const dx = event.clientX - panStateRef.current.panStart.x;
+        const dy = event.clientY - panStateRef.current.panStart.y;
+        if (Math.hypot(dx, dy) >= TOUCH_PAN_THRESHOLD_PX) {
+          desktopPanThresholdCrossedRef.current = true;
+          setIsPanning(true);
+        }
+      }
       const now = performance.now();
       const dt = now - prevMoveTime;
       if (dt > 0 && dt < 80) {
@@ -788,6 +798,7 @@ export function useCanvasViewportController({
       if (event.button !== 0) return;
       if (!isPanningRef.current) return;
       isPanningRef.current = false;
+      desktopPanThresholdCrossedRef.current = false;
       finishTransformOnlyPan({
         cancelDraw: cancelScheduledPanDraw,
         commitOffset: (offset) => {

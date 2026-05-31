@@ -1,11 +1,16 @@
+// @vitest-environment jsdom
 import type Konva from 'konva';
 import type { Rack } from '@wos/domain';
+import { render, fireEvent, act } from '@testing-library/react';
+import { createElement, useEffect, useRef } from 'react';
+import type { MutableRefObject } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   getCanvasLOD,
   isRackInViewport,
   LOD_CELL_ENTRY
 } from '@/entities/layout-version/lib/canvas-geometry';
+import { useCameraStore } from '@/warehouse/editor/model/camera-store';
 import { getStorageOccupancyOverlayLod } from './shapes/storage-occupancy-overlay';
 import {
   batchDrawStageLayers,
@@ -19,8 +24,10 @@ import {
   moveTransformOnlyPan,
   shouldQueueModeEntryAutoFit,
   startTransformOnlyPan,
+  useCanvasViewportController,
   updateTransformOnlyZoom
 } from './use-canvas-viewport-controller';
+import { useCanvasZoomSettingsStore } from '@/app/settings/model/canvas-zoom-settings';
 
 type FakeStage = Konva.Stage & {
   __position: { x: number; y: number };
@@ -63,6 +70,32 @@ function createFakeStage(initial = { x: 0, y: 0 }) {
     }
   } as unknown as FakeStage;
 
+  return stage;
+}
+
+function createInteractiveStage(
+  containerRef: { current: HTMLDivElement | null },
+  initial = { x: 0, y: 0 }
+) {
+  let position = { ...initial };
+  const stage = {
+    container: () => containerRef.current as HTMLDivElement,
+    getIntersection: () => null,
+    getLayers: () => [{ batchDraw: vi.fn() }],
+    position(next?: { x: number; y: number }) {
+      if (next) position = { ...next };
+      return position;
+    },
+    scale() {
+      return { x: 1, y: 1 };
+    },
+    x() {
+      return position.x;
+    },
+    y() {
+      return position.y;
+    }
+  } as unknown as Konva.Stage;
   return stage;
 }
 
@@ -376,5 +409,106 @@ describe('transform-only pan helpers', () => {
 
     expect(stage.__position).toEqual({ x: 60, y: 30 });
     expect(worldFromStage).toEqual(worldFromStore);
+  });
+});
+
+describe('useCanvasViewportController desktop pan threshold', () => {
+  it('keeps click/below-threshold move non-panning, enters panning at threshold once, resets on mouseup, and supports next drag', () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+
+    const stageContainerRef: { current: HTMLDivElement | null } = { current: null };
+    const stageRef = { current: createInteractiveStage(stageContainerRef) };
+    const panningSnapshots: boolean[] = [];
+    const setOffsetSpy = vi.spyOn(useCameraStore.getState(), 'setOffset');
+    const nowSpy = vi
+      .spyOn(performance, 'now')
+      .mockImplementation(() => 1000);
+
+    useCameraStore.setState({ zoom: 1, offsetX: 0, offsetY: 0 });
+    useCanvasZoomSettingsStore.setState({ minZoom: 0.1, maxZoom: 3 });
+
+    function Harness() {
+      const controller = useCanvasViewportController({
+        autoFitRacks: [],
+        setCanvasZoom: () => undefined,
+        stageRef: stageRef as MutableRefObject<Konva.Stage | null>,
+        viewMode: 'layout',
+        zoom: 1
+      });
+      const mountedRef = useRef(false);
+      useEffect(() => {
+        if (!mountedRef.current) {
+          mountedRef.current = true;
+          return;
+        }
+        panningSnapshots.push(controller.isPanning);
+      }, [controller.isPanning]);
+      return createElement('div', {
+        ref: (node: HTMLDivElement | null) => {
+          stageContainerRef.current = node;
+          controller.containerRef.current = node;
+        }
+      });
+    }
+
+    const rendered = render(createElement(Harness));
+    const container = rendered.container.firstElementChild as HTMLDivElement;
+    container.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600
+      }) as DOMRect;
+
+    act(() => {
+      fireEvent.mouseDown(container, { button: 0, clientX: 100, clientY: 100 });
+    });
+    expect(panningSnapshots).toEqual([]);
+
+    act(() => {
+      fireEvent.mouseMove(window, { clientX: 104, clientY: 100 });
+    });
+    expect(panningSnapshots).toEqual([]);
+
+    act(() => {
+      fireEvent.mouseMove(window, { clientX: 106, clientY: 100 });
+    });
+    expect(panningSnapshots).toEqual([true]);
+
+    act(() => {
+      fireEvent.mouseMove(window, { clientX: 120, clientY: 100 });
+      fireEvent.mouseMove(window, { clientX: 130, clientY: 100 });
+    });
+    expect(panningSnapshots).toEqual([true]);
+
+    act(() => {
+      fireEvent.mouseUp(window, { button: 0 });
+    });
+    expect(panningSnapshots).toEqual([true, false]);
+    expect(setOffsetSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      fireEvent.mouseDown(container, { button: 0, clientX: 50, clientY: 50 });
+      fireEvent.mouseMove(window, { clientX: 56, clientY: 50 });
+    });
+    expect(panningSnapshots).toEqual([true, false, true]);
+
+    act(() => {
+      fireEvent.mouseUp(window, { button: 0 });
+    });
+    expect(panningSnapshots).toEqual([true, false, true, false]);
+    expect(setOffsetSpy).toHaveBeenCalledTimes(2);
+
+    nowSpy.mockRestore();
+    setOffsetSpy.mockRestore();
+    rendered.unmount();
+    globalThis.ResizeObserver = originalResizeObserver;
   });
 });
