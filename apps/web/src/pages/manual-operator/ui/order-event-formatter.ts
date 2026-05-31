@@ -20,6 +20,12 @@ export function formatOrderEventLabel(event: ManualShiftOrderEvent): string {
       return 'תקלה דווחה';
     case 'picker_changed':
       return 'מלקט שונה';
+    case 'bulk_imported':
+      return 'הזמנה יובאה מייבוא';
+    case 'point_deleted':
+      return 'הזמנה נמחקה';
+    case 'point_restored':
+      return 'הזמנה שוחזרה';
     case 'check_unit_created':
       return 'יחידת בדיקה נוספה';
     case 'check_unit_status_changed':

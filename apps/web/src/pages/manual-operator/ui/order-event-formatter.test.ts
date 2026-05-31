@@ -43,6 +43,18 @@ describe('formatOrderEventLabel', () => {
     ).toBe('סטטוס שונה ל: הושלם');
   });
 
+  it('bulk_imported → הזמנה יובאה מייבוא', () => {
+    expect(formatOrderEventLabel(makeEvent({ eventType: 'bulk_imported' }))).toBe('הזמנה יובאה מייבוא');
+  });
+
+  it('point_deleted → הזמנה נמחקה', () => {
+    expect(formatOrderEventLabel(makeEvent({ eventType: 'point_deleted' }))).toBe('הזמנה נמחקה');
+  });
+
+  it('point_restored → הזמנה שוחזרה', () => {
+    expect(formatOrderEventLabel(makeEvent({ eventType: 'point_restored' }))).toBe('הזמנה שוחזרה');
+  });
+
   it('error_reported → תקלה דווחה', () => {
     expect(formatOrderEventLabel(makeEvent({ eventType: 'error_reported' }))).toBe('תקלה דווחה');
   });
