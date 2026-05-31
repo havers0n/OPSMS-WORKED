@@ -448,3 +448,14 @@ export function canTransitionManualShiftOrderToDoneWithCheckUnits(
 
   return progress.activeUnits > 0 && progress.openUnits === 0 && progress.returnedUnits === 0;
 }
+
+export function getEffectiveExpectedCheckUnitsCount(input: {
+  declaredPalletCount?: number | null;
+  units: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>;
+}): number {
+  const declaredPalletCount = input.declaredPalletCount ?? 0;
+  const relevantUnitsCount = input.units.filter(
+    (unit) => unit.status === 'open' || unit.status === 'checked'
+  ).length;
+  return Math.max(declaredPalletCount, relevantUnitsCount);
+}

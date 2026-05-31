@@ -452,6 +452,7 @@ export function useCreateManualShiftOrderCheckUnit(orderId: string) {
         (prev) => (prev ? [...prev, checkUnit] : [checkUnit])
       );
       invalidateOrderCheckUnitQueries(queryClient, checkUnit);
+      invalidateOrderQueries(queryClient, checkUnit.lineId, checkUnit.shiftId);
     }
   });
 }
@@ -462,6 +463,7 @@ export function useUpdateManualShiftOrderCheckUnitStatus() {
     mutationFn: updateOrderCheckUnitStatus,
     onSuccess: (checkUnit) => {
       invalidateOrderCheckUnitQueries(queryClient, checkUnit);
+      invalidateOrderQueries(queryClient, checkUnit.lineId, checkUnit.shiftId);
     }
   });
 }

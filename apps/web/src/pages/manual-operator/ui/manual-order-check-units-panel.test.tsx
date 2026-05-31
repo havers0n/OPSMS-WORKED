@@ -408,7 +408,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     mockedBffRequest.mockResolvedValue([makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'returned'), makeCheckUnit(3, 'voided')]);
     renderPanel();
     await waitFor(() => {
-      expect(screen.getByText('נבדקו 1 מתוך 2')).toBeTruthy();
+      expect(screen.getByText('נבדקו 1 מתוך 1')).toBeTruthy();
       expect(screen.getByTestId('check-units-status-chip').textContent).toBe('דורש תיקון');
     });
   });

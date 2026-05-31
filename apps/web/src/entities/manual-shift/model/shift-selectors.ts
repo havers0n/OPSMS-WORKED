@@ -7,7 +7,8 @@ import type {
 } from '@wos/domain';
 import {
   summarizeManualShiftOrderCheckUnits as domainSummarizeManualShiftOrderCheckUnits,
-  canTransitionManualShiftOrderToDoneWithCheckUnits as domainCanTransitionManualShiftOrderToDoneWithCheckUnits
+  canTransitionManualShiftOrderToDoneWithCheckUnits as domainCanTransitionManualShiftOrderToDoneWithCheckUnits,
+  getEffectiveExpectedCheckUnitsCount as domainGetEffectiveExpectedCheckUnitsCount
 } from '@wos/domain';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -439,6 +440,16 @@ export function canCloseOrderFromCheckUnits(
   expectedUnitsCount?: number | null
 ): boolean {
   return domainCanTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits, expectedUnitsCount);
+}
+
+export function getEffectiveExpectedCheckUnitsCount(
+  declaredPalletCount: number | null | undefined,
+  checkUnits: ReadonlyArray<Pick<ManualShiftOrderCheckUnit, 'status'>>
+): number {
+  return domainGetEffectiveExpectedCheckUnitsCount({
+    declaredPalletCount,
+    units: checkUnits
+  });
 }
 
 const DETAIL_STATUS_PRIORITY: Record<ManualShiftOrderStatus, number> = {

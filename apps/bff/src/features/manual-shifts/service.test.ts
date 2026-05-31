@@ -1409,6 +1409,367 @@ describe('manual shift order check units', () => {
     expect(listed[0]?.id).toBe(created.id);
   });
 
+  it('create check unit does not persist inferred palletCount when initial palletCount is null', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: null }));
+
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+  });
+
+  it('create check unit does not change declared palletCount=0', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: 0 }));
+
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(state.orders[0]?.palletCount).toBe(0);
+  });
+
+  it('create check unit keeps declared palletCount unchanged even when active units exceed declaration', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: 3 }));
+
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(state.orders[0]?.palletCount).toBe(3);
+
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(state.orders[0]?.palletCount).toBe(3);
+  });
+
+  it('void replacement flow keeps declared palletCount unchanged and allows completion', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: null }));
+
+    const unit1 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    const unit2 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'voided',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    const unit3 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit1.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit3.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(state.orders[0]?.palletCount).toBeNull();
+    expect(done.status).toBe('done');
+  });
+
+  it('returned replacement flow (returned->voided->new unit) keeps declared palletCount unchanged and allows completion', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: null }));
+
+    const unit1 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    const unit2 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'returned',
+      reason: 'damaged wrap',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'voided',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    const unit3 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit1.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit3.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(done.status).toBe('done');
+  });
+
+  it('returned -> checked after replacement keeps declared palletCount unchanged and completion consistent', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: null }));
+
+    const unit1 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    const unit2 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'returned',
+      reason: 'damaged wrap',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    const unit3 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'checked',
+      reason: 'resolved',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit1.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit3.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(done.status).toBe('done');
+    expect(state.orders[0]?.palletCount).toBeNull();
+  });
+
+  it('returned -> open after replacement keeps declared palletCount unchanged and done stays blocked with open unit', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: null }));
+
+    const unit1 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    const unit2 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'returned',
+      reason: 'damaged wrap',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    const unit3 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'open',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    expect(state.orders[0]?.palletCount).toBeNull();
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit1.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit3.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    await expect(
+      service.transitionOrderStatus({
+        tenantId: ids.tenant,
+        orderId: ids.order,
+        status: 'done',
+        actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+      })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_DONE_BLOCKED_BY_CHECK_UNITS' });
+  });
+
+  it('order can complete after multiple dynamically added pallets are checked', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check', palletCount: null }));
+
+    const unit1 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    const unit2 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+    const unit3 = await service.createOrderCheckUnit({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit1.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit2.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId: unit3.id,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    const done = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'done',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(done.status).toBe('done');
+    expect(state.orders[0]?.palletCount).toBeNull();
+  });
+
   it('transitions check unit status and emits audit event', async () => {
     const { repo, state } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
@@ -2583,3 +2944,4 @@ describe('listOrderEvents access control', () => {
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
   });
 });
+

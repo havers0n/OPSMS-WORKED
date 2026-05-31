@@ -101,7 +101,7 @@ describe('OrderDetail check-units section', () => {
 
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText('עדיין לא נוספו יחידות בדיקה')).toBeTruthy();
+      expect(screen.getByText('עדיין לא נוספו משטחים')).toBeTruthy();
     });
   });
 
@@ -121,7 +121,7 @@ describe('OrderDetail check-units section', () => {
     });
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByText('יחידה תקינה') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('משטח תקין') as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByText('תקלה') as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByText('עוד'));
     expect((screen.getByText('בטל יחידה') as HTMLButtonElement).disabled).toBe(true);
@@ -139,42 +139,62 @@ describe('OrderDetail check-units section', () => {
     await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByText('יחידה תקינה') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByText('משטח תקין') as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('picking completion requires confirmation: cancel does not mutate', async () => {
+  it('picking + palletCount=null finishes to waiting_check without modal', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
       if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status') && method === 'PATCH') {
+        return makeOrder({ status: 'waiting_check', palletCount: null });
+      }
       return [];
     });
 
-    renderDetail(makeOrder({ status: 'picking' }));
+    renderDetail(makeOrder({ status: 'picking', palletCount: null }));
     fireEvent.click(await screen.findByText('סיים ליקוט'));
 
-    expect(screen.getByText('סיום ליקוט')).toBeTruthy();
-    expect(screen.getByText('האם כל היחידות הגיעו לבדיקה? לאחר אישור ניתן יהיה לסגור את הבדיקה כתקינה אם כל היחידות נבדקו.')).toBeTruthy();
-    fireEvent.click(screen.getByText('ביטול'));
-
     await waitFor(() => {
-      expect(
-        mockedBffRequest.mock.calls.some(([url, init]) =>
-          String(url).includes('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111') &&
-          (init as RequestInit | undefined)?.method === 'PATCH'
-        )
-      ).toBe(false);
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'waiting_check' })
+      });
     });
+
+    expect(screen.queryByText('סיום ליקוט')).toBeNull();
   });
 
-  it('picking completion confirm patches palletCount then transitions to waiting_check', async () => {
+  it('picking + palletCount=0 finishes to waiting_check without modal', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
       if (path.includes('/check-units') && method === 'GET') return [];
-      if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111') && method === 'PATCH') {
-        return makeOrder({ status: 'picking', palletCount: 2 });
+      if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status') && method === 'PATCH') {
+        return makeOrder({ status: 'waiting_check', palletCount: 0 });
       }
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'picking', palletCount: 0 }));
+    fireEvent.click(await screen.findByText('סיים ליקוט'));
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'waiting_check' })
+      });
+    });
+
+    expect(screen.queryByText('סיום ליקוט')).toBeNull();
+  });
+
+  it('picking + palletCount>0 preserves direct transition behavior', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
       if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status') && method === 'PATCH') {
         return makeOrder({ status: 'waiting_check', palletCount: 2 });
       }
@@ -183,27 +203,20 @@ describe('OrderDetail check-units section', () => {
 
     renderDetail(makeOrder({ status: 'picking', palletCount: 2 }));
     fireEvent.click(await screen.findByText('סיים ליקוט'));
-    fireEvent.click(screen.getByText('כן, כל היחידות הגיעו'));
 
     await waitFor(() => {
-      expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          pickerName: undefined,
-          pickerWorkerId: undefined,
-          lineCount: undefined,
-          palletCount: 2,
-          startedAt: undefined,
-          waitingCheckAt: undefined,
-          finishedAt: undefined,
-          checkedAt: undefined
-        })
-      });
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status', {
         method: 'PATCH',
         body: JSON.stringify({ status: 'waiting_check' })
       });
     });
+
+    expect(
+      mockedBffRequest.mock.calls.some(([url, init]) =>
+        String(url).endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111') &&
+        (init?.method ?? 'GET') === 'PATCH'
+      )
+    ).toBe(false);
   });
 
   it('waiting_check order keeps actions enabled', async () => {
@@ -218,7 +231,7 @@ describe('OrderDetail check-units section', () => {
     await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByText('יחידה תקינה') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByText('משטח תקין') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('shows one canonical finalize blocking reason and disables תקין', async () => {
@@ -233,7 +246,7 @@ describe('OrderDetail check-units section', () => {
     renderDetail(makeOrder({ status: 'waiting_check', palletCount: 2 }));
     await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
 
-    expect(screen.getByText('לא ניתן לסגור: חסרות יחידות לבדיקה')).toBeTruthy();
+    expect(screen.getByText('לא ניתן לסגור: חסרים משטחים לבדיקה')).toBeTruthy();
     expect(screen.queryByText('לא ניתן לסגור: יש השלמה פתוחה')).toBeNull();
     const doneButton = screen.getByRole('button', { name: /סגור כתקין/ }) as HTMLButtonElement;
     expect(doneButton.disabled).toBe(true);

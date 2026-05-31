@@ -8,6 +8,7 @@ import {
 } from '@/entities/manual-shift/api/mutations';
 import {
   canCloseOrderFromCheckUnits,
+  getEffectiveExpectedCheckUnitsCount,
   summarizeManualShiftOrderCheckUnits
 } from '@/entities/manual-shift/model/shift-selectors';
 
@@ -117,6 +118,7 @@ interface ManualOrderCheckUnitsPanelState {
   blockingReason: string | null;
   hasOpenAshlama: boolean;
   checkedUnits: number;
+  effectiveExpectedUnitsCount: number;
   activeUnits: number;
   openUnits: number;
   returnedUnits: number;
@@ -175,16 +177,20 @@ export function ManualOrderCheckUnitsPanel({
       .map((ashlama) => [ashlama.checkUnitId, ashlama] as const)
   );
   const progress = summarizeManualShiftOrderCheckUnits(checkUnits);
+  const effectiveExpectedUnitsCount = getEffectiveExpectedCheckUnitsCount(
+    expectedUnitsCount,
+    checkUnits
+  );
   const hasOpenAshlama = ashlamot.some((ashlama) => ashlama.status === 'open');
-  const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits, expectedUnitsCount) && !hasOpenAshlama;
+  const canCloseOrder = canCloseOrderFromCheckUnits(checkUnits, effectiveExpectedUnitsCount) && !hasOpenAshlama;
   const blockingReason =
     hasOpenAshlama
       ? 'לא ניתן לסגור: יש השלמה פתוחה'
-      : expectedUnitsCount != null && progress.checkedUnits < expectedUnitsCount
+      : progress.checkedUnits < effectiveExpectedUnitsCount
         ? 'לא ניתן לסגור: חסרים משטחים לבדיקה'
         : null;
   const hasUnits = checkUnits.length > 0;
-  const missingUnits = expectedUnitsCount != null ? Math.max(expectedUnitsCount - progress.activeUnits, 0) : 0;
+  const missingUnits = Math.max(effectiveExpectedUnitsCount - progress.activeUnits, 0);
   const batchCreateCount = progress.activeUnits === 0 && missingUnits > 1 ? missingUnits : 1;
   const canPerformActions = interactive && canInteract;
   const showInteractionHint = interactive && !canInteract && Boolean(disabledReason);
@@ -205,6 +211,7 @@ export function ManualOrderCheckUnitsPanel({
       blockingReason,
       hasOpenAshlama,
       checkedUnits: progress.checkedUnits,
+      effectiveExpectedUnitsCount,
       activeUnits: progress.activeUnits,
       openUnits: progress.openUnits,
       returnedUnits: progress.returnedUnits,
@@ -212,7 +219,7 @@ export function ManualOrderCheckUnitsPanel({
       isLoading: checkUnitsQuery.isLoading,
       isError: checkUnitsQuery.isError
     });
-  }, [onStateChange, hasUnits, canCloseOrder, blockingReason, hasOpenAshlama, progress.checkedUnits, progress.activeUnits, progress.openUnits, progress.returnedUnits, missingUnits, checkUnitsQuery.isLoading, checkUnitsQuery.isError]);
+  }, [onStateChange, hasUnits, canCloseOrder, blockingReason, hasOpenAshlama, progress.checkedUnits, effectiveExpectedUnitsCount, progress.activeUnits, progress.openUnits, progress.returnedUnits, missingUnits, checkUnitsQuery.isLoading, checkUnitsQuery.isError]);
 
   useEffect(() => {
     return () => {
@@ -301,7 +308,7 @@ export function ManualOrderCheckUnitsPanel({
       {!checkUnitsQuery.isLoading && !checkUnitsQuery.isError && checkUnits.length > 0 && (
         <>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold" data-testid="check-units-summary">
-            <span>נבדקו {progress.checkedUnits} מתוך {expectedUnitsCount ?? progress.activeUnits}</span>
+            <span>נבדקו {progress.checkedUnits} מתוך {effectiveExpectedUnitsCount || progress.activeUnits}</span>
             <span className="text-gray-400">·</span>
             <span>פתוחות {progress.openUnits}</span>
             <span className="text-gray-400">·</span>

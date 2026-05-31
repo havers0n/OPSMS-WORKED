@@ -109,6 +109,46 @@ describe('manual shift order check unit mutations', () => {
     });
   });
 
+  it('create mutation invalidates check-units and order-level queries', async () => {
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useCreateManualShiftOrderCheckUnit('o1'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({});
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.orderCheckUnits('o1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+  });
+
+  it('create mutation keeps invalidating order-level queries on repeated add', async () => {
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useCreateManualShiftOrderCheckUnit('o1'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({});
+      await result.current.mutateAsync({});
+    });
+
+    const todayCalls = invalidateSpy.mock.calls.filter(
+      ([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: manualShiftKeys.today() })
+    );
+    const lineCalls = invalidateSpy.mock.calls.filter(
+      ([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: manualShiftKeys.lineOrders('l1') })
+    );
+    const shiftCalls = invalidateSpy.mock.calls.filter(
+      ([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: manualShiftKeys.shiftOrders('s1') })
+    );
+
+    expect(todayCalls.length).toBeGreaterThanOrEqual(2);
+    expect(lineCalls.length).toBeGreaterThanOrEqual(2);
+    expect(shiftCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('status mutation sends expected request shape', async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useUpdateManualShiftOrderCheckUnitStatus(), { wrapper });
@@ -146,7 +186,7 @@ describe('manual shift order check unit mutations', () => {
     });
   });
 
-  it('invalidates only order check-units after check-unit mutation', async () => {
+  it('status mutation invalidates check-units and order-level queries', async () => {
     const { invalidateSpy, wrapper } = createWrapper();
     const { result } = renderHook(() => useUpdateManualShiftOrderCheckUnitStatus(), { wrapper });
 
@@ -155,6 +195,10 @@ describe('manual shift order check unit mutations', () => {
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.orderCheckUnits('o1') });
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
   });
 });

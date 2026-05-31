@@ -109,12 +109,13 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
   const [hasCheckUnits, setHasCheckUnits] = useState(false);
   const [canCloseOrder, setCanCloseOrder] = useState(true);
   const [checkedUnits, setCheckedUnits] = useState(0);
+  const [effectiveExpectedUnitsCount, setEffectiveExpectedUnitsCount] = useState(0);
   const [activeUnits, setActiveUnits] = useState<number | null>(null);
 
   const elapsed = getElapsedFromIso(order.waitingCheckAt ?? order.createdAt);
   const doneDisabledByCheckUnits = hasCheckUnits && !canCloseOrder;
-  const doneDisabledByMissingExpected = order.palletCount == null || order.palletCount <= 0;
-  const doneDisabledByMissingUnits = order.palletCount != null && checkedUnits < order.palletCount;
+  const doneDisabledByMissingExpected = effectiveExpectedUnitsCount <= 0;
+  const doneDisabledByMissingUnits = checkedUnits < effectiveExpectedUnitsCount;
   const doneDisabledByStage = order.status !== 'waiting_check';
   const doneDisabled =
     isPending ||
@@ -171,6 +172,7 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           setHasCheckUnits(state.hasUnits);
           setCanCloseOrder(state.canCloseOrder);
           setCheckedUnits(state.checkedUnits);
+          setEffectiveExpectedUnitsCount(state.effectiveExpectedUnitsCount);
           if (!state.isLoading) setActiveUnits(state.activeUnits);
         }}
       />

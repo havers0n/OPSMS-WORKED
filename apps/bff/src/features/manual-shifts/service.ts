@@ -25,6 +25,7 @@ import {
   canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
   deriveManualShiftLineStatus,
+  getEffectiveExpectedCheckUnitsCount,
   manualShiftBulkAddInputRowSchema
 } from '@wos/domain';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -1336,7 +1337,11 @@ export function createManualShiftsServiceFromRepo(
 
       if (order.status === 'waiting_check' && input.status === 'done') {
         const checkUnits = await repo.listOrderCheckUnits(order.id);
-        if (!canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits, order.palletCount)) {
+        const effectiveExpectedUnitsCount = getEffectiveExpectedCheckUnitsCount({
+          declaredPalletCount: order.palletCount,
+          units: checkUnits
+        });
+        if (!canTransitionManualShiftOrderToDoneWithCheckUnits(checkUnits, effectiveExpectedUnitsCount)) {
           throw manualShiftOrderDoneBlockedByCheckUnits(order.id);
         }
         const ashlamot = await repo.listOrderAshlamot(order.id);

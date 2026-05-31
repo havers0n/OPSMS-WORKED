@@ -4,6 +4,7 @@ import {
   canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
   deriveManualShiftLineStatus,
+  getEffectiveExpectedCheckUnitsCount,
   manualShiftBulkAddResultSchema,
   manualShiftDaySummarySchema,
   manualShiftOrderCheckUnitSchema,
@@ -279,6 +280,21 @@ describe('manual shift control contracts', () => {
         { status: 'checked' }
       ], 2)
     ).toBe(false);
+  });
+
+  it('derives effective expected count as max(declared, open+checked)', () => {
+    expect(
+      getEffectiveExpectedCheckUnitsCount({
+        declaredPalletCount: null,
+        units: [{ status: 'open' }, { status: 'checked' }, { status: 'returned' }, { status: 'voided' }]
+      })
+    ).toBe(2);
+    expect(
+      getEffectiveExpectedCheckUnitsCount({
+        declaredPalletCount: 3,
+        units: [{ status: 'checked' }]
+      })
+    ).toBe(3);
   });
 });
 
