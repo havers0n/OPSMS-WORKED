@@ -25,7 +25,7 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
     (o) =>
       o.status === 'waiting_check' ||
       o.status === 'returned' ||
-      (o.status === 'picking' && Boolean(o.waitingCheckAt))
+      (o.status === 'picking' && Boolean(o.checkStartedAt))
   );
   const lineNameMap = new Map(lines.map((ls) => [ls.line.id, ls.line.name]));
 
@@ -112,7 +112,9 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
   const [effectiveExpectedUnitsCount, setEffectiveExpectedUnitsCount] = useState(0);
   const [activeUnits, setActiveUnits] = useState<number | null>(null);
 
-  const elapsed = getElapsedFromIso(order.waitingCheckAt ?? order.createdAt);
+  const timerLabel = order.status === 'picking' ? 'בדיקה במקביל' : 'ממתין לבדיקה';
+  const elapsedSource = order.status === 'picking' ? order.checkStartedAt : order.waitingCheckAt;
+  const elapsed = getElapsedFromIso(elapsedSource);
   const doneDisabledByCheckUnits = hasCheckUnits && !canCloseOrder;
   const doneDisabledByMissingExpected = effectiveExpectedUnitsCount <= 0;
   const doneDisabledByMissingUnits = checkedUnits < effectiveExpectedUnitsCount;
@@ -132,7 +134,7 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
           {elapsed && (
             <div className="flex items-center gap-1 text-amber-600 text-sm shrink-0">
               <Clock size={14} />
-              <span>{elapsed}</span>
+              <span>{timerLabel}: {elapsed}</span>
             </div>
           )}
         </div>
@@ -214,7 +216,7 @@ function CheckOrderCard({ order, lineName, onOK, onError, isPending }: CheckOrde
       )}
       {doneDisabledByStage && (
         <p className="text-sm text-amber-700" data-testid={`check-stage-close-reason-${order.id}`}>
-          לא ניתן לסגור כתקין עד סיום מפורש של הליקוט/ההכנה.
+          הליקוט עדיין נמשך — לא ניתן לסגור את ההזמנה עדיין
         </p>
       )}
     </div>

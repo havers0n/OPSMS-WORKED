@@ -46,7 +46,8 @@ function createOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrde
     deletedByProfileId: null,
     deletedByName: null,
     deleteReason: null,
-    ...overrides
+    ...overrides,
+    checkStartedAt: overrides.checkStartedAt ?? null
   };
 }
 

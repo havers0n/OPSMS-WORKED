@@ -73,9 +73,14 @@ type PatchOrderInput = {
   lineCount?: number | null;
   palletCount?: number | null;
   startedAt?: string | null;
-  waitingCheckAt?: string | null;
   finishedAt?: string | null;
   checkedAt?: string | null;
+};
+
+type StartOrderCheckInput = {
+  orderId: string;
+  lineId: string;
+  shiftId: string;
 };
 
 type CreateOrderErrorInput = {
@@ -258,13 +263,18 @@ async function patchOrder({
   lineCount,
   palletCount,
   startedAt,
-  waitingCheckAt,
   finishedAt,
   checkedAt
 }: PatchOrderInput): Promise<ManualShiftOrder> {
   return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}`, {
     method: 'PATCH',
-    body: JSON.stringify({ pickerName, pickerWorkerId, lineCount, palletCount, startedAt, waitingCheckAt, finishedAt, checkedAt })
+    body: JSON.stringify({ pickerName, pickerWorkerId, lineCount, palletCount, startedAt, finishedAt, checkedAt })
+  });
+}
+
+async function startOrderCheck({ orderId }: StartOrderCheckInput): Promise<ManualShiftOrder> {
+  return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}/start-check`, {
+    method: 'POST'
   });
 }
 
@@ -503,6 +513,16 @@ export function usePatchManualShiftOrder() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: patchOrder,
+    onSuccess: (_data, variables) => {
+      invalidateOrderQueries(queryClient, variables.lineId, variables.shiftId);
+    }
+  });
+}
+
+export function useStartManualShiftOrderCheck() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: startOrderCheck,
     onSuccess: (_data, variables) => {
       invalidateOrderQueries(queryClient, variables.lineId, variables.shiftId);
     }

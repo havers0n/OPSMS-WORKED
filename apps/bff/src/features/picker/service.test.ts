@@ -108,6 +108,7 @@ function createManualRepoMock(): ManualShiftsRepo {
       size: 'unknown' as const,
       status: 'picking' as const,
       startedAt: null,
+      checkStartedAt: null,
       waitingCheckAt: null,
       checkedAt: null,
       finishedAt: null,

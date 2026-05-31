@@ -353,7 +353,6 @@ export function registerManualShiftsRoutes(
       size: body.size,
       comment: body.comment,
       startedAt: body.startedAt,
-      waitingCheckAt: body.waitingCheckAt,
       finishedAt: body.finishedAt,
       checkedAt: body.checkedAt,
       actor: actorFromAuth(auth)
@@ -381,6 +380,24 @@ export function registerManualShiftsRoutes(
 
     void reply.code(201);
     return parseOrThrow(manualShiftOrderCheckUnitResponseSchema, checkUnit);
+  });
+
+  app.post('/api/manual-shift-orders/:orderId/start-check', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+
+    const order = await getManualShiftsService(auth).startOrderCheck({
+      tenantId,
+      orderId,
+      actor: actorFromAuth(auth)
+    });
+
+    return parseOrThrow(manualShiftOrderResponseSchema, order);
   });
 
   app.post('/api/manual-shift-orders/:orderId/ashlamot', async (request, reply) => {

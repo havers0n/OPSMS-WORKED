@@ -71,7 +71,8 @@ function createOrder(
     deletedByProfileId: null,
     deletedByName: null,
     deleteReason: null,
-    ...overrides
+    ...overrides,
+    checkStartedAt: overrides.checkStartedAt ?? null
   };
 }
 
@@ -488,6 +489,7 @@ function createRepo() {
       if (patch.comment !== undefined) nextOrder.comment = patch.comment;
       if (patch.status !== undefined) nextOrder.status = patch.status;
       if (patch.startedAt !== undefined) nextOrder.startedAt = patch.startedAt;
+      if (patch.checkStartedAt !== undefined) nextOrder.checkStartedAt = patch.checkStartedAt;
       if (patch.waitingCheckAt !== undefined) nextOrder.waitingCheckAt = patch.waitingCheckAt;
       if (patch.checkedAt !== undefined) nextOrder.checkedAt = patch.checkedAt;
       if (patch.finishedAt !== undefined) nextOrder.finishedAt = patch.finishedAt;
@@ -2729,6 +2731,73 @@ describe('manual shift timestamp correctness (PR2)', () => {
 
     expect(order.waitingCheckAt).toBe(nowIso);
     expect(order.checkedAt).toBe(firstCheckedAt);
+  });
+
+  it('start-check from picking sets checkStartedAt only, keeps status and waitingCheckAt, and writes check_started event', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'picking', waitingCheckAt: null, checkStartedAt: null }));
+
+    const order = await service.startOrderCheck({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(order.status).toBe('picking');
+    expect(order.checkStartedAt).toBe(nowIso);
+    expect(order.waitingCheckAt).toBeNull();
+    expect(state.events.some((event) => event.eventType === 'check_started')).toBe(true);
+  });
+
+  it('repeated start-check is idempotent and does not overwrite first checkStartedAt', async () => {
+    const firstCheckStartedAt = '2026-05-26T06:30:00.000Z';
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'picking', checkStartedAt: firstCheckStartedAt }));
+
+    const order = await service.startOrderCheck({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(order.checkStartedAt).toBe(firstCheckStartedAt);
+    expect(state.events.some((event) => event.eventType === 'check_started')).toBe(false);
+  });
+
+  it('start-check then finish picking preserves checkStartedAt and stamps waitingCheckAt separately', async () => {
+    const { service, state } = makeService(() => nowIso);
+    state.orders.push(createOrder({ id: ids.order, status: 'picking', checkStartedAt: null, waitingCheckAt: null }));
+
+    await service.startOrderCheck({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+    const order = await service.transitionOrderStatus({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      status: 'waiting_check',
+      actor: { actorProfileId: ids.actor, actorName: 'Picker' }
+    });
+
+    expect(order.status).toBe('waiting_check');
+    expect(order.checkStartedAt).toBe(nowIso);
+    expect(order.waitingCheckAt).toBe(nowIso);
+  });
+
+  it('start-check rejects non-picking statuses', async () => {
+    const statuses: ManualShiftOrder['status'][] = ['queued', 'waiting_check', 'returned', 'done'];
+    for (const status of statuses) {
+      const { service, state } = makeService(() => nowIso);
+      state.orders.push(createOrder({ id: ids.order, status }));
+      await expect(
+        service.startOrderCheck({
+          tenantId: ids.tenant,
+          orderId: ids.order,
+          actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+        })
+      ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_INVALID_STATUS_TRANSITION' });
+    }
   });
 
   it('createOrderError sets checkedAt on first error and does not overwrite on a subsequent error', async () => {

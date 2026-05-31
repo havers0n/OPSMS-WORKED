@@ -42,6 +42,7 @@ const baseOrder = {
   size: 'M' as const,
   status: 'waiting_check' as const,
   startedAt: null,
+  checkStartedAt: null,
   waitingCheckAt: new Date().toISOString(),
   checkedAt: null,
   finishedAt: null,
@@ -234,7 +235,7 @@ describe('CheckTab expected units close guard', () => {
     mockedBffRequest.mockImplementation(async (url) => {
       const path = String(url);
       if (path.includes('/api/manual-shifts/shift-1/orders')) {
-        return [{ ...baseOrder, status: 'picking' as const, waitingCheckAt: new Date().toISOString() }];
+        return [{ ...baseOrder, status: 'picking' as const, checkStartedAt: new Date().toISOString() }];
       }
       if (path.includes('/api/manual-shift-orders/order-1/check-units')) return [makeCheckUnit(1, 'checked'), makeCheckUnit(2, 'checked')];
       return [];
@@ -242,6 +243,7 @@ describe('CheckTab expected units close guard', () => {
 
     renderCheckTab();
     await waitFor(() => expect(screen.getByTestId('check-stage-close-reason-order-1')).toBeTruthy());
+    expect(screen.getByText('הליקוט עדיין נמשך — לא ניתן לסגור את ההזמנה עדיין')).toBeTruthy();
     expect(getDoneButton().disabled).toBe(true);
   });
 

@@ -73,6 +73,7 @@ type ManualShiftOrderRow = {
   size: ManualShiftOrder['size'];
   status: ManualShiftOrder['status'];
   started_at: string | null;
+  check_started_at: string | null;
   waiting_check_at: string | null;
   checked_at: string | null;
   finished_at: string | null;
@@ -184,7 +185,7 @@ const lineColumns =
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
@@ -292,6 +293,7 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     size: row.size,
     status: row.status,
     startedAt: row.started_at,
+    checkStartedAt: row.check_started_at,
     waitingCheckAt: row.waiting_check_at,
     checkedAt: row.checked_at,
     finishedAt: row.finished_at,
@@ -427,6 +429,7 @@ export type ManualShiftOrderPatch = {
   comment?: string | null;
   status?: ManualShiftOrder['status'];
   startedAt?: string | null;
+  checkStartedAt?: string | null;
   waitingCheckAt?: string | null;
   checkedAt?: string | null;
   finishedAt?: string | null;
@@ -1102,6 +1105,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (patch.comment !== undefined) payload.comment = patch.comment;
       if (patch.status !== undefined) payload.status = patch.status;
       if (patch.startedAt !== undefined) payload.started_at = patch.startedAt;
+      if (patch.checkStartedAt !== undefined) payload.check_started_at = patch.checkStartedAt;
       if (patch.waitingCheckAt !== undefined) payload.waiting_check_at = patch.waitingCheckAt;
       if (patch.checkedAt !== undefined) payload.checked_at = patch.checkedAt;
       if (patch.finishedAt !== undefined) payload.finished_at = patch.finishedAt;

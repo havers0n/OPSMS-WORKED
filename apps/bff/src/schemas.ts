@@ -448,7 +448,6 @@ export const patchManualShiftOrderBodySchema = z.object({
   size: manualShiftOrderSizeSchema.optional(),
   comment: z.string().trim().min(1).nullable().optional(),
   startedAt: z.string().nullable().optional(),
-  waitingCheckAt: z.string().nullable().optional(),
   finishedAt: z.string().nullable().optional(),
   checkedAt: z.string().nullable().optional()
 });

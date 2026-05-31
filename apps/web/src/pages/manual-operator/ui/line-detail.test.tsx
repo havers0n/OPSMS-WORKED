@@ -90,7 +90,8 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
     deletedByProfileId: null,
     deletedByName: null,
     deleteReason: null,
-    ...overrides
+    ...overrides,
+    checkStartedAt: overrides.checkStartedAt ?? null
   };
 }
 
@@ -565,9 +566,8 @@ describe('PR4 – Line Detail & Manual Orders', () => {
         if (String(url).includes('/check-units')) {
           return Promise.resolve([checkedUnit]);
         }
-        if (String(url).includes('/api/manual-shift-orders/order-1') && method === 'PATCH') {
-          const body = JSON.parse((init as RequestInit).body as string) as { waitingCheckAt?: string };
-          return Promise.resolve({ ...order, waitingCheckAt: body.waitingCheckAt ?? order.waitingCheckAt });
+        if (String(url).includes('/api/manual-shift-orders/order-1/start-check') && method === 'POST') {
+          return Promise.resolve({ ...order, checkStartedAt: '2026-01-01T00:00:00.000Z' });
         }
         if (String(url).includes('/orders')) {
           return Promise.resolve([order]);
@@ -601,19 +601,17 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       });
     });
 
-    it('picking -> start check: calls PATCH /api/manual-shift-orders/:id with waitingCheckAt', async () => {
+    it('picking -> start check: calls POST /api/manual-shift-orders/:id/start-check', async () => {
       await setupOrderAndOpen('picking');
       fireEvent.click(screen.getByText('התחל בדיקה'));
 
       await waitFor(() => {
         const call = mockedBffRequest.mock.calls.find(
           ([url, init]) =>
-            String(url).includes('/api/manual-shift-orders/order-1') &&
-            (init as RequestInit | undefined)?.method === 'PATCH'
+            String(url).includes('/api/manual-shift-orders/order-1/start-check') &&
+            (init as RequestInit | undefined)?.method === 'POST'
         );
         expect(call).toBeTruthy();
-        const body = JSON.parse((call![1] as RequestInit).body as string);
-        expect(typeof body.waitingCheckAt).toBe('string');
       });
     });
 

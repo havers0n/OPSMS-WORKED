@@ -49,7 +49,8 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
     deletedByProfileId: null,
     deletedByName: null,
     deleteReason: null,
-    ...overrides
+    ...overrides,
+    checkStartedAt: overrides.checkStartedAt ?? null
   };
 }
 
@@ -135,7 +136,7 @@ describe('OrderDetail check-units section', () => {
       return [];
     });
 
-    renderDetail(makeOrder({ status: 'picking', waitingCheckAt: '2026-05-29T09:10:00.000Z' }));
+    renderDetail(makeOrder({ status: 'picking', checkStartedAt: '2026-05-29T09:10:00.000Z' }));
     await waitFor(() => expect(screen.getByText('#1')).toBeTruthy());
 
     expect((screen.getByTestId('create-check-unit') as HTMLButtonElement).disabled).toBe(false);

@@ -82,10 +82,13 @@ describe('formatOrderEventLabel', () => {
       )
     ).toBe('השלמה בוטלה');
   });
-
+  it('check_started -> label', () => {
+    expect(formatOrderEventLabel(makeEvent({ eventType: 'check_started' }))).toBe('\u05D4\u05D1\u05D3\u05D9\u05E7\u05D4 \u05D4\u05EA\u05D7\u05D9\u05DC\u05D4');
+  });
   it('unknown event type uses fallback', () => {
     expect(
       formatOrderEventLabel(makeEvent({ eventType: 'updated' as ManualShiftOrderEvent['eventType'] }))
     ).toBe('עודכן מידע בהזמנה');
   });
 });
+

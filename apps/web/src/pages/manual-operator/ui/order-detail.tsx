@@ -3,7 +3,7 @@ import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, History, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
 import {
   useDeleteManualShiftOrder,
-  usePatchManualShiftOrder,
+  useStartManualShiftOrderCheck,
   useUpdateManualShiftOrderStatus
 } from '@/entities/manual-shift/api/mutations';
 import { AssignPickerSheet } from './assign-picker-sheet';
@@ -32,7 +32,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [showEditOrder, setShowEditOrder] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
-  const patchOrder = usePatchManualShiftOrder();
+  const startOrderCheck = useStartManualShiftOrderCheck();
   const deleteOrder = useDeleteManualShiftOrder(order.id, {
     lineId: order.lineId,
     shiftId: order.shiftId
@@ -40,23 +40,31 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
 
   const statusLabel = getOrderStatusLabel(order.status);
   const statusColor = getOrderStatusColor(order.status);
-  const elapsed = getElapsedFromIso(order.createdAt);
+  const stageTimerSource =
+    order.status === 'queued'
+      ? order.createdAt
+      : order.status === 'picking'
+        ? order.startedAt
+        : order.status === 'waiting_check'
+          ? order.waitingCheckAt
+          : null;
+  const elapsed = getElapsedFromIso(stageTimerSource);
+  const parallelCheckElapsed = order.status === 'picking' ? getElapsedFromIso(order.checkStartedAt) : null;
 
   function transition(status: ManualShiftOrder['status']) {
     updateStatus.mutate({ orderId: order.id, lineId: order.lineId, status });
   }
 
   const isCheckActive =
-    Boolean(order.waitingCheckAt) || order.status === 'waiting_check' || order.status === 'returned';
+    Boolean(order.checkStartedAt) || order.status === 'waiting_check' || order.status === 'returned';
   const canInteractWithCheckUnits = isCheckActive && order.status !== 'done';
 
   function startCheck() {
     if (isCheckActive) return;
-    patchOrder.mutate({
+    startOrderCheck.mutate({
       orderId: order.id,
       lineId: order.lineId,
-      shiftId: order.shiftId,
-      waitingCheckAt: new Date().toISOString()
+      shiftId: order.shiftId
     });
   }
 
@@ -177,9 +185,10 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           }}
         />
         {order.status === 'picking' && isCheckActive && (
-          <p className="text-sm text-amber-700">
-            הבדיקה פעילה במקביל לליקוט. סגירה כתקין חסומה עד לסיום מפורש של הליקוט (העברה ל"ממתין לבדיקה").
-          </p>
+          <div className="text-sm text-amber-700 flex flex-col gap-1">
+            {parallelCheckElapsed && <p>בדיקה במקביל: <span dir="ltr">{parallelCheckElapsed}</span></p>}
+            <p>הבדיקה פעילה במקביל לליקוט. סגירה כתקין חסומה עד לסיום מפורש של הליקוט (העברה ל"ממתין לבדיקה").</p>
+          </div>
         )}
 
         <button
@@ -205,8 +214,8 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
             )}
             {order.status === 'picking' && (
               <div className="flex gap-3">
-                <button onClick={startCheck} disabled={patchOrder.isPending || isCheckActive} className="w-1/2 bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
-                  {patchOrder.isPending ? '...' : isCheckActive ? 'הבדיקה התחילה' : 'התחל בדיקה'}
+                <button onClick={startCheck} disabled={startOrderCheck.isPending || isCheckActive} className="w-1/2 bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
+                  {startOrderCheck.isPending ? '...' : isCheckActive ? 'הבדיקה התחילה' : 'התחל בדיקה'}
                 </button>
                 <button
                   onClick={() => transition('waiting_check')}

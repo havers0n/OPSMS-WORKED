@@ -185,9 +185,13 @@ export type ManualShiftsService = {
     size?: ManualShiftOrderSize;
     comment?: string | null;
     startedAt?: string | null;
-    waitingCheckAt?: string | null;
     finishedAt?: string | null;
     checkedAt?: string | null;
+    actor: ActorContext;
+  }): Promise<ManualShiftOrder>;
+  startOrderCheck(input: {
+    tenantId: string;
+    orderId: string;
     actor: ActorContext;
   }): Promise<ManualShiftOrder>;
   deleteOrder(input: {
@@ -1159,7 +1163,6 @@ export function createManualShiftsServiceFromRepo(
         size: deriveOrderSize(input.lineCount, input.size, order.size),
         comment: input.comment,
         startedAt: input.startedAt,
-        waitingCheckAt: input.waitingCheckAt,
         finishedAt: input.finishedAt,
         checkedAt: input.checkedAt
       });
@@ -1201,7 +1204,6 @@ export function createManualShiftsServiceFromRepo(
         input.size !== undefined ||
         input.comment !== undefined ||
         input.startedAt !== undefined ||
-        input.waitingCheckAt !== undefined ||
         input.finishedAt !== undefined ||
         input.checkedAt !== undefined;
 
@@ -1228,6 +1230,47 @@ export function createManualShiftsServiceFromRepo(
           }
         });
       }
+
+      return updated;
+    },
+
+    async startOrderCheck(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await requireActiveShift(order.shiftId);
+
+      if (order.status !== 'picking') {
+        throw invalidManualShiftOrderTransition(order.status, 'waiting_check');
+      }
+
+      if (order.checkStartedAt) {
+        return order;
+      }
+
+      const nowIso = getNowIso();
+      const updated = await repo.updateOrder(input.orderId, {
+        checkStartedAt: nowIso
+      });
+
+      if (!updated) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      await repo.createOrderEvent({
+        tenantId: input.tenantId,
+        shiftId: updated.shiftId,
+        lineId: updated.lineId,
+        orderId: updated.id,
+        eventType: 'check_started',
+        actorProfileId: input.actor.actorProfileId,
+        actorName: input.actor.actorName,
+        fromStatus: null,
+        toStatus: null,
+        payload: null
+      });
 
       return updated;
     },
