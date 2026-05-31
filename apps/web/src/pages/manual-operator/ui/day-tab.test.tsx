@@ -73,12 +73,20 @@ const baseDaySummary = {
   ]
 };
 
-function renderDayTab(shiftId = 'shift-1', shiftName = 'משמרת בוקר') {
+function renderDayTab(shiftId = 'shift-1', shiftName = 'משמרת בוקר', canInteract = true) {
   return render(
     <QueryClientProvider client={makeQC()}>
-      <DayTab shiftId={shiftId} shiftName={shiftName} />
+      <DayTab shiftId={shiftId} shiftName={shiftName} canInteract={canInteract} />
     </QueryClientProvider>
   );
+}
+
+function mockDayRequests(overrides?: { orders?: unknown[] }) {
+  mockedBffRequest.mockImplementation((url: string) => {
+    if (url.includes('/open-ashlamot')) return Promise.resolve([]);
+    if (url.includes('/orders')) return Promise.resolve(overrides?.orders ?? []);
+    return Promise.resolve(baseDaySummary);
+  });
 }
 
 describe('DayTab', () => {
@@ -87,7 +95,7 @@ describe('DayTab', () => {
   });
 
   it('renders totals and status breakdown', async () => {
-    mockedBffRequest.mockResolvedValue(baseDaySummary);
+    mockDayRequests();
 
     renderDayTab();
 
@@ -106,7 +114,7 @@ describe('DayTab', () => {
   });
 
   it('renders error breakdown by type', async () => {
-    mockedBffRequest.mockResolvedValue(baseDaySummary);
+    mockDayRequests();
 
     renderDayTab();
 
@@ -119,7 +127,7 @@ describe('DayTab', () => {
   });
 
   it('renders line breakdown', async () => {
-    mockedBffRequest.mockResolvedValue(baseDaySummary);
+    mockDayRequests();
 
     renderDayTab();
 
@@ -131,7 +139,7 @@ describe('DayTab', () => {
   });
 
   it('renders picker breakdown', async () => {
-    mockedBffRequest.mockResolvedValue(baseDaySummary);
+    mockDayRequests();
 
     renderDayTab();
 
@@ -143,7 +151,7 @@ describe('DayTab', () => {
   });
 
   it('shows export button', async () => {
-    mockedBffRequest.mockResolvedValue(baseDaySummary);
+    mockDayRequests();
 
     renderDayTab();
 
@@ -155,6 +163,7 @@ describe('DayTab', () => {
   it('export button is disabled when no orders loaded', async () => {
     // day summary resolves but orders resolves to []
     mockedBffRequest.mockImplementation((url: string) => {
+      if (url.includes('/open-ashlamot')) return Promise.resolve([]);
       if (url.includes('/orders')) return Promise.resolve([]);
       return Promise.resolve(baseDaySummary);
     });
@@ -194,6 +203,7 @@ describe('DayTab', () => {
     };
 
     mockedBffRequest.mockImplementation((url: string) => {
+      if (url.includes('/open-ashlamot')) return Promise.resolve([]);
       if (url.includes('/orders')) return Promise.resolve([mockOrder]);
       return Promise.resolve(baseDaySummary);
     });
@@ -236,5 +246,21 @@ describe('DayTab', () => {
 
   it('does not access supabase directly', () => {
     expect(mockedBffRequest).toBeDefined();
+  });
+
+  it('ShiftOpenAshlamotBoard renders before סיכום יום in the tab', async () => {
+    mockDayRequests();
+
+    renderDayTab();
+
+    await waitFor(() => {
+      expect(screen.getByText('סיכום יום')).toBeTruthy();
+      expect(screen.getByTestId('shift-open-ashlamot-board')).toBeTruthy();
+    });
+
+    const boardEl = screen.getByTestId('shift-open-ashlamot-board');
+    const summaryEl = screen.getByText('סיכום יום');
+    // DOCUMENT_POSITION_FOLLOWING means summaryEl comes AFTER boardEl
+    expect(boardEl.compareDocumentPosition(summaryEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

@@ -349,6 +349,28 @@ function createRepo() {
         .filter((ashlama) => ashlama.orderId === orderId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }),
+    listOpenShiftAshlamot: vi.fn(async (tenantId: string, shiftId: string) => {
+      return state.ashlamot
+        .filter((a) => a.shiftId === shiftId && a.tenantId === tenantId && a.status === 'open')
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .flatMap((a) => {
+          const order = state.orders.find((o) => o.id === a.orderId);
+          const line = state.lines.find((l) => l.id === a.lineId);
+          if (!order || order.deletedAt || !line || line.deleted_at) return [];
+          return [{
+            id: a.id,
+            orderId: a.orderId,
+            orderNumber: order.orderNumber ?? null,
+            pointName: order.pointName ?? null,
+            lineId: a.lineId,
+            lineName: line.name,
+            text: a.text,
+            source: a.source,
+            checkUnitId: a.checkUnitId,
+            createdAt: a.createdAt
+          }];
+        });
+    }),
     listOrderEvents: vi.fn(async (orderId: string) => {
       return state.events
         .filter((e) => e['orderId'] === orderId)
@@ -1856,6 +1878,135 @@ describe('manual shift ashlama constraints', () => {
         actor: { actorProfileId: ids.actor, actorName: 'Checker' }
       })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_DUPLICATE_OPEN_FOR_CHECK_UNIT' });
+  });
+});
+
+describe('listOpenShiftAshlamot', () => {
+  function makeService() {
+    const { repo, state } = createRepo();
+    return { service: createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso }), state };
+  }
+
+  it('returns only open ashlamot for the shift', async () => {
+    const { service, state } = makeService();
+    state.orders.push(createOrder({ id: ids.order }));
+    state.ashlamot.push(
+      { id: 'aaaa0000-0000-4000-8000-000000000001', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'open', text: 'פריט חסר', createdAt: '2026-05-26T07:00:00.000Z', updatedAt: nowIso },
+      { id: 'aaaa0000-0000-4000-8000-000000000002', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'done', text: 'הושלם', createdAt: '2026-05-26T07:01:00.000Z', updatedAt: nowIso },
+      { id: 'aaaa0000-0000-4000-8000-000000000003', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'cancelled', text: 'בוטל', createdAt: '2026-05-26T07:02:00.000Z', updatedAt: nowIso }
+    );
+
+    const result = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('פריט חסר');
+    expect(result[0].id).toBe('aaaa0000-0000-4000-8000-000000000001');
+  });
+
+  it('returns rows sorted oldest first', async () => {
+    const { service, state } = makeService();
+    state.orders.push(createOrder({ id: ids.order }));
+    state.ashlamot.push(
+      { id: 'aaaa0000-0000-4000-8000-000000000002', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'open', text: 'שנייה', createdAt: '2026-05-26T07:01:00.000Z', updatedAt: nowIso },
+      { id: 'aaaa0000-0000-4000-8000-000000000001', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'open', text: 'ראשונה', createdAt: '2026-05-26T07:00:00.000Z', updatedAt: nowIso }
+    );
+
+    const result = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result[0].text).toBe('ראשונה');
+    expect(result[1].text).toBe('שנייה');
+  });
+
+  it('returns order number and point name from joined order', async () => {
+    const { service, state } = makeService();
+    state.orders.push(createOrder({ id: ids.order, orderNumber: '502481', pointName: 'ירושלים' }));
+    state.ashlamot.push(
+      { id: 'aaaa0000-0000-4000-8000-000000000001', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'open', text: 'פריט', createdAt: nowIso, updatedAt: nowIso }
+    );
+
+    const [item] = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(item.orderNumber).toBe('502481');
+    expect(item.pointName).toBe('ירושלים');
+    expect(item.lineName).toBe('Kav A');
+  });
+
+  it('returns empty array when no open ashlamot exist', async () => {
+    const { service } = makeService();
+
+    const result = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result).toEqual([]);
+  });
+
+  it('throws when shift belongs to a different tenant', async () => {
+    const { service } = makeService();
+
+    await expect(
+      service.listOpenShiftAshlamot({ tenantId: ids.otherTenant, shiftId: ids.shift })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_NOT_FOUND' });
+  });
+
+  it('excludes open ashlama belonging to a soft-deleted order', async () => {
+    const { service, state } = makeService();
+    state.orders.push(createOrder({ id: ids.order, deletedAt: nowIso }));
+    state.ashlamot.push({
+      id: 'aaaa0000-0000-4000-8000-000000000001',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: null,
+      source: 'manual',
+      status: 'open',
+      text: 'soft-deleted order',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const result = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('excludes open ashlama belonging to a soft-deleted line', async () => {
+    const { service, state } = makeService();
+    state.orders.push(createOrder({ id: ids.order }));
+    state.lines[0] = { ...state.lines[0], deleted_at: nowIso };
+    state.ashlamot.push({
+      id: 'aaaa0000-0000-4000-8000-000000000001',
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      checkUnitId: null,
+      source: 'manual',
+      status: 'open',
+      text: 'soft-deleted line',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const result = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns active-order ashlama and excludes deleted-order ashlama in the same shift', async () => {
+    const { service, state } = makeService();
+    state.orders.push(
+      createOrder({ id: ids.order, deletedAt: null }),
+      createOrder({ id: ids.orderTwo, deletedAt: nowIso })
+    );
+    state.ashlamot.push(
+      { id: 'aaaa0000-0000-4000-8000-000000000001', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.order, checkUnitId: null, source: 'manual', status: 'open', text: 'active order', createdAt: nowIso, updatedAt: nowIso },
+      { id: 'aaaa0000-0000-4000-8000-000000000002', tenantId: ids.tenant, shiftId: ids.shift, lineId: ids.line, orderId: ids.orderTwo, checkUnitId: null, source: 'manual', status: 'open', text: 'deleted order', createdAt: nowIso, updatedAt: nowIso }
+    );
+
+    const result = await service.listOpenShiftAshlamot({ tenantId: ids.tenant, shiftId: ids.shift });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('active order');
   });
 });
 

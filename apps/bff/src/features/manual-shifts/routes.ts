@@ -38,7 +38,8 @@ import {
   patchManualShiftWorkerBodySchema,
   transitionManualShiftOrderCheckUnitStatusBodySchema,
   transitionManualShiftOrderStatusBodySchema,
-  pickTaskDetailResponseSchema
+  pickTaskDetailResponseSchema,
+  openAshlamaBoardResponseSchema
 } from '../../schemas.js';
 import { parseOrThrow } from '../../validation.js';
 import { createPickBridgeServiceFromSupabase } from './pick-bridge-service.js';
@@ -626,6 +627,18 @@ export function registerManualShiftsRoutes(
     }).id;
     const summary = await getManualShiftsService(auth).getDaySummary({ tenantId, shiftId });
     return parseOrThrow(manualShiftDaySummaryResponseSchema, summary);
+  });
+
+  app.get('/api/manual-shifts/:shiftId/open-ashlamot', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { shiftId: string }).shiftId
+    }).id;
+    const items = await getManualShiftsService(auth).listOpenShiftAshlamot({ tenantId, shiftId });
+    return parseOrThrow(openAshlamaBoardResponseSchema, items);
   });
 
   // ── Pick bridge ──────────────────────────────────────────────────────────────

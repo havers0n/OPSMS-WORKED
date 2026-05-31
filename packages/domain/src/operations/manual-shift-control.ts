@@ -177,6 +177,20 @@ export const manualShiftOrderAshlamaSchema = z.object({
 });
 export type ManualShiftOrderAshlama = z.infer<typeof manualShiftOrderAshlamaSchema>;
 
+export const openAshlamaBoardItemSchema = z.object({
+  id: z.string().uuid(),
+  orderId: z.string().uuid(),
+  orderNumber: z.string().nullable(),
+  pointName: z.string().nullable(),
+  lineId: z.string().uuid(),
+  lineName: z.string(),
+  text: z.string().trim().min(1),
+  source: manualShiftOrderAshlamaSourceSchema,
+  checkUnitId: z.string().uuid().nullable(),
+  createdAt: z.string()
+});
+export type OpenAshlamaBoardItem = z.infer<typeof openAshlamaBoardItemSchema>;
+
 export const manualShiftLineEventSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

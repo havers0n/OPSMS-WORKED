@@ -151,6 +151,7 @@ export function ManualOperatorPage() {
           todayDate={todayDate}
           onChangeDate={handleSelectDate}
           onOpenDatePicker={() => setShowDatePicker(true)}
+          canInteract={!isReadOnly}
         />
         {showDatePicker && (
           <ShiftDatePicker
@@ -211,7 +212,7 @@ export function ManualOperatorPage() {
             )}
             {activeTab === 'check' && <CheckTab shiftId={shift.id} lines={lines} />}
             {activeTab === 'people' && <PeopleTab shiftId={shift.id} />}
-            {activeTab === 'day' && <DayTab shiftId={shift.id} shiftName={shift.name} />}
+            {activeTab === 'day' && <DayTab shiftId={shift.id} shiftName={shift.name} canInteract={!isReadOnly} />}
           </>
         )}
 

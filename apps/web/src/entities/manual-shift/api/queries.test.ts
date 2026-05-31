@@ -5,7 +5,8 @@ import {
   shiftOrdersQueryOptions,
   orderCheckUnitsQueryOptions,
   peopleSummaryQueryOptions,
-  daySummaryQueryOptions
+  daySummaryQueryOptions,
+  shiftOpenAshlamotQueryOptions
 } from './queries';
 import { bffRequest } from '@/shared/api/bff/client';
 import { vi } from 'vitest';
@@ -150,5 +151,42 @@ describe('daySummaryQueryOptions', () => {
 
   it('is disabled when shiftId is empty', () => {
     expect(daySummaryQueryOptions('').enabled).toBe(false);
+  });
+});
+
+describe('manualShiftKeys.shiftOpenAshlamot', () => {
+  it('is scoped to shiftId', () => {
+    expect(manualShiftKeys.shiftOpenAshlamot(SHIFT_A)).toEqual([
+      'manual-shift',
+      'shift-open-ashlamot',
+      SHIFT_A
+    ]);
+  });
+
+  it('produces distinct keys for different shift IDs', () => {
+    expect(manualShiftKeys.shiftOpenAshlamot(SHIFT_A)).not.toEqual(
+      manualShiftKeys.shiftOpenAshlamot(SHIFT_B)
+    );
+  });
+});
+
+describe('shiftOpenAshlamotQueryOptions', () => {
+  it('uses the shiftOpenAshlamot query key', () => {
+    expect(shiftOpenAshlamotQueryOptions(SHIFT_A).queryKey).toEqual([
+      'manual-shift',
+      'shift-open-ashlamot',
+      SHIFT_A
+    ]);
+  });
+
+  it('calls open-ashlamot endpoint in queryFn', async () => {
+    const queryFn = shiftOpenAshlamotQueryOptions(SHIFT_A).queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(`/api/manual-shifts/${SHIFT_A}/open-ashlamot`);
+  });
+
+  it('is disabled when shiftId is empty', () => {
+    expect(shiftOpenAshlamotQueryOptions('').enabled).toBe(false);
   });
 });

@@ -239,6 +239,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     listLineOrders: vi.fn(async () => []),
     listOrderCheckUnits: vi.fn(async () => [createCheckUnit()]),
     listOrderAshlamot: vi.fn(async () => [ashlama]),
+    listOpenShiftAshlamot: vi.fn(async () => []),
     listOrderEvents: vi.fn(async () => [createEvent()]),
     createOrderAshlama: vi.fn(async () => ashlama),
     patchOrderAshlamaStatus: vi.fn(async () => ({ ...ashlama, status: 'done' as const })),
@@ -551,6 +552,41 @@ describe('manual shifts routes', () => {
 
     expect(response.statusCode).toBe(400);
     expect(service.transitionOrderCheckUnitStatus).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns open shift ashlamot board', async () => {
+    const boardItem = {
+      id: 'a9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      orderId: ids.order,
+      orderNumber: '502481',
+      pointName: 'ירושלים',
+      lineId: ids.line,
+      lineName: 'Kav A',
+      text: 'פריט חסר',
+      source: 'manual' as const,
+      checkUnitId: null,
+      createdAt: '2026-05-26T07:00:00.000Z'
+    };
+    const service = createServiceMock({
+      listOpenShiftAshlamot: vi.fn(async () => [boardItem])
+    });
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shifts/${ids.shift}/open-ashlamot`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject([
+      { id: boardItem.id, orderId: ids.order, lineName: 'Kav A', text: 'פריט חסר', source: 'manual' }
+    ]);
+    expect(service.listOpenShiftAshlamot).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      shiftId: ids.shift
+    });
 
     await app.close();
   });

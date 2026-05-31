@@ -6,7 +6,8 @@ import type {
   ManualShiftOrderEvent,
   ManualShiftPeopleSummary,
   ManualShiftDaySummary,
-  ManualShiftWorker
+  ManualShiftWorker,
+  OpenAshlamaBoardItem
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -24,7 +25,9 @@ export const manualShiftKeys = {
   workers: (shiftId: string) => [...manualShiftKeys.all, 'workers', shiftId] as const,
   peopleSummary: (shiftId: string) =>
     [...manualShiftKeys.all, 'people-summary', shiftId] as const,
-  daySummary: (shiftId: string) => [...manualShiftKeys.all, 'day-summary', shiftId] as const
+  daySummary: (shiftId: string) => [...manualShiftKeys.all, 'day-summary', shiftId] as const,
+  shiftOpenAshlamot: (shiftId: string) =>
+    [...manualShiftKeys.all, 'shift-open-ashlamot', shiftId] as const
 };
 
 async function fetchTodayShift(): Promise<ManualShiftTodayResponse> {
@@ -152,5 +155,18 @@ export function daySummaryQueryOptions(shiftId: string) {
     queryFn: () => fetchDaySummary(shiftId),
     enabled: !!shiftId,
     staleTime: 30_000
+  });
+}
+
+async function fetchShiftOpenAshlamot(shiftId: string): Promise<OpenAshlamaBoardItem[]> {
+  return bffRequest<OpenAshlamaBoardItem[]>(`/api/manual-shifts/${shiftId}/open-ashlamot`);
+}
+
+export function shiftOpenAshlamotQueryOptions(shiftId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.shiftOpenAshlamot(shiftId),
+    queryFn: () => fetchShiftOpenAshlamot(shiftId),
+    enabled: !!shiftId,
+    staleTime: 10_000
   });
 }

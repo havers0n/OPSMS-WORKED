@@ -17,7 +17,8 @@ import type {
   ManualShiftSession,
   ManualShiftTodayResponse,
   ManualShiftWorker,
-  ManualShiftWorkerRole
+  ManualShiftWorkerRole,
+  OpenAshlamaBoardItem
 } from '@wos/domain';
 import {
   calculateSizeFromLineCount,
@@ -101,6 +102,7 @@ export type ManualShiftsService = {
   listLineOrders(input: { tenantId: string; lineId: string }): Promise<ManualShiftOrder[]>;
   listOrderCheckUnits(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderCheckUnit[]>;
   listOrderAshlamot(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderAshlama[]>;
+  listOpenShiftAshlamot(input: { tenantId: string; shiftId: string }): Promise<OpenAshlamaBoardItem[]>;
   listOrderEvents(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderEvent[]>;
   createOrderAshlama(input: {
     tenantId: string;
@@ -664,6 +666,14 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftOrderNotFound(input.orderId);
       }
       return repo.listOrderAshlamot(input.orderId);
+    },
+
+    async listOpenShiftAshlamot(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+      return repo.listOpenShiftAshlamot(input.tenantId, input.shiftId);
     },
 
     async listOrderEvents(input) {

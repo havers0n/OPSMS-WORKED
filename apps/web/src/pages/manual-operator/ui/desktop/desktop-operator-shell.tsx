@@ -16,6 +16,7 @@ import { DesktopKpiRow } from './desktop-kpi-row';
 import { DesktopLinePanel } from './desktop-line-panel';
 import { DesktopOrdersPanel } from './desktop-orders-panel';
 import { DesktopPickerPanel } from './desktop-picker-panel';
+import { ShiftOpenAshlamotBoard } from '../shift-open-ashlamot-board';
 
 interface DesktopOperatorShellProps {
   shift: ManualShiftSession | null;
@@ -39,6 +40,7 @@ interface DesktopOperatorShellProps {
   todayDate: string;
   onChangeDate: (date: string) => void;
   onOpenDatePicker: () => void;
+  canInteract: boolean;
 }
 
 function LoadingSkeleton() {
@@ -106,7 +108,8 @@ export function DesktopOperatorShell({
   selectedDate,
   todayDate,
   onChangeDate,
-  onOpenDatePicker
+  onOpenDatePicker,
+  canInteract
 }: DesktopOperatorShellProps) {
   if (isLoading) {
     return (
@@ -209,6 +212,13 @@ export function DesktopOperatorShell({
           </main>
 
           <aside className="w-72 bg-white overflow-y-auto shrink-0">
+            <div className="p-3 border-b border-gray-100">
+              <ShiftOpenAshlamotBoard
+                shiftId={shift.id}
+                canInteract={canInteract}
+                variant="desktop"
+              />
+            </div>
             <DesktopPickerPanel
               pickers={pickerWorkloads}
               checkQueue={checkQueue}

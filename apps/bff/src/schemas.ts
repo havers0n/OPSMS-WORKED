@@ -81,7 +81,8 @@ import {
   manualShiftOrderSizeSchema,
   manualShiftOrderErrorTypeSchema,
   manualShiftWorkerSchema,
-  manualShiftWorkerRoleSchema
+  manualShiftWorkerRoleSchema,
+  openAshlamaBoardItemSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -539,6 +540,7 @@ export const manualShiftDaySummaryResponseSchema = manualShiftDaySummarySchema;
 export const manualShiftOrdersResponseSchema = z.array(manualShiftOrderSchema);
 export const manualShiftBulkAddResponseSchema = manualShiftBulkAddResultSchema;
 export const manualShiftWorkerResponseSchema = manualShiftWorkerSchema;
+export const openAshlamaBoardResponseSchema = z.array(openAshlamaBoardItemSchema);
 export const manualShiftWorkersResponseSchema = z.array(manualShiftWorkerSchema);
 
 // ── Orders ────────────────────────────────────────────────────────────────────

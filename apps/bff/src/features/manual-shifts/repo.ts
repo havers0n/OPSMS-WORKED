@@ -11,7 +11,8 @@ import type {
   ManualShiftOrderEvent,
   ManualShiftSession,
   ManualShiftWorker,
-  ManualShiftWorkerRole
+  ManualShiftWorkerRole,
+  OpenAshlamaBoardItem
 } from '@wos/domain';
 
 type PostgrestLikeError = {
@@ -339,6 +340,34 @@ function mapAshlamaRow(row: ManualShiftOrderAshlamaRow): ManualShiftOrderAshlama
   };
 }
 
+type OpenAshlamaBoardItemRow = {
+  id: string;
+  shift_id: string;
+  line_id: string;
+  order_id: string;
+  check_unit_id: string | null;
+  source: string;
+  text: string;
+  created_at: string;
+  manual_shift_orders: { order_number: string | null; point_name: string | null } | null;
+  manual_shift_lines: { name: string } | null;
+};
+
+function mapOpenAshlamaBoardItemRow(row: OpenAshlamaBoardItemRow): OpenAshlamaBoardItem {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    orderNumber: row.manual_shift_orders?.order_number ?? null,
+    pointName: row.manual_shift_orders?.point_name ?? null,
+    lineId: row.line_id,
+    lineName: row.manual_shift_lines?.name ?? '',
+    text: row.text,
+    source: row.source as OpenAshlamaBoardItem['source'],
+    checkUnitId: row.check_unit_id,
+    createdAt: row.created_at
+  };
+}
+
 function mapLineEventRow(row: ManualShiftLineEventRow): ManualShiftLineEvent {
   return {
     id: row.id,
@@ -469,6 +498,7 @@ export type ManualShiftsRepo = {
   findOrderById(orderId: string): Promise<ManualShiftOrder | null>;
   listOrderCheckUnits(orderId: string): Promise<ManualShiftOrderCheckUnit[]>;
   listOrderAshlamot(orderId: string): Promise<ManualShiftOrderAshlama[]>;
+  listOpenShiftAshlamot(tenantId: string, shiftId: string): Promise<OpenAshlamaBoardItem[]>;
   listOrderEvents(orderId: string): Promise<ManualShiftOrderEvent[]>;
   findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
   findOrderAshlamaById(ashlamaId: string): Promise<ManualShiftOrderAshlama | null>;
@@ -869,6 +899,25 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (error) throw error;
       return ((data ?? []) as ManualShiftOrderAshlamaRow[]).map(mapAshlamaRow);
+    },
+
+    async listOpenShiftAshlamot(tenantId, shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_ashlamot')
+        .select(
+          'id,shift_id,line_id,order_id,check_unit_id,source,text,created_at,' +
+          'manual_shift_orders!inner(order_number,point_name),' +
+          'manual_shift_lines!inner(name)'
+        )
+        .eq('tenant_id', tenantId)
+        .eq('shift_id', shiftId)
+        .eq('status', 'open')
+        .filter('manual_shift_orders.deleted_at', 'is', null)
+        .filter('manual_shift_lines.deleted_at', 'is', null)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return ((data ?? []) as unknown as OpenAshlamaBoardItemRow[]).map(mapOpenAshlamaBoardItemRow);
     },
 
     async listOrderEvents(orderId) {

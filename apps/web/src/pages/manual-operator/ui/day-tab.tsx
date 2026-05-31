@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, Download } from 'lucide-react';
 import { daySummaryQueryOptions, shiftOrdersQueryOptions } from '@/entities/manual-shift/api/queries';
 import { exportShiftOrdersCSV } from './export-utils';
+import { ShiftOpenAshlamotBoard } from './shift-open-ashlamot-board';
 
 const ERROR_TYPE_LABELS: Record<string, string> = {
   wrong_quantity: 'כמות לא נכונה',
@@ -16,9 +17,10 @@ const ERROR_TYPE_LABELS: Record<string, string> = {
 interface DayTabProps {
   shiftId: string;
   shiftName: string;
+  canInteract: boolean;
 }
 
-export function DayTab({ shiftId, shiftName }: DayTabProps) {
+export function DayTab({ shiftId, shiftName, canInteract }: DayTabProps) {
   const { data: summary, isLoading } = useQuery(daySummaryQueryOptions(shiftId));
   const { data: orders = [] } = useQuery(shiftOrdersQueryOptions(shiftId));
 
@@ -47,6 +49,8 @@ export function DayTab({ shiftId, shiftName }: DayTabProps) {
 
   return (
     <div className="flex flex-col gap-4 p-4 pb-8">
+      <ShiftOpenAshlamotBoard shiftId={shiftId} canInteract={canInteract} variant="mobile" />
+
       <button
         onClick={handleExport}
         disabled={orders.length === 0}

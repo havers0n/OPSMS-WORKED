@@ -1,5 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../shift-open-ashlamot-board', () => ({
+  ShiftOpenAshlamotBoard: () => null
+}));
+
 import { DesktopOperatorShell } from '../desktop-operator-shell';
 import {
   emptyCheckQueue,
@@ -35,7 +40,8 @@ const defaultProps = {
   selectedDate: '2026-05-28',
   todayDate: '2026-05-29',
   onChangeDate: vi.fn(),
-  onOpenDatePicker: vi.fn()
+  onOpenDatePicker: vi.fn(),
+  canInteract: true
 };
 
 describe('DesktopOperatorShell', () => {
@@ -136,5 +142,15 @@ describe('DesktopOperatorShell', () => {
     render(<DesktopOperatorShell {...defaultProps} onOpenDatePicker={onOpenDatePicker} />);
     fireEvent.click(screen.getByRole('button', { name: 'פתח לוח שנה' }));
     expect(onOpenDatePicker).toHaveBeenCalledOnce();
+  });
+
+  it('board wrapper div appears in the aside before DesktopPickerPanel', () => {
+    const { container } = render(<DesktopOperatorShell {...defaultProps} />);
+    // The board is mounted inside a dedicated wrapper div with these classes
+    const boardWrapper = container.querySelector('.p-3.border-b');
+    const pickerHeader = screen.getByText('מלקטים');
+    expect(boardWrapper).toBeTruthy();
+    // DOCUMENT_POSITION_FOLLOWING means pickerHeader comes AFTER boardWrapper
+    expect(boardWrapper!.compareDocumentPosition(pickerHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

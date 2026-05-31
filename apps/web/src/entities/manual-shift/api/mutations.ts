@@ -329,9 +329,13 @@ function invalidateOrderCheckUnitQueries(
 
 function invalidateOrderAshlamaQueries(
   queryClient: ReturnType<typeof useQueryClient>,
-  orderId: string
+  orderId: string,
+  shiftId?: string
 ) {
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.orderAshlamot(orderId) });
+  if (shiftId) {
+    void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOpenAshlamot(shiftId) });
+  }
 }
 
 function invalidateLineQueries(
@@ -477,8 +481,8 @@ export function useCreateManualShiftOrderAshlama(orderId: string) {
   return useMutation({
     mutationFn: (input: Omit<CreateOrderAshlamaInput, 'orderId'>) =>
       createOrderAshlama({ ...input, orderId }),
-    onSuccess: () => {
-      invalidateOrderAshlamaQueries(queryClient, orderId);
+    onSuccess: (ashlama) => {
+      invalidateOrderAshlamaQueries(queryClient, orderId, ashlama.shiftId);
     }
   });
 }
@@ -487,8 +491,8 @@ export function usePatchManualShiftOrderAshlama(orderId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: patchOrderAshlama,
-    onSuccess: () => {
-      invalidateOrderAshlamaQueries(queryClient, orderId);
+    onSuccess: (ashlama) => {
+      invalidateOrderAshlamaQueries(queryClient, orderId, ashlama.shiftId);
     }
   });
 }

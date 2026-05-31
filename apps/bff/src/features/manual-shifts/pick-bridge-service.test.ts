@@ -150,6 +150,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     listLineOrders: vi.fn(async () => []),
     listOrderCheckUnits: vi.fn(async () => []),
     listOrderAshlamot: vi.fn(async () => []),
+    listOpenShiftAshlamot: vi.fn(async () => []),
     findOrderCheckUnitById: vi.fn(async () => null),
     findOrderAshlamaById: vi.fn(async () => null),
     createOrderCheckUnit: vi.fn(async () => { throw new Error('not used'); }),
