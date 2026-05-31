@@ -80,6 +80,9 @@ export const manualShiftOrderEventTypeSchema = z.enum([
   'check_unit_created',
   'check_unit_status_changed',
   'check_unit_note_changed',
+  'check_unit_issue_reported',
+  'check_unit_checked',
+  'check_unit_issue_resolved',
   'ashlama_created',
   'ashlama_status_changed'
 ]);

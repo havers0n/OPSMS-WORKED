@@ -569,7 +569,7 @@ export function ManualOrderCheckUnitsPanel({
                                 type="button"
                                 onClick={() => {
                                   mutateStatus('checked', 'מוצר אזל');
-                                  createAshlama.mutate({ checkUnitId: null, text: azalAshlamaText.trim() });
+                                  createAshlama.mutate({ checkUnitId: unit.id, text: azalAshlamaText.trim() });
                                   setReasonSelectorUnitId(null);
                                   setAzalAshlamaText('');
                                   setStockoutStepByUnitId((prev) => ({ ...prev, [unit.id]: undefined }));

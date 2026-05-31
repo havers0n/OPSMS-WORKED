@@ -26,6 +26,27 @@ export function formatOrderEventLabel(event: ManualShiftOrderEvent): string {
       return 'סטטוס יחידת בדיקה עודכן';
     case 'check_unit_note_changed':
       return 'הערה ביחידת בדיקה עודכנה';
+    case 'check_unit_issue_reported': {
+      const p = event.payload as Record<string, unknown> | null;
+      const unitNum = p?.['unitNumber'];
+      const reason = p?.['reason'];
+      const parts: string[] = ['תקלה ביחידת בדיקה'];
+      if (typeof unitNum === 'number') parts.push(`#${unitNum}`);
+      if (typeof reason === 'string' && reason) parts.push(`(${reason})`);
+      return parts.join(' ');
+    }
+    case 'check_unit_checked': {
+      const p = event.payload as Record<string, unknown> | null;
+      const unitNum = p?.['unitNumber'];
+      if (typeof unitNum === 'number') return `יחידת בדיקה #${unitNum} נסגרה כתקינה`;
+      return 'יחידת בדיקה נסגרה כתקינה';
+    }
+    case 'check_unit_issue_resolved': {
+      const p = event.payload as Record<string, unknown> | null;
+      const unitNum = p?.['unitNumber'];
+      if (typeof unitNum === 'number') return `תקלה ביחידת בדיקה #${unitNum} טופלה`;
+      return 'תקלה ביחידת בדיקה טופלה';
+    }
     case 'ashlama_created':
       return 'השלמה נפתחה';
     case 'ashlama_status_changed': {

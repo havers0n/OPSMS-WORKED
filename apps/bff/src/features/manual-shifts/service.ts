@@ -11,6 +11,7 @@ import type {
   ManualShiftOrderCheckUnitStatus,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
+  ManualShiftOrderEventType,
   ManualShiftOrderStatus,
   ManualShiftOrderSize,
   ManualShiftPeopleSummary,
@@ -337,6 +338,22 @@ function canTransitionManualShiftOrderCheckUnitStatus(
   to: ManualShiftOrderCheckUnitStatus
 ) {
   return allowedManualShiftOrderCheckUnitTransitions[from].includes(to);
+}
+
+const STOCKOUT_REASON = 'מוצר אזל';
+
+function selectCheckUnitEventType(
+  fromStatus: ManualShiftOrderCheckUnitStatus,
+  toStatus: ManualShiftOrderCheckUnitStatus,
+  reason: string | null | undefined
+): ManualShiftOrderEventType {
+  if (toStatus === 'returned') return 'check_unit_issue_reported';
+  if (toStatus === 'checked') {
+    if (fromStatus === 'returned') return 'check_unit_issue_resolved';
+    if ((reason ?? '').trim() === STOCKOUT_REASON) return 'check_unit_issue_reported';
+    return 'check_unit_checked';
+  }
+  return 'check_unit_status_changed';
 }
 
 export function createManualShiftsServiceFromRepo(
@@ -701,10 +718,11 @@ export function createManualShiftsServiceFromRepo(
         if (checkUnit.orderId !== order.id) {
           throw manualShiftAshlamaCheckUnitOrderMismatch(normalizedCheckUnitId, order.id);
         }
-        if (checkUnit.status !== 'returned') {
+        const ashlamaEligibleReasons = ['מוצר אזל', 'שכח לשים'];
+        const ashlamaEligibleStatuses: ManualShiftOrderCheckUnitStatus[] = ['returned', 'checked'];
+        if (!ashlamaEligibleStatuses.includes(checkUnit.status)) {
           throw manualShiftAshlamaRequiresReturnedCheckUnit(normalizedCheckUnitId);
         }
-        const ashlamaEligibleReasons = ['מוצר אזל', 'שכח לשים'];
         if (!ashlamaEligibleReasons.includes((checkUnit.reason ?? '').trim())) {
           throw manualShiftAshlamaRequiresMissingProductReason(normalizedCheckUnitId);
         }
@@ -952,7 +970,7 @@ export function createManualShiftsServiceFromRepo(
         shiftId: order.shiftId,
         lineId: order.lineId,
         orderId: order.id,
-        eventType: 'check_unit_status_changed',
+        eventType: selectCheckUnitEventType(checkUnit.status, updated.status, updated.reason),
         actorProfileId: input.actor.actorProfileId,
         actorName: input.actor.actorName,
         fromStatus: null,

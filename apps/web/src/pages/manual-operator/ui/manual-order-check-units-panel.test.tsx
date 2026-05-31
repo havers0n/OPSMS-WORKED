@@ -399,7 +399,7 @@ describe('ManualOrderCheckUnitsPanel', () => {
     await waitFor(() =>
       expect(mockedBffRequest).toHaveBeenCalledWith('/api/manual-shift-orders/order-1/ashlamot', {
         method: 'POST',
-        body: JSON.stringify({ checkUnitId: null, text: 'להשלים מוצר אזל' })
+        body: JSON.stringify({ checkUnitId: 'cu-1', text: 'להשלים מוצר אזל' })
       })
     );
   });

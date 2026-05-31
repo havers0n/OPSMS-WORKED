@@ -1409,12 +1409,13 @@ describe('manual shift order check units', () => {
     expect(listed[0]?.id).toBe(created.id);
   });
 
-  it('transitions check unit status and emits audit event', async () => {
+  it('open → checked (clean) emits check_unit_checked with checkUnitId', async () => {
     const { repo, state } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
     state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
     state.checkUnits.push({
-      id: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      id: checkUnitId,
       tenantId: ids.tenant,
       shiftId: ids.shift,
       lineId: ids.line,
@@ -1432,7 +1433,7 @@ describe('manual shift order check units', () => {
 
     const updated = await service.transitionOrderCheckUnitStatus({
       tenantId: ids.tenant,
-      checkUnitId: 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57',
+      checkUnitId,
       status: 'checked',
       actor: { actorProfileId: ids.actor, actorName: 'Checker' }
     });
@@ -1441,8 +1442,206 @@ describe('manual shift order check units', () => {
     expect(updated.checkedAt).toBe(nowIso);
     expect(repo.createOrderEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        eventType: 'check_unit_status_changed'
+        eventType: 'check_unit_checked',
+        payload: expect.objectContaining({ checkUnitId, unitNumber: 1, fromStatus: 'open', toStatus: 'checked' })
       })
+    );
+  });
+
+  it('open → returned emits check_unit_issue_reported with checkUnitId and reason', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 2,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId,
+      status: 'returned',
+      reason: 'מוצר לא נכון',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'check_unit_issue_reported',
+        payload: expect.objectContaining({
+          checkUnitId,
+          unitNumber: 2,
+          fromStatus: 'open',
+          toStatus: 'returned',
+          reason: 'מוצר לא נכון'
+        })
+      })
+    );
+  });
+
+  it('open → returned with missing_item reason (שכח לשים) preserves checkUnitId in event', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 3,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId,
+      status: 'returned',
+      reason: 'שכח לשים',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'check_unit_issue_reported',
+        payload: expect.objectContaining({ checkUnitId, fromStatus: 'open', toStatus: 'returned', reason: 'שכח לשים' })
+      })
+    );
+  });
+
+  it('stockout (open → checked with מוצר אזל) emits check_unit_issue_reported preserving checkUnitId', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 4,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId,
+      status: 'checked',
+      reason: 'מוצר אזל',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'check_unit_issue_reported',
+        payload: expect.objectContaining({
+          checkUnitId,
+          unitNumber: 4,
+          fromStatus: 'open',
+          toStatus: 'checked',
+          reason: 'מוצר אזל'
+        })
+      })
+    );
+  });
+
+  it('returned → checked emits check_unit_issue_resolved with checkUnitId', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 5,
+      status: 'returned',
+      note: null,
+      reason: 'בעיית אריזה',
+      checkedAt: null,
+      returnedAt: nowIso,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId,
+      status: 'checked',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'check_unit_issue_resolved',
+        payload: expect.objectContaining({ checkUnitId, unitNumber: 5, fromStatus: 'returned', toStatus: 'checked' })
+      })
+    );
+  });
+
+  it('voided transition emits generic check_unit_status_changed', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 6,
+      status: 'open',
+      note: null,
+      reason: null,
+      checkedAt: null,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    await service.transitionOrderCheckUnitStatus({
+      tenantId: ids.tenant,
+      checkUnitId,
+      status: 'voided',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'check_unit_status_changed' })
     );
   });
 
@@ -1631,7 +1830,7 @@ describe('manual shift ashlama constraints', () => {
     expect(ashlama.source).toBe('check_unit');
   });
 
-  it('rejects ashlama when check unit is not returned', async () => {
+  it('rejects ashlama when check unit is still open (not returned or checked-with-stockout)', async () => {
     const { repo, state } = createRepo();
     const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
     state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
@@ -1642,10 +1841,10 @@ describe('manual shift ashlama constraints', () => {
       lineId: ids.line,
       orderId: ids.order,
       unitNumber: 1,
-      status: 'checked',
+      status: 'open',
       note: null,
       reason: 'מוצר אזל',
-      checkedAt: nowIso,
+      checkedAt: null,
       returnedAt: null,
       voidedAt: null,
       createdAt: nowIso,
@@ -1660,6 +1859,46 @@ describe('manual shift ashlama constraints', () => {
         actor: { actorProfileId: ids.actor, actorName: 'Checker' }
       })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ASHLAMA_REQUIRES_RETURNED_CHECK_UNIT' });
+  });
+
+  it('allows ashlama from checked unit when reason is מוצר אזל (stockout+ashlama flow), stores checkUnitId', async () => {
+    const { repo, state } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    const checkUnitId = 'f9f0bdee-4aeb-4c8a-a6f2-42f71e7f7e57';
+    state.orders.push(createOrder({ id: ids.order, status: 'waiting_check' }));
+    state.checkUnits.push({
+      id: checkUnitId,
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      lineId: ids.line,
+      orderId: ids.order,
+      unitNumber: 1,
+      status: 'checked',
+      note: null,
+      reason: 'מוצר אזל',
+      checkedAt: nowIso,
+      returnedAt: null,
+      voidedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
+
+    const ashlama = await service.createOrderAshlama({
+      tenantId: ids.tenant,
+      orderId: ids.order,
+      checkUnitId,
+      text: 'להשלים מוצר שאזל',
+      actor: { actorProfileId: ids.actor, actorName: 'Checker' }
+    });
+
+    expect(ashlama.checkUnitId).toBe(checkUnitId);
+    expect(ashlama.source).toBe('check_unit');
+    expect(repo.createOrderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'ashlama_created',
+        payload: expect.objectContaining({ checkUnitId, source: 'check_unit' })
+      })
+    );
   });
 
   it('rejects ashlama when checkUnit reason is not חסר מוצר', async () => {

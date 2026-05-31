@@ -83,6 +83,62 @@ describe('formatOrderEventLabel', () => {
     ).toBe('השלמה בוטלה');
   });
 
+  it('check_unit_issue_reported with unitNumber and reason shows pallet identifier and reason', () => {
+    expect(
+      formatOrderEventLabel(
+        makeEvent({
+          eventType: 'check_unit_issue_reported',
+          payload: { checkUnitId: 'cu-1', unitNumber: 3, reason: 'מוצר לא נכון', fromStatus: 'open', toStatus: 'returned' }
+        })
+      )
+    ).toBe('תקלה ביחידת בדיקה #3 (מוצר לא נכון)');
+  });
+
+  it('check_unit_issue_reported without unitNumber falls back gracefully', () => {
+    expect(
+      formatOrderEventLabel(makeEvent({ eventType: 'check_unit_issue_reported', payload: null }))
+    ).toBe('תקלה ביחידת בדיקה');
+  });
+
+  it('check_unit_issue_reported for stockout includes reason', () => {
+    expect(
+      formatOrderEventLabel(
+        makeEvent({
+          eventType: 'check_unit_issue_reported',
+          payload: { checkUnitId: 'cu-2', unitNumber: 1, reason: 'מוצר אזל', fromStatus: 'open', toStatus: 'checked' }
+        })
+      )
+    ).toBe('תקלה ביחידת בדיקה #1 (מוצר אזל)');
+  });
+
+  it('check_unit_checked with unitNumber shows clean-check label', () => {
+    expect(
+      formatOrderEventLabel(
+        makeEvent({ eventType: 'check_unit_checked', payload: { checkUnitId: 'cu-3', unitNumber: 2 } })
+      )
+    ).toBe('יחידת בדיקה #2 נסגרה כתקינה');
+  });
+
+  it('check_unit_checked without unitNumber falls back gracefully', () => {
+    expect(
+      formatOrderEventLabel(makeEvent({ eventType: 'check_unit_checked', payload: null }))
+    ).toBe('יחידת בדיקה נסגרה כתקינה');
+  });
+
+  it('check_unit_issue_resolved with unitNumber shows resolution label', () => {
+    expect(
+      formatOrderEventLabel(
+        makeEvent({ eventType: 'check_unit_issue_resolved', payload: { checkUnitId: 'cu-4', unitNumber: 5 } })
+      )
+    ).toBe('תקלה ביחידת בדיקה #5 טופלה');
+  });
+
+  it('check_unit_issue_resolved without unitNumber falls back gracefully', () => {
+    expect(
+      formatOrderEventLabel(makeEvent({ eventType: 'check_unit_issue_resolved', payload: null }))
+    ).toBe('תקלה ביחידת בדיקה טופלה');
+  });
+
   it('unknown event type uses fallback', () => {
     expect(
       formatOrderEventLabel(makeEvent({ eventType: 'updated' as ManualShiftOrderEvent['eventType'] }))
