@@ -211,7 +211,7 @@ async function openOrderDetail() {
   fireEvent.click(screen.getByText('502481'));
 
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: 'מחק נקודה' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'מחיקה' })).toBeTruthy();
   });
 }
 
@@ -230,13 +230,13 @@ describe('manual shift delete actions', () => {
     await openLineDetail();
     await waitForLineOrdersToLoad();
 
-    expect(screen.queryByRole('button', { name: 'מחק נקודה' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'מחיקה' })).toBeNull();
     expect(screen.getByRole('button', { name: 'מחק קו' })).toBeTruthy();
 
     fireEvent.click(screen.getByText('502481'));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'מחק נקודה' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'מחיקה' })).toBeTruthy();
     });
   });
 
@@ -249,7 +249,7 @@ describe('manual shift delete actions', () => {
     renderPage(makeQueryClient());
     await openOrderDetail();
 
-    fireEvent.click(screen.getByRole('button', { name: 'מחק נקודה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקה' }));
 
     await waitFor(() => {
       expect(screen.getByText('מחיקת נקודה')).toBeTruthy();
@@ -276,7 +276,7 @@ describe('manual shift delete actions', () => {
     renderPage(queryClient);
 
     await openOrderDetail();
-    fireEvent.click(screen.getByRole('button', { name: 'מחק נקודה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקה' }));
     await waitFor(() => {
       expect(screen.getByText('מחיקת נקודה')).toBeTruthy();
     });
@@ -284,7 +284,7 @@ describe('manual shift delete actions', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'duplicate point' }
     });
-    fireEvent.click(screen.getAllByRole('button', { name: 'מחק נקודה' })[1]);
+    fireEvent.click(screen.getByText('מחק נקודה'));
 
     await waitFor(() => {
       expect(mockedBffRequest).toHaveBeenCalledWith(
@@ -326,11 +326,11 @@ describe('manual shift delete actions', () => {
     renderPage(makeQueryClient());
     await openOrderDetail();
 
-    fireEvent.click(screen.getByRole('button', { name: 'מחק נקודה' }));
+    fireEvent.click(screen.getByRole('button', { name: 'מחיקה' }));
     await waitFor(() => {
       expect(screen.getByText('מחיקת נקודה')).toBeTruthy();
     });
-    fireEvent.click(screen.getAllByRole('button', { name: 'מחק נקודה' })[1]);
+    fireEvent.click(screen.getByText('מחק נקודה'));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'בטל' })).toBeTruthy();

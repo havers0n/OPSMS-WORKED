@@ -916,8 +916,8 @@ describe('PR4 – Line Detail & Manual Orders', () => {
 
       // pointName shown in detail
       expect(screen.getAllByText('ירושלים').length).toBeGreaterThan(0);
-      // מספר משטחים label present
-      expect(screen.getByText('מספר משטחים')).toBeTruthy();
+      // pallet count label is present in current mobile detail header
+      expect(screen.getByText('מס.משטחים')).toBeTruthy();
       // palletCount value shown (may coexist with other "2" occurrences)
       expect(screen.getAllByText('2').length).toBeGreaterThan(0);
     });
