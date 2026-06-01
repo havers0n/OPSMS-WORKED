@@ -12,7 +12,9 @@ import type {
   ManualShiftOrderAshlamaStatus,
   ManualShiftOrderCheckUnitStatus,
   ManualShiftWorker,
-  ManualShiftWorkerRole
+  ManualShiftWorkerRole,
+  DailyManualShiftImportPreview,
+  ApplyDailyManualShiftImportResponse
 } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -131,6 +133,15 @@ type DeleteRestoreOrderContext = {
 
 type DeleteRestoreLineContext = {
   shiftId: string;
+};
+
+type DailyManualShiftImportPreviewResponse = {
+  preview: DailyManualShiftImportPreview;
+};
+
+type ApplyDailyManualShiftImportInput = {
+  shiftId: string;
+  preview: DailyManualShiftImportPreview;
 };
 
 async function createWorker({ shiftId, ...body }: CreateWorkerInput): Promise<ManualShiftWorker> {
@@ -467,6 +478,26 @@ export function useCreateManualShiftOrderCheckUnit(orderId: string) {
   });
 }
 
+async function previewManualShiftExcelImport(
+  file: File
+): Promise<DailyManualShiftImportPreviewResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return bffRequest<DailyManualShiftImportPreviewResponse>('/api/manual-shifts/import/preview', {
+    method: 'POST',
+    body: formData
+  });
+}
+
+async function applyManualShiftExcelImport(
+  input: ApplyDailyManualShiftImportInput
+): Promise<ApplyDailyManualShiftImportResponse> {
+  return bffRequest<ApplyDailyManualShiftImportResponse>('/api/manual-shifts/import/apply', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  });
+}
+
 export function useUpdateManualShiftOrderCheckUnitStatus() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -575,6 +606,27 @@ export function useRestoreManualShiftLine(lineId: string, context: DeleteRestore
       restoreManualShiftLine(lineId, input),
     onSuccess: () => {
       invalidateLineQueries(queryClient, lineId, context.shiftId);
+    }
+  });
+}
+
+export function usePreviewManualShiftExcelImport() {
+  return useMutation({
+    mutationFn: previewManualShiftExcelImport
+  });
+}
+
+export function useApplyManualShiftExcelImport(selectedDate: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: applyManualShiftExcelImport,
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.byDate(selectedDate) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(data.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(data.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(data.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(data.shiftId) });
     }
   });
 }

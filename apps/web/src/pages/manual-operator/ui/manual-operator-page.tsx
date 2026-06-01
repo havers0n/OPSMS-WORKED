@@ -19,6 +19,7 @@ import {
   selectOrderDetail
 } from '@/entities/manual-shift/model/shift-selectors';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
+import { useAuth } from '@/app/providers/auth-provider';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
 import { MobileOperatorShell, type OperatorTab } from './mobile-operator-shell';
 import { ShiftEmptyState } from './shift-empty-state';
@@ -29,6 +30,7 @@ import { AddLineSheet } from './add-line-sheet';
 import { CheckTab } from './check-tab';
 import { PeopleTab } from './people-tab';
 import { DayTab } from './day-tab';
+import { ImportExcelSheet } from './import-excel-sheet';
 
 function getTodayDateIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -58,6 +60,7 @@ function MobileLoadingState() {
 
 export function ManualOperatorPage() {
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const { currentTenantId, memberships } = useAuth();
 
   const todayDate = getTodayDateIsrael();
 
@@ -66,6 +69,8 @@ export function ManualOperatorPage() {
 
   const [activeTab, setActiveTab] = useState<OperatorTab>('queue');
   const [showAddLine, setShowAddLine] = useState(false);
+  const [showImportExcel, setShowImportExcel] = useState(false);
+  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
   const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
     | { type: 'line'; lineId: string }
@@ -80,7 +85,6 @@ export function ManualOperatorPage() {
   const shift = shiftData?.shift ?? null;
   const lines = shiftData?.lines ?? [];
 
-  // Read-only when viewing a past date OR the shift is closed
   const isReadOnly = !isToday || shift?.status === 'closed';
 
   const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
@@ -125,6 +129,12 @@ export function ManualOperatorPage() {
   }, [selectedDesktopDetail, shiftOrders, lineSummaries]);
 
   const createShift = useCreateShift();
+  const currentMembership = currentTenantId
+    ? memberships.find((membership) => membership.tenantId === currentTenantId) ?? null
+    : memberships[0] ?? null;
+  const canImportExcelByRole =
+    currentMembership?.role === 'tenant_admin' ||
+    currentMembership?.role === 'platform_admin';
 
   if (isDesktop) {
     return (
@@ -166,8 +176,8 @@ export function ManualOperatorPage() {
   }
 
   const fab =
-    !isReadOnly && shift && activeTab === 'queue' && !selectedLine
-      ? { ariaLabel: 'הוסף קו', onClick: () => setShowAddLine(true) }
+    !isReadOnly && shift && activeTab === 'queue' && !selectedLine && lines.length > 0
+      ? { ariaLabel: 'Add line', onClick: () => setShowAddLine(true) }
       : undefined;
 
   function handleChangeTab(tab: OperatorTab) {
@@ -180,6 +190,7 @@ export function ManualOperatorPage() {
     setActiveTab('queue');
     setSelectedLine(null);
     setSelectedDesktopDetail(null);
+    setImportSuccessMessage(null);
   }
 
   return (
@@ -204,7 +215,20 @@ export function ManualOperatorPage() {
           <>
             {activeTab === 'queue' && (
               <>
-                <LineList lines={lines} onSelectLine={setSelectedLine} />
+                {importSuccessMessage && (
+                  <div className="mx-4 mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                    {importSuccessMessage}
+                  </div>
+                )}
+                <LineList
+                  lines={lines}
+                  onSelectLine={setSelectedLine}
+                  canImport={!isReadOnly && shift.status === 'active' && lines.length === 0 && canImportExcelByRole}
+                  canAddManual={!isReadOnly}
+                  showNoShiftHint={!shift}
+                  onImportExcel={() => setShowImportExcel(true)}
+                  onAddLineManually={() => setShowAddLine(true)}
+                />
                 {selectedLine && (
                   <LineDetail summary={selectedLine} onBack={() => setSelectedLine(null)} />
                 )}
@@ -218,6 +242,17 @@ export function ManualOperatorPage() {
 
         {showAddLine && shift && !isReadOnly && (
           <AddLineSheet shiftId={shift.id} onClose={() => setShowAddLine(false)} />
+        )}
+        {showImportExcel && shift && !isReadOnly && (
+          <ImportExcelSheet
+            shiftId={shift.id}
+            selectedDate={selectedDate}
+            onClose={() => setShowImportExcel(false)}
+            onSuccess={({ linesCreated, ordersCreated }) => {
+              setShowImportExcel(false);
+              setImportSuccessMessage(`יובאו: ${linesCreated} קווים, ${ordersCreated} הזמנות`);
+            }}
+          />
         )}
       </MobileOperatorShell>
 

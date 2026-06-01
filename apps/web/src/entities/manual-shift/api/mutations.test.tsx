@@ -4,6 +4,8 @@ import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  useApplyManualShiftExcelImport,
+  usePreviewManualShiftExcelImport,
   useCreateManualShiftOrderCheckUnit,
   usePatchManualShiftOrder,
   usePatchManualShiftOrderCheckUnit,
@@ -91,6 +93,70 @@ describe('usePatchManualShiftOrder', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+  });
+});
+
+describe('manual shift import mutations', () => {
+  it('preview mutation sends FormData with file field', async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => usePreviewManualShiftExcelImport(), { wrapper });
+    const file = new File(['xlsx-binary'], 'daily.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync(file);
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/manual-shifts/import/preview',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData)
+      })
+    );
+    const call = vi.mocked(bffRequest).mock.calls.find((entry) => entry[0] === '/api/manual-shifts/import/preview');
+    const formData = call?.[1]?.body as FormData;
+    expect(formData.get('file')).toBe(file);
+  });
+
+  it('apply mutation invalidates queue-related keys', async () => {
+    vi.mocked(bffRequest).mockResolvedValueOnce({ shiftId: 's1', linesCreated: 2, ordersCreated: 5 });
+    const { wrapper, invalidateSpy } = createWrapper();
+    const { result } = renderHook(() => useApplyManualShiftExcelImport('2026-06-01'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        shiftId: 's1',
+        preview: {
+          fileName: 'daily.xlsx',
+          sheetName: 'סיכמות',
+          importDateRaw: '1.6.26',
+          importDate: '2026-06-01',
+          lineCount: 1,
+          orderCount: 1,
+          lines: [{
+            name: 'דרום',
+            rawLabel: 'דרום',
+            sourceRow: 1,
+            sortOrder: 1,
+            orders: [{
+              pointName: 'A',
+              rawLabel: 'דרום/A',
+              sourceRow: 2,
+              sortOrder: 1
+            }]
+          }]
+        }
+      });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.byDate('2026-06-01') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lines('s1') });
   });
 });
 
