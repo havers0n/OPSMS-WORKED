@@ -46,6 +46,7 @@ export * from './warehouse/setup-state';
 export * from './contracts/readiness';
 export * from './operations/order';
 export * from './operations/manual-shift-control';
+export * from './operations/manual-shift-import';
 export * from './operations/pick-task';
 export * from './operations/picking-planning';
 export * from './operations/planning-warning';

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
+import multipart from '@fastify/multipart';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
+import * as XLSX from 'xlsx';
 import type {
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
@@ -263,6 +265,12 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
 
 async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedRequestContext | null = authContext) {
   const app = Fastify({ logger: false });
+  await app.register(multipart, {
+    limits: {
+      files: 1,
+      fileSize: 5 * 1024 * 1024
+    }
+  });
 
   registerManualShiftsRoutes(app, {
     getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => auth,
@@ -287,6 +295,76 @@ async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedReq
 
   await app.ready();
   return app;
+}
+
+function buildWorkbookBuffer(withTargetSheet: boolean): Buffer {
+  const workbook = XLSX.utils.book_new();
+  if (withTargetSheet) {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      [null, 'תאריך הפצה', '2.6.26'],
+      [],
+      [null, 'קו הפצה'],
+      [null, 'דרום'],
+      [null, 'דרום/סלולר']
+    ]);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'סכימות');
+  } else {
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['x']]), 'Other');
+  }
+  const output = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+}
+
+function buildRepresentativeWorkbookBuffer(): Buffer {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    [null, 'תאריך הפצה', '2.6.26'],
+    [],
+    [null, 'קו הפצה'],
+    [null, 'דרום'],
+    [null, 'דרום/סלולר'],
+    [null, 'דרום/רכב-פז ב\'\'ש מרכז'],
+    [null, ''],
+    [null, 'חיפה'],
+    [null, 'חיפה / לאסט פרייס'],
+    [null, 'חיפה/קטגוריה/פנימית']
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, 'סכימות');
+  const output = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+}
+
+function buildMultipartBody(fieldName: string, fileName: string, contentType: string, fileBuffer: Buffer) {
+  const boundary = '----wos-manual-shift-boundary';
+  const head = Buffer.from(
+    `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="${fieldName}"; filename="${fileName}"\r\n` +
+      `Content-Type: ${contentType}\r\n\r\n`
+  );
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return {
+    body: Buffer.concat([head, fileBuffer, tail]),
+    contentType: `multipart/form-data; boundary=${boundary}`
+  };
+}
+
+function buildMultipartBodies(parts: Array<{ fieldName: string; fileName: string; contentType: string; fileBuffer: Buffer }>) {
+  const boundary = '----wos-manual-shift-boundary-multi';
+  const chunks: Buffer[] = [];
+  for (const part of parts) {
+    chunks.push(Buffer.from(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="${part.fieldName}"; filename="${part.fileName}"\r\n` +
+      `Content-Type: ${part.contentType}\r\n\r\n`
+    ));
+    chunks.push(part.fileBuffer);
+    chunks.push(Buffer.from('\r\n'));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return {
+    body: Buffer.concat(chunks),
+    contentType: `multipart/form-data; boundary=${boundary}`
+  };
 }
 
 describe('manual shifts routes', () => {
@@ -607,6 +685,256 @@ describe('manual shifts routes', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ code: 'NO_TENANT' });
+
+    await app.close();
+  });
+
+  it('returns preview for representative .xlsx upload', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildRepresentativeWorkbookBuffer()
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      preview: {
+        fileName: 'manual.xlsx',
+        sheetName: 'סכימות',
+        importDateRaw: '2.6.26',
+        importDate: '2026-06-02',
+        lineCount: 2,
+        orderCount: 4,
+        lines: [
+          {
+            name: 'דרום',
+            rawLabel: 'דרום',
+            sourceRow: 4,
+            sortOrder: 1,
+            orders: [
+              {
+                pointName: 'סלולר',
+                rawLabel: 'דרום/סלולר',
+                sourceRow: 5,
+                sortOrder: 1
+              },
+              {
+                pointName: 'רכב-פז ב\'\'ש מרכז',
+                rawLabel: 'דרום/רכב-פז ב\'\'ש מרכז',
+                sourceRow: 6,
+                sortOrder: 2
+              }
+            ]
+          },
+          {
+            name: 'חיפה',
+            rawLabel: 'חיפה',
+            sourceRow: 8,
+            sortOrder: 2,
+            orders: [
+              {
+                pointName: 'לאסט פרייס',
+                rawLabel: 'חיפה / לאסט פרייס',
+                sourceRow: 9,
+                sortOrder: 1
+              },
+              {
+                pointName: 'קטגוריה/פנימית',
+                rawLabel: 'חיפה/קטגוריה/פנימית',
+                sourceRow: 10,
+                sortOrder: 2
+              }
+            ]
+          }
+        ]
+      }
+    });
+    expect(service.createShift).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns MISSING_FILE for missing multipart file', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----wos-empty'
+      },
+      payload: '------wos-empty--\r\n'
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'MISSING_FILE' });
+
+    await app.close();
+  });
+
+  it('returns UNSUPPORTED_FILE_TYPE for non-xlsx upload', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody('file', 'manual.csv', 'text/csv', Buffer.from('x,y\n1,2'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' });
+
+    await app.close();
+  });
+
+  it('returns UNSUPPORTED_FILE_TYPE for unexpected multipart field name', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'not_file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildWorkbookBuffer(true)
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' });
+
+    await app.close();
+  });
+
+  it('returns UNSUPPORTED_FILE_TYPE for duplicate uploaded files', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBodies([
+      {
+        fieldName: 'file',
+        fileName: 'first.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileBuffer: buildWorkbookBuffer(true)
+      },
+      {
+        fieldName: 'file',
+        fileName: 'second.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileBuffer: buildWorkbookBuffer(true)
+      }
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' });
+
+    await app.close();
+  });
+
+  it('returns INVALID_WORKBOOK for renamed non-xlsx content', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      Buffer.from('not a workbook')
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'INVALID_WORKBOOK' });
+
+    await app.close();
+  });
+
+  it('returns FILE_TOO_LARGE for file above 5MB', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const oversizedBuffer = Buffer.alloc(5 * 1024 * 1024 + 1, 65);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      oversizedBuffer
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'FILE_TOO_LARGE' });
+
+    await app.close();
+  });
+
+  it('returns validation error for invalid workbook structure', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildWorkbookBuffer(false)
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
 
     await app.close();
   });

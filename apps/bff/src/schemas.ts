@@ -83,6 +83,8 @@ import {
   manualShiftWorkerSchema,
   manualShiftWorkerRoleSchema,
   openAshlamaBoardItemSchema
+  ,
+  dailyManualShiftImportPreviewSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -541,6 +543,9 @@ export const manualShiftBulkAddResponseSchema = manualShiftBulkAddResultSchema;
 export const manualShiftWorkerResponseSchema = manualShiftWorkerSchema;
 export const openAshlamaBoardResponseSchema = z.array(openAshlamaBoardItemSchema);
 export const manualShiftWorkersResponseSchema = z.array(manualShiftWorkerSchema);
+export const manualShiftImportPreviewResponseSchema = z.object({
+  preview: dailyManualShiftImportPreviewSchema
+});
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 

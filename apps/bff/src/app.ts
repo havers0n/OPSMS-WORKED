@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { env } from './env.js';
 import { ApiError, mapSupabaseError, sendApiError } from './errors.js';
@@ -68,6 +69,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   void app.register(cors, {
     origin: env.corsOrigin,
     credentials: true
+  });
+  void app.register(multipart, {
+    limits: {
+      files: 1,
+      fileSize: 5 * 1024 * 1024
+    }
   });
 
   app.addHook('onResponse', async (request, reply) => {

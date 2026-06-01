@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { ManualShiftImportError, parseDailyManualShiftImport } from '@wos/domain';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ManualShiftsService } from './service.js';
 import { ApiError } from '../../errors.js';
+import { parseManualShiftImportWorkbook } from './import-adapter.js';
 import {
   bulkCreateManualShiftOrdersBodySchema,
   createManualShiftBodySchema,
@@ -28,6 +30,7 @@ import {
   manualShiftSessionResponseSchema,
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
+  manualShiftImportPreviewResponseSchema,
   manualShiftDeleteRestoreBodySchema,
   manualShiftWorkerResponseSchema,
   manualShiftWorkersResponseSchema,
@@ -380,6 +383,83 @@ export function registerManualShiftsRoutes(
 
     void reply.code(201);
     return parseOrThrow(manualShiftOrderCheckUnitResponseSchema, checkUnit);
+  });
+
+  app.post('/api/manual-shifts/import/preview', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    requireTenant(auth);
+
+    const multipartRequest = request as FastifyRequest & {
+      parts: () => AsyncIterable<{
+        type: 'file' | 'field';
+        fieldname?: string;
+        filename?: string;
+        file?: { resume: () => void };
+        toBuffer?: () => Promise<Buffer>;
+      }>;
+    };
+
+    let fileName: string | null = null;
+    let fileBuffer: Buffer | null = null;
+    try {
+      for await (const part of multipartRequest.parts()) {
+        if (part.type !== 'file') {
+          continue;
+        }
+        if (part.fieldname !== 'file' || !part.filename || !part.toBuffer) {
+          part.file?.resume();
+          throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Unexpected multipart file field.');
+        }
+        if (fileBuffer !== null) {
+          part.file?.resume();
+          throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
+        }
+        fileName = part.filename;
+        fileBuffer = await part.toBuffer();
+      }
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
+      ) {
+        throw new ApiError(400, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.');
+      }
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === 'FST_FILES_LIMIT'
+      ) {
+        throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
+      }
+      throw error;
+    }
+
+    if (!fileName || !fileBuffer) {
+      throw new ApiError(400, 'MISSING_FILE', 'Multipart file field "file" is required.');
+    }
+    if (!fileName.toLowerCase().endsWith('.xlsx')) {
+      throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Only .xlsx files are supported.');
+    }
+
+    const workbook = parseManualShiftImportWorkbook({
+      fileName,
+      buffer: fileBuffer
+    });
+
+    try {
+      const preview = parseDailyManualShiftImport(workbook);
+      return parseOrThrow(manualShiftImportPreviewResponseSchema, { preview });
+    } catch (error) {
+      if (error instanceof ManualShiftImportError) {
+        throw new ApiError(400, error.code, error.message);
+      }
+      throw error;
+    }
   });
 
   app.post('/api/manual-shift-orders/:orderId/start-check', async (request, reply) => {
