@@ -5,6 +5,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import * as XLSX from 'xlsx';
 import type {
+  ApplyDailyManualShiftImportResponse,
+  DailyManualShiftImportPreview,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
   ManualShiftLine,
@@ -98,6 +100,7 @@ function createOrder(status: ManualShiftOrder['status']): ManualShiftOrder {
     pickerWorkerId: null,
     checkerName: null,
     lineCount: 12,
+    sortOrder: null,
     size: 'L',
     status,
     startedAt: status === 'picking' ? '2026-05-26T07:20:00.000Z' : null,
@@ -223,6 +226,11 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     createdAt: '2026-05-26T07:00:00.000Z',
     updatedAt: '2026-05-26T07:30:00.000Z'
   };
+  const applyResponse: ApplyDailyManualShiftImportResponse = {
+    shiftId: ids.shift,
+    linesCreated: 1,
+    ordersCreated: 2
+  };
 
   return {
     listShiftWorkers: vi.fn(async () => [createWorker()]),
@@ -251,6 +259,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     transitionOrderCheckUnitStatus: vi.fn(async () => createCheckUnit('checked')),
     createOrder: vi.fn(async () => createOrder('queued')),
     bulkCreateOrders: vi.fn(async () => bulkResult),
+    applyDailyImport: vi.fn(async () => applyResponse),
     patchOrder: vi.fn(async () => ({ ...createOrder('queued'), comment: 'Updated' })),
     startOrderCheck: vi.fn(async () => ({ ...createOrder('picking'), checkStartedAt: '2026-05-26T07:25:00.000Z' })),
     deleteOrder: vi.fn(async () => ({ ...createOrder('queued'), deletedAt: '2026-05-26T08:00:00.000Z', deletedByProfileId: ids.user, deletedByName: 'Shift Dispatcher', deleteReason: 'cleanup' })),
@@ -935,6 +944,134 @@ describe('manual shifts routes', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
+
+    await app.close();
+  });
+
+  it('applies validated import preview into an existing shift', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const preview: DailyManualShiftImportPreview = {
+      fileName: 'manual.xlsx',
+      sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+      importDateRaw: '2.6.26',
+      importDate: '2026-06-02',
+      lineCount: 1,
+      orderCount: 1,
+      lines: [
+        {
+          name: 'Ч“ЧЁЧ•Чќ',
+          rawLabel: 'Ч“ЧЁЧ•Чќ',
+          sourceRow: 4,
+          sortOrder: 1,
+          orders: [
+            {
+              pointName: 'ЧЎЧњЧ•ЧњЧЁ',
+              rawLabel: 'Ч“ЧЁЧ•Чќ/ЧЎЧњЧ•ЧњЧЁ',
+              sourceRow: 5,
+              sortOrder: 1
+            }
+          ]
+        }
+      ]
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/apply',
+      payload: {
+        shiftId: ids.shift,
+        preview
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      shiftId: ids.shift,
+      linesCreated: 1,
+      ordersCreated: 2
+    });
+    expect(service.applyDailyImport).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      preview,
+      actor: {
+        actorProfileId: ids.user,
+        actorName: 'Shift Dispatcher'
+      }
+    });
+
+    await app.close();
+  });
+
+  it('rejects tampered import apply payload', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/apply',
+      payload: {
+        shiftId: ids.shift,
+        preview: {
+          fileName: 'manual.xlsx',
+          sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+          importDateRaw: '2.6.26',
+          importDate: '2026-06-02',
+          lineCount: 1,
+          orderCount: 1,
+          lines: [
+            {
+              name: '',
+              rawLabel: 'bad',
+              sourceRow: 4,
+              sortOrder: 1,
+              orders: []
+            }
+          ]
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(service.applyDailyImport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it.each([
+    ['SHIFT_NOT_FOUND', 404],
+    ['SHIFT_NOT_ACTIVE', 409],
+    ['SHIFT_DATE_MISMATCH', 409],
+    ['SHIFT_NOT_EMPTY', 409]
+  ])('propagates apply error %s', async (code, statusCode) => {
+    const service = createServiceMock({
+      applyDailyImport: vi.fn(async () => {
+        throw new ApiError(statusCode, code, code);
+      })
+    });
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/apply',
+      payload: {
+        shiftId: ids.shift,
+        preview: {
+          fileName: 'manual.xlsx',
+          sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+          importDateRaw: '2.6.26',
+          importDate: '2026-06-02',
+          lineCount: 1,
+          orderCount: 0,
+          lines: []
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(statusCode);
+    expect(response.json()).toMatchObject({ code });
 
     await app.close();
   });

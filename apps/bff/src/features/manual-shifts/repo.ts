@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
+  ApplyDailyManualShiftImportResponse,
+  DailyManualShiftImportPreview,
   ManualShiftDaySummaryByError,
   ManualShiftLine,
   ManualShiftLineEvent,
@@ -70,6 +72,7 @@ type ManualShiftOrderRow = {
   picker_worker_id: string | null;
   checker_name: string | null;
   line_count: number | null;
+  sort_order: number | null;
   size: ManualShiftOrder['size'];
   status: ManualShiftOrder['status'];
   started_at: string | null;
@@ -185,7 +188,7 @@ const lineColumns =
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,created_at,updated_at';
 const orderColumns =
-  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
+  'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
@@ -290,6 +293,7 @@ function mapOrderRow(row: ManualShiftOrderRow): ManualShiftOrder {
     pickerWorkerId: row.picker_worker_id,
     checkerName: row.checker_name,
     lineCount: row.line_count,
+    sortOrder: row.sort_order,
     size: row.size,
     status: row.status,
     startedAt: row.started_at,
@@ -552,11 +556,17 @@ export type ManualShiftsRepo = {
     pickerWorkerId: string | null;
     checkerName: string | null;
     lineCount: number | null;
+    sortOrder?: number | null;
     size: ManualShiftOrder['size'];
     status: ManualShiftOrder['status'];
     startedAt: string | null;
     comment: string | null;
   }): Promise<ManualShiftOrder>;
+  applyDailyImport(input: {
+    tenantId: string;
+    shiftId: string;
+    preview: DailyManualShiftImportPreview;
+  }): Promise<ApplyDailyManualShiftImportResponse>;
   updateOrder(orderId: string, patch: ManualShiftOrderPatch): Promise<ManualShiftOrder | null>;
   createOrderEvent(input: {
     tenantId: string;
@@ -826,7 +836,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .select(orderColumns)
         .eq('shift_id', shiftId)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
       if (error) {
         throw error;
@@ -841,7 +853,9 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         .select(orderColumns)
         .eq('line_id', lineId)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+        .order('sort_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
 
       if (error) {
         throw error;
@@ -1076,6 +1090,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           picker_worker_id: input.pickerWorkerId,
           checker_name: input.checkerName,
           line_count: input.lineCount,
+          sort_order: input.sortOrder ?? null,
           size: input.size,
           status: input.status,
           started_at: input.startedAt,
@@ -1089,6 +1104,25 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return mapOrderRow(data as ManualShiftOrderRow);
+    },
+
+    async applyDailyImport(input) {
+      const { data, error } = await supabase.rpc('manual_shift_apply_daily_import', {
+        p_tenant_id: input.tenantId,
+        p_shift_id: input.shiftId,
+        p_preview: input.preview
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      return {
+        shiftId: row.shift_id,
+        linesCreated: Number(row.lines_created ?? 0),
+        ordersCreated: Number(row.orders_created ?? 0)
+      };
     },
 
     async updateOrder(orderId, patch) {

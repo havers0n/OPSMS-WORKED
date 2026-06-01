@@ -58,6 +58,7 @@ function createOrder(
     pickerWorkerId: null,
     checkerName: null,
     lineCount: 12,
+    sortOrder: null,
     size: 'L',
     status: 'queued',
     startedAt: null,
@@ -553,6 +554,11 @@ function createRepo() {
       state.errors.push(error);
       return error;
     }),
+    applyDailyImport: vi.fn(async (input) => ({
+      shiftId: input.shiftId,
+      linesCreated: 0,
+      ordersCreated: 0
+    })),
     listShiftErrors: vi.fn(async (shiftId: string) => {
       return state.errors.filter((error) => error.shiftId === shiftId);
     })
@@ -1384,7 +1390,8 @@ describe('manual shift workers service', () => {
       (k) => !k.startsWith('listShift') && !k.startsWith('find') &&
               !k.startsWith('create') && !k.startsWith('update') &&
               !k.startsWith('close') && !k.startsWith('patch') &&
-              !k.startsWith('list')
+              !k.startsWith('list') &&
+              k !== 'applyDailyImport'
     );
     expect(canonicalKeys).toEqual([]);
   });
@@ -3011,6 +3018,134 @@ describe('listOrderEvents access control', () => {
     await expect(
       service.listOrderEvents({ tenantId: ids.tenant, orderId: ids.order })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
+  });
+});
+
+describe('manual shift daily import apply', () => {
+  function makeApplyService() {
+    const { repo } = createRepo();
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    return { repo, service };
+  }
+
+  it('applies a validated preview via repository transaction path', async () => {
+    const { service, repo } = makeApplyService();
+    const preview = {
+      fileName: 'manual.xlsx',
+      sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+      importDateRaw: '2.6.26',
+      importDate: '2026-06-02',
+      lineCount: 1,
+      orderCount: 1,
+      lines: [
+        {
+          name: 'Ч“ЧЁЧ•Чќ',
+          rawLabel: 'Ч“ЧЁЧ•Чќ',
+          sourceRow: 4,
+          sortOrder: 1,
+          orders: [
+            {
+              pointName: 'ЧЎЧњЧ•ЧњЧЁ',
+              rawLabel: 'Ч“ЧЁЧ•Чќ/ЧЎЧњЧ•ЧњЧЁ',
+              sourceRow: 5,
+              sortOrder: 1
+            }
+          ]
+        }
+      ]
+    };
+
+    const result = await service.applyDailyImport({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      preview,
+      actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+    });
+
+    expect(result).toMatchObject({ shiftId: ids.shift, linesCreated: 0, ordersCreated: 0 });
+    expect(repo.applyDailyImport).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      preview
+    });
+  });
+
+  it.each([
+    ['SHIFT_NOT_FOUND', 'SHIFT_NOT_FOUND'],
+    ['SHIFT_NOT_ACTIVE', 'SHIFT_NOT_ACTIVE'],
+    ['SHIFT_DATE_MISMATCH', 'SHIFT_DATE_MISMATCH'],
+    ['SHIFT_NOT_EMPTY', 'SHIFT_NOT_EMPTY'],
+    ['INVALID_PREVIEW_PAYLOAD', 'INVALID_PREVIEW_PAYLOAD']
+  ])('maps apply failure %s to ApiError code', async (dbMessage, expectedCode) => {
+    const { service, repo } = makeApplyService();
+    vi.mocked(repo.applyDailyImport).mockRejectedValueOnce({ code: 'P0001', message: dbMessage });
+
+    await expect(
+      service.applyDailyImport({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        preview: {
+          fileName: 'manual.xlsx',
+          sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+          importDateRaw: '2.6.26',
+          importDate: '2026-06-02',
+          lineCount: 1,
+          orderCount: 1,
+          lines: []
+        },
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: expectedCode });
+  });
+
+  it.each(['22007', '22P02'])('maps apply cast error %s to INVALID_PREVIEW_PAYLOAD', async (dbCode) => {
+    const { service, repo } = makeApplyService();
+    vi.mocked(repo.applyDailyImport).mockRejectedValueOnce({
+      code: dbCode,
+      message: 'invalid input syntax'
+    });
+
+    await expect(
+      service.applyDailyImport({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        preview: {
+          fileName: 'manual.xlsx',
+          sheetName: 'Р§РЋР§вЂєР§в„ўР§С›Р§вЂўР§Р„',
+          importDateRaw: '2.6.26',
+          importDate: '2026-06-02',
+          lineCount: 1,
+          orderCount: 1,
+          lines: []
+        },
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_PREVIEW_PAYLOAD' });
+  });
+
+  it('maps apply insufficient permission to FORBIDDEN', async () => {
+    const { service, repo } = makeApplyService();
+    vi.mocked(repo.applyDailyImport).mockRejectedValueOnce({
+      code: '42501',
+      message: 'FORBIDDEN'
+    });
+
+    await expect(
+      service.applyDailyImport({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        preview: {
+          fileName: 'manual.xlsx',
+          sheetName: 'Р§РЋР§вЂєР§в„ўР§С›Р§вЂўР§Р„',
+          importDateRaw: '2.6.26',
+          importDate: '2026-06-02',
+          lineCount: 1,
+          orderCount: 1,
+          lines: []
+        },
+        actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
+      })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 

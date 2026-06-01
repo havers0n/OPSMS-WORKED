@@ -13,6 +13,34 @@ export function manualShiftOrderNotFound(orderId: string) {
   return new ApiError(404, 'MANUAL_SHIFT_ORDER_NOT_FOUND', `Manual shift order ${orderId} was not found.`);
 }
 
+export function manualShiftImportShiftNotFound(shiftId: string) {
+  return new ApiError(404, 'SHIFT_NOT_FOUND', `Manual shift ${shiftId} was not found.`);
+}
+
+export function manualShiftImportShiftNotActive(shiftId: string) {
+  return new ApiError(409, 'SHIFT_NOT_ACTIVE', `Manual shift ${shiftId} is not active.`);
+}
+
+export function manualShiftImportShiftDateMismatch(shiftId: string, expectedDate: string, previewDate: string) {
+  return new ApiError(
+    409,
+    'SHIFT_DATE_MISMATCH',
+    `Manual shift ${shiftId} date ${expectedDate} does not match import date ${previewDate}.`
+  );
+}
+
+export function manualShiftImportShiftNotEmpty(shiftId: string) {
+  return new ApiError(409, 'SHIFT_NOT_EMPTY', `Manual shift ${shiftId} already has lines or orders.`);
+}
+
+export function manualShiftImportInvalidPreviewPayload() {
+  return new ApiError(400, 'INVALID_PREVIEW_PAYLOAD', 'Import preview payload is invalid.');
+}
+
+export function manualShiftImportForbidden() {
+  return new ApiError(403, 'FORBIDDEN', 'You do not have permission to import into this shift.');
+}
+
 export function manualShiftAlreadyActive(date: string) {
   return new ApiError(409, 'MANUAL_SHIFT_ALREADY_ACTIVE', `An active manual shift already exists for ${date}.`);
 }

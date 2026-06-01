@@ -121,6 +121,7 @@ function createManualRepoMock(): ManualShiftsRepo {
       deleteReason: null
     })),
     createOrder: vi.fn(),
+    applyDailyImport: vi.fn(async () => ({ shiftId: ids.shift, linesCreated: 0, ordersCreated: 0 })),
     updateOrder: vi.fn(async () => null),
     createOrderEvent: vi.fn(),
     createLineEvent: vi.fn(),

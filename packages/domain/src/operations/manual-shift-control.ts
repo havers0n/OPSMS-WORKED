@@ -129,6 +129,7 @@ export const manualShiftOrderSchema = z.object({
   pickerWorkerId: z.string().uuid().nullable(),
   checkerName: z.string().trim().min(1).nullable(),
   lineCount: z.number().int().positive().nullable(),
+  sortOrder: z.number().int().nullable().optional(),
   size: manualShiftOrderSizeSchema,
   status: manualShiftOrderStatusSchema,
   startedAt: z.string().nullable(),

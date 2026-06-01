@@ -58,6 +58,19 @@ export const dailyManualShiftImportPreviewSchema = z.object({
 });
 export type DailyManualShiftImportPreview = z.infer<typeof dailyManualShiftImportPreviewSchema>;
 
+export const applyDailyManualShiftImportRequestSchema = z.object({
+  shiftId: z.string().uuid(),
+  preview: dailyManualShiftImportPreviewSchema
+});
+export type ApplyDailyManualShiftImportRequest = z.infer<typeof applyDailyManualShiftImportRequestSchema>;
+
+export const applyDailyManualShiftImportResponseSchema = z.object({
+  shiftId: z.string().uuid(),
+  linesCreated: z.number().int().min(0),
+  ordersCreated: z.number().int().min(0)
+});
+export type ApplyDailyManualShiftImportResponse = z.infer<typeof applyDailyManualShiftImportResponseSchema>;
+
 function normalizeImportDate(dateRaw: string): string {
   const normalized = dateRaw.trim();
   const match = /^(\d{1,2})\.(\d{1,2})\.(\d{2})$/.exec(normalized);

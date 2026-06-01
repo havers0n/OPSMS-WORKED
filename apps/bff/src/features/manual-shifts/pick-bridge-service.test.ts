@@ -159,6 +159,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     createOrderAshlama: vi.fn(async () => { throw new Error('not used'); }),
     updateOrderAshlama: vi.fn(async () => null),
     createOrder: vi.fn(async () => { throw new Error('not used'); }),
+    applyDailyImport: vi.fn(async () => ({ shiftId: ids.shift, linesCreated: 0, ordersCreated: 0 })),
     createOrderError: vi.fn(async () => { throw new Error('not used'); }),
     createLineEvent: vi.fn(async () => { throw new Error('not used'); }),
     listShiftErrors: vi.fn(async () => []),

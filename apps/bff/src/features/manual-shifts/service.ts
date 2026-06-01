@@ -1,4 +1,6 @@
 import type {
+  ApplyDailyManualShiftImportResponse,
+  DailyManualShiftImportPreview,
   ManualShiftBulkAddInputRow,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
@@ -49,7 +51,13 @@ import {
   manualShiftAshlamaDuplicateOpenForCheckUnit,
   manualShiftAshlamaCheckUnitOrderMismatch,
   manualShiftPickerWorkerInvalid,
-  manualShiftWorkerNotFound
+  manualShiftWorkerNotFound,
+  manualShiftImportShiftDateMismatch,
+  manualShiftImportShiftNotActive,
+  manualShiftImportShiftNotEmpty,
+  manualShiftImportShiftNotFound,
+  manualShiftImportInvalidPreviewPayload,
+  manualShiftImportForbidden
 } from './errors.js';
 import type { ManualShiftsRepo } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
@@ -221,6 +229,12 @@ export type ManualShiftsService = {
   }): Promise<ManualShiftOrderError>;
   getPeopleSummary(input: { tenantId: string; shiftId: string }): Promise<ManualShiftPeopleSummary>;
   getDaySummary(input: { tenantId: string; shiftId: string }): Promise<ManualShiftDaySummary>;
+  applyDailyImport(input: {
+    tenantId: string;
+    shiftId: string;
+    preview: DailyManualShiftImportPreview;
+    actor: ActorContext;
+  }): Promise<ApplyDailyManualShiftImportResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1097,6 +1111,46 @@ export function createManualShiftsServiceFromRepo(
         rows: parsed.rows,
         skippedRows: parsed.skippedRows
       };
+    },
+
+    async applyDailyImport(input) {
+      try {
+        return await repo.applyDailyImport({
+          tenantId: input.tenantId,
+          shiftId: input.shiftId,
+          preview: input.preview
+        });
+      } catch (error) {
+        const dbError = error as { code?: string; message?: string };
+        if (dbError?.code === 'P0001') {
+          if (dbError.message === 'SHIFT_NOT_FOUND') {
+            throw manualShiftImportShiftNotFound(input.shiftId);
+          }
+          if (dbError.message === 'SHIFT_NOT_ACTIVE') {
+            throw manualShiftImportShiftNotActive(input.shiftId);
+          }
+          if (dbError.message === 'SHIFT_DATE_MISMATCH') {
+            throw manualShiftImportShiftDateMismatch(
+              input.shiftId,
+              'unknown',
+              input.preview.importDate
+            );
+          }
+          if (dbError.message === 'SHIFT_NOT_EMPTY') {
+            throw manualShiftImportShiftNotEmpty(input.shiftId);
+          }
+          if (dbError.message === 'INVALID_PREVIEW_PAYLOAD') {
+            throw manualShiftImportInvalidPreviewPayload();
+          }
+        }
+        if (dbError?.code === '22007' || dbError?.code === '22P02') {
+          throw manualShiftImportInvalidPreviewPayload();
+        }
+        if (dbError?.code === '42501') {
+          throw manualShiftImportForbidden();
+        }
+        throw error;
+      }
     },
 
     async patchOrder(input) {

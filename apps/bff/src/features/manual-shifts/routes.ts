@@ -31,6 +31,8 @@ import {
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
   manualShiftImportPreviewResponseSchema,
+  applyManualShiftImportRequestSchema,
+  applyManualShiftImportResponseSchema,
   manualShiftDeleteRestoreBodySchema,
   manualShiftWorkerResponseSchema,
   manualShiftWorkersResponseSchema,
@@ -460,6 +462,22 @@ export function registerManualShiftsRoutes(
       }
       throw error;
     }
+  });
+
+  app.post('/api/manual-shifts/import/apply', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    const tenantId = requireTenant(auth);
+
+    const body = parseOrThrow(applyManualShiftImportRequestSchema, request.body);
+    const result = await getManualShiftsService(auth).applyDailyImport({
+      tenantId,
+      shiftId: body.shiftId,
+      preview: body.preview,
+      actor: actorFromAuth(auth)
+    });
+
+    return parseOrThrow(applyManualShiftImportResponseSchema, result);
   });
 
   app.post('/api/manual-shift-orders/:orderId/start-check', async (request, reply) => {
