@@ -55,7 +55,7 @@ export function DesktopOrdersPanel({ orders, lineSummaries, onSelectOrder }: Des
             <th className="text-right font-medium px-3 py-2">קו</th>
             <th className="text-right font-medium px-3 py-2">מלקט</th>
             <th className="text-right font-medium px-3 py-2">שורות</th>
-            <th className="text-right font-medium px-3 py-2">גיל</th>
+            <th className="text-right font-medium px-3 py-2">זמן בשלב</th>
           </tr>
         </thead>
         <tbody>

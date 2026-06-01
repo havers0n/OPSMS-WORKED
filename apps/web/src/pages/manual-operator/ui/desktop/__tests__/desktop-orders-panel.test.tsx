@@ -10,6 +10,11 @@ describe('DesktopOrdersPanel', () => {
     expect(screen.getByText('ORD-002')).toBeTruthy();
   });
 
+  it('uses זמן בשלב as active table temporal header', () => {
+    render(<DesktopOrdersPanel orders={mockActiveOrders} lineSummaries={mockLines} />);
+    expect(screen.getByText('זמן בשלב')).toBeTruthy();
+  });
+
   it('shows empty state heading when orders array is empty', () => {
     render(<DesktopOrdersPanel orders={[]} lineSummaries={[]} />);
     expect(screen.getByText(/אין|Чђ/i)).toBeTruthy();

@@ -234,6 +234,7 @@ export const mockOrderDetail: OrderDetail = {
   palletCount: 2,
   createdAt: '2026-05-27T08:00:00.000Z',
   startedAt: '2026-05-27T08:10:00.000Z',
+  checkStartedAt: null,
   waitingCheckAt: null,
   checkedAt: null,
   finishedAt: null,

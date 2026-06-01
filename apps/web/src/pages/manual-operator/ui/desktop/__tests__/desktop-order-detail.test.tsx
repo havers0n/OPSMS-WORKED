@@ -26,6 +26,29 @@ describe('DesktopOrderDetail', () => {
     expect(screen.getByText('זמנים')).toBeTruthy();
   });
 
+  it('shows parallel check indicator when status is picking and checkStartedAt exists', () => {
+    render(
+      <DesktopOrderDetail
+        detail={{ ...mockOrderDetail, status: 'picking', checkStartedAt: new Date(Date.now() - 120_000).toISOString() }}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/בדיקה במקביל/i)).toBeTruthy();
+  });
+
+  it('parallel check indicator does not replace status age row', () => {
+    render(
+      <DesktopOrderDetail
+        detail={{ ...mockOrderDetail, status: 'picking', ageSeconds: 180, checkStartedAt: new Date(Date.now() - 120_000).toISOString() }}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('גיל סטטוס')).toBeTruthy();
+    expect(screen.getByText(/בדיקה במקביל/i)).toBeTruthy();
+  });
+
   it('renders localized timestamp as DD.MM.YYYY · HH:mm with ltr direction and not raw ISO', () => {
     const rawIso = '2026-05-26T23:57:41.345065+00:00';
     const expected = formatDateTimeHe(rawIso);
@@ -51,6 +74,19 @@ describe('DesktopOrderDetail', () => {
       />
     );
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('renders checkStartedAt absolute timestamp in times section', () => {
+    const checkStartedAt = '2026-05-27T09:20:00.000Z';
+    render(
+      <DesktopOrderDetail
+        detail={{ ...mockOrderDetail, checkStartedAt }}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('הבדיקה התחילה')).toBeTruthy();
+    expect(screen.getByText(formatDateTimeHe(checkStartedAt))).toBeTruthy();
   });
 
   it('renders dash for invalid timestamp', () => {

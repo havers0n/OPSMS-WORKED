@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { OrderDetail } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftOrderStatus } from '@wos/domain';
 import { formatDateTimeHe } from '@/shared/lib/format-date-time';
+import { getElapsedFromIso } from '../order-utils';
 
 interface DesktopOrderDetailProps {
   detail: OrderDetail | null;
@@ -91,6 +92,9 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
     );
   }
 
+  const parallelCheckElapsed =
+    detail.status === 'picking' && detail.checkStartedAt ? getElapsedFromIso(detail.checkStartedAt) : null;
+
   return (
     <div className="space-y-3 p-4" dir="rtl" data-testid="order-detail-view">
       <header className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2.5">
@@ -128,10 +132,17 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
       <Section title="זמנים">
         <Row label="נוצרה" value={formatDateTimeHe(detail.createdAt)} valueDir="ltr" />
         <Row label="התחלת ליקוט" value={formatDateTimeHe(detail.startedAt)} valueDir="ltr" />
+        <Row label="הבדיקה התחילה" value={formatDateTimeHe(detail.checkStartedAt)} valueDir="ltr" />
         <Row label="ממתין בדיקה" value={formatDateTimeHe(detail.waitingCheckAt)} valueDir="ltr" />
         <Row label="נבדק" value={formatDateTimeHe(detail.checkedAt)} valueDir="ltr" />
         <Row label="הסתיים" value={formatDateTimeHe(detail.finishedAt)} valueDir="ltr" />
       </Section>
+
+      {parallelCheckElapsed && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-amber-800">בדיקה במקביל · <span dir="ltr">{parallelCheckElapsed}</span></p>
+        </section>
+      )}
 
       <Section title="משכי שלבים">
         <Row label="זמן ליקוט" value={diffMinutes(detail.startedAt, detail.waitingCheckAt)} />

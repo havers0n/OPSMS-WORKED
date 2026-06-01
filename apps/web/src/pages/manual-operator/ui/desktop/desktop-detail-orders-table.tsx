@@ -37,6 +37,25 @@ function formatAge(seconds: number | null): string {
   return `${h}:${String(rem).padStart(2, '0')}`;
 }
 
+function formatClosedAt(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const time = new Intl.DateTimeFormat('he-IL', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Jerusalem'
+  }).format(date);
+  return `נסגר ב־${time}`;
+}
+
+function renderTemporalValue(row: DetailRow): string {
+  if (row.status === 'returned') return '—';
+  if (row.status === 'done') return formatClosedAt(row.finishedAt);
+  return formatAge(row.ageSeconds);
+}
+
 function renderPointCell(row: DetailRow) {
   return (
     <td className="px-3 py-2 max-w-[180px]">
@@ -67,7 +86,7 @@ export function DesktopDetailOrdersTable({ mode, rows, onSelectOrder }: DesktopD
             <th className="text-right font-medium px-3 py-2">גודל</th>
             <th className="text-right font-medium px-3 py-2">שורות</th>
             <th className="text-right font-medium px-3 py-2">משטחים</th>
-            <th className="text-right font-medium px-3 py-2">גיל</th>
+            <th className="text-right font-medium px-3 py-2">זמן בשלב</th>
           </tr>
         </thead>
         <tbody>
@@ -96,7 +115,7 @@ export function DesktopDetailOrdersTable({ mode, rows, onSelectOrder }: DesktopD
               <td className="px-3 py-2 text-gray-700 text-center">{row.size ?? '—'}</td>
               <td className="px-3 py-2 text-gray-700 text-center">{row.lineCount ?? '—'}</td>
               <td className="px-3 py-2 text-gray-700 text-center">{row.palletCount ?? '—'}</td>
-              <td className="px-3 py-2 text-gray-500 text-xs tabular-nums">{formatAge(row.ageSeconds)}</td>
+              <td className="px-3 py-2 text-gray-500 text-xs tabular-nums">{renderTemporalValue(row)}</td>
             </tr>
           ))}
         </tbody>

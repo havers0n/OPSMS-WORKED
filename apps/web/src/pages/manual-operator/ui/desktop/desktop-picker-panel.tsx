@@ -72,7 +72,7 @@ export function DesktopPickerPanel({ pickers, checkQueue, onSelectPicker }: Desk
           <p className="text-amber-800 font-bold text-sm">{checkQueue.count} ממתינים לבדיקה</p>
           {checkQueue.oldestOrder && (
             <p className="text-amber-600 text-xs mt-0.5">
-              ותיק: {formatWaitingAge(checkQueue.oldestOrder.waitingSeconds)}
+              זמן המתנה: {formatWaitingAge(checkQueue.oldestOrder.waitingSeconds)}
             </p>
           )}
         </div>

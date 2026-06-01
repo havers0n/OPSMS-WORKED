@@ -21,6 +21,7 @@ describe('DesktopPickerPanel', () => {
     render(<DesktopPickerPanel pickers={mockPickers} checkQueue={mockCheckQueue} />);
 
     expect(screen.getByText('1 ממתינים לבדיקה')).toBeTruthy();
+    expect(screen.getByText(/זמן המתנה:/)).toBeTruthy();
   });
 
   it('invokes selection callback when picker row is clicked', () => {

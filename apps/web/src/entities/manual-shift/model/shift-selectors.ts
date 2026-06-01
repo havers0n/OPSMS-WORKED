@@ -378,6 +378,7 @@ export interface DetailOrderRowBase {
   lineCount: number | null;
   palletCount: number | null;
   ageSeconds: number | null;
+  finishedAt?: string | null;
 }
 
 export interface LineDetailOrderRow extends DetailOrderRowBase {
@@ -425,6 +426,7 @@ export interface OrderDetail {
   startedAt: string | null;
   waitingCheckAt: string | null;
   checkedAt: string | null;
+  checkStartedAt: string | null;
   finishedAt: string | null;
   ageSeconds: number | null;
 }
@@ -569,7 +571,8 @@ export function selectLineDetail(
     size: order.size ?? null,
     lineCount: order.lineCount,
     palletCount: order.palletCount,
-    ageSeconds: toAgeSeconds(order, nowMs)
+    ageSeconds: toAgeSeconds(order, nowMs),
+    finishedAt: order.finishedAt
   }));
 
   return {
@@ -608,7 +611,8 @@ export function selectPickerDetail(
     size: order.size ?? null,
     lineCount: order.lineCount,
     palletCount: order.palletCount,
-    ageSeconds: toAgeSeconds(order, nowMs)
+    ageSeconds: toAgeSeconds(order, nowMs),
+    finishedAt: order.finishedAt
   }));
 
   const lineBreakdownMap = new Map<string, PickerLineBreakdownEntry>();
@@ -669,6 +673,7 @@ export function selectOrderDetail(
     startedAt: order.startedAt,
     waitingCheckAt: order.waitingCheckAt,
     checkedAt: order.checkedAt,
+    checkStartedAt: order.checkStartedAt ?? null,
     finishedAt: order.finishedAt,
     ageSeconds: toAgeSeconds(order, now.getTime())
   };
