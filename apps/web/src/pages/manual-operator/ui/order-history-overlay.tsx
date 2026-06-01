@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Clock } from 'lucide-react';
 import { orderEventsQueryOptions } from '@/entities/manual-shift/api/queries';
 import { formatDateTimeHe } from '@/shared/lib/format-date-time';
-import { formatOrderEventLabel } from './order-event-formatter';
+import { formatOrderEvent } from './order-event-formatter';
 
 interface OrderHistoryOverlayProps {
   orderId: string;
@@ -11,7 +11,11 @@ interface OrderHistoryOverlayProps {
 
 export function OrderHistoryOverlay({ orderId, onClose }: OrderHistoryOverlayProps) {
   const eventsQuery = useQuery(orderEventsQueryOptions(orderId, true));
-  const events = Array.isArray(eventsQuery.data) ? eventsQuery.data : [];
+  const events = Array.isArray(eventsQuery.data)
+    ? eventsQuery.data
+        .map((event) => ({ event, formatted: formatOrderEvent(event) }))
+        .filter((item) => item.formatted.isVisible)
+    : [];
 
   return (
     <div className="absolute inset-0 bg-white z-30 flex flex-col anim-slide-in" dir="rtl">
@@ -28,9 +32,7 @@ export function OrderHistoryOverlay({ orderId, onClose }: OrderHistoryOverlayPro
       </header>
 
       <main className="flex-1 overflow-y-auto p-4">
-        {eventsQuery.isLoading && (
-          <p className="text-center text-gray-400 py-8">טוען...</p>
-        )}
+        {eventsQuery.isLoading && <p className="text-center text-gray-400 py-8">טוען...</p>}
         {eventsQuery.isError && (
           <p className="text-center text-red-500 py-8">שגיאה בטעינת ההיסטוריה</p>
         )}
@@ -39,18 +41,17 @@ export function OrderHistoryOverlay({ orderId, onClose }: OrderHistoryOverlayPro
         )}
         {events.length > 0 && (
           <ol className="flex flex-col gap-0">
-            {events.map((event, index) => (
+            {events.map(({ event, formatted }, index) => (
               <li key={event.id} className="flex gap-3">
                 <div className="flex flex-col items-center">
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1 shrink-0" />
-                  {index < events.length - 1 && (
-                    <div className="w-px flex-1 bg-gray-200 my-1" />
-                  )}
+                  {index < events.length - 1 && <div className="w-px flex-1 bg-gray-200 my-1" />}
                 </div>
                 <div className="pb-4 flex-1">
-                  <p className="font-medium text-gray-900 text-sm leading-snug">
-                    {formatOrderEventLabel(event)}
-                  </p>
+                  <p className="font-medium text-gray-900 text-sm leading-snug">{formatted.label}</p>
+                  {formatted.detail && (
+                    <p className="text-xs text-gray-600 mt-0.5 leading-snug">{formatted.detail}</p>
+                  )}
                   <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
                     <Clock size={11} />
                     <span dir="ltr">{formatDateTimeHe(event.createdAt)}</span>

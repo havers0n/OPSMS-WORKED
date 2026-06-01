@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ManualShiftOrderEvent } from '@wos/domain';
-import { formatOrderEventLabel } from './order-event-formatter';
+import { formatOrderEvent } from './order-event-formatter';
 
 function makeEvent(overrides: Partial<ManualShiftOrderEvent> = {}): ManualShiftOrderEvent {
   return {
@@ -20,75 +20,118 @@ function makeEvent(overrides: Partial<ManualShiftOrderEvent> = {}): ManualShiftO
   };
 }
 
-describe('formatOrderEventLabel', () => {
-  it('created → הזמנה נוצרה', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'created' }))).toBe('הזמנה נוצרה');
+describe('formatOrderEvent', () => {
+  it('1. queued -> picking', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'status_changed', fromStatus: 'queued', toStatus: 'picking' }));
+    expect(r.label).toBe('הליקוט התחיל');
   });
 
-  it('status_changed with toStatus → shows Hebrew label', () => {
-    expect(
-      formatOrderEventLabel(makeEvent({ eventType: 'status_changed', toStatus: 'picking' }))
-    ).toBe('סטטוס שונה ל: בליקוט');
+  it('2. picking -> waiting_check', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'status_changed', fromStatus: 'picking', toStatus: 'waiting_check' }));
+    expect(r.label).toBe('הליקוט הושלם');
+    expect(r.detail).toBe('ההזמנה ממתינה לבדיקה');
   });
 
-  it('status_changed waiting_check', () => {
-    expect(
-      formatOrderEventLabel(makeEvent({ eventType: 'status_changed', toStatus: 'waiting_check' }))
-    ).toBe('סטטוס שונה ל: ממתין לבדיקה');
+  it('3. waiting_check -> returned', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'status_changed', fromStatus: 'waiting_check', toStatus: 'returned' }));
+    expect(r.label).toBe('ההזמנה הוחזרה לתיקון');
   });
 
-  it('status_changed done', () => {
-    expect(
-      formatOrderEventLabel(makeEvent({ eventType: 'status_changed', toStatus: 'done' }))
-    ).toBe('סטטוס שונה ל: הושלם');
+  it('4. returned -> waiting_check', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'status_changed', fromStatus: 'returned', toStatus: 'waiting_check' }));
+    expect(r.label).toBe('ההזמנה נשלחה לבדיקה חוזרת');
   });
 
-  it('error_reported → תקלה דווחה', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'error_reported' }))).toBe('תקלה דווחה');
+  it('5. waiting_check -> done', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'status_changed', fromStatus: 'waiting_check', toStatus: 'done' }));
+    expect(r.label).toBe('ההזמנה נסגרה');
   });
 
-  it('picker_changed → מלקט שונה', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'picker_changed' }))).toBe('מלקט שונה');
+  it('6. unknown status transition fallback', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'status_changed', fromStatus: 'queued', toStatus: 'done' }));
+    expect(r.label).toBe('סטטוס הזמנה השתנה');
+    expect(r.detail).toBe('ממתין -> הושלם');
   });
 
-  it('check_unit_created → יחידת בדיקה נוספה', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'check_unit_created' }))).toBe('יחידת בדיקה נוספה');
+  it('7. initial picker assignment', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'picker_changed', payload: { previousPickerName: null, nextPickerName: 'Dana' } }));
+    expect(r.label).toBe('מונה מלקט: Dana');
   });
 
-  it('check_unit_status_changed → סטטוס יחידת בדיקה עודכן', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'check_unit_status_changed' }))).toBe('סטטוס יחידת בדיקה עודכן');
+  it('8. picker replacement', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'picker_changed', payload: { previousPickerName: 'Dana', nextPickerName: 'Alex' } }));
+    expect(r.label).toBe('המלקט הוחלף: Dana -> Alex');
   });
 
-  it('check_unit_note_changed → הערה ביחידת בדיקה עודכנה', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'check_unit_note_changed' }))).toBe('הערה ביחידת בדיקה עודכנה');
+  it('9. check-unit created with unit number', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'check_unit_created', payload: { unitNumber: 3 } }));
+    expect(r.label).toBe('נוספה יחידת בדיקה 3');
   });
 
-  it('ashlama_created → השלמה נפתחה', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'ashlama_created' }))).toBe('השלמה נפתחה');
+  it('10. check-unit checked', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'check_unit_status_changed', payload: { unitNumber: 2, fromStatus: 'open', toStatus: 'checked' } }));
+    expect(r.label).toBe('יחידת בדיקה 2: פתוח -> נבדק');
   });
 
-  it('ashlama_status_changed done → השלמה סומנה כבוצעה', () => {
-    expect(
-      formatOrderEventLabel(
-        makeEvent({ eventType: 'ashlama_status_changed', payload: { toStatus: 'done' } })
-      )
-    ).toBe('השלמה סומנה כבוצעה');
+  it('11. check-unit returned with reason', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'check_unit_status_changed', payload: { unitNumber: 2, fromStatus: 'checked', toStatus: 'returned', reason: 'wrong item' } }));
+    expect(r.label).toBe('יחידת בדיקה 2: נבדק -> הוחזר לתיקון');
+    expect(r.detail).toBe('סיבה: wrong item');
   });
 
-  it('ashlama_status_changed cancelled → השלמה בוטלה', () => {
-    expect(
-      formatOrderEventLabel(
-        makeEvent({ eventType: 'ashlama_status_changed', payload: { toStatus: 'cancelled' } })
-      )
-    ).toBe('השלמה בוטלה');
+  it('12. check-unit reopened', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'check_unit_status_changed', payload: { unitNumber: 2, fromStatus: 'returned', toStatus: 'open' } }));
+    expect(r.label).toBe('יחידת בדיקה 2: הוחזר לתיקון -> פתוח');
   });
-  it('check_started -> label', () => {
-    expect(formatOrderEventLabel(makeEvent({ eventType: 'check_started' }))).toBe('\u05D4\u05D1\u05D3\u05D9\u05E7\u05D4 \u05D4\u05EA\u05D7\u05D9\u05DC\u05D4');
+
+  it('13. check-unit voided', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'check_unit_status_changed', payload: { unitNumber: 2, fromStatus: 'open', toStatus: 'voided' } }));
+    expect(r.label).toBe('יחידת בדיקה 2: פתוח -> בוטל');
   });
-  it('unknown event type uses fallback', () => {
-    expect(
-      formatOrderEventLabel(makeEvent({ eventType: 'updated' as ManualShiftOrderEvent['eventType'] }))
-    ).toBe('עודכן מידע בהזמנה');
+
+  it('14. note/reason changed', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'check_unit_note_changed', payload: { unitNumber: 8, note: 'fixed', reason: 'missing item' } }));
+    expect(r.label).toBe('עודכנה הערה ליחידת בדיקה 8');
+    expect(r.detail).toContain('הערה: fixed');
+    expect(r.detail).toContain('סיבה: missing item');
+  });
+
+  it('15. ashlama created', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'ashlama_created', payload: { checkUnitId: 'abc', text: 'complete pack' } }));
+    expect(r.label).toBe('נפתחה השלמה ליחידת בדיקה');
+    expect(r.detail).toBe('complete pack');
+  });
+
+  it('16. error reported with comment', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'error_reported', payload: { type: 'wrong_item', comment: 'sku mismatch' } }));
+    expect(r.label).toBe('דווחה תקלה בהזמנה');
+    expect(r.detail).toContain('wrong_item');
+    expect(r.detail).toContain('sku mismatch');
+  });
+
+  it('17. bulk imported', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'bulk_imported', payload: { raw: 'row text' } }));
+    expect(r.label).toBe('הזמנה נוספה מייבוא מרובה');
+    expect(r.isVisible).toBe(false);
+  });
+
+  it('18. deleted', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'point_deleted', payload: { reason: 'duplicate' } }));
+    expect(r.label).toBe('ההזמנה נמחקה');
+    expect(r.detail).toBe('duplicate');
+  });
+
+  it('19. restored', () => {
+    const r = formatOrderEvent(makeEvent({ eventType: 'point_restored', payload: { reason: 'mistake' } }));
+    expect(r.label).toBe('ההזמנה שוחזרה');
+    expect(r.detail).toBe('mistake');
+  });
+
+  it('20. generic updated noise handling', () => {
+    const noisy = formatOrderEvent(makeEvent({ eventType: 'updated', payload: null }));
+    expect(noisy.isVisible).toBe(false);
+
+    const meaningful = formatOrderEvent(makeEvent({ eventType: 'updated', payload: { pointName: 'X', comment: 'Y' } }));
+    expect(meaningful.isVisible).toBe(false);
   });
 });
-
