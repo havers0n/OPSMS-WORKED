@@ -65,6 +65,14 @@ export async function invalidateContainerInventoryQueries(
     })
   );
 
+  // Invalidate per-location container lists. After any inventory mutation,
+  // the affected location's container list is semantically stale.
+  jobs.push(
+    queryClient.invalidateQueries({
+      queryKey: [...locationKeys.all, 'containers']
+    })
+  );
+
   if (args.floorId) {
     jobs.push(
       queryClient.invalidateQueries({

@@ -23,6 +23,14 @@ export async function invalidatePlacementQueries(
     })
   );
 
+  // Invalidate per-location container lists. After any placement mutation,
+  // source and/or target location container lists are semantically stale.
+  jobs.push(
+    queryClient.invalidateQueries({
+      queryKey: [...locationKeys.all, 'containers']
+    })
+  );
+
   if (args.containerId) {
     jobs.push(
       queryClient.invalidateQueries({
