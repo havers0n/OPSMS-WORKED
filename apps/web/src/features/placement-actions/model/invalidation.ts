@@ -52,6 +52,11 @@ export async function invalidatePlacementQueries(
   if (args.floorId) {
     jobs.push(
       queryClient.invalidateQueries({
+        queryKey: locationKeys.storageByFloor(args.floorId)
+      })
+    );
+    jobs.push(
+      queryClient.invalidateQueries({
         queryKey: locationKeys.occupancyByFloor(args.floorId)
       })
     );

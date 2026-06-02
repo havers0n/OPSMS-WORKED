@@ -89,6 +89,7 @@ export function usePublishLayout(floorId: string | null) {
       void queryClient.invalidateQueries({ queryKey: cellKeys.publishedByFloor(floorId) });
       void queryClient.invalidateQueries({ queryKey: locationKeys.byCellAll() });
       void queryClient.invalidateQueries({ queryKey: locationKeys.storageAll() });
+      void queryClient.invalidateQueries({ queryKey: locationKeys.storageByFloor(floorId) });
       void queryClient.invalidateQueries({ queryKey: productLocationRoleKeys.byLocationAll() });
       void queryClient.invalidateQueries({ queryKey: productLocationRoleKeys.effectiveRoleAll() });
       warehouseStorageFocusActions.clearAllFocus();

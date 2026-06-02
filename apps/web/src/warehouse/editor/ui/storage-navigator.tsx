@@ -2,7 +2,7 @@ import type { FloorWorkspace, Rack } from '@wos/domain';
 import React, { useEffect, useMemo, useState } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
-import { useFloorLocationOccupancy } from '@/entities/location/api/use-floor-location-occupancy';
+import { useFloorLocationStorage } from '@/entities/location/api/use-floor-location-storage';
 import { collectRackPublishedSemanticLevels } from '@/warehouse/editor/model/storage-level-mapping';
 import { useT } from '@/shared/i18n';
 import { useIsNavigatorCollapsed, useToggleNavigator } from '@/app/store/ui-selectors';
@@ -27,6 +27,89 @@ interface StorageNavigatorProps {
 
 type FaceFilter = 'all' | 'A' | 'B';
 
+type StorageRow = NonNullable<ReturnType<typeof useFloorLocationStorage>['data']>[number];
+
+type CellBadge =
+  | { kind: 'container'; label: string }
+  | { kind: 'aggregate'; label: string }
+  | null;
+
+function normalizeSearchToken(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function getContainerDisplayCode(row: Pick<StorageRow, 'externalCode' | 'systemCode' | 'containerId'>): string {
+  return row.externalCode ?? row.systemCode ?? row.containerId;
+}
+
+function containerIdentityMatches(row: StorageRow, normalizedQuery: string): boolean {
+  if (normalizedQuery === '') return false;
+
+  return [
+    row.externalCode,
+    row.systemCode,
+    row.containerId
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+    .some((value) => normalizeSearchToken(value).includes(normalizedQuery));
+}
+
+function productMatches(row: StorageRow, normalizedQuery: string): boolean {
+  if (normalizedQuery === '') return false;
+
+  return [
+    row.itemRef,
+    row.product?.name,
+    row.product?.sku,
+    row.product?.externalProductId
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+    .some((value) => normalizeSearchToken(value).includes(normalizedQuery));
+}
+
+function resolveCellBadge(
+  rows: StorageRow[],
+  normalizedQuery: string,
+  aggregateLabel: string
+): CellBadge {
+  if (rows.length === 0) return null;
+
+  const rowsByContainerId = new Map<string, StorageRow[]>();
+  for (const row of rows) {
+    const existing = rowsByContainerId.get(row.containerId);
+    if (existing) {
+      existing.push(row);
+    } else {
+      rowsByContainerId.set(row.containerId, [row]);
+    }
+  }
+
+  const containers = Array.from(rowsByContainerId.values()).map((groupRows) => groupRows[0]);
+  if (containers.length === 1) {
+    return { kind: 'container', label: getContainerDisplayCode(containers[0]) };
+  }
+
+  const identityMatches = containers.filter((row) => containerIdentityMatches(row, normalizedQuery));
+  if (identityMatches.length === 1) {
+    return { kind: 'container', label: getContainerDisplayCode(identityMatches[0]) };
+  }
+  if (identityMatches.length > 1) {
+    return { kind: 'aggregate', label: aggregateLabel };
+  }
+
+  const productMatchesByContainer = containers.filter((containerRow) =>
+    (rowsByContainerId.get(containerRow.containerId) ?? []).some((row) => productMatches(row, normalizedQuery))
+  );
+  if (productMatchesByContainer.length === 1) {
+    return { kind: 'container', label: getContainerDisplayCode(productMatchesByContainer[0]) };
+  }
+  if (productMatchesByContainer.length > 1) {
+    return { kind: 'aggregate', label: aggregateLabel };
+  }
+
+  return { kind: 'aggregate', label: aggregateLabel };
+}
+
 export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const t = useT();
   const floorId = workspace?.floorId ?? null;
@@ -40,7 +123,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const setActiveLevel = useStorageFocusSetActiveLevel();
 
   const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(floorId);
-  const { data: occupancyRows = [], isLoading: occupancyLoading } = useFloorLocationOccupancy(floorId);
+  const { data: storageRows = [], isLoading: storageLoading } = useFloorLocationStorage(floorId);
 
   const isCollapsed = useIsNavigatorCollapsed();
   const toggle = useToggleNavigator();
@@ -58,15 +141,19 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [toggle]);
 
-  const occupancyByCellId = useMemo(() => {
-    const map = new Map<string, (typeof occupancyRows)[number]>();
-    for (const row of occupancyRows) {
-      if (row.cellId && !map.has(row.cellId)) {
-        map.set(row.cellId, row);
+  const storageRowsByCellId = useMemo(() => {
+    const map = new Map<string, typeof storageRows>();
+    for (const row of storageRows) {
+      if (!row.cellId) continue;
+      const existing = map.get(row.cellId);
+      if (existing) {
+        existing.push(row);
+      } else {
+        map.set(row.cellId, [row]);
       }
     }
     return map;
-  }, [occupancyRows]);
+  }, [storageRows]);
 
   const availableLevels = useMemo(() => {
     return collectRackPublishedSemanticLevels(publishedCells, rackId);
@@ -94,6 +181,34 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const showFaceFilter = availableFaces.length > 1;
 
+  const searchableTextByCellId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const cell of publishedCells) {
+      const rows = storageRowsByCellId.get(cell.id) ?? [];
+      const parts = new Set<string>([cell.address.raw, cell.address.raw.replaceAll('.', '')]);
+      for (const row of rows) {
+        parts.add(row.locationCode);
+        parts.add(row.systemCode);
+        if (row.externalCode) parts.add(row.externalCode);
+        parts.add(row.containerId);
+        parts.add(row.containerType);
+        if (row.itemRef) parts.add(row.itemRef);
+        if (row.product?.name) parts.add(row.product.name);
+        if (row.product?.sku) parts.add(row.product.sku);
+        if (row.product?.externalProductId) parts.add(row.product.externalProductId);
+      }
+      map.set(
+        cell.id,
+        normalizeSearchToken(
+          Array.from(parts)
+            .filter(Boolean)
+            .join(' ')
+        )
+      );
+    }
+    return map;
+  }, [publishedCells, storageRowsByCellId]);
+
   useEffect(() => {
     if (faceFilter !== 'all' && !availableFaces.includes(faceFilter)) {
       setFaceFilter('all');
@@ -114,13 +229,14 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       })
       .filter((cell) => {
         if (occupancyFilter === 'empty-only') {
-          return !occupancyByCellId.has(cell.id);
+          return !storageRowsByCellId.has(cell.id);
         }
         return true;
       })
       .filter((cell) => {
-        if (searchQuery.trim() === '') return true;
-        return cell.address.raw.toLowerCase().includes(searchQuery.trim().toLowerCase());
+        const normalizedQuery = normalizeSearchToken(searchQuery);
+        if (normalizedQuery === '') return true;
+        return searchableTextByCellId.get(cell.id)?.includes(normalizedQuery) ?? false;
       });
     if (diagnosticsEnabled) {
       recordCanvasTiming(
@@ -130,7 +246,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       );
     }
     return result;
-  }, [cellsForLevel, faceFilter, occupancyFilter, searchQuery, occupancyByCellId]);
+  }, [cellsForLevel, faceFilter, occupancyFilter, searchQuery, searchableTextByCellId, storageRowsByCellId]);
   recordCanvasMode('storage');
   recordCanvasDataSizes({ navigatorVisibleCellCount: visibleCells.length });
   recordCanvasComponentRender({
@@ -147,8 +263,9 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const filtersActive = faceFilter !== 'all' || occupancyFilter !== 'all' || searchQuery.trim() !== '';
   const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '-';
+  const normalizedSearchQuery = normalizeSearchToken(searchQuery);
 
-  const isLoading = cellsLoading || occupancyLoading;
+  const isLoading = cellsLoading || storageLoading;
   const noRackContext = !rackId && !isLoading;
   const levelButtons = availableLevels.length > 0 ? availableLevels : [1, 2, 3];
 
@@ -301,10 +418,16 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
             <div className="divide-y divide-gray-100">
               {visibleCells.map((cell) => {
-                const occupancyRow = occupancyByCellId.get(cell.id);
-                const isOccupied = Boolean(occupancyRow);
+                const cellStorageRows = storageRowsByCellId.get(cell.id) ?? [];
+                const isOccupied = cellStorageRows.length > 0;
                 const isSelected = selectedCellId === cell.id;
-                const containerCode = occupancyRow?.externalCode ?? occupancyRow?.containerId ?? null;
+                const badge = resolveCellBadge(
+                  cellStorageRows,
+                  normalizedSearchQuery,
+                  t('storage.inventory.containerCount', {
+                    count: new Set(cellStorageRows.map((row) => row.containerId)).size
+                  })
+                );
 
                 return (
                   <div
@@ -341,14 +464,14 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                       {cell.address.raw}
                     </span>
 
-                    {containerCode && (
+                    {badge && (
                       <span
                         className={`max-w-24 truncate rounded px-1.5 py-0.5 text-[11px] ${
                           isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
                         }`}
                         dir="ltr"
                       >
-                        {containerCode}
+                        {badge.label}
                       </span>
                     )}
 

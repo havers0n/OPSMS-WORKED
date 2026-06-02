@@ -278,6 +278,7 @@ describe('usePublishLayout', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: cellKeys.publishedByFloor(draft.floorId) });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: locationKeys.byCellAll() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: locationKeys.storageAll() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: locationKeys.storageByFloor(draft.floorId) });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: productLocationRoleKeys.byLocationAll() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: productLocationRoleKeys.effectiveRoleAll() });
   });
