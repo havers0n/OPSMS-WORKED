@@ -110,6 +110,38 @@ export function registerLocationReadRoutes(app: FastifyInstance, deps: LocationR
     return parseOrThrow(locationOccupancyRowsResponseSchema, rows.map(mapLocationOccupancyRowToDomain));
   });
 
+  app.get('/api/floors/:floorId/storage', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const supabase = deps.getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const data = await locationReadRepo.listFloorCellStorage(floorId);
+    const rows = await attachProductsToRows(supabase, (data ?? []) as Array<ProductAwareRow & {
+      tenant_id: string;
+      floor_id: string;
+      location_id: string;
+      location_code: string;
+      location_type: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer';
+      cell_id: string | null;
+      container_id: string;
+      system_code: string;
+      external_code: string | null;
+      container_type: string;
+      container_status: 'active' | 'quarantined' | 'closed' | 'lost' | 'damaged';
+      placed_at: string;
+      inventory_unit_id?: string | null;
+      product_id?: string | null;
+      quantity: number | null;
+      uom: string | null;
+    }>);
+
+    return parseOrThrow(locationStorageSnapshotRowsResponseSchema, rows.map(mapLocationStorageSnapshotRowToDomain));
+  });
+
   app.get('/api/floors/:floorId/cells-by-product', async (request, reply) => {
     const auth = await deps.getAuthContext(request, reply);
     if (!auth) return;

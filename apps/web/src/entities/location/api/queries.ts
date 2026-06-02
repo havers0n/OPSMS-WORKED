@@ -20,6 +20,8 @@ export const locationKeys = {
     [...locationKeys.storageAll(), locationId ?? 'none'] as const,
   occupancyByFloor: (floorId: string | null) =>
     [...locationKeys.all, 'occupancy-by-floor', floorId ?? 'none'] as const,
+  storageByFloor: (floorId: string | null) =>
+    [...locationKeys.all, 'storage-by-floor', floorId ?? 'none'] as const,
   operationsCellsByFloor: (floorId: string | null) =>
     [...locationKeys.all, 'operations-cells-by-floor', floorId ?? 'none'] as const,
   nonRackByFloor: (floorId: string | null) =>
@@ -42,6 +44,10 @@ async function fetchLocationStorage(locationId: string): Promise<LocationStorage
 
 async function fetchFloorLocationOccupancy(floorId: string): Promise<LocationOccupancyRow[]> {
   return bffRequest<LocationOccupancyRow[]>(`/api/floors/${floorId}/location-occupancy`);
+}
+
+async function fetchFloorLocationStorage(floorId: string): Promise<LocationStorageSnapshotRow[]> {
+  return bffRequest<LocationStorageSnapshotRow[]>(`/api/floors/${floorId}/storage`);
 }
 
 async function fetchFloorOperationsCells(floorId: string): Promise<OperationsCellRuntime[]> {
@@ -76,6 +82,14 @@ export function floorLocationOccupancyQueryOptions(floorId: string | null) {
   return queryOptions({
     queryKey: locationKeys.occupancyByFloor(floorId),
     queryFn: () => fetchFloorLocationOccupancy(floorId as string),
+    enabled: Boolean(floorId)
+  });
+}
+
+export function floorLocationStorageQueryOptions(floorId: string | null) {
+  return queryOptions({
+    queryKey: locationKeys.storageByFloor(floorId),
+    queryFn: () => fetchFloorLocationStorage(floorId as string),
     enabled: Boolean(floorId)
   });
 }

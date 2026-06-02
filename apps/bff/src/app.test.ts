@@ -673,16 +673,32 @@ function createSupabaseStub() {
       if (table === 'location_storage_snapshot_v' || table === 'location_storage_canonical_v') {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn((column: string, value: string) => ({
-              order: vi.fn(async () => ({
-                data: cellStorageSnapshotRows.filter((row) => {
-                  if (column === 'cell_id') return row.cell_id === value;
-                  if (column === 'location_id') return row.location_id === value;
-                  return false;
-                }),
-                error: null
-              }))
-            })),
+            eq: vi.fn((column: string, value: string) => {
+              const filteredRows = cellStorageSnapshotRows.filter((row) => {
+                if (column === 'cell_id') return row.cell_id === value;
+                if (column === 'location_id') return row.location_id === value;
+                if (column === 'floor_id') return row.floor_id === value;
+                return false;
+              });
+
+              return {
+                not: vi.fn((notColumn: string, _operator: string, notValue: null) => ({
+                  order: vi.fn(async () => ({
+                    data: filteredRows.filter((row) => {
+                      if (notColumn === 'cell_id') {
+                        return row.cell_id !== notValue;
+                      }
+                      return true;
+                    }),
+                    error: null
+                  }))
+                })),
+                order: vi.fn(async () => ({
+                  data: filteredRows,
+                  error: null
+                }))
+              };
+            }),
             in: vi.fn((_column: string, values: string[]) => ({
               order: vi.fn(async () => ({
                 data: cellStorageSnapshotRows.filter((row) => values.includes(row.cell_id)),
@@ -2459,6 +2475,38 @@ describe('buildApp', () => {
       locationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
       locationCode: '03-A.01.02.01',
       locationType: 'rack_slot'
+    });
+
+    await app.close();
+  });
+
+  it('returns floor-level storage rows with resolved product context', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/5e5236d0-316b-443a-a4d8-f03cdd79f670/storage',
+      headers: {
+        authorization: 'Bearer token'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()[0]).toMatchObject({
+      floorId: '5e5236d0-316b-443a-a4d8-f03cdd79f670',
+      locationId: 'f932d7de-7350-42b9-9dd6-df11e34b3ea1',
+      locationCode: '03-A.01.02.01',
+      cellId: '216f2dd6-8f17-4de4-aaba-657f9e0e1398',
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      systemCode: 'CNT-000101',
+      externalCode: 'PALLET-001',
+      product: productResponses[0],
+      quantity: 5,
+      uom: 'pcs'
     });
 
     await app.close();

@@ -1,7 +1,7 @@
 import { createElement, Fragment } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FloorWorkspace } from '@wos/domain';
+import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StorageNavigator } from './storage-navigator';
 import { StorageInspectorV2 } from './storage-inspector-v2';
@@ -20,7 +20,7 @@ type MockCell = {
 };
 
 let mockPublishedCells: MockCell[] = [];
-let mockOccupancyRows: Array<{ cellId: string | null; containerId?: string | null; externalCode?: string | null }> = [];
+let mockFloorStorageRows: LocationStorageSnapshotRow[] = [];
 let mockStorageRowsByLocationId: Record<string, Array<{ locationCode?: string | null; locationType?: string | null; containerId: string; containerStatus: string }>> = {};
 const workspaceCanvasAndPanelSpy = vi.fn();
 
@@ -31,9 +31,9 @@ vi.mock('@/entities/cell/api/use-published-cells', () => ({
   })
 }));
 
-vi.mock('@/entities/location/api/use-floor-location-occupancy', () => ({
-  useFloorLocationOccupancy: () => ({
-    data: mockOccupancyRows,
+vi.mock('@/entities/location/api/use-floor-location-storage', () => ({
+  useFloorLocationStorage: () => ({
+    data: mockFloorStorageRows,
     isLoading: false,
   })
 }));
@@ -196,7 +196,7 @@ describe('Storage V2 focus cutover integration', () => {
         address: { raw: '01-A.02.01', parts: { level: 2 } }
       }
     ];
-    mockOccupancyRows = [];
+    mockFloorStorageRows = [];
     mockStorageRowsByLocationId = {
       'loc-cell-1': [
         {
