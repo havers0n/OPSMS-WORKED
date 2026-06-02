@@ -122,7 +122,8 @@ export const addInventoryToContainerBodySchema = z.object({
   uom: z.string().trim().min(1),
   packagingState: inventoryPackagingStateSchema.optional(),
   productPackagingLevelId: z.string().uuid().nullable().optional(),
-  packCount: z.number().int().positive().nullable().optional()
+  packCount: z.number().int().positive().nullable().optional(),
+  receiptCorrelationKey: z.string().uuid()
 });
 
 export const createInventoryItemBodySchema = z.object({

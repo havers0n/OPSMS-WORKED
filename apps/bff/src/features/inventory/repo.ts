@@ -49,6 +49,7 @@ export type ReceiveInventoryUnitParams = {
   packagingState?: 'sealed' | 'opened' | 'loose';
   productPackagingLevelId?: string | null;
   packCount?: number | null;
+  receiptCorrelationKey: string;
 };
 
 export type InventoryRepo = {
@@ -67,7 +68,8 @@ export function createInventoryRepo(supabase: SupabaseClient): InventoryRepo {
         actor_uuid: params.actorId,
         packaging_state: params.packagingState ?? 'loose',
         product_packaging_level_uuid: params.productPackagingLevelId ?? null,
-        pack_count: params.packCount ?? null
+        pack_count: params.packCount ?? null,
+        receipt_correlation_key: params.receiptCorrelationKey
       });
 
       if (error) {

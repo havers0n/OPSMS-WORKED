@@ -9,6 +9,7 @@ export type AddInventoryToContainerInput = {
   packagingState?: 'sealed' | 'opened' | 'loose';
   productPackagingLevelId?: string | null;
   packCount?: number | null;
+  receiptCorrelationKey: string;
 };
 
 export type AddInventoryToContainerResult = InventoryItem;
