@@ -67,7 +67,7 @@ function renderProductSubtitle(t: ReturnType<typeof useT>, subtitle: ProductSubt
 export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const t = useT();
   const floorId = workspace?.floorId ?? null;
-  const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
+  const rackSource: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
 
   const selectedCellId = useStorageFocusSelectedCellId();
   const rackId = useStorageFocusSelectedRackId();
@@ -109,6 +109,10 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     return map;
   }, [storageRows]);
 
+  const rackById = useMemo(() => {
+    return new Map(Object.values(rackSource ?? {}).map((rack) => [rack.id, rack]));
+  }, [rackSource]);
+
   const availableLevels = useMemo(() => {
     return collectRackPublishedSemanticLevels(publishedCells, rackId);
   }, [publishedCells, rackId]);
@@ -126,6 +130,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [occupancyFilter, setOccupancyFilter] = useState<'all' | 'empty-only'>('all');
   const [faceFilter, setFaceFilter] = useState<FaceFilter>('all');
+  const normalizedSearchQuery = normalizeSearchToken(searchQuery);
+  const isGlobalSearch = normalizedSearchQuery !== '';
 
   const availableFaces = useMemo(() => {
     return Array.from(
@@ -134,7 +140,6 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   }, [cellsForLevel]);
 
   const showFaceFilter = availableFaces.length > 1;
-  const normalizedSearchQuery = normalizeSearchToken(searchQuery);
 
   const searchPresentationByCellId = useMemo(() => {
     const map = new Map<string, ReturnType<typeof resolveCellSearchPresentation>>();
@@ -158,14 +163,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     }
   }, [availableFaces, faceFilter]);
 
-  const visibleCells = useMemo(() => {
-    const diagnosticsEnabled = isCanvasRenderPipelineDiagnosticsEnabled();
-    const startedAt = diagnosticsEnabled
-      ? typeof performance !== 'undefined'
-        ? performance.now()
-        : Date.now()
-      : 0;
-    const result = cellsForLevel
+  const browseCells = useMemo(() => {
+    return cellsForLevel
       .filter((cell) => {
         if (faceFilter === 'all') return true;
         return cell.address.parts.face === faceFilter;
@@ -175,11 +174,23 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
           return !storageRowsByCellId.has(cell.id);
         }
         return true;
-      })
-      .filter((cell) => {
-        if (normalizedSearchQuery === '') return true;
-        return searchPresentationByCellId.get(cell.id)?.matches ?? false;
       });
+  }, [cellsForLevel, faceFilter, occupancyFilter, storageRowsByCellId]);
+
+  const globalSearchCells = useMemo(() => {
+    return publishedCells
+      .filter((cell) => cell.status === 'active')
+      .filter((cell) => searchPresentationByCellId.get(cell.id)?.matches ?? false);
+  }, [publishedCells, searchPresentationByCellId]);
+
+  const visibleCells = useMemo(() => {
+    const diagnosticsEnabled = isCanvasRenderPipelineDiagnosticsEnabled();
+    const startedAt = diagnosticsEnabled
+      ? typeof performance !== 'undefined'
+        ? performance.now()
+        : Date.now()
+      : 0;
+    const result = isGlobalSearch ? globalSearchCells : browseCells;
     if (diagnosticsEnabled) {
       recordCanvasTiming(
         'storage-navigator-visible-cells-derive-ms',
@@ -188,7 +199,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       );
     }
     return result;
-  }, [cellsForLevel, faceFilter, normalizedSearchQuery, occupancyFilter, searchPresentationByCellId, storageRowsByCellId]);
+  }, [browseCells, globalSearchCells, isGlobalSearch]);
   recordCanvasMode('storage');
   recordCanvasDataSizes({ navigatorVisibleCellCount: visibleCells.length });
   recordCanvasComponentRender({
@@ -203,12 +214,16 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     propsKeys: ['rackId', 'activeLevel', 'visibleCellCount', 'cellsForLevelCount', 'isCollapsed']
   });
 
-  const filtersActive = faceFilter !== 'all' || occupancyFilter !== 'all' || searchQuery.trim() !== '';
-  const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '-';
+  const filtersActive = faceFilter !== 'all' || occupancyFilter !== 'all' || isGlobalSearch;
+  const rackDisplayCode = rackId ? (rackById.get(rackId)?.displayCode ?? rackId) : '-';
 
   const isLoading = cellsLoading || storageLoading;
-  const noRackContext = !rackId && !isLoading;
+  const noRackContext = !isGlobalSearch && !rackId && !isLoading;
   const levelButtons = availableLevels.length > 0 ? availableLevels : [1, 2, 3];
+  const controlsDisabled = isGlobalSearch;
+  const listHeading = isGlobalSearch
+    ? t('storage.navigator.searchingEntireWarehouse')
+    : t('storage.field.levelWithNumber', { level: activeLevel });
 
   if (isCollapsed) {
     return (
@@ -253,11 +268,13 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
             {levelButtons.map((level) => (
               <button
                 key={level}
+                type="button"
+                disabled={controlsDisabled}
                 className={`min-w-8 rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
                   activeLevel === level
                     ? 'border-blue-300 bg-blue-50 text-blue-900'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
                 onClick={() => setActiveLevel(level)}
               >
                 L{level}
@@ -277,21 +294,25 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           <button
+            type="button"
+            disabled={controlsDisabled}
             className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
               occupancyFilter === 'all'
                 ? 'border-blue-300 bg-blue-50 text-blue-900'
                 : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-            }`}
+            } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
             onClick={() => setOccupancyFilter('all')}
           >
             {t('storage.filter.all')}
           </button>
           <button
+            type="button"
+            disabled={controlsDisabled}
             className={`h-8 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
               occupancyFilter === 'empty-only'
                 ? 'border-blue-300 bg-blue-50 text-blue-900'
                 : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-            }`}
+            } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
             onClick={() => setOccupancyFilter('empty-only')}
           >
             {t('storage.filter.empty')}
@@ -308,11 +329,12 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
             <div className="ms-auto flex gap-1">
               <button
                 type="button"
+                disabled={controlsDisabled}
                 className={`h-7 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
                   faceFilter === 'all'
                     ? 'border-blue-300 bg-blue-50 text-blue-900'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
                 onClick={() => setFaceFilter('all')}
               >
                 {t('storage.filter.all')}
@@ -321,11 +343,12 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                 <button
                   key={face}
                   type="button"
+                  disabled={controlsDisabled}
                   className={`h-7 rounded-md border px-2.5 font-mono text-xs font-semibold transition-colors ${
                     faceFilter === face
                       ? 'border-blue-300 bg-blue-50 text-blue-900'
                       : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
+                  } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
                   aria-pressed={faceFilter === face}
                   onClick={() => setFaceFilter(face)}
                 >
@@ -344,7 +367,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
           </div>
         ) : isLoading ? (
           <div className="px-3 py-6 text-sm text-gray-400">{t('storage.state.loadingLocations')}</div>
-        ) : cellsForLevel.length === 0 ? (
+        ) : !isGlobalSearch && cellsForLevel.length === 0 ? (
           <div className="px-3 py-6 text-sm text-gray-500">{t('storage.state.noLocationsForLevel', { level: activeLevel })}</div>
         ) : visibleCells.length === 0 && filtersActive ? (
           <div className="px-3 py-6 text-sm text-gray-500">{t('storage.state.noLocationsMatchFilters')}</div>
@@ -352,7 +375,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
           <div>
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-1.5">
               <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
-                {t('storage.field.levelWithNumber', { level: activeLevel })}
+                {listHeading}
               </h3>
               <span className="text-xs text-gray-500">{visibleCells.length}</span>
             </div>
@@ -362,6 +385,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                 const cellStorageRows = storageRowsByCellId.get(cell.id) ?? [];
                 const isOccupied = cellStorageRows.length > 0;
                 const isSelected = selectedCellId === cell.id;
+                const resultRackDisplayCode = rackById.get(cell.rackId)?.displayCode ?? cell.rackId;
                 const presentation = searchPresentationByCellId.get(cell.id) ?? resolveCellSearchPresentation({
                   cellAddress: cell.address.raw,
                   rows: cellStorageRows,
@@ -407,7 +431,21 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                       <div className="font-mono text-[13px] font-medium text-gray-900" dir="ltr">
                         {cell.address.raw}
                       </div>
-                      {showSubtitle ? (
+                      {isGlobalSearch ? (
+                        <div className="truncate text-xs text-gray-500">
+                          <span dir="ltr" className="inline-block">
+                            {resultRackDisplayCode}
+                          </span>
+                          <span aria-hidden>{' / '}</span>
+                          <span>{t('storage.field.levelWithNumber', { level: cell.address.parts.level })}</span>
+                          {presentation.subtitle ? (
+                            <>
+                              <span aria-hidden>{' В· '}</span>
+                              {renderProductSubtitle(t, presentation.subtitle)}
+                            </>
+                          ) : null}
+                        </div>
+                      ) : showSubtitle ? (
                         <div className="truncate text-xs text-gray-500">
                           {presentation.subtitle ? renderProductSubtitle(t, presentation.subtitle) : null}
                         </div>

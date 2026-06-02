@@ -145,6 +145,13 @@ function clickLocationByAddress(renderer: TestRenderer.ReactTestRenderer, addres
   });
 }
 
+function findButtonByLabel(renderer: TestRenderer.ReactTestRenderer, label: string) {
+  return getAllButtons(renderer).find((node) => {
+    const text = Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '');
+    return text.includes(label);
+  });
+}
+
 function changeSearch(renderer: TestRenderer.ReactTestRenderer, value: string) {
   const input = renderer.root.findByType('input');
   act(() => {
@@ -158,6 +165,14 @@ function findLocationRow(renderer: TestRenderer.ReactTestRenderer, addressRaw: s
     typeof node.props?.title === 'string' &&
     node.props.title.includes(addressRaw)
   )[0];
+}
+
+function findLocationRows(renderer: TestRenderer.ReactTestRenderer, addressRaw: string) {
+  return renderer.root.findAll((node) =>
+    node.type === 'div' &&
+    typeof node.props?.title === 'string' &&
+    node.props.title.includes(addressRaw)
+  );
 }
 
 function collectText(node: TestRenderer.ReactTestInstance): string {
@@ -912,6 +927,390 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(rowText).toContain(translate('storage.navigator.matchingProducts', { count: 2 }));
     expect(rowText).not.toContain('SKU-BLUE-1');
     expect(rowText).not.toContain('SKU-BLUE-2');
+  });
+
+  it('finds product results before any rack is selected', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-3',
+        containerId: 'container-c',
+        systemCode: 'CNT-300',
+        externalCode: 'PALLET-C',
+        locationCode: '02-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555553',
+          source: 'manual',
+          externalProductId: 'EXT-GREEN',
+          sku: 'SKU-GREEN',
+          name: 'Green Washers',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 9,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Green Washers');
+
+    const tree = JSON.stringify(renderer.toJSON());
+    const rowText = collectText(findLocationRow(renderer, '02-A.01.01'));
+
+    expect(rowText).toContain('02-A.01.01');
+    expect(rowText).toContain('R-02');
+    expect(rowText).toContain(translate('storage.field.levelWithNumber', { level: 1 }));
+    expect(tree).toContain(translate('storage.navigator.searchingEntireWarehouse'));
+    expect(tree).not.toContain(translate('storage.state.selectRackOnMap'));
+  });
+
+  it('returns cross-rack product results even when another rack is selected', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-3',
+        containerId: 'container-c',
+        systemCode: 'CNT-300',
+        externalCode: 'PALLET-C',
+        locationCode: '02-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555553',
+          source: 'manual',
+          externalProductId: 'EXT-GREEN',
+          sku: 'SKU-GREEN',
+          name: 'Green Washers',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 9,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Green Washers');
+
+    const tree = JSON.stringify(renderer.toJSON());
+    const rowText = collectText(findLocationRow(renderer, '02-A.01.01'));
+
+    expect(rowText).toContain('R-02');
+    expect(tree).not.toContain('01-A.01.01');
+  });
+
+  it('returns cross-level container results while keeping browse level unchanged until click', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-2',
+        containerId: 'container-b',
+        systemCode: 'CNT-L2',
+        externalCode: 'PALLET-L2',
+        locationCode: '01-A.02.01'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'PALLET-L2');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.02.01'));
+    expect(rowText).toContain(translate('storage.field.levelWithNumber', { level: 2 }));
+    expect(useStorageFocusStore.getState().activeLevel).toBe(1);
+  });
+
+  it('renders every matching physical cell once across multiple racks', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        locationCode: '01-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555554',
+          source: 'manual',
+          externalProductId: 'EXT-BLACK',
+          sku: 'SKU-BLACK',
+          name: 'Black Bolts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 2,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
+        cellId: 'cell-3',
+        containerId: 'container-c',
+        systemCode: 'CNT-003',
+        externalCode: 'PALLET-C',
+        locationCode: '02-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555554',
+          source: 'manual',
+          externalProductId: 'EXT-BLACK',
+          sku: 'SKU-BLACK',
+          name: 'Black Bolts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 4,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Black Bolts');
+
+    expect(findLocationRows(renderer, '01-A.01.01')).toHaveLength(1);
+    expect(findLocationRows(renderer, '02-A.01.01')).toHaveLength(1);
+  });
+
+  it('restores the previous browse state after clearing a global query', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [
+      {
+        id: 'cell-a',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } }
+      },
+      {
+        id: 'cell-b',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-B.01.01', parts: { face: 'B', level: 1 } }
+      },
+      {
+        id: 'cell-l2',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.02.01', parts: { face: 'A', level: 2 } }
+      },
+      {
+        id: 'cell-r2',
+        rackId: 'rack-2',
+        status: 'active',
+        address: { raw: '02-A.01.01', parts: { face: 'A', level: 1 } }
+      }
+    ];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-r2',
+        containerId: 'container-r2',
+        systemCode: 'CNT-R2',
+        externalCode: 'PALLET-R2',
+        locationCode: '02-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555559',
+          source: 'manual',
+          externalProductId: 'EXT-R2',
+          sku: 'SKU-R2',
+          name: 'Remote Item',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 1,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    clickButtonByLabel(renderer, 'B');
+    clickButtonByLabel(renderer, translate('storage.filter.empty'));
+
+    let tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('01-B.01.01');
+    expect(tree).not.toContain('01-A.01.01');
+
+    changeSearch(renderer, 'Remote Item');
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('02-A.01.01');
+
+    changeSearch(renderer, '');
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('01-B.01.01');
+    expect(tree).not.toContain('01-A.01.01');
+    expect(tree).not.toContain('02-A.01.01');
+  });
+
+  it('ignores the empty-only filter during global search and reapplies it after clearing the query', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        locationCode: '01-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555555',
+          source: 'manual',
+          externalProductId: 'EXT-RED',
+          sku: 'SKU-RED',
+          name: 'Red Bolts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 5,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    clickButtonByLabel(renderer, translate('storage.filter.empty'));
+    expect(JSON.stringify(renderer.toJSON())).toContain(translate('storage.state.noLocationsMatchFilters'));
+
+    changeSearch(renderer, 'Red Bolts');
+    let tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain('01-A.01.01');
+
+    changeSearch(renderer, '');
+    tree = JSON.stringify(renderer.toJSON());
+    expect(tree).toContain(translate('storage.state.noLocationsMatchFilters'));
+  });
+
+  it('finds location queries globally across racks', () => {
+    const workspace = createWorkspace();
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, '02-A.01.01');
+
+    const rowText = collectText(findLocationRow(renderer, '02-A.01.01'));
+    expect(rowText).toContain('R-02');
+  });
+
+  it('disables browse controls during global search and re-enables them after query clear', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [
+      {
+        id: 'cell-a',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } }
+      },
+      {
+        id: 'cell-b',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-B.01.01', parts: { face: 'B', level: 1 } }
+      }
+    ];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-b',
+        containerId: 'container-b',
+        systemCode: 'CNT-002',
+        externalCode: 'PALLET-B',
+        locationCode: '01-B.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555560',
+          source: 'manual',
+          externalProductId: 'EXT-B',
+          sku: 'SKU-B',
+          name: 'Blue Brackets',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 3,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Blue Brackets');
+
+    expect(findButtonByLabel(renderer, 'L1')?.props.disabled).toBe(true);
+    expect(findButtonByLabel(renderer, translate('storage.filter.all'))?.props.disabled).toBe(true);
+    expect(findButtonByLabel(renderer, 'B')?.props.disabled).toBe(true);
+    expect(JSON.stringify(renderer.toJSON())).toContain(translate('storage.navigator.searchingEntireWarehouse'));
+
+    changeSearch(renderer, '');
+
+    expect(findButtonByLabel(renderer, 'L1')?.props.disabled).toBe(false);
+    expect(findButtonByLabel(renderer, translate('storage.filter.all'))?.props.disabled).toBe(false);
+    expect(findButtonByLabel(renderer, 'B')?.props.disabled).toBe(false);
+    expect(JSON.stringify(renderer.toJSON())).not.toContain(translate('storage.navigator.searchingEntireWarehouse'));
+  });
+
+  it('clicking a global result updates selected rack, level, and cell', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-3',
+        containerId: 'container-c',
+        systemCode: 'CNT-300',
+        externalCode: 'PALLET-C',
+        locationCode: '02-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555553',
+          source: 'manual',
+          externalProductId: 'EXT-GREEN',
+          sku: 'SKU-GREEN',
+          name: 'Green Washers',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 9,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Green Washers');
+    clickLocationByAddress(renderer, '02-A.01.01');
+
+    const state = useStorageFocusStore.getState();
+    expect(state.selectedRackId).toBe('rack-2');
+    expect(state.activeLevel).toBe(1);
+    expect(state.selectedCellId).toBe('cell-3');
   });
 
   it('does not match containerType values', () => {
