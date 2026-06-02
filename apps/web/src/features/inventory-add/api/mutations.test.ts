@@ -16,11 +16,14 @@ describe('addInventoryItem', () => {
       id: 'cbb1e2b2-c41a-42ec-9a17-4555cfe2cb85'
     } as never);
 
+    const receiptCorrelationKey = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
     await addInventoryItem({
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
       productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
       quantity: 3,
-      uom: 'pcs'
+      uom: 'pcs',
+      receiptCorrelationKey
     });
 
     expect(bffRequest).toHaveBeenCalledWith('/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory', {
@@ -28,13 +31,16 @@ describe('addInventoryItem', () => {
       body: JSON.stringify({
         productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
         quantity: 3,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       })
     });
   });
 
   it('serializes optional packaging fields additively', async () => {
     vi.mocked(bffRequest).mockResolvedValue({ id: 'x' } as never);
+
+    const receiptCorrelationKey = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
     await addInventoryItem({
       containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
@@ -43,7 +49,8 @@ describe('addInventoryItem', () => {
       uom: 'pcs',
       packagingState: 'opened',
       productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      packCount: 1
+      packCount: 1,
+      receiptCorrelationKey
     });
 
     expect(bffRequest).toHaveBeenCalledWith('/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory', {
@@ -54,8 +61,30 @@ describe('addInventoryItem', () => {
         uom: 'pcs',
         packagingState: 'opened',
         productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        packCount: 1
+        packCount: 1,
+        receiptCorrelationKey
       })
     });
+  });
+
+  it('sends receiptCorrelationKey with the request', async () => {
+    vi.mocked(bffRequest).mockResolvedValue({ id: 'x' } as never);
+
+    const receiptCorrelationKey = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+    await addInventoryItem({
+      containerId: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      productId: '9f4d6839-c1a9-4820-b057-f0da8e92c222',
+      quantity: 5,
+      uom: 'pcs',
+      receiptCorrelationKey
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      expect.objectContaining({
+        body: expect.stringContaining(receiptCorrelationKey)
+      })
+    );
   });
 });

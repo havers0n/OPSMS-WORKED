@@ -1100,7 +1100,8 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           containerId,
           productId: createWithProductSelectedProduct.id,
           quantity: Number(createWithProductQuantity),
-          uom: createWithProductUom.trim()
+          uom: createWithProductUom.trim(),
+          receiptCorrelationKey: crypto.randomUUID()
         });
       } catch (error) {
         await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });

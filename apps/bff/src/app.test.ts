@@ -2022,6 +2022,8 @@ describe('buildApp', () => {
       getUserSupabase: vi.fn(() => supabase as never)
     });
 
+    const receiptCorrelationKey = '11111111-1111-4111-8111-111111111111';
+
     const response = await app.inject({
       method: 'POST',
       url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
@@ -2031,7 +2033,8 @@ describe('buildApp', () => {
       payload: {
         productId: productRows[1].id,
         quantity: 3,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       }
     });
 
@@ -2059,7 +2062,8 @@ describe('buildApp', () => {
       actor_uuid: authContext.user.id,
       packaging_state: 'loose',
       product_packaging_level_uuid: null,
-      pack_count: null
+      pack_count: null,
+      receipt_correlation_key: receiptCorrelationKey
     });
     expect(
       supabase.from.mock.calls.some(([table]) => table === 'containers' || table === 'products' || table === 'inventory_unit')
@@ -2084,6 +2088,36 @@ describe('buildApp', () => {
       payload: {
         productId: 'not-a-uuid',
         quantity: -1,
+        uom: 'pcs',
+        receiptCorrelationKey: '550e8400-e29b-41d4-a716-446655440000'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('rejects receive request when receiptCorrelationKey is missing', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: productRows[0].id,
+        quantity: 1,
         uom: 'pcs'
       }
     });
@@ -2097,7 +2131,77 @@ describe('buildApp', () => {
     await app.close();
   });
 
+  it('rejects receive request when receiptCorrelationKey is malformed', async () => {
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: productRows[0].id,
+        quantity: 1,
+        uom: 'pcs',
+        receiptCorrelationKey: 'not-a-uuid'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('receives valid correlation key end-to-end', async () => {
+    const receiptCorrelationKey = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const supabase = createSupabaseStub();
+    const app = buildApp({
+      getAuthContext: vi.fn(async () => authContext as never),
+      getUserSupabase: vi.fn(() => supabase as never)
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/containers/188ed1eb-c44d-47f8-a8b1-94c7e20db85f/inventory',
+      headers: {
+        authorization: 'Bearer token'
+      },
+      payload: {
+        productId: productRows[1].id,
+        quantity: 5,
+        uom: 'pcs',
+        receiptCorrelationKey
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(supabase.rpc).toHaveBeenCalledWith('receive_inventory_unit', {
+      tenant_uuid: authContext.currentTenant.tenantId,
+      container_uuid: '188ed1eb-c44d-47f8-a8b1-94c7e20db85f',
+      product_uuid: productRows[1].id,
+      quantity: 5,
+      uom: 'pcs',
+      actor_uuid: authContext.user.id,
+      packaging_state: 'loose',
+      product_packaging_level_uuid: null,
+      pack_count: null,
+      receipt_correlation_key: receiptCorrelationKey
+    });
+
+    await app.close();
+  });
+
   it('allows multiple canonical inventory rows for the same product and container', async () => {
+    const receiptCorrelationKey = '22222222-2222-4222-8222-222222222222';
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -2113,7 +2217,8 @@ describe('buildApp', () => {
       payload: {
         productId: productRows[0].id,
         quantity: 7,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       }
     });
 
@@ -2141,7 +2246,8 @@ describe('buildApp', () => {
       actor_uuid: authContext.user.id,
       packaging_state: 'loose',
       product_packaging_level_uuid: null,
-      pack_count: null
+      pack_count: null,
+      receipt_correlation_key: receiptCorrelationKey
     });
     expect(supabase.from.mock.calls.some(([table]) => table === 'inventory_unit')).toBe(false);
 
@@ -2155,6 +2261,7 @@ describe('buildApp', () => {
       getUserSupabase: vi.fn(() => supabase as never)
     });
 
+    const receiptCorrelationKey = '33333333-3333-4333-8333-333333333333';
     const response = await app.inject({
       method: 'POST',
       url: '/api/containers/00000000-0000-0000-0000-000000000000/inventory',
@@ -2164,7 +2271,8 @@ describe('buildApp', () => {
       payload: {
         productId: productRows[0].id,
         quantity: 1,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       }
     });
 
@@ -2183,7 +2291,8 @@ describe('buildApp', () => {
       actor_uuid: authContext.user.id,
       packaging_state: 'loose',
       product_packaging_level_uuid: null,
-      pack_count: null
+      pack_count: null,
+      receipt_correlation_key: receiptCorrelationKey
     });
 
     await app.close();
@@ -2205,6 +2314,7 @@ describe('buildApp', () => {
       return { data: null, error: null };
     });
 
+    const receiptCorrelationKey = '44444444-4444-4444-8444-444444444444';
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -2219,7 +2329,8 @@ describe('buildApp', () => {
       payload: {
         productId: productRows[0].id,
         quantity: 1,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       }
     });
 
@@ -2240,7 +2351,8 @@ describe('buildApp', () => {
       actor_uuid: authContext.user.id,
       packaging_state: 'loose',
       product_packaging_level_uuid: null,
-      pack_count: null
+      pack_count: null,
+      receipt_correlation_key: receiptCorrelationKey
     });
 
     await app.close();
@@ -2262,6 +2374,7 @@ describe('buildApp', () => {
       return { data: null, error: null };
     });
 
+    const receiptCorrelationKey = '55555555-5555-4555-8555-555555555555';
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -2276,7 +2389,8 @@ describe('buildApp', () => {
       payload: {
         productId: productRows[0].id,
         quantity: 2,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       }
     });
 
@@ -2295,7 +2409,8 @@ describe('buildApp', () => {
       actor_uuid: authContext.user.id,
       packaging_state: 'loose',
       product_packaging_level_uuid: null,
-      pack_count: null
+      pack_count: null,
+      receipt_correlation_key: receiptCorrelationKey
     });
     expect(
       supabase.from.mock.calls.some(([table]) => table === 'containers' || table === 'products' || table === 'inventory_unit')
@@ -4746,6 +4861,7 @@ describe('buildApp', () => {
       return { data: null, error: null };
     });
 
+    const receiptCorrelationKey = '66666666-6666-4666-8666-666666666666';
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -4763,7 +4879,8 @@ describe('buildApp', () => {
         uom: 'pcs',
         packagingState: 'sealed',
         productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        packCount: 1
+        packCount: 1,
+        receiptCorrelationKey
       }
     });
 
@@ -4776,6 +4893,7 @@ describe('buildApp', () => {
   });
 
   it('accepts optional packaging metadata and forwards it to the receive RPC', async () => {
+    const receiptCorrelationKey = '77777777-7777-4777-8777-777777777777';
     const supabase = createSupabaseStub();
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
@@ -4794,7 +4912,8 @@ describe('buildApp', () => {
         uom: 'pcs',
         packagingState: 'sealed',
         productPackagingLevelId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        packCount: 2
+        packCount: 2,
+        receiptCorrelationKey
       }
     });
 
@@ -4813,7 +4932,8 @@ describe('buildApp', () => {
       actor_uuid: authContext.user.id,
       packaging_state: 'sealed',
       product_packaging_level_uuid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      pack_count: 2
+      pack_count: 2,
+      receipt_correlation_key: receiptCorrelationKey
     });
 
     await app.close();
@@ -4852,6 +4972,7 @@ describe('buildApp', () => {
       return { data: null, error: null };
     });
 
+    const receiptCorrelationKey = '88888888-8888-4888-8888-888888888888';
     const app = buildApp({
       getAuthContext: vi.fn(async () => authContext as never),
       getUserSupabase: vi.fn(() => supabase as never)
@@ -4866,7 +4987,8 @@ describe('buildApp', () => {
       payload: {
         productId: productRows[0].id,
         quantity: 1,
-        uom: 'pcs'
+        uom: 'pcs',
+        receiptCorrelationKey
       }
     });
 

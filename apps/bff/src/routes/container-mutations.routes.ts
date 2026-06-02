@@ -74,7 +74,8 @@ export function registerContainerMutationsRoutes(app: FastifyInstance, deps: Con
       actorId: auth.user.id,
       packagingState: body.packagingState,
       productPackagingLevelId: body.productPackagingLevelId ?? null,
-      packCount: body.packCount ?? null
+      packCount: body.packCount ?? null,
+      receiptCorrelationKey: body.receiptCorrelationKey
     });
 
     return parseOrThrow(

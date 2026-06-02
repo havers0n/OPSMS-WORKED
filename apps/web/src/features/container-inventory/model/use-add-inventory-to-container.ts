@@ -1,6 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { addInventoryToContainer as addInventoryToContainerMutation } from '../api/mutations';
+import { useRef } from 'react';
+import { addInventoryToContainer as addInventoryToContainerMutation, type AddInventoryToContainerInput } from '../api/mutations';
 import { invalidateContainerInventoryQueries } from './invalidation';
+
+export type AddInventoryToContainerMutationInput = Omit<AddInventoryToContainerInput, 'receiptCorrelationKey'>;
 
 export function useAddInventoryToContainer(args: {
   floorId: string | null;
@@ -8,10 +11,20 @@ export function useAddInventoryToContainer(args: {
   containerId: string | null;
 }) {
   const queryClient = useQueryClient();
+  const correlationKeyRef = useRef<string | null>(null);
 
   return useMutation({
-    mutationFn: addInventoryToContainerMutation,
+    mutationFn: (params: AddInventoryToContainerMutationInput) => {
+      if (!correlationKeyRef.current) {
+        correlationKeyRef.current = crypto.randomUUID();
+      }
+      return addInventoryToContainerMutation({
+        ...params,
+        receiptCorrelationKey: correlationKeyRef.current
+      });
+    },
     onSuccess: async () => {
+      correlationKeyRef.current = null;
       await invalidateContainerInventoryQueries(queryClient, {
         floorId: args.floorId,
         sourceCellId: args.sourceCellId,
