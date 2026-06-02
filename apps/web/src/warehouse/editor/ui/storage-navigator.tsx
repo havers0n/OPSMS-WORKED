@@ -20,6 +20,7 @@ import {
   recordCanvasMode,
   recordCanvasTiming
 } from './canvas-diagnostics';
+import { resolveCellSearchPresentation, type ProductSubtitlePresentation } from './storage-navigator-search';
 
 interface StorageNavigatorProps {
   workspace: FloorWorkspace | null;
@@ -27,87 +28,40 @@ interface StorageNavigatorProps {
 
 type FaceFilter = 'all' | 'A' | 'B';
 
-type StorageRow = NonNullable<ReturnType<typeof useFloorLocationStorage>['data']>[number];
-
-type CellBadge =
-  | { kind: 'container'; label: string }
-  | { kind: 'aggregate'; label: string }
-  | null;
-
 function normalizeSearchToken(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function getContainerDisplayCode(row: Pick<StorageRow, 'externalCode' | 'systemCode' | 'containerId'>): string {
-  return row.externalCode ?? row.systemCode ?? row.containerId;
-}
-
-function containerIdentityMatches(row: StorageRow, normalizedQuery: string): boolean {
-  if (normalizedQuery === '') return false;
-
-  return [
-    row.externalCode,
-    row.systemCode,
-    row.containerId
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
-    .some((value) => normalizeSearchToken(value).includes(normalizedQuery));
-}
-
-function productMatches(row: StorageRow, normalizedQuery: string): boolean {
-  if (normalizedQuery === '') return false;
-
-  return [
-    row.itemRef,
-    row.product?.name,
-    row.product?.sku,
-    row.product?.externalProductId
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
-    .some((value) => normalizeSearchToken(value).includes(normalizedQuery));
-}
-
-function resolveCellBadge(
-  rows: StorageRow[],
-  normalizedQuery: string,
-  aggregateLabel: string
-): CellBadge {
-  if (rows.length === 0) return null;
-
-  const rowsByContainerId = new Map<string, StorageRow[]>();
-  for (const row of rows) {
-    const existing = rowsByContainerId.get(row.containerId);
-    if (existing) {
-      existing.push(row);
-    } else {
-      rowsByContainerId.set(row.containerId, [row]);
-    }
+function renderProductSubtitle(t: ReturnType<typeof useT>, subtitle: ProductSubtitlePresentation) {
+  if (subtitle.kind === 'multiple-products') {
+    return (
+      <span dir="auto">
+        {t('storage.navigator.matchingProducts', { count: subtitle.count })}
+      </span>
+    );
   }
 
-  const containers = Array.from(rowsByContainerId.values()).map((groupRows) => groupRows[0]);
-  if (containers.length === 1) {
-    return { kind: 'container', label: getContainerDisplayCode(containers[0]) };
-  }
-
-  const identityMatches = containers.filter((row) => containerIdentityMatches(row, normalizedQuery));
-  if (identityMatches.length === 1) {
-    return { kind: 'container', label: getContainerDisplayCode(identityMatches[0]) };
-  }
-  if (identityMatches.length > 1) {
-    return { kind: 'aggregate', label: aggregateLabel };
-  }
-
-  const productMatchesByContainer = containers.filter((containerRow) =>
-    (rowsByContainerId.get(containerRow.containerId) ?? []).some((row) => productMatches(row, normalizedQuery))
+  return (
+    <>
+      <span dir="auto">{subtitle.productName}</span>
+      {subtitle.sku ? (
+        <>
+          <span aria-hidden>{' · '}</span>
+          <span dir="ltr" className="inline-block">
+            {subtitle.sku}
+          </span>
+        </>
+      ) : null}
+      {subtitle.quantityLabel ? (
+        <>
+          <span aria-hidden>{' · '}</span>
+          <span dir="ltr" className="inline-block">
+            {subtitle.quantityLabel}
+          </span>
+        </>
+      ) : null}
+    </>
   );
-  if (productMatchesByContainer.length === 1) {
-    return { kind: 'container', label: getContainerDisplayCode(productMatchesByContainer[0]) };
-  }
-  if (productMatchesByContainer.length > 1) {
-    return { kind: 'aggregate', label: aggregateLabel };
-  }
-
-  return { kind: 'aggregate', label: aggregateLabel };
 }
 
 export function StorageNavigator({ workspace }: StorageNavigatorProps) {
@@ -180,34 +134,23 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   }, [cellsForLevel]);
 
   const showFaceFilter = availableFaces.length > 1;
+  const normalizedSearchQuery = normalizeSearchToken(searchQuery);
 
-  const searchableTextByCellId = useMemo(() => {
-    const map = new Map<string, string>();
+  const searchPresentationByCellId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof resolveCellSearchPresentation>>();
     for (const cell of publishedCells) {
       const rows = storageRowsByCellId.get(cell.id) ?? [];
-      const parts = new Set<string>([cell.address.raw, cell.address.raw.replaceAll('.', '')]);
-      for (const row of rows) {
-        parts.add(row.locationCode);
-        parts.add(row.systemCode);
-        if (row.externalCode) parts.add(row.externalCode);
-        parts.add(row.containerId);
-        parts.add(row.containerType);
-        if (row.itemRef) parts.add(row.itemRef);
-        if (row.product?.name) parts.add(row.product.name);
-        if (row.product?.sku) parts.add(row.product.sku);
-        if (row.product?.externalProductId) parts.add(row.product.externalProductId);
-      }
-      map.set(
-        cell.id,
-        normalizeSearchToken(
-          Array.from(parts)
-            .filter(Boolean)
-            .join(' ')
-        )
-      );
+      map.set(cell.id, resolveCellSearchPresentation({
+        cellAddress: cell.address.raw,
+        rows,
+        normalizedQuery: normalizedSearchQuery,
+        aggregateLabel: t('storage.inventory.containerCount', {
+          count: new Set(rows.map((row) => row.containerId)).size
+        })
+      }));
     }
     return map;
-  }, [publishedCells, storageRowsByCellId]);
+  }, [normalizedSearchQuery, publishedCells, storageRowsByCellId, t]);
 
   useEffect(() => {
     if (faceFilter !== 'all' && !availableFaces.includes(faceFilter)) {
@@ -234,9 +177,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
         return true;
       })
       .filter((cell) => {
-        const normalizedQuery = normalizeSearchToken(searchQuery);
-        if (normalizedQuery === '') return true;
-        return searchableTextByCellId.get(cell.id)?.includes(normalizedQuery) ?? false;
+        if (normalizedSearchQuery === '') return true;
+        return searchPresentationByCellId.get(cell.id)?.matches ?? false;
       });
     if (diagnosticsEnabled) {
       recordCanvasTiming(
@@ -246,7 +188,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       );
     }
     return result;
-  }, [cellsForLevel, faceFilter, occupancyFilter, searchQuery, searchableTextByCellId, storageRowsByCellId]);
+  }, [cellsForLevel, faceFilter, normalizedSearchQuery, occupancyFilter, searchPresentationByCellId, storageRowsByCellId]);
   recordCanvasMode('storage');
   recordCanvasDataSizes({ navigatorVisibleCellCount: visibleCells.length });
   recordCanvasComponentRender({
@@ -263,7 +205,6 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
 
   const filtersActive = faceFilter !== 'all' || occupancyFilter !== 'all' || searchQuery.trim() !== '';
   const rackDisplayCode = rackId ? (racks?.[rackId]?.displayCode ?? rackId) : '-';
-  const normalizedSearchQuery = normalizeSearchToken(searchQuery);
 
   const isLoading = cellsLoading || storageLoading;
   const noRackContext = !rackId && !isLoading;
@@ -421,13 +362,15 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                 const cellStorageRows = storageRowsByCellId.get(cell.id) ?? [];
                 const isOccupied = cellStorageRows.length > 0;
                 const isSelected = selectedCellId === cell.id;
-                const badge = resolveCellBadge(
-                  cellStorageRows,
-                  normalizedSearchQuery,
-                  t('storage.inventory.containerCount', {
+                const presentation = searchPresentationByCellId.get(cell.id) ?? resolveCellSearchPresentation({
+                  cellAddress: cell.address.raw,
+                  rows: cellStorageRows,
+                  normalizedQuery: normalizedSearchQuery,
+                  aggregateLabel: t('storage.inventory.containerCount', {
                     count: new Set(cellStorageRows.map((row) => row.containerId)).size
                   })
-                );
+                });
+                const showSubtitle = normalizedSearchQuery !== '' && presentation.subtitle !== null;
 
                 return (
                   <div
@@ -460,18 +403,25 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                       aria-hidden
                     />
 
-                    <span className="flex-1 font-mono text-[13px] font-medium text-gray-900" dir="ltr">
-                      {cell.address.raw}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-[13px] font-medium text-gray-900" dir="ltr">
+                        {cell.address.raw}
+                      </div>
+                      {showSubtitle ? (
+                        <div className="truncate text-xs text-gray-500">
+                          {presentation.subtitle ? renderProductSubtitle(t, presentation.subtitle) : null}
+                        </div>
+                      ) : null}
+                    </div>
 
-                    {badge && (
+                    {presentation.badge && (
                       <span
                         className={`max-w-24 truncate rounded px-1.5 py-0.5 text-[11px] ${
                           isSelected ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
                         }`}
                         dir="ltr"
                       >
-                        {badge.label}
+                        {presentation.badge.label}
                       </span>
                     )}
 

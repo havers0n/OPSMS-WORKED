@@ -80,6 +80,36 @@ function createWorkspace(): FloorWorkspace {
   } as unknown as FloorWorkspace;
 }
 
+function makeStorageRow(overrides: Partial<LocationStorageSnapshotRow> & Pick<LocationStorageSnapshotRow, 'cellId' | 'containerId' | 'systemCode'>): LocationStorageSnapshotRow {
+  return {
+    tenantId: '11111111-1111-4111-8111-111111111111',
+    floorId: 'floor-1',
+    locationId: '22222222-2222-4222-8222-222222222222',
+    locationCode: '01-A.01.01',
+    locationType: 'rack_slot',
+    cellId: overrides.cellId,
+    containerId: overrides.containerId,
+    systemCode: overrides.systemCode,
+    externalCode: overrides.externalCode ?? null,
+    containerType: overrides.containerType ?? 'pallet',
+    containerStatus: overrides.containerStatus ?? 'active',
+    placedAt: overrides.placedAt ?? '2026-06-02T12:00:00.000Z',
+    inventoryUnitId: overrides.inventoryUnitId ?? null,
+    itemRef: overrides.itemRef ?? null,
+    product: overrides.product ?? null,
+    quantity: overrides.quantity ?? null,
+    uom: overrides.uom ?? null,
+    packagingState: overrides.packagingState,
+    productPackagingLevelId: overrides.productPackagingLevelId,
+    packCount: overrides.packCount,
+    containerPackagingProfileId: overrides.containerPackagingProfileId,
+    containerIsStandardPack: overrides.containerIsStandardPack,
+    preferredPackagingProfileId: overrides.preferredPackagingProfileId,
+    presetUsageStatus: overrides.presetUsageStatus,
+    presetMaterializationStatus: overrides.presetMaterializationStatus
+  };
+}
+
 function renderNavigator(workspace: FloorWorkspace) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -134,6 +164,12 @@ function collectText(node: TestRenderer.ReactTestInstance): string {
   return node.children
     .map((child) => (typeof child === 'string' ? child : collectText(child)))
     .join(' ');
+}
+
+function selectRackLevelOne() {
+  act(() => {
+    useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+  });
 }
 
 describe('StorageNavigator PR7 focus ownership', () => {
@@ -341,7 +377,7 @@ describe('StorageNavigator PR7 focus ownership', () => {
     expect(tree).toContain('01-A.01.02');
   });
 
-  it('searches by location, container code, system code, and product name', () => {
+  it('keeps existing badges on empty query and shows no subtitle', () => {
     const workspace = createWorkspace();
     mockPublishedCells = [
       {
@@ -358,25 +394,15 @@ describe('StorageNavigator PR7 focus ownership', () => {
       }
     ];
     mockStorageRows = [
-      {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
+      makeStorageRow({
         cellId: 'cell-1',
-        containerId: '33333333-3333-4333-8333-333333333333',
+        containerId: 'container-a',
         systemCode: 'CNT-100',
         externalCode: 'PALLET-RED',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:00:00.000Z',
-        inventoryUnitId: '44444444-4444-4444-8444-444444444444',
-        itemRef: 'product:sku-red',
         product: {
           id: '55555555-5555-4555-8555-555555555555',
           source: 'manual',
-          externalProductId: 'SKU-RED',
+          externalProductId: 'EXT-RED',
           sku: 'SKU-RED',
           name: 'Red Bolts',
           permalink: null,
@@ -389,31 +415,32 @@ describe('StorageNavigator PR7 focus ownership', () => {
         },
         quantity: 5,
         uom: 'pcs'
-      }
+      }),
+      makeStorageRow({
+        cellId: 'cell-2',
+        containerId: 'container-b',
+        systemCode: 'CNT-200',
+        externalCode: 'PALLET-A'
+      }),
+      makeStorageRow({
+        cellId: 'cell-2',
+        containerId: 'container-c',
+        systemCode: 'CNT-201',
+        externalCode: 'PALLET-B'
+      })
     ] as LocationStorageSnapshotRow[];
-    act(() => {
-      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
-    });
+    selectRackLevelOne();
 
     const renderer = renderNavigator(workspace);
+    const firstRow = collectText(findLocationRow(renderer, '01-A.01.01'));
+    const secondRow = collectText(findLocationRow(renderer, '01-A.01.02'));
 
-    changeSearch(renderer, 'PALLET-RED');
-    let tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain('01-A.01.01');
-    expect(tree).not.toContain('01-A.01.02');
-
-    changeSearch(renderer, 'CNT-100');
-    tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain('01-A.01.01');
-    expect(tree).not.toContain('01-A.01.02');
-
-    changeSearch(renderer, 'Red Bolts');
-    tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain('01-A.01.01');
-    expect(tree).not.toContain('01-A.01.02');
+    expect(firstRow).toContain('PALLET-RED');
+    expect(firstRow).not.toContain('Red Bolts');
+    expect(secondRow).toContain(translate('storage.inventory.containerCount', { count: 2 }));
   });
 
-  it('shows the matched container instead of the first row in a multi-container cell', () => {
+  it('preserves the container badge and hides subtitle for location queries', () => {
     const workspace = createWorkspace();
     mockPublishedCells = [
       {
@@ -424,48 +451,64 @@ describe('StorageNavigator PR7 focus ownership', () => {
       }
     ];
     mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, '01-A.01.01');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
+    expect(rowText).toContain('PALLET-A');
+    expect(rowText).not.toContain(translate('storage.navigator.matchingProducts', { count: 1 }));
+  });
+
+  it('selects the matched container for an exact external container code query and shows no subtitle', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [
       {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
+        id: 'cell-1',
+        rackId: 'rack-1',
+        status: 'active',
+        address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } }
+      }
+    ];
+    mockStorageRows = [
+      makeStorageRow({
         cellId: 'cell-1',
         containerId: 'container-a',
         systemCode: 'CNT-001',
         externalCode: 'PALLET-A',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:00:00.000Z',
-        inventoryUnitId: null,
-        itemRef: null,
-        product: null,
-        quantity: null,
-        uom: null
-      },
-      {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
+        product: {
+          id: '55555555-5555-4555-8555-555555555555',
+          source: 'manual',
+          externalProductId: 'EXT-ALPHA',
+          sku: 'SKU-ALPHA',
+          name: 'PALLET-B fasteners',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 4,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
         cellId: 'cell-1',
         containerId: 'container-b',
         systemCode: 'CNT-002',
-        externalCode: 'PALLET-B',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:01:00.000Z',
-        inventoryUnitId: null,
-        itemRef: null,
-        product: null,
-        quantity: null,
-        uom: null
-      }
+        externalCode: 'PALLET-B'
+      })
     ] as LocationStorageSnapshotRow[];
-    act(() => {
-      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
-    });
+    selectRackLevelOne();
 
     const renderer = renderNavigator(workspace);
     changeSearch(renderer, 'PALLET-B');
@@ -473,9 +516,10 @@ describe('StorageNavigator PR7 focus ownership', () => {
     const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
     expect(rowText).toContain('PALLET-B');
     expect(rowText).not.toContain('PALLET-A');
+    expect(rowText).not.toContain('fasteners');
   });
 
-  it('shows the product-matched container instead of another container in the same cell', () => {
+  it('shows product name, sku, quantity, and uom for product-name queries', () => {
     const workspace = createWorkspace();
     mockPublishedCells = [
       {
@@ -486,44 +530,15 @@ describe('StorageNavigator PR7 focus ownership', () => {
       }
     ];
     mockStorageRows = [
-      {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
+      makeStorageRow({
         cellId: 'cell-1',
         containerId: 'container-a',
         systemCode: 'CNT-001',
         externalCode: 'PALLET-A',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:00:00.000Z',
-        inventoryUnitId: null,
-        itemRef: null,
-        product: null,
-        quantity: null,
-        uom: null
-      },
-      {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
-        cellId: 'cell-1',
-        containerId: 'container-b',
-        systemCode: 'CNT-002',
-        externalCode: 'PALLET-B',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:01:00.000Z',
-        inventoryUnitId: '44444444-4444-4444-8444-444444444444',
-        itemRef: 'product:sku-blue',
         product: {
-          id: '55555555-5555-4555-8555-555555555555',
+          id: '55555555-5555-4555-8555-555555555551',
           source: 'manual',
-          externalProductId: 'SKU-BLUE',
+          externalProductId: 'EXT-BLUE',
           sku: 'SKU-BLUE',
           name: 'Blue Nuts',
           permalink: null,
@@ -536,50 +551,321 @@ describe('StorageNavigator PR7 focus ownership', () => {
         },
         quantity: 5,
         uom: 'pcs'
-      }
+      })
     ] as LocationStorageSnapshotRow[];
-    act(() => {
-      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
-    });
+    selectRackLevelOne();
 
     const renderer = renderNavigator(workspace);
     changeSearch(renderer, 'Blue Nuts');
 
     const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
-    expect(rowText).toContain('PALLET-B');
-    expect(rowText).not.toContain('PALLET-A');
+    expect(rowText).toContain('PALLET-A');
+    expect(rowText).toContain('Blue Nuts');
+    expect(rowText).toContain('SKU-BLUE');
+    expect(rowText).toContain('5 pcs');
   });
 
-  it('shows an aggregated label when the product match is ambiguous inside one cell', () => {
+  it('prefers an exact sku match over a partial product-name match in the same cell', () => {
     const workspace = createWorkspace();
-    mockPublishedCells = [
-      {
-        id: 'cell-1',
-        rackId: 'rack-1',
-        status: 'active',
-        address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } }
-      }
-    ];
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
     mockStorageRows = [
-      {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
+      makeStorageRow({
         cellId: 'cell-1',
         containerId: 'container-a',
         systemCode: 'CNT-001',
         externalCode: 'PALLET-A',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:00:00.000Z',
-        inventoryUnitId: '44444444-4444-4444-8444-444444444444',
-        itemRef: 'product:sku-blue-1',
         product: {
           id: '55555555-5555-4555-8555-555555555551',
           source: 'manual',
-          externalProductId: 'SKU-BLUE-1',
+          externalProductId: 'EXT-ONE',
+          sku: 'SKU-ALPHA',
+          name: 'SKU-001 anchors',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 1,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-b',
+        systemCode: 'CNT-002',
+        externalCode: 'PALLET-B',
+        product: {
+          id: '55555555-5555-4555-8555-555555555552',
+          source: 'manual',
+          externalProductId: 'EXT-TWO',
+          sku: 'SKU-001',
+          name: 'Anchor Kit',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 3,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'SKU-001');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
+    expect(rowText).toContain('PALLET-B');
+    expect(rowText).toContain('Anchor Kit');
+    expect(rowText).not.toContain('anchors');
+  });
+
+  it('prefers an exact container code over a substring product-name match in the same cell', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-ONE',
+          sku: 'SKU-ONE',
+          name: 'CNT-002 clamp',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 1,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-b',
+        systemCode: 'CNT-002',
+        externalCode: 'PALLET-B'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'CNT-002');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
+    expect(rowText).toContain('PALLET-B');
+    expect(rowText).not.toContain('clamp');
+  });
+
+  it('safely aggregates one product across multiple rows in the same container', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        inventoryUnitId: '44444444-4444-4444-8444-444444444444',
+        itemRef: 'internal-ref-1',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE',
+          sku: 'SKU-BLUE',
+          name: 'Blue Nuts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 5,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        inventoryUnitId: '44444444-4444-4444-8444-444444444445',
+        itemRef: 'internal-ref-2',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE',
+          sku: 'SKU-BLUE',
+          name: 'Blue Nuts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 7,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Blue Nuts');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
+    expect(rowText).toContain('PALLET-A');
+    expect(rowText).toContain('12 pcs');
+    expect(rowText.match(/Blue Nuts/g)?.length).toBe(1);
+  });
+
+  it('shows container count badge and product subtitle for one matched product across multiple containers', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE',
+          sku: 'SKU-BLUE',
+          name: 'Blue Nuts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 5,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-b',
+        systemCode: 'CNT-002',
+        externalCode: 'PALLET-B',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE',
+          sku: 'SKU-BLUE',
+          name: 'Blue Nuts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 7,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Blue Nuts');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
+    expect(rowText).toContain(translate('storage.inventory.containerCount', { count: 2 }));
+    expect(rowText).toContain('Blue Nuts');
+    expect(rowText).not.toContain('SKU-BLUE');
+    expect(rowText).toContain('12 pcs');
+  });
+
+  it('suppresses quantity when matched product rows use different uom values', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE',
+          sku: 'SKU-BLUE',
+          name: 'Blue Nuts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 5,
+        uom: 'pcs'
+      }),
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-b',
+        systemCode: 'CNT-002',
+        externalCode: 'PALLET-B',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE',
+          sku: 'SKU-BLUE',
+          name: 'Blue Nuts',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 7,
+        uom: 'box'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Blue Nuts');
+
+    const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
+    expect(rowText).toContain('Blue Nuts');
+    expect(rowText).not.toContain('12 pcs');
+    expect(rowText).not.toContain('box');
+  });
+
+  it('shows a neutral subtitle when multiple distinct matched products exist', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        product: {
+          id: '55555555-5555-4555-8555-555555555551',
+          source: 'manual',
+          externalProductId: 'EXT-BLUE-1',
           sku: 'SKU-BLUE-1',
           name: 'Blue Nuts',
           permalink: null,
@@ -592,26 +878,16 @@ describe('StorageNavigator PR7 focus ownership', () => {
         },
         quantity: 5,
         uom: 'pcs'
-      },
-      {
-        tenantId: '11111111-1111-4111-8111-111111111111',
-        floorId: 'floor-1',
-        locationId: '22222222-2222-4222-8222-222222222222',
-        locationCode: '01-A.01.01',
-        locationType: 'rack_slot',
+      }),
+      makeStorageRow({
         cellId: 'cell-1',
         containerId: 'container-b',
         systemCode: 'CNT-002',
         externalCode: 'PALLET-B',
-        containerType: 'pallet',
-        containerStatus: 'active',
-        placedAt: '2026-06-02T12:01:00.000Z',
-        inventoryUnitId: '44444444-4444-4444-8444-444444444445',
-        itemRef: 'product:sku-blue-2',
         product: {
           id: '55555555-5555-4555-8555-555555555552',
           source: 'manual',
-          externalProductId: 'SKU-BLUE-2',
+          externalProductId: 'EXT-BLUE-2',
           sku: 'SKU-BLUE-2',
           name: 'Blue Nuts',
           permalink: null,
@@ -622,20 +898,78 @@ describe('StorageNavigator PR7 focus ownership', () => {
           createdAt: '2026-06-02T12:00:00.000Z',
           updatedAt: '2026-06-02T12:00:00.000Z'
         },
-        quantity: 5,
+        quantity: 7,
         uom: 'pcs'
-      }
+      })
     ] as LocationStorageSnapshotRow[];
-    act(() => {
-      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
-    });
+    selectRackLevelOne();
 
     const renderer = renderNavigator(workspace);
     changeSearch(renderer, 'Blue Nuts');
 
     const rowText = collectText(findLocationRow(renderer, '01-A.01.01'));
     expect(rowText).toContain(translate('storage.inventory.containerCount', { count: 2 }));
-    expect(rowText).not.toContain('PALLET-A');
-    expect(rowText).not.toContain('PALLET-B');
+    expect(rowText).toContain(translate('storage.navigator.matchingProducts', { count: 2 }));
+    expect(rowText).not.toContain('SKU-BLUE-1');
+    expect(rowText).not.toContain('SKU-BLUE-2');
+  });
+
+  it('does not match containerType values', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'EXT-001',
+        containerType: 'pallet'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'pallet');
+
+    expect(JSON.stringify(renderer.toJSON())).toContain(translate('storage.state.noLocationsMatchFilters'));
+  });
+
+  it('does not match internal itemRef values', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: 'container-a',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A',
+        itemRef: 'internal-ref-123'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'internal-ref-123');
+
+    expect(JSON.stringify(renderer.toJSON())).toContain(translate('storage.state.noLocationsMatchFilters'));
+  });
+
+  it('does not match uuid container ids', () => {
+    const workspace = createWorkspace();
+    mockPublishedCells = [{ id: 'cell-1', rackId: 'rack-1', status: 'active', address: { raw: '01-A.01.01', parts: { face: 'A', level: 1 } } }];
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-1',
+        containerId: '33333333-3333-4333-8333-333333333333',
+        systemCode: 'CNT-001',
+        externalCode: 'PALLET-A'
+      })
+    ] as LocationStorageSnapshotRow[];
+    selectRackLevelOne();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, '33333333-3333-4333-8333-333333333333');
+
+    expect(JSON.stringify(renderer.toJSON())).toContain(translate('storage.state.noLocationsMatchFilters'));
   });
 });
