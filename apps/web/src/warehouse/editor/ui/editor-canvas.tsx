@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { FloorWorkspace } from '@wos/domain';
+import type { Cell, FloorWorkspace } from '@wos/domain';
 import { Layer, Line, Rect, Stage } from 'react-konva';
 import KonvaRuntime from 'konva';
 import type { default as Konva } from 'konva';
@@ -48,6 +48,8 @@ import type {
 } from '@/warehouse/editor/model/editor-types';
 import { useEditorStore } from '@/warehouse/editor/model/editor-store';
 import { useInteractionStore } from '@/warehouse/editor/model/interaction-store';
+import { useCameraStore } from '@/warehouse/editor/model/camera-store';
+import { resolveStorageCameraTarget } from '@/warehouse/editor/model/v2/storage-camera-focus';
 import {
   useStorageFocusActiveLevel,
   useStorageFocusSelectedCellId,
@@ -56,6 +58,7 @@ import {
   useStorageFocusSelectRack,
   useStorageFocusHandleEmptyCanvasClick
 } from '@/warehouse/editor/model/v2/v2-selectors';
+import { useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
 import {
   collectRackSemanticLevels,
   resolveIndexForSemanticLevel,
@@ -1386,6 +1389,35 @@ export function EditorCanvas({
       now - mountStartMsRef.current
     );
   }, [layoutDraft, viewport.height, viewport.width]);
+
+  // ── Camera focus request consumption ────────────────────────────────────
+  // Subscribe to pending camera focus request (emitted by global search).
+  // Clears request exactly once after viewport is ready.
+  const consumedCameraFocusRequestIdRef = useRef<number | null>(null);
+  const cameraFocusRequest = useStorageFocusStore(
+    (s) => s.cameraFocusRequest
+  );
+  useEffect(() => {
+    if (!cameraFocusRequest) return;
+    if (cameraFocusRequest.requestId === consumedCameraFocusRequestIdRef.current) return;
+    if (viewport.width <= 0 || viewport.height <= 0) return;
+
+    consumedCameraFocusRequestIdRef.current = cameraFocusRequest.requestId;
+
+    const target = resolveStorageCameraTarget(
+      cameraFocusRequest,
+      racks,
+      publishedCellsById as Map<string, Cell>,
+      viewport,
+      zoom,
+    );
+
+    useStorageFocusStore.getState().clearCameraFocusRequest();
+
+    if (target) {
+      useCameraStore.getState().setCamera(target.zoom, target.offsetX, target.offsetY);
+    }
+  }, [cameraFocusRequest, racks, publishedCellsById, viewport.width, viewport.height, zoom]);
 
   // Alias for SnapGuides — always use major grid span as the guide extent
   const gridLines = gridLineData.major;

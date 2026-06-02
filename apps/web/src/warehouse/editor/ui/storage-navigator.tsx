@@ -12,6 +12,7 @@ import {
   useStorageFocusActiveLevel,
   useStorageFocusSelectCell,
   useStorageFocusSetActiveLevel,
+  useStorageFocusRequestCameraFocus,
 } from '../model/v2/v2-selectors';
 import {
   isCanvasRenderPipelineDiagnosticsEnabled,
@@ -74,6 +75,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const activeLevel = useStorageFocusActiveLevel() ?? 1;
 
   const selectCell = useStorageFocusSelectCell();
+  const requestCameraFocus = useStorageFocusRequestCameraFocus();
   const setActiveLevel = useStorageFocusSetActiveLevel();
 
   const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(floorId);
@@ -418,6 +420,13 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
                         rackId: cell.rackId,
                         level: cell.address.parts.level,
                       });
+                      if (isGlobalSearch) {
+                        requestCameraFocus({
+                          source: 'storage-global-search',
+                          rackId: cell.rackId,
+                          cellId: cell.id,
+                        });
+                      }
                     }}
                   >
                     <span

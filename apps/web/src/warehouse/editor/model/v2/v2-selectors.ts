@@ -61,10 +61,23 @@ export const useStorageFocusHandleEmptyCanvasClick = () =>
   useStorageFocusStore((state: StorageFocusStore) => state.handleEmptyCanvasClick)
 
 // ============================================================================
+// Storage Camera Focus Request — transient UI intent
+// ============================================================================
+
+export const useCameraFocusRequest = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.cameraFocusRequest)
+
+export const useStorageFocusRequestCameraFocus = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.requestCameraFocus)
+
+export const useClearCameraFocusRequest = () =>
+  useStorageFocusStore((state: StorageFocusStore) => state.clearCameraFocusRequest)
+
+// ============================================================================
 // Re-exports for convenience (types needed by consumer code)
 // ============================================================================
 
-export type { StorageFocusStore } from './storage-focus-store'
+export type { StorageFocusStore, StorageCameraFocusRequest } from './storage-focus-store'
 export type {
   TaskStore,
   StorageTask,

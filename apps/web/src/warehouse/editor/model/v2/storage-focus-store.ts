@@ -1,6 +1,18 @@
 import { create } from 'zustand'
 
 /**
+ * Transient camera focus request — emitted by UI (e.g. global search click)
+ * and consumed by the canvas effect. Store generates monotonic requestId.
+ * Not persisted, not sent to server.
+ */
+export type StorageCameraFocusRequest = {
+  requestId: number
+  source: 'storage-global-search'
+  rackId: string
+  cellId: string
+}
+
+/**
  * StorageFocusStore — the single source of truth for Storage V2 runtime focus.
  *
  * PR7: Replaces the dual read/write pattern across navigation-store + selection-store
@@ -35,6 +47,13 @@ export type StorageFocusStore = {
   activeLevel: number | null
   /** Internal control state — not for UI consumption. */
   _consecutiveEmptyCanvasClicks: number
+
+  // ── Transient camera focus request ─────────────────────────────────────────
+
+  /** Monotonic sequence counter for camera focus requests. */
+  cameraFocusRequestSequence: number
+  /** Pending camera focus request, consumed by canvas effect. */
+  cameraFocusRequest: StorageCameraFocusRequest | null
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -76,6 +95,21 @@ export type StorageFocusStore = {
    * click #2 (consecutive, counter ≥ 1): clearAllFocus, counter → 0
    */
   handleEmptyCanvasClick: () => void
+
+  /**
+   * Emit a transient camera focus request.
+   * Store assigns a monotonic requestId.
+   */
+  requestCameraFocus: (payload: {
+    source: 'storage-global-search'
+    rackId: string
+    cellId: string
+  }) => void
+
+  /**
+   * Clear the pending camera focus request (called after consumption).
+   */
+  clearCameraFocusRequest: () => void
 }
 
 const initialState = {
@@ -83,6 +117,8 @@ const initialState = {
   selectedRackId: null,
   activeLevel: null,
   _consecutiveEmptyCanvasClicks: 0,
+  cameraFocusRequestSequence: 0,
+  cameraFocusRequest: null,
 }
 
 export const useStorageFocusStore = create<StorageFocusStore>((set) => ({
@@ -124,7 +160,22 @@ export const useStorageFocusStore = create<StorageFocusStore>((set) => ({
       selectedRackId: null,
       activeLevel: null,
       _consecutiveEmptyCanvasClicks: 0,
+      cameraFocusRequest: null,
     }),
+
+  requestCameraFocus: (payload) =>
+    set((state) => ({
+      cameraFocusRequestSequence: state.cameraFocusRequestSequence + 1,
+      cameraFocusRequest: {
+        requestId: state.cameraFocusRequestSequence + 1,
+        source: payload.source,
+        rackId: payload.rackId,
+        cellId: payload.cellId,
+      },
+    })),
+
+  clearCameraFocusRequest: () =>
+    set({ cameraFocusRequest: null }),
 
   handleEmptyCanvasClick: () =>
     set((state) => {
