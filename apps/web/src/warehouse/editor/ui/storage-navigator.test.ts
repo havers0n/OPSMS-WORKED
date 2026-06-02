@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace, LocationStorageSnapshotRow } from '@wos/domain';
 import { StorageNavigator } from './storage-navigator';
 import { resetStorageFocusStore, useStorageFocusStore } from '@/warehouse/editor/model/v2/storage-focus-store';
+import type { StorageCameraFocusRequest } from '@/warehouse/editor/model/v2/storage-focus-store';
 import { translate } from '@/shared/i18n';
 
 type MockCell = {
@@ -1370,5 +1371,88 @@ describe('StorageNavigator PR7 focus ownership', () => {
     changeSearch(renderer, '33333333-3333-4333-8333-333333333333');
 
     expect(JSON.stringify(renderer.toJSON())).toContain(translate('storage.state.noLocationsMatchFilters'));
+  });
+
+  // ── Camera focus request tests ─────────────────────────────────────────────
+
+  it('14: click global result emits exactly one camera request with correct ids', () => {
+    const workspace = createWorkspace();
+    mockStorageRows = [
+      makeStorageRow({
+        cellId: 'cell-3',
+        containerId: 'container-c',
+        systemCode: 'CNT-300',
+        externalCode: 'PALLET-C',
+        locationCode: '02-A.01.01',
+        product: {
+          id: '55555555-5555-4555-8555-555555555553',
+          source: 'manual',
+          externalProductId: 'EXT-GREEN',
+          sku: 'SKU-GREEN',
+          name: 'Green Washers',
+          permalink: null,
+          imageUrls: [],
+          imageFiles: [],
+          isActive: true,
+          category: null,
+          createdAt: '2026-06-02T12:00:00.000Z',
+          updatedAt: '2026-06-02T12:00:00.000Z'
+        },
+        quantity: 9,
+        uom: 'pcs'
+      })
+    ] as LocationStorageSnapshotRow[];
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'Green Washers');
+
+    // Clear any prior state
+    useStorageFocusStore.getState().clearCameraFocusRequest();
+    clickLocationByAddress(renderer, '02-A.01.01');
+
+    const request: StorageCameraFocusRequest | null = useStorageFocusStore.getState().cameraFocusRequest;
+    expect(request).not.toBeNull();
+    expect(request!.source).toBe('storage-global-search');
+    expect(request!.rackId).toBe('rack-2');
+    expect(request!.cellId).toBe('cell-3');
+    expect(request!.requestId).toBeGreaterThan(0);
+  });
+
+  it('15: browse-mode cell click does not create camera request', () => {
+    const workspace = createWorkspace();
+    act(() => {
+      useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
+    });
+    useStorageFocusStore.getState().clearCameraFocusRequest();
+
+    const renderer = renderNavigator(workspace);
+    clickLocationByAddress(renderer, '01-A.01.01');
+
+    const request = useStorageFocusStore.getState().cameraFocusRequest;
+    expect(request).toBeNull();
+  });
+
+  it('16: typing does not create camera request', () => {
+    const workspace = createWorkspace();
+    useStorageFocusStore.getState().clearCameraFocusRequest();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'something');
+    changeSearch(renderer, 'something else');
+
+    const request = useStorageFocusStore.getState().cameraFocusRequest;
+    expect(request).toBeNull();
+  });
+
+  it('17: clear query does not create camera request', () => {
+    const workspace = createWorkspace();
+    useStorageFocusStore.getState().clearCameraFocusRequest();
+
+    const renderer = renderNavigator(workspace);
+    changeSearch(renderer, 'something');
+    changeSearch(renderer, '');
+
+    const request = useStorageFocusStore.getState().cameraFocusRequest;
+    expect(request).toBeNull();
   });
 });

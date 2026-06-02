@@ -155,12 +155,14 @@ describe('clearAllFocus', () => {
 // ── resetStorageFocusStore ─────────────────────────────────────────────────────
 
 describe('resetStorageFocusStore', () => {
-  it('restores initial state', () => {
+  it('restores initial state including camera focus fields', () => {
     useStorageFocusStore.setState({
       selectedCellId: 'cell-1',
       selectedRackId: 'rack-1',
       activeLevel: 5,
       _consecutiveEmptyCanvasClicks: 3,
+      cameraFocusRequestSequence: 5,
+      cameraFocusRequest: { requestId: 5, source: 'storage-global-search', rackId: 'rack-1', cellId: 'cell-1' },
     });
     resetStorageFocusStore();
     const s = useStorageFocusStore.getState();
@@ -168,5 +170,94 @@ describe('resetStorageFocusStore', () => {
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
     expect(s._consecutiveEmptyCanvasClicks).toBe(0);
+    expect(s.cameraFocusRequestSequence).toBe(0);
+    expect(s.cameraFocusRequest).toBeNull();
+  });
+});
+
+// ── requestCameraFocus ─────────────────────────────────────────────────────────
+
+describe('requestCameraFocus', () => {
+  it('initial request is null', () => {
+    expect(useStorageFocusStore.getState().cameraFocusRequest).toBeNull();
+    expect(useStorageFocusStore.getState().cameraFocusRequestSequence).toBe(0);
+  });
+
+  it('preserves payload and increments monotonic requestId', () => {
+    useStorageFocusStore.getState().requestCameraFocus({
+      source: 'storage-global-search',
+      rackId: 'rack-1',
+      cellId: 'cell-1',
+    });
+    const s = useStorageFocusStore.getState();
+    expect(s.cameraFocusRequest).toEqual({
+      requestId: 1,
+      source: 'storage-global-search',
+      rackId: 'rack-1',
+      cellId: 'cell-1',
+    });
+    expect(s.cameraFocusRequestSequence).toBe(1);
+  });
+
+  it('two sequential requests have different requestIds', () => {
+    useStorageFocusStore.getState().requestCameraFocus({
+      source: 'storage-global-search',
+      rackId: 'rack-1',
+      cellId: 'cell-1',
+    });
+    useStorageFocusStore.getState().requestCameraFocus({
+      source: 'storage-global-search',
+      rackId: 'rack-2',
+      cellId: 'cell-2',
+    });
+    const s = useStorageFocusStore.getState();
+    expect(s.cameraFocusRequest?.requestId).toBe(2);
+    expect(s.cameraFocusRequest?.rackId).toBe('rack-2');
+    expect(s.cameraFocusRequest?.cellId).toBe('cell-2');
+    expect(s.cameraFocusRequestSequence).toBe(2);
+  });
+});
+
+// ── clearCameraFocusRequest ────────────────────────────────────────────────────
+
+describe('clearCameraFocusRequest', () => {
+  it('clears the pending request', () => {
+    useStorageFocusStore.getState().requestCameraFocus({
+      source: 'storage-global-search',
+      rackId: 'rack-1',
+      cellId: 'cell-1',
+    });
+    useStorageFocusStore.getState().clearCameraFocusRequest();
+    expect(useStorageFocusStore.getState().cameraFocusRequest).toBeNull();
+    // Sequence is not reset by clearing
+    expect(useStorageFocusStore.getState().cameraFocusRequestSequence).toBe(1);
+  });
+});
+
+// ── clearAllFocus clears camera request ────────────────────────────────────────
+
+describe('clearAllFocus', () => {
+  it('clears pending camera focus request along with other state', () => {
+    useStorageFocusStore.getState().requestCameraFocus({
+      source: 'storage-global-search',
+      rackId: 'rack-1',
+      cellId: 'cell-1',
+    });
+    useStorageFocusStore.setState({ selectedCellId: 'cell-1', selectedRackId: 'rack-1', activeLevel: 1 });
+    useStorageFocusStore.getState().clearAllFocus();
+    const s = useStorageFocusStore.getState();
+    expect(s.selectedCellId).toBeNull();
+    expect(s.selectedRackId).toBeNull();
+    expect(s.activeLevel).toBeNull();
+    expect(s.cameraFocusRequest).toBeNull();
+  });
+});
+
+// ── selectCell does NOT create camera request ──────────────────────────────────
+
+describe('selectCell', () => {
+  it('does not create a camera focus request', () => {
+    useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
+    expect(useStorageFocusStore.getState().cameraFocusRequest).toBeNull();
   });
 });
