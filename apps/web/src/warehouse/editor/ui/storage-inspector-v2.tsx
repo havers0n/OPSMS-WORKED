@@ -1,4 +1,4 @@
-import type { FloorWorkspace, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
+import type { FloorWorkspace, LocationOccupancyRow, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
@@ -26,6 +26,7 @@ import {
   swapContainers as swapContainersApi
 } from '@/features/placement-actions/api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
+import { applyOptimisticContainerMove } from '@/features/placement-actions/model/optimistic-move';
 import {
   containerKeys,
   containerListQueryOptions,
@@ -1291,6 +1292,42 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         containerId: moveTaskState.sourceContainerId,
         targetLocationId: resolvedTargetLocationId
       });
+
+      {
+        const targetCellId = moveTaskState.targetCellId;
+        const sourceCellId = moveTaskState.sourceCellId;
+        const containerId = moveTaskState.sourceContainerId;
+        const targetLocationCode = moveTargetLocationRef?.locationCode;
+        if (targetCellId && targetLocationCode) {
+          const occupancyKey = locationKeys.occupancyByFloor(floorId);
+          const storageKey = locationKeys.storageByFloor(floorId);
+          const currentOccupancy = queryClient.getQueryData<LocationOccupancyRow[]>(occupancyKey);
+          const currentStorage = queryClient.getQueryData<LocationStorageSnapshotRow[]>(storageKey);
+
+          if (currentOccupancy) {
+            queryClient.setQueryData(
+              occupancyKey,
+              applyOptimisticContainerMove(
+                currentOccupancy,
+                { sourceCellId, containerId, targetCellId, targetLocationId: resolvedTargetLocationId, targetLocationCode },
+                (row) => ({ ...row, cellId: targetCellId, locationId: resolvedTargetLocationId, locationCode: targetLocationCode })
+              )
+            );
+          }
+
+          if (currentStorage) {
+            queryClient.setQueryData(
+              storageKey,
+              applyOptimisticContainerMove(
+                currentStorage,
+                { sourceCellId, containerId, targetCellId, targetLocationId: resolvedTargetLocationId, targetLocationCode },
+                (row) => ({ ...row, cellId: targetCellId, locationId: resolvedTargetLocationId, locationCode: targetLocationCode })
+              )
+            );
+          }
+        }
+      }
+
       await invalidatePlacementQueries(queryClient, {
         floorId,
         sourceCellId: moveTaskState.sourceCellId,
@@ -1426,6 +1463,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   if (mode.kind === 'task-move-container') {
     const isTargetSameAsSource = moveTaskState?.targetCellId === moveTaskState?.sourceCellId;
     const resolvedTargetLocationId = moveTargetLocationRef?.locationId ?? null;
+    const resolvedTargetLocationCode = moveTargetLocationRef?.locationCode ?? null;
     const canConfirm =
       moveTaskState !== null &&
       moveTaskState.targetCellId !== null &&
@@ -1438,7 +1476,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         moveTaskState={moveTaskState!}
         rackDisplayCode={rackDisplayCode}
         targetLocationLoading={moveTargetLocationLoading}
-        resolvedTargetLocationId={resolvedTargetLocationId}
+        resolvedTargetLocationCode={resolvedTargetLocationCode}
         canConfirm={canConfirm}
         onConfirm={() => void handleMoveConfirm()}
         onCancel={handleMoveCancel}
