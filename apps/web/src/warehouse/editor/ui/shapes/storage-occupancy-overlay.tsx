@@ -1,6 +1,7 @@
 import type { Cell, OperationsCellRuntime, Rack, RackFace } from '@wos/domain';
 import { memo, useMemo } from 'react';
 import { Group, Shape } from 'react-konva';
+
 import {
   getRackGeometry,
   shouldRenderCanvasCell,
@@ -59,7 +60,13 @@ const CELL_SURFACE_INSET_SCREEN_PX = 1.5;
 
 // Storage overview visibility lives outside RackCells because RackCells is
 // intentionally gated until deeper cell LOD in storage mode.
-function resolveStatus(params: {
+const EXCEPTIONAL_OVERLAY_STATUSES: ReadonlySet<string> = new Set([
+  'pick_active',
+  'reserved',
+  'quarantined'
+]);
+
+export function resolveStatus(params: {
   cellId: string;
   occupiedCellIds: Set<string>;
   cellRuntimeById: Map<string, OperationsCellRuntime>;
@@ -68,7 +75,7 @@ function resolveStatus(params: {
   'status' | 'hasRuntimeTruth' | 'hasWarning'
 > {
   const runtime = params.cellRuntimeById.get(params.cellId) ?? null;
-  if (runtime) {
+  if (runtime && EXCEPTIONAL_OVERLAY_STATUSES.has(runtime.status)) {
     return {
       status: runtime.status,
       hasRuntimeTruth: true,
@@ -76,6 +83,8 @@ function resolveStatus(params: {
     };
   }
 
+  // Normal runtime states (stocked, empty) defer to physical occupancy data
+  // so that Move/Remove/Add mutation results are reflected immediately.
   if (params.occupiedCellIds.has(params.cellId)) {
     return {
       status: 'occupied',
