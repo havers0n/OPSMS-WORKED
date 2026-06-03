@@ -340,7 +340,6 @@ export function PickingPlanningOverlay({
 
   useEffect(() => {
     if (source.kind !== 'none') return;
-    if (!canSeedPickingPlanningSource(import.meta.env.MODE)) return;
     let cancelled = false;
     setOrdersLoading(true);
     setOrdersError(null);
@@ -747,10 +746,8 @@ export function PickingPlanningOverlay({
         </div>
 
         <div className="mt-3 max-h-[calc(100vh-142px)] overflow-y-auto pr-1">
-          {source.kind === 'none' &&
-            (canSeedPickingPlanningSource(import.meta.env.MODE) ? (
+          {source.kind === 'none' && (
               <div className="space-y-4">
-                {/* Primary: order list */}
                 <div className="space-y-2">
                   <div className="text-xs font-semibold text-slate-700">
                     Select order
@@ -770,8 +767,7 @@ export function PickingPlanningOverlay({
 
                   {!ordersLoading && !ordersError && orders.length === 0 && (
                     <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-4 text-sm text-slate-500">
-                      No orders found. Create an order first or use the advanced
-                      input below.
+                      No orders found.
                     </div>
                   )}
 
@@ -815,43 +811,38 @@ export function PickingPlanningOverlay({
                   )}
                 </div>
 
-                {/* Secondary: advanced UUID input */}
-                <div
-                  className="space-y-2 rounded-lg border border-slate-200 bg-white/50 p-3"
-                >
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Advanced: load by order ID
+                {canSeedPickingPlanningSource(import.meta.env.MODE) && (
+                  <div className="space-y-2 rounded-lg border border-slate-200 bg-white/50 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Advanced: load by order ID
+                    </div>
+                    <textarea
+                      value={orderIdInput}
+                      onChange={(e) => setOrderIdInput(e.target.value)}
+                      placeholder={'uuid-1, uuid-2\nor one per line'}
+                      rows={2}
+                      data-testid="picking-plan-order-id-input"
+                      className="w-full rounded-lg border border-slate-300 bg-white/80 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleLoadFromInput}
+                      disabled={!orderIdInput.trim()}
+                      data-testid="picking-plan-load-button"
+                      className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                      style={{
+                        background: 'rgba(37,99,235,0.08)',
+                        borderColor: 'rgba(37,99,235,0.35)',
+                        color: 'var(--accent)'
+                      }}
+                    >
+                      <Route className="h-3.5 w-3.5" />
+                      Load order preview
+                    </button>
                   </div>
-                  <textarea
-                    value={orderIdInput}
-                    onChange={(e) => setOrderIdInput(e.target.value)}
-                    placeholder={'uuid-1, uuid-2\nor one per line'}
-                    rows={2}
-                    data-testid="picking-plan-order-id-input"
-                    className="w-full rounded-lg border border-slate-300 bg-white/80 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleLoadFromInput}
-                    disabled={!orderIdInput.trim()}
-                    data-testid="picking-plan-load-button"
-                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                    style={{
-                      background: 'rgba(37,99,235,0.08)',
-                      borderColor: 'rgba(37,99,235,0.35)',
-                      color: 'var(--accent)'
-                    }}
-                  >
-                    <Route className="h-3.5 w-3.5" />
-                    Load order preview
-                  </button>
-                </div>
+                )}
               </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-4 text-sm text-slate-600">
-                No picking planning source selected.
-              </div>
-            ))}
+            )}
 
           {isLoading && (
             <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4 text-sm text-blue-800">
