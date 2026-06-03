@@ -401,7 +401,7 @@ export function EditorCanvas({
     Array<{ type: 'x' | 'y'; position: number }>
   >([]);
 
-  const { containerRef, viewport, canvasOffset, isPanning, handleZoom, handleWheelZoom } =
+  const { containerRef, viewport, canvasOffset, isPanning, handleZoom, handleWheelZoom, commitInteractionsForExternalCamera } =
     useCanvasViewportController({
       autoFitRacks: racks,
       blockMousePan:
@@ -1393,6 +1393,8 @@ export function EditorCanvas({
   // ── Camera focus request consumption ────────────────────────────────────
   // Subscribe to pending camera focus request (emitted by global search).
   // Clears request exactly once after viewport is ready.
+  // commitInteractionsForExternalCamera() must be called before setCamera so
+  // that pan inertia and transform-only zoom cannot overwrite the jump target.
   const consumedCameraFocusRequestIdRef = useRef<number | null>(null);
   const cameraFocusRequest = useStorageFocusStore(
     (s) => s.cameraFocusRequest
@@ -1415,9 +1417,10 @@ export function EditorCanvas({
     useStorageFocusStore.getState().clearCameraFocusRequest();
 
     if (target) {
+      commitInteractionsForExternalCamera();
       useCameraStore.getState().setCamera(target.zoom, target.offsetX, target.offsetY);
     }
-  }, [cameraFocusRequest, racks, publishedCellsById, viewport.width, viewport.height, zoom]);
+  }, [cameraFocusRequest, racks, publishedCellsById, viewport.width, viewport.height, zoom, commitInteractionsForExternalCamera]);
 
   // Alias for SnapGuides — always use major grid span as the guide extent
   const gridLines = gridLineData.major;

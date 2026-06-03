@@ -420,6 +420,8 @@ export function useCanvasViewportController({
   const panFrameRef = useRef<number | null>(null);
   const zoomFrameRef = useRef<number | null>(null);
   const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Lifted out of the pan effect so programmatic camera jumps can cancel inertia.
+  const inertiaRafIdRef = useRef<number | null>(null);
   const touchPanActiveRef = useRef(false);
   const touchPanStartRef = useRef<ScreenPoint | null>(null);
   const desktopPanThresholdCrossedRef = useRef(false);
@@ -684,7 +686,6 @@ export function useCanvasViewportController({
     // to avoid one React re-render per frame.
     const INERTIA_DECAY = 0.88;
     const INERTIA_MIN_SPEED = 0.5;
-    let inertiaRafId: number | null = null;
     let panVelX = 0;
     let panVelY = 0;
     let prevMoveX = 0;
@@ -692,9 +693,9 @@ export function useCanvasViewportController({
     let prevMoveTime = 0;
 
     const cancelInertia = () => {
-      if (inertiaRafId !== null) {
-        window.cancelAnimationFrame(inertiaRafId);
-        inertiaRafId = null;
+      if (inertiaRafIdRef.current !== null) {
+        window.cancelAnimationFrame(inertiaRafIdRef.current);
+        inertiaRafIdRef.current = null;
       }
     };
 
@@ -713,20 +714,20 @@ export function useCanvasViewportController({
         if (Math.hypot(velX, velY) < INERTIA_MIN_SPEED) {
           useCameraStore.getState().setOffset(curX, curY);
           recordCanvasCameraStoreUpdate('offset');
-          inertiaRafId = null;
+          inertiaRafIdRef.current = null;
           return;
         }
         curX += velX;
         curY += velY;
         const s = stageRef.current;
-        if (!s) { inertiaRafId = null; return; }
+        if (!s) { inertiaRafIdRef.current = null; return; }
         withKonvaDiagnosticsSource('inertia-pan', () => {
           s.position({ x: curX, y: curY });
         });
         batchDrawStageLayersWithSource(s, 'inertia-pan');
-        inertiaRafId = window.requestAnimationFrame(tick);
+        inertiaRafIdRef.current = window.requestAnimationFrame(tick);
       };
-      inertiaRafId = window.requestAnimationFrame(tick);
+      inertiaRafIdRef.current = window.requestAnimationFrame(tick);
     };
 
     const onMouseDown = (event: MouseEvent) => {
@@ -1013,12 +1014,23 @@ export function useCanvasViewportController({
     isMobileNavigateMode
   ]);
 
+  // Called by the camera focus effect before a programmatic setCamera() so that
+  // pan inertia and transform-only zoom cannot overwrite the target position.
+  const commitInteractionsForExternalCamera = useCallback(() => {
+    if (inertiaRafIdRef.current !== null) {
+      window.cancelAnimationFrame(inertiaRafIdRef.current);
+      inertiaRafIdRef.current = null;
+    }
+    commitTransformOnlyZoom();
+  }, [commitTransformOnlyZoom]);
+
   return {
     containerRef,
     viewport,
     canvasOffset,
     isPanning,
     handleZoom,
-    handleWheelZoom
+    handleWheelZoom,
+    commitInteractionsForExternalCamera
   };
 }

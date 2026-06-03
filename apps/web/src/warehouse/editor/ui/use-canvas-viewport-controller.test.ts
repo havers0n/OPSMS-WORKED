@@ -512,3 +512,141 @@ describe('useCanvasViewportController desktop pan threshold', () => {
     globalThis.ResizeObserver = originalResizeObserver;
   });
 });
+
+describe('commitInteractionsForExternalCamera', () => {
+  it('cancels an in-flight inertia RAF so programmatic camera jump is not overwritten', () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+
+    vi.useFakeTimers();
+    const rafIds: number[] = [];
+    const cancelledRafIds: number[] = [];
+    let rafCounter = 0;
+    const originalRaf = window.requestAnimationFrame;
+    const originalCaf = window.cancelAnimationFrame;
+    window.requestAnimationFrame = (cb) => {
+      const id = ++rafCounter;
+      rafIds.push(id);
+      // Schedule via setTimeout so fake timers control it
+      globalThis.setTimeout(() => cb(id), 16);
+      return id;
+    };
+    window.cancelAnimationFrame = (id) => {
+      cancelledRafIds.push(id);
+      globalThis.clearTimeout(id);
+    };
+
+    const stageContainerRef: { current: HTMLDivElement | null } = { current: null };
+    const stageRef = { current: createInteractiveStage(stageContainerRef) };
+    useCameraStore.setState({ zoom: 1, offsetX: 0, offsetY: 0 });
+    useCanvasZoomSettingsStore.setState({ minZoom: 0.1, maxZoom: 3 });
+
+    let commitInteractions: (() => void) | null = null;
+
+    function Harness() {
+      const controller = useCanvasViewportController({
+        autoFitRacks: [],
+        setCanvasZoom: () => undefined,
+        stageRef: stageRef as MutableRefObject<Konva.Stage | null>,
+        viewMode: 'storage',
+        zoom: 1
+      });
+      useEffect(() => {
+        commitInteractions = controller.commitInteractionsForExternalCamera;
+      });
+      const ref = controller.containerRef;
+      return createElement('div', { ref });
+    }
+
+    const rendered = render(createElement(Harness));
+    const container = rendered.container.firstElementChild as HTMLDivElement;
+    container.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 }) as DOMRect;
+    stageContainerRef.current = container;
+
+    // Simulate a fast pan that triggers inertia
+    act(() => {
+      fireEvent.mouseDown(container, { button: 0, clientX: 100, clientY: 100 });
+    });
+    act(() => {
+      fireEvent.mouseMove(window, { clientX: 110, clientY: 100 });
+      fireEvent.mouseMove(window, { clientX: 140, clientY: 100 });
+      fireEvent.mouseMove(window, { clientX: 200, clientY: 100 });
+    });
+    act(() => {
+      fireEvent.mouseUp(window, { button: 0, clientX: 200, clientY: 100 });
+    });
+
+    // Inertia RAF should be scheduled
+    const rafIdsBefore = rafIds.length;
+    expect(rafIdsBefore).toBeGreaterThan(0);
+
+    // commitInteractionsForExternalCamera should cancel the inertia RAF
+    act(() => {
+      commitInteractions?.();
+    });
+
+    expect(cancelledRafIds.length).toBeGreaterThan(0);
+
+    // Advance timers — inertia should NOT call setOffset because it was cancelled
+    const setOffsetSpy = vi.spyOn(useCameraStore.getState(), 'setOffset');
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(setOffsetSpy).not.toHaveBeenCalled();
+
+    setOffsetSpy.mockRestore();
+    window.requestAnimationFrame = originalRaf;
+    window.cancelAnimationFrame = originalCaf;
+    vi.useRealTimers();
+    rendered.unmount();
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
+
+  it('is a stable callback reference across re-renders', () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+
+    const stageRef = { current: null as Konva.Stage | null };
+    useCameraStore.setState({ zoom: 1, offsetX: 0, offsetY: 0 });
+    useCanvasZoomSettingsStore.setState({ minZoom: 0.1, maxZoom: 3 });
+
+    const capturedRefs: (() => void)[] = [];
+
+    function Harness({ zoom }: { zoom: number }) {
+      const controller = useCanvasViewportController({
+        autoFitRacks: [],
+        setCanvasZoom: () => undefined,
+        stageRef: stageRef as MutableRefObject<Konva.Stage | null>,
+        viewMode: 'storage',
+        zoom
+      });
+      useEffect(() => {
+        capturedRefs.push(controller.commitInteractionsForExternalCamera);
+      });
+      const ref = controller.containerRef;
+      return createElement('div', { ref });
+    }
+
+    const rendered = render(createElement(Harness, { zoom: 1 }));
+    act(() => {
+      rendered.rerender(createElement(Harness, { zoom: 1.5 }));
+    });
+
+    expect(capturedRefs.length).toBeGreaterThanOrEqual(2);
+    // All captured refs must be the exact same stable function reference.
+    const first = capturedRefs[0];
+    for (const ref of capturedRefs) {
+      expect(ref).toBe(first);
+    }
+
+    rendered.unmount();
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
+});
