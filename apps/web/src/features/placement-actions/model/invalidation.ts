@@ -68,6 +68,13 @@ export async function invalidatePlacementQueries(
         queryKey: locationKeys.occupancyByFloor(args.floorId)
       })
     );
+    // Invalidate operations cells so that the canvas cell-runtime map
+    // is refreshed after any placement mutation (Move, Remove, Add).
+    jobs.push(
+      queryClient.invalidateQueries({
+        queryKey: locationKeys.operationsCellsByFloor(args.floorId)
+      })
+    );
     jobs.push(
       queryClient.invalidateQueries({
         queryKey: layoutVersionKeys.workspace(args.floorId)

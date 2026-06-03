@@ -15,7 +15,7 @@ describe('invalidatePlacementQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(7);
+    expect(invalidateQueries).toHaveBeenCalledTimes(8);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'storage']
     });
@@ -35,6 +35,9 @@ describe('invalidatePlacementQueries', () => {
       queryKey: ['location', 'occupancy-by-floor', 'floor-uuid']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['location', 'operations-cells-by-floor', 'floor-uuid']
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['layout-version', 'workspace', 'floor-uuid']
     });
   });
@@ -52,7 +55,7 @@ describe('invalidatePlacementQueries', () => {
       }
     );
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'storage']
     });
@@ -64,6 +67,9 @@ describe('invalidatePlacementQueries', () => {
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'occupancy-by-floor', 'floor-uuid']
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['location', 'operations-cells-by-floor', 'floor-uuid']
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['layout-version', 'workspace', 'floor-uuid']
@@ -129,6 +135,29 @@ describe('invalidatePlacementQueries', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['container', 'current-location', 'c1']
     });
+  });
+
+  it('invalidates operationsCellsByFloor after placement mutations', async () => {
+    const invalidateQueries = vi.fn(async () => undefined);
+    await invalidatePlacementQueries(
+      { invalidateQueries } as never,
+      { floorId: 'floor-uuid', containerId: 'c1' }
+    );
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['location', 'operations-cells-by-floor', 'floor-uuid']
+    });
+  });
+
+  it('skips operationsCellsByFloor when floorId is null', async () => {
+    const invalidateQueries = vi.fn(async () => undefined);
+    await invalidatePlacementQueries(
+      { invalidateQueries } as never,
+      { floorId: null, containerId: 'c1' }
+    );
+    const opsCellCalls = invalidateQueries.mock.calls.filter(
+      (c: unknown[]) => (c[0] as { queryKey: unknown[] }).queryKey[2] === 'operations-cells-by-floor'
+    );
+    expect(opsCellCalls).toHaveLength(0);
   });
 
   it('invalidates occupancyByFloor where required', async () => {
