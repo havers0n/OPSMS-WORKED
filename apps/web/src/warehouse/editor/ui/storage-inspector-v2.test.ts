@@ -34,7 +34,11 @@ type MockStorageRow = {
 };
 
 let mockPublishedCells: MockCell[] = [];
-let mockLocationRef: { locationId: string } | null = null;
+let mockLocationRef: {
+  locationId: string;
+  locationCode?: string | null;
+  locationType?: 'rack_slot' | 'floor' | 'staging' | 'dock' | 'buffer' | null;
+} | null = null;
 let mockStorageRows: MockStorageRow[] = [];
 let mockProductsSearchResults: Array<{
   id: string;
@@ -177,6 +181,7 @@ vi.mock('@/entities/location/api/queries', () => ({
     all: ['location'] as const,
     storage: (locationId: string | null) => ['location', 'storage', locationId ?? 'none'] as const,
     occupancyByFloor: (floorId: string | null) => ['location', 'occupancy-by-floor', floorId ?? 'none'] as const,
+    storageByFloor: (floorId: string | null) => ['location', 'storage-by-floor', floorId ?? 'none'] as const,
   },
 }));
 
@@ -195,8 +200,12 @@ const mockInvalidatePlacement = vi.fn();
 const mockInvalidateQueries = vi.fn();
 const mockRefetchQueries = vi.fn();
 const mockFetchQuery = vi.fn();
+const mockCancelQueries = vi.fn();
+const mockGetQueryData = vi.fn();
+const mockSetQueryData = vi.fn();
 const mockCreateContainerFromStoragePreset = vi.fn();
 const mockSetPreferredStoragePreset = vi.fn();
+const mockQueryCache = new Map<string, unknown>();
 
 vi.mock('@/features/container-create/api/mutations', () => ({
   createContainer: (...args: unknown[]) => mockCreateContainer(...args),
@@ -268,7 +277,10 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
     useQueryClient: () => ({
       invalidateQueries: mockInvalidateQueries,
       refetchQueries: mockRefetchQueries,
-      fetchQuery: mockFetchQuery
+      fetchQuery: mockFetchQuery,
+      cancelQueries: mockCancelQueries,
+      getQueryData: mockGetQueryData,
+      setQueryData: mockSetQueryData
     }),
   };
 });
@@ -283,6 +295,22 @@ beforeEach(() => {
   mockTransferInventoryToContainer.mockReset();
   mockCreateContainerFromStoragePreset.mockReset();
   mockSetPreferredStoragePreset.mockReset();
+  mockCancelQueries.mockReset();
+  mockGetQueryData.mockReset();
+  mockSetQueryData.mockReset();
+  mockQueryCache.clear();
+  mockCancelQueries.mockResolvedValue(undefined);
+  mockGetQueryData.mockImplementation((queryKey: unknown[]) => mockQueryCache.get(JSON.stringify(queryKey)));
+  mockSetQueryData.mockImplementation((queryKey: unknown[], value: unknown) => {
+    const cacheKey = JSON.stringify(queryKey);
+    const previous = mockQueryCache.get(cacheKey);
+    const nextValue =
+      typeof value === 'function'
+        ? (value as (input: unknown) => unknown)(previous)
+        : value;
+    mockQueryCache.set(cacheKey, nextValue);
+    return nextValue;
+  });
 });
 
 function createWorkspace(): FloorWorkspace {
@@ -415,7 +443,7 @@ function setupCellOverview() {
   mockPublishedCells = [
     { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
   ];
-  mockLocationRef = { locationId: 'loc-1' };
+  mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
   mockStorageRows = [];
 }
 
@@ -637,7 +665,7 @@ describe('StorageInspectorV2 breadcrumb fallbacks', () => {
         address: { raw: '01-A.01.01', parts: { level: 1 } }
       }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-SEM-01',
@@ -815,7 +843,7 @@ describe('StorageInspectorV2 panel modes', () => {
     mockPublishedCells = [
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [];
     const renderer = renderInspector(createWorkspace());
     const text = flattenText(renderer.toJSON());
@@ -843,7 +871,7 @@ describe('StorageInspectorV2 panel modes', () => {
     mockPublishedCells = [
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-001',
@@ -880,7 +908,7 @@ describe('StorageInspectorV2 panel modes', () => {
         level: 1,
       });
     });
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [];
     const renderer = renderInspector(createWorkspace());
     const text = flattenText(renderer.toJSON());
@@ -933,7 +961,7 @@ describe('StorageInspectorV2 panel modes', () => {
     mockPublishedCells = [
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-01',
@@ -978,7 +1006,7 @@ describe('StorageInspectorV2 panel modes', () => {
     mockPublishedCells = [
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-01',
@@ -1045,7 +1073,7 @@ describe('StorageInspectorV2 panel modes', () => {
         address: { raw: '01-A.01.02', parts: { level: 1 } }
       },
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-01',
@@ -1100,7 +1128,7 @@ describe('StorageInspectorV2 panel modes', () => {
     mockPublishedCells = [
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-01',
@@ -1518,6 +1546,73 @@ describe('StorageInspectorV2 task flows', () => {
     expect(mockAddInventoryItem).not.toHaveBeenCalled();
   });
 
+  it('create-with-product reconciles occupancy before and after invalidation', async () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockCreateContainer.mockResolvedValue({ containerId: 'created-container' });
+    mockPlaceContainer.mockResolvedValue({ ok: true });
+    mockAddInventoryItem.mockResolvedValue({ ok: true });
+    const occupancyKey = ['location', 'occupancy-by-floor', 'floor-1'] as const;
+    mockQueryCache.set(JSON.stringify(occupancyKey), []);
+
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({ target: { value: 'type-1' } });
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Product' } });
+    });
+    act(() => {
+      root.findAllByProps({ role: 'option' })[0].props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
+    });
+
+    await act(async () => {
+      root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainerWithProduct') }).props.onClick();
+    });
+
+    const occupancyCalls = mockSetQueryData.mock.calls.filter(
+      (call: unknown[]) => JSON.stringify(call[0]) === JSON.stringify(occupancyKey)
+    );
+
+    expect(mockCancelQueries).toHaveBeenCalledWith({ queryKey: occupancyKey, exact: true });
+    expect(occupancyCalls).toHaveLength(2);
+    expect(mockQueryCache.get(JSON.stringify(occupancyKey))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cellId: 'cell-1',
+          containerId: 'created-container',
+          locationId: 'loc-1',
+          locationCode: 'LOC-01',
+          locationType: 'rack_slot',
+          containerType: 'PLT'
+        })
+      ])
+    );
+  });
+
   it('move flow does not require a new global store (all state is local)', () => {
     mockStorageRows = [
       {
@@ -1604,6 +1699,18 @@ describe('StorageInspectorV2 task flows', () => {
       previousLocationId: 'loc-1',
       removedAt: '2026-01-01T00:00:00.000Z'
     });
+    const occupancyKey = ['location', 'occupancy-by-floor', 'floor-1'] as const;
+    mockQueryCache.set(
+      JSON.stringify(occupancyKey),
+      [
+        {
+          cellId: 'cell-1',
+          containerId: 'container-remove-1',
+          locationId: 'loc-1',
+          locationCode: 'LOC-01'
+        }
+      ]
+    );
 
     const renderer = renderInspector(createWorkspace());
     const root = renderer.root;
@@ -1622,6 +1729,8 @@ describe('StorageInspectorV2 task flows', () => {
       expect.anything(),
       expect.objectContaining({ containerId: 'container-remove-1' })
     );
+    expect(mockCancelQueries).toHaveBeenCalledWith({ queryKey: occupancyKey, exact: true });
+    expect(mockQueryCache.get(JSON.stringify(occupancyKey))).toEqual([]);
     expect(flattenText(renderer.toJSON())).toContain(translate('storage.field.actions'));
   });
 
@@ -2023,7 +2132,7 @@ describe('StorageInspectorV2 location role context (PR6)', () => {
         address: { raw: '01-A.01.01', parts: { level: 1 } }
       }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = rows;
   }
 
@@ -2780,7 +2889,7 @@ describe('StorageInspectorV2 contents action flows', () => {
     mockPublishedCells = [
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
     ];
-    mockLocationRef = { locationId: 'loc-1' };
+    mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-01',
@@ -3014,7 +3123,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       renderer.root.findByProps({ 'data-testid': 'swap-container-action' }).props.onClick();
     });
 
-    mockLocationRef = { locationId: 'loc-2' };
+    mockLocationRef = { locationId: 'loc-2', locationCode: 'LOC-02', locationType: 'rack_slot' };
     mockStorageRows = [
       {
         locationCode: 'LOC-02',
@@ -3058,7 +3167,7 @@ describe('StorageInspectorV2 contents action flows', () => {
       renderer.root.findByProps({ 'data-testid': 'swap-container-action' }).props.onClick();
     });
 
-    mockLocationRef = { locationId: 'loc-2' };
+    mockLocationRef = { locationId: 'loc-2', locationCode: 'LOC-02', locationType: 'rack_slot' };
     mockStorageRows = [];
     act(() => {
       useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
@@ -3091,7 +3200,7 @@ describe('StorageInspectorV2 move container flow', () => {
       { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } },
       { id: 'cell-2', rackId: 'rack-1', address: { raw: '01-A.01.02', parts: { level: 1 } } },
     ];
-    mockLocationRef = { locationId: 'loc-source' };
+    mockLocationRef = { locationId: 'loc-source', locationCode: 'LOC-SRC', locationType: 'rack_slot' };
     mockStorageRows = [CONTAINER_ROW];
   }
 
@@ -3238,7 +3347,7 @@ describe('StorageInspectorV2 move container flow', () => {
     });
     openMoveTask(renderer.root);
     // Update mockLocationRef to target before navigating so panel resolves target location
-    mockLocationRef = { locationId: 'loc-target' };
+    mockLocationRef = { locationId: 'loc-target', locationCode: 'LOC-TGT', locationType: 'rack_slot' };
     act(() => {
       useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
     });
@@ -3255,6 +3364,70 @@ describe('StorageInspectorV2 move container flow', () => {
     );
   });
 
+  it('patches occupancyByFloor cache on successful move before invalidation', async () => {
+    mockMoveContainer.mockResolvedValue({
+      containerId: 'c-1',
+      sourceLocationId: 'loc-source',
+      targetLocationId: 'loc-target',
+      movementId: 'm-1',
+      occurredAt: '',
+    });
+    const occupancyKey = ['location', 'occupancy-by-floor', 'floor-1'] as const;
+    mockQueryCache.set(
+      JSON.stringify(occupancyKey),
+      [
+        {
+          cellId: 'cell-1',
+          containerId: 'c-1',
+          locationId: 'loc-source',
+          locationCode: 'LOC-SRC'
+        },
+        {
+          cellId: 'cell-other',
+          containerId: 'c-2',
+          locationId: 'loc-other',
+          locationCode: 'LOC-OTHER'
+        }
+      ]
+    );
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
+    });
+    openMoveTask(renderer.root);
+    mockLocationRef = { locationId: 'loc-target', locationCode: 'LOC-TGT', locationType: 'rack_slot' };
+    act(() => {
+      useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-testid': 'move-confirm-button' }).props.onClick();
+    });
+
+    const occupancyCalls = mockSetQueryData.mock.calls.filter(
+      (call: unknown[]) => JSON.stringify(call[0]) === JSON.stringify(occupancyKey)
+    );
+
+    expect(mockCancelQueries).toHaveBeenCalledWith({ queryKey: occupancyKey, exact: true });
+    expect(occupancyCalls).toHaveLength(2);
+    expect(mockQueryCache.get(JSON.stringify(occupancyKey))).toEqual([
+      {
+        cellId: 'cell-other',
+        containerId: 'c-2',
+        locationId: 'loc-other',
+        locationCode: 'LOC-OTHER'
+      },
+      {
+        cellId: 'cell-2',
+        containerId: 'c-1',
+        locationId: 'loc-target',
+        locationCode: 'LOC-TGT',
+        locationType: 'rack_slot'
+      }
+    ]);
+  });
+
   it('successful move returns to selected target location overview', async () => {
     mockMoveContainer.mockResolvedValue({
       containerId: 'c-1',
@@ -3268,7 +3441,7 @@ describe('StorageInspectorV2 move container flow', () => {
       renderer = TestRenderer.create(createElement(StorageInspectorV2, { workspace: createWorkspace() }));
     });
     openMoveTask(renderer.root);
-    mockLocationRef = { locationId: 'loc-target' };
+    mockLocationRef = { locationId: 'loc-target', locationCode: 'LOC-TGT', locationType: 'rack_slot' };
     act(() => {
       useStorageFocusStore.getState().selectCell({ cellId: 'cell-2', rackId: 'rack-1', level: 1 });
     });

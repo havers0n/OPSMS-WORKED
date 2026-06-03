@@ -1,4 +1,4 @@
-import type { FloorWorkspace, LocationOccupancyRow, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
+import type { FloorWorkspace, LocationStorageSnapshotRow, Product, Rack } from '@wos/domain';
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CellStatusChip } from '@/entities/cell/ui/cell-status-chip';
@@ -27,6 +27,10 @@ import {
 } from '@/features/placement-actions/api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
 import { applyOptimisticContainerMove } from '@/features/placement-actions/model/optimistic-move';
+import {
+  reconcileFloorOccupancyAfterPlacementMutation,
+  type FloorOccupancyReconciliation
+} from '@/features/placement-actions/model/floor-occupancy-reconciliation';
 import {
   containerKeys,
   containerListQueryOptions,
@@ -1116,7 +1120,30 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         return;
       }
 
-      await invalidatePlacementQueries(queryClient, { floorId, containerId });
+      const containerTypeCode =
+        containerTypes.find((type) => type.id === createWithProductContainerTypeId)?.code ??
+        createWithProductContainerTypeId;
+      const occupancyReconciliation =
+        floorId && cellId && locationRef
+          ? ({
+              kind: 'add',
+              target: {
+                floorId,
+                cellId,
+                containerId,
+                locationId,
+                locationCode: locationRef.locationCode,
+                locationType: locationRef.locationType,
+                containerType: containerTypeCode
+              }
+            } satisfies FloorOccupancyReconciliation)
+          : null;
+
+      await reconcileFloorOccupancyAfterPlacementMutation(queryClient, {
+        floorId,
+        reconciliation: occupancyReconciliation,
+        invalidate: () => invalidatePlacementQueries(queryClient, { floorId, containerId })
+      });
       await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
       setSelectedContainerId(null);
       closeCreateWithProductTask();
@@ -1293,27 +1320,29 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         targetLocationId: resolvedTargetLocationId
       });
 
+      let occupancyReconciliation: FloorOccupancyReconciliation | null = null;
       {
         const targetCellId = moveTaskState.targetCellId;
         const sourceCellId = moveTaskState.sourceCellId;
         const containerId = moveTaskState.sourceContainerId;
         const targetLocationCode = moveTargetLocationRef?.locationCode;
-        if (targetCellId && targetLocationCode) {
-          const occupancyKey = locationKeys.occupancyByFloor(floorId);
+        const targetLocationType = moveTargetLocationRef?.locationType;
+        if (floorId && targetCellId && targetLocationCode && targetLocationType) {
           const storageKey = locationKeys.storageByFloor(floorId);
-          const currentOccupancy = queryClient.getQueryData<LocationOccupancyRow[]>(occupancyKey);
           const currentStorage = queryClient.getQueryData<LocationStorageSnapshotRow[]>(storageKey);
 
-          if (currentOccupancy) {
-            queryClient.setQueryData(
-              occupancyKey,
-              applyOptimisticContainerMove(
-                currentOccupancy,
-                { sourceCellId, containerId, targetCellId, targetLocationId: resolvedTargetLocationId, targetLocationCode },
-                (row) => ({ ...row, cellId: targetCellId, locationId: resolvedTargetLocationId, locationCode: targetLocationCode })
-              )
-            );
-          }
+          occupancyReconciliation = {
+            kind: 'move',
+            containerId,
+            target: {
+              floorId,
+              cellId: targetCellId,
+              containerId,
+              locationId: resolvedTargetLocationId,
+              locationCode: targetLocationCode,
+              locationType: targetLocationType
+            }
+          };
 
           if (currentStorage) {
             queryClient.setQueryData(
@@ -1328,10 +1357,15 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         }
       }
 
-      await invalidatePlacementQueries(queryClient, {
+      await reconcileFloorOccupancyAfterPlacementMutation(queryClient, {
         floorId,
-        sourceCellId: moveTaskState.sourceCellId,
-        containerId: moveTaskState.sourceContainerId
+        reconciliation: occupancyReconciliation,
+        invalidate: () =>
+          invalidatePlacementQueries(queryClient, {
+            floorId,
+            sourceCellId: moveTaskState.sourceCellId,
+            containerId: moveTaskState.sourceContainerId
+          })
       });
       setTaskKind(null);
       setMoveTaskState(null);
@@ -1422,7 +1456,14 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
 
     try {
       await removeContainer({ containerId });
-      await invalidatePlacementQueries(queryClient, { floorId, containerId });
+      await reconcileFloorOccupancyAfterPlacementMutation(queryClient, {
+        floorId,
+        reconciliation: {
+          kind: 'remove',
+          containerId
+        },
+        invalidate: () => invalidatePlacementQueries(queryClient, { floorId, containerId })
+      });
       if (locationId) {
         await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
       }
