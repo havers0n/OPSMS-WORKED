@@ -10,7 +10,7 @@ export interface MoveContainerTaskPanelProps {
   moveTaskState: MoveTaskState;
   rackDisplayCode: string;
   targetLocationLoading: boolean;
-  resolvedTargetLocationId: string | null;
+  resolvedTargetLocationCode: string | null;
   canConfirm: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -20,7 +20,7 @@ export function MoveContainerTaskPanel({
   moveTaskState,
   rackDisplayCode,
   targetLocationLoading,
-  resolvedTargetLocationId,
+  resolvedTargetLocationCode,
   canConfirm,
   onConfirm,
   onCancel
@@ -79,7 +79,7 @@ export function MoveContainerTaskPanel({
             <p className="text-sm text-gray-400">{t('storage.state.resolvingLocation')}</p>
           ) : (
             <p className="font-mono text-sm text-gray-700" data-testid="move-target-selected" dir="ltr">
-              {resolvedTargetLocationId ? moveTaskState.targetCellId : '-'}
+              {resolvedTargetLocationCode ?? '-'}
             </p>
           )}
         </div>
