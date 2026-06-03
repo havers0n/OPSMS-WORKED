@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { addInventoryItem, type AddInventoryItemInput } from '../api/mutations';
 import { invalidatePlacementQueries } from '@/features/placement-actions/model/invalidation';
+import { createUuid } from '@/shared/lib/create-uuid';
 
 export type AddInventoryItemMutationInput = Omit<AddInventoryItemInput, 'receiptCorrelationKey'>;
 
@@ -16,7 +17,7 @@ export function useAddInventoryItem(args: {
   return useMutation({
     mutationFn: (params: AddInventoryItemMutationInput) => {
       if (!correlationKeyRef.current) {
-        correlationKeyRef.current = crypto.randomUUID();
+        correlationKeyRef.current = createUuid();
       }
       return addInventoryItem({
         ...params,

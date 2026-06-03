@@ -78,14 +78,14 @@ describe('newEntityId', () => {
     }
   });
 
-  it('uses Math.random fallback when both randomUUID and getRandomValues are unavailable', () => {
+  it('throws when both randomUUID and getRandomValues are unavailable', () => {
     const restoreRandomUUID = withCryptoMethodOverride('randomUUID', undefined);
     const restoreGetRandomValues = withCryptoMethodOverride('getRandomValues', undefined);
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
     try {
-      const id = newEntityId();
-      expect(id).toMatch(UUID_V4_REGEX);
+      expect(() => newEntityId()).toThrowError(
+        'UUID generation requires crypto.randomUUID() or crypto.getRandomValues().'
+      );
     } finally {
       restoreRandomUUID();
       restoreGetRandomValues();

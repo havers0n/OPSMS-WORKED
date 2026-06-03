@@ -94,6 +94,7 @@ import {
   inspectorShellClassName
 } from './storage-inspector-v2/shared';
 import { useT } from '@/shared/i18n';
+import { createUuid } from '@/shared/lib/create-uuid';
 import {
   markCanvasTimingEnd,
   markCanvasTimingStart,
@@ -1101,7 +1102,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           productId: createWithProductSelectedProduct.id,
           quantity: Number(createWithProductQuantity),
           uom: createWithProductUom.trim(),
-          receiptCorrelationKey: crypto.randomUUID()
+          receiptCorrelationKey: createUuid()
         });
       } catch (error) {
         await queryClient.invalidateQueries({ queryKey: locationKeys.storage(locationId) });
