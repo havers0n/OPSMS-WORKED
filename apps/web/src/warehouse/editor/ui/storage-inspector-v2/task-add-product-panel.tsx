@@ -1,5 +1,6 @@
 import type { Product } from '@wos/domain';
-import { useT } from '@/shared/i18n';
+import { useI18n, useT } from '@/shared/i18n';
+import { resolveUomPresentation } from '@/shared/uom';
 import {
   TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
@@ -20,11 +21,9 @@ export interface AddProductToContainerTaskPanelProps {
   selectedProduct: Product | null;
   searchResults: Product[];
   quantity: string;
-  uom: string;
   onProductSearchChange: (value: string) => void;
   onProductSelect: (product: Product) => void;
   onQuantityChange: (value: string) => void;
-  onUomChange: (value: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -42,14 +41,13 @@ export function AddProductToContainerTaskPanel({
   selectedProduct,
   searchResults,
   quantity,
-  uom,
   onProductSearchChange,
   onProductSelect,
   onQuantityChange,
-  onUomChange,
   onConfirm,
   onCancel
 }: AddProductToContainerTaskPanelProps) {
+  const { locale } = useI18n();
   const t = useT();
   const showResults = productSearch.trim().length > 0 && !selectedProduct;
   const quantityNumber = Number(quantity);
@@ -58,7 +56,6 @@ export function AddProductToContainerTaskPanel({
     selectedProduct !== null &&
     Number.isFinite(quantityNumber) &&
     quantityNumber > 0 &&
-    uom.trim().length > 0 &&
     !isSubmitting;
 
   return (
@@ -156,15 +153,12 @@ export function AddProductToContainerTaskPanel({
             <label className="block text-xs font-medium text-gray-700">
               {t('storage.field.uom')} <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={uom}
-              onChange={(event) => onUomChange(event.target.value)}
-              disabled={isSubmitting}
-              placeholder="EA"
-              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            <div
+              className="flex h-[34px] w-full items-center rounded border border-gray-300 bg-gray-50 px-2 text-sm text-gray-700"
               aria-label={t('storage.field.uom')}
-            />
+            >
+              {resolveUomPresentation('PCS', locale)}
+            </div>
           </div>
         </div>
 

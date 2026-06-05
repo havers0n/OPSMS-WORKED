@@ -1,5 +1,6 @@
 import type { Container, LocationStorageSnapshotRow } from '@wos/domain';
-import { useT } from '@/shared/i18n';
+import { useI18n, useT } from '@/shared/i18n';
+import { resolveUomPresentation } from '@/shared/uom';
 import {
   TaskPanelBreadcrumb,
   inspectorFooterActionsClassName,
@@ -59,6 +60,7 @@ export function TransferToContainerTaskPanel({
   onConfirm,
   onCancel
 }: TransferToContainerTaskPanelProps) {
+  const { locale } = useI18n();
   const t = useT();
   const availableContainers = containers.filter(
     (container) => container.status === 'active' && container.id !== sourceLine.containerId
@@ -87,7 +89,7 @@ export function TransferToContainerTaskPanel({
             {t('storage.transfer.sourceSummary', {
               containerCode: sourceContainerDisplayCode,
               quantity: sourceLine.quantity ?? t('storage.transfer.unknownQuantity'),
-              uom: sourceLine.uom ?? ''
+              uom: resolveUomPresentation(sourceLine.uom, locale)
             })}
           </div>
         </div>
