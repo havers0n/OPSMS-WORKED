@@ -14,6 +14,8 @@ vi.mock('react-konva', () => ({
     createElement('Layer', props, children),
   Line: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Line', props, children),
+  Rect: ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('Rect', props, children),
   Text: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Text', props, children)
 }));
@@ -25,6 +27,37 @@ const step = {
   skuId: 'sku-1',
   qtyToPick: 1,
   allocations: []
+};
+
+const segmentDiagnostics = {
+  fromStepId: 'task-1',
+  toStepId: 'task-2',
+  fromCanvasPoint: { x: 10, y: 20 },
+  toCanvasPoint: { x: 30, y: 40 },
+  fromWorldPoint: { x: 0.25, y: 0.5 },
+  toWorldPoint: { x: 0.75, y: 1 },
+  grid: { minX: 0, minY: 0, resolutionM: 0.5 },
+  originalStartCell: { x: 1, y: 2 },
+  originalEndCell: { x: 3, y: 4 },
+  snappedStartCell: { x: 1, y: 1 },
+  snappedEndCell: { x: 3, y: 3 },
+  solverBounds: { minX: 0, minY: 0, maxX: 2, maxY: 2 },
+  obstacleCount: 1,
+  blockedGridCellCount: 2,
+  blockedGridCells: [
+    { x: 1, y: 1 },
+    { x: 2, y: 2 }
+  ],
+  solverStatus: 'ok' as const,
+  debugReason: 'start_snap:r1',
+  pathGridCells: [
+    { x: 1, y: 1 },
+    { x: 2, y: 2 }
+  ],
+  pathWorldPoints: [
+    { x: 0.25, y: 0.5 },
+    { x: 0.75, y: 1 }
+  ]
 };
 
 describe('PickingRouteOverlayLayer', () => {
@@ -224,6 +257,115 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
     expect(arrows).toHaveLength(1);
     expect(arrows[0]?.props.stroke).toContain('234');
     expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
+  });
+
+  it('keeps unroutable fallback visually distinct from a solved route in DEV diagnostics', () => {
+    const solvedSegments: SolvedRouteSegment[] = [
+      {
+        status: 'ok',
+        fromStepId: 'task-1',
+        toStepId: 'task-2',
+        costMetres: 3,
+        canvasPoints: [
+          { x: 10, y: 20 },
+          { x: 20, y: 20 },
+          { x: 30, y: 40 }
+        ],
+        diagnostics: segmentDiagnostics
+      },
+      {
+        status: 'unroutable',
+        solverStatus: 'no_path',
+        debugReason: 'grid_guard:99',
+        fromStepId: 'task-2',
+        toStepId: 'task-3',
+        fromCanvasPoint: { x: 30, y: 40 },
+        toCanvasPoint: { x: 50, y: 60 },
+        diagnostics: {
+          ...segmentDiagnostics,
+          fromStepId: 'task-2',
+          toStepId: 'task-3',
+          fromCanvasPoint: { x: 30, y: 40 },
+          toCanvasPoint: { x: 50, y: 60 },
+          fromWorldPoint: { x: 0.75, y: 1 },
+          toWorldPoint: { x: 1.25, y: 1.5 },
+          solverStatus: 'no_path',
+          debugReason: 'grid_guard:99',
+          pathGridCells: [],
+          pathWorldPoints: [],
+          blockedGridCells: [{ x: 1, y: 1 }]
+        }
+      }
+    ];
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(PickingRouteOverlayLayer, {
+          anchors,
+          solvedSegments,
+          showDiagnostics: true,
+          diagnosticObstacles: [
+            { type: 'rack', id: 'rack-1', x: 0, y: 0, width: 1, height: 1 }
+          ]
+        })
+      );
+    });
+
+    const arrows = renderer.root.findAll((node) => String(node.type) === 'Arrow');
+    const labels = renderer.root.findAll((node) => String(node.type) === 'Text');
+    const routeLines = renderer.root.findAll(
+      (node) =>
+        String(node.type) === 'Line' &&
+        node.props.stroke === 'rgba(37,99,235,0.72)'
+    );
+
+    expect(routeLines).toHaveLength(1);
+    expect(arrows).toHaveLength(1);
+    expect(labels.some((node) => node.props.text === 'UNROUTABLE: no_path grid_guard:99')).toBe(
+      true
+    );
+  });
+
+  it('does not render diagnostics when disabled outside DEV', () => {
+    const solvedSegments: SolvedRouteSegment[] = [
+      {
+        status: 'ok',
+        fromStepId: 'task-1',
+        toStepId: 'task-2',
+        costMetres: 3,
+        canvasPoints: [
+          { x: 10, y: 20 },
+          { x: 20, y: 20 },
+          { x: 30, y: 40 }
+        ],
+        diagnostics: segmentDiagnostics
+      }
+    ];
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(PickingRouteOverlayLayer, {
+          anchors,
+          solvedSegments,
+          showDiagnostics: false,
+          diagnosticObstacles: [
+            { type: 'rack', id: 'rack-1', x: 0, y: 0, width: 1, height: 1 }
+          ]
+        })
+      );
+    });
+
+    expect(renderer.root.findAll((node) => String(node.type) === 'Rect')).toHaveLength(0);
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Text' &&
+          typeof node.props.text === 'string' &&
+          node.props.text.startsWith('UNROUTABLE:')
+      )
+    ).toHaveLength(0);
   });
 
   it('omits a skipped segment when one canvas point is missing', () => {

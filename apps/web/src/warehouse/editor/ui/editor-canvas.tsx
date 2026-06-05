@@ -1828,6 +1828,8 @@ export function EditorCanvas({
                     anchors={pickingPlanningActiveRouteAnchors}
                     solvedSegments={pickingPlanningActiveRouteSegments}
                     startCanvasPoint={pickingPlanningActiveRouteStartCanvasPoint ?? null}
+                    showDiagnostics={import.meta.env.DEV}
+                    diagnosticObstacles={obstacleRouteObstacles}
                   />
                 )}
               </Layer>

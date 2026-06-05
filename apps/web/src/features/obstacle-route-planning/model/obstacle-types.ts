@@ -3,6 +3,36 @@ export type RoutePoint = {
   y: number;
 };
 
+export type RouteGridCell = {
+  x: number;
+  y: number;
+};
+
+export type RouteSolverBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+export type RouteSolveDiagnostics = {
+  grid: {
+    minX: number;
+    minY: number;
+    resolutionM: number;
+  };
+  originalStartCell: RouteGridCell;
+  originalEndCell: RouteGridCell;
+  snappedStartCell?: RouteGridCell;
+  snappedEndCell?: RouteGridCell;
+  solverBounds: RouteSolverBounds;
+  obstacleCount: number;
+  blockedGridCellCount: number;
+  blockedGridCells: RouteGridCell[];
+  pathGridCells: RouteGridCell[];
+  pathWorldPoints: RoutePoint[];
+};
+
 export type RouteObstacle =
   | {
       type: 'rack';
@@ -33,24 +63,28 @@ export type RouteSolveResult =
       points: RoutePoint[];
       cost: number;
       debugReason?: string;
+      diagnostics?: RouteSolveDiagnostics;
     }
   | {
       status: 'no_path';
       points: [];
       cost: 0;
       debugReason?: string;
+      diagnostics?: RouteSolveDiagnostics;
     }
   | {
       status: 'start_blocked';
       points: [];
       cost: 0;
       debugReason?: string;
+      diagnostics?: RouteSolveDiagnostics;
     }
   | {
       status: 'end_blocked';
       points: [];
       cost: 0;
       debugReason?: string;
+      diagnostics?: RouteSolveDiagnostics;
     };
 
 export type GridRouteSolverConfig = {

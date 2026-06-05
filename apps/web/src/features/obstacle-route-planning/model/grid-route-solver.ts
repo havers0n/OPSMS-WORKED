@@ -2,8 +2,10 @@ import {
   DEFAULT_GRID_ROUTE_SOLVER_CONFIG,
   type GridRouteSolverConfig,
   type ResolvedGridRouteSolverConfig,
+  type RouteGridCell,
   type RouteObstacle,
   type RoutePoint,
+  type RouteSolveDiagnostics,
   type RouteSolveResult
 } from './obstacle-types';
 import {
@@ -30,6 +32,10 @@ type Grid = {
 type Cell = {
   x: number;
   y: number;
+};
+
+type SolveGridRouteOptions = {
+  includeDiagnostics?: boolean;
 };
 
 type HeapItem = {
@@ -236,6 +242,10 @@ function pointToCell(point: RoutePoint, grid: Grid): Cell {
   };
 }
 
+function toRouteGridCell(cell: Cell): RouteGridCell {
+  return { x: cell.x, y: cell.y };
+}
+
 function cellToPoint(cell: Cell, grid: Grid): RoutePoint {
   return {
     x: grid.minX + cell.x * grid.resolutionM,
@@ -332,6 +342,17 @@ function reconstructPath(cameFrom: Map<number, number>, endKey: number, grid: Gr
   }
 
   return keys.reverse().map((key) => cellToPoint(keyToCell(key, grid), grid));
+}
+
+function reconstructPathCells(cameFrom: Map<number, number>, endKey: number, grid: Grid) {
+  const keys = [endKey];
+  let current = endKey;
+  while (cameFrom.has(current)) {
+    current = cameFrom.get(current)!;
+    keys.push(current);
+  }
+
+  return keys.reverse().map((key) => keyToCell(key, grid));
 }
 
 function buildCellWalkability(
@@ -454,11 +475,73 @@ function smoothFoundPath(
   );
 }
 
+function countBlockedGridCells(grid: Grid, isWalkable: (cell: Cell) => boolean) {
+  const blockedCells: Cell[] = [];
+
+  for (let y = 0; y < grid.rows; y += 1) {
+    for (let x = 0; x < grid.cols; x += 1) {
+      if (!isWalkable({ x, y })) blockedCells.push({ x, y });
+    }
+  }
+
+  return blockedCells;
+}
+
+function buildRouteSolveDiagnostics({
+  bounds,
+  grid,
+  obstacles,
+  startCell,
+  endCell,
+  startSnap,
+  endSnap,
+  blockedGridCells,
+  pathCells,
+  pathWorldPoints,
+  blockedGridCellCount
+}: {
+  bounds: Bounds;
+  grid: Grid;
+  obstacles: RouteObstacle[];
+  startCell: Cell;
+  endCell: Cell;
+  startSnap: { cell: Cell; radius: number } | null;
+  endSnap: { cell: Cell; radius: number } | null;
+  blockedGridCells: Cell[];
+  pathCells?: Cell[];
+  pathWorldPoints?: RoutePoint[];
+  blockedGridCellCount: number;
+}): RouteSolveDiagnostics {
+  return {
+    grid: {
+      minX: grid.minX,
+      minY: grid.minY,
+      resolutionM: grid.resolutionM
+    },
+    originalStartCell: toRouteGridCell(startCell),
+    originalEndCell: toRouteGridCell(endCell),
+    ...(startSnap ? { snappedStartCell: toRouteGridCell(startSnap.cell) } : {}),
+    ...(endSnap ? { snappedEndCell: toRouteGridCell(endSnap.cell) } : {}),
+    solverBounds: {
+      minX: bounds.minX,
+      minY: bounds.minY,
+      maxX: bounds.maxX,
+      maxY: bounds.maxY
+    },
+    obstacleCount: obstacles.length,
+    blockedGridCellCount,
+    blockedGridCells: blockedGridCells.map(toRouteGridCell),
+    pathGridCells: pathCells?.map(toRouteGridCell) ?? [],
+    pathWorldPoints: pathWorldPoints ? [...pathWorldPoints] : []
+  };
+}
+
 export function solveGridRoute(
   start: RoutePoint,
   end: RoutePoint,
   obstacles: RouteObstacle[],
-  configInput: GridRouteSolverConfig = {}
+  configInput: GridRouteSolverConfig = {},
+  options: SolveGridRouteOptions = {}
 ): RouteSolveResult {
   const config = resolveGridRouteSolverConfig(configInput);
 
@@ -487,6 +570,10 @@ export function solveGridRoute(
   const startCell = pointToCell(start, grid);
   const endCell = pointToCell(end, grid);
   const isWalkable = buildCellWalkability(grid, obstacles, config.clearanceM);
+  const blockedGridCells = options.includeDiagnostics
+    ? countBlockedGridCells(grid, isWalkable)
+    : [];
+  const blockedGridCellCount = blockedGridCells.length;
   const startSnap =
     isWalkable(startCell)
       ? null
@@ -507,10 +594,48 @@ export function solveGridRoute(
         );
 
   if (!isWalkable(startCell) && !startSnap) {
-    return { status: 'start_blocked', points: [], cost: 0 };
+    return {
+      status: 'start_blocked',
+      points: [],
+      cost: 0,
+      ...(options.includeDiagnostics
+        ? {
+            diagnostics: buildRouteSolveDiagnostics({
+              bounds,
+              grid,
+              obstacles,
+              startCell,
+              endCell,
+              startSnap,
+              endSnap,
+              blockedGridCells,
+              blockedGridCellCount
+            })
+          }
+        : {})
+    };
   }
   if (!isWalkable(endCell) && !endSnap) {
-    return { status: 'end_blocked', points: [], cost: 0 };
+    return {
+      status: 'end_blocked',
+      points: [],
+      cost: 0,
+      ...(options.includeDiagnostics
+        ? {
+            diagnostics: buildRouteSolveDiagnostics({
+              bounds,
+              grid,
+              obstacles,
+              startCell,
+              endCell,
+              startSnap,
+              endSnap,
+              blockedGridCells,
+              blockedGridCellCount
+            })
+          }
+        : {})
+    };
   }
 
   const routedStartCell = startSnap?.cell ?? startCell;
@@ -558,6 +683,7 @@ export function solveGridRoute(
     }
 
     if (currentItem.key === endKey) {
+      const gridPathCells = reconstructPathCells(cameFrom, endKey, grid);
       const gridPath = reconstructPath(cameFrom, endKey, grid);
       const snappedPath = smoothFoundPath(
         routedStartPoint,
@@ -575,6 +701,23 @@ export function solveGridRoute(
         status: 'ok',
         points,
         cost: totalPathCost(points),
+        ...(options.includeDiagnostics
+          ? {
+              diagnostics: buildRouteSolveDiagnostics({
+                bounds,
+                grid,
+                obstacles,
+                startCell,
+                endCell,
+                startSnap,
+                endSnap,
+                blockedGridCells,
+                pathCells: gridPathCells,
+                pathWorldPoints: points,
+                blockedGridCellCount
+              })
+            }
+          : {}),
         ...(snapTags.length > 0
           ? {
               debugReason: snapTags.join(',')
@@ -623,5 +766,24 @@ export function solveGridRoute(
     }
   }
 
-  return { status: 'no_path', points: [], cost: 0 };
+  return {
+    status: 'no_path',
+    points: [],
+    cost: 0,
+    ...(options.includeDiagnostics
+      ? {
+          diagnostics: buildRouteSolveDiagnostics({
+            bounds,
+            grid,
+            obstacles,
+            startCell,
+            endCell,
+            startSnap,
+            endSnap,
+            blockedGridCells,
+            blockedGridCellCount
+          })
+        }
+      : {})
+  };
 }

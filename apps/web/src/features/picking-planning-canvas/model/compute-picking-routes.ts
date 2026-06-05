@@ -183,7 +183,10 @@ export function computePickingRoutes({
       nearestAnchors,
       obstacles,
       undefined,
-      { startCanvasPoint: activeRouteStartCanvasPoint }
+      {
+        startCanvasPoint: activeRouteStartCanvasPoint,
+        includeDiagnostics: import.meta.env.DEV
+      }
     );
     const nearestSolveMs = Math.max(0, nowMs() - startedNearestSolveAtMs);
 
@@ -242,7 +245,10 @@ export function computePickingRoutes({
       routeCostAnchors,
       obstacles,
       undefined,
-      { startCanvasPoint: activeRouteStartCanvasPoint }
+      {
+        startCanvasPoint: activeRouteStartCanvasPoint,
+        includeDiagnostics: import.meta.env.DEV
+      }
     );
     const routeCostSolveMs = Math.max(0, nowMs() - startedRouteCostSolveAtMs);
 
@@ -327,7 +333,10 @@ export function computePickingRoutes({
       improvedAnchors,
       obstacles,
       undefined,
-      { startCanvasPoint: activeRouteStartCanvasPoint }
+      {
+        startCanvasPoint: activeRouteStartCanvasPoint,
+        includeDiagnostics: import.meta.env.DEV
+      }
     );
     const improvedSolveMs = Math.max(0, nowMs() - startedImprovedSolveAtMs);
 
@@ -377,7 +386,10 @@ export function computePickingRoutes({
     originalAnchors,
     obstacles,
     undefined,
-    { startCanvasPoint: activeRouteStartCanvasPoint }
+    {
+      startCanvasPoint: activeRouteStartCanvasPoint,
+      includeDiagnostics: import.meta.env.DEV
+    }
   );
   const originalSolveMs = Math.max(0, nowMs() - startedOriginalSolveAtMs);
 

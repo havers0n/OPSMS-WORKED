@@ -8,6 +8,7 @@ import type {
 import { solveGridRoute } from '@/features/obstacle-route-planning/model/grid-route-solver';
 import type {
   GridRouteSolverConfig,
+  RouteGridCell,
   RouteObstacle
 } from '@/features/obstacle-route-planning/model/obstacle-types';
 import { resolvePickPoint } from '@/features/pick-point-resolver/model/pick-point-resolver';
@@ -171,6 +172,28 @@ export function indexRouteAnchorStatus(anchors: PickingRouteAnchor[]) {
   );
 }
 
+export type PickingRouteSegmentDiagnostics = {
+  fromStepId: string;
+  toStepId: string;
+  fromCanvasPoint?: { x: number; y: number };
+  toCanvasPoint?: { x: number; y: number };
+  fromWorldPoint?: { x: number; y: number };
+  toWorldPoint?: { x: number; y: number };
+  grid?: { minX: number; minY: number; resolutionM: number };
+  originalStartCell?: RouteGridCell;
+  originalEndCell?: RouteGridCell;
+  snappedStartCell?: RouteGridCell;
+  snappedEndCell?: RouteGridCell;
+  solverBounds?: { minX: number; minY: number; maxX: number; maxY: number };
+  obstacleCount?: number;
+  blockedGridCellCount?: number;
+  blockedGridCells: RouteGridCell[];
+  solverStatus: 'ok' | 'no_path' | 'start_blocked' | 'end_blocked' | 'skipped';
+  debugReason?: string;
+  pathGridCells: RouteGridCell[];
+  pathWorldPoints: { x: number; y: number }[];
+};
+
 export type SolvedRouteSegment =
   | {
       status: 'ok';
@@ -178,6 +201,7 @@ export type SolvedRouteSegment =
       toStepId: string;
       canvasPoints: { x: number; y: number }[];
       costMetres: number;
+      diagnostics?: PickingRouteSegmentDiagnostics;
     }
   | {
       // Solver was never called — one or both anchors could not be resolved.
@@ -187,6 +211,7 @@ export type SolvedRouteSegment =
       toStepId: string;
       fromCanvasPoint: { x: number; y: number } | undefined;
       toCanvasPoint: { x: number; y: number } | undefined;
+      diagnostics?: PickingRouteSegmentDiagnostics;
     }
   | {
       // Solver was called but returned a non-ok status.
@@ -197,13 +222,73 @@ export type SolvedRouteSegment =
       toStepId: string;
       fromCanvasPoint: { x: number; y: number };
       toCanvasPoint: { x: number; y: number };
+      diagnostics?: PickingRouteSegmentDiagnostics;
     };
+
+function buildSegmentDiagnostics({
+  fromStepId,
+  toStepId,
+  fromCanvasPoint,
+  toCanvasPoint,
+  debugReason,
+  solverStatus,
+  routeDiagnostics
+}: {
+  fromStepId: string;
+  toStepId: string;
+  fromCanvasPoint?: { x: number; y: number };
+  toCanvasPoint?: { x: number; y: number };
+  debugReason?: string;
+  solverStatus: PickingRouteSegmentDiagnostics['solverStatus'];
+  routeDiagnostics?: {
+    grid: { minX: number; minY: number; resolutionM: number };
+    originalStartCell: RouteGridCell;
+    originalEndCell: RouteGridCell;
+    snappedStartCell?: RouteGridCell;
+    snappedEndCell?: RouteGridCell;
+    solverBounds: { minX: number; minY: number; maxX: number; maxY: number };
+    obstacleCount: number;
+    blockedGridCellCount: number;
+    blockedGridCells: RouteGridCell[];
+    pathGridCells: RouteGridCell[];
+    pathWorldPoints: { x: number; y: number }[];
+  };
+}): PickingRouteSegmentDiagnostics {
+  return {
+    fromStepId,
+    toStepId,
+    fromCanvasPoint,
+    toCanvasPoint,
+    fromWorldPoint: fromCanvasPoint
+      ? { x: fromCanvasPoint.x / WORLD_SCALE, y: fromCanvasPoint.y / WORLD_SCALE }
+      : undefined,
+    toWorldPoint: toCanvasPoint
+      ? { x: toCanvasPoint.x / WORLD_SCALE, y: toCanvasPoint.y / WORLD_SCALE }
+      : undefined,
+    grid: routeDiagnostics?.grid,
+    originalStartCell: routeDiagnostics?.originalStartCell,
+    originalEndCell: routeDiagnostics?.originalEndCell,
+    snappedStartCell: routeDiagnostics?.snappedStartCell,
+    snappedEndCell: routeDiagnostics?.snappedEndCell,
+    solverBounds: routeDiagnostics?.solverBounds,
+    obstacleCount: routeDiagnostics?.obstacleCount,
+    blockedGridCellCount: routeDiagnostics?.blockedGridCellCount,
+    blockedGridCells: routeDiagnostics?.blockedGridCells ?? [],
+    solverStatus,
+    debugReason,
+    pathGridCells: routeDiagnostics?.pathGridCells ?? [],
+    pathWorldPoints: routeDiagnostics?.pathWorldPoints ?? []
+  };
+}
 
 export function solvePickingRoute(
   anchors: PickingRouteAnchor[],
   obstacles: RouteObstacle[],
   config?: GridRouteSolverConfig,
-  options?: { startCanvasPoint?: { x: number; y: number } }
+  options?: {
+    startCanvasPoint?: { x: number; y: number };
+    includeDiagnostics?: boolean;
+  }
 ): SolvedRouteSegment[] {
   const resolvedAnchors = anchors.filter(
     (
@@ -224,7 +309,21 @@ export function solvePickingRoute(
       x: first.point.x / WORLD_SCALE,
       y: first.point.y / WORLD_SCALE
     };
-    const result = solveGridRoute(startWorld, endWorld, obstacles, config);
+    const result = solveGridRoute(startWorld, endWorld, obstacles, config, {
+      includeDiagnostics: options?.includeDiagnostics
+    });
+    const diagnostics =
+      options?.includeDiagnostics
+        ? buildSegmentDiagnostics({
+            fromStepId: '__route_start__',
+            toStepId: first.stepId,
+            fromCanvasPoint: startCanvasPoint,
+            toCanvasPoint: first.point,
+            debugReason: result.debugReason,
+            solverStatus: result.status,
+            routeDiagnostics: result.diagnostics
+          })
+        : undefined;
 
     if (result.status !== 'ok') {
       startSegment.push({
@@ -234,7 +333,8 @@ export function solvePickingRoute(
         fromStepId: '__route_start__',
         toStepId: first.stepId,
         fromCanvasPoint: startCanvasPoint,
-        toCanvasPoint: first.point
+        toCanvasPoint: first.point,
+        ...(diagnostics ? { diagnostics } : {})
       });
     } else {
       startSegment.push({
@@ -245,7 +345,8 @@ export function solvePickingRoute(
         canvasPoints: result.points.map((p) => ({
           x: p.x * WORLD_SCALE,
           y: p.y * WORLD_SCALE
-        }))
+        })),
+        ...(diagnostics ? { diagnostics } : {})
       });
     }
   }
@@ -256,13 +357,25 @@ export function solvePickingRoute(
     const previous = anchors[index]!;
 
     if (previous.status !== 'resolved' || anchor.status !== 'resolved') {
+      const diagnostics =
+        options?.includeDiagnostics
+          ? buildSegmentDiagnostics({
+              fromStepId: previous.stepId,
+              toStepId: anchor.stepId,
+              fromCanvasPoint: previous.status === 'resolved' ? previous.point : undefined,
+              toCanvasPoint: anchor.status === 'resolved' ? anchor.point : undefined,
+              debugReason: 'unresolved_anchor',
+              solverStatus: 'skipped'
+            })
+          : undefined;
       return {
         status: 'skipped' as const,
         reason: 'unresolved_anchor' as const,
         fromStepId: previous.stepId,
         toStepId: anchor.stepId,
         fromCanvasPoint: previous.status === 'resolved' ? previous.point : undefined,
-        toCanvasPoint: anchor.status === 'resolved' ? anchor.point : undefined
+        toCanvasPoint: anchor.status === 'resolved' ? anchor.point : undefined,
+        ...(diagnostics ? { diagnostics } : {})
       };
     }
 
@@ -275,7 +388,21 @@ export function solvePickingRoute(
       y: anchor.point.y / WORLD_SCALE
     };
 
-    const result = solveGridRoute(startWorld, endWorld, obstacles, config);
+    const result = solveGridRoute(startWorld, endWorld, obstacles, config, {
+      includeDiagnostics: options?.includeDiagnostics
+    });
+    const diagnostics =
+      options?.includeDiagnostics
+        ? buildSegmentDiagnostics({
+            fromStepId: previous.stepId,
+            toStepId: anchor.stepId,
+            fromCanvasPoint: previous.point,
+            toCanvasPoint: anchor.point,
+            debugReason: result.debugReason,
+            solverStatus: result.status,
+            routeDiagnostics: result.diagnostics
+          })
+        : undefined;
 
     if (result.status !== 'ok') {
       return {
@@ -285,7 +412,8 @@ export function solvePickingRoute(
         fromStepId: previous.stepId,
         toStepId: anchor.stepId,
         fromCanvasPoint: previous.point,
-        toCanvasPoint: anchor.point
+        toCanvasPoint: anchor.point,
+        ...(diagnostics ? { diagnostics } : {})
       };
     }
 
@@ -297,7 +425,8 @@ export function solvePickingRoute(
       canvasPoints: result.points.map((p) => ({
         x: p.x * WORLD_SCALE,
         y: p.y * WORLD_SCALE
-      }))
+      })),
+      ...(diagnostics ? { diagnostics } : {})
     };
   });
 
