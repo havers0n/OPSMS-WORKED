@@ -13,7 +13,6 @@ export const routes = {
   waveDetail: '/operations/waves/:id',
   pickTaskDetail: '/operations/pick-tasks/:id',
   tasks: '/tasks',
-  pickingQueue: '/picking',
   pickingRun: '/picking/run',
   orders: '/orders',
   waves: '/waves',
@@ -44,14 +43,6 @@ export function pickTaskDetailPath(
 
 export function productDetailPath(productId: string) {
   return `/products/${productId}`;
-}
-
-export function pickingRunPath(context: { orderId?: string; waveId?: string }) {
-  const params = new URLSearchParams();
-  if (context.orderId) params.set('orderId', context.orderId);
-  if (context.waveId) params.set('waveId', context.waveId);
-  const qs = params.toString();
-  return `${routes.pickingRun}${qs ? `?${qs}` : ''}`;
 }
 
 export function pickerPath(workerId: string): string {
