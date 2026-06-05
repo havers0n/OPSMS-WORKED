@@ -92,6 +92,21 @@ function formatNumber(value: number | undefined, suffix = '') {
   return `${Number.isInteger(value) ? value : value.toFixed(1)}${suffix}`;
 }
 
+function sanitizeFilenamePart(value: string | null | undefined) {
+  const sanitized = (value ?? 'unknown')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return sanitized || 'unknown';
+}
+
+function buildRouteDiagnosticsFilename(
+  floorId: string | null | undefined,
+  timestamp: string | null | undefined
+) {
+  return `picking-route-diagnostics-${sanitizeFilenamePart(floorId)}-${sanitizeFilenamePart(timestamp)}.json`;
+}
+
 function summarizeStepOrder(steps: PlanningRouteStepDto[]) {
   if (steps.length === 0) return '-';
   return steps
@@ -317,6 +332,26 @@ export function PickingPlanningOverlay({
     } catch {
       setCopyDiagnosticsState('error');
     }
+  }
+
+  function handleDownloadRouteDiagnostics() {
+    if (!detailedDiagnosticsPayload) {
+      return;
+    }
+
+    const filename = buildRouteDiagnosticsFilename(
+      detailedDiagnosticsPayload.scenario.floorId,
+      detailedDiagnosticsPayload.build.timestamp
+    );
+    const blob = new Blob([JSON.stringify(detailedDiagnosticsPayload, null, 2)], {
+      type: 'application/json'
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
   }
 
   function handleSelectOrder(orderId: string) {
@@ -1414,13 +1449,24 @@ export function PickingPlanningOverlay({
                                 >
                                   Copy route diagnostics JSON
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={handleDownloadRouteDiagnostics}
+                                  className="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700"
+                                  data-testid="download-route-diagnostics-json"
+                                >
+                                  Download route diagnostics JSON
+                                </button>
                                 {copyDiagnosticsState === 'success' && <span>Copied</span>}
-                                {copyDiagnosticsState === 'error' && (
-                                  <span>Copy failed</span>
-                                )}
                               </div>
                             )}
                           </div>
+                          {copyDiagnosticsState === 'error' && (
+                            <div className="mt-1 text-[10px] text-amber-700">
+                              <span>Copy failed</span>{' '}
+                              <span>Use Download route diagnostics JSON</span>
+                            </div>
+                          )}
                           <label className="mt-1 inline-flex cursor-pointer items-center gap-1.5">
                             <input
                               type="checkbox"

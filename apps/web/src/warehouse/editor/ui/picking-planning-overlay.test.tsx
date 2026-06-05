@@ -163,6 +163,124 @@ function createPreview(): PickingPlanningPreviewResponse {
   };
 }
 
+function createDetailedDiagnosticsSummary() {
+  return {
+    scope: 'active-only' as const,
+    computedModes: {
+      original: true,
+      nearest: false,
+      nearestRouteCost: false,
+      improved: false
+    },
+    anchorResolutionMs: {
+      original: 0,
+      nearest: 0,
+      nearestRouteCost: 0,
+      improved: 0,
+      total: 0
+    },
+    solveMs: {
+      original: 0,
+      nearest: 0,
+      nearestRouteCost: 0,
+      improved: 0,
+      total: 0
+    },
+    sequenceMs: { nearest: 0, nearestRouteCost: 0, improved: 0 },
+    routeDiagnosticsMs: 0,
+    totalRouteComputeMs: 0,
+    counts: {
+      anchorCount: 1,
+      resolvedAnchorCount: 1,
+      unresolvedAnchorCount: 0,
+      obstacleCount: 0,
+      rackObstacleCount: 0,
+      wallObstacleCount: 0,
+      routeSegmentCount: 1
+    },
+    mode: {
+      activeMode: 'original' as const,
+      hasManualStartPoint: false,
+      nearestRouteCostIsPartial: false,
+      improvedRouteCostIsPartial: false
+    },
+    pairStats: {
+      nearestRouteCostPairSolveCount: 0,
+      nearestRouteCostUnreachablePairCount: 0,
+      improvedRouteCostPairSolveCount: 0,
+      improvedRouteCostUnreachablePairCount: 0
+    },
+    debug: {
+      publishedCellsQueryStatus: 'success' as const,
+      publishedCellsByIdSize: 1,
+      requiredCellIdsCount: 1,
+      missingRequiredCellIds: [],
+      aisleTopologyQueryStatus: 'success' as const,
+      faceAccessByFaceIdSize: 0,
+      anchorsResolvedCount: 1,
+      anchorsUnresolvedCount: 0,
+      segments: [],
+      detailedDiagnostics: {
+        build: {
+          sha: 'sha-1',
+          timestamp: '2026-06-05T12:34:56.789Z',
+          mode: 'production'
+        },
+        scenario: {
+          floorId: 'floor:1/main',
+          layoutVersionId: 'layout-1',
+          packageId: 'pkg-1',
+          activeRouteMode: 'original'
+        },
+        readiness: {
+          publishedCellsQueryStatus: 'success' as const,
+          publishedCellsByIdSize: 1,
+          requiredCellIds: ['cell-1'],
+          missingRequiredCellIds: [],
+          aisleTopologyQueryStatus: 'success' as const,
+          faceAccessByFaceIdSize: 0,
+          anchorCount: 1,
+          resolvedAnchorCount: 1,
+          unresolvedAnchorCount: 0
+        },
+        solverConfig: {
+          gridCellSizeM: 0.5,
+          obstaclePaddingM: 0.4,
+          boundsMarginM: 5,
+          maxEndpointSnapCells: 2
+        },
+        obstacles: {
+          totalCount: 0,
+          rackCount: 0,
+          wallCount: 0,
+          signature: 'obs'
+        },
+        anchors: {
+          signature: 'anc'
+        },
+        segments: [
+          {
+            index: 0,
+            fromStepId: 'task-1',
+            toStepId: 'task-2',
+            status: 'ok' as const
+          }
+        ]
+      }
+    }
+  };
+}
+
+function createSolvedSegment(): SolvedRouteSegment {
+  return {
+    status: 'ok',
+    fromStepId: 'task-1',
+    toStepId: 'task-2',
+    costMetres: 1,
+    canvasPoints: []
+  };
+}
+
 describe('PickingPlanningOverlay', () => {
   afterEach(async () => {
     // Drain any pending React state updates before unmounting, to avoid
@@ -869,6 +987,144 @@ describe('PickingPlanningOverlay', () => {
     expect(bodyText()).not.toContain('Improved · 0 m · status: computed');
     expect(bodyText()).not.toContain('Route-cost stats · pair solves: 20 · unreachable pairs: 3');
     expect(bodyText()).not.toContain('Improved stats · method: route-cost 2-opt local search');
+  });
+
+  it('shows the download button only when diagnostics mode is enabled', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    const summary = createDetailedDiagnosticsSummary();
+
+    const { rerender } = render(
+      createElement(PickingPlanningOverlay, {
+        solvedSegments: [createSolvedSegment()],
+        routePerformanceSummary: summary
+      })
+    );
+
+    expect(screen.queryByTestId('download-route-diagnostics-json')).toBeNull();
+
+    rerender(
+      createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
+        solvedSegments: [createSolvedSegment()],
+        routePerformanceSummary: summary
+      })
+    );
+
+    await waitFor(() => expect(bodyText()).toContain('Batch picking'));
+    fireEvent.click(screen.getByText('WP-1'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('download-route-diagnostics-json')).not.toBeNull()
+    );
+  });
+
+  it('hides the download button for unauthorized production users', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    render(
+      createElement(PickingPlanningOverlay, {
+        solvedSegments: [createSolvedSegment()],
+        routePerformanceSummary: createDetailedDiagnosticsSummary(),
+        showDetailedDiagnostics: false
+      })
+    );
+
+    await waitFor(() => expect(bodyText()).toContain('Batch picking'));
+    expect(screen.queryByTestId('download-route-diagnostics-json')).toBeNull();
+    expect(screen.queryByTestId('copy-route-diagnostics-json')).toBeNull();
+  });
+
+  it('downloads a JSON blob from the existing diagnostics payload with a sanitized filename', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    const createObjectUrl = vi.fn((_: Blob) => 'blob:test');
+    const revokeObjectUrl = vi.fn((_: string) => undefined);
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = createObjectUrl;
+        static revokeObjectURL = revokeObjectUrl;
+      }
+    );
+    const linkClick = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi
+      .spyOn(document, 'createElement')
+      .mockImplementation(((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName.toLowerCase() === 'a') {
+          Object.defineProperty(element, 'click', {
+            value: linkClick
+          });
+        }
+        return element;
+      }) as typeof document.createElement);
+
+    render(
+      createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
+        solvedSegments: [createSolvedSegment()],
+        routePerformanceSummary: createDetailedDiagnosticsSummary()
+      })
+    );
+
+    await waitFor(() => expect(bodyText()).toContain('Batch picking'));
+    fireEvent.click(screen.getByText('WP-1'));
+    fireEvent.click(screen.getByTestId('download-route-diagnostics-json'));
+
+    expect(createObjectUrl).toHaveBeenCalledTimes(1);
+    const blobArg = createObjectUrl.mock.calls[0]?.[0];
+    expect(blobArg).toBeInstanceOf(Blob);
+    expect((blobArg as Blob).type).toBe('application/json');
+    const anchor = createElementSpy.mock.results.find(
+      (result) => result.value instanceof HTMLAnchorElement
+    )?.value as HTMLAnchorElement | undefined;
+    expect(anchor?.download).toBe(
+      'picking-route-diagnostics-floor-1-main-2026-06-05T12-34-56.789Z.json'
+    );
+    expect(anchor?.href).toBe('blob:test');
+    expect(linkClick).toHaveBeenCalledTimes(1);
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:test');
+
+    createElementSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the download fallback hint when clipboard copy fails', async () => {
+    vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    usePickingPlanningOverlayStore
+      .getState()
+      .setSource({ kind: 'orders', orderIds: ['order-1'] });
+
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockRejectedValue(new Error('denied'))
+      }
+    });
+
+    render(
+      createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
+        solvedSegments: [createSolvedSegment()],
+        routePerformanceSummary: createDetailedDiagnosticsSummary()
+      })
+    );
+
+    await waitFor(() => expect(bodyText()).toContain('Batch picking'));
+    fireEvent.click(screen.getByText('WP-1'));
+    fireEvent.click(screen.getByTestId('copy-route-diagnostics-json'));
+
+    await waitFor(() => expect(bodyText()).toContain('Copy failed'));
+    expect(bodyText()).toContain('Use Download route diagnostics JSON');
   });
 
   it('renders comparison deltas when comparison scope computes all modes', async () => {
