@@ -562,6 +562,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 100, canvasPoints: [] }
         ],
@@ -714,6 +715,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 1, canvasPoints: [] }
         ],
@@ -740,7 +742,6 @@ describe('PickingPlanningOverlay', () => {
 
     expect(bodyText()).toContain('Route-cost fallback: disabled for this package');
     expect(bodyText()).toContain('30 resolved anchors; limit 25');
-    expect(bodyText()).toContain('DEV route-order debug');
     expect(bodyText()).toContain('Route-cost · not computed · status: skipped');
     expect(bodyText()).not.toContain('status: fallback(too_many_resolved_anchors)');
     expect(bodyText()).not.toContain('Route-cost stats · pair solves: 0 · unreachable pairs: 0');
@@ -754,6 +755,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         activeRouteOrderMode: 'improved-route-cost',
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 1, canvasPoints: [] }
@@ -785,7 +787,7 @@ describe('PickingPlanningOverlay', () => {
     expect(bodyText()).not.toContain('Improved stats · method: route-cost 2-opt local search');
   });
 
-  it('renders DEV route perf block from performance summary metadata', async () => {
+  it('renders route perf block from performance summary metadata', async () => {
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     usePickingPlanningOverlayStore
       .getState()
@@ -793,6 +795,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 1, canvasPoints: [] }
         ],
@@ -842,9 +845,9 @@ describe('PickingPlanningOverlay', () => {
         }
       })
     );
-    await waitFor(() => expect(bodyText()).toContain('DEV route perf'));
+    await waitFor(() => expect(bodyText()).toContain('Route diagnostics'));
 
-    expect(bodyText()).toContain('DEV route perf');
+    expect(bodyText()).toContain('Route diagnostics');
     expect(bodyText()).toContain('active: nearest-route-cost');
     expect(bodyText()).toContain('total compute: 59 ms');
     expect(bodyText()).toContain('scope: active-only');
@@ -876,6 +879,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 1, canvasPoints: [] }
         ],
@@ -981,6 +985,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 1, canvasPoints: [] }
         ]
@@ -1000,7 +1005,7 @@ describe('PickingPlanningOverlay', () => {
     ).toBe(true);
   });
 
-  it('shows policy diagnostics in DEV route perf panel', async () => {
+  it('shows policy diagnostics in route perf panel', async () => {
     vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
     usePickingPlanningOverlayStore
       .getState()
@@ -1008,6 +1013,7 @@ describe('PickingPlanningOverlay', () => {
 
     render(
       createElement(PickingPlanningOverlay, {
+        showDetailedDiagnostics: true,
         solvedSegments: [
           { status: 'ok', fromStepId: 'task-1', toStepId: 'task-2', costMetres: 1, canvasPoints: [] }
         ],

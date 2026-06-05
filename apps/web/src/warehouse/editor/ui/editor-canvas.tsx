@@ -126,7 +126,12 @@ import {
 import type { CanvasRenderMode } from './canvas-render-mode';
 import { isCanvasFullDetailRenderMode } from './canvas-render-mode';
 import { resolveRouteComputationFlags } from './route-computation-scope';
-import { buildPickingRouteDebugSummary } from './picking-route-debug-summary';
+import { useAuth } from '@/app/providers/auth-provider';
+import {
+  buildPickingRouteDebugSummary,
+  buildPickingRouteDetailedDiagnostics,
+  isPickingRouteDetailedDiagnosticsEnabled
+} from './picking-route-debug-summary';
 
 const EMPTY_RACK_IDS: string[] = [];
 const EMPTY_CELL_ID_SET = new Set<string>();
@@ -156,6 +161,7 @@ export function EditorCanvas({
     typeof performance !== 'undefined' ? performance.now() : Date.now()
   );
   const canvasReadyRecordedRef = useRef(false);
+  const { currentTenantId, memberships } = useAuth();
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
   const viewStage = useViewStage();
@@ -830,6 +836,17 @@ export function EditorCanvas({
         y: pickingPlanningActiveRouteStartPoint.y * WORLD_SCALE
       }
     : undefined;
+  const isPickingRouteDetailedDiagnosticsEnabledForUser = useMemo(
+    () =>
+      isPickingRouteDetailedDiagnosticsEnabled({
+        isDev: import.meta.env.DEV,
+        currentTenantId,
+        memberships,
+        search:
+          typeof window === 'undefined' ? '' : window.location.search
+      }),
+    [currentTenantId, memberships]
+  );
   const pickingPlanningRoutesComputed = useMemo(() => {
     if (!pickingPlanningActivePackage) return null;
     return computePickingRoutes({
@@ -841,10 +858,12 @@ export function EditorCanvas({
       layout: placementLayout ?? layoutDraft,
       publishedCellsById,
       faceAccessByFaceId,
-      obstacles: obstacleRouteObstacles
+      obstacles: obstacleRouteObstacles,
+      includeDetailedDiagnostics: isPickingRouteDetailedDiagnosticsEnabledForUser
     });
   }, [
     faceAccessByFaceId,
+    isPickingRouteDetailedDiagnosticsEnabledForUser,
     layoutDraft,
     obstacleRouteObstacles,
     pickingPlanningActivePackage,
@@ -978,6 +997,46 @@ export function EditorCanvas({
         improvedRouteCostUnreachablePairCount: 0
       }
     };
+  const pickingPlanningDetailedDiagnostics = useMemo(
+    () =>
+      isPickingRouteDetailedDiagnosticsEnabledForUser
+        ? buildPickingRouteDetailedDiagnostics({
+            routeSteps: pickingPlanningOriginalRouteSteps,
+            locationsById: pickingPlanningPreview?.locationsById,
+            publishedCellsById,
+            publishedCellsQueryStatus,
+            aisleTopologyQueryStatus: aisleTopologyQuery.status,
+            faceAccessByFaceId,
+            anchors: pickingPlanningActiveRouteAnchors,
+            segments: pickingPlanningActiveRouteSegments,
+            obstacles: obstacleRouteObstacles,
+            floorId: workspace?.floorId ?? null,
+            layoutVersionId:
+              (placementLayout ?? layoutDraft)?.layoutVersionId ?? null,
+            packageId: pickingPlanningActivePackage?.workPackage.id ?? null,
+            activeRouteMode: pickingPlanningActiveRouteOrderMode,
+            tenantId: currentTenantId
+          })
+        : undefined,
+    [
+      aisleTopologyQuery.status,
+      currentTenantId,
+      faceAccessByFaceId,
+      isPickingRouteDetailedDiagnosticsEnabledForUser,
+      layoutDraft,
+      obstacleRouteObstacles,
+      pickingPlanningActivePackage?.workPackage.id,
+      pickingPlanningActiveRouteAnchors,
+      pickingPlanningActiveRouteOrderMode,
+      pickingPlanningActiveRouteSegments,
+      pickingPlanningOriginalRouteSteps,
+      pickingPlanningPreview?.locationsById,
+      placementLayout,
+      publishedCellsById,
+      publishedCellsQueryStatus,
+      workspace?.floorId
+    ]
+  );
   const pickingPlanningRoutePerformanceSummary: PickingRoutePerformanceSummary = useMemo(
     () => ({
       ...basePickingPlanningRoutePerformanceSummary,
@@ -989,13 +1048,15 @@ export function EditorCanvas({
         aisleTopologyQueryStatus: aisleTopologyQuery.status,
         faceAccessByFaceId,
         anchors: pickingPlanningActiveRouteAnchors,
-        segments: pickingPlanningActiveRouteSegments
+        segments: pickingPlanningActiveRouteSegments,
+        detailedDiagnostics: pickingPlanningDetailedDiagnostics
       })
     }),
     [
       aisleTopologyQuery.status,
       basePickingPlanningRoutePerformanceSummary,
       faceAccessByFaceId,
+      pickingPlanningDetailedDiagnostics,
       pickingPlanningActiveRouteAnchors,
       pickingPlanningActiveRouteSegments,
       pickingPlanningOriginalRouteSteps,
@@ -1604,6 +1665,9 @@ export function EditorCanvas({
               routeStartPoint={pickingPlanningActiveRouteStartPoint}
               isPlacingRouteStartPoint={isPickingPlanRouteStartPlacementMode}
               routePerformanceSummary={pickingPlanningRoutePerformanceSummary}
+              showDetailedDiagnostics={
+                isPickingRouteDetailedDiagnosticsEnabledForUser
+              }
             />
           )}
 
@@ -1856,7 +1920,9 @@ export function EditorCanvas({
                     anchors={pickingPlanningActiveRouteAnchors}
                     solvedSegments={pickingPlanningActiveRouteSegments}
                     startCanvasPoint={pickingPlanningActiveRouteStartCanvasPoint ?? null}
-                    showDiagnostics={import.meta.env.DEV}
+                    showDiagnostics={
+                      isPickingRouteDetailedDiagnosticsEnabledForUser
+                    }
                     diagnosticObstacles={obstacleRouteObstacles}
                   />
                 )}

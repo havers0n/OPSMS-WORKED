@@ -69,6 +69,7 @@ export type ComputePickingRoutesInput = {
   publishedCellsById: Map<string, Cell>;
   faceAccessByFaceId?: Map<string, FaceAccessLike>;
   obstacles: RouteObstacle[];
+  includeDetailedDiagnostics?: boolean;
   nowMs?: () => number;
 };
 
@@ -128,6 +129,7 @@ export function computePickingRoutes({
   publishedCellsById,
   faceAccessByFaceId,
   obstacles,
+  includeDetailedDiagnostics = false,
   nowMs = defaultNowMs
 }: ComputePickingRoutesInput): ComputePickingRoutesResult {
   const activeMode = asActiveModeKey(activeRouteOrderMode);
@@ -185,7 +187,7 @@ export function computePickingRoutes({
       undefined,
       {
         startCanvasPoint: activeRouteStartCanvasPoint,
-        includeDiagnostics: import.meta.env.DEV
+        includeDiagnostics: includeDetailedDiagnostics
       }
     );
     const nearestSolveMs = Math.max(0, nowMs() - startedNearestSolveAtMs);
@@ -247,7 +249,7 @@ export function computePickingRoutes({
       undefined,
       {
         startCanvasPoint: activeRouteStartCanvasPoint,
-        includeDiagnostics: import.meta.env.DEV
+        includeDiagnostics: includeDetailedDiagnostics
       }
     );
     const routeCostSolveMs = Math.max(0, nowMs() - startedRouteCostSolveAtMs);
@@ -335,7 +337,7 @@ export function computePickingRoutes({
       undefined,
       {
         startCanvasPoint: activeRouteStartCanvasPoint,
-        includeDiagnostics: import.meta.env.DEV
+        includeDiagnostics: includeDetailedDiagnostics
       }
     );
     const improvedSolveMs = Math.max(0, nowMs() - startedImprovedSolveAtMs);
@@ -388,7 +390,7 @@ export function computePickingRoutes({
     undefined,
     {
       startCanvasPoint: activeRouteStartCanvasPoint,
-      includeDiagnostics: import.meta.env.DEV
+      includeDiagnostics: includeDetailedDiagnostics
     }
   );
   const originalSolveMs = Math.max(0, nowMs() - startedOriginalSolveAtMs);

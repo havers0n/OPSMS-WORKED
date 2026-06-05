@@ -271,6 +271,71 @@ export type PickingRoutePerformanceSummary = {
     };
   };
   debug?: {
+    detailedDiagnostics?: {
+      build: {
+        sha: string;
+        timestamp: string;
+        mode: string;
+      };
+      scenario: {
+        floorId: string | null;
+        layoutVersionId: string | null;
+        packageId: string | null;
+        activeRouteMode: string;
+        tenantId?: string | null;
+      };
+      readiness: {
+        publishedCellsQueryStatus: 'pending' | 'error' | 'success';
+        publishedCellsByIdSize: number;
+        requiredCellIds: string[];
+        missingRequiredCellIds: string[];
+        aisleTopologyQueryStatus: 'pending' | 'error' | 'success';
+        faceAccessByFaceIdSize: number;
+        anchorCount: number;
+        resolvedAnchorCount: number;
+        unresolvedAnchorCount: number;
+      };
+      solverConfig: {
+        gridCellSizeM: number;
+        obstaclePaddingM: number;
+        boundsMarginM: number;
+        maxEndpointSnapCells: number;
+      };
+      obstacles: {
+        totalCount: number;
+        rackCount: number;
+        wallCount: number;
+        signature: string;
+      };
+      anchors: {
+        signature: string;
+      };
+      segments: Array<{
+        index: number;
+        fromStepId: string;
+        toStepId: string;
+        status: 'ok' | 'skipped' | 'unroutable';
+        skippedReason?: string;
+        solverStatus?: 'no_path' | 'start_blocked' | 'end_blocked';
+        debugReason?: string;
+        startCanvas?: { x: number; y: number } | null;
+        endCanvas?: { x: number; y: number } | null;
+        startWorld?: { x: number; y: number } | null;
+        endWorld?: { x: number; y: number } | null;
+        originalStartGridCell?: { x: number; y: number } | null;
+        originalEndGridCell?: { x: number; y: number } | null;
+        snappedStartGridCell?: { x: number; y: number } | null;
+        snappedEndGridCell?: { x: number; y: number } | null;
+        solverBounds?: {
+          minX: number;
+          minY: number;
+          maxX: number;
+          maxY: number;
+        } | null;
+        blockedCellCount?: number | null;
+        solvedPathPointCount?: number | null;
+      }>;
+    };
     publishedCellsQueryStatus: 'pending' | 'error' | 'success';
     publishedCellsByIdSize: number;
     requiredCellIdsCount: number;

@@ -5,7 +5,15 @@ import type { Cell } from '@wos/domain';
 import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import { PickingRouteOverlayLayer } from '@/features/picking-planning-canvas/ui/picking-route-overlay-layer';
 import { resolveRouteStepAnchors, solvePickingRoute } from '@/features/picking-planning-canvas/model/route-step-geometry';
-import { buildPickingRouteDebugSummary } from './picking-route-debug-summary';
+import type { PickingRouteAnchor, SolvedRouteSegment } from '@/features/picking-planning-canvas/model/route-step-geometry';
+import type { RouteObstacle } from '@/features/obstacle-route-planning/model/obstacle-types';
+import {
+  buildAnchorSignature,
+  buildObstacleSignature,
+  buildPickingRouteDebugSummary,
+  buildPickingRouteDetailedDiagnostics,
+  isPickingRouteDetailedDiagnosticsEnabled
+} from './picking-route-debug-summary';
 
 vi.mock('react-konva', () => ({
   Arrow: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -46,7 +54,10 @@ function createCell(cellId: string, rackId: string, slotNo: number): Cell {
   };
 }
 
-function renderFallbackArrowCount(anchors: ReturnType<typeof resolveRouteStepAnchors>, segments: ReturnType<typeof solvePickingRoute>) {
+function renderFallbackArrowCount(
+  anchors: ReturnType<typeof resolveRouteStepAnchors>,
+  segments: ReturnType<typeof solvePickingRoute>
+) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -55,6 +66,336 @@ function renderFallbackArrowCount(anchors: ReturnType<typeof resolveRouteStepAnc
   });
   return renderer.root.findAll((node) => String(node.type) === 'Arrow').length;
 }
+
+describe('picking route detailed diagnostics authorization', () => {
+  const tenantAdmin = [
+    {
+      tenantId: 'tenant-1',
+      tenantCode: 'tenant-1',
+      tenantName: 'Tenant 1',
+      role: 'tenant_admin' as const
+    }
+  ];
+
+  it('DEV mode exposes detailed diagnostics', () => {
+    expect(
+      isPickingRouteDetailedDiagnosticsEnabled({
+        isDev: true,
+        currentTenantId: 'tenant-1',
+        memberships: [],
+        search: ''
+      })
+    ).toBe(true);
+  });
+
+  it('production mode plus tenant admin and query parameter exposes diagnostics', () => {
+    expect(
+      isPickingRouteDetailedDiagnosticsEnabled({
+        isDev: false,
+        currentTenantId: 'tenant-1',
+        memberships: tenantAdmin,
+        search: '?pickingRouteDebug=1'
+      })
+    ).toBe(true);
+  });
+
+  it('production mode plus tenant admin without query parameter does not expose diagnostics', () => {
+    expect(
+      isPickingRouteDetailedDiagnosticsEnabled({
+        isDev: false,
+        currentTenantId: 'tenant-1',
+        memberships: tenantAdmin,
+        search: ''
+      })
+    ).toBe(false);
+  });
+
+  it('production mode plus non-admin with query parameter does not expose diagnostics', () => {
+    expect(
+      isPickingRouteDetailedDiagnosticsEnabled({
+        isDev: false,
+        currentTenantId: 'tenant-1',
+        memberships: [
+          {
+            tenantId: 'tenant-1',
+            tenantCode: 'tenant-1',
+            tenantName: 'Tenant 1',
+            role: 'operator'
+          }
+        ],
+        search: '?pickingRouteDebug=1'
+      })
+    ).toBe(false);
+  });
+});
+
+describe('picking route detailed diagnostics signatures', () => {
+  it('obstacle signature is deterministic regardless of input order', () => {
+    const left: RouteObstacle[] = [
+      { type: 'rack', id: 'rack-2', x: 6, y: 1, width: 2, height: 3 },
+      { type: 'wall', id: 'wall-1', x1: 0, y1: 0, x2: 0, y2: 5 }
+    ];
+    const right: RouteObstacle[] = [...left].reverse();
+
+    expect(buildObstacleSignature(left)).toBe(buildObstacleSignature(right));
+  });
+
+  it('obstacle signature changes when geometry changes', () => {
+    const base: RouteObstacle[] = [
+      { type: 'rack', id: 'rack-1', x: 1, y: 2, width: 3, height: 4 }
+    ];
+    const changed: RouteObstacle[] = [
+      { type: 'rack', id: 'rack-1', x: 1, y: 2, width: 3.5, height: 4 }
+    ];
+
+    expect(buildObstacleSignature(base)).not.toBe(buildObstacleSignature(changed));
+  });
+
+  it('anchor signature is deterministic', () => {
+    const anchors: PickingRouteAnchor[] = [
+      {
+        status: 'resolved',
+        stepId: 'task-1',
+        step: { ...baseStep, taskId: 'task-1', fromLocationId: 'loc-1' },
+        point: { x: 40, y: 80 },
+        source: 'pick-point'
+      },
+      {
+        status: 'unresolved',
+        stepId: 'task-2',
+        step: { ...baseStep, taskId: 'task-2', fromLocationId: 'loc-2' },
+        reason: 'missing-published-cell'
+      }
+    ];
+
+    expect(buildAnchorSignature(anchors)).toBe(buildAnchorSignature(anchors));
+  });
+
+  it('numeric precision normalization prevents meaningless float-noise changes', () => {
+    const obstacleA: RouteObstacle[] = [
+      { type: 'rack', id: 'rack-1', x: 1.000001, y: 2.000001, width: 3, height: 4 }
+    ];
+    const obstacleB: RouteObstacle[] = [
+      { type: 'rack', id: 'rack-1', x: 1.000002, y: 2.000002, width: 3, height: 4 }
+    ];
+    const anchorsA: PickingRouteAnchor[] = [
+      {
+        status: 'resolved',
+        stepId: 'task-1',
+        step: { ...baseStep, taskId: 'task-1', fromLocationId: 'loc-1' },
+        point: { x: 40.00001, y: 79.99999 },
+        source: 'pick-point'
+      }
+    ];
+    const anchorsB: PickingRouteAnchor[] = [
+      {
+        status: 'resolved',
+        stepId: 'task-1',
+        step: { ...baseStep, taskId: 'task-1', fromLocationId: 'loc-1' },
+        point: { x: 40.00002, y: 80.00001 },
+        source: 'pick-point'
+      }
+    ];
+
+    expect(buildObstacleSignature(obstacleA)).toBe(buildObstacleSignature(obstacleB));
+    expect(buildAnchorSignature(anchorsA)).toBe(buildAnchorSignature(anchorsB));
+  });
+});
+
+describe('picking route detailed diagnostics payload', () => {
+  it('includes build metadata, readiness, solver config, signatures, and segment detail', () => {
+    const routeSteps = [
+      { ...baseStep, taskId: 'task-1', fromLocationId: 'loc-1' },
+      { ...baseStep, taskId: 'task-2', fromLocationId: 'loc-2' },
+      { ...baseStep, taskId: 'task-3', fromLocationId: 'loc-3' }
+    ];
+    const locationsById = {
+      'loc-1': { id: 'loc-1', warehouseId: 'warehouse-1', addressLabel: 'A-01', cellId: 'cell-1' },
+      'loc-2': { id: 'loc-2', warehouseId: 'warehouse-1', addressLabel: 'A-02', cellId: 'cell-2' },
+      'loc-3': { id: 'loc-3', warehouseId: 'warehouse-1', addressLabel: 'A-03', cellId: 'cell-3' }
+    };
+    const publishedCellsById = new Map([
+      ['cell-1', createCell('cell-1', 'rack-1', 1)],
+      ['cell-2', createCell('cell-2', 'rack-1', 2)]
+    ]);
+    const anchors: PickingRouteAnchor[] = [
+      {
+        status: 'resolved',
+        stepId: 'task-1',
+        step: routeSteps[0]!,
+        point: { x: 40, y: 80 },
+        source: 'pick-point'
+      },
+      {
+        status: 'resolved',
+        stepId: 'task-2',
+        step: routeSteps[1]!,
+        point: { x: 120, y: 80 },
+        source: 'projection'
+      },
+      {
+        status: 'unresolved',
+        stepId: 'task-3',
+        step: routeSteps[2]!,
+        reason: 'missing-published-cell'
+      }
+    ];
+    const segments: SolvedRouteSegment[] = [
+      {
+        status: 'ok',
+        fromStepId: 'task-1',
+        toStepId: 'task-2',
+        costMetres: 2,
+        canvasPoints: [
+          { x: 40, y: 80 },
+          { x: 120, y: 80 }
+        ],
+        diagnostics: {
+          fromStepId: 'task-1',
+          toStepId: 'task-2',
+          fromCanvasPoint: { x: 40, y: 80 },
+          toCanvasPoint: { x: 120, y: 80 },
+          fromWorldPoint: { x: 1, y: 2 },
+          toWorldPoint: { x: 3, y: 2 },
+          grid: { minX: 0, minY: 0, resolutionM: 0.5 },
+          originalStartCell: { x: 1, y: 2 },
+          originalEndCell: { x: 6, y: 2 },
+          snappedStartCell: { x: 1, y: 2 },
+          snappedEndCell: { x: 6, y: 2 },
+          solverBounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+          obstacleCount: 2,
+          blockedGridCellCount: 3,
+          blockedGridCells: [],
+          solverStatus: 'ok',
+          pathGridCells: [{ x: 1, y: 2 }, { x: 6, y: 2 }],
+          pathWorldPoints: [{ x: 1, y: 2 }, { x: 3, y: 2 }]
+        }
+      },
+      {
+        status: 'unroutable',
+        fromStepId: 'task-2',
+        toStepId: 'task-3',
+        solverStatus: 'no_path',
+        debugReason: 'no_path_after_snap',
+        fromCanvasPoint: { x: 120, y: 80 },
+        toCanvasPoint: { x: 200, y: 80 },
+        diagnostics: {
+          fromStepId: 'task-2',
+          toStepId: 'task-3',
+          fromCanvasPoint: { x: 120, y: 80 },
+          toCanvasPoint: { x: 200, y: 80 },
+          fromWorldPoint: { x: 3, y: 2 },
+          toWorldPoint: { x: 5, y: 2 },
+          grid: { minX: 0, minY: 0, resolutionM: 0.5 },
+          originalStartCell: { x: 6, y: 2 },
+          originalEndCell: { x: 10, y: 2 },
+          snappedStartCell: { x: 6, y: 2 },
+          snappedEndCell: { x: 9, y: 2 },
+          solverBounds: { minX: 0, minY: 0, maxX: 12, maxY: 12 },
+          obstacleCount: 2,
+          blockedGridCellCount: 6,
+          blockedGridCells: [],
+          solverStatus: 'no_path',
+          debugReason: 'no_path_after_snap',
+          pathGridCells: [],
+          pathWorldPoints: []
+        }
+      },
+      {
+        status: 'skipped',
+        reason: 'unresolved_anchor',
+        fromStepId: 'task-3',
+        toStepId: 'task-4',
+        fromCanvasPoint: undefined,
+        toCanvasPoint: undefined,
+        diagnostics: {
+          fromStepId: 'task-3',
+          toStepId: 'task-4',
+          blockedGridCells: [],
+          pathGridCells: [],
+          pathWorldPoints: [],
+          solverStatus: 'skipped',
+          debugReason: 'unresolved_anchor'
+        }
+      }
+    ];
+    const obstacles: RouteObstacle[] = [
+      { type: 'rack', id: 'rack-1', x: 1, y: 2, width: 3, height: 4 },
+      { type: 'wall', id: 'wall-1', x1: 0, y1: 0, x2: 0, y2: 5 }
+    ];
+
+    const diagnostics = buildPickingRouteDetailedDiagnostics({
+      routeSteps,
+      locationsById: locationsById as never,
+      publishedCellsById,
+      publishedCellsQueryStatus: 'success',
+      aisleTopologyQueryStatus: 'pending',
+      faceAccessByFaceId: new Map(),
+      anchors,
+      segments,
+      obstacles,
+      floorId: 'floor-1',
+      layoutVersionId: 'layout-version-1',
+      packageId: 'pkg-1',
+      activeRouteMode: 'original',
+      tenantId: 'tenant-1'
+    });
+
+    expect(diagnostics.build).toEqual({
+      sha: 'unknown',
+      timestamp: 'unknown',
+      mode: import.meta.env.MODE
+    });
+    expect(diagnostics.readiness).toMatchObject({
+      publishedCellsQueryStatus: 'success',
+      publishedCellsByIdSize: 2,
+      requiredCellIds: ['cell-1', 'cell-2', 'cell-3'],
+      missingRequiredCellIds: ['cell-3'],
+      aisleTopologyQueryStatus: 'pending',
+      faceAccessByFaceIdSize: 0,
+      anchorCount: 3,
+      resolvedAnchorCount: 2,
+      unresolvedAnchorCount: 1
+    });
+    expect(diagnostics.solverConfig).toEqual({
+      gridCellSizeM: 0.5,
+      obstaclePaddingM: 0.4,
+      boundsMarginM: 5,
+      maxEndpointSnapCells: 2
+    });
+    expect(diagnostics.obstacles.totalCount).toBe(2);
+    expect(diagnostics.obstacles.signature.length).toBeGreaterThan(0);
+    expect(diagnostics.anchors.signature.length).toBeGreaterThan(0);
+    expect(diagnostics.segments[0]).toMatchObject({
+      status: 'ok',
+      fromStepId: 'task-1',
+      toStepId: 'task-2'
+    });
+    expect(diagnostics.segments[1]).toMatchObject({
+      status: 'unroutable',
+      solverStatus: 'no_path',
+      debugReason: 'no_path_after_snap'
+    });
+    expect(diagnostics.segments[2]).toMatchObject({
+      status: 'skipped',
+      skippedReason: 'unresolved_anchor',
+      debugReason: 'unresolved_anchor'
+    });
+
+    const summary = buildPickingRouteDebugSummary({
+      routeSteps,
+      locationsById: locationsById as never,
+      publishedCellsById,
+      publishedCellsQueryStatus: 'success',
+      aisleTopologyQueryStatus: 'pending',
+      faceAccessByFaceId: new Map(),
+      anchors,
+      segments,
+      detailedDiagnostics: diagnostics
+    });
+    expect(summary.detailedDiagnostics).toEqual(diagnostics);
+  });
+});
 
 describe('picking route debug summary scenarios', () => {
   const layout = createLayoutDraftFixture();

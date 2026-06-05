@@ -78,6 +78,7 @@ type PickingPlanningOverlayProps = {
   routeStartPoint?: PickingRouteStartPoint | null;
   isPlacingRouteStartPoint?: boolean;
   routePerformanceSummary?: PickingRoutePerformanceSummary;
+  showDetailedDiagnostics?: boolean;
 };
 
 function sourceLabel(source: PickingPlanningOverlaySource) {
@@ -261,7 +262,8 @@ export function PickingPlanningOverlay({
   activeRouteOrderMode,
   routeStartPoint = null,
   isPlacingRouteStartPoint = false,
-  routePerformanceSummary
+  routePerformanceSummary,
+  showDetailedDiagnostics = false
 }: PickingPlanningOverlayProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [warningsExpanded, setWarningsExpanded] = useState(false);
@@ -269,6 +271,9 @@ export function PickingPlanningOverlay({
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [copyDiagnosticsState, setCopyDiagnosticsState] = useState<
+    'idle' | 'success' | 'error'
+  >('idle');
   const {
     activePackageId,
     errorMessage,
@@ -291,6 +296,28 @@ export function PickingPlanningOverlay({
     source,
     routeComparisonDebugEnabled
   } = usePickingPlanningOverlayStore();
+  const detailedDiagnosticsPayload =
+    routePerformanceSummary?.debug?.detailedDiagnostics;
+
+  useEffect(() => {
+    setCopyDiagnosticsState('idle');
+  }, [detailedDiagnosticsPayload]);
+
+  async function handleCopyRouteDiagnostics() {
+    if (!detailedDiagnosticsPayload || !navigator.clipboard?.writeText) {
+      setCopyDiagnosticsState('error');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        JSON.stringify(detailedDiagnosticsPayload, null, 2)
+      );
+      setCopyDiagnosticsState('success');
+    } catch {
+      setCopyDiagnosticsState('error');
+    }
+  }
 
   function handleSelectOrder(orderId: string) {
     if (typeof window !== 'undefined') {
@@ -1369,9 +1396,31 @@ export function PickingPlanningOverlay({
                           Improved fallback: using route-cost order ({improvedRouteCostFallbackReason}).
                         </div>
                       )}
-                      {import.meta.env.DEV && (
+                      {showDetailedDiagnostics && (
                         <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[10px] text-slate-700">
-                          <div className="font-semibold text-slate-800">DEV route perf</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-semibold text-slate-800">
+                              Route diagnostics
+                            </div>
+                            {detailedDiagnosticsPayload && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void handleCopyRouteDiagnostics();
+                                  }}
+                                  className="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700"
+                                  data-testid="copy-route-diagnostics-json"
+                                >
+                                  Copy route diagnostics JSON
+                                </button>
+                                {copyDiagnosticsState === 'success' && <span>Copied</span>}
+                                {copyDiagnosticsState === 'error' && (
+                                  <span>Copy failed</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <label className="mt-1 inline-flex cursor-pointer items-center gap-1.5">
                             <input
                               type="checkbox"
@@ -1514,10 +1563,10 @@ export function PickingPlanningOverlay({
                           )}
                         </div>
                       )}
-                      {import.meta.env.DEV && (
+                      {showDetailedDiagnostics && (
                         <div className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[10px] text-slate-700">
                           <div className="font-semibold text-slate-800">
-                            DEV route-order debug
+                            Route-order debug
                           </div>
                           <div className="mt-1">
                             Original · {formatNumber(originalRouteDiagnostics.totalDistanceMetres, ' m')} · status: computed · align: {originalSidebarCanvasAligned ? 'yes' : 'no'}
@@ -1574,7 +1623,7 @@ export function PickingPlanningOverlay({
                           )}
                         </div>
                       )}
-                      {import.meta.env.DEV && (
+                      {showDetailedDiagnostics && (
                         <div className="mt-1 space-y-1 text-[11px] text-slate-500">
                           {(routePerformanceSummary?.debug?.segments ?? solvedSegments).map(
                             (segment, index) => {
