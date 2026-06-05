@@ -281,6 +281,10 @@ const readOnlyReasonCopy: Record<RackReadOnlyReason, { title: string; body: stri
     title: 'Published layout',
     body: 'This rack is read-only until a draft is created for the floor.'
   },
+  'draft-preview': {
+    title: 'Draft preview',
+    body: 'Click Edit layout to start editing rack geometry.'
+  },
   'non-layout-readonly': {
     title: 'Read-only view',
     body: 'Switch to Layout mode to edit rack geometry, structure, and addressing.'

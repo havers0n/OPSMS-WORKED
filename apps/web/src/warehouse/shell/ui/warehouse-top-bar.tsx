@@ -1,4 +1,4 @@
-import { CornerDownLeft, Menu, Search, X } from 'lucide-react';
+import { ArrowLeftToLine, CornerDownLeft, Edit, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Product } from '@wos/domain';
@@ -23,7 +23,14 @@ import {
   useWarehouseLayoutDraft
 } from '@/warehouse/state/layout-draft';
 import { warehouseStorageFocusActions } from '@/warehouse/state/storage-focus';
-import { useWarehouseViewMode } from '@/warehouse/state/view-mode';
+import {
+  useWarehouseEnterLayoutPreview,
+  useWarehouseExitLayout,
+  useWarehouseFinishLayoutEditing,
+  useWarehouseLayoutInteractionMode,
+  useWarehouseStartLayoutEditing,
+  useWarehouseViewMode
+} from '@/warehouse/state/view-mode';
 import { AccountControls } from '@/widgets/app-shell/ui/account-controls';
 import { ViewModeSwitcher } from './view-mode-switcher';
 import { WorkspaceActions } from './workspace-actions';
@@ -391,6 +398,12 @@ export function WarehouseTopBar() {
 
   const activeFloorId = useActiveFloorId();
   const viewMode = useWarehouseViewMode();
+  const layoutInteractionMode = useWarehouseLayoutInteractionMode();
+  const enterLayoutPreview = useWarehouseEnterLayoutPreview();
+  const startLayoutEditing = useWarehouseStartLayoutEditing();
+  const finishLayoutEditing = useWarehouseFinishLayoutEditing();
+  const exitLayout = useWarehouseExitLayout();
+
   const shouldShowLocateInline =
     isWarehouseViewRoute ||
     (pathname.startsWith(routes.warehouse) && viewMode !== 'layout');
@@ -402,10 +415,10 @@ export function WarehouseTopBar() {
   const persistedDraftValidation = useLayoutValidation(layoutDraft?.layoutVersionId ?? null).cachedResult;
 
   const hasDraftLayout = layoutDraft?.state === 'draft';
+  const isPreview = viewMode === 'layout' && layoutInteractionMode === 'preview';
+  const isEditing = viewMode === 'layout' && layoutInteractionMode === 'editing';
 
   const issueSummary = useMemo(() => {
-    // Published state is already communicated by the breadcrumb badge and
-    // the PublishedBanner below the TopBar — no need to repeat it here.
     if (!layoutDraft && latestPublished) return null;
     if (layoutDraft?.state === 'published') return null;
     if (isDraftDirty) return t('warehouse.status.draftChanged');
@@ -430,19 +443,23 @@ export function WarehouseTopBar() {
     ? t('warehouse.status.published')
     : viewMode !== 'layout'
       ? t('warehouse.status.readOnly')
-      : persistenceStatus === 'dirty'
-        ? t('warehouse.status.unsaved')
-        : persistenceStatus === 'saving'
-          ? t('warehouse.status.saving')
-          : persistenceStatus === 'conflict'
-            ? t('warehouse.status.conflict')
-            : persistenceStatus === 'error'
-              ? t('warehouse.status.saveFailed')
-              : t('warehouse.status.saved');
+      : isPreview
+        ? t('warehouse.status.draftPreview')
+        : persistenceStatus === 'dirty'
+          ? t('warehouse.status.unsaved')
+          : persistenceStatus === 'saving'
+            ? t('warehouse.status.saving')
+            : persistenceStatus === 'conflict'
+              ? t('warehouse.status.conflict')
+              : persistenceStatus === 'error'
+                ? t('warehouse.status.saveFailed')
+                : t('warehouse.status.saved');
 
-  const isCurrentModeLocked = viewMode !== 'layout' || !hasDraftLayout;
+  const isCurrentModeLocked = viewMode !== 'layout' || !hasDraftLayout || isPreview;
   const workspaceStateStyle = isCurrentModeLocked
-    ? { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
+    ? isPreview
+      ? { background: 'rgba(183,121,31,0.12)', color: '#b9770e' }
+      : { background: 'rgba(37,99,235,0.12)', color: '#1d4ed8' }
     : persistenceStatus === 'dirty'
       ? { background: 'rgba(183,121,31,0.12)', color: 'var(--warning)' }
       : persistenceStatus === 'saving'
@@ -455,7 +472,46 @@ export function WarehouseTopBar() {
     ? t('warehouse.tooltip.publishedLocked')
     : viewMode !== 'layout'
       ? t('warehouse.tooltip.readOnly')
-      : null;
+      : isPreview
+        ? t('warehouse.tooltip.draftPreview')
+        : null;
+
+  const layoutWorkspaceCenter = viewMode === 'layout' && (
+    <div className="flex items-center gap-3">
+      <span
+        className="rounded-full px-3 py-1 text-xs font-semibold"
+        style={{
+          background: workspaceStateStyle.background,
+          color: workspaceStateStyle.color,
+        }}
+      >
+        {workspaceStateLabel}
+      </span>
+
+      {isPreview && (
+        <button
+          type="button"
+          onClick={() => startLayoutEditing()}
+          className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-white transition-opacity hover:opacity-90"
+          style={{ background: 'var(--accent)' }}
+        >
+          <Edit className="h-3.5 w-3.5" />
+          {t('warehouse.action.editLayout')}
+        </button>
+      )}
+
+      {isEditing && (
+        <button
+          type="button"
+          onClick={() => finishLayoutEditing()}
+          className="flex h-7 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-white transition-opacity hover:opacity-90"
+          style={{ background: 'var(--accent)' }}
+        >
+          {t('warehouse.action.doneEditing')}
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div className="relative shrink-0">
@@ -485,31 +541,61 @@ export function WarehouseTopBar() {
               <span className="hidden text-sm font-semibold text-slate-800 sm:inline">{t('app.brand.name')}</span>
             </div>
 
-            <div className="hidden min-w-0 border-s ps-3 md:block" style={{ borderColor: 'var(--border-muted)' }}>
-              <WorkspaceNav
-                onContextSwitched={() => setStatusMessage(null)}
-                statusBadge={
-                  <WorkspaceStatus
-                    variant="badge"
-                    label={workspaceStateLabel}
-                    isCurrentModeLocked={isCurrentModeLocked}
-                    style={workspaceStateStyle}
-                    tooltip={workspaceTooltip}
-                  />
-                }
-              />
-            </div>
+            {isPreview || isEditing ? (
+              <button
+                type="button"
+                onClick={() => exitLayout()}
+                className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-slate-100"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <ArrowLeftToLine className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('warehouse.action.backToWarehouse')}</span>
+              </button>
+            ) : (
+              <div className="hidden min-w-0 border-s ps-3 md:block" style={{ borderColor: 'var(--border-muted)' }}>
+                <WorkspaceNav
+                  onContextSwitched={() => setStatusMessage(null)}
+                  statusBadge={
+                    <WorkspaceStatus
+                      variant="badge"
+                      label={workspaceStateLabel}
+                      isCurrentModeLocked={isCurrentModeLocked}
+                      style={workspaceStateStyle}
+                      tooltip={workspaceTooltip}
+                    />
+                  }
+                />
+              </div>
+            )}
           </div>
         }
-        center={<ViewModeSwitcher />}
+        center={
+          viewMode === 'layout' ? (
+            layoutWorkspaceCenter
+          ) : (
+            <ViewModeSwitcher />
+          )
+        }
         right={
           <div className="flex h-full min-w-0 items-center justify-end gap-3">
             <div
               className="hidden min-w-0 items-center gap-2 border-s ps-3 md:flex"
               style={{ borderColor: 'var(--border-muted)' }}
             >
+              {viewMode !== 'layout' && (
+                <button
+                  type="button"
+                  onClick={() => enterLayoutPreview()}
+                  className="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors hover:bg-slate-100"
+                  style={{ color: 'var(--text-muted)' }}
+                  title={t('warehouse.action.editWarehouseLayout')}
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                  <span className="hidden lg:inline">{t('warehouse.action.editWarehouseLayout')}</span>
+                </button>
+              )}
               <WorkspaceStatus variant="inline" message={inlineStatusMessage} />
-              <WorkspaceActions onStatusMessageChange={setStatusMessage} />
+              {(isPreview || isEditing) && <WorkspaceActions onStatusMessageChange={setStatusMessage} />}
             </div>
 
             <div className="border-s" style={{ borderColor: 'var(--border-muted)' }}>

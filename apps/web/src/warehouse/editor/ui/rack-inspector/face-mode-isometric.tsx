@@ -6,6 +6,7 @@ export type TopologyChoice = 'single' | 'mirrored' | 'independent';
 
 const readOnlyReasonLabel: Record<RackReadOnlyReason, string> = {
   'published-readonly': 'Create a draft to edit face configuration.',
+  'draft-preview': 'Click Edit to start editing face configuration.',
   'non-layout-readonly': 'Switch to Layout mode to edit face configuration.',
   'no-layout': 'Load a layout draft to edit face configuration.',
   'rack-locked': 'Unlock this rack to edit face configuration.'
