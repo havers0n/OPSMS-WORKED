@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { pickingQueueQueryOptions } from '@/entities/picking-queue/api/queries';
-import { pickingRunPath } from '@/shared/config/routes';
 
 function statusLabel(status: 'ready' | 'in_progress' | 'blocked') {
   if (status === 'ready') return 'Ready';
@@ -10,7 +8,6 @@ function statusLabel(status: 'ready' | 'in_progress' | 'blocked') {
 }
 
 export function PickingQueuePage() {
-  const navigate = useNavigate();
   const { data, isLoading, isError, error } = useQuery(pickingQueueQueryOptions());
 
   if (isLoading) {
@@ -39,17 +36,9 @@ export function PickingQueuePage() {
       <p className="mb-4 text-sm text-slate-600">Available picking tasks for orders and waves.</p>
       <div className="space-y-3" data-testid="picking-queue-list">
         {data.map((item) => (
-          <button
+          <div
             key={`${item.kind}:${item.id}`}
-            type="button"
-            className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-slate-300"
-            onClick={() =>
-              navigate(
-                item.kind === 'order'
-                  ? pickingRunPath({ orderId: item.id })
-                  : pickingRunPath({ waveId: item.id })
-              )
-            }
+            className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left opacity-80"
             data-testid={`picking-queue-item-${item.kind}`}
           >
             <div className="flex items-center justify-between gap-2">
@@ -67,7 +56,7 @@ export function PickingQueuePage() {
               {item.kind === 'wave' && typeof item.orderCount === 'number' && <span>Orders: {item.orderCount}</span>}
               {typeof item.warningCount === 'number' && <span>Warnings: {item.warningCount}</span>}
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>

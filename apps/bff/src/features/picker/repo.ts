@@ -28,6 +28,7 @@ type PickStepStateRow = {
   id: string;
   task_id: string;
   tenant_id: string;
+  qty_required: number;
   qty_picked: number;
   status: string;
 };
@@ -113,7 +114,7 @@ export function createPickerRepo(supabase: SupabaseClient): PickerRepo {
     async findStepForTask(taskId, stepId) {
       const { data, error } = await supabase
         .from('pick_steps')
-        .select('id,task_id,tenant_id,qty_picked,status')
+        .select('id,task_id,tenant_id,qty_required,qty_picked,status')
         .eq('id', stepId)
         .eq('task_id', taskId)
         .maybeSingle();

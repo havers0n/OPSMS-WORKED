@@ -14,7 +14,8 @@ import type {
   ManualShiftWorker,
   ManualShiftWorkerRole,
   DailyManualShiftImportPreview,
-  ApplyDailyManualShiftImportResponse
+  ApplyDailyManualShiftImportResponse,
+  PickTaskDetail
 } from '@wos/domain';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { bffRequest } from '@/shared/api/bff/client';
@@ -80,6 +81,12 @@ type PatchOrderInput = {
 };
 
 type StartOrderCheckInput = {
+  orderId: string;
+  lineId: string;
+  shiftId: string;
+};
+
+type StartManualShiftOrderPickingInput = {
   orderId: string;
   lineId: string;
   shiftId: string;
@@ -285,6 +292,14 @@ async function patchOrder({
 
 async function startOrderCheck({ orderId }: StartOrderCheckInput): Promise<ManualShiftOrder> {
   return bffRequest<ManualShiftOrder>(`/api/manual-shift-orders/${orderId}/start-check`, {
+    method: 'POST'
+  });
+}
+
+async function startManualShiftOrderPicking({
+  orderId
+}: StartManualShiftOrderPickingInput): Promise<PickTaskDetail> {
+  return bffRequest<PickTaskDetail>(`/api/manual-shifts/orders/${orderId}/start-picking`, {
     method: 'POST'
   });
 }
@@ -554,6 +569,16 @@ export function useStartManualShiftOrderCheck() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: startOrderCheck,
+    onSuccess: (_data, variables) => {
+      invalidateOrderQueries(queryClient, variables.lineId, variables.shiftId);
+    }
+  });
+}
+
+export function useStartManualShiftOrderPicking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: startManualShiftOrderPicking,
     onSuccess: (_data, variables) => {
       invalidateOrderQueries(queryClient, variables.lineId, variables.shiftId);
     }

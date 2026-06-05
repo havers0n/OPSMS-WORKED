@@ -26,7 +26,7 @@ export function PickerPage() {
   const navigate = useNavigate();
   const workerId = searchParams.get('workerId');
 
-  const { data: tasks, isLoading, isError, error } = useQuery(
+  const { data: tasks, isLoading, isError, refetch } = useQuery(
     pickerTasksQueryOptions(workerId)
   );
 
@@ -37,10 +37,15 @@ export function PickerPage() {
         data-testid="picker-missing-worker"
       >
         <div className="text-4xl mb-4">⚠️</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Worker identity missing</h1>
-        <p className="text-sm text-gray-500">
-          Open this page with a valid <code className="font-mono">?workerId=</code> query parameter.
-        </p>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
+        <p className="text-sm text-gray-500 mb-4">לא נמצאה הפעלת עובד.</p>
+        <button
+          onClick={() => navigate('/')}
+          className="text-blue-600 text-sm font-medium underline"
+          data-testid="picker-return-home"
+        >
+          חזור לדף הראשי
+        </button>
       </div>
     );
   }
@@ -59,13 +64,19 @@ export function PickerPage() {
   if (isError) {
     return (
       <div
-        className="flex min-h-screen items-center justify-center p-6 bg-white"
+        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white"
         data-testid="picker-error"
       >
-        <p className="text-sm text-red-600">
-          Failed to load tasks:{' '}
-          {error instanceof Error ? error.message : 'Unknown error'}
+        <p className="text-sm text-red-600 mb-4">
+          נכשל בטעינת המשימות
         </p>
+        <button
+          onClick={() => refetch()}
+          className="text-blue-600 text-sm font-medium underline"
+          data-testid="picker-retry"
+        >
+          נסה שוב
+        </button>
       </div>
     );
   }

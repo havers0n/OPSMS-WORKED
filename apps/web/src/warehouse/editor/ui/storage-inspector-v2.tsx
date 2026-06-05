@@ -440,7 +440,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [createWithProductSearch, setCreateWithProductSearch] = useState('');
   const [createWithProductSelectedProduct, setCreateWithProductSelectedProduct] = useState<Product | null>(null);
   const [createWithProductQuantity, setCreateWithProductQuantity] = useState('');
-  const [createWithProductUom, setCreateWithProductUom] = useState('');
   const [createWithProductErrorMessage, setCreateWithProductErrorMessage] = useState<string | null>(null);
   const [createWithProductIsSubmitting, setCreateWithProductIsSubmitting] = useState(false);
 
@@ -460,7 +459,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [addProductSearch, setAddProductSearch] = useState('');
   const [addProductSelectedProduct, setAddProductSelectedProduct] = useState<Product | null>(null);
   const [addProductQuantity, setAddProductQuantity] = useState('');
-  const [addProductUom, setAddProductUom] = useState('');
   const [addProductErrorMessage, setAddProductErrorMessage] = useState<string | null>(null);
   const [removeContainerIsSubmitting, setRemoveContainerIsSubmitting] = useState(false);
   const [removeContainerErrorMessage, setRemoveContainerErrorMessage] = useState<string | null>(null);
@@ -636,7 +634,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setCreateWithProductSearch('');
     setCreateWithProductSelectedProduct(null);
     setCreateWithProductQuantity('');
-    setCreateWithProductUom('');
     setCreateWithProductErrorMessage(null);
     setCreateWithProductIsSubmitting(false);
   };
@@ -661,7 +658,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     setAddProductSearch('');
     setAddProductSelectedProduct(null);
     setAddProductQuantity('');
-    setAddProductUom('');
     setAddProductErrorMessage(null);
   };
 
@@ -1070,7 +1066,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
       !createWithProductSelectedProduct ||
       createWithProductQuantity.trim() === '' ||
       Number(createWithProductQuantity) <= 0 ||
-      createWithProductUom.trim() === '' ||
       createWithProductIsSubmitting
     ) {
       return;
@@ -1106,7 +1101,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           containerId,
           productId: createWithProductSelectedProduct.id,
           quantity: Number(createWithProductQuantity),
-          uom: createWithProductUom.trim(),
+          uom: 'PCS',
           receiptCorrelationKey: createUuid()
         });
       } catch (error) {
@@ -1694,7 +1689,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         selectedProduct={createWithProductSelectedProduct}
         searchResults={createWithProductSearchResults}
         quantity={createWithProductQuantity}
-        uom={createWithProductUom}
         isSubmitting={createWithProductIsSubmitting}
         locationId={locationId}
         errorMessage={createWithProductErrorMessage}
@@ -1706,7 +1700,6 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         onProductSearchChange={handleCreateWithProductSearchChange}
         onProductSelect={handleCreateWithProductSelect}
         onQuantityChange={setCreateWithProductQuantity}
-        onUomChange={setCreateWithProductUom}
         onConfirm={() => void handleCreateWithProductConfirm()}
         onCancel={closeCreateWithProductTask}
       />
@@ -1832,7 +1825,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
           containerId: addProductContainerId,
           productId: addProductSelectedProduct.id,
           quantity: Number(addProductQuantity),
-          uom: addProductUom.trim()
+          uom: 'PCS'
         });
 
         await Promise.all([
@@ -1866,11 +1859,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
         selectedProduct={addProductSelectedProduct}
         searchResults={addProductSearchResults}
         quantity={addProductQuantity}
-        uom={addProductUom}
         onProductSearchChange={handleAddProductSearchChange}
         onProductSelect={handleAddProductSelect}
         onQuantityChange={setAddProductQuantity}
-        onUomChange={setAddProductUom}
         onConfirm={() => void handleAddProductConfirm()}
         onCancel={closeAddProductTask}
       />

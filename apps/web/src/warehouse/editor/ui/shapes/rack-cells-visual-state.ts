@@ -140,6 +140,19 @@ function mapRuntimeStatusToFill(runtimeStatus: RuntimeStatus): CellFillSemantic 
   }
 }
 
+/** Runtime statuses that represent exceptional operational state and should
+ *  override physical occupancy data. Normal states (stocked, empty) are
+ *  superseded by the canonical occupiedCellIds derived from location occupancy. */
+const EXCEPTIONAL_RUNTIME_STATUSES: ReadonlySet<string> = new Set([
+  'pick_active',
+  'reserved',
+  'quarantined'
+]);
+
+function isExceptionalRuntimeStatus(status: string | null): boolean {
+  return status !== null && EXCEPTIONAL_RUNTIME_STATUSES.has(status);
+}
+
 function resolveCanonicalSemantics(inputs: CellVisualInputs): CellCanonicalSemantics {
   const invalidTarget =
     inputs.isWorkflowScope &&
@@ -150,10 +163,13 @@ function resolveCanonicalSemantics(inputs: CellVisualInputs): CellCanonicalSeman
     inputs.runtimeStatus === null &&
     inputs.isOccupiedByFallback;
 
-  if (inputs.runtimeStatus !== null) {
+  // Exceptional runtime states (pick_active, reserved, quarantined) always win.
+  // Normal runtime states (stocked, empty) defer to occupiedCellIds fallback
+  // so that Move/Remove/Add mutation results are reflected immediately.
+  if (isExceptionalRuntimeStatus(inputs.runtimeStatus)) {
     return {
       base: inputs.hasCellIdentity ? 'frame' : 'missing-identity',
-      fill: mapRuntimeStatusToFill(inputs.runtimeStatus),
+      fill: mapRuntimeStatusToFill(inputs.runtimeStatus!),
       interaction: {
         selected: inputs.isSelected,
         locateTarget: inputs.isLocateTarget,

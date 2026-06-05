@@ -1585,13 +1585,14 @@ describe('StorageInspectorV2 task flows', () => {
     act(() => {
       root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
     });
-    act(() => {
-      root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
-    });
 
     await act(async () => {
       root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainerWithProduct') }).props.onClick();
     });
+
+    expect(mockAddInventoryItem).toHaveBeenCalledWith(
+      expect.objectContaining({ uom: 'PCS' })
+    );
 
     const occupancyCalls = mockSetQueryData.mock.calls.filter(
       (call: unknown[]) => JSON.stringify(call[0]) === JSON.stringify(occupancyKey)
@@ -1825,7 +1826,7 @@ describe('StorageInspectorV2 task flows', () => {
     expect(mockAddInventoryToContainerMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('keeps submit disabled until explicit product selection, quantity > 0, and non-empty UOM', () => {
+  it('keeps submit disabled until explicit product selection and quantity > 0', () => {
     mockProductsSearchResults = [
       {
         id: '11111111-1111-1111-1111-111111111111',
@@ -1878,20 +1879,12 @@ describe('StorageInspectorV2 task flows', () => {
     act(() => {
       renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '0' } });
     });
-    act(() => {
-      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
-    });
     expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(true);
 
     act(() => {
       renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
     });
     expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(false);
-
-    act(() => {
-      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: '   ' } });
-    });
-    expect(renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.disabled).toBe(true);
   });
 
   it('successful add-product flow keeps same container-detail context and shows refreshed inventory', async () => {
@@ -1964,9 +1957,6 @@ describe('StorageInspectorV2 task flows', () => {
     act(() => {
       renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
     });
-    act(() => {
-      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
-    });
 
     await act(async () => {
       renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') }).props.onClick();
@@ -1976,7 +1966,7 @@ describe('StorageInspectorV2 task flows', () => {
       containerId: 'c-1',
       productId: '11111111-1111-1111-1111-111111111111',
       quantity: 3,
-      uom: 'EA'
+      uom: 'PCS'
     });
     expect(mockRefetchQueries).toHaveBeenCalledWith({
       queryKey: ['location', 'storage', 'loc-1'],
@@ -1991,7 +1981,7 @@ describe('StorageInspectorV2 task flows', () => {
     const text = flattenText(renderer.toJSON());
     expect(text).toContain('C-001');
     expect(text).not.toContain(translate('storage.state.emptyContainer'));
-    expect(text).toContain('3 EA');
+    expect(text).toContain('3 יח׳');
   });
 
   it('aborts empty-only flow honestly when container is no longer empty at submit check', async () => {
@@ -2048,9 +2038,6 @@ describe('StorageInspectorV2 task flows', () => {
     });
     act(() => {
       renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '2' } });
-    });
-    act(() => {
-      renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') }).props.onChange({ target: { value: 'EA' } });
     });
 
     await act(async () => {
@@ -2112,6 +2099,214 @@ describe('StorageInspectorV2 task flows', () => {
     const text = flattenText(renderer.toJSON());
     expect(text).toContain(translate('storage.field.currentContainers'));
     expect(text).not.toContain('Add product to C-001');
+  });
+
+  it('create-with-product panel displays fixed PCS/* label instead of editable UOM input', () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') }).props.onClick();
+    });
+
+    const uomElement = root.findByProps({ 'aria-label': translate('storage.field.uom') });
+    // Must be a div (not an input), showing PCS
+    expect(uomElement.type).toBe('div');
+    expect(flattenText(renderer.toJSON())).toContain('יח׳');
+  });
+
+  it('create-with-product submits canonical PCS uom', async () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockCreateContainer.mockResolvedValue({ containerId: 'created-container' });
+    mockPlaceContainer.mockResolvedValue({ ok: true });
+    mockAddInventoryItem.mockResolvedValue({ ok: true });
+
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.containerType') }).props.onChange({ target: { value: 'type-1' } });
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Product' } });
+    });
+    act(() => {
+      root.findAllByProps({ role: 'option' })[0].props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '3' } });
+    });
+
+    await act(async () => {
+      root.findByProps({ 'aria-label': translate('storage.action.confirmCreateContainerWithProduct') }).props.onClick();
+    });
+
+    expect(mockAddInventoryItem).toHaveBeenCalledWith(
+      expect.objectContaining({ uom: 'PCS' })
+    );
+  });
+
+  it('add-product panel displays fixed PCS/* label instead of editable UOM input', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+
+    const uomElement = renderer.root.findByProps({ 'aria-label': translate('storage.field.uom') });
+    expect(uomElement.type).toBe('div');
+    expect(flattenText(renderer.toJSON())).toContain('יח׳');
+  });
+
+  it('editable UOM input is absent from create-with-product and add-product forms', () => {
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    const root = renderer.root;
+
+    // Open create-with-product
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.action.createContainerWithProductAtLocation') }).props.onClick();
+    });
+    // The UOM element must be a div, not an input
+    const createUom = root.findByProps({ 'aria-label': translate('storage.field.uom') });
+    expect(createUom.type).not.toBe('input');
+    expect(createUom.type).toBe('div');
+
+    // Go back, open add-product
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.action.cancelCreateContainerWithProduct') }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
+    });
+    act(() => {
+      root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+    const addUom = root.findByProps({ 'aria-label': translate('storage.field.uom') });
+    expect(addUom.type).not.toBe('input');
+    expect(addUom.type).toBe('div');
+  });
+
+  it('existing quantity validation remains intact for add-product', () => {
+    mockProductsSearchResults = [
+      {
+        id: '11111111-1111-1111-1111-111111111111',
+        sku: 'SKU-1',
+        name: 'Product One',
+        source: 'catalog',
+        externalProductId: 'SKU-1',
+        permalink: null,
+        imageUrls: [],
+        imageFiles: [],
+        isActive: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    ];
+    mockStorageRows = [
+      {
+        locationCode: 'LOC-01',
+        locationType: 'rack_slot',
+        containerId: 'c-1',
+        containerStatus: 'stored',
+        systemCode: 'C-001',
+        externalCode: null,
+        containerType: 'pallet',
+        itemRef: null,
+        quantity: null,
+        uom: null
+      }
+    ];
+
+    const renderer = renderInspector(createWorkspace());
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': translate('storage.inspector.viewContainer', { containerCode: 'C-001' }) }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'data-testid': 'add-product-action' }).props.onClick();
+    });
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.product') }).props.onChange({ target: { value: 'Prod' } });
+    });
+    act(() => {
+      renderer.root.findAllByProps({ role: 'option' })[0].props.onClick();
+    });
+
+    const submit = () => renderer.root.findByProps({ 'aria-label': translate('storage.action.confirmAddProductToContainer') });
+
+    // Quantity empty / zero → disabled
+    expect(submit().props.disabled).toBe(true);
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '0' } });
+    });
+    expect(submit().props.disabled).toBe(true);
+
+    // Quantity > 0 → enabled (UOM is always PCS, no separate check needed)
+    act(() => {
+      renderer.root.findByProps({ 'aria-label': translate('storage.field.quantity') }).props.onChange({ target: { value: '5' } });
+    });
+    expect(submit().props.disabled).toBe(false);
   });
 });
 
@@ -3176,6 +3371,120 @@ describe('StorageInspectorV2 contents action flows', () => {
     expect(flattenText(renderer.toJSON())).toContain(translate('storage.swap.targetEmpty'));
     expect(renderer.root.findByProps({ 'data-testid': 'swap-confirm-button' }).props.disabled).toBe(true);
     expect(mockSwapContainers).not.toHaveBeenCalled();
+  });
+  describe('legacy UOM display normalization', () => {
+    function setupNormalizationTest(rawUom: string | null) {
+      resetStorageFocusForTest();
+      act(() => {
+        useStorageFocusStore.getState().selectCell({ cellId: 'cell-1', rackId: 'rack-1', level: 1 });
+      });
+      mockPublishedCells = [
+        { id: 'cell-1', rackId: 'rack-1', address: { raw: '01-A.01.01', parts: { level: 1 } } }
+      ];
+      mockLocationRef = { locationId: 'loc-1', locationCode: 'LOC-01', locationType: 'rack_slot' };
+      mockStorageRows = [
+        {
+          locationCode: 'LOC-01',
+          locationType: 'rack_slot',
+          containerId: 'source-container',
+          inventoryUnitId: 'iu-1',
+          containerStatus: 'active',
+          systemCode: 'C-001',
+          externalCode: null,
+          containerType: 'pallet',
+          itemRef: 'product:sku-1',
+          quantity: 5,
+          uom: rawUom,
+          product: { id: 'product-1', sku: 'SKU-1', name: 'Widget', isActive: true }
+        }
+      ];
+      mockStorageContainers = [
+        {
+          id: 'source-container',
+          tenantId: 'tenant-1',
+          systemCode: 'C-001',
+          externalCode: null,
+          containerTypeId: 'type-1',
+          status: 'active',
+          operationalRole: 'storage',
+          createdAt: '',
+          createdBy: null
+        },
+        {
+          id: 'target-container',
+          tenantId: 'tenant-1',
+          systemCode: 'C-002',
+          externalCode: null,
+          containerTypeId: 'type-1',
+          status: 'active',
+          operationalRole: 'storage',
+          createdAt: '',
+          createdBy: null
+        }
+      ];
+      mockContainerTypes = [
+        { id: 'type-1', code: 'PLT', description: 'Pallet', supportsStorage: true, supportsPicking: false }
+      ];
+    }
+
+    it.each([
+      ['EA', 'PCS'],
+      ['pcs', 'PCS'],
+      ['PCs', 'PCS'],
+      ['PCS', 'PCS'],
+      ['יח', 'PCS']
+    ])('transfer panel source summary normalizes legacy UOM "%s" to "%s"', (legacyUom, _expected) => {
+      setupNormalizationTest(legacyUom);
+      const renderer = renderInspector(createWorkspace());
+      openContainerDetail(renderer.root);
+      act(() => {
+        renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' }).props.onClick();
+      });
+      const text = flattenText(renderer.toJSON());
+      expect(text).toContain('יח׳');
+    });
+
+    it.each([
+      ['EA', 'PCS'],
+      ['pcs', 'PCS'],
+      ['PCs', 'PCS'],
+      ['PCS', 'PCS'],
+      ['יח', 'PCS']
+    ])('extract panel source summary normalizes legacy UOM "%s" to "%s"', (legacyUom, _expected) => {
+      setupNormalizationTest(legacyUom);
+      const renderer = renderInspector(createWorkspace());
+      openContainerDetail(renderer.root);
+      act(() => {
+        renderer.root.findByProps({ 'data-testid': 'extract-quantity-action' }).props.onClick();
+      });
+      const text = flattenText(renderer.toJSON());
+      expect(text).toContain('יח׳');
+    });
+
+    it.each([
+      ['EA', 'PCS'],
+      ['pcs', 'PCS'],
+      ['PCs', 'PCS'],
+      ['PCS', 'PCS'],
+      ['יח', 'PCS']
+    ])('container-detail inventory item normalized legacy UOM "%s" to "%s"', (legacyUom, _expected) => {
+      setupNormalizationTest(legacyUom);
+      const renderer = renderInspector(createWorkspace());
+      openContainerDetail(renderer.root);
+      const text = flattenText(renderer.toJSON());
+      expect(text).toContain('5 יח׳');
+    });
+
+    it('passes through unknown legacy UOM as-is in transfer panel', () => {
+      setupNormalizationTest('BOX');
+      const renderer = renderInspector(createWorkspace());
+      openContainerDetail(renderer.root);
+      act(() => {
+        renderer.root.findByProps({ 'data-testid': 'transfer-to-container-action' }).props.onClick();
+      });
+      const text = flattenText(renderer.toJSON());
+      expect(text).toContain('BOX');
+    });
   });
 });
 

@@ -1,5 +1,6 @@
 import type { LocationStorageSnapshotRow, StoragePreset } from '@wos/domain';
-import { useT } from '@/shared/i18n';
+import { useI18n, useT } from '@/shared/i18n';
+import { resolveUomPresentation } from '@/shared/uom';
 import {
   InspectorFooter,
   inspectorRowCardClassName,
@@ -107,6 +108,7 @@ export function ContainerDetailPanel({
   onOpenSwapContainerTask,
   onOpenRemoveContainerTask
 }: ContainerDetailPanelProps) {
+  const { locale } = useI18n();
   const t = useT();
 
   return (
@@ -279,7 +281,7 @@ export function ContainerDetailPanel({
               {items.map((row, idx) => {
                 const label = row.product?.name ?? row.product?.sku ?? row.itemRef ?? '-';
                 const qty = row.quantity ?? 0;
-                const uom = row.uom ?? '';
+                const uom = resolveUomPresentation(row.uom, locale);
                 return (
                   <div key={`${row.containerId}-${row.inventoryUnitId ?? row.itemRef ?? idx}`} className={inspectorRowCardClassName}>
                     <div className="min-w-0 flex-1 text-xs text-gray-600">

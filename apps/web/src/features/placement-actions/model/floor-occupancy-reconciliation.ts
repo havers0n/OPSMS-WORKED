@@ -85,8 +85,9 @@ export function applyFloorOccupancyReconciliation(
   floorId: string,
   reconciliation: FloorOccupancyReconciliation
 ) {
+  const queryKey = locationKeys.occupancyByFloor(floorId);
   queryClient.setQueryData<LocationOccupancyRow[]>(
-    locationKeys.occupancyByFloor(floorId),
+    queryKey,
     (current = []) => reconcileFloorOccupancyRows(current, reconciliation)
   );
 }

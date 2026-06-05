@@ -56,12 +56,13 @@ function createInputs(overrides: Partial<CellVisualInputs> = {}): CellVisualInpu
 
 describe('rack-cells-visual-state PR4 paint normalization', () => {
   it.each([
-    { runtimeStatus: 'empty' as const, fill: 'empty', paintFill: palette.emptyFill },
-    { runtimeStatus: 'stocked' as const, fill: 'occupied', paintFill: palette.occupiedFill },
+    // stocked and empty are normal states — they defer to occupiedCellIds
+    // fallback when isOccupiedByFallback is true (used below).
+    { runtimeStatus: 'stocked' as const, fill: 'occupied', paintFill: palette.occupiedFill, expectFallback: true },
     { runtimeStatus: 'reserved' as const, fill: 'reserved', paintFill: palette.reservedFill },
     { runtimeStatus: 'pick_active' as const, fill: 'pick-active', paintFill: palette.pickActiveFill },
     { runtimeStatus: 'quarantined' as const, fill: 'quarantined', paintFill: palette.quarantinedFill }
-  ])('maps runtime truth $runtimeStatus to canonical fill $fill', ({ runtimeStatus, fill, paintFill }) => {
+  ])('maps runtime truth $runtimeStatus to canonical fill $fill', ({ runtimeStatus, fill, paintFill, expectFallback }) => {
     const state = resolveCellVisualState(
       createInputs({
         runtimeStatus,
@@ -72,12 +73,23 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
 
     expect(state.semantics.base).toBe('frame');
     expect(state.semantics.fill).toBe(fill);
-    expect(state.semantics.truth).toEqual({
-      isDegraded: false,
-      isUnknown: false,
-      source: 'runtime'
-    });
-    expect(state.flags.fillSource).toBe('runtime');
+    if (expectFallback) {
+      // Normal runtime states (stocked) defer to physical occupancy fallback
+      expect(state.semantics.truth).toEqual({
+        isDegraded: true,
+        isUnknown: false,
+        source: 'fallback'
+      });
+      expect(state.flags.fillSource).toBe('fallback');
+    } else {
+      // Exceptional runtime states (pick_active, reserved, quarantined) still use runtime
+      expect(state.semantics.truth).toEqual({
+        isDegraded: false,
+        isUnknown: false,
+        source: 'runtime'
+      });
+      expect(state.flags.fillSource).toBe('runtime');
+    }
     expect(state.fill).toBe(paintFill);
     expect(state.surface.fill).toBe(paintFill);
     expect(state.surface.pattern).toEqual(
@@ -93,7 +105,16 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
           }
         : undefined
     );
-    expect(state.truthMarker).toBeNull();
+    if (expectFallback) {
+      // Normal runtime state (stocked) defers to fallback → shows degraded truth marker
+      // The degraded marker uses palette stroke color (surfacePaint.stroke)
+      expect(state.truthMarker).toEqual({
+        kind: 'degraded',
+        color: palette.occupiedStroke
+      });
+    } else {
+      expect(state.truthMarker).toBeNull();
+    }
   });
 
   it('degrades fallback occupancy only to canonical occupied fill and a truth marker', () => {
@@ -294,6 +315,104 @@ describe('rack-cells-visual-state PR4 paint normalization', () => {
     }).toEqual({
       base: storageState.semantics.base,
       fill: storageState.semantics.fill
+    });
+  });
+
+  describe('stale runtime vs physical occupancy resolution', () => {
+    it('stale runtime stocked but occupiedCellIds excludes cell → renders empty (no fill, source none)', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: 'stocked',
+          isOccupiedByFallback: false
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBeNull();
+      expect(state.semantics.truth.source).toBe('none');
+      expect(state.flags.fillSource).toBe('none');
+      expect(state.flags.hasFill).toBe(false);
+      expect(state.fill).toBe(palette.baseFill);
+    });
+
+    it('stale runtime empty but occupiedCellIds includes cell → renders occupied (fallback source)', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: 'empty',
+          isOccupiedByFallback: true
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBe('occupied');
+      expect(state.semantics.truth.source).toBe('fallback');
+      expect(state.flags.fillSource).toBe('fallback');
+      expect(state.flags.isDegradedFill).toBe(true);
+      expect(state.fill).toBe(palette.occupiedFill);
+    });
+
+    it('runtime status stocked with occupiedCellIds included → renders occupied (fallback source)', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: 'stocked',
+          isOccupiedByFallback: true
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBe('occupied');
+      expect(state.semantics.truth.source).toBe('fallback');
+      expect(state.flags.fillSource).toBe('fallback');
+      expect(state.fill).toBe(palette.occupiedFill);
+    });
+
+    it('exceptional runtime pick_active still overrides physical occupancy', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: 'pick_active',
+          isOccupiedByFallback: false
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBe('pick-active');
+      expect(state.semantics.truth.source).toBe('runtime');
+      expect(state.fill).toBe(palette.pickActiveFill);
+    });
+
+    it('exceptional runtime reserved still overrides physical occupancy', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: 'reserved',
+          isOccupiedByFallback: false
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBe('reserved');
+      expect(state.semantics.truth.source).toBe('runtime');
+      expect(state.fill).toBe(palette.reservedFill);
+    });
+
+    it('exceptional runtime quarantined still overrides physical occupancy', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: 'quarantined',
+          isOccupiedByFallback: false
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBe('quarantined');
+      expect(state.semantics.truth.source).toBe('runtime');
+      expect(state.fill).toBe(palette.quarantinedFill);
+    });
+
+    it('no runtime and no fallback → empty (source none)', () => {
+      const state = resolveCellVisualState(
+        createInputs({
+          runtimeStatus: null,
+          isOccupiedByFallback: false
+        }),
+        palette
+      );
+      expect(state.semantics.fill).toBeNull();
+      expect(state.semantics.truth.source).toBe('none');
+      expect(state.fill).toBe(palette.baseFill);
     });
   });
 

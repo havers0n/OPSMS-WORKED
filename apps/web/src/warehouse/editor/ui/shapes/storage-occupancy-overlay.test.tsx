@@ -12,6 +12,7 @@ import type { CanvasDiagnosticsFlags } from '../canvas-diagnostics';
 import {
   getStorageOccupancyOverlaySurfaceRect,
   getStorageOccupancyOverlayLod,
+  resolveStatus,
   StorageOccupancyOverlay
 } from './storage-occupancy-overlay';
 
@@ -351,6 +352,108 @@ describe('getStorageOccupancyOverlaySurfaceRect', () => {
   });
 });
 
+describe('resolveStatus', () => {
+  const _occupiedCellIds = new Set(['cell-occupied']);
+  const cellRuntimeById = new Map<string, OperationsCellRuntime>([
+    ['cell-stocked', { cellId: 'cell-stocked', cellAddress: 'A.01.01.01', status: 'stocked', pickActive: true, reserved: false, quarantined: false, stocked: true, containerCount: 1, totalQuantity: 10, containers: [] }],
+    ['cell-empty', { cellId: 'cell-empty', cellAddress: 'A.01.01.02', status: 'empty', pickActive: false, reserved: false, quarantined: false, stocked: false, containerCount: 0, totalQuantity: 0, containers: [] }],
+    ['cell-pick-active', { cellId: 'cell-pick-active', cellAddress: 'A.01.01.03', status: 'pick_active', pickActive: true, reserved: false, quarantined: false, stocked: true, containerCount: 1, totalQuantity: 5, containers: [] }],
+    ['cell-reserved', { cellId: 'cell-reserved', cellAddress: 'A.01.01.04', status: 'reserved', pickActive: false, reserved: true, quarantined: false, stocked: false, containerCount: 0, totalQuantity: 0, containers: [] }],
+    ['cell-quarantined', { cellId: 'cell-quarantined', cellAddress: 'A.01.01.05', status: 'quarantined', pickActive: false, reserved: false, quarantined: true, stocked: false, containerCount: 0, totalQuantity: 0, containers: [] }]
+  ]);
+
+  it('stale runtime stocked but occupiedCellIds excludes source → empty', () => {
+    const result = resolveStatus({
+      cellId: 'cell-stocked',
+      occupiedCellIds: new Set(),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('empty');
+    expect(result.hasRuntimeTruth).toBe(false);
+  });
+
+  it('runtime empty but occupiedCellIds includes target → occupied (fallback)', () => {
+    const result = resolveStatus({
+      cellId: 'cell-empty',
+      occupiedCellIds: new Set(['cell-empty']),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('occupied');
+    expect(result.hasRuntimeTruth).toBe(false);
+  });
+
+  it('runtime stocked with occupiedCellIds includes cell → occupied (fallback)', () => {
+    const result = resolveStatus({
+      cellId: 'cell-stocked',
+      occupiedCellIds: new Set(['cell-stocked']),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('occupied');
+    expect(result.hasRuntimeTruth).toBe(false);
+  });
+
+  it('runtime empty and no fallback → empty', () => {
+    const result = resolveStatus({
+      cellId: 'cell-empty',
+      occupiedCellIds: new Set(),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('empty');
+    expect(result.hasRuntimeTruth).toBe(false);
+  });
+
+  it('exceptional runtime pick_active still overrides physical occupancy', () => {
+    const result = resolveStatus({
+      cellId: 'cell-pick-active',
+      occupiedCellIds: new Set(),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('pick_active');
+    expect(result.hasRuntimeTruth).toBe(true);
+  });
+
+  it('exceptional runtime reserved still overrides physical occupancy', () => {
+    const result = resolveStatus({
+      cellId: 'cell-reserved',
+      occupiedCellIds: new Set(),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('reserved');
+    expect(result.hasRuntimeTruth).toBe(true);
+  });
+
+  it('exceptional runtime quarantined still overrides physical occupancy with warning', () => {
+    const result = resolveStatus({
+      cellId: 'cell-quarantined',
+      occupiedCellIds: new Set(),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('quarantined');
+    expect(result.hasRuntimeTruth).toBe(true);
+    expect(result.hasWarning).toBe(true);
+  });
+
+  it('no runtime and no fallback → empty', () => {
+    const result = resolveStatus({
+      cellId: 'unknown-cell',
+      occupiedCellIds: new Set(),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('empty');
+    expect(result.hasRuntimeTruth).toBe(false);
+  });
+
+  it('no runtime and occupiedCellIds includes → occupied (fallback)', () => {
+    const result = resolveStatus({
+      cellId: 'occupied-cell',
+      occupiedCellIds: new Set(['occupied-cell']),
+      cellRuntimeById
+    });
+    expect(result.status).toBe('occupied');
+    expect(result.hasRuntimeTruth).toBe(false);
+  });
+});
+
 describe('StorageOccupancyOverlay', () => {
   it('renders active occupancy marks at storage overview zoom while RackCells would be gated', () => {
     const renderer = renderOverlay({ zoom: 0.6 });
@@ -365,6 +468,7 @@ describe('StorageOccupancyOverlay', () => {
     expect(shapes[0]?.props.overlayLod).toBe('cell-compact');
     expect(shapes[0]?.props.cells.map((cell: { cellId: string }) => cell.cellId)).toEqual([
       'cell-1',
+      'cell-2',
       'cell-3'
     ]);
     expect(
@@ -375,7 +479,11 @@ describe('StorageOccupancyOverlay', () => {
         })
       )
     ).toEqual([
+      // cell-1: no runtime, occupiedCellIds includes → occupied fallback
       { status: 'occupied', hasRuntimeTruth: false },
+      // cell-2: runtime empty defers to occupiedCellIds fallback
+      { status: 'occupied', hasRuntimeTruth: false },
+      // cell-3: exceptional runtime pick_active overrides
       { status: 'pick_active', hasRuntimeTruth: true }
     ]);
     expect(renderer.root.findAll((node) => String(node.type) === 'Text')).toHaveLength(0);
@@ -388,7 +496,7 @@ describe('StorageOccupancyOverlay', () => {
     ).toHaveLength(0);
   });
 
-  it('does not render heavy overlay marks for empty cells', () => {
+  it('renders physical occupancy marks for all occupied cells even when runtime is stale', () => {
     const renderer = renderOverlay({
       occupiedCellIds: new Set(['cell-1', 'cell-2', 'cell-3']),
       cellRuntimeById: new Map([
@@ -400,8 +508,13 @@ describe('StorageOccupancyOverlay', () => {
     const shapes = getStorageShapes(renderer);
 
     expect(shapes).toHaveLength(1);
-    expect(shapes[0]?.props.cells).toMatchObject([
-      { cellId: 'cell-2', status: 'stocked' }
+    // All three cells are physically occupied via occupiedCellIds.
+    // Normal runtime states (stocked, empty) defer to physical occupancy,
+    // so all show as occupied (fallback) rather than their stale runtime status.
+    expect(shapes[0]?.props.cells.map((c: { cellId: string; status: string }) => ({ cellId: c.cellId, status: c.status }))).toEqual([
+      { cellId: 'cell-1', status: 'occupied' },
+      { cellId: 'cell-2', status: 'occupied' },
+      { cellId: 'cell-3', status: 'occupied' }
     ]);
   });
 
