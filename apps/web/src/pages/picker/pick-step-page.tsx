@@ -137,8 +137,9 @@ function PickStepScreen({
                 {qtyPicked}
               </div>
               <button
-                onClick={() => onQtyChange(qtyPicked + 1)}
-                className="w-14 h-14 flex items-center justify-center bg-white rounded-xl shadow-sm border border-gray-200 text-gray-700 active:bg-gray-100"
+                onClick={() => onQtyChange(Math.min(step.qtyRequired, qtyPicked + 1))}
+                disabled={qtyPicked >= step.qtyRequired}
+                className="w-14 h-14 flex items-center justify-center bg-white rounded-xl shadow-sm border border-gray-200 text-gray-700 active:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="pick-step-qty-increase"
               >
                 <Plus className="w-6 h-6" />

@@ -309,7 +309,7 @@ describe('PickStepPage', () => {
     });
   });
 
-  it('qty stepper increments and decrements without going below 0', async () => {
+  it('qty stepper increments and decrements without going below 0 or above qtyRequired', async () => {
     vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
 
     renderPickStepPage();
@@ -323,20 +323,40 @@ describe('PickStepPage', () => {
     // initial value equals qtyRequired (3)
     expect(value()).toBe('3');
 
+    // increment is clamped at qtyRequired
     fireEvent.click(increase);
-    expect(value()).toBe('4');
+    expect(value()).toBe('3');
 
     fireEvent.click(decrease);
-    expect(value()).toBe('3');
+    expect(value()).toBe('2');
 
     // drive to 0 then try to go below
     fireEvent.click(decrease);
     fireEvent.click(decrease);
-    fireEvent.click(decrease);
     expect(value()).toBe('0');
 
     fireEvent.click(decrease);
     expect(value()).toBe('0');
+  });
+
+  it('increase button is disabled when qtyPicked reaches qtyRequired', async () => {
+    vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
+
+    renderPickStepPage();
+
+    await waitFor(() => expect(screen.getByTestId('pick-step-qty-value')).toBeTruthy());
+
+    // initial qtyPicked = qtyRequired = 3, so + button should be disabled
+    const increase = screen.getByTestId('pick-step-qty-increase') as HTMLButtonElement;
+    expect(increase.disabled).toBe(true);
+
+    // decrease to 2, button should be enabled again
+    fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));
+    expect(increase.disabled).toBe(false);
+
+    // increase back to 3, button should be disabled again
+    fireEvent.click(increase);
+    expect(increase.disabled).toBe(true);
   });
 
   it('confirm calls API with current qtyPicked and workerId', async () => {
@@ -347,9 +367,6 @@ describe('PickStepPage', () => {
 
     await waitFor(() => expect(screen.getByTestId('pick-step-confirm')).toBeTruthy());
 
-    // Increment once so qty = 4
-    fireEvent.click(screen.getByTestId('pick-step-qty-increase'));
-
     fireEvent.click(screen.getByTestId('pick-step-confirm'));
 
     await waitFor(() => {
@@ -357,7 +374,7 @@ describe('PickStepPage', () => {
         taskId: TASK_ID,
         stepId: STEP_ID_1,
         workerId: WORKER_ID,
-        qtyPicked: 4,
+        qtyPicked: 3,
       });
     });
   });

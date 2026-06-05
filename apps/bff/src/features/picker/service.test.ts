@@ -43,6 +43,7 @@ function createPickerRepoMock(): PickerRepo {
       id: ids.stepA,
       task_id: ids.task,
       tenant_id: ids.tenant,
+      qty_required: 5,
       qty_picked: 0,
       status: 'pending'
     })),
@@ -200,6 +201,33 @@ describe('picker service', () => {
     })).rejects.toBeInstanceOf(ApiError);
   });
 
+  it('rejects overpick when qtyPicked exceeds qtyRequired', async () => {
+    const pickerRepo = createPickerRepoMock();
+    const manualRepo = createManualRepoMock();
+    (pickerRepo.findStepForTask as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: ids.stepA,
+      task_id: ids.task,
+      tenant_id: ids.tenant,
+      qty_required: 3,
+      qty_picked: 0,
+      status: 'pending'
+    });
+
+    const service = createPickerService(pickerRepo, manualRepo);
+
+    await expect(
+      service.confirmStep({
+        tenantId: ids.tenant,
+        workerId: ids.worker,
+        taskId: ids.task,
+        stepId: ids.stepA,
+        qtyPicked: 4
+      })
+    ).rejects.toMatchObject({ code: 'PICK_STEP_QTY_EXCEEDS_REQUIRED' });
+
+    expect(pickerRepo.markStepPicked).not.toHaveBeenCalled();
+  });
+
   it('confirm step updates qtyPicked and marks step picked', async () => {
     const pickerRepo = createPickerRepoMock();
     const manualRepo = createManualRepoMock();
@@ -290,6 +318,7 @@ describe('picker service', () => {
       id: ids.stepA,
       task_id: ids.task,
       tenant_id: ids.tenant,
+      qty_required: 5,
       qty_picked: 2,
       status: 'picked'
     });
@@ -321,6 +350,7 @@ describe('picker service', () => {
       id: ids.stepA,
       task_id: ids.task,
       tenant_id: ids.tenant,
+      qty_required: 5,
       qty_picked: 2,
       status: 'picked'
     });
