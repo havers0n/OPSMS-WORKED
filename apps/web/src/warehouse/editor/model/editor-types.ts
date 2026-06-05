@@ -2,6 +2,8 @@ export type EditorMode = 'select' | 'place' | 'draw-zone' | 'draw-wall';
 
 /** Top-level editing perspective — controls which tools, overlays and inspector sections are active */
 export type ViewMode = 'view' | 'storage' | 'layout';
+export type NonLayoutViewMode = 'view' | 'storage';
+export type LayoutInteractionMode = 'preview' | 'editing';
 export type ViewStage = 'map' | 'picking-plan' | 'route-graph' | 'obstacle-route';
 export type RackSideFocus = 'north' | 'east' | 'south' | 'west';
 export type ObjectWorkContext = 'geometry' | 'structure' | 'addressing' | 'face-mode';

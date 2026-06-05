@@ -57,29 +57,27 @@ describe('ViewModeSwitcher view stages', () => {
       renderer = TestRenderer.create(createElement(ViewModeSwitcher));
     });
 
+    // After PR1 default viewMode is 'view', so ViewStageSwitcher is rendered.
+    // For the initial state we need to explicitly set view to test stage rendering.
     const mapLabel = translate('warehouse.view.stage.map');
     const pickingPlanLabel = translate('warehouse.view.stage.pickingPlan');
     const routeGraphLabel = translate('warehouse.view.stage.routeGraph');
     const obstacleRouteLabel = translate('warehouse.view.stage.obstacleRoute');
     let text = collectText(renderer!.toJSON());
-    expect(text).not.toContain(mapLabel);
-    expect(text).not.toContain(pickingPlanLabel);
-    expect(text).not.toContain(routeGraphLabel);
-    expect(text).not.toContain(obstacleRouteLabel);
-    expect(text).not.toContain('Plan picking');
-    expect(text).not.toContain('Plan wave');
-
-    act(() => {
-      warehouseViewModeActions.setViewMode('view');
-    });
-
-    text = collectText(renderer!.toJSON());
     expect(text).toContain(mapLabel);
     expect(text).toContain(pickingPlanLabel);
     expect(text).not.toContain(routeGraphLabel);
     expect(text).not.toContain(obstacleRouteLabel);
     expect(text).not.toContain('Plan picking');
     expect(text).not.toContain('Plan wave');
+
+    act(() => {
+      warehouseViewModeActions.setViewMode('storage');
+    });
+
+    text = collectText(renderer!.toJSON());
+    expect(text).not.toContain(mapLabel);
+    expect(text).not.toContain(pickingPlanLabel);
   });
 
   it('keeps routing tool substages hidden even for admins/dev-capable users', () => {
@@ -103,7 +101,6 @@ describe('ViewModeSwitcher view stages', () => {
   it('updates the active View stage without changing the top-level mode', () => {
     act(() => {
       warehouseViewModeActions.reset();
-      warehouseViewModeActions.setViewMode('view');
     });
 
     act(() => {
@@ -127,7 +124,6 @@ describe('ViewModeSwitcher view stages', () => {
   it('resets a hidden routing tool stage to map', () => {
     act(() => {
       warehouseViewModeActions.reset();
-      warehouseViewModeActions.setViewMode('view');
       warehouseViewModeActions.setViewStage('route-graph');
     });
 
@@ -142,7 +138,6 @@ describe('ViewModeSwitcher view stages', () => {
   it('resets View stage to map when switching away from View mode', () => {
     act(() => {
       warehouseViewModeActions.reset();
-      warehouseViewModeActions.setViewMode('view');
       warehouseViewModeActions.setViewStage('route-graph');
     });
 

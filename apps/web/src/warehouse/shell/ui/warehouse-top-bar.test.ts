@@ -110,6 +110,8 @@ function resetStores() {
   warehouseViewModeActions.reset();
   warehouseInteractionActions.resetAll();
   warehouseLayoutDraftActions.resetDraft();
+  warehouseViewModeActions.enterLayoutPreview();
+  warehouseViewModeActions.startLayoutEditing();
 }
 
 function collectText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.ReactTestRendererJSON[] | null): string {

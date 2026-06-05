@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveRackFaceSections, type FloorWorkspace, type LayoutDraft } from '@wos/domain';
 import { createLayoutDraftFixture } from '../model/__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/warehouse/editor/model/editor-store';
@@ -26,7 +26,8 @@ vi.mock('@/features/layout-draft-save/model/use-create-layout-draft', () => ({
 function resetStores() {
   useModeStore.setState({
     viewMode: 'layout',
-    editorMode: 'select'
+    editorMode: 'select',
+    layoutInteractionMode: 'editing'
   });
 
   useInteractionStore.setState({
@@ -196,10 +197,12 @@ function isRoleButtonActive(button: TestRenderer.ReactTestInstance) {
   return typeof button.props.className === 'string' && button.props.className.includes('ring-1 ring-black/5');
 }
 
+beforeEach(() => {
+  resetStores();
+});
+
 afterEach(() => {
   resetStores();
-  createDraftMutationMock.isPending = false;
-  vi.clearAllMocks();
 });
 
 describe('RackInspector tasks', () => {

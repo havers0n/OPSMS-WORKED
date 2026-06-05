@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FloorWorkspace } from '@wos/domain';
 import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import { useEditorStore } from '@/warehouse/editor/model/editor-store';
@@ -22,7 +22,8 @@ vi.mock('./inspector-surface', () => ({
 function resetStores() {
   useModeStore.setState({
     viewMode: 'layout',
-    editorMode: 'select'
+    editorMode: 'select',
+    layoutInteractionMode: 'editing'
   });
 
   useInteractionStore.setState({
@@ -66,6 +67,10 @@ function renderSlot(workspace: FloorWorkspace = createWorkspace()) {
   });
   return renderer;
 }
+
+beforeEach(() => {
+  resetStores();
+});
 
 afterEach(() => {
   resetStores();

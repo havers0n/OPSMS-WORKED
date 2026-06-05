@@ -55,6 +55,8 @@ function resetStores() {
   warehouseInteractionActions.resetAll();
   resetStorageFocusStore();
   warehouseLayoutDraftActions.resetDraft();
+  warehouseViewModeActions.enterLayoutPreview();
+  warehouseViewModeActions.startLayoutEditing();
 }
 
 function deferred<T>() {

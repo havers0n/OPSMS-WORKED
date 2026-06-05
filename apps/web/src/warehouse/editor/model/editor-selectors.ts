@@ -13,6 +13,7 @@ import {
   type RackSelectionFocus
 } from './editor-types';
 import {
+  canEditLayoutGeometry,
   isLayoutEditModeEditable,
   resolveLayoutEditMode,
   resolveLayoutReadOnlyReason,
@@ -29,6 +30,10 @@ const BODY_RACK_FOCUS: RackSelectionFocus = { type: 'body' };
 
 export const useViewMode = () => useModeStore((state) => state.viewMode);
 export const useSetViewMode = () => useEditorStore((state) => state.setViewMode);
+export const useEnterLayoutPreview = () => useEditorStore((state) => state.enterLayoutPreview);
+export const useStartLayoutEditing = () => useEditorStore((state) => state.startLayoutEditing);
+export const useFinishLayoutEditing = () => useEditorStore((state) => state.finishLayoutEditing);
+export const useExitLayout = () => useEditorStore((state) => state.exitLayout);
 export const useViewStage = () => useModeStore((state) => state.viewStage);
 export const useSetViewStage = () => useModeStore((state) => state.setViewStage);
 export const useEditorMode = () => useModeStore((state) => state.editorMode);
@@ -80,8 +85,9 @@ export const useCanvasZoom = () => useCameraStore((state) => state.zoom);
 export const useLayoutDraftState = () => useEditorStore((state) => state.draft);
 export const useLayoutEditMode = (): LayoutEditMode => {
   const viewMode = useModeStore((state) => state.viewMode);
+  const layoutInteractionMode = useModeStore((state) => state.layoutInteractionMode);
   const draft = useEditorStore((state) => state.draft);
-  return resolveLayoutEditMode({ viewMode, draft });
+  return resolveLayoutEditMode({ viewMode, draft, layoutInteractionMode });
 };
 export const useLayoutReadOnlyReason = (): LayoutReadOnlyReason | null =>
   resolveLayoutReadOnlyReason(useLayoutEditMode());
@@ -158,6 +164,16 @@ export const useSetSelectedCellId = () => useEditorStore((state) => state.setSel
 export const useSetSelectedContainerId = () => useEditorStore((state) => state.setSelectedContainerId);
 export const useActiveStorageWorkflow = (): ActiveStorageWorkflow =>
   useEditorStore((state) => state.activeStorageWorkflow);
+export const useLayoutInteractionMode = () =>
+  useModeStore((state) => state.layoutInteractionMode);
+export const useLastNonLayoutViewMode = () =>
+  useModeStore((state) => state.lastNonLayoutViewMode);
+export const useCanEditLayoutGeometry = (): boolean => {
+  const viewMode = useModeStore((state) => state.viewMode);
+  const layoutInteractionMode = useModeStore((state) => state.layoutInteractionMode);
+  const draft = useEditorStore((state) => state.draft);
+  return canEditLayoutGeometry({ viewMode, layoutInteractionMode, draft });
+};
 export const useInteractionScope = (): InteractionScope => {
   const selection = useInteractionStore((state) => state.selection);
   const activeStorageWorkflow = useEditorStore((state) => state.activeStorageWorkflow);

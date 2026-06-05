@@ -9,10 +9,13 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function resetStore() {
-  // Reset mode-store
+  // Reset mode-store — default to layout editing mode for mutation tests
   useModeStore.setState({
     viewMode: 'layout',
-    editorMode: 'select'
+    viewStage: 'map',
+    editorMode: 'select',
+    layoutInteractionMode: 'editing',
+    lastNonLayoutViewMode: 'view',
   });
 
   // Reset editor-store
@@ -659,7 +662,7 @@ describe('editor-store', () => {
 
     useEditorStore.getState().resetDraft();
 
-    expect(useModeStore.getState().viewMode).toBe('layout');
+    expect(useModeStore.getState().viewMode).toBe('view');
     expect(useModeStore.getState().editorMode).toBe('select');
     expect(useEditorStore.getState().activeStorageWorkflow).toBeNull();
   });

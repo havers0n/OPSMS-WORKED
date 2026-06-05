@@ -1,8 +1,9 @@
 import type { LayoutDraft, Rack } from '@wos/domain';
-import type { ViewMode } from './editor-types';
+import type { LayoutInteractionMode, ViewMode } from './editor-types';
 
 export type LayoutEditMode =
   | 'draft-editing'
+  | 'draft-preview'
   | 'published-readonly'
   | 'non-layout-readonly'
   | 'no-layout';
@@ -13,10 +14,12 @@ export type RackReadOnlyReason = LayoutReadOnlyReason | 'rack-locked';
 
 export function resolveLayoutEditMode({
   viewMode,
-  draft
+  draft,
+  layoutInteractionMode
 }: {
   viewMode: ViewMode;
   draft: Pick<LayoutDraft, 'state'> | null | undefined;
+  layoutInteractionMode: LayoutInteractionMode;
 }): LayoutEditMode {
   if (viewMode !== 'layout') {
     return 'non-layout-readonly';
@@ -26,15 +29,31 @@ export function resolveLayoutEditMode({
     return 'no-layout';
   }
 
-  if (draft.state === 'draft') {
+  if (draft.state !== 'draft') {
+    return 'published-readonly';
+  }
+
+  if (layoutInteractionMode === 'editing') {
     return 'draft-editing';
   }
 
-  return 'published-readonly';
+  return 'draft-preview';
 }
 
 export function isLayoutEditModeEditable(layoutEditMode: LayoutEditMode): boolean {
   return layoutEditMode === 'draft-editing';
+}
+
+export function canEditLayoutGeometry({
+  viewMode,
+  layoutInteractionMode,
+  draft,
+}: {
+  viewMode: ViewMode;
+  layoutInteractionMode: LayoutInteractionMode;
+  draft: Pick<LayoutDraft, 'state'> | null | undefined;
+}): boolean {
+  return viewMode === 'layout' && layoutInteractionMode === 'editing' && draft?.state === 'draft';
 }
 
 export function resolveLayoutReadOnlyReason(

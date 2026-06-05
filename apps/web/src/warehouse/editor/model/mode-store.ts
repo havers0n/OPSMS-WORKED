@@ -1,41 +1,48 @@
 import { create } from 'zustand';
-import type { EditorMode, ViewMode, ViewStage } from './editor-types';
-
-/**
- * Mode Store — independent single source of truth for viewMode and editorMode.
- *
- * This store is separate from editor-store to isolate mode state from selection,
- * workflow, and other editor concerns. However, mode changes have coordinated
- * side effects (clearing selection, cancelling workflows) which are handled
- * by editor-store's setViewMode action, not here.
- *
- * Responsibilities:
- * - Hold current viewMode ('layout', 'view', 'storage')
- * - Hold current editorMode ('select', 'place', 'draw-zone', 'draw-wall')
- * - Provide synchronous setters for mode transitions
- *
- * Does NOT:
- * - Clear selection or workflow (editor-store handles this)
- * - Trigger camera auto-fit (useCanvasViewportController handles this)
- * - Gate interaction semantics (useCanvasSceneModel handles this)
- */
+import type {
+  EditorMode,
+  LayoutInteractionMode,
+  NonLayoutViewMode,
+  ViewMode,
+  ViewStage
+} from './editor-types';
 
 type ModeStore = {
   viewMode: ViewMode;
   viewStage: ViewStage;
   editorMode: EditorMode;
+  layoutInteractionMode: LayoutInteractionMode;
+  lastNonLayoutViewMode: NonLayoutViewMode;
   setViewMode: (nextViewMode: ViewMode) => void;
   setViewStage: (nextViewStage: ViewStage) => void;
   setEditorMode: (nextEditorMode: EditorMode) => void;
+  setLayoutInteractionMode: (next: LayoutInteractionMode) => void;
+  enterLayoutPreview: () => void;
+  startLayoutEditing: () => void;
+  finishLayoutEditing: () => void;
+  exitLayout: () => void;
 };
 
 export const useModeStore = create<ModeStore>((set) => ({
-  viewMode: 'layout',
+  viewMode: 'view',
   viewStage: 'map',
   editorMode: 'select',
+  layoutInteractionMode: 'preview',
+  lastNonLayoutViewMode: 'view',
   setViewMode: (nextViewMode) =>
-    set({
-      viewMode: nextViewMode
+    set((state) => {
+      const isEnteringLayout = nextViewMode === 'layout' && state.viewMode !== 'layout';
+
+      return {
+        viewMode: nextViewMode,
+        layoutInteractionMode:
+          nextViewMode !== 'layout' ? 'preview' : 'preview',
+        lastNonLayoutViewMode: isEnteringLayout
+          ? (state.viewMode as NonLayoutViewMode)
+          : nextViewMode !== 'layout'
+            ? (nextViewMode as NonLayoutViewMode)
+            : state.lastNonLayoutViewMode,
+      };
     }),
   setViewStage: (nextViewStage) =>
     set({
@@ -44,5 +51,22 @@ export const useModeStore = create<ModeStore>((set) => ({
   setEditorMode: (nextEditorMode) =>
     set({
       editorMode: nextEditorMode
-    })
+    }),
+  setLayoutInteractionMode: (next) =>
+    set({ layoutInteractionMode: next }),
+  enterLayoutPreview: () =>
+    set((state) => ({
+      viewMode: 'layout',
+      layoutInteractionMode: 'preview',
+      lastNonLayoutViewMode: state.viewMode as NonLayoutViewMode,
+    })),
+  startLayoutEditing: () =>
+    set({ layoutInteractionMode: 'editing' }),
+  finishLayoutEditing: () =>
+    set({ layoutInteractionMode: 'preview' }),
+  exitLayout: () =>
+    set((state) => ({
+      viewMode: state.lastNonLayoutViewMode,
+      layoutInteractionMode: 'preview',
+    })),
 }));

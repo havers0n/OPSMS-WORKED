@@ -17,7 +17,10 @@ import {
   useWarehouseDraftStatus,
   useWarehouseLayoutDraft
 } from '@/warehouse/state/layout-draft';
-import { useWarehouseViewMode } from '@/warehouse/state/view-mode';
+import {
+  useWarehouseLayoutInteractionMode,
+  useWarehouseViewMode
+} from '@/warehouse/state/view-mode';
 import { getLayoutActionState } from '../lib/layout-context';
 
 type WorkspaceActionsProps = {
@@ -28,6 +31,7 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
   const t = useT();
   const activeFloorId = useActiveFloorId();
   const viewMode = useWarehouseViewMode();
+  const layoutInteractionMode = useWarehouseLayoutInteractionMode();
   const layoutDraft = useWarehouseLayoutDraft();
   const isDraftDirty = useIsWarehouseDraftDirty();
   const persistenceStatus = useWarehouseDraftStatus();
@@ -50,9 +54,10 @@ export function WorkspaceActions({ onStatusMessageChange }: WorkspaceActionsProp
     isDraftDirty
   });
 
-  // True when viewing a published layout with no active draft - the editor is
-  // in read-only mode and the primary action is to create a new draft.
-  const canShowLayoutActions = viewMode === 'layout';
+  // Show layout actions when editing mode is active, or when viewing published layout
+  // with no draft (create draft flow). Preview mode with existing draft hides the
+  // editing toolbar — "Edit layout" CTA is in the top bar center.
+  const canShowLayoutActions = viewMode === 'layout' && (layoutInteractionMode === 'editing' || !layoutDraft || layoutDraft.state !== 'draft');
   const isPublishedMode = canShowLayoutActions && actions.canCreateDraft && latestPublished !== null;
   const isBusy =
     createDraft.isPending ||

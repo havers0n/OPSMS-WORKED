@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createLayoutDraftFixture } from '@/warehouse/editor/model/__fixtures__/layout-draft.fixture';
 import {
   getWarehouseDraftSnapshot,
@@ -23,6 +23,8 @@ function resetStores() {
   warehouseViewModeActions.reset();
   warehouseInteractionActions.resetAll();
   warehouseLayoutDraftActions.resetDraft();
+  warehouseViewModeActions.enterLayoutPreview();
+  warehouseViewModeActions.startLayoutEditing();
 }
 
 function findButtonByText(root: TestRenderer.ReactTestInstance, text: string) {
@@ -32,6 +34,10 @@ function findButtonByText(root: TestRenderer.ReactTestInstance, text: string) {
       node.children.some((child) => typeof child === 'string' && child.includes(text))
   )[0];
 }
+
+beforeEach(() => {
+  resetStores();
+});
 
 afterEach(() => {
   resetStores();

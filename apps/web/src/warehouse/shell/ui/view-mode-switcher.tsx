@@ -7,10 +7,9 @@ import { Button } from '@/shared/ui/button';
 import { useT } from '@/shared/i18n';
 import { ViewStageSwitcher } from './view-stage-switcher';
 
-const VIEW_MODES: { id: WarehouseViewMode; labelKey: 'warehouse.view.mode.view' | 'warehouse.view.mode.storage' | 'warehouse.view.mode.layout' }[] = [
+const VIEW_MODES: { id: WarehouseViewMode; labelKey: 'warehouse.view.mode.view' | 'warehouse.view.mode.storage' }[] = [
   { id: 'view', labelKey: 'warehouse.view.mode.view' },
   { id: 'storage', labelKey: 'warehouse.view.mode.storage' },
-  { id: 'layout', labelKey: 'warehouse.view.mode.layout' },
 ];
 
 export function ViewModeSwitcher() {

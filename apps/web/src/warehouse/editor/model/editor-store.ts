@@ -47,6 +47,7 @@ import {
   updateWallInDraft,
   updateZoneInDraft
 } from './editor-store-helpers';
+import { canEditLayoutGeometry } from './layout-edit-mode';
 import {
   checkMinimumDistance,
   alignRacksToLine,
@@ -90,6 +91,10 @@ type EditorStore = {
   lastChangeClass: LayoutChangeClass | null;
   // — Mode (coordinates with mode-store) —
   setViewMode: (mode: ViewMode) => void;
+  enterLayoutPreview: () => void;
+  startLayoutEditing: () => void;
+  finishLayoutEditing: () => void;
+  exitLayout: () => void;
   setEditorMode: (mode: EditorMode) => void;
   setObjectWorkContext: (context: ObjectWorkContext) => void;
   setSelectedRackActiveLevel: (level: number) => void;
@@ -268,6 +273,22 @@ function markDraftChanged<T extends object>(state: Pick<EditorStore, 'persistenc
   };
 }
 
+/**
+ * Guard for structural layout mutations.
+ * Checks both draft lifecycle (canEditDraft) and current interaction mode
+ * (canEditLayoutGeometry). This is the store-level gate that prevents
+ * mutations when the layout workspace is in preview mode.
+ */
+function canEditDraftInCurrentMode(draft: LayoutDraft | null): draft is LayoutDraft {
+  if (!canEditDraft(draft)) return false;
+  const modeState = useModeStore.getState();
+  return canEditLayoutGeometry({
+    viewMode: modeState.viewMode,
+    layoutInteractionMode: modeState.layoutInteractionMode,
+    draft,
+  });
+}
+
 export const useEditorStore = create<EditorStore>((set, get) => ({
   ...initialEditorState,
   setViewMode: (nextViewMode) => {
@@ -279,6 +300,35 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     useModeStore.getState().setEditorMode('select');
     // clearForModeSwitch: clears selection and highlightedCellIds
+    useInteractionStore.getState().clearForModeSwitch();
+    set({
+      ...WORKFLOW_RESET,
+      objectWorkContext: 'geometry',
+      ...selectedRackActiveLevelResetPatch(prevSelection, { type: 'none' })
+    });
+  },
+  enterLayoutPreview: () => {
+    const prevSelection = useInteractionStore.getState().selection;
+    useModeStore.getState().enterLayoutPreview();
+    useModeStore.getState().setViewStage('map');
+    useModeStore.getState().setEditorMode('select');
+    useInteractionStore.getState().clearForModeSwitch();
+    set({
+      ...WORKFLOW_RESET,
+      objectWorkContext: 'geometry',
+      ...selectedRackActiveLevelResetPatch(prevSelection, { type: 'none' })
+    });
+  },
+  startLayoutEditing: () => {
+    useModeStore.getState().startLayoutEditing();
+  },
+  finishLayoutEditing: () => {
+    useModeStore.getState().finishLayoutEditing();
+  },
+  exitLayout: () => {
+    const prevSelection = useInteractionStore.getState().selection;
+    useModeStore.getState().exitLayout();
+    useModeStore.getState().setEditorMode('select');
     useInteractionStore.getState().clearForModeSwitch();
     set({
       ...WORKFLOW_RESET,
@@ -453,7 +503,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (TRACE) {
       console.debug('[WOS TRACE]', { t: Date.now(), op: 'resetDraft' });
     }
-    useModeStore.getState().setViewMode('layout');
+    useModeStore.getState().setViewMode('view');
     useModeStore.getState().setEditorMode('select');
     useInteractionStore.getState().resetAll();
     set({
@@ -613,7 +663,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   createRack: (x, y) => {
     let created = false;
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const newRack = buildNewRack(state.draft.racks, x, y);
       if (hasBlockingWallIntersection(newRack, state.draft.walls)) {
@@ -641,7 +691,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   createZone: (rect) => {
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const newZone = buildNewZone(state.draft.zones, rect);
       const nextDraft = cloneDraft(state.draft);
@@ -660,7 +710,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   createFreeWall: (x1, y1, x2, y2) => {
     let created = false;
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const newWall = buildNewFreeWall(state.draft.walls, x1, y1, x2, y2);
       if (!newWall) return state;
@@ -684,7 +734,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   createWallFromRackSide: (rackId, side) => {
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const rack = state.draft.racks[rackId];
       if (!rack) return state;
@@ -705,7 +755,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   deleteRack: (rackId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       const nextDraft = cloneDraft(state.draft);
@@ -729,7 +779,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   deleteZone: (zoneId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const nextDraft = cloneDraft(state.draft);
       delete nextDraft.zones[zoneId];
@@ -748,7 +798,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   deleteWall: (wallId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const nextDraft = cloneDraft(state.draft);
       delete nextDraft.walls[wallId];
@@ -767,7 +817,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   duplicateRack: (rackId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const source = state.draft.racks[rackId];
       if (!source || source.isLocked) return state;
@@ -814,7 +864,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   setRackLock: (rackId, isLocked) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const rack = state.draft.racks[rackId];
       if (!rack || rack.isLocked === isLocked) return state;
@@ -825,7 +875,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateRackPosition: (rackId, x, y) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       const rack = state.draft.racks[rackId];
       if (!rack || rack.isLocked) return state;
@@ -850,7 +900,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateZoneRect: (zoneId, rect) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       return markDraftChanged(state, {
         draft: updateZoneInDraft(state.draft, zoneId, (zone) => ({
@@ -864,7 +914,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateZoneDetails: (zoneId, patch) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       return markDraftChanged(state, {
         draft: updateZoneInDraft(state.draft, zoneId, (zone) => ({
@@ -877,7 +927,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateWallGeometry: (wallId, geometry) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       return markDraftChanged(state, {
         draft: updateWallInDraft(state.draft, wallId, (wall) => ({
@@ -888,7 +938,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateWallDetails: (wallId, patch) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
 
       return markDraftChanged(state, {
         draft: updateWallInDraft(state.draft, wallId, (wall) => ({
@@ -916,7 +966,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   rotateRack: (rackId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -932,7 +982,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateRackGeneral: (rackId, patch) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -941,7 +991,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateFaceConfig: (rackId, side, patch) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -966,7 +1016,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateSectionLength: (rackId, side, sectionId, length) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -985,7 +1035,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateSectionSlots: (rackId, side, sectionId, slotCount) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1008,7 +1058,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateLevelCount: (rackId, side, sectionId, count) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1040,7 +1090,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateRackLevelStructuralDefaultRole: (rackId: string, ordinal: number, role: 'primary_pick' | 'reserve' | 'none') =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1073,7 +1123,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   updateLevelStructuralDefaultRole: (rackId: string, side: 'A' | 'B', ordinal: number, role: 'primary_pick' | 'reserve' | 'none') =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1097,7 +1147,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   addSection: (rackId, side) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1119,7 +1169,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   deleteSection: (rackId, side, sectionId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1135,7 +1185,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   addLevel: (rackId, side, sectionId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1168,7 +1218,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   applyFacePreset: (rackId, side, sectionCount, levelCount, slotCount) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1208,7 +1258,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   resetFaceB: (rackId) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1233,7 +1283,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   setFaceLength: (rackId, side, length) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1257,7 +1307,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   setFaceBRelationship: (rackId, mode, options) =>
     set((state) => {
-      if (!canEditDraft(state.draft)) return state;
+      if (!canEditDraftInCurrentMode(state.draft)) return state;
       if (isDraftRackLocked(state.draft, rackId)) return state;
 
       return markDraftChanged(state, {
@@ -1343,7 +1393,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   alignRacksHorizontal: (rackIds) =>
     set((state) => {
-      if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
+      if (!canEditDraftInCurrentMode(state.draft) || rackIds.length < 2) return state;
 
       const racks = rackIds.map(id => state.draft!.racks[id]).filter((rack): rack is Rack => Boolean(rack && !rack.isLocked));
       if (racks.length < 2) return state;
@@ -1363,7 +1413,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   alignRacksVertical: (rackIds) =>
     set((state) => {
-      if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
+      if (!canEditDraftInCurrentMode(state.draft) || rackIds.length < 2) return state;
 
       const racks = rackIds.map(id => state.draft!.racks[id]).filter((rack): rack is Rack => Boolean(rack && !rack.isLocked));
       if (racks.length < 2) return state;
@@ -1383,7 +1433,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
   distributeRacksEqual: (rackIds, axis) =>
     set((state) => {
-      if (!canEditDraft(state.draft) || rackIds.length < 2) return state;
+      if (!canEditDraftInCurrentMode(state.draft) || rackIds.length < 2) return state;
 
       const racks = rackIds.map(id => state.draft!.racks[id]).filter((rack): rack is Rack => Boolean(rack && !rack.isLocked));
       if (racks.length < 2) return state;

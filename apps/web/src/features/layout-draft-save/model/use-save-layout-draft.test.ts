@@ -32,6 +32,8 @@ function resetStores() {
   warehouseViewModeActions.reset();
   warehouseInteractionActions.resetAll();
   warehouseLayoutDraftActions.resetDraft();
+  warehouseViewModeActions.enterLayoutPreview();
+  warehouseViewModeActions.startLayoutEditing();
 }
 
 function deferred<T>() {
