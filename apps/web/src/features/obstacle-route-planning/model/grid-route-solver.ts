@@ -36,6 +36,8 @@ type Cell = {
 
 type SolveGridRouteOptions = {
   includeDiagnostics?: boolean;
+  boundsOverride?: Bounds;
+  occupancyMode?: 'conservative' | 'center';
 };
 
 type HeapItem = {
@@ -44,6 +46,35 @@ type HeapItem = {
 };
 
 const EPSILON = 1e-9;
+
+export type RouteCellBlockReason =
+  | {
+      obstacleId: string;
+      obstacleType: 'rack';
+      rule: 'center_in_inflated_obstacle' | 'cell_area_intersects_inflated_obstacle';
+      overlapRect:
+        | {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+          }
+        | null;
+    }
+  | {
+      obstacleId: string;
+      obstacleType: 'wall';
+      rule: 'center_on_wall';
+      overlapRect: null;
+    };
+
+export type RouteEndpointCandidateInspection = {
+  radius: number;
+  cell: RouteGridCell;
+  worldCenter: RoutePoint;
+  blocked: boolean;
+  blockers: RouteCellBlockReason[];
+};
 
 export function resolveGridRouteSolverConfig(
   config: GridRouteSolverConfig = {}
@@ -268,6 +299,74 @@ function isCellWithinGrid(cell: Cell, grid: Grid) {
   return cell.x >= 0 && cell.y >= 0 && cell.x < grid.cols && cell.y < grid.rows;
 }
 
+function getCellRect(cell: Cell, grid: Grid) {
+  const center = cellToPoint(cell, grid);
+  const half = grid.resolutionM / 2;
+
+  return {
+    x: center.x - half,
+    y: center.y - half,
+    width: grid.resolutionM,
+    height: grid.resolutionM
+  };
+}
+
+function getCellBlockReasons(
+  cell: Cell,
+  grid: Grid,
+  obstacles: RouteObstacle[],
+  clearanceM: number,
+  occupancyMode: 'conservative' | 'center'
+): RouteCellBlockReason[] {
+  if (!isCellWithinGrid(cell, grid)) return [];
+
+  const center = cellToPoint(cell, grid);
+  const cellRect = getCellRect(cell, grid);
+  const reasons: RouteCellBlockReason[] = [];
+
+  for (const obstacle of obstacles) {
+    if (obstacle.type === 'rack') {
+      const inflated = inflateRack(obstacle, clearanceM);
+      if (isPointInRect(center, inflated)) {
+        reasons.push({
+          obstacleId: obstacle.id,
+          obstacleType: 'rack',
+          rule: 'center_in_inflated_obstacle',
+          overlapRect: getRectIntersection(cellRect, inflated)
+        });
+        continue;
+      }
+
+      if (occupancyMode === 'conservative' && doRectsIntersect(cellRect, inflated)) {
+        reasons.push({
+          obstacleId: obstacle.id,
+          obstacleType: 'rack',
+          rule: 'cell_area_intersects_inflated_obstacle',
+          overlapRect: getRectIntersection(cellRect, inflated)
+        });
+      }
+      continue;
+    }
+
+    if (
+      isPointOnSegment(
+        center,
+        { x: obstacle.x1, y: obstacle.y1 },
+        { x: obstacle.x2, y: obstacle.y2 }
+      )
+    ) {
+      reasons.push({
+        obstacleId: obstacle.id,
+        obstacleType: 'wall',
+        rule: 'center_on_wall',
+        overlapRect: null
+      });
+    }
+  }
+
+  return reasons;
+}
+
 class MinHeap {
   private readonly items: HeapItem[] = [];
 
@@ -358,7 +457,8 @@ function reconstructPathCells(cameFrom: Map<number, number>, endKey: number, gri
 function buildCellWalkability(
   grid: Grid,
   obstacles: RouteObstacle[],
-  clearanceM: number
+  clearanceM: number,
+  occupancyMode: 'conservative' | 'center'
 ) {
   const cache = new Map<number, boolean>();
 
@@ -368,26 +468,8 @@ function buildCellWalkability(
     const cached = cache.get(key);
     if (cached !== undefined) return cached;
 
-    const center = cellToPoint(cell, grid);
-    const half = grid.resolutionM / 2;
-    const cellRect = {
-      x: center.x - half,
-      y: center.y - half,
-      width: grid.resolutionM,
-      height: grid.resolutionM
-    };
-    const walkable = obstacles.every((obstacle) => {
-      if (obstacle.type === 'rack') {
-        const inflated = inflateRack(obstacle, clearanceM);
-        return !isPointInRect(center, inflated) && !doRectsIntersect(cellRect, inflated);
-      }
-
-      return !isPointOnSegment(
-        center,
-        { x: obstacle.x1, y: obstacle.y1 },
-        { x: obstacle.x2, y: obstacle.y2 }
-      );
-    });
+    const walkable =
+      getCellBlockReasons(cell, grid, obstacles, clearanceM, occupancyMode).length === 0;
     cache.set(key, walkable);
     return walkable;
   };
@@ -416,6 +498,32 @@ function snapEndpointsToOriginal(
   prependIfDistinct(next, start);
   appendIfDistinct(next, end);
   return next;
+}
+
+function enumerateCandidateCells(blockedCell: Cell, maxRadiusCells: number) {
+  const seen = new Set<string>();
+  const candidates: Array<{ cell: Cell; radius: number }> = [];
+  const pushCandidate = (cell: Cell, radius: number) => {
+    const key = `${cell.x},${cell.y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ cell, radius });
+  };
+
+  pushCandidate(blockedCell, 0);
+
+  for (let radius = 1; radius <= maxRadiusCells; radius += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      pushCandidate({ x: blockedCell.x + dx, y: blockedCell.y - radius }, radius);
+      pushCandidate({ x: blockedCell.x + dx, y: blockedCell.y + radius }, radius);
+    }
+    for (let dy = -radius + 1; dy <= radius - 1; dy += 1) {
+      pushCandidate({ x: blockedCell.x - radius, y: blockedCell.y + dy }, radius);
+      pushCandidate({ x: blockedCell.x + radius, y: blockedCell.y + dy }, radius);
+    }
+  }
+
+  return candidates;
 }
 
 function findNearestWalkableCell(
@@ -473,6 +581,25 @@ function smoothFoundPath(
     config.clearanceM,
     isRouteSegmentClear
   );
+}
+
+function getRectIntersection(
+  left: ReturnType<typeof inflateRack>,
+  right: ReturnType<typeof inflateRack>
+) {
+  const x = Math.max(left.x, right.x);
+  const y = Math.max(left.y, right.y);
+  const maxX = Math.min(left.x + left.width, right.x + right.width);
+  const maxY = Math.min(left.y + left.height, right.y + right.height);
+
+  if (maxX < x || maxY < y) return null;
+
+  return {
+    x,
+    y,
+    width: maxX - x,
+    height: maxY - y
+  };
 }
 
 function countBlockedGridCells(grid: Grid, isWalkable: (cell: Cell) => boolean) {
@@ -544,6 +671,7 @@ export function solveGridRoute(
   options: SolveGridRouteOptions = {}
 ): RouteSolveResult {
   const config = resolveGridRouteSolverConfig(configInput);
+  const occupancyMode = options.occupancyMode ?? 'conservative';
 
   if (isPointBlocked(start, obstacles, config.clearanceM)) {
     return { status: 'start_blocked', points: [], cost: 0 };
@@ -554,7 +682,7 @@ export function solveGridRoute(
 
   // MVP/debug behavior: until floor boundaries are modeled, the solver creates
   // finite bounds from the requested endpoints and visible obstacles.
-  const bounds = inferBounds(start, end, obstacles, config);
+  const bounds = options.boundsOverride ?? inferBounds(start, end, obstacles, config);
   const grid = buildGrid(bounds, config);
   const gridCells = grid.cols * grid.rows;
 
@@ -569,7 +697,12 @@ export function solveGridRoute(
 
   const startCell = pointToCell(start, grid);
   const endCell = pointToCell(end, grid);
-  const isWalkable = buildCellWalkability(grid, obstacles, config.clearanceM);
+  const isWalkable = buildCellWalkability(
+    grid,
+    obstacles,
+    config.clearanceM,
+    occupancyMode
+  );
   const blockedGridCells = options.includeDiagnostics
     ? countBlockedGridCells(grid, isWalkable)
     : [];
@@ -785,5 +918,61 @@ export function solveGridRoute(
           })
         }
       : {})
+  };
+}
+
+export function inspectGridRouteEndpointCandidates(
+  start: RoutePoint,
+  end: RoutePoint,
+  obstacles: RouteObstacle[],
+  configInput: GridRouteSolverConfig = {},
+  options: Omit<SolveGridRouteOptions, 'includeDiagnostics'> & {
+    endpoint: 'start' | 'end';
+    maxRadiusCells: number;
+  }
+) {
+  const config = resolveGridRouteSolverConfig(configInput);
+  const occupancyMode = options.occupancyMode ?? 'conservative';
+  const bounds = options.boundsOverride ?? inferBounds(start, end, obstacles, config);
+  const grid = buildGrid(bounds, config);
+  const originCell = pointToCell(options.endpoint === 'start' ? start : end, grid);
+  const candidates = enumerateCandidateCells(originCell, options.maxRadiusCells)
+    .filter(({ cell }) => isCellWithinGrid(cell, grid))
+    .map<RouteEndpointCandidateInspection>(({ cell, radius }) => {
+      const blockers = getCellBlockReasons(
+        cell,
+        grid,
+        obstacles,
+        config.clearanceM,
+        occupancyMode
+      );
+
+      return {
+        radius,
+        cell: toRouteGridCell(cell),
+        worldCenter: cellToPoint(cell, grid),
+        blocked: blockers.length > 0,
+        blockers
+      };
+    });
+  const isWalkable = buildCellWalkability(
+    grid,
+    obstacles,
+    config.clearanceM,
+    occupancyMode
+  );
+
+  return {
+    bounds,
+    grid: {
+      minX: grid.minX,
+      minY: grid.minY,
+      cols: grid.cols,
+      rows: grid.rows,
+      resolutionM: grid.resolutionM
+    },
+    originalCell: toRouteGridCell(originCell),
+    blockedGridCellCount: countBlockedGridCells(grid, isWalkable).length,
+    candidates
   };
 }
