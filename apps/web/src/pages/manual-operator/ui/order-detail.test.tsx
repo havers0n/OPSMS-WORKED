@@ -2,7 +2,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ManualShiftOrder, ManualShiftOrderCheckUnit } from '@wos/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { OrderDetail } from './order-detail';
+import { pickerPath } from '@/shared/config/routes';
 
 vi.mock('@/shared/api/bff/client', async importOriginal => {
   const actual = await importOriginal<typeof import('@/shared/api/bff/client')>();
@@ -78,13 +80,24 @@ function makeCheckUnit(
   };
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
+}
+
 function renderDetail(order: ManualShiftOrder = makeOrder()) {
   const queryClient = makeQueryClient();
+  const onClose = vi.fn();
+  const onDeleted = vi.fn();
   render(
-    <QueryClientProvider client={queryClient}>
-      <OrderDetail order={order} onClose={vi.fn()} onDeleted={vi.fn()} />
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={['/operator/manual']}>
+      <QueryClientProvider client={queryClient}>
+        <LocationProbe />
+        <OrderDetail order={order} onClose={onClose} onDeleted={onDeleted} />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
+  return { onClose, onDeleted };
 }
 
 describe('OrderDetail check-units section', () => {
@@ -252,6 +265,131 @@ describe('OrderDetail check-units section', () => {
     const doneButton = screen.getByRole('button', { name: /סגור כתקין/ }) as HTMLButtonElement;
     expect(doneButton.disabled).toBe(true);
   });
+
+  it('queued order with pickerWorkerId starts picking via bridge and does not navigate away', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shifts/orders/11111111-1111-4111-8111-111111111111/start-picking') && method === 'POST') {
+        return {
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          taskNumber: 'PT-1',
+          tenantId: '22222222-2222-4222-8222-222222222222',
+          sourceType: 'manual_shift_order',
+          sourceId: '11111111-1111-4111-8111-111111111111',
+          status: 'assigned',
+          assignedTo: null,
+          assignedWorkerId: 'worker-1',
+          startedAt: null,
+          completedAt: null,
+          createdAt: '2026-05-29T09:00:00.000Z',
+          totalSteps: 1,
+          completedSteps: 0,
+          steps: []
+        };
+      }
+      return [];
+    });
+
+    const { onClose } = renderDetail(makeOrder({ status: 'queued', pickerWorkerId: 'worker-1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'התחל ליקוט' }));
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith(
+        '/api/manual-shifts/orders/11111111-1111-4111-8111-111111111111/start-picking',
+        { method: 'POST' }
+      );
+    });
+
+    expect(
+      mockedBffRequest.mock.calls.some(([url, init]) =>
+        String(url).endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/status') &&
+        (init?.method ?? 'GET') === 'PATCH'
+      )
+    ).toBe(false);
+    expect(screen.getByTestId('location-probe').textContent).toBe('/operator/manual');
+    expect(screen.getAllByText('Point A').length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('queued order without pickerWorkerId disables start and shows explanation', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'queued', pickerWorkerId: null }));
+
+    expect(screen.getByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'התחל ליקוט' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      mockedBffRequest.mock.calls.some(([url]) =>
+        String(url).includes('/start-picking')
+      )
+    ).toBe(false);
+  });
+
+  it('bridge failure shows the backend error and stays on the operator screen', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shifts/orders/11111111-1111-4111-8111-111111111111/start-picking') && method === 'POST') {
+        throw new Error('Order has no picker worker assigned.');
+      }
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'queued', pickerWorkerId: 'worker-1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'התחל ליקוט' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Order has no picker worker assigned.')).toBeTruthy();
+    });
+
+    expect(screen.getByTestId('location-probe').textContent).toBe('/operator/manual');
+  });
+
+  it('picking order with pickerWorkerId renders explicit open picker action and navigates with pickerPath', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'picking', pickerWorkerId: 'worker-1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'פתח ממשק מלקט' }));
+
+    expect(screen.getByTestId('location-probe').textContent).toBe(pickerPath('worker-1'));
+  });
+
+  it('picking order keeps finish-picking override and check-start flow', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/start-check') && method === 'POST') {
+        return makeOrder({ status: 'picking', pickerWorkerId: 'worker-1', checkStartedAt: '2026-05-29T09:10:00.000Z' });
+      }
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'picking', pickerWorkerId: 'worker-1' }));
+
+    expect(screen.getByRole('button', { name: 'סיים ליקוט' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'התחל בדיקה' }));
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith(
+        '/api/manual-shift-orders/11111111-1111-4111-8111-111111111111/start-check',
+        { method: 'POST' }
+      );
+    });
+  });
 });
 
 describe('OrderDetail history', () => {
@@ -383,7 +521,7 @@ describe('OrderDetail history', () => {
     });
     renderDetail();
     fireEvent.click(await screen.findByText('היסטוריית הזמנה'));
-    await waitFor(() => expect(screen.getByText('יחידת בדיקה נוספה')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('נוספה יחידת בדיקה 1')).toBeTruthy());
     expect(screen.queryByText('cu-1')).toBeNull();
     expect(screen.queryByText('checkUnitId')).toBeNull();
   });

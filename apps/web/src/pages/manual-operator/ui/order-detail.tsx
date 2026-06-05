@@ -1,11 +1,14 @@
 ﻿import { useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, History, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   useDeleteManualShiftOrder,
+  useStartManualShiftOrderPicking,
   useStartManualShiftOrderCheck,
   useUpdateManualShiftOrderStatus
 } from '@/entities/manual-shift/api/mutations';
+import { pickerPath } from '@/shared/config/routes';
 import { AssignPickerSheet } from './assign-picker-sheet';
 import { DeleteConfirmSheet } from './delete-confirm-sheet';
 import { EditOrderSheet } from './edit-order-sheet';
@@ -22,6 +25,7 @@ interface OrderDetailProps {
 }
 
 export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
+  const navigate = useNavigate();
   const [showErrorFlow, setShowErrorFlow] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [checkUnitsActiveCount, setCheckUnitsActiveCount] = useState<number | null>(null);
@@ -32,6 +36,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   const [showEditOrder, setShowEditOrder] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const updateStatus = useUpdateManualShiftOrderStatus();
+  const startPicking = useStartManualShiftOrderPicking();
   const startOrderCheck = useStartManualShiftOrderCheck();
   const deleteOrder = useDeleteManualShiftOrder(order.id, {
     lineId: order.lineId,
@@ -62,6 +67,16 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
   function startCheck() {
     if (isCheckActive) return;
     startOrderCheck.mutate({
+      orderId: order.id,
+      lineId: order.lineId,
+      shiftId: order.shiftId
+    });
+  }
+
+  function handleStartPicking() {
+    if (!order.pickerWorkerId) return;
+    startPicking.reset();
+    startPicking.mutate({
       orderId: order.id,
       lineId: order.lineId,
       shiftId: order.shiftId
@@ -208,22 +223,52 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
         {order.status !== 'done' && (
           <>
             {order.status === 'queued' && (
-              <button onClick={() => transition('picking')} disabled={updateStatus.isPending} className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
-                {updateStatus.isPending ? '...' : 'התחל ליקוט'}
-              </button>
+              <div className="flex flex-col gap-2">
+                {!order.pickerWorkerId && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    יש לשייך מלקט לפני תחילת ליקוט.
+                  </p>
+                )}
+                {startPicking.isError && (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {startPicking.error instanceof Error ? startPicking.error.message : 'לא ניתן להתחיל ליקוט כעת.'}
+                  </p>
+                )}
+                <button
+                  onClick={handleStartPicking}
+                  disabled={startPicking.isPending || !order.pickerWorkerId}
+                  className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50"
+                >
+                  {startPicking.isPending ? '...' : 'התחל ליקוט'}
+                </button>
+              </div>
             )}
             {order.status === 'picking' && (
-              <div className="flex gap-3">
-                <button onClick={startCheck} disabled={startOrderCheck.isPending || isCheckActive} className="w-1/2 bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
-                  {startOrderCheck.isPending ? '...' : isCheckActive ? 'הבדיקה התחילה' : 'התחל בדיקה'}
-                </button>
-                <button
-                  onClick={() => transition('waiting_check')}
-                  disabled={updateStatus.isPending}
-                  className="w-1/2 bg-amber-500 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50"
-                >
-                  {updateStatus.isPending ? '...' : 'סיים ליקוט'}
-                </button>
+              <div className="flex flex-col gap-3">
+                {order.pickerWorkerId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!order.pickerWorkerId) return;
+                      navigate(pickerPath(order.pickerWorkerId));
+                    }}
+                    className="w-full rounded-xl border border-blue-200 bg-blue-50 h-12 font-bold text-base text-blue-700"
+                  >
+                    פתח ממשק מלקט
+                  </button>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={startCheck} disabled={startOrderCheck.isPending || isCheckActive} className="w-1/2 bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50">
+                    {startOrderCheck.isPending ? '...' : isCheckActive ? 'הבדיקה התחילה' : 'התחל בדיקה'}
+                  </button>
+                  <button
+                    onClick={() => transition('waiting_check')}
+                    disabled={updateStatus.isPending}
+                    className="w-1/2 bg-amber-500 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50"
+                  >
+                    {updateStatus.isPending ? '...' : 'סיים ליקוט'}
+                  </button>
+                </div>
               </div>
             )}
             {order.status === 'waiting_check' && (
