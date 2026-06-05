@@ -83,7 +83,8 @@ export function useCanvasSceneModel({
     floorOperationsCellsById,
     occupiedCellIds,
     publishedCellsById,
-    publishedCellsByStructure
+    publishedCellsByStructure,
+    publishedCellsQueryStatus
   } = useFloorSceneData({ viewMode, workspace });
 
   const capabilities = useCanvasCapabilities({
@@ -176,7 +177,8 @@ export function useCanvasSceneModel({
         highlightedCellIdSet,
         occupiedCellIds,
         publishedCellsById,
-        publishedCellsByStructure
+        publishedCellsByStructure,
+        publishedCellsQueryStatus
       },
       selection: resolvedSelection,
       workflow
@@ -203,6 +205,7 @@ export function useCanvasSceneModel({
       publishedCellsById,
       placementLayout,
       publishedCellsByStructure,
+      publishedCellsQueryStatus,
       racks,
       resolvedSelection,
       walls,

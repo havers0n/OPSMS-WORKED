@@ -270,4 +270,21 @@ export type PickingRoutePerformanceSummary = {
       routeComparisonDebugEnabled: boolean;
     };
   };
+  debug?: {
+    publishedCellsQueryStatus: 'pending' | 'error' | 'success';
+    publishedCellsByIdSize: number;
+    requiredCellIdsCount: number;
+    missingRequiredCellIds: string[];
+    aisleTopologyQueryStatus: 'pending' | 'error' | 'success';
+    faceAccessByFaceIdSize: number;
+    anchorsResolvedCount: number;
+    anchorsUnresolvedCount: number;
+    segments: Array<{
+      fromStepId: string;
+      toStepId: string;
+      status: 'ok' | 'skipped' | 'unroutable';
+      solverStatus?: 'no_path' | 'start_blocked' | 'end_blocked' | 'skipped';
+      debugReason?: string;
+    }>;
+  };
 };

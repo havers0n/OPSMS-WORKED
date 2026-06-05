@@ -126,6 +126,7 @@ import {
 import type { CanvasRenderMode } from './canvas-render-mode';
 import { isCanvasFullDetailRenderMode } from './canvas-render-mode';
 import { resolveRouteComputationFlags } from './route-computation-scope';
+import { buildPickingRouteDebugSummary } from './picking-route-debug-summary';
 
 const EMPTY_RACK_IDS: string[] = [];
 const EMPTY_CELL_ID_SET = new Set<string>();
@@ -644,7 +645,8 @@ export function EditorCanvas({
     highlightedCellIdSet,
     occupiedCellIds,
     publishedCellsById,
-    publishedCellsByStructure
+    publishedCellsByStructure,
+    publishedCellsQueryStatus
   } = scene.lookups;
   const {
     activeCellRackId,
@@ -924,7 +926,7 @@ export function EditorCanvas({
   const pickingPlanningImprovedRouteCostCanvasStepIds =
     pickingPlanningRoutesComputed?.canvasStepIdsByMode.improved ??
     pickingPlanningOriginalCanvasStepIds;
-  const pickingPlanningRoutePerformanceSummary: PickingRoutePerformanceSummary =
+  const basePickingPlanningRoutePerformanceSummary: PickingRoutePerformanceSummary =
     pickingPlanningRoutesComputed?.routePerformanceSummary ?? {
       scope: pickingPlanningRouteComputationFlags.scope,
       computedModes: {
@@ -976,6 +978,32 @@ export function EditorCanvas({
         improvedRouteCostUnreachablePairCount: 0
       }
     };
+  const pickingPlanningRoutePerformanceSummary: PickingRoutePerformanceSummary = useMemo(
+    () => ({
+      ...basePickingPlanningRoutePerformanceSummary,
+      debug: buildPickingRouteDebugSummary({
+        routeSteps: pickingPlanningOriginalRouteSteps,
+        locationsById: pickingPlanningPreview?.locationsById,
+        publishedCellsById,
+        publishedCellsQueryStatus,
+        aisleTopologyQueryStatus: aisleTopologyQuery.status,
+        faceAccessByFaceId,
+        anchors: pickingPlanningActiveRouteAnchors,
+        segments: pickingPlanningActiveRouteSegments
+      })
+    }),
+    [
+      aisleTopologyQuery.status,
+      basePickingPlanningRoutePerformanceSummary,
+      faceAccessByFaceId,
+      pickingPlanningActiveRouteAnchors,
+      pickingPlanningActiveRouteSegments,
+      pickingPlanningOriginalRouteSteps,
+      pickingPlanningPreview?.locationsById,
+      publishedCellsById,
+      publishedCellsQueryStatus
+    ]
+  );
   const cellStateOverlaysEnabled =
     (renderMode === 'full' ||
       renderMode === 'restore-overlays' ||

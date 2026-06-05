@@ -29,9 +29,12 @@ export function useFloorSceneData({ viewMode, workspace }: FloorSceneDataParams)
   const placementFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
   const runtimeFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
 
-  const { data: floorCellOccupancy = [] } = useFloorLocationOccupancy(placementFloorId);
-  const { data: floorOperationsCells = [] } = useFloorOperationsCells(runtimeFloorId);
-  const { data: publishedCells = [] } = usePublishedCells(placementFloorId);
+  const floorCellOccupancyQuery = useFloorLocationOccupancy(placementFloorId);
+  const floorOperationsCellsQuery = useFloorOperationsCells(runtimeFloorId);
+  const publishedCellsQuery = usePublishedCells(placementFloorId);
+  const { data: floorCellOccupancy = [] } = floorCellOccupancyQuery;
+  const { data: floorOperationsCells = [] } = floorOperationsCellsQuery;
+  const { data: publishedCells = [] } = publishedCellsQuery;
 
   const publishedCellsByStructure = useMemo(
     () => indexPublishedCellsByStructure(publishedCells),
@@ -55,6 +58,7 @@ export function useFloorSceneData({ viewMode, workspace }: FloorSceneDataParams)
     occupiedCellIds,
     publishedCells,
     publishedCellsById,
-    publishedCellsByStructure
+    publishedCellsByStructure,
+    publishedCellsQueryStatus: publishedCellsQuery.status
   };
 }

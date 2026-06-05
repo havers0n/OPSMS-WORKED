@@ -819,6 +819,25 @@ describe('PickingPlanningOverlay', () => {
           pairStats: {
             nearestRouteCostPairSolveCount: 20, nearestRouteCostUnreachablePairCount: 3,
             improvedRouteCostPairSolveCount: 42, improvedRouteCostUnreachablePairCount: 4
+          },
+          debug: {
+            publishedCellsQueryStatus: 'pending',
+            publishedCellsByIdSize: 0,
+            requiredCellIdsCount: 2,
+            missingRequiredCellIds: ['cell-1', 'cell-2'],
+            aisleTopologyQueryStatus: 'success',
+            faceAccessByFaceIdSize: 1,
+            anchorsResolvedCount: 1,
+            anchorsUnresolvedCount: 1,
+            segments: [
+              {
+                fromStepId: 'task-1',
+                toStepId: 'task-2',
+                status: 'skipped',
+                solverStatus: 'skipped',
+                debugReason: 'unresolved_anchor'
+              }
+            ]
           }
         }
       })
@@ -829,6 +848,11 @@ describe('PickingPlanningOverlay', () => {
     expect(bodyText()).toContain('active: nearest-route-cost');
     expect(bodyText()).toContain('total compute: 59 ms');
     expect(bodyText()).toContain('scope: active-only');
+    expect(bodyText()).toContain('published cells');
+    expect(bodyText()).toContain('missing required cells: cell-1, cell-2');
+    expect(bodyText()).toContain('aisle topology');
+    expect(bodyText()).toContain('anchors resolved/unresolved: 1 / 1');
+    expect(bodyText()).toContain('Segment 1 : skipped');
     expect(bodyText()).toContain('skipped: nearest route-cost improved');
     expect(bodyText()).toContain('pairs · rc: - · imp: -');
     expect(bodyText()).toContain('rc fallback: too_many_resolved_anchors');

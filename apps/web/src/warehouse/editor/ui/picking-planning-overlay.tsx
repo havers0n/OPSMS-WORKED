@@ -1484,6 +1484,30 @@ export function PickingPlanningOverlay({
                                   imp fallback: {routePerformanceSummary.mode.improvedRouteCostFallbackReason}
                                 </div>
                               )}
+                              {routePerformanceSummary.debug && (
+                                <>
+                                  <div>
+                                    published cells В· status: {routePerformanceSummary.debug.publishedCellsQueryStatus} В· map size:{' '}
+                                    {routePerformanceSummary.debug.publishedCellsByIdSize} В· required:{' '}
+                                    {routePerformanceSummary.debug.requiredCellIdsCount}
+                                  </div>
+                                  <div>
+                                    missing required cells:{' '}
+                                    {routePerformanceSummary.debug.missingRequiredCellIds.length > 0
+                                      ? routePerformanceSummary.debug.missingRequiredCellIds.join(', ')
+                                      : 'none'}
+                                  </div>
+                                  <div>
+                                    aisle topology В· status: {routePerformanceSummary.debug.aisleTopologyQueryStatus} В· face access map size:{' '}
+                                    {routePerformanceSummary.debug.faceAccessByFaceIdSize}
+                                  </div>
+                                  <div>
+                                    anchors resolved/unresolved:{' '}
+                                    {routePerformanceSummary.debug.anchorsResolvedCount}/
+                                    {routePerformanceSummary.debug.anchorsUnresolvedCount}
+                                  </div>
+                                </>
+                              )}
                             </>
                           ) : (
                             <div className="mt-1">No route perf summary</div>
@@ -1552,16 +1576,28 @@ export function PickingPlanningOverlay({
                       )}
                       {import.meta.env.DEV && (
                         <div className="mt-1 space-y-1 text-[11px] text-slate-500">
-                          {solvedSegments.map((segment, index) => (
-                            <div key={`${segment.fromStepId}:${segment.toStepId}`}>
-                              Segment {index + 1}: {segment.status}
-                              {segment.status === 'unroutable' &&
-                                `, ${segment.solverStatus}`}
-                              {segment.status === 'unroutable' &&
-                                segment.debugReason &&
-                                `, ${segment.debugReason}`}
-                            </div>
-                          ))}
+                          {(routePerformanceSummary?.debug?.segments ?? solvedSegments).map(
+                            (segment, index) => {
+                              const segmentDebugReason =
+                                'debugReason' in segment ? segment.debugReason : undefined;
+                              const segmentSolverStatus =
+                                'solverStatus' in segment ? segment.solverStatus : undefined;
+
+                              return (
+                                <div key={`${segment.fromStepId}:${segment.toStepId}`}>
+                                  Segment {index + 1}: {segment.status}
+                                  {(segment.status === 'unroutable' ||
+                                    segment.status === 'skipped') &&
+                                    segmentSolverStatus &&
+                                    `, ${segmentSolverStatus}`}
+                                  {(segment.status === 'unroutable' ||
+                                    segment.status === 'skipped') &&
+                                    segmentDebugReason &&
+                                    `, ${segmentDebugReason}`}
+                                </div>
+                              );
+                            }
+                          )}
                         </div>
                       )}
                     </div>

@@ -307,7 +307,8 @@ vi.mock('./use-canvas-scene-model', () => ({
         highlightedCellIdSet: new Set<string>(mockHighlightedCellIds),
         occupiedCellIds: new Set<string>(),
         publishedCellsById: mockPublishedCellsById,
-        publishedCellsByStructure: new Map()
+        publishedCellsByStructure: new Map(),
+        publishedCellsQueryStatus: 'success'
       },
       selection: {
         activeCellRackId,
