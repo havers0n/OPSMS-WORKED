@@ -85,20 +85,12 @@ function PickStepScreen({
               Location
             </div>
             <div
-              className="font-medium text-lg text-gray-800 flex items-center gap-2 mb-3"
+              className="font-medium text-lg text-gray-800 flex items-center gap-2"
               data-testid="pick-step-location"
             >
               <MapPin className="text-blue-500 w-5 h-5 shrink-0" />
               {step.sourceCellAddress}
             </div>
-            <button
-              disabled
-              className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 cursor-not-allowed"
-              data-testid="pick-step-where-is-it"
-            >
-              <MapPin className="w-4 h-4" />
-              Where is it? (coming soon)
-            </button>
           </section>
         )}
 
@@ -137,8 +129,9 @@ function PickStepScreen({
                 {qtyPicked}
               </div>
               <button
-                onClick={() => onQtyChange(qtyPicked + 1)}
-                className="w-14 h-14 flex items-center justify-center bg-white rounded-xl shadow-sm border border-gray-200 text-gray-700 active:bg-gray-100"
+                onClick={() => onQtyChange(Math.min(step.qtyRequired, qtyPicked + 1))}
+                disabled={qtyPicked >= step.qtyRequired}
+                className="w-14 h-14 flex items-center justify-center bg-white rounded-xl shadow-sm border border-gray-200 text-gray-700 active:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="pick-step-qty-increase"
               >
                 <Plus className="w-6 h-6" />
@@ -196,7 +189,7 @@ export function PickStepPage() {
   const navigate = useNavigate();
   const workerId = searchParams.get('workerId') ?? '';
 
-  const { data: task, isLoading } = useQuery(
+  const { data: task, isLoading, isError, refetch } = useQuery(
     pickerTaskDetailQueryOptions(taskId ?? null, workerId || null)
   );
 
@@ -240,7 +233,27 @@ export function PickStepPage() {
     }
   };
 
-  if (isLoading || !task) {
+  if (!workerId) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
+        data-testid="pick-step-missing-worker"
+      >
+        <div className="text-4xl mb-4">⚠️</div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
+        <p className="text-sm text-gray-500 mb-4">לא נמצאה הפעלת עובד.</p>
+        <button
+          onClick={() => navigate('/')}
+          className="text-blue-600 text-sm font-medium underline"
+          data-testid="pick-step-return-home"
+        >
+          חזור לדף הראשי
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
     return (
       <div
         className="flex min-h-screen items-center justify-center bg-white"
@@ -251,7 +264,27 @@ export function PickStepPage() {
     );
   }
 
-  if (!step) {
+  if (isError) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white"
+        data-testid="pick-step-query-error"
+      >
+        <p className="text-sm text-red-600 mb-4">
+          נכשל בטעינת הפרטים
+        </p>
+        <button
+          onClick={() => refetch()}
+          className="text-blue-600 text-sm font-medium underline"
+          data-testid="pick-step-query-retry"
+        >
+          נסה שוב
+        </button>
+      </div>
+    );
+  }
+
+  if (!task || !step) {
     return (
       <div
         className="flex min-h-screen flex-col items-center justify-center p-6 bg-white"

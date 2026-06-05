@@ -9,6 +9,7 @@ import {
   useCreateManualShiftOrderCheckUnit,
   usePatchManualShiftOrder,
   usePatchManualShiftOrderCheckUnit,
+  useStartManualShiftOrderPicking,
   useUpdateManualShiftOrderCheckUnitStatus
 } from './mutations';
 import { manualShiftKeys } from './queries';
@@ -88,6 +89,30 @@ describe('usePatchManualShiftOrder', () => {
       });
     });
 
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+  });
+});
+
+describe('useStartManualShiftOrderPicking', () => {
+  it('posts to the bridge endpoint and invalidates order-level queries', async () => {
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useStartManualShiftOrderPicking(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId: 'o1',
+        lineId: 'l1',
+        shiftId: 's1'
+      });
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith('/api/manual-shifts/orders/o1/start-picking', {
+      method: 'POST'
+    });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });

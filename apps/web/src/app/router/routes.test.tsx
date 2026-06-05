@@ -11,6 +11,7 @@ vi.mock('@/app/layouts/app-shell', async () => {
 // Mock pages that rely on app providers (react-query, etc.) so router tests stay focused
 vi.mock('@/pages/manual-operator/ui/manual-operator-page', () => ({ ManualOperatorPage: () => <div>Artos Operator</div> }));
 vi.mock('@/pages/products/ui/products-page', () => ({ ProductsPage: () => <div>Product Catalog</div> }));
+vi.mock('@/pages/picking/ui/picking-queue-page', () => ({ PickingQueuePage: () => <div data-testid="picking-queue-page">Picking Queue</div> }));
 
 describe('AppRouter lazy routes', () => {
   beforeEach(() => {
@@ -48,5 +49,44 @@ describe('AppRouter lazy routes', () => {
 
     const title = await screen.findByText('Product Catalog');
     expect(title).toBeTruthy();
+  });
+
+  it('renders PickingQueuePage at /tasks', async () => {
+    window.history.pushState({}, '', routes.tasks);
+    const { AppRouter } = await import('./routes');
+
+    render(
+      <I18nProvider>
+        <AppRouter />
+      </I18nProvider>
+    );
+
+    expect(await screen.findByTestId('picking-queue-page')).toBeTruthy();
+  });
+
+  it('redirects /picking to /tasks', async () => {
+    window.history.pushState({}, '', routes.picking);
+    const { AppRouter } = await import('./routes');
+
+    render(
+      <I18nProvider>
+        <AppRouter />
+      </I18nProvider>
+    );
+
+    expect(await screen.findByTestId('picking-queue-page')).toBeTruthy();
+  });
+
+  it('redirects /picking/run to /tasks', async () => {
+    window.history.pushState({}, '', routes.pickingRun);
+    const { AppRouter } = await import('./routes');
+
+    render(
+      <I18nProvider>
+        <AppRouter />
+      </I18nProvider>
+    );
+
+    expect(await screen.findByTestId('picking-queue-page')).toBeTruthy();
   });
 });

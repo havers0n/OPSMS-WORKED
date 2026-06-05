@@ -67,6 +67,14 @@ export function createPickerService(
         throw new ApiError(404, 'PICK_STEP_NOT_FOUND', `Pick step ${input.stepId} not found for task ${input.taskId}.`);
       }
 
+      if (qtyPicked > step.qty_required) {
+        throw new ApiError(
+          400,
+          'PICK_STEP_QTY_EXCEEDS_REQUIRED',
+          `Picked quantity ${qtyPicked} exceeds required quantity ${step.qty_required}.`
+        );
+      }
+
       const nowIso = getNowIso();
       if (step.status === 'picked') {
         if (step.qty_picked !== qtyPicked) {
