@@ -234,9 +234,21 @@ describe('PickerPage', () => {
     mockMutateAsync.mockReset();
   });
 
-  it('shows missing worker identity state when workerId is absent', () => {
+  it('shows missing worker identity state with return action when workerId is absent', () => {
     renderPickerPage();
     expect(screen.getByTestId('picker-missing-worker')).toBeTruthy();
+    expect(screen.getByTestId('picker-return-home')).toBeTruthy();
+  });
+
+  it('shows error state with retry action on list query failure', async () => {
+    vi.mocked(fetchPickerTasks).mockRejectedValue(new Error('Network error'));
+
+    renderPickerPage(`?workerId=${WORKER_ID}`);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-error')).toBeTruthy();
+      expect(screen.getByTestId('picker-retry')).toBeTruthy();
+    });
   });
 
   it('renders assigned tasks when workerId is present', async () => {
@@ -273,6 +285,34 @@ describe('PickTaskPage', () => {
     mockMutateAsync.mockReset();
   });
 
+  it('shows missing worker state with return action when workerId is absent', () => {
+    renderPickTaskPage(TASK_ID, '');
+    expect(screen.getByTestId('pick-task-missing-worker')).toBeTruthy();
+    expect(screen.getByTestId('pick-task-return-home')).toBeTruthy();
+  });
+
+  it('shows error state with retry action on task query failure', async () => {
+    vi.mocked(fetchPickerTaskDetail).mockRejectedValue(new Error('Network error'));
+
+    renderPickTaskPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-task-error')).toBeTruthy();
+      expect(screen.getByTestId('pick-task-retry')).toBeTruthy();
+    });
+  });
+
+  it('shows completion handoff for a completed task', async () => {
+    vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask({ status: 'completed' }));
+
+    renderPickTaskPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-task-completed')).toBeTruthy();
+      expect(screen.getByTestId('pick-task-back-to-list')).toBeTruthy();
+    });
+  });
+
   it('renders steps with correct statuses', async () => {
     vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
 
@@ -296,6 +336,12 @@ describe('PickStepPage', () => {
     mockMutateAsync.mockReset();
   });
 
+  it('shows missing worker state with return action when workerId is absent', () => {
+    renderPickStepPage(TASK_ID, STEP_ID_1, '');
+    expect(screen.getByTestId('pick-step-missing-worker')).toBeTruthy();
+    expect(screen.getByTestId('pick-step-return-home')).toBeTruthy();
+  });
+
   it('renders product name, location, and required qty', async () => {
     vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
 
@@ -307,6 +353,32 @@ describe('PickStepPage', () => {
       expect(screen.getByTestId('pick-step-location').textContent).toContain('A-04-02');
       expect(screen.getByTestId('pick-step-qty-required').textContent).toContain('3');
     });
+  });
+
+  it('does not render coming-soon location button and shows location passively', async () => {
+    vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
+
+    renderPickStepPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-step-location')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('pick-step-where-is-it')).toBeNull();
+  });
+
+  it('omits location block when source location is missing', async () => {
+    const task = makeTask();
+    task.steps[0] = { ...task.steps[0], sourceCellAddress: null };
+    vi.mocked(fetchPickerTaskDetail).mockResolvedValue(task);
+
+    renderPickStepPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pick-step-product-name')).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId('pick-step-location')).toBeNull();
   });
 
   it('qty stepper increments and decrements without going below 0 or above qtyRequired', async () => {

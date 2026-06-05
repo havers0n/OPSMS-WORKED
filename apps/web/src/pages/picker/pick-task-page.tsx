@@ -30,11 +30,31 @@ export function PickTaskPage() {
   const navigate = useNavigate();
   const workerId = searchParams.get('workerId') ?? '';
 
-  const { data: task, isLoading, isError, error } = useQuery(
+  const { data: task, isLoading, isError, refetch } = useQuery(
     pickerTaskDetailQueryOptions(taskId ?? null, workerId || null)
   );
 
   const goBack = () => navigate(pickerPath(workerId));
+
+  if (!workerId) {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
+        data-testid="pick-task-missing-worker"
+      >
+        <div className="text-4xl mb-4">⚠️</div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
+        <p className="text-sm text-gray-500 mb-4">לא נמצאה הפעלת עובד.</p>
+        <button
+          onClick={() => navigate('/')}
+          className="text-blue-600 text-sm font-medium underline"
+          data-testid="pick-task-return-home"
+        >
+          חזור לדף הראשי
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -57,15 +77,41 @@ export function PickTaskPage() {
           <ChevronLeft className="w-5 h-5" />
           <span className="text-sm font-medium ml-1">Back</span>
         </button>
-        <p className="text-sm text-red-600">
-          Failed to load task:{' '}
-          {error instanceof Error ? error.message : 'Unknown error'}
+        <p className="text-sm text-red-600 mb-4">
+          נכשל בטעינת המשימה
         </p>
+        <button
+          onClick={() => refetch()}
+          className="text-blue-600 text-sm font-medium underline"
+          data-testid="pick-task-retry"
+        >
+          נסה שוב
+        </button>
       </div>
     );
   }
 
   if (!task) return null;
+
+  if (task.status === 'completed' || task.status === 'completed_with_exceptions') {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
+        data-testid="pick-task-completed"
+      >
+        <div className="text-4xl mb-4">✅</div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">הקטיף הושלם</h1>
+        <p className="text-sm text-gray-500 mb-6">ההזמנה מוכנה לבדיקה</p>
+        <button
+          onClick={goBack}
+          className="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg active:scale-[0.98] transition-all"
+          data-testid="pick-task-back-to-list"
+        >
+          חזור לרשימת המשימות
+        </button>
+      </div>
+    );
+  }
 
   const progressPct =
     task.totalSteps > 0
@@ -92,9 +138,7 @@ export function PickTaskPage() {
         </div>
         <span
           className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${
-            task.status === 'completed' || task.status === 'completed_with_exceptions'
-              ? 'bg-green-100 text-green-700'
-              : task.status === 'in_progress'
+            task.status === 'in_progress'
               ? 'bg-blue-100 text-blue-700'
               : 'bg-gray-100 text-gray-600'
           }`}
