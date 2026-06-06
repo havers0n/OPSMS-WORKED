@@ -289,7 +289,7 @@ describe('POST /api/picking-planning/preview', () => {
       productName: null,
       productImageUrl: null,
       qtyToPick: 2,
-      qtyEach: 2,
+      qtyEach: null,
       packagingLevels: []
     });
     expect(payload.rootWorkPackage.id).toBe('wp-1');
