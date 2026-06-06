@@ -33,7 +33,7 @@ export function orderQueryOptions(orderId: string | null) {
   });
 }
 
-async function fetchOrderExecution(orderId: string): Promise<PickTaskSummary[]> {
+export async function fetchOrderExecution(orderId: string): Promise<PickTaskSummary[]> {
   return bffRequest<PickTaskSummary[]>(`/api/orders/${orderId}/execution`);
 }
 
