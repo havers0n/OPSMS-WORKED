@@ -2,11 +2,22 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PickingPlanningOrderInputReadRepo } from './input-builder.js';
 
 export type PickingPlanningWaveReadRepo = {
+  getWaveById(waveId: string): Promise<{ id: string } | null>;
   listOrderIdsForWave(waveId: string): Promise<string[]>;
 };
 
 export function createPickingPlanningWaveReadRepo(supabase: SupabaseClient, tenantId: string): PickingPlanningWaveReadRepo {
   return {
+    async getWaveById(waveId) {
+      const { data, error } = await supabase
+        .from('waves')
+        .select('id')
+        .eq('id', waveId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
     async listOrderIdsForWave(waveId) {
       const { data: waveData, error: waveError } = await supabase
         .from('waves')
@@ -34,6 +45,16 @@ export function createPickingPlanningWaveReadRepo(supabase: SupabaseClient, tena
 
 export function createPickingPlanningOrderInputReadRepo(supabase: SupabaseClient, tenantId: string): PickingPlanningOrderInputReadRepo {
   return {
+    async listOrdersByIds(orderIds) {
+      if (orderIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id')
+        .in('id', orderIds)
+        .eq('tenant_id', tenantId);
+      if (error) throw error;
+      return data ?? [];
+    },
     async listOrderLines(orderIds) {
       const { data, error } = await supabase
         .from('order_lines')

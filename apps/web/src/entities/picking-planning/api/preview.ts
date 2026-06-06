@@ -8,28 +8,33 @@ import type {
 
 function postPreview<TPayload>(
   path: string,
-  payload: TPayload
+  payload: TPayload,
+  signal?: AbortSignal
 ): Promise<PickingPlanningPreviewResponse> {
   return bffRequest<PickingPlanningPreviewResponse>(path, {
     method: 'POST',
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal
   });
 }
 
 export function previewPickingPlanFromOrders(
-  payload: PreviewPickingPlanFromOrdersPayload
+  payload: PreviewPickingPlanFromOrdersPayload,
+  signal?: AbortSignal
 ) {
-  return postPreview('/api/picking-planning/preview/orders', payload);
+  return postPreview('/api/picking-planning/preview/orders', payload, signal);
 }
 
 export function previewPickingPlanFromWave(
-  payload: PreviewPickingPlanFromWavePayload
+  payload: PreviewPickingPlanFromWavePayload,
+  signal?: AbortSignal
 ) {
-  return postPreview('/api/picking-planning/preview/wave', payload);
+  return postPreview('/api/picking-planning/preview/wave', payload, signal);
 }
 
 export function previewExplicitPickingPlan(
-  payload: PreviewExplicitPickingPlanPayload
+  payload: PreviewExplicitPickingPlanPayload,
+  signal?: AbortSignal
 ) {
-  return postPreview('/api/picking-planning/preview', payload);
+  return postPreview('/api/picking-planning/preview', payload, signal);
 }

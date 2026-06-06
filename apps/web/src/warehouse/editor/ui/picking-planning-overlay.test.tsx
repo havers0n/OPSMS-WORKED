@@ -123,6 +123,7 @@ function createPreview(): PickingPlanningPreviewResponse {
               fromLocationId: 'loc-1',
               skuId: 'sku-1',
               qtyToPick: 1,
+              qtyEach: null,
               allocations: [{ orderId: 'order-1', orderLineId: 'line-1', qty: 1 }]
             },
             {
@@ -131,6 +132,7 @@ function createPreview(): PickingPlanningPreviewResponse {
               fromLocationId: 'loc-2',
               skuId: 'sku-2',
               qtyToPick: 1,
+              qtyEach: null,
               allocations: [{ orderId: 'order-1', orderLineId: 'line-2', qty: 1 }]
             }
           ],
@@ -1462,5 +1464,231 @@ describe('PickingPlanningOverlay', () => {
     await waitFor(() =>
       expect(bodyText()).toContain('Click on the map to place route start. Esc to cancel.')
     );
+  });
+
+  describe('preview request lifecycle hardening', () => {
+    afterEach(() => {
+      vi.mocked(previewPickingPlanFromOrders).mockResolvedValue(createPreview());
+    });
+
+    it('switching source A to B aborts request A', async () => {
+      const signals: AbortSignal[] = [];
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        () => new Promise(() => {})
+      );
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        (_payload, signal) => {
+          signals.push(signal ?? new AbortController().signal);
+          return new Promise(() => {});
+        }
+      );
+
+      render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['A'] });
+      });
+      await waitFor(() => expect(signals.length).toBe(1));
+      const signalA = signals[0];
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['B'] });
+      });
+      await waitFor(() => expect(signals.length).toBe(2));
+
+      expect(signalA.aborted).toBe(true);
+      expect(signals[1].aborted).toBe(false);
+    });
+
+    it('unmount aborts active request', async () => {
+      const signals: AbortSignal[] = [];
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        (_payload, signal) => {
+          signals.push(signal ?? new AbortController().signal);
+          return new Promise(() => {});
+        }
+      );
+
+      const { unmount } = render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['A'] });
+      });
+      await waitFor(() => expect(signals.length).toBe(1));
+      expect(signals[0].aborted).toBe(false);
+
+      act(() => {
+        unmount();
+      });
+      expect(signals[0].aborted).toBe(true);
+    });
+
+    it('aborted request does not set visible error', async () => {
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        (_payload, signal) =>
+          new Promise((_resolve, reject) => {
+            if (!signal) {
+              reject(new Error('no signal'));
+              return;
+            }
+            if (signal.aborted) {
+              reject(new DOMException('The user aborted a request.', 'AbortError'));
+              return;
+            }
+            signal.addEventListener(
+              'abort',
+              () => {
+                reject(
+                  new DOMException('The user aborted a request.', 'AbortError')
+                );
+              },
+              { once: true }
+            );
+          })
+      );
+
+      render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['A'] });
+      });
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'none' });
+      });
+
+      // Abort rejection should be silently suppressed
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+      expect(bodyText()).not.toMatch(/abort|error|fail/i);
+    });
+
+    it('genuine network failure still sets visible error', async () => {
+      vi.mocked(previewPickingPlanFromOrders).mockRejectedValue(
+        new Error('Network error')
+      );
+
+      render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['A'] });
+      });
+
+      await waitFor(() => expect(bodyText()).toContain('Network error'));
+    });
+
+    it('late A response cannot overwrite B when B is already active', async () => {
+      const resolves: Array<(value: PickingPlanningPreviewResponse) => void> = [];
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        () => new Promise<PickingPlanningPreviewResponse>((resolve) => {
+          resolves.push(resolve);
+        })
+      );
+
+      render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['A'] });
+      });
+      await waitFor(() => expect(resolves.length).toBe(1));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['B'] });
+      });
+      await waitFor(() => expect(resolves.length).toBe(2));
+
+      resolves[0](createPreview());
+      await act(async () => {});
+      expect(usePickingPlanningOverlayStore.getState().preview).toBeNull();
+
+      await act(async () => {
+        resolves[1](createPreview());
+      });
+      await waitFor(() => {
+        expect(usePickingPlanningOverlayStore.getState().preview).not.toBeNull();
+      });
+    });
+
+    it('transition to none aborts active preview request', async () => {
+      const signals: AbortSignal[] = [];
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        (_payload, signal) => {
+          signals.push(signal ?? new AbortController().signal);
+          return new Promise(() => {});
+        }
+      );
+
+      render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'orders', orderIds: ['A'] });
+      });
+      await waitFor(() => expect(signals.length).toBe(1));
+      expect(signals[0].aborted).toBe(false);
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource({ kind: 'none' });
+      });
+
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+      expect(signals[0].aborted).toBe(true);
+    });
+
+    it('retry with same exact source object re-issues preview request', async () => {
+      let callCount = 0;
+      vi.mocked(previewPickingPlanFromOrders).mockReset();
+      vi.mocked(previewPickingPlanFromOrders).mockImplementation(
+        () => {
+          callCount++;
+          return Promise.reject(new Error('fail'));
+        }
+      );
+
+      render(createElement(PickingPlanningOverlay));
+      await waitFor(() => expect(bodyText()).toContain('Select order'));
+
+      const source = { kind: 'orders' as const, orderIds: ['A'] };
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource(source);
+      });
+      await waitFor(() => expect(callCount).toBe(1));
+      await waitFor(() => expect(bodyText()).toContain('fail'));
+
+      act(() => {
+        usePickingPlanningOverlayStore
+          .getState()
+          .setSource(source);
+      });
+
+      await waitFor(() => expect(callCount).toBe(2));
+    });
   });
 });

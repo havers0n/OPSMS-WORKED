@@ -43,9 +43,25 @@ export function calculatePlanningCoverage(input: {
     }
   }
 
-  const plannedLineCount = plannedLineIds.size;
-  const unresolvedLineCount = input.unresolved.length;
-  const orderLineCount = plannedLineCount + unresolvedLineCount;
+  const unresolvedLineIds = new Set<string>();
+  for (const line of input.unresolved) {
+    unresolvedLineIds.add(`${line.orderId}:${line.orderLineId}`);
+  }
+
+  // A line is fully planned only if it has tasks and no unresolved entry for the same line.
+  const fullyPlannedLineIds = new Set<string>();
+  for (const id of plannedLineIds) {
+    if (!unresolvedLineIds.has(id)) {
+      fullyPlannedLineIds.add(id);
+    }
+  }
+
+  // Total unique order lines = union of planned and unresolved.
+  const allLineIds = new Set([...plannedLineIds, ...unresolvedLineIds]);
+
+  const plannedLineCount = fullyPlannedLineIds.size;
+  const unresolvedLineCount = unresolvedLineIds.size;
+  const orderLineCount = allLineIds.size;
 
   const plannedQty = input.tasks.reduce((sum, task) => sum + task.qty, 0);
   const unresolvedQty = input.unresolved.reduce((sum, line) => sum + line.qty, 0);

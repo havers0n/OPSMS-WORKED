@@ -389,8 +389,96 @@ describe('response mapper', () => {
       productImageUrl: null,
       barcode: null,
       qtyToPick: 2,
-      qtyEach: 2
+      qtyEach: null
     });
     expect(result.packages[0].route.steps[0].packagingLevels).toEqual([]);
+  });
+
+  it('preserves qtyEach from task when present', () => {
+    const planning = createPlanningResult();
+    const step = mapPlanningPreviewToResponse({
+      kind: 'explicit',
+      planning
+    }).packages[0].route.steps[0];
+
+    expect(step.qtyToPick).toBe(2);
+    expect(step.qtyEach).toBe(2);
+  });
+
+  it('emits null qtyEach when task metadata is absent and no fallback to qtyToPick', () => {
+    const planning = createPlanningResult();
+    planning.packages[0]!.package.tasks[0] = {
+      ...planning.packages[0]!.package.tasks[0]!,
+      qtyEach: undefined,
+      packagingLevels: undefined
+    };
+
+    const result = mapPlanningPreviewToResponse({
+      kind: 'explicit',
+      planning,
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01'
+        }
+      }
+    });
+
+    expect(result.packages[0].route.steps[0].qtyEach).toBeNull();
+    expect(result.packages[0].route.steps[0].qtyToPick).toBe(2);
+  });
+
+  it('does not modify packagingLevels[].qtyEach conversion factor', () => {
+    const planning = createPlanningResult();
+    const step = mapPlanningPreviewToResponse({
+      kind: 'explicit',
+      planning,
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01'
+        }
+      }
+    }).packages[0].route.steps[0];
+
+    expect(step.packagingLevels).toEqual([
+      { id: 'pack-each', code: 'EA', name: 'Each', qtyEach: 1, sortOrder: 1 },
+      { id: 'pack-box', code: 'BOX', name: 'Box', qtyEach: 6, sortOrder: 2 }
+    ]);
+  });
+
+  it('preserves full DTO shape: qtyToPick, allocations, product fields unchanged', () => {
+    const planning = createPlanningResult();
+    const step = mapPlanningPreviewToResponse({
+      kind: 'explicit',
+      planning,
+      locationsById: {
+        'loc-1': {
+          id: 'loc-1',
+          warehouseId: 'warehouse-1',
+          addressLabel: 'A-01',
+          cellId: 'cell-1'
+        }
+      }
+    }).packages[0].route.steps[0];
+
+    expect(step).toMatchObject({
+      sequence: 1,
+      taskId: 'task-1',
+      fromLocationId: 'loc-1',
+      locationId: 'loc-1',
+      addressLabel: 'A-01',
+      cellId: 'cell-1',
+      productId: 'product-1',
+      skuId: 'sku-1',
+      displayCode: '1234567890',
+      barcode: '1234567890',
+      productName: 'Widget',
+      qtyToPick: 2,
+      qtyEach: 2
+    });
+    expect(step.allocations).toHaveLength(1);
   });
 });

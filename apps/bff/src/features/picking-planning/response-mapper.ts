@@ -45,7 +45,7 @@ export type PlanningRouteStepDto = {
   productName: string | null;
   productImageUrl: string | null;
   qtyToPick: number;
-  qtyEach: number;
+  qtyEach: number | null;
   packagingLevels: Array<{
     id: string;
     code: string;
@@ -225,7 +225,7 @@ export function mapRouteStepToDto(
     productName: task?.productName ?? null,
     productImageUrl: task?.productImageUrl ?? null,
     qtyToPick: step.qtyToPick,
-    qtyEach: task?.qtyEach ?? step.qtyToPick,
+    qtyEach: task?.qtyEach ?? null,
     packagingLevels: task?.packagingLevels?.map((level) => ({ ...level })) ?? [],
     allocations: step.allocations.map((allocation) => ({ ...allocation })),
     handlingInstruction: step.handlingInstruction

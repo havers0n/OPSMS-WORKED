@@ -3,6 +3,19 @@ import type {
   PickingPlanningOverlaySource,
   PickingPlanningPreviewResponse
 } from './types';
+import { getRouteStepId } from './route-steps';
+
+export function getPreviewSourceKey(source: PickingPlanningOverlaySource): string {
+  if (source.kind === 'none') return 'none';
+  if (source.kind === 'orders') return `orders:${JSON.stringify(source.orderIds)}`;
+  return `wave:${source.waveId}`;
+}
+
+function cloneSource(source: PickingPlanningOverlaySource): PickingPlanningOverlaySource {
+  if (source.kind === 'none') return { kind: 'none' };
+  if (source.kind === 'orders') return { kind: 'orders', orderIds: [...source.orderIds] };
+  return { kind: 'wave', waveId: source.waveId };
+}
 
 export type PickingRouteOrderMode =
   | 'original'
@@ -39,7 +52,6 @@ export type PickingPlanningOverlayState = {
   setRouteComparisonDebugEnabled: (enabled: boolean) => void;
   reorderPackageSteps: (
     packageId: string,
-    stepIds: string[],
     stepId: string,
     direction: -1 | 1
   ) => void;
@@ -78,18 +90,38 @@ export const usePickingPlanningOverlayStore =
   create<PickingPlanningOverlayState>((set) => ({
     ...initialState,
     setSource: (source) =>
-      set({
-        source,
-        preview: null,
-        isLoading: false,
-        errorMessage: null,
-        activePackageId: null,
-        selectedStepId: null,
-        reorderedStepIdsByPackageId: {},
-        routeOrderModeByPackageId: {},
-        routeStartPointByPackageId: {},
-        placingRouteStartForPackageId: null,
-        routeComparisonDebugEnabled: false
+      set((state) => {
+        if (getPreviewSourceKey(state.source) === getPreviewSourceKey(source)) {
+          if (!state.errorMessage) {
+            return state;
+          }
+          return {
+            source: cloneSource(source),
+            preview: null,
+            isLoading: false,
+            errorMessage: null,
+            activePackageId: null,
+            selectedStepId: null,
+            reorderedStepIdsByPackageId: {},
+            routeOrderModeByPackageId: {},
+            routeStartPointByPackageId: {},
+            placingRouteStartForPackageId: null,
+            routeComparisonDebugEnabled: false
+          };
+        }
+        return {
+          source,
+          preview: null,
+          isLoading: false,
+          errorMessage: null,
+          activePackageId: null,
+          selectedStepId: null,
+          reorderedStepIdsByPackageId: {},
+          routeOrderModeByPackageId: {},
+          routeStartPointByPackageId: {},
+          placingRouteStartForPackageId: null,
+          routeComparisonDebugEnabled: false
+        };
       }),
     setPreview: (preview) =>
       set((state) => {
@@ -158,8 +190,17 @@ export const usePickingPlanningOverlayStore =
       set({ placingRouteStartForPackageId: null }),
     setRouteComparisonDebugEnabled: (enabled) =>
       set({ routeComparisonDebugEnabled: enabled }),
-    reorderPackageSteps: (packageId, stepIds, stepId, direction) =>
+    reorderPackageSteps: (packageId, stepId, direction) =>
       set((state) => {
+        const targetPackage = state.preview?.packages.find(
+          (p) => p.workPackage.id === packageId
+        );
+        if (!targetPackage) return state;
+
+        const originalStepIds =
+          targetPackage.route.steps.map(getRouteStepId);
+        if (originalStepIds.length === 0) return state;
+
         const mode = state.routeOrderModeByPackageId[packageId] ?? 'original';
         const nextRouteOrderModeByPackageId =
           mode !== 'original'
@@ -169,7 +210,7 @@ export const usePickingPlanningOverlayStore =
               }
             : state.routeOrderModeByPackageId;
         const current =
-          state.reorderedStepIdsByPackageId[packageId] ?? stepIds;
+          state.reorderedStepIdsByPackageId[packageId] ?? originalStepIds;
         return {
           routeOrderModeByPackageId: nextRouteOrderModeByPackageId,
           reorderedStepIdsByPackageId: {

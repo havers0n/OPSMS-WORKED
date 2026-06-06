@@ -23,6 +23,7 @@ import {
   type UnresolvedPlanningLineSummary
 } from './diagnostics.js';
 import type { PickingPlanningWaveReadRepo } from './repo.js';
+import { ApiError } from '../../errors.js';
 
 export type PickingPlanningPreviewFromOrdersResult = {
   planning: PickingPlanningResult;
@@ -57,7 +58,15 @@ export function createPickingPlanningPreviewService(
       throw new Error('Picking planning order input repo is not configured.');
     }
 
-    const built = await buildPlanningInputFromOrders(inputReadRepo, { orderIds: input.orderIds });
+    const deduplicatedOrderIds = Array.from(new Set(input.orderIds));
+    const foundOrders = await inputReadRepo.listOrdersByIds(deduplicatedOrderIds);
+    const foundOrderIdSet = new Set(foundOrders.map((o) => o.id));
+    const missingOrderId = deduplicatedOrderIds.find((id) => !foundOrderIdSet.has(id));
+    if (missingOrderId) {
+      throw new ApiError(404, 'NOT_FOUND', 'Order not found');
+    }
+
+    const built = await buildPlanningInputFromOrders(inputReadRepo, { orderIds: deduplicatedOrderIds });
     const planning = planner({
       tasks: built.tasks,
       locationsById: built.locationsById,
@@ -71,11 +80,11 @@ export function createPickingPlanningPreviewService(
     });
 
     const unresolvedSummary = summarizeUnresolvedPlanningLines(built.unresolved);
-    const coverage = calculatePlanningCoverage({ orderIds: input.orderIds, tasks: built.tasks, unresolved: built.unresolved });
+    const coverage = calculatePlanningCoverage({ orderIds: deduplicatedOrderIds, tasks: built.tasks, unresolved: built.unresolved });
 
     return {
       planning,
-      orderIds: [...input.orderIds],
+      orderIds: [...deduplicatedOrderIds],
       unresolvedSummary,
       coverage,
       ...built
@@ -101,6 +110,11 @@ export function createPickingPlanningPreviewService(
     previewPickingPlanFromWave: async (input) => {
       if (!waveReadRepo) {
         throw new Error('Picking planning wave repo is not configured.');
+      }
+
+      const wave = await waveReadRepo.getWaveById(input.waveId);
+      if (!wave) {
+        throw new ApiError(404, 'NOT_FOUND', 'Wave not found');
       }
 
       const orderIds = await waveReadRepo.listOrderIdsForWave(input.waveId);
