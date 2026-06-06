@@ -209,7 +209,7 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
     expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
   });
 
-  it('renders fallback Arrow for a skipped (unresolved_anchor) segment', () => {
+  it('hides direct fallback for a skipped (unresolved_anchor) segment', () => {
     const solvedSegments: SolvedRouteSegment[] = [
       {
         status: 'skipped',
@@ -228,13 +228,11 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
       );
     });
 
-    const arrows = renderer.root.findAll((node) => String(node.type) === 'Arrow');
-    expect(arrows).toHaveLength(1);
-    expect(arrows[0]?.props.stroke).toContain('234');
+    expect(renderer.root.findAll((node) => String(node.type) === 'Arrow')).toHaveLength(0);
     expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
   });
 
-  it('renders fallback Arrow for an unroutable (solver failure) segment', () => {
+  it('hides direct fallback for an unroutable segment in normal mode', () => {
     const solvedSegments: SolvedRouteSegment[] = [
       {
         status: 'unroutable',
@@ -253,10 +251,48 @@ describe('PickingRouteOverlayLayer with solvedSegments', () => {
       );
     });
 
+    expect(renderer.root.findAll((node) => String(node.type) === 'Arrow')).toHaveLength(0);
+    expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
+  });
+
+  it('renders fallback Arrow for unroutable segment in diagnostics mode', () => {
+    const solvedSegments: SolvedRouteSegment[] = [
+      {
+        status: 'unroutable',
+        solverStatus: 'no_path',
+        debugReason: 'grid_guard:99',
+        fromStepId: 'task-1',
+        toStepId: 'task-2',
+        fromCanvasPoint: { x: 10, y: 20 },
+        toCanvasPoint: { x: 30, y: 40 },
+        diagnostics: {
+          ...segmentDiagnostics,
+          fromStepId: 'task-1',
+          toStepId: 'task-2',
+          solverStatus: 'no_path',
+          debugReason: 'grid_guard:99'
+        }
+      }
+    ];
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        createElement(PickingRouteOverlayLayer, {
+          anchors,
+          solvedSegments,
+          showDiagnostics: true
+        })
+      );
+    });
+
     const arrows = renderer.root.findAll((node) => String(node.type) === 'Arrow');
     expect(arrows).toHaveLength(1);
     expect(arrows[0]?.props.stroke).toContain('234');
-    expect(renderer.root.findAll((node) => String(node.type) === 'Line')).toHaveLength(0);
+    const labels = renderer.root.findAll((node) => String(node.type) === 'Text');
+    expect(labels.some((node) => node.props.text === 'UNROUTABLE: no_path grid_guard:99')).toBe(
+      true
+    );
   });
 
   it('keeps unroutable fallback visually distinct from a solved route in DEV diagnostics', () => {
