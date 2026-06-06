@@ -436,6 +436,7 @@ export function PickingPlanningOverlay({
   }, [setSource, source.kind]);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
 
     async function loadPreview() {
@@ -451,27 +452,35 @@ export function PickingPlanningOverlay({
       try {
         const nextPreview =
           source.kind === 'orders'
-            ? await previewPickingPlanFromOrders({ orderIds: source.orderIds })
-            : await previewPickingPlanFromWave({ waveId: source.waveId });
+            ? await previewPickingPlanFromOrders(
+                { orderIds: source.orderIds },
+                controller.signal
+              )
+            : await previewPickingPlanFromWave(
+                { waveId: source.waveId },
+                controller.signal
+              );
         if (!cancelled) {
           setPreview(nextPreview);
         }
       } catch (error) {
-        if (!cancelled) {
-          usePickingPlanningOverlayStore.setState({
-            isLoading: false,
-            errorMessage:
-              error instanceof Error
-                ? error.message
-                : 'Failed to load picking planning preview.'
-          });
+        if (cancelled || controller.signal.aborted) {
+          return;
         }
+        usePickingPlanningOverlayStore.setState({
+          isLoading: false,
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : 'Failed to load picking planning preview.'
+        });
       }
     }
 
     void loadPreview();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [setPreview, source]);
 

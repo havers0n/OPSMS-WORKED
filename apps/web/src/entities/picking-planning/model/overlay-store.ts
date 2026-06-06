@@ -5,6 +5,18 @@ import type {
 } from './types';
 import { getRouteStepId } from './route-steps';
 
+export function getPreviewSourceKey(source: PickingPlanningOverlaySource): string {
+  if (source.kind === 'none') return 'none';
+  if (source.kind === 'orders') return `orders:${JSON.stringify(source.orderIds)}`;
+  return `wave:${source.waveId}`;
+}
+
+function cloneSource(source: PickingPlanningOverlaySource): PickingPlanningOverlaySource {
+  if (source.kind === 'none') return { kind: 'none' };
+  if (source.kind === 'orders') return { kind: 'orders', orderIds: [...source.orderIds] };
+  return { kind: 'wave', waveId: source.waveId };
+}
+
 export type PickingRouteOrderMode =
   | 'original'
   | 'nearest-neighbor'
@@ -78,18 +90,38 @@ export const usePickingPlanningOverlayStore =
   create<PickingPlanningOverlayState>((set) => ({
     ...initialState,
     setSource: (source) =>
-      set({
-        source,
-        preview: null,
-        isLoading: false,
-        errorMessage: null,
-        activePackageId: null,
-        selectedStepId: null,
-        reorderedStepIdsByPackageId: {},
-        routeOrderModeByPackageId: {},
-        routeStartPointByPackageId: {},
-        placingRouteStartForPackageId: null,
-        routeComparisonDebugEnabled: false
+      set((state) => {
+        if (getPreviewSourceKey(state.source) === getPreviewSourceKey(source)) {
+          if (!state.errorMessage) {
+            return state;
+          }
+          return {
+            source: cloneSource(source),
+            preview: null,
+            isLoading: false,
+            errorMessage: null,
+            activePackageId: null,
+            selectedStepId: null,
+            reorderedStepIdsByPackageId: {},
+            routeOrderModeByPackageId: {},
+            routeStartPointByPackageId: {},
+            placingRouteStartForPackageId: null,
+            routeComparisonDebugEnabled: false
+          };
+        }
+        return {
+          source,
+          preview: null,
+          isLoading: false,
+          errorMessage: null,
+          activePackageId: null,
+          selectedStepId: null,
+          reorderedStepIdsByPackageId: {},
+          routeOrderModeByPackageId: {},
+          routeStartPointByPackageId: {},
+          placingRouteStartForPackageId: null,
+          routeComparisonDebugEnabled: false
+        };
       }),
     setPreview: (preview) =>
       set((state) => {

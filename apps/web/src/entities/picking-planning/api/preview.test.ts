@@ -28,6 +28,19 @@ describe('picking planning preview api', () => {
     );
   });
 
+  it('forwards AbortSignal to bffRequest for orders', async () => {
+    const controller = new AbortController();
+    await previewPickingPlanFromOrders(
+      { orderIds: ['order-1'] },
+      controller.signal
+    );
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/picking-planning/preview/orders',
+      expect.objectContaining({ signal: controller.signal })
+    );
+  });
+
   it('posts wave preview payload', async () => {
     await previewPickingPlanFromWave({ waveId: 'wave-1' });
 
@@ -35,6 +48,19 @@ describe('picking planning preview api', () => {
       method: 'POST',
       body: JSON.stringify({ waveId: 'wave-1' })
     });
+  });
+
+  it('forwards AbortSignal to bffRequest for wave', async () => {
+    const controller = new AbortController();
+    await previewPickingPlanFromWave(
+      { waveId: 'wave-1' },
+      controller.signal
+    );
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/picking-planning/preview/wave',
+      expect.objectContaining({ signal: controller.signal })
+    );
   });
 
   it('posts explicit preview payload', async () => {
@@ -47,5 +73,18 @@ describe('picking planning preview api', () => {
       method: 'POST',
       body: JSON.stringify({ routeMode: 'hybrid', tasks: [] })
     });
+  });
+
+  it('forwards AbortSignal to bffRequest for explicit plan', async () => {
+    const controller = new AbortController();
+    await previewExplicitPickingPlan(
+      { routeMode: 'hybrid', tasks: [] },
+      controller.signal
+    );
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/picking-planning/preview',
+      expect.objectContaining({ signal: controller.signal })
+    );
   });
 });

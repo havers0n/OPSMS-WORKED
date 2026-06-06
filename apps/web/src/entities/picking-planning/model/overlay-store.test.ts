@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  getPreviewSourceKey,
   resetPickingPlanningOverlayStore,
   usePickingPlanningOverlayStore
 } from './overlay-store';
 import { deriveDisplayedRouteSteps, getRouteStepId } from './route-steps';
-import type { PickingPlanningPreviewResponse } from './types';
+import type { PickingPlanningOverlaySource, PickingPlanningPreviewResponse } from './types';
 
 function createPreview(): PickingPlanningPreviewResponse {
   return {
@@ -650,6 +651,123 @@ describe('picking planning overlay store', () => {
       expect(
         usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId
       ).toEqual({});
+    });
+  });
+
+  describe('getPreviewSourceKey', () => {
+    it('returns none for no source', () => {
+      expect(getPreviewSourceKey({ kind: 'none' })).toBe('none');
+    });
+
+    it('returns orders with preserved order IDs', () => {
+      expect(
+        getPreviewSourceKey({ kind: 'orders', orderIds: ['A', 'B'] })
+      ).toBe('orders:["A","B"]');
+    });
+
+    it('returns wave with wave ID', () => {
+      expect(getPreviewSourceKey({ kind: 'wave', waveId: 'W1' })).toBe('wave:W1');
+    });
+  });
+
+  describe('setSource semantic deduplication', () => {
+    it('same source while loading is a no-op', () => {
+      const store = usePickingPlanningOverlayStore;
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+
+      expect(store.getState().source).toEqual({
+        kind: 'orders',
+        orderIds: ['A']
+      });
+      expect(store.getState().preview).toBeNull();
+      expect(store.getState().errorMessage).toBeNull();
+    });
+
+    it('same successfully loaded source is a no-op', () => {
+      const store = usePickingPlanningOverlayStore;
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+
+      const preview = createPreview();
+      store.getState().setPreview(preview);
+
+      const stateBefore = store.getState();
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+
+      const stateAfter = store.getState();
+      expect(stateAfter.preview).toEqual(preview);
+      expect(stateAfter.source).toEqual(stateBefore.source);
+    });
+
+    it('retries after failure', () => {
+      const store = usePickingPlanningOverlayStore;
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+
+      const secondCallState = store.getState();
+      expect(secondCallState.errorMessage).toBeNull();
+
+      const errorState = {
+        ...secondCallState,
+        errorMessage: 'Server error',
+        isLoading: false
+      };
+      store.setState(errorState);
+
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+
+      expect(store.getState().errorMessage).toBeNull();
+      expect(store.getState().preview).toBeNull();
+    });
+
+    it('different source triggers full reset', () => {
+      const store = usePickingPlanningOverlayStore;
+      store.getState().setSource({ kind: 'orders', orderIds: ['A'] });
+      store.getState().setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+      store.getState().setSource({ kind: 'orders', orderIds: ['B'] });
+
+      expect(store.getState().routeOrderModeByPackageId).toEqual({});
+      expect(store.getState().source).toEqual({
+        kind: 'orders',
+        orderIds: ['B']
+      });
+    });
+
+    it('orders [A,B] and [B,A] are different sources', () => {
+      const store = usePickingPlanningOverlayStore;
+      store.getState().setSource({ kind: 'orders', orderIds: ['A', 'B'] });
+      store.getState().setRouteOrderMode('pkg-1', 'nearest-neighbor');
+
+      store.getState().setSource({ kind: 'orders', orderIds: ['B', 'A'] });
+
+      expect(store.getState().source).toEqual({
+        kind: 'orders',
+        orderIds: ['B', 'A']
+      });
+      expect(store.getState().routeOrderModeByPackageId).toEqual({});
+    });
+
+    it('retry with same object reference creates a new source reference', () => {
+      const store = usePickingPlanningOverlayStore;
+      const source: PickingPlanningOverlaySource = { kind: 'orders', orderIds: ['A'] };
+
+      store.getState().setSource(source);
+
+      store.setState({
+        ...store.getState(),
+        errorMessage: 'fail',
+        isLoading: false
+      });
+
+      const previousRef = store.getState().source;
+
+      store.getState().setSource(source);
+
+      expect(store.getState().source).not.toBe(previousRef);
+      expect(store.getState().source).toEqual(source);
+      expect(store.getState().errorMessage).toBeNull();
     });
   });
 });
