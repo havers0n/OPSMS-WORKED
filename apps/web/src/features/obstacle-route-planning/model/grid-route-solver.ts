@@ -489,6 +489,110 @@ function prependIfDistinct(points: RoutePoint[], point: RoutePoint) {
   }
 }
 
+type EndpointOverride = {
+  cells: Cell[];
+};
+
+const ALL_DIRECTIONS: ReadonlyArray<{ dx: number; dy: number }> = [
+  { dx: -1, dy: 0 },
+  { dx: 1, dy: 0 },
+  { dx: 0, dy: -1 },
+  { dx: 0, dy: 1 },
+  { dx: -1, dy: -1 },
+  { dx: 1, dy: -1 },
+  { dx: -1, dy: 1 },
+  { dx: 1, dy: 1 }
+];
+
+function getEndpointOverride(
+  worldPoint: RoutePoint,
+  cell: Cell,
+  grid: Grid,
+  obstacles: RouteObstacle[],
+  clearanceM: number,
+  occupancyMode: 'conservative' | 'center'
+): EndpointOverride | null {
+  const blockers = getCellBlockReasons(cell, grid, obstacles, clearanceM, occupancyMode);
+  const isOnlyAreaIntersects =
+    blockers.length > 0 &&
+    blockers.every((b) => b.rule === 'cell_area_intersects_inflated_obstacle');
+  if (!isOnlyAreaIntersects) return null;
+
+  const visited = new Map<number, Cell | null>();
+  const queue: Cell[] = [cell];
+  const cellKeyValue = cellKey(cell, grid);
+  visited.set(cellKeyValue, null);
+
+  let searchedCells = 0;
+  const MAX_SEARCH = 1000;
+
+  while (queue.length > 0 && searchedCells < MAX_SEARCH) {
+    const current = queue.shift()!;
+    searchedCells += 1;
+
+    for (const dir of ALL_DIRECTIONS) {
+      const next = { x: current.x + dir.dx, y: current.y + dir.dy };
+      if (!isCellWithinGrid(next, grid)) continue;
+
+      const nextKey = cellKey(next, grid);
+      if (visited.has(nextKey)) continue;
+
+      const nextBlockers = getCellBlockReasons(
+        next,
+        grid,
+        obstacles,
+        clearanceM,
+        occupancyMode
+      );
+
+      if (nextBlockers.length === 0) {
+        const nextCenter = cellToPoint(next, grid);
+        if (!isRouteSegmentClear(nextCenter, worldPoint, obstacles, clearanceM)) {
+          visited.set(nextKey, current);
+          continue;
+        }
+
+        const pathCells: Cell[] = [next];
+        let cur: Cell | null = current;
+        while (cur !== null) {
+          pathCells.push(cur);
+          if (cur.x === cell.x && cur.y === cell.y) break;
+          cur = visited.get(cellKey(cur, grid)) ?? null;
+        }
+
+        return { cells: pathCells };
+      }
+
+      if (
+        nextBlockers.every(
+          (b) => b.rule === 'cell_area_intersects_inflated_obstacle'
+        )
+      ) {
+        visited.set(nextKey, current);
+        queue.push(next);
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildIsWalkableWithOverride(
+  base: (cell: Cell) => boolean,
+  overrideCells: Cell[],
+  grid: Grid
+): (cell: Cell) => boolean {
+  const overrideKeys = new Set<number>();
+  for (const c of overrideCells) {
+    overrideKeys.add(cellKey(c, grid));
+  }
+
+  return (cell: Cell) => {
+    if (overrideKeys.has(cellKey(cell, grid))) return true;
+    return base(cell);
+  };
+}
+
 function snapEndpointsToOriginal(
   points: RoutePoint[],
   start: RoutePoint,
@@ -726,7 +830,14 @@ export function solveGridRoute(
           config.maxEndpointSnapCells
         );
 
-  if (!isWalkable(startCell) && !startSnap) {
+  const startOverride = !isWalkable(startCell) && !startSnap
+    ? getEndpointOverride(start, startCell, grid, obstacles, config.clearanceM, occupancyMode)
+    : null;
+  const endOverride = !isWalkable(endCell) && !endSnap
+    ? getEndpointOverride(end, endCell, grid, obstacles, config.clearanceM, occupancyMode)
+    : null;
+
+  if (!isWalkable(startCell) && !startSnap && !startOverride) {
     return {
       status: 'start_blocked',
       points: [],
@@ -748,7 +859,7 @@ export function solveGridRoute(
         : {})
     };
   }
-  if (!isWalkable(endCell) && !endSnap) {
+  if (!isWalkable(endCell) && !endSnap && !endOverride) {
     return {
       status: 'end_blocked',
       points: [],
@@ -773,6 +884,14 @@ export function solveGridRoute(
 
   const routedStartCell = startSnap?.cell ?? startCell;
   const routedEndCell = endSnap?.cell ?? endCell;
+
+  let isWalkableForAStar = isWalkable;
+  if (startOverride) {
+    isWalkableForAStar = buildIsWalkableWithOverride(isWalkableForAStar, startOverride.cells, grid);
+  }
+  if (endOverride) {
+    isWalkableForAStar = buildIsWalkableWithOverride(isWalkableForAStar, endOverride.cells, grid);
+  }
   const routedStartPoint = cellToPoint(routedStartCell, grid);
   const routedEndPoint = cellToPoint(routedEndCell, grid);
   const startKey = cellKey(routedStartCell, grid);
@@ -830,6 +949,10 @@ export function solveGridRoute(
         startSnap ? `start_snap:r${startSnap.radius}` : null,
         endSnap ? `end_snap:r${endSnap.radius}` : null
       ].filter(Boolean);
+      const overrideTags = [
+        startOverride ? 'start_override' : null,
+        endOverride ? 'end_override' : null
+      ].filter(Boolean);
       return {
         status: 'ok',
         points,
@@ -851,9 +974,9 @@ export function solveGridRoute(
               })
             }
           : {}),
-        ...(snapTags.length > 0
+        ...(snapTags.length > 0 || overrideTags.length > 0
           ? {
-              debugReason: snapTags.join(',')
+              debugReason: [...snapTags, ...overrideTags].join(',')
             }
           : {})
       };
@@ -868,13 +991,13 @@ export function solveGridRoute(
         y: currentCell.y + direction.dy
       };
 
-      if (!isWalkable(nextCell)) continue;
+      if (!isWalkableForAStar(nextCell)) continue;
 
       const isDiagonal = direction.dx !== 0 && direction.dy !== 0;
       if (isDiagonal) {
         const horizontal = { x: currentCell.x + direction.dx, y: currentCell.y };
         const vertical = { x: currentCell.x, y: currentCell.y + direction.dy };
-        if (!isWalkable(horizontal) || !isWalkable(vertical)) continue;
+        if (!isWalkableForAStar(horizontal) || !isWalkableForAStar(vertical)) continue;
       }
 
       const nextPoint = cellToPoint(nextCell, grid);

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   inspectGridRouteEndpointCandidates,
+  isPointBlocked,
   isRouteSegmentClear,
   solveGridRoute
 } from './grid-route-solver';
-import type { RouteObstacle, RoutePoint } from './obstacle-types';
+import type { RouteObstacle, RoutePoint, RouteSolveResult } from './obstacle-types';
 import {
   removeRedundantCollinearPoints,
   simplifyRouteLineOfSight
@@ -159,7 +160,7 @@ describe('solveGridRoute', () => {
     expect(result.status).toBe('end_blocked');
   });
 
-  it('reproduces the production end_blocked aisle edge case with exact cells', () => {
+  it('solves the production aisle edge case via endpoint override', () => {
     const result = solveGridRoute(
       productionStart,
       productionEnd,
@@ -171,7 +172,12 @@ describe('solveGridRoute', () => {
       }
     );
 
-    expect(result.status).toBe('end_blocked');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.points[0]).toEqual(productionStart);
+    expect(result.points[result.points.length - 1]).toEqual(productionEnd);
+    expect(result.debugReason).toContain('end_override');
+    expectRouteClear(result.points, productionAisleObstacles, productionConfig.clearanceM);
     expect(result.diagnostics).toMatchObject({
       originalStartCell: { x: 18, y: 73 },
       originalEndCell: { x: 14, y: 80 }
@@ -276,37 +282,46 @@ describe('solveGridRoute', () => {
       }
     );
 
+    const getDebugReason = (r: RouteSolveResult): string | undefined =>
+      (r as { debugReason?: string }).debugReason;
+
     expect({
       conservative: {
         status: conservative.status,
         blockedGridCellCount: conservative.diagnostics?.blockedGridCellCount ?? null,
-        hasPath: conservative.status === 'ok'
+        hasPath: conservative.status === 'ok',
+        hasOverride: getDebugReason(conservative)?.includes('end_override') ?? false
       },
       finerGrid: {
         status: finerGrid.status,
         blockedGridCellCount: finerGrid.diagnostics?.blockedGridCellCount ?? null,
-        hasPath: finerGrid.status === 'ok'
+        hasPath: finerGrid.status === 'ok',
+        hasOverride: getDebugReason(finerGrid)?.includes('end_override') ?? false
       },
       centerPoint: {
         status: centerPoint.status,
         blockedGridCellCount: centerPoint.diagnostics?.blockedGridCellCount ?? null,
-        hasPath: centerPoint.status === 'ok'
+        hasPath: centerPoint.status === 'ok',
+        hasOverride: getDebugReason(centerPoint)?.includes('end_override') ?? false
       }
     }).toEqual({
       conservative: {
-        status: 'end_blocked',
+        status: 'ok',
         blockedGridCellCount: 454,
-        hasPath: false
+        hasPath: true,
+        hasOverride: true
       },
       finerGrid: {
         status: 'ok',
         blockedGridCellCount: 1544,
-        hasPath: true
+        hasPath: true,
+        hasOverride: false
       },
       centerPoint: {
         status: 'ok',
         blockedGridCellCount: 362,
-        hasPath: true
+        hasPath: true,
+        hasOverride: false
       }
     });
   });
@@ -386,7 +401,7 @@ describe('solveGridRoute', () => {
     expectRouteClear(result.points, obstacles, 0.1);
   });
 
-  it('returns start_blocked when no nearby walkable cell exists within snap radius', () => {
+  it('applies start override when no snap target exists within radius 0', () => {
     const rack: RouteObstacle = {
       type: 'rack',
       id: 'rack-1',
@@ -402,7 +417,9 @@ describe('solveGridRoute', () => {
       { clearanceM: 0.1, resolutionM: 0.5, maxEndpointSnapCells: 0 }
     );
 
-    expect(result.status).toBe('start_blocked');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.debugReason).toContain('start_override');
   });
 
   it('does not cross a blocking wall segment', () => {
@@ -485,6 +502,136 @@ describe('solveGridRoute', () => {
       { x: 0.4, y: 0.4 }
     ]);
     expectRouteClear(result.points, obstacles, 0.01);
+  });
+
+  it('returns end_blocked when the exact endpoint is inside an inflated rack (true blocked endpoint)', () => {
+    const rack: RouteObstacle = {
+      type: 'rack',
+      id: 'rack-1',
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 2
+    };
+
+    const result = solveGridRoute(
+      { x: -3, y: -3 },
+      { x: 1.1, y: 1.1 },
+      [rack],
+      { clearanceM: 0.2, resolutionM: 0.5 }
+    );
+
+    expect(result.status).toBe('end_blocked');
+  });
+
+  it('does not apply override to non-endpoint traversal cells', () => {
+    const obstacles: RouteObstacle[] = [
+      { type: 'rack', id: 'a', x: 0, y: 0, width: 3, height: 1.2 },
+      { type: 'rack', id: 'b', x: 0, y: 2.0, width: 3, height: 1.2 }
+    ];
+    const config = { clearanceM: 0.2, resolutionM: 0.5, maxEndpointSnapCells: 2 };
+
+    const start = { x: -2, y: 0.3 };
+    const end = { x: 1.5, y: -1 };
+
+    const withOverride = solveGridRoute(start, end, obstacles, config, {
+      boundsOverride: { minX: -3, minY: -3, maxX: 7, maxY: 6 },
+      includeDiagnostics: true,
+      occupancyMode: 'conservative'
+    });
+
+    const withoutOverride = solveGridRoute(start, end, obstacles, config, {
+      boundsOverride: { minX: -3, minY: -3, maxX: 7, maxY: 6 },
+      includeDiagnostics: true,
+      occupancyMode: 'center'
+    });
+
+    expect(withOverride.diagnostics?.blockedGridCellCount).toBeGreaterThan(
+      withoutOverride.diagnostics?.blockedGridCellCount ?? 0
+    );
+  });
+
+  it('applies the endpoint override symmetrically for start_blocked', () => {
+    const obstacles: RouteObstacle[] = [
+      {
+        type: 'rack',
+        id: 'lower',
+        x: 4.94,
+        y: 31.709,
+        width: 17,
+        height: 2.25
+      },
+      {
+        type: 'rack',
+        id: 'upper',
+        x: 4.113,
+        y: 35.351,
+        width: 18,
+        height: 1
+      }
+    ];
+
+    const startPoint = { x: 5.4125, y: 34.559 };
+    const endPoint = { x: 7.3025, y: 31.109 };
+
+    const result = solveGridRoute(startPoint, endPoint, obstacles, productionConfig, {
+      includeDiagnostics: true,
+      boundsOverride: productionBounds
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.points[0]).toEqual(startPoint);
+    expect(result.points[result.points.length - 1]).toEqual(endPoint);
+    expect(result.debugReason).toContain('start_override');
+    expectRouteClear(result.points, obstacles, productionConfig.clearanceM);
+  });
+
+  it('does not allow endpoint override to relax traversal occupancy in narrow corridors', () => {
+    const obstacles: RouteObstacle[] = [
+      { type: 'rack', id: 'lower', x: 0, y: 0, width: 3, height: 1.2 },
+      { type: 'rack', id: 'upper', x: 0, y: 1.8, width: 3, height: 1.2 }
+    ];
+    const config = { clearanceM: 0.2, resolutionM: 0.5, maxEndpointSnapCells: 2 };
+
+    const start = { x: 1.5, y: -1 };
+    const end = { x: 1.5, y: 3.5 };
+
+    expect(isPointBlocked(start, obstacles, config.clearanceM)).toBe(false);
+    expect(isPointBlocked(end, obstacles, config.clearanceM)).toBe(false);
+
+    const result = solveGridRoute(start, end, obstacles, config, {
+      boundsOverride: { minX: -3, minY: -3, maxX: 7, maxY: 6 },
+      includeDiagnostics: true
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.debugReason ?? '').not.toContain('override');
+    expectRouteClear(result.points, obstacles, config.clearanceM);
+  });
+});
+
+describe('connector segment clearance invariant', () => {
+  it('rejects a connector that crosses an inflated obstacle even when both endpoints are individually clear', () => {
+    const rack: RouteObstacle = {
+      type: 'rack',
+      id: 'rack-1',
+      x: 0,
+      y: -0.5,
+      width: 1,
+      height: 3
+    };
+    const clearanceM = 0.2;
+
+    // inflated rack: x∈[-0.2, 1.2], y∈[-0.7, 3.2]
+    const pointA = { x: -1, y: 0.5 };
+    const pointB = { x: 2, y: 0.5 };
+
+    expect(isPointBlocked(pointA, [rack], clearanceM)).toBe(false);
+    expect(isPointBlocked(pointB, [rack], clearanceM)).toBe(false);
+
+    expect(isRouteSegmentClear(pointA, pointB, [rack], clearanceM)).toBe(false);
   });
 });
 
