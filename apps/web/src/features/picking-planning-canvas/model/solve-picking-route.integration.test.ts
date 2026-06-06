@@ -11,6 +11,7 @@ const step = {
   fromLocationId: 'loc-1',
   skuId: 'sku-1',
   qtyToPick: 1,
+  qtyEach: null,
   allocations: []
 };
 

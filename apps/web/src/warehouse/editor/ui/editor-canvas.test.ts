@@ -441,6 +441,7 @@ function seedPickingPlanPreview() {
                   fromLocationId: 'loc-1',
                   skuId: 'sku-1',
                   qtyToPick: 1,
+                  qtyEach: null,
                   allocations: []
                 },
                 {
@@ -449,6 +450,7 @@ function seedPickingPlanPreview() {
                   fromLocationId: 'loc-2',
                   skuId: 'sku-2',
                   qtyToPick: 1,
+                  qtyEach: null,
                   allocations: []
                 }
               ],
@@ -1177,6 +1179,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
                   fromLocationId: 'loc-1',
                   skuId: 'sku-1',
                   qtyToPick: 1,
+                  qtyEach: null,
                   allocations: []
                 },
                 {
@@ -1185,6 +1188,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
                   fromLocationId: 'loc-2',
                   skuId: 'sku-2',
                   qtyToPick: 1,
+                  qtyEach: null,
                   allocations: []
                 }
               ],
@@ -1357,6 +1361,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
                     fromLocationId: 'loc-1',
                     skuId: 'sku-1',
                     qtyToPick: 1,
+                    qtyEach: null,
                     allocations: []
                   },
                   {
@@ -1365,6 +1370,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
                     fromLocationId: 'loc-2',
                     skuId: 'sku-2',
                     qtyToPick: 1,
+                    qtyEach: null,
                     allocations: []
                   }
                 ],

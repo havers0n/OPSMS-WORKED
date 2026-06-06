@@ -18,6 +18,7 @@ function step(taskId: string): PlanningRouteStepDto {
     fromLocationId: `loc-${taskId}`,
     skuId: `sku-${taskId}`,
     qtyToPick: 1,
+    qtyEach: null,
     allocations: []
   };
 }

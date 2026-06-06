@@ -256,27 +256,32 @@ export function PickingRouteOverlayLayer({
                 />
               );
             }
-            if (!seg.fromCanvasPoint || !seg.toCanvasPoint) return null;
-            return (
-              <Arrow
-                key={`route-${seg.fromStepId}-${seg.toStepId}`}
-                points={[
-                  seg.fromCanvasPoint.x,
-                  seg.fromCanvasPoint.y,
-                  seg.toCanvasPoint.x,
-                  seg.toCanvasPoint.y
-                ]}
-                pointerLength={10}
-                pointerWidth={8}
-                stroke="rgba(234,88,12,0.72)"
-                fill="rgba(234,88,12,0.72)"
-                strokeWidth={2}
-                strokeScaleEnabled={false}
-                dash={[6, 4]}
-                lineCap="round"
-                lineJoin="round"
-              />
-            );
+
+            if (seg.status === 'unroutable' && showDiagnostics) {
+              if (!seg.fromCanvasPoint || !seg.toCanvasPoint) return null;
+              return (
+                <Arrow
+                  key={`route-${seg.fromStepId}-${seg.toStepId}`}
+                  points={[
+                    seg.fromCanvasPoint.x,
+                    seg.fromCanvasPoint.y,
+                    seg.toCanvasPoint.x,
+                    seg.toCanvasPoint.y
+                  ]}
+                  pointerLength={10}
+                  pointerWidth={8}
+                  stroke="rgba(234,88,12,0.72)"
+                  fill="rgba(234,88,12,0.72)"
+                  strokeWidth={2}
+                  strokeScaleEnabled={false}
+                  dash={[6, 4]}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              );
+            }
+
+            return null;
           })
         : anchors.slice(1).map((anchor, index) => {
             const previous = anchors[index];

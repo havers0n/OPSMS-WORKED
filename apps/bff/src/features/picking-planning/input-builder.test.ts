@@ -3,6 +3,7 @@ import { buildPlanningInputFromOrders, type PickingPlanningOrderInputReadRepo } 
 
 function makeRepo(overrides: Partial<PickingPlanningOrderInputReadRepo> = {}): PickingPlanningOrderInputReadRepo {
   return {
+    listOrdersByIds: async () => [],
     listOrderLines: async () => [],
     listProducts: async () => [],
     listUnitProfiles: async () => [],
@@ -570,6 +571,180 @@ describe('buildPlanningInputFromOrders', () => {
     expect(result.unresolved).toEqual([]);
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0]).toMatchObject({ fromLocationId: 'loc-1', qty: 2 });
+  });
+
+  // ── Unresolved reason deduplication tests ──
+
+  it('emits exactly one unsupported_uom when all inventory has unsupported UOM (test 1)', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 5, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1', name: 'Product 1', image_urls: [] }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'box', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0]?.reason).toBe('unsupported_uom');
+    expect(result.warningDetails).toContainEqual(
+      expect.objectContaining({ code: 'UNSUPPORTED_UOM', severity: 'error' })
+    );
+    expect(result.warningDetails.filter((w) => w.code === 'NO_AVAILABLE_INVENTORY')).toHaveLength(0);
+  });
+
+  it('emits exactly one no_available_inventory when supported inventory is insufficient (test 2)', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 10, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1', name: 'Product 1', image_urls: [] }],
+        listExplicitLocationRoles: async () => [{ product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' }],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 5, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0]?.reason).toBe('no_available_inventory');
+  });
+
+  it('plans successfully when unsupported candidate exists alongside a supported usable candidate (test 3)', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 5, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1', name: 'Product 1', image_urls: [] }],
+        listExplicitLocationRoles: async () => [
+          { product_id: 'p1', location_id: 'loc-unsupported', role: 'primary_pick' },
+          { product_id: 'p1', location_id: 'loc-supported', role: 'primary_pick' }
+        ],
+        listInventoryUnits: async () => [
+          { id: 'iu-unsupported', product_id: 'p1', container_id: 'c-unsup', quantity: 5, uom: 'box', created_at: '2025-01-01T00:00:00Z' },
+          { id: 'iu-supported', product_id: 'p1', container_id: 'c-sup', quantity: 5, uom: 'ea', created_at: '2025-01-02T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [
+          { id: 'c-unsup', current_location_id: 'loc-unsupported' },
+          { id: 'c-sup', current_location_id: 'loc-supported' }
+        ],
+        listLocations: async () => [
+          { id: 'loc-unsupported', tenant_id: 't1', floor_id: 'f1', code: 'A-01' },
+          { id: 'loc-supported', tenant_id: 't1', floor_id: 'f1', code: 'B-01' }
+        ]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toHaveLength(1);
+    expect(result.unresolved).toEqual([]);
+    expect(result.tasks[0]?.qty).toBe(5);
+  });
+
+  it('emits exactly one unsupported_uom when all candidates across multiple locations have unsupported UOM (test 4)', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 5, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1', name: 'Product 1', image_urls: [] }],
+        listExplicitLocationRoles: async () => [
+          { product_id: 'p1', location_id: 'loc-a', role: 'primary_pick' },
+          { product_id: 'p1', location_id: 'loc-b', role: 'primary_pick' }
+        ],
+        listInventoryUnits: async () => [
+          { id: 'iu-a', product_id: 'p1', container_id: 'c-a', quantity: 5, uom: 'box', created_at: '2025-01-01T00:00:00Z' },
+          { id: 'iu-b', product_id: 'p1', container_id: 'c-b', quantity: 5, uom: 'pallet', created_at: '2025-01-02T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [
+          { id: 'c-a', current_location_id: 'loc-a' },
+          { id: 'c-b', current_location_id: 'loc-b' }
+        ],
+        listLocations: async () => [
+          { id: 'loc-a', tenant_id: 't1', floor_id: 'f1', code: 'A-01' },
+          { id: 'loc-b', tenant_id: 't1', floor_id: 'f1', code: 'B-01' }
+        ]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0]?.reason).toBe('unsupported_uom');
+  });
+
+  it('emits exactly one no_primary_pick_location when usable inventory exists but no primary pick location is configured (test 5)', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [{ order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 5, qty_picked: 0 }],
+        listProducts: async () => [{ id: 'p1', sku: 'sku-1', name: 'Product 1', image_urls: [] }],
+        listExplicitLocationRoles: async () => [],
+        listStructuralRolesForLocations: async () => [],
+        listInventoryUnits: async () => [
+          { id: 'iu-1', product_id: 'p1', container_id: 'c1', quantity: 10, uom: 'ea', created_at: '2025-01-01T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [{ id: 'c1', current_location_id: 'loc-1' }],
+        listLocations: async () => [{ id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' }]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toEqual([]);
+    expect(result.unresolved).toHaveLength(1);
+    expect(result.unresolved[0]?.reason).toBe('no_primary_pick_location');
+  });
+
+  it('resolves mixed order with one planned, one unsupported_uom, one no_available_inventory (test 7)', async () => {
+    const result = await buildPlanningInputFromOrders(
+      makeRepo({
+        listOrderLines: async () => [
+          { order_id: 'o1', id: 'l1', product_id: 'p1', sku: 'sku-1', qty_required: 5, qty_picked: 0 },
+          { order_id: 'o1', id: 'l2', product_id: 'p2', sku: 'sku-2', qty_required: 5, qty_picked: 0 },
+          { order_id: 'o1', id: 'l3', product_id: 'p3', sku: 'sku-3', qty_required: 5, qty_picked: 0 }
+        ],
+        listProducts: async () => [
+          { id: 'p1', sku: 'sku-1', name: 'Product 1', image_urls: [] },
+          { id: 'p2', sku: 'sku-2', name: 'Product 2', image_urls: [] },
+          { id: 'p3', sku: 'sku-3', name: 'Product 3', image_urls: [] }
+        ],
+        listExplicitLocationRoles: async () => [
+          { product_id: 'p1', location_id: 'loc-1', role: 'primary_pick' },
+          { product_id: 'p2', location_id: 'loc-2', role: 'primary_pick' },
+          { product_id: 'p3', location_id: 'loc-3', role: 'primary_pick' }
+        ],
+        listInventoryUnits: async () => [
+          { id: 'iu-p1', product_id: 'p1', container_id: 'c1', quantity: 5, uom: 'ea', created_at: '2025-01-01T00:00:00Z' },
+          { id: 'iu-p2', product_id: 'p2', container_id: 'c2', quantity: 5, uom: 'box', created_at: '2025-01-02T00:00:00Z' },
+          { id: 'iu-p3', product_id: 'p3', container_id: 'c3', quantity: 2, uom: 'ea', created_at: '2025-01-03T00:00:00Z' }
+        ],
+        listContainerLocations: async () => [
+          { id: 'c1', current_location_id: 'loc-1' },
+          { id: 'c2', current_location_id: 'loc-2' },
+          { id: 'c3', current_location_id: 'loc-3' }
+        ],
+        listLocations: async () => [
+          { id: 'loc-1', tenant_id: 't1', floor_id: 'f1', code: 'A-01' },
+          { id: 'loc-2', tenant_id: 't1', floor_id: 'f1', code: 'B-01' },
+          { id: 'loc-3', tenant_id: 't1', floor_id: 'f1', code: 'C-01' }
+        ]
+      }),
+      { orderIds: ['o1'] }
+    );
+
+    expect(result.tasks).toHaveLength(1);
+    expect(result.tasks[0]?.orderRefs[0]?.orderLineId).toBe('l1');
+    expect(result.unresolved).toHaveLength(2);
+    expect(result.unresolved.map((u) => u.orderLineId)).toEqual(
+      expect.arrayContaining(['l2', 'l3'])
+    );
+    expect(result.unresolved.find((u) => u.orderLineId === 'l2')?.reason).toBe('unsupported_uom');
+    expect(result.unresolved.find((u) => u.orderLineId === 'l3')?.reason).toBe('no_available_inventory');
   });
 
   it('emits no_primary_pick_location when neither explicit nor structural primary_pick exists', async () => {

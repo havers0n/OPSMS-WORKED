@@ -43,7 +43,7 @@ export type PlanningRouteStepDto = {
   productName?: string | null;
   productImageUrl?: string | null;
   qtyToPick: number;
-  qtyEach?: number;
+  qtyEach: number | null;
   packagingLevels?: Array<{
     id: string;
     code: string;

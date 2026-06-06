@@ -121,6 +121,7 @@ export type BuildPlanningInputFromOrdersResult = {
 };
 
 export type PickingPlanningOrderInputReadRepo = {
+  listOrdersByIds(orderIds: string[]): Promise<Array<{ id: string }>>;
   listOrderLines(orderIds: string[]): Promise<OrderLinePlanningRow[]>;
   listProducts(productIds: string[]): Promise<ProductPlanningRow[]>;
   listUnitProfiles(productIds: string[]): Promise<ProductUnitProfilePlanningRow[]>;
@@ -433,12 +434,20 @@ export async function buildPlanningInputFromOrders(
 
     const stagedAllocations: StagedInventoryAllocation[] = [];
     let remainingQtyToStage = qtyToPlan;
+    let hasSupportedInventoryAtAnyLocation = false;
+    let hasOnlyUnsupportedInventoryAtAnyLocation = false;
 
     for (const locationId of primaryPickLocationIds) {
       const key = `${line.product_id}:${locationId}`;
       const eligible = (eligibleInventoryByProductAndLocation.get(key) ?? []).slice().sort(compareInventoryUnits);
 
       const withSupportedUom = eligible.filter((row) => SUPPORTED_UNIT_UOMS.has(row.uom.trim().toLowerCase()));
+
+      if (eligible.length > 0 && withSupportedUom.length > 0) {
+        hasSupportedInventoryAtAnyLocation = true;
+      } else if (eligible.length > 0 && withSupportedUom.length === 0) {
+        hasOnlyUnsupportedInventoryAtAnyLocation = true;
+      }
 
       for (const inventory of withSupportedUom) {
         const remainingInventoryQty = allocationLedger.remainingByInventoryUnitId.get(inventory.id) ?? 0;
@@ -452,32 +461,31 @@ export async function buildPlanningInputFromOrders(
       }
 
       if (remainingQtyToStage === 0) break;
-
-      if (eligible.length > 0 && withSupportedUom.length === 0) {
-        const unresolvedLine = {
-          orderId: line.order_id,
-          orderLineId: line.id,
-          skuId: product.sku ?? line.sku,
-          productId: line.product_id,
-          qty: qtyToPlan,
-          reason: 'unsupported_uom',
-          message: `Inventory at location ${locationId} for product ${line.product_id} has unsupported UOMs.`
-        } satisfies UnresolvedPlanningLine;
-        unresolved.push(unresolvedLine);
-        const warning = createUnresolvedPlanningWarning(unresolvedLine);
-        if (warning) warningDetails.push(warning);
-      }
     }
 
     if (remainingQtyToStage > 0) {
+      let reason: UnresolvedPlanningLine['reason'];
+      let message: string;
+
+      if (hasSupportedInventoryAtAnyLocation) {
+        reason = 'no_available_inventory';
+        message = `No available inventory in primary_pick locations can satisfy qty ${qtyToPlan}.`;
+      } else if (hasOnlyUnsupportedInventoryAtAnyLocation) {
+        reason = 'unsupported_uom';
+        message = `Inventory for product ${line.product_id} in primary_pick locations has unsupported UOMs.`;
+      } else {
+        reason = 'no_available_inventory';
+        message = `No available inventory in primary_pick locations can satisfy qty ${qtyToPlan}.`;
+      }
+
       const unresolvedLine = {
         orderId: line.order_id,
         orderLineId: line.id,
         skuId: product.sku ?? line.sku,
         productId: line.product_id,
         qty: qtyToPlan,
-        reason: 'no_available_inventory',
-        message: `No available inventory in primary_pick locations can satisfy qty ${qtyToPlan}.`
+        reason,
+        message
       } satisfies UnresolvedPlanningLine;
       unresolved.push(unresolvedLine);
       const warning = createUnresolvedPlanningWarning(unresolvedLine);
