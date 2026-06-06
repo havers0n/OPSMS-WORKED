@@ -123,6 +123,7 @@ function createPreview(): PickingPlanningPreviewResponse {
               fromLocationId: 'loc-1',
               skuId: 'sku-1',
               qtyToPick: 1,
+              qtyEach: null,
               allocations: [{ orderId: 'order-1', orderLineId: 'line-1', qty: 1 }]
             },
             {
@@ -131,6 +132,7 @@ function createPreview(): PickingPlanningPreviewResponse {
               fromLocationId: 'loc-2',
               skuId: 'sku-2',
               qtyToPick: 1,
+              qtyEach: null,
               allocations: [{ orderId: 'order-1', orderLineId: 'line-2', qty: 1 }]
             }
           ],
