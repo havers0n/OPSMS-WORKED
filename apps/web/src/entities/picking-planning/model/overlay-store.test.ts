@@ -116,11 +116,10 @@ describe('picking planning overlay store', () => {
     const preview = createPreview();
     usePickingPlanningOverlayStore.getState().setPreview(preview);
     const steps = preview.packages[0].route.steps;
-    const stepIds = steps.map(getRouteStepId);
 
     usePickingPlanningOverlayStore
       .getState()
-      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+      .reorderPackageSteps('pkg-1', 'task-2', -1);
 
     const reordered =
       usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
@@ -186,10 +185,9 @@ describe('picking planning overlay store', () => {
   it('switching to nearest mode clears manual reorder for package', () => {
     const preview = createPreview();
     usePickingPlanningOverlayStore.getState().setPreview(preview);
-    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
     usePickingPlanningOverlayStore
       .getState()
-      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+      .reorderPackageSteps('pkg-1', 'task-2', -1);
 
     usePickingPlanningOverlayStore
       .getState()
@@ -203,14 +201,13 @@ describe('picking planning overlay store', () => {
   it('manual reorder switches nearest mode back to original', () => {
     const preview = createPreview();
     usePickingPlanningOverlayStore.getState().setPreview(preview);
-    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
     usePickingPlanningOverlayStore
       .getState()
       .setRouteOrderMode('pkg-1', 'nearest-neighbor');
 
     usePickingPlanningOverlayStore
       .getState()
-      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+      .reorderPackageSteps('pkg-1', 'task-2', -1);
 
     expect(
       usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
@@ -220,14 +217,13 @@ describe('picking planning overlay store', () => {
   it('manual reorder switches route-cost mode back to original', () => {
     const preview = createPreview();
     usePickingPlanningOverlayStore.getState().setPreview(preview);
-    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
     usePickingPlanningOverlayStore
       .getState()
       .setRouteOrderMode('pkg-1', 'nearest-route-cost');
 
     usePickingPlanningOverlayStore
       .getState()
-      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+      .reorderPackageSteps('pkg-1', 'task-2', -1);
 
     expect(
       usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
@@ -237,14 +233,13 @@ describe('picking planning overlay store', () => {
   it('manual reorder switches improved mode back to original', () => {
     const preview = createPreview();
     usePickingPlanningOverlayStore.getState().setPreview(preview);
-    const stepIds = preview.packages[0].route.steps.map(getRouteStepId);
     usePickingPlanningOverlayStore
       .getState()
       .setRouteOrderMode('pkg-1', 'improved-route-cost');
 
     usePickingPlanningOverlayStore
       .getState()
-      .reorderPackageSteps('pkg-1', stepIds, 'task-2', -1);
+      .reorderPackageSteps('pkg-1', 'task-2', -1);
 
     expect(
       usePickingPlanningOverlayStore.getState().routeOrderModeByPackageId['pkg-1']
@@ -360,5 +355,301 @@ describe('picking planning overlay store', () => {
     expect(
       usePickingPlanningOverlayStore.getState().routeComparisonDebugEnabled
     ).toBe(false);
+  });
+
+  describe('reorderPackageSteps focused behavior', () => {
+    function createStep(sequence: number) {
+      return {
+        sequence,
+        taskId: `task-${sequence}`,
+        fromLocationId: `loc-${sequence}`,
+        locationId: `loc-${sequence}`,
+        addressLabel: `A-${String(sequence).padStart(2, '0')}`,
+        cellId: `cell-${sequence}`,
+        productId: `product-${sequence}`,
+        skuId: `sku-${sequence}`,
+        displayCode: `sku-${sequence}`,
+        barcode: null,
+        productName: `Product ${sequence}`,
+        productImageUrl: null,
+        qtyToPick: 1,
+        qtyEach: 1,
+        packagingLevels: [],
+        allocations: []
+      };
+    }
+
+    function createNStepPreview(n: number): PickingPlanningPreviewResponse {
+      const base = createPreview();
+      const steps = Array.from({ length: n }, (_, i) => createStep(i + 1));
+      return {
+        ...base,
+        packages: [
+          {
+            ...base.packages[0],
+            route: {
+              ...base.packages[0].route,
+              steps,
+              metadata: {
+                ...base.packages[0].route.metadata,
+                taskCount: n,
+                sequencedCount: n
+              }
+            }
+          }
+        ],
+        summary: {
+          ...base.summary,
+          routeStepCount: n,
+          taskCount: n
+        }
+      };
+    }
+
+    // A. Single reorder
+    it('single reorder moves last step up', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toEqual(['task-1', 'task-2', 'task-4', 'task-3']);
+    });
+
+    // B. Repeated reorder builds on override, not original
+    it('repeated reorder applies to current override', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toEqual(['task-1', 'task-2', 'task-4', 'task-3']);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toEqual(['task-1', 'task-4', 'task-2', 'task-3']);
+    });
+
+    // C. Move down after move up
+    it('move down after move up restores original order', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-3', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toEqual(['task-1', 'task-3', 'task-2', 'task-4']);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-3', 1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toEqual(['task-1', 'task-2', 'task-3', 'task-4']);
+    });
+
+    // D. Bounds
+    it('move first step up leaves effective order unchanged', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+      const steps = preview.packages[0].route.steps;
+      const originalStepIds = steps.map(getRouteStepId);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-1', -1);
+
+      const reordered =
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ];
+      expect(
+        deriveDisplayedRouteSteps(steps, reordered).map(getRouteStepId)
+      ).toEqual(originalStepIds);
+    });
+
+    it('move last step down leaves effective order unchanged', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+      const steps = preview.packages[0].route.steps;
+      const originalStepIds = steps.map(getRouteStepId);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', 1);
+
+      const reordered =
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ];
+      expect(
+        deriveDisplayedRouteSteps(steps, reordered).map(getRouteStepId)
+      ).toEqual(originalStepIds);
+    });
+
+    // E. Package isolation
+    it('reorder of one package does not affect other packages', () => {
+      const preview = createNStepPreview(4);
+      const pkg2WorkPackage = {
+        ...preview.packages[0].workPackage,
+        id: 'pkg-2',
+        taskCount: 2
+      };
+      const dualPreview: PickingPlanningPreviewResponse = {
+        ...preview,
+        packages: [
+          preview.packages[0],
+          {
+            workPackage: pkg2WorkPackage,
+            route: {
+              steps: [createStep(1), createStep(2)].map((s, i) => ({
+                ...s,
+                taskId: `pkg2-task-${i + 1}`
+              })),
+              warnings: [],
+              metadata: {
+                mode: 'hybrid',
+                taskCount: 2,
+                sequencedCount: 2,
+                unknownLocationCount: 0
+              }
+            }
+          }
+        ],
+        summary: { ...preview.summary, packageCount: 2 }
+      };
+
+      usePickingPlanningOverlayStore.getState().setPreview(dualPreview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-2'
+        ]
+      ).toBeUndefined();
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toEqual(['task-1', 'task-2', 'task-4', 'task-3']);
+    });
+
+    // F. Reset
+    it('reset restores original order after manual reorder', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toBeDefined();
+
+      usePickingPlanningOverlayStore.getState().resetReorder('pkg-1');
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toBeUndefined();
+    });
+
+    // G. Missing-preview no-op
+    it('reorder with no preview does not write ghost override', () => {
+      expect(usePickingPlanningOverlayStore.getState().preview).toBeNull();
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId
+      ).toEqual({});
+    });
+
+    // H. Unknown package no-op
+    it('reorder with unknown packageId does not write ghost override', () => {
+      const preview = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('unknown-pkg', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId
+      ).toEqual({});
+    });
+
+    // I. Empty route no-op
+    it('reorder with empty route steps does not write ghost override', () => {
+      const preview = createNStepPreview(0);
+      usePickingPlanningOverlayStore.getState().setPreview(preview);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId
+      ).toEqual({});
+    });
+
+    // J. Preview replacement clears reorders
+    it('preview replacement clears old manual reorders', () => {
+      const previewA = createNStepPreview(4);
+      usePickingPlanningOverlayStore.getState().setPreview(previewA);
+
+      usePickingPlanningOverlayStore
+        .getState()
+        .reorderPackageSteps('pkg-1', 'task-4', -1);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId[
+          'pkg-1'
+        ]
+      ).toBeDefined();
+
+      const previewB = createNStepPreview(2);
+      usePickingPlanningOverlayStore.getState().setPreview(previewB);
+
+      expect(
+        usePickingPlanningOverlayStore.getState().reorderedStepIdsByPackageId
+      ).toEqual({});
+    });
   });
 });

@@ -3,6 +3,7 @@ import type {
   PickingPlanningOverlaySource,
   PickingPlanningPreviewResponse
 } from './types';
+import { getRouteStepId } from './route-steps';
 
 export type PickingRouteOrderMode =
   | 'original'
@@ -39,7 +40,6 @@ export type PickingPlanningOverlayState = {
   setRouteComparisonDebugEnabled: (enabled: boolean) => void;
   reorderPackageSteps: (
     packageId: string,
-    stepIds: string[],
     stepId: string,
     direction: -1 | 1
   ) => void;
@@ -158,8 +158,17 @@ export const usePickingPlanningOverlayStore =
       set({ placingRouteStartForPackageId: null }),
     setRouteComparisonDebugEnabled: (enabled) =>
       set({ routeComparisonDebugEnabled: enabled }),
-    reorderPackageSteps: (packageId, stepIds, stepId, direction) =>
+    reorderPackageSteps: (packageId, stepId, direction) =>
       set((state) => {
+        const targetPackage = state.preview?.packages.find(
+          (p) => p.workPackage.id === packageId
+        );
+        if (!targetPackage) return state;
+
+        const originalStepIds =
+          targetPackage.route.steps.map(getRouteStepId);
+        if (originalStepIds.length === 0) return state;
+
         const mode = state.routeOrderModeByPackageId[packageId] ?? 'original';
         const nextRouteOrderModeByPackageId =
           mode !== 'original'
@@ -169,7 +178,7 @@ export const usePickingPlanningOverlayStore =
               }
             : state.routeOrderModeByPackageId;
         const current =
-          state.reorderedStepIdsByPackageId[packageId] ?? stepIds;
+          state.reorderedStepIdsByPackageId[packageId] ?? originalStepIds;
         return {
           routeOrderModeByPackageId: nextRouteOrderModeByPackageId,
           reorderedStepIdsByPackageId: {

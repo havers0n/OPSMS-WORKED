@@ -507,10 +507,6 @@ export function PickingPlanningOverlay({
       reorderedStepIdsByPackageId
     ]
   );
-  const displayedStepIds = useMemo(
-    () => displayedSteps.map(getRouteStepId),
-    [displayedSteps]
-  );
   const warningGroups = useMemo(
     () => groupWarnings(preview?.warningDetails ?? []),
     [preview?.warningDetails]
@@ -1267,15 +1263,14 @@ export function PickingPlanningOverlay({
                           isReorderEnabled={
                             activeRouteOrderModeValue === 'original'
                           }
-                          onMove={(direction) => {
-                            if (activeRouteOrderModeValue !== 'original') return;
-                            reorderPackageSteps(
-                              activePackage.workPackage.id,
-                              displayedStepIds,
-                              stepId,
-                              direction
-                            );
-                          }}
+                            onMove={(direction) => {
+                              if (activeRouteOrderModeValue !== 'original') return;
+                              reorderPackageSteps(
+                                activePackage.workPackage.id,
+                                stepId,
+                                direction
+                              );
+                            }}
                           onSelect={() => setSelectedStepId(stepId)}
                           selected={selectedStepId === stepId}
                           status={stepGeometryById[stepId]}
