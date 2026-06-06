@@ -88,6 +88,7 @@ describe('picking planning read repos', () => {
     });
     const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
 
+    await repo.listOrdersByIds(['order-1', 'order-other']);
     await repo.listOrderLines(['order-1', 'order-other']);
     await repo.listProducts(['product-1']);
     await repo.listUnitProfiles(['product-1']);
@@ -98,6 +99,7 @@ describe('picking planning read repos', () => {
     await repo.listContainerLocations(['container-1']);
     await repo.listLocations(['location-1']);
 
+    expectEq(findTable(tables, 'orders'), 'tenant_id', tenantId);
     expectEq(findTable(tables, 'order_lines'), 'tenant_id', tenantId);
     expectEq(findTable(tables, 'product_location_roles'), 'tenant_id', tenantId);
     expectEq(findTable(tables, 'inventory_unit'), 'tenant_id', tenantId);
@@ -184,10 +186,50 @@ describe('picking planning read repos', () => {
     expectEq(findTable(tables, 'waves'), 'tenant_id', tenantId);
   });
 
+  it('returns wave data when wave exists for tenant via getWaveById', async () => {
+    const { supabase, tables } = makeSupabaseMock({
+      waves: [{ id: 'wave-1' }]
+    });
+    const repo = createPickingPlanningWaveReadRepo(supabase as never, tenantId);
+
+    const result = await repo.getWaveById('wave-1');
+
+    expect(result).toEqual({ id: 'wave-1' });
+    const waves = findTable(tables, 'waves');
+    expectEq(waves, 'id', 'wave-1');
+    expectEq(waves, 'tenant_id', tenantId);
+  });
+
+  it('returns null from getWaveById when wave is not visible to the tenant', async () => {
+    const { supabase, tables } = makeSupabaseMock({ waves: [] });
+    const repo = createPickingPlanningWaveReadRepo(supabase as never, tenantId);
+
+    const result = await repo.getWaveById('other-tenant-wave');
+
+    expect(result).toBeNull();
+    expect(tables.map((entry) => entry.table)).toEqual(['waves']);
+    expectEq(findTable(tables, 'waves'), 'tenant_id', tenantId);
+  });
+
+  it('returns orders scoped by tenant via listOrdersByIds', async () => {
+    const { supabase, tables } = makeSupabaseMock({
+      orders: [{ id: 'order-1' }, { id: 'order-2' }]
+    });
+    const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
+
+    const result = await repo.listOrdersByIds(['order-1', 'order-2', 'order-3']);
+
+    expect(result).toEqual([{ id: 'order-1' }, { id: 'order-2' }]);
+    const orders = findTable(tables, 'orders');
+    expectEq(orders, 'tenant_id', tenantId);
+    expect(orders.calls).toContainEqual({ op: 'in', args: ['id', ['order-1', 'order-2', 'order-3']] });
+  });
+
   it('returns empty arrays without hitting the database when input lists are empty', async () => {
     const { supabase, tables } = makeSupabaseMock({});
     const repo = createPickingPlanningOrderInputReadRepo(supabase as never, tenantId);
 
+    await expect(repo.listOrdersByIds([])).resolves.toEqual([]);
     await expect(repo.listExplicitLocationRoles([], ['loc-1'])).resolves.toEqual([]);
     await expect(repo.listExplicitLocationRoles(['p1'], [])).resolves.toEqual([]);
     await expect(repo.listStructuralRolesForLocations([])).resolves.toEqual([]);

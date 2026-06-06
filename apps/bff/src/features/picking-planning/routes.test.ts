@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildApp } from '../../app.js';
 import type { AuthenticatedRequestContext } from '../../auth.js';
+import { ApiError } from '../../errors.js';
 
 const authContext = {
   accessToken: 'token',
@@ -25,6 +26,11 @@ const authContext = {
     role: 'tenant_admin' as const
   }
 } as unknown as AuthenticatedRequestContext;
+
+const OWN_ORDER_ID = '11111111-1111-4111-8111-111111111111';
+const OWN_ORDER_ID_2 = '22222222-2222-4222-8222-222222222222';
+const FOREIGN_ORDER_ID = '33333333-3333-4333-8333-333333333333';
+const OWN_WAVE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const baseRequest = {
   tasks: [
@@ -235,14 +241,14 @@ describe('POST /api/picking-planning/preview', () => {
       }),
       previewPickingPlanFromWave: async (input: any) => ({
         waveId: input.waveId,
-        orderIds: input.waveId === 'wave-empty' ? [] : ['order-1', 'order-2'],
+        orderIds: input.waveId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' ? [OWN_ORDER_ID, OWN_ORDER_ID_2] : [],
         planning: makePlanning({ tasks: [] }),
         tasks: [],
         locationsById: {},
         unresolved: [],
         unresolvedSummary: { total: 0, byReason: {} },
         coverage: {
-          orderCount: input.waveId === 'wave-empty' ? 0 : 2,
+          orderCount: input.waveId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' ? 2 : 0,
           orderLineCount: 0,
           plannedLineCount: 0,
           unresolvedLineCount: 0,
@@ -250,8 +256,8 @@ describe('POST /api/picking-planning/preview', () => {
           unresolvedQty: 0,
           planningCoveragePct: 100
         },
-        warnings: input.waveId === 'wave-empty' ? ['Wave contains no orders.'] : [],
-        warningDetails: input.waveId === 'wave-empty' ? [{ code: 'EMPTY_WAVE', severity: 'warning', message: 'Wave contains no orders.', source: 'wave' }] : []
+        warnings: input.waveId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' ? [] : ['Wave contains no orders.'],
+        warningDetails: input.waveId === 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' ? [] : [{ code: 'EMPTY_WAVE', severity: 'warning', message: 'Wave contains no orders.', source: 'wave' }]
       })
     })) as never
   });
@@ -316,27 +322,53 @@ describe('POST /api/picking-planning/preview', () => {
   });
 
   it('returns kind=orders response with coverage and unresolvedSummary', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/orders', payload: { orderIds: ['order-1', 'order-2'] } });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: [OWN_ORDER_ID, OWN_ORDER_ID_2] }
+    });
 
     expect(response.statusCode).toBe(200);
     const payload = response.json();
     expect(payload.kind).toBe('orders');
-    expect(payload.input.orderIds).toEqual(['order-1', 'order-2']);
+    expect(payload.input.orderIds).toEqual([OWN_ORDER_ID, OWN_ORDER_ID_2]);
     expect(payload.unresolvedSummary).toEqual({ total: 0, byReason: {} });
     expect(payload.coverage).toMatchObject({ orderCount: 2, planningCoveragePct: 100 });
     expect(payload.warningDetails).toEqual([]);
   });
 
   it('returns kind=wave response with waveId, orderIds, coverage and unresolvedSummary', async () => {
-    const response = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/wave', payload: { waveId: 'wave-1' } });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/wave',
+      payload: { waveId: OWN_WAVE_ID }
+    });
 
     expect(response.statusCode).toBe(200);
     const payload = response.json();
     expect(payload.kind).toBe('wave');
-    expect(payload.input.waveId).toBe('wave-1');
-    expect(payload.input.orderIds).toEqual(['order-1', 'order-2']);
+    expect(payload.input.waveId).toBe(OWN_WAVE_ID);
+    expect(payload.input.orderIds).toEqual([OWN_ORDER_ID, OWN_ORDER_ID_2]);
     expect(payload.unresolvedSummary).toEqual({ total: 0, byReason: {} });
     expect(payload.coverage).toMatchObject({ orderCount: 2, planningCoveragePct: 100 });
+  });
+
+  it('returns 400 for malformed order IDs', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: ['not-a-uuid'] }
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('returns 400 for malformed wave ID', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/wave',
+      payload: { waveId: 'not-a-uuid' }
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   it('returns 400 validation errors for invalid request payloads', async () => {
@@ -348,5 +380,65 @@ describe('POST /api/picking-planning/preview', () => {
 
     const invalidWave = await app.inject({ method: 'POST', url: '/api/picking-planning/preview/wave', payload: {} });
     expect(invalidWave.statusCode).toBe(400);
+  });
+});
+
+describe('POST /api/picking-planning/preview/orders - tenant isolation 404', () => {
+  const app = buildApp({
+    getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => authContext,
+    getPickingPlanningPreviewService: (() => ({
+      previewPickingPlan: () => { throw new ApiError(404, 'NOT_FOUND', 'Order not found'); },
+      previewPickingPlanFromOrders: async () => { throw new ApiError(404, 'NOT_FOUND', 'Order not found'); },
+      previewPickingPlanFromWave: async () => { throw new ApiError(404, 'NOT_FOUND', 'Wave not found'); }
+    })) as never
+  });
+
+  beforeAll(async () => {
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('returns 404 with generic message for foreign order ID', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: [FOREIGN_ORDER_ID] }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().message).toBe('Order not found');
+  });
+
+  it('returns 404 with generic message for foreign wave ID', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/wave',
+      payload: { waveId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().message).toBe('Wave not found');
+  });
+
+  it('does not reveal whether a foreign or missing resource caused the 404', async () => {
+    const foreignOrderResp = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: [FOREIGN_ORDER_ID] }
+    });
+
+    const missingOrderResp = await app.inject({
+      method: 'POST',
+      url: '/api/picking-planning/preview/orders',
+      payload: { orderIds: ['cccccccc-cccc-4ccc-8ccc-cccccccccccc'] }
+    });
+
+    expect(foreignOrderResp.statusCode).toBe(404);
+    expect(missingOrderResp.statusCode).toBe(404);
+    expect(foreignOrderResp.json().code).toBe('NOT_FOUND');
+    expect(missingOrderResp.json().code).toBe('NOT_FOUND');
   });
 });

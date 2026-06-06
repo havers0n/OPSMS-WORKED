@@ -3,6 +3,7 @@ import { buildPlanningInputFromOrders, type PickingPlanningOrderInputReadRepo } 
 
 function makeRepo(overrides: Partial<PickingPlanningOrderInputReadRepo> = {}): PickingPlanningOrderInputReadRepo {
   return {
+    listOrdersByIds: async () => [],
     listOrderLines: async () => [],
     listProducts: async () => [],
     listUnitProfiles: async () => [],

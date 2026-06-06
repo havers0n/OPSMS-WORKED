@@ -121,6 +121,7 @@ export type BuildPlanningInputFromOrdersResult = {
 };
 
 export type PickingPlanningOrderInputReadRepo = {
+  listOrdersByIds(orderIds: string[]): Promise<Array<{ id: string }>>;
   listOrderLines(orderIds: string[]): Promise<OrderLinePlanningRow[]>;
   listProducts(productIds: string[]): Promise<ProductPlanningRow[]>;
   listUnitProfiles(productIds: string[]): Promise<ProductUnitProfilePlanningRow[]>;

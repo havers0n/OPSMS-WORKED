@@ -56,11 +56,11 @@ export const pickingPlanningPreviewRequestSchema = pickingPlanningPreviewBaseSch
 });
 
 export const pickingPlanningPreviewOrdersRequestSchema = pickingPlanningPreviewBaseSchema.extend({
-  orderIds: z.array(z.string().trim().min(1)).min(1)
+  orderIds: z.array(z.string().uuid()).min(1)
 });
 
 export const pickingPlanningPreviewWaveRequestSchema = pickingPlanningPreviewBaseSchema.extend({
-  waveId: z.string().trim().min(1)
+  waveId: z.string().uuid()
 });
 
 export type PickingPlanningPreviewRequest = z.infer<typeof pickingPlanningPreviewRequestSchema>;
