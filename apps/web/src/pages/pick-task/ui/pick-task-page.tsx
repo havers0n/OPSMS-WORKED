@@ -11,7 +11,7 @@ import {
   RefreshCw,
   Zap
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { Container, ContainerType, PickStepDetail, PickTaskDetail } from '@wos/domain';
 import {
@@ -26,13 +26,48 @@ import {
   getPickStepStatusColor,
   getPickStepStatusLabel,
   getPickTaskStatusColor,
-  getPickTaskStatusLabel,
-  isTerminalStep
+  getPickTaskStatusLabel
 } from '@/entities/pick-task/lib/pick-task-actions';
 import { useCreateContainer } from '@/features/container-create/api/mutations';
 import { ProductPickPhoto } from '@/features/picking-execution/ui/product-pick-photo';
 import { routes, waveDetailPath, warehouseViewPath } from '@/shared/config/routes';
 import { useBarcodeScan } from '@/shared/lib/use-barcode-scan';
+import { getWorkerSafeMutationErrorMessage } from '@/entities/pick-task/lib/worker-safe-error';
+
+type PickTaskProgressBuckets = {
+  picked: number;
+  partial: number;
+  skipped: number;
+  exception: number;
+  blocked: number;
+  remaining: number;
+};
+
+function getPickTaskProgressBuckets(steps: PickStepDetail[]): PickTaskProgressBuckets {
+  return steps.reduce<PickTaskProgressBuckets>(
+    (acc, step) => {
+      if (step.status === 'pending') {
+        acc.remaining += 1;
+      } else if (step.status === 'picked') {
+        acc.picked += 1;
+      } else if (step.status === 'partial') {
+        acc.partial += 1;
+      } else if (step.status === 'skipped') {
+        acc.skipped += 1;
+      } else if (step.status === 'exception') {
+        acc.exception += 1;
+      } else if (step.status === 'needs_replenishment') {
+        acc.blocked += 1;
+      }
+      return acc;
+    },
+    { picked: 0, partial: 0, skipped: 0, exception: 0, blocked: 0, remaining: 0 }
+  );
+}
+
+function isAllocatedStep(step: PickStepDetail): boolean {
+  return !(step.status === 'pending' && step.sourceLocationId === null && step.sourceCellId === null);
+}
 
 // ── Container setup (choose existing OR create new) ───────────────────────────
 
@@ -49,18 +84,16 @@ function PickContainerSetup({
   const pickableTypes = containerTypes.filter((ct) => ct.supportsPicking);
   const [typeId, setTypeId] = useState(pickableTypes[0]?.id ?? '');
   const [code, setCode] = useState('');
-  const [createError, setCreateError] = useState<string | null>(null);
   const create = useCreateContainer();
 
   const active = containers.filter((c) => c.status === 'active');
 
   const typeById = new Map(containerTypes.map((t) => [t.id, t]));
 
-  function handleCreate(e: React.FormEvent) {
+  function handleCreate(e: FormEvent) {
     e.preventDefault();
     const externalCode = code.trim();
     if (!typeId) return;
-    setCreateError(null);
     create.mutate(
       {
         containerTypeId: typeId,
@@ -71,9 +104,6 @@ function PickContainerSetup({
         onSuccess: (result) => {
           const selectedType = pickableTypes.find((t) => t.id === typeId);
           onSelect(result.containerId, result.systemCode, selectedType?.description ?? null);
-        },
-        onError: (err) => {
-          setCreateError(err instanceof Error ? err.message : 'Creation failed. Try again.');
         }
       }
     );
@@ -184,8 +214,13 @@ function PickContainerSetup({
                 </div>
               </div>
 
-              {createError && (
-                <div className="text-xs text-red-600">{createError}</div>
+              {create.isError && (
+                <div className="text-xs text-red-600">
+                  {getWorkerSafeMutationErrorMessage(
+                    create.error,
+                    'Unable to create a pick container. Try again.'
+                  )}
+                </div>
               )}
 
               <button
@@ -476,9 +511,10 @@ function GuidedStepCard({
 
           {execute.isError && (
             <div className="mt-3 text-xs text-red-600">
-              {execute.error instanceof Error
-                ? execute.error.message
-                : 'Execution failed. Try again.'}
+              {getWorkerSafeMutationErrorMessage(
+                execute.error,
+                'Unable to confirm this pick. Try again.'
+              )}
             </div>
           )}
         </div>
@@ -557,9 +593,10 @@ function GuidedStepCard({
               </div>
               {skip.isError && (
                 <div className="mb-3 text-xs text-red-600">
-                  {skip.error instanceof Error
-                    ? skip.error.message
-                    : 'Skip failed. Try again.'}
+                  {getWorkerSafeMutationErrorMessage(
+                    skip.error,
+                    'Unable to skip this step. Try again.'
+                  )}
                 </div>
               )}
               <div className="flex gap-2">
@@ -598,7 +635,13 @@ function WaveOrderSummary({ steps }: { steps: PickStepDetail[] }) {
   for (const step of steps) {
     if (!step.orderId) continue;
     const existing = orderGroups.get(step.orderId);
-    const done = isTerminalStep(step.status) ? 1 : 0;
+    const done =
+      step.status === 'picked' ||
+      step.status === 'partial' ||
+      step.status === 'skipped' ||
+      step.status === 'exception'
+        ? 1
+        : 0;
     if (existing) {
       existing.total++;
       existing.done += done;
@@ -913,7 +956,10 @@ function StepCard({
           {/* Mutation error */}
           {execute.isError && (
             <div className="mt-3 text-xs text-red-600">
-              {execute.error instanceof Error ? execute.error.message : 'Execution failed. Try again.'}
+              {getWorkerSafeMutationErrorMessage(
+                execute.error,
+                'Unable to confirm this pick. Try again.'
+              )}
             </div>
           )}
         </div>
@@ -935,41 +981,97 @@ function StepCard({
 // ── Task complete banner ──────────────────────────────────────────────────────
 
 function TaskCompleteBanner({ task }: { task: PickTaskDetail }) {
-  const isClean = task.status === 'completed';
+  const progress = getPickTaskProgressBuckets(task.steps);
+  const isTerminal = task.status === 'completed' || task.status === 'completed_with_exceptions';
+  const actionableSteps = progress.remaining;
+  const title = isTerminal
+    ? task.status === 'completed'
+      ? 'Task complete'
+      : 'Task complete with exceptions'
+    : actionableSteps === 0
+      ? 'No actionable steps remain'
+      : 'Task progress';
+  const details =
+    progress.blocked > 0
+      ? `${progress.blocked} step${progress.blocked !== 1 ? 's' : ''} still need replenishment.`
+      : actionableSteps === 0
+        ? 'No remaining pick actions are available for this task.'
+        : null;
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-2xl border p-5 ${
-        isClean
+      className={`rounded-2xl border p-5 ${
+        isTerminal
           ? 'border-emerald-200 bg-emerald-50'
-          : 'border-orange-200 bg-orange-50'
+          : actionableSteps === 0
+            ? 'border-orange-200 bg-orange-50'
+            : 'border-slate-200 bg-white'
       }`}
     >
-      <CheckCircle2
-        className={`mt-0.5 h-5 w-5 shrink-0 ${isClean ? 'text-emerald-600' : 'text-orange-500'}`}
-      />
-      <div>
-        <div className={`font-semibold ${isClean ? 'text-emerald-900' : 'text-orange-900'}`}>
-          {isClean
-            ? `Task complete — all ${task.totalSteps} step${task.totalSteps !== 1 ? 's' : ''} picked`
-            : 'Task complete with exceptions'}
+      <div className="flex items-start gap-3">
+        <CheckCircle2
+          className={`mt-0.5 h-5 w-5 shrink-0 ${
+            isTerminal
+              ? 'text-emerald-600'
+              : actionableSteps === 0
+                ? 'text-orange-500'
+                : 'text-slate-500'
+          }`}
+        />
+        <div className="min-w-0">
+          <div
+            className={`font-semibold ${
+              isTerminal
+                ? 'text-emerald-900'
+                : actionableSteps === 0
+                  ? 'text-orange-900'
+                  : 'text-slate-900'
+            }`}
+          >
+            {title}
+          </div>
+          {details && (
+            <div className={`mt-0.5 text-sm ${isTerminal ? 'text-emerald-700' : 'text-slate-600'}`}>
+              {details}
+            </div>
+          )}
+          {task.completedAt && (
+            <div className={`mt-1 text-xs ${isTerminal ? 'text-emerald-700' : 'text-slate-500'}`}>
+              Completed {new Date(task.completedAt).toLocaleString()}
+            </div>
+          )}
         </div>
-        {!isClean && (
-          <div className="mt-0.5 text-sm text-orange-800">
-            Some steps had exceptions or partial picks. Review with your supervisor.
-          </div>
-        )}
-        {task.completedAt && (
-          <div className={`mt-1 text-xs ${isClean ? 'text-emerald-700' : 'text-orange-700'}`}>
-            Completed {new Date(task.completedAt).toLocaleString()}
-          </div>
-        )}
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
+          <div className="font-medium">Picked</div>
+          <div className="mt-0.5 text-lg font-semibold">{progress.picked}</div>
+        </div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-orange-800">
+          <div className="font-medium">Partial</div>
+          <div className="mt-0.5 text-lg font-semibold">{progress.partial}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
+          <div className="font-medium">Skipped</div>
+          <div className="mt-0.5 text-lg font-semibold">{progress.skipped}</div>
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-800">
+          <div className="font-medium">Exception</div>
+          <div className="mt-0.5 text-lg font-semibold">{progress.exception}</div>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+          <div className="font-medium">Blocked</div>
+          <div className="mt-0.5 text-lg font-semibold">{progress.blocked}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
+          <div className="font-medium">Remaining</div>
+          <div className="mt-0.5 text-lg font-semibold">{progress.remaining}</div>
+        </div>
       </div>
     </div>
   );
 }
-
-// ── All-blocked banner ────────────────────────────────────────────────────────
 
 function AllBlockedBanner() {
   return (
@@ -1105,33 +1207,21 @@ export function PickTaskPage() {
           : routes.operations;
   const backLabel = effectiveWaveId ? 'Wave' : 'Operations';
 
-  const pct =
-    task.totalSteps > 0
-      ? Math.round((task.completedSteps / task.totalSteps) * 100)
-      : 0;
-
   const isTerminalTask =
     task.status === 'completed' || task.status === 'completed_with_exceptions';
-
-  const nextPendingStep: PickStepDetail | null = findNextPendingStep<PickStepDetail>(task.steps as PickStepDetail[]);
-
-  const pendingSteps = task.steps.filter((s: PickStepDetail) => s.status === 'pending');
-  const allRemainingBlocked =
+  const progress = getPickTaskProgressBuckets(task.steps);
+  const progressDone = progress.picked + progress.partial + progress.skipped + progress.exception;
+  const progressPct = task.steps.length > 0 ? Math.round((progressDone / task.steps.length) * 100) : 0;
+  const allocationRequired =
     !isTerminalTask &&
-    pendingSteps.length === 0 &&
-    task.steps.some((s: PickStepDetail) => s.status === 'needs_replenishment');
-
-  const hasUnallocatedSteps =
-    !isTerminalTask &&
-    task.steps.some(
-      (s: PickStepDetail) =>
-        s.status === 'pending' &&
-        s.sourceLocationId === null &&
-        s.sourceCellId === null
-    );
-
-  // Guided mode only makes sense when there are steps and a container is selected
-  const canUseGuidedMode = !isTerminalTask && Boolean(pickContainer) && task.steps.length > 0;
+    (task.steps.length === 0 ||
+      task.steps.some((step: PickStepDetail) => step.status === 'pending' && !isAllocatedStep(step)));
+  const showBlockedState = !allocationRequired && progress.remaining === 0 && progress.blocked > 0;
+  const showCompletionSummary = !allocationRequired && progress.remaining === 0 && progress.blocked === 0;
+  const nextPendingStep = findNextPendingStep(task.steps);
+  const canUseGuidedMode = !showCompletionSummary && Boolean(pickContainer) && progress.remaining > 0;
+  const showContainerSelection = !allocationRequired && !showCompletionSummary && !showBlockedState && !pickContainer;
+  const showGuidedExecution = !showCompletionSummary && !showBlockedState && Boolean(pickContainer) && progress.remaining > 0;
 
   return (
     <div className="flex h-full w-full flex-col overflow-auto">
@@ -1166,24 +1256,41 @@ export function PickTaskPage() {
             <div className="mt-1.5 font-mono text-xs text-slate-400">{task.taskNumber}</div>
           </div>
 
-          {/* Progress */}
-          <div className="text-right">
-            <div className="text-2xl font-bold text-slate-900">
-              {task.completedSteps}
-              <span className="text-lg font-normal text-slate-400">/{task.totalSteps}</span>
+        {/* Progress */}
+        <div className="text-right">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-left text-xs text-slate-500">
+            <div>
+              <span className="font-medium text-slate-900">Picked</span> {progress.picked}
             </div>
-            <div className="text-xs text-slate-500">steps complete</div>
-            <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-cyan-500'}`}
-                style={{ width: `${pct}%` }}
-              />
+            <div>
+              <span className="font-medium text-slate-900">Partial</span> {progress.partial}
+            </div>
+            <div>
+              <span className="font-medium text-slate-900">Skipped</span> {progress.skipped}
+            </div>
+            <div>
+              <span className="font-medium text-slate-900">Exception</span> {progress.exception}
+            </div>
+            <div>
+              <span className="font-medium text-slate-900">Blocked</span> {progress.blocked}
+            </div>
+            <div>
+              <span className="font-medium text-slate-900">Remaining</span> {progress.remaining}
             </div>
           </div>
+          <div className="mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all ${
+                progressPct === 100 ? 'bg-emerald-500' : 'bg-cyan-500'
+              }`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
         </div>
 
         {/* ── Allocate steps banner ── */}
-        {hasUnallocatedSteps && (
+        {allocationRequired && (
           <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
             <div className="min-w-0">
               <div className="text-sm font-medium text-slate-900">Steps not yet allocated</div>
@@ -1192,9 +1299,10 @@ export function PickTaskPage() {
               </div>
               {allocate.isError && (
                 <div className="mt-1 text-xs text-red-600">
-                  {allocate.error instanceof Error
-                    ? allocate.error.message
-                    : 'Allocation failed. Try again.'}
+                  {getWorkerSafeMutationErrorMessage(
+                    allocate.error,
+                    'Unable to allocate steps. Try again.'
+                  )}
                 </div>
               )}
               {allocate.isSuccess && (
@@ -1202,7 +1310,7 @@ export function PickTaskPage() {
                   Allocated {allocate.data.allocated} step
                   {allocate.data.allocated !== 1 ? 's' : ''}
                   {allocate.data.needsReplenishment > 0
-                    ? ` · ${allocate.data.needsReplenishment} need replenishment`
+                    ? ` · ${allocate.data.needsReplenishment} blocked for replenishment`
                     : ''}
                 </div>
               )}
@@ -1219,14 +1327,14 @@ export function PickTaskPage() {
           </div>
         )}
 
-        {/* ── Completion banner ── */}
-        {isTerminalTask && <TaskCompleteBanner task={task} />}
+        {/* ── Completion summary ── */}
+        {showCompletionSummary && <TaskCompleteBanner task={task} />}
 
-        {/* ── All-blocked banner ── */}
-        {allRemainingBlocked && <AllBlockedBanner />}
+        {/* ── Blocked / unresolved state ── */}
+        {showBlockedState && <AllBlockedBanner />}
 
         {/* ── Container setup ── */}
-        {!isTerminalTask && !pickContainer && (
+        {showContainerSelection && (
           <PickContainerSetup
             containers={containers}
             containerTypes={containerTypes}
@@ -1234,8 +1342,8 @@ export function PickTaskPage() {
           />
         )}
 
-        {/* ── Container chip + view toggle + steps ── */}
-        {!isTerminalTask && pickContainer && task.steps.length > 0 && (
+        {/* ── Container chip + guided execution ── */}
+        {showGuidedExecution && pickContainer && (
           <section className="space-y-4">
             {/* Container chip */}
             <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5">
@@ -1258,18 +1366,16 @@ export function PickTaskPage() {
               </button>
             </div>
 
-            {/* Mode toggle (only when there are steps to navigate) */}
-            {task.steps.length > 0 && (
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-900">
-                  Steps{' '}
-                  <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                    {task.steps.length}
-                  </span>
-                </div>
-                <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            {/* Mode toggle */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900">
+                Steps{' '}
+                <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                  {task.steps.length}
+                </span>
               </div>
-            )}
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            </div>
 
             {/* ── Guided mode ── */}
             {viewMode === 'guided' && canUseGuidedMode && (
@@ -1303,63 +1409,6 @@ export function PickTaskPage() {
               </div>
             )}
           </section>
-        )}
-
-        {/* ── Steps list when no container selected (read-only preview) ── */}
-        {!isTerminalTask && !pickContainer && task.steps.length > 0 && (
-          <section>
-            <div className="mb-3 text-sm font-semibold text-slate-900">
-              Steps{' '}
-              <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                {task.steps.length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {task.steps.map((step: PickStepDetail) => (
-                <StepCard
-                  key={step.id}
-                  step={step}
-                  isActive={false}
-                  pickContainerId=""
-                  taskId={task.id}
-                  taskNumber={task.taskNumber}
-                  onExecuted={() => {}}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── Terminal task steps (list, read-only) ── */}
-        {isTerminalTask && task.steps.length > 0 && (
-          <section>
-            <div className="mb-3 text-sm font-semibold text-slate-900">
-              Steps{' '}
-              <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                {task.steps.length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {task.steps.map((step: PickStepDetail) => (
-                <StepCard
-                  key={step.id}
-                  step={step}
-                  isActive={false}
-                  pickContainerId=""
-                  taskId={task.id}
-                  taskNumber={task.taskNumber}
-                  onExecuted={() => {}}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── Empty steps ── */}
-        {task.steps.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-500">
-            No steps have been allocated to this task yet.
-          </div>
         )}
 
       </div>
