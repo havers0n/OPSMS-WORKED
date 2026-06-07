@@ -454,6 +454,74 @@ describe('resolveStatus', () => {
   });
 });
 
+function createMediaQueryList(matches: boolean): MediaQueryList {
+  return {
+    matches,
+    media: '(pointer: coarse)',
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  };
+}
+
+describe('coarse pointer guard', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns null on coarse-pointer devices', () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      () => createMediaQueryList(true)
+    );
+
+    const renderer = renderOverlay({ zoom: 0.6 });
+    const shapes = getStorageShapes(renderer);
+    expect(shapes).toHaveLength(0);
+  });
+
+  it('renders overlay on non-coarse-pointer devices', () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      () => createMediaQueryList(false)
+    );
+
+    const renderer = renderOverlay({ zoom: 0.6 });
+    const shapes = getStorageShapes(renderer);
+    expect(shapes).toHaveLength(1);
+  });
+
+  it('falls back to desktop behavior when matchMedia is unavailable', () => {
+    const originalMatchMedia = window.matchMedia;
+    (window as { matchMedia?: typeof window.matchMedia }).matchMedia = undefined as unknown as typeof window.matchMedia;
+
+    const renderer = renderOverlay({ zoom: 0.6 });
+    const shapes = getStorageShapes(renderer);
+    expect(shapes).toHaveLength(1);
+
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('disableOccupancyOverlay=off still hides overlay regardless of pointer', () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      () => createMediaQueryList(false)
+    );
+
+    const renderer = renderOverlay({
+      zoom: 0.6,
+      diagnostics: { storageOccupancyOverlay: 'off' }
+    });
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          String(node.type) === 'Shape' &&
+          node.props.wosShapeRole === 'storage-occupancy-overlay'
+      )
+    ).toHaveLength(0);
+  });
+});
+
 describe('StorageOccupancyOverlay', () => {
   it('renders active occupancy marks at storage overview zoom while RackCells would be gated', () => {
     const renderer = renderOverlay({ zoom: 0.6 });

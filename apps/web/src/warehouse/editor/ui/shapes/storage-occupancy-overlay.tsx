@@ -2,6 +2,15 @@ import type { Cell, OperationsCellRuntime, Rack, RackFace } from '@wos/domain';
 import { memo, useMemo } from 'react';
 import { Group, Shape } from 'react-konva';
 
+function isCoarsePointerDevice(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    return window.matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
+
 import {
   getRackGeometry,
   shouldRenderCanvasCell,
@@ -559,7 +568,13 @@ export const StorageOccupancyOverlay = memo(function StorageOccupancyOverlay({
     selectedRackActiveLevel
   ]);
 
-  if (overlayLod === 'hidden' || rackModels.length === 0) return null;
+  if (
+    overlayLod === 'hidden' ||
+    rackModels.length === 0 ||
+    isCoarsePointerDevice()
+  ) {
+    return null;
+  }
 
   return (
     <>
