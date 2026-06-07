@@ -9,6 +9,7 @@ import {
 import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
+import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
 
 const INSPECTOR_MODE_KEY = 'wos:storage-inspector-mode';
 
@@ -115,6 +116,21 @@ export function StorageWorkspaceV2({
   };
 
   const inspectorVisible = inspectorMode !== 'hidden';
+
+  useEffect(() => {
+    recordClientRuntimeEvent('storage-workspace-v2:mount', {
+      hasWorkspace: Boolean(workspace)
+    });
+  }, [workspace]);
+
+  useEffect(() => {
+    recordClientRuntimeEvent('storage-workspace-v2:selection', {
+      hasSelection,
+      selectedRackId,
+      selectedCellId,
+      inspectorMode
+    });
+  }, [hasSelection, inspectorMode, selectedCellId, selectedRackId]);
 
   // Mobile sheet height class per mode.
   const mobileSheetClass =

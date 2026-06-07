@@ -649,3 +649,29 @@ export const errorResponseSchema = z.object({
   requestId: z.string(),
   errorId: z.string()
 });
+
+export const clientErrorReportRequestBodySchema = z.object({
+  clientErrorId: z.string().uuid(),
+  source: z.enum(['window-error', 'unhandled-rejection', 'react-error-boundary', 'manual-debug']),
+  message: z.string().trim().min(1),
+  stack: z.string().trim().min(1).nullable().optional(),
+  componentStack: z.string().trim().min(1).nullable().optional(),
+  route: z.string().trim().min(1).nullable().optional(),
+  url: z.string().trim().min(1).nullable().optional(),
+  userAgent: z.string().trim().min(1).nullable().optional(),
+  occurredAt: z.string().trim().min(1),
+  viewport: z
+    .object({
+      width: z.number().int().min(0),
+      height: z.number().int().min(0),
+      pixelRatio: z.number().positive().nullable().optional()
+    })
+    .nullable()
+    .optional(),
+  context: z.record(z.string(), z.unknown()).optional()
+});
+
+export const clientErrorReportResponseSchema = z.object({
+  accepted: z.literal(true),
+  requestId: z.string()
+});

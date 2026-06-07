@@ -5797,3 +5797,61 @@ describe('storage preset endpoints', () => {
     await app.close();
   });
 });
+
+describe('client runtime diagnostics endpoint', () => {
+  it('accepts validated client runtime error payloads without auth', async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/client-errors',
+      payload: {
+        clientErrorId: '6f7ed8b1-6c91-4c08-b68c-55f9b5d79235',
+        source: 'window-error',
+        message: 'Storage page crashed on mobile',
+        stack: 'Error: Storage page crashed on mobile',
+        componentStack: null,
+        route: '/warehouse/view?debug=1',
+        url: 'https://example.com/warehouse/view?debug=1',
+        userAgent: 'Mozilla/5.0 (iPhone)',
+        occurredAt: '2026-06-07T12:00:00.000Z',
+        viewport: {
+          width: 390,
+          height: 844,
+          pixelRatio: 3
+        },
+        context: {
+          viewMode: 'storage'
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      accepted: true,
+      requestId: expect.any(String)
+    });
+
+    await app.close();
+  });
+
+  it('rejects malformed client runtime error payloads', async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/client-errors',
+      payload: {
+        source: 'window-error',
+        message: ''
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      code: 'VALIDATION_ERROR'
+    });
+
+    await app.close();
+  });
+});

@@ -12,6 +12,7 @@ import { registerProductsRoutes } from './features/products/routes.js';
 import { registerPickingPlanningPreviewRoutes } from './features/picking-planning/routes.js';
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
+import { registerClientErrorsRoutes } from './routes/client-errors.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
 import { registerSitesRoutes } from './routes/sites.routes.js';
 import { registerFloorsRoutes } from './routes/floors.routes.js';
@@ -90,6 +91,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   registerHealthRoutes(app, { getHealthSupabase });
+  registerClientErrorsRoutes(app);
 
   registerSitesRoutes(app, { getAuthContext, getSitesService });
   registerFloorsRoutes(app, { getAuthContext, getSitesService, getFloorsService, getUserSupabase });

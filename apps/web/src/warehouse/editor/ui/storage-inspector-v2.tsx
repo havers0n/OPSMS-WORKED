@@ -106,6 +106,7 @@ import {
   recordCanvasComponentRender,
   recordCanvasMode
 } from './canvas-diagnostics';
+import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
 
 type Translator = ReturnType<typeof useT>;
 
@@ -479,6 +480,16 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [extractQuantity, setExtractQuantity] = useState('');
   const [extractIsSubmitting, setExtractIsSubmitting] = useState(false);
   const [extractErrorMessage, setExtractErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    recordClientRuntimeEvent('storage-inspector-v2:state', {
+      floorId,
+      rackId,
+      cellId,
+      selectedContainerId,
+      taskKind
+    });
+  }, [cellId, floorId, rackId, selectedContainerId, taskKind]);
 
   const taskKindRef = useRef<TaskKind | null>(null);
   const inspectorReadyCellIdRef = useRef<string | null>(null);

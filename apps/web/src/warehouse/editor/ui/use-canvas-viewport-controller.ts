@@ -30,6 +30,7 @@ import {
   recordCanvasZoomDurableCommit,
   recordCanvasZoomTransientUpdate
 } from './canvas-diagnostics';
+import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
 
 const TRANSFORM_ONLY_ZOOM_IDLE_MS = 500;
 const WHEEL_ZOOM_BASE = 0.999;
@@ -479,6 +480,15 @@ export function useCanvasViewportController({
     ro.observe(node);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    recordClientRuntimeEvent('canvas-viewport-controller:state', {
+      viewMode,
+      hasStorageFocus,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height
+    });
+  }, [hasStorageFocus, viewMode, viewport.height, viewport.width]);
 
   // Auto-fit when entering View/Storage.
   // View mode keeps the cell-visible floor; Storage mode stays rack-friendly.

@@ -22,6 +22,7 @@ import {
   recordCanvasTiming
 } from './canvas-diagnostics';
 import { resolveCellSearchPresentation, type ProductSubtitlePresentation } from './storage-navigator-search';
+import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
 
 interface StorageNavigatorProps {
   workspace: FloorWorkspace | null;
@@ -226,6 +227,16 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const listHeading = isGlobalSearch
     ? t('storage.navigator.searchingEntireWarehouse')
     : t('storage.field.levelWithNumber', { level: activeLevel });
+
+  useEffect(() => {
+    recordClientRuntimeEvent('storage-navigator:state', {
+      rackId,
+      activeLevel,
+      visibleCellCount: visibleCells.length,
+      isLoading,
+      isGlobalSearch
+    });
+  }, [activeLevel, isGlobalSearch, isLoading, rackId, visibleCells.length]);
 
   if (isCollapsed) {
     return (

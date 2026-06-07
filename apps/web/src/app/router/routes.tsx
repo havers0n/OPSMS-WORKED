@@ -14,6 +14,8 @@ const MobilePickerPage = lazy(() => import('@/pages/picker/picker-page').then(m 
 const MobilePickTaskPage = lazy(() => import('@/pages/picker/pick-task-page').then(m => ({ default: m.PickTaskPage })));
 const MobilePickStepPage = lazy(() => import('@/pages/picker/pick-step-page').then(m => ({ default: m.PickStepPage })));
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { AppRouteErrorBoundary } from '@/app/diagnostics/app-route-error-boundary';
+import { AppRouteRuntime } from '@/app/diagnostics/app-route-runtime';
 import { AppShell } from '@/app/layouts/app-shell';
 import { ProtectedRoute } from '@/app/router/protected-route';
 import { routes } from '@/shared/config/routes';
@@ -39,7 +41,9 @@ export function AppRouter() {
 
   return (
     <BrowserRouter>
-      <Routes>
+      <AppRouteRuntime />
+      <AppRouteErrorBoundary>
+        <Routes>
         <Route path={routes.login} element={<LoginPage />} />
         {/*
           Picker routes (MVP): protected by existing Supabase app auth.
@@ -124,7 +128,8 @@ export function AppRouter() {
           <Route path={routes.waves} element={<Navigate to={routes.operations} replace />} />
           <Route path="*" element={<Navigate to={routes.warehouse} replace />} />
         </Route>
-      </Routes>
+        </Routes>
+      </AppRouteErrorBoundary>
     </BrowserRouter>
   );
 }

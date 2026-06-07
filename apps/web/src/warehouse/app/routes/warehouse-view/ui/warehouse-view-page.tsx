@@ -28,6 +28,7 @@ import { useT } from '@/shared/i18n';
 import { PublishedViewer } from '@/warehouse/editor/ui/published-viewer';
 import { recordRoutePreviewAppPhaseMark } from '@/warehouse/editor/ui/canvas-diagnostics';
 import { ViewTopBar } from '@/warehouse/viewer/ui/view-top-bar';
+import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
 import {
   getFloorDeepLinkAction,
   resolveFloorDeepLink
@@ -112,7 +113,16 @@ export function WarehouseViewPage() {
 
   useEffect(() => {
     recordRoutePreviewAppPhaseMark('warehouse-view-page:mount');
+    recordClientRuntimeEvent('warehouse-view-page:mount');
   }, []);
+
+  useEffect(() => {
+    recordClientRuntimeEvent('warehouse-view-page:state', {
+      viewMode,
+      activeFloorId,
+      hasWorkspace: Boolean(workspaceQuery.data)
+    });
+  }, [activeFloorId, viewMode, workspaceQuery.data]);
 
   useEffect(() => {
     if (!targetFloorId) return;
