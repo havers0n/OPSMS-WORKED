@@ -675,3 +675,37 @@ export const clientErrorReportResponseSchema = z.object({
   accepted: z.literal(true),
   requestId: z.string()
 });
+
+export const diagnosticsHeartbeatRequestBodySchema = z.object({
+  sessionId: z.string().uuid(),
+  sequence: z.number().int().positive(),
+  timestamp: z.string().trim().min(1),
+  route: z.string(),
+  activeWarehouseMode: z.string(),
+  floorId: z.string().nullable(),
+  viewportWidth: z.number().int().min(0),
+  viewportHeight: z.number().int().min(0),
+  devicePixelRatio: z.number().positive().nullable(),
+  publishedCellCount: z.number().int().min(0),
+  occupancyRowCount: z.number().int().min(0),
+  navigatorItemCount: z.number().int().min(0).nullable(),
+  recentBreadcrumbs: z.array(
+    z.object({
+      name: z.string(),
+      timestamp: z.string(),
+      data: z.record(z.string(), z.unknown()).optional()
+    })
+  ),
+  activeDebugFlags: z.object({
+    disableOccupancyOverlay: z.boolean(),
+    disableNavigator: z.boolean(),
+    disableInspector: z.boolean(),
+    disableStorageData: z.boolean()
+  }),
+  userAgent: z.string()
+});
+
+export const diagnosticsHeartbeatResponseSchema = z.object({
+  accepted: z.literal(true),
+  requestId: z.string()
+});

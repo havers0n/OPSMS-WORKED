@@ -10,6 +10,13 @@ import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
+import {
+  parseStorageDebugFlags,
+  recordStorageBreadcrumb,
+  clearStorageBreadcrumbs,
+  startStorageHeartbeat,
+  stopStorageHeartbeat
+} from '@/shared/diagnostics/storage-diagnostics';
 
 const INSPECTOR_MODE_KEY = 'wos:storage-inspector-mode';
 
@@ -52,6 +59,7 @@ export function StorageWorkspaceV2({
   onCloseInspector
 }: StorageWorkspaceV2Props) {
   const t = useT();
+  const debugFlags = parseStorageDebugFlags(typeof window !== 'undefined' ? window.location.search : '');
 
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => {
     try {
@@ -118,6 +126,36 @@ export function StorageWorkspaceV2({
   const inspectorVisible = inspectorMode !== 'hidden';
 
   useEffect(() => {
+    recordStorageBreadcrumb('storage-mode-entered', {
+      floorId: workspace?.floorId ?? null,
+      hasWorkspace: Boolean(workspace),
+      debugFlags
+    });
+    clearStorageBreadcrumbs();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const search = window.location.search;
+    const isDebug = new URLSearchParams(search).get('debug') === '1';
+    if (!isDebug) return;
+
+    startStorageHeartbeat({
+      getRoute: () => window.location.pathname + window.location.search,
+      getActiveWarehouseMode: () => 'storage',
+      getFloorId: () => workspace?.floorId ?? null,
+      getPublishedCellCount: () => 0,
+      getOccupancyRowCount: () => 0,
+      getNavigatorItemCount: () => null,
+      getDebugFlags: () => debugFlags
+    });
+
+    return () => {
+      stopStorageHeartbeat();
+    };
+  }, [workspace?.floorId, debugFlags]);
+
+  useEffect(() => {
     recordClientRuntimeEvent('storage-workspace-v2:mount', {
       hasWorkspace: Boolean(workspace)
     });
@@ -146,7 +184,7 @@ export function StorageWorkspaceV2({
       aria-label={t('warehouse.storage.region')}
       className="relative flex h-full w-full overflow-hidden"
     >
-      <StorageNavigator workspace={workspace} />
+      {debugFlags.disableNavigator ? null : <StorageNavigator workspace={workspace} />}
 
       <WorkspaceCanvasAndPanel
         workspace={workspace}
@@ -230,12 +268,12 @@ export function StorageWorkspaceV2({
             />
           </button>
 
-          {inspectorVisible && <StorageInspectorV2 workspace={workspace} />}
+          {inspectorVisible && !debugFlags.disableInspector && <StorageInspectorV2 workspace={workspace} />}
         </div>
       )}
 
       {/* No selection: render inspector so its hooks keep running (returns null internally). */}
-      {!hasSelection && <StorageInspectorV2 workspace={workspace} />}
+      {!hasSelection && !debugFlags.disableInspector && <StorageInspectorV2 workspace={workspace} />}
     </div>
   );
 }

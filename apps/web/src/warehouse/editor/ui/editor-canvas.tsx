@@ -106,6 +106,7 @@ import { getRackLabelRevealPolicy } from './shapes/rack-label-reveal-policy';
 import { SelectionOverlayLayer } from './shapes/selection-overlay-layer';
 import { SnapGuides } from './shapes/snap-guides';
 import { StorageOccupancyOverlay } from './shapes/storage-occupancy-overlay';
+import { parseStorageDebugFlags } from '@/shared/diagnostics/storage-diagnostics';
 import { useCanvasSceneModel } from './use-canvas-scene-model';
 import { useCanvasKeyboardShortcuts } from './use-canvas-keyboard-shortcuts';
 import { useCanvasStageInteractions } from './use-canvas-stage-interactions';
@@ -197,6 +198,7 @@ export function EditorCanvas({
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
   const diagnosticsFlags = useCanvasDiagnosticsFlags();
+  const storageDebugFlags = parseStorageDebugFlags(typeof window !== 'undefined' ? window.location.search : '');
   const isDiagnosticsHitTestDisabled = diagnosticsFlags.hitTest === 'off';
   const isLayoutEditable = useIsLayoutEditable();
   const selectedRackIds = useInteractionStore((state) =>
@@ -1885,6 +1887,7 @@ export function EditorCanvas({
               )}
 
               <Layer name="overlay-layer" listening={false}>
+                {!storageDebugFlags.disableOccupancyOverlay && (
                 <StorageOccupancyOverlay
                   isStorageMode={isStorageMode}
                   racks={visibleRacks}
@@ -1898,6 +1901,7 @@ export function EditorCanvas({
                   renderMode={renderMode}
                   zoom={zoom}
                 />
+                )}
 
                 {cellStateOverlaysEnabled && (
                   <SelectionOverlayLayer
