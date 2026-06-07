@@ -199,6 +199,10 @@ export function EditorCanvas({
   const layoutDraft = useWorkspaceLayout(workspace);
   const diagnosticsFlags = useCanvasDiagnosticsFlags();
   const storageDebugFlags = parseStorageDebugFlags(typeof window !== 'undefined' ? window.location.search : '');
+  const isCoarsePointerDevice =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: coarse)').matches
+      : false;
   const isDiagnosticsHitTestDisabled = diagnosticsFlags.hitTest === 'off';
   const isLayoutEditable = useIsLayoutEditable();
   const selectedRackIds = useInteractionStore((state) =>
@@ -1887,7 +1891,7 @@ export function EditorCanvas({
               )}
 
               <Layer name="overlay-layer" listening={false}>
-                {!storageDebugFlags.disableOccupancyOverlay && (
+                {!storageDebugFlags.disableOccupancyOverlay && !isCoarsePointerDevice && (
                 <StorageOccupancyOverlay
                   isStorageMode={isStorageMode}
                   racks={visibleRacks}
