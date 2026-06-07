@@ -74,29 +74,44 @@ function isActionableGuidedStep(step: PickStepDetail): boolean {
   return step.status === 'pending';
 }
 
-function getActionableGuidedSteps(steps: PickStepDetail[]): PickStepDetail[] {
-  return steps.filter(isActionableGuidedStep);
+function getGuidedActionableSteps(
+  steps: PickStepDetail[],
+  pendingCanonicalReconciliationStepIds: ReadonlySet<string>
+): PickStepDetail[] {
+  return steps.filter(
+    (step) =>
+      isActionableGuidedStep(step) && !pendingCanonicalReconciliationStepIds.has(step.id)
+  );
 }
 
-function findFirstActionableGuidedStep(steps: PickStepDetail[]): PickStepDetail | null {
-  return getActionableGuidedSteps(steps)[0] ?? null;
+function findFirstActionableGuidedStep(
+  steps: PickStepDetail[],
+  pendingCanonicalReconciliationStepIds: ReadonlySet<string>
+): PickStepDetail | null {
+  return getGuidedActionableSteps(steps, pendingCanonicalReconciliationStepIds)[0] ?? null;
 }
 
 function findNextActionableGuidedStep(
   steps: PickStepDetail[],
   currentStepId: string,
+  pendingCanonicalReconciliationStepIds: ReadonlySet<string>,
   excludedStepId?: string
 ): PickStepDetail | null {
   const currentIndex = steps.findIndex((step) => step.id === currentStepId);
   if (currentIndex < 0) {
     return findFirstActionableGuidedStep(
-      excludedStepId ? steps.filter((step) => step.id !== excludedStepId) : steps
+      excludedStepId ? steps.filter((step) => step.id !== excludedStepId) : steps,
+      pendingCanonicalReconciliationStepIds
     );
   }
 
   for (let index = currentIndex + 1; index < steps.length; index += 1) {
     const step = steps[index];
-    if (step.id !== excludedStepId && isActionableGuidedStep(step)) {
+    if (
+      step.id !== excludedStepId &&
+      isActionableGuidedStep(step) &&
+      !pendingCanonicalReconciliationStepIds.has(step.id)
+    ) {
       return step;
     }
   }
@@ -106,14 +121,18 @@ function findNextActionableGuidedStep(
 
 function findPreviousActionableGuidedStep(
   steps: PickStepDetail[],
-  currentStepId: string
+  currentStepId: string,
+  pendingCanonicalReconciliationStepIds: ReadonlySet<string>
 ): PickStepDetail | null {
   const currentIndex = steps.findIndex((step) => step.id === currentStepId);
   if (currentIndex < 0) return null;
 
   for (let index = currentIndex - 1; index >= 0; index -= 1) {
     const step = steps[index];
-    if (isActionableGuidedStep(step)) {
+    if (
+      isActionableGuidedStep(step) &&
+      !pendingCanonicalReconciliationStepIds.has(step.id)
+    ) {
       return step;
     }
   }
@@ -797,10 +816,39 @@ function GuidedPickExecution({
 }) {
   const steps = task.steps;
   const isWavePick = task.sourceType === 'wave';
-  const actionableSteps = getActionableGuidedSteps(steps);
-  const [activeStepId, setActiveStepId] = useState<string | null>(
-    () => findFirstActionableGuidedStep(steps)?.id ?? null
+  const [pendingCanonicalReconciliationStepIds, setPendingCanonicalReconciliationStepIds] =
+    useState<Set<string>>(() => new Set());
+  const actionableSteps = getGuidedActionableSteps(
+    steps,
+    pendingCanonicalReconciliationStepIds
   );
+  const [activeStepId, setActiveStepId] = useState<string | null>(
+    () => findFirstActionableGuidedStep(steps, new Set())?.id ?? null
+  );
+
+  useEffect(() => {
+    setPendingCanonicalReconciliationStepIds(new Set());
+    setActiveStepId(findFirstActionableGuidedStep(steps, new Set())?.id ?? null);
+  }, [taskId]);
+
+  useEffect(() => {
+    setPendingCanonicalReconciliationStepIds((current) => {
+      if (current.size === 0) return current;
+
+      const next = new Set<string>();
+      for (const stepId of current) {
+        const canonicalStep = steps.find((step) => step.id === stepId);
+        if (canonicalStep && canonicalStep.status === 'pending') {
+          next.add(stepId);
+        }
+      }
+
+      return next.size === current.size &&
+        [...next].every((stepId) => current.has(stepId))
+        ? current
+        : next;
+    });
+  }, [steps]);
 
   useEffect(() => {
     const firstActionableStep = actionableSteps[0] ?? null;
@@ -816,6 +864,10 @@ function GuidedPickExecution({
     }
   }, [actionableSteps, activeStepId]);
 
+  if (actionableSteps.length === 0) {
+    return <GuidedExecutionUpdatingState />;
+  }
+
   const step =
     (activeStepId
       ? actionableSteps.find((actionableStep) => actionableStep.id === activeStepId)
@@ -828,11 +880,29 @@ function GuidedPickExecution({
   const activeStepIndex = actionableSteps.findIndex(
     (actionableStep) => actionableStep.id === step.id
   );
-  const previousActionableStep = findPreviousActionableGuidedStep(steps, step.id);
-  const nextActionableStep = findNextActionableGuidedStep(steps, step.id);
+  const previousActionableStep = findPreviousActionableGuidedStep(
+    steps,
+    step.id,
+    pendingCanonicalReconciliationStepIds
+  );
+  const nextActionableStep = findNextActionableGuidedStep(
+    steps,
+    step.id,
+    pendingCanonicalReconciliationStepIds
+  );
 
   function handleExecuted(stepId: string) {
-    const nextStep = findNextActionableGuidedStep(steps, stepId, stepId);
+    const nextPendingCanonicalReconciliationStepIds = new Set(
+      pendingCanonicalReconciliationStepIds
+    );
+    nextPendingCanonicalReconciliationStepIds.add(stepId);
+    setPendingCanonicalReconciliationStepIds(nextPendingCanonicalReconciliationStepIds);
+    const nextStep = findNextActionableGuidedStep(
+      steps,
+      stepId,
+      nextPendingCanonicalReconciliationStepIds,
+      stepId
+    );
     setActiveStepId(nextStep?.id ?? null);
   }
 
@@ -1237,6 +1307,17 @@ function ViewModeToggle({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type PickContainer = { id: string; label: string; typeLabel: string | null };
+
+function GuidedExecutionUpdatingState() {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-6 text-center">
+      <div className="text-sm font-medium text-slate-900">Updating task...</div>
+      <div className="mt-1 text-xs text-slate-500">
+        Waiting for the latest task state before showing the next step.
+      </div>
+    </div>
+  );
+}
 
 export function PickTaskPage() {
   const { id: taskId } = useParams<{ id: string }>();

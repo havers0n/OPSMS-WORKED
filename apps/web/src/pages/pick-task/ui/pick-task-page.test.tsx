@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { Container, ContainerType, PickStepDetail, PickStepStatus, PickTaskDetail } from '@wos/domain';
 import type { CreateContainerResult } from '@/features/container-create/api/mutations';
@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
     allocatedTaskFixture: undefined as PickTaskDetail | undefined,
     nextTaskFixtureAfterExecute: null as PickTaskDetail | null,
     nextTaskFixtureAfterSkip: null as PickTaskDetail | null,
+    deferCanonicalRefreshAfterExecute: false,
+    deferCanonicalRefreshAfterSkip: false,
     allocateFailure: null as Error | null,
     executeFailure: null as Error | null,
     skipFailure: null as Error | null,
@@ -362,7 +364,10 @@ vi.mock('@/entities/pick-task/api/mutations', async () => {
         mutationFn: async (input: { stepId: string; qtyActual: number; pickContainerId: string }) => {
           mocks.spies.execute(input);
           if (mocks.state.executeFailure) throw mocks.state.executeFailure;
-          if (mocks.state.nextTaskFixtureAfterExecute) {
+          if (
+            mocks.state.nextTaskFixtureAfterExecute &&
+            !mocks.state.deferCanonicalRefreshAfterExecute
+          ) {
             mocks.state.taskFixture = clone(mocks.state.nextTaskFixtureAfterExecute);
             mocks.state.nextTaskFixtureAfterExecute = null;
           }
@@ -388,7 +393,10 @@ vi.mock('@/entities/pick-task/api/mutations', async () => {
         mutationFn: async (input: { stepId: string }) => {
           mocks.spies.skip(input);
           if (mocks.state.skipFailure) throw mocks.state.skipFailure;
-          if (mocks.state.nextTaskFixtureAfterSkip) {
+          if (
+            mocks.state.nextTaskFixtureAfterSkip &&
+            !mocks.state.deferCanonicalRefreshAfterSkip
+          ) {
             mocks.state.taskFixture = clone(mocks.state.nextTaskFixtureAfterSkip);
             mocks.state.nextTaskFixtureAfterSkip = null;
           }
@@ -455,6 +463,19 @@ async function selectPickContainer() {
   fireEvent.click(await screen.findByRole('button', { name: /TOTE-01/ }));
 }
 
+async function refreshCanonicalTask(queryClient: QueryClient, task: PickTaskDetail) {
+  mocks.state.taskFixture = clone(task);
+  await act(async () => {
+    await queryClient.refetchQueries();
+  });
+}
+
+function expectGuidedExecutionHandoffState() {
+  expect(screen.getByText('Updating task...')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Confirm pick' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Problem / skip step' })).not.toBeInTheDocument();
+}
+
 beforeEach(() => {
   mocks.spies.allocate.mockReset();
   mocks.spies.execute.mockReset();
@@ -466,6 +487,8 @@ beforeEach(() => {
   mocks.state.createFailure = null;
   mocks.state.nextTaskFixtureAfterExecute = null;
   mocks.state.nextTaskFixtureAfterSkip = null;
+  mocks.state.deferCanonicalRefreshAfterExecute = false;
+  mocks.state.deferCanonicalRefreshAfterSkip = false;
   mocks.state.orderDetail = { externalNumber: 'ORD-42' };
   mocks.state.containers = [makeContainer()];
   mocks.state.containerTypes = [makeContainerType()];
@@ -524,11 +547,11 @@ describe('PickTaskPage', () => {
     expect(screen.queryByText('Done item')).not.toBeInTheDocument();
   });
 
-  it('auto-advances to the next actionable step after execute even when the rendered snapshot is stale', async () => {
+  it('uses the canonical execute hook and immediately advances to the next guided actionable step while the snapshot is stale', async () => {
     mocks.state.taskFixture = makeTaskFromSteps([
       makeAllocatedStep(1, 'pending', { itemName: 'First item', qtyRequired: 2 }),
-      makeAllocatedStep(2, 'picked', { itemName: 'Already picked' }),
-      makeAllocatedStep(3, 'pending', { itemName: 'Next actionable' })
+      makeAllocatedStep(2, 'pending', { itemName: 'Next actionable' }),
+      makeAllocatedStep(3, 'picked', { itemName: 'Already picked' })
     ]);
     renderPage();
 
@@ -542,6 +565,7 @@ describe('PickTaskPage', () => {
     );
     expect(await screen.findByText('Next actionable')).toBeInTheDocument();
     expect(screen.queryByText('First item')).not.toBeInTheDocument();
+    expect(screen.queryByText('Already picked')).not.toBeInTheDocument();
   });
 
   it('auto-advance skips needs_replenishment steps', async () => {
@@ -576,7 +600,7 @@ describe('PickTaskPage', () => {
     expect(screen.queryByText('Excepted middle')).not.toBeInTheDocument();
   });
 
-  it('skip mutation advances to the next actionable step', async () => {
+  it('uses the canonical skip hook and advances to the next guided actionable step', async () => {
     mocks.state.taskFixture = makeTaskFromSteps([
       makeAllocatedStep(1, 'pending', { itemName: 'Skip me' }),
       makeAllocatedStep(2, 'pending', { itemName: 'After skip' })
@@ -591,7 +615,7 @@ describe('PickTaskPage', () => {
     expect(await screen.findByText('After skip')).toBeInTheDocument();
   });
 
-  it('final execute reaches completion state after refreshed canonical data', async () => {
+  it('shows a neutral stale-completion handoff after the final execute until canonical refresh confirms completion', async () => {
     const pendingOnlyTask = makeTaskFromSteps([
       makeAllocatedStep(1, 'pending', { itemName: 'Last step', qtyRequired: 2 })
     ]);
@@ -601,17 +625,23 @@ describe('PickTaskPage', () => {
     completedTask.status = 'completed';
     completedTask.completedAt = '2026-01-02T00:00:00.000Z';
     mocks.state.taskFixture = pendingOnlyTask;
-    mocks.state.nextTaskFixtureAfterExecute = completedTask;
-    renderPage();
+    mocks.state.deferCanonicalRefreshAfterExecute = true;
+    const { queryClient } = renderPage();
 
     await selectPickContainer();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
 
-    await waitFor(() => expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' })));
+    await waitFor(() =>
+      expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' }))
+    );
+    expectGuidedExecutionHandoffState();
+    expect(screen.queryByText('Last step')).not.toBeInTheDocument();
+
+    await refreshCanonicalTask(queryClient, completedTask);
     expect(await screen.findByText('Task complete')).toBeInTheDocument();
   });
 
-  it('final execute with blocked steps remaining reaches blocked state after refreshed canonical data', async () => {
+  it('shows a neutral stale-blocked handoff after the final execute until canonical refresh confirms blocked state', async () => {
     const pendingThenBlockedTask = makeTaskFromSteps([
       makeAllocatedStep(1, 'pending', { itemName: 'Last actionable' }),
       makeAllocatedStep(2, 'needs_replenishment', { itemName: 'Still blocked' })
@@ -621,14 +651,83 @@ describe('PickTaskPage', () => {
       makeAllocatedStep(2, 'needs_replenishment', { itemName: 'Still blocked' })
     ]);
     mocks.state.taskFixture = pendingThenBlockedTask;
-    mocks.state.nextTaskFixtureAfterExecute = blockedTask;
-    renderPage();
+    mocks.state.deferCanonicalRefreshAfterExecute = true;
+    const { queryClient } = renderPage();
 
     await selectPickContainer();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
 
-    await waitFor(() => expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' })));
+    await waitFor(() =>
+      expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' }))
+    );
+    expectGuidedExecutionHandoffState();
+    expect(screen.queryByText('Last actionable')).not.toBeInTheDocument();
+
+    await refreshCanonicalTask(queryClient, blockedTask);
     expect(await screen.findByText('All remaining steps need replenishment')).toBeInTheDocument();
+    expect(screen.queryByText('Task complete')).not.toBeInTheDocument();
+  });
+
+  it('shows a neutral stale-completion handoff after the final skip until canonical refresh confirms completion', async () => {
+    const pendingOnlyTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'Skippable last step' })
+    ]);
+    const skippedTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'skipped', { itemName: 'Skippable last step', qtyPicked: 0 })
+    ]);
+    skippedTask.status = 'completed_with_exceptions';
+    skippedTask.completedAt = '2026-01-02T00:00:00.000Z';
+    mocks.state.taskFixture = pendingOnlyTask;
+    mocks.state.deferCanonicalRefreshAfterSkip = true;
+    const { queryClient } = renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Problem / skip step' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm skip' }));
+
+    await waitFor(() => expect(mocks.spies.skip).toHaveBeenCalledWith({ stepId: 'step-1' }));
+    expectGuidedExecutionHandoffState();
+    expect(screen.queryByText('Skippable last step')).not.toBeInTheDocument();
+
+    await refreshCanonicalTask(queryClient, skippedTask);
+    expect(await screen.findByText('Task complete with exceptions')).toBeInTheDocument();
+  });
+
+  it('keeps multiple successful stale actions excluded until canonical refresh reconciles them', async () => {
+    const initialTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'First stale action' }),
+      makeAllocatedStep(2, 'pending', { itemName: 'Second stale action' })
+    ]);
+    const completedTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'picked', { itemName: 'First stale action', qtyPicked: 1 }),
+      makeAllocatedStep(2, 'picked', { itemName: 'Second stale action', qtyPicked: 1 })
+    ]);
+    completedTask.status = 'completed';
+    completedTask.completedAt = '2026-01-02T00:00:00.000Z';
+    mocks.state.taskFixture = initialTask;
+    mocks.state.deferCanonicalRefreshAfterExecute = true;
+    const { queryClient } = renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+
+    await waitFor(() =>
+      expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' }))
+    );
+    expect(await screen.findByText('Second stale action')).toBeInTheDocument();
+    expect(screen.queryByText('First stale action')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+
+    await waitFor(() =>
+      expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-2' }))
+    );
+    expectGuidedExecutionHandoffState();
+    expect(screen.queryByText('First stale action')).not.toBeInTheDocument();
+    expect(screen.queryByText('Second stale action')).not.toBeInTheDocument();
+
+    await refreshCanonicalTask(queryClient, completedTask);
+    expect(await screen.findByText('Task complete')).toBeInTheDocument();
   });
 
   it('renders worker-facing progress buckets with partial and exception called out separately', async () => {
