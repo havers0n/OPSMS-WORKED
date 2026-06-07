@@ -77,6 +77,9 @@ export function ObjectLocalAffordanceBar({
     };
 
     updateSize();
+    if (typeof ResizeObserver !== 'function') {
+      return;
+    }
     const observer = new ResizeObserver(updateSize);
     observer.observe(node);
 

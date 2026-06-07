@@ -146,6 +146,12 @@ export function createTransformOnlyZoomState(
   };
 }
 
+function isInteractiveTouchTarget(target: EventTarget | null) {
+  return target instanceof Element
+    ? target.closest('button, a, input, select, textarea, [role="button"]') !== null
+    : false;
+}
+
 function isManualPanBatchDrawDisabled() {
   return (
     typeof window !== 'undefined' &&
@@ -466,6 +472,9 @@ export function useCanvasViewportController({
     if (!node) return;
     const update = () => setViewport({ width: node.clientWidth, height: node.clientHeight });
     update();
+    if (typeof ResizeObserver !== 'function') {
+      return;
+    }
     const ro = new ResizeObserver(update);
     ro.observe(node);
     return () => ro.disconnect();
@@ -818,7 +827,7 @@ export function useCanvasViewportController({
       if (!stage) return;
 
       // Don't intercept touches on interactive HTML elements overlaid on the canvas (e.g. zoom buttons)
-      if ((event.target as HTMLElement).closest('button, a, input, select, textarea, [role="button"]')) return;
+      if (isInteractiveTouchTarget(event.target)) return;
 
       if (event.touches.length === 2) {
         // Cancel any in-progress 1-finger pan

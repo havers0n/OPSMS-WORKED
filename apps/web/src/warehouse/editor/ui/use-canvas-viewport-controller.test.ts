@@ -413,6 +413,32 @@ describe('transform-only pan helpers', () => {
 });
 
 describe('useCanvasViewportController desktop pan threshold', () => {
+  it('mounts safely when ResizeObserver is unavailable', () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+    // Simulate older/mobile browser environments where ResizeObserver is absent.
+    // @ts-expect-error test intentionally removes the global
+    globalThis.ResizeObserver = undefined;
+
+    const stageRef = { current: null as Konva.Stage | null };
+    useCameraStore.setState({ zoom: 1, offsetX: 0, offsetY: 0 });
+    useCanvasZoomSettingsStore.setState({ minZoom: 0.1, maxZoom: 3 });
+
+    function Harness() {
+      const controller = useCanvasViewportController({
+        autoFitRacks: [],
+        setCanvasZoom: () => undefined,
+        stageRef: stageRef as MutableRefObject<Konva.Stage | null>,
+        viewMode: 'storage',
+        zoom: 1
+      });
+      return createElement('div', { ref: controller.containerRef });
+    }
+
+    expect(() => render(createElement(Harness))).not.toThrow();
+
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
+
   it('keeps click/below-threshold move non-panning, enters panning at threshold once, resets on mouseup, and supports next drag', () => {
     const originalResizeObserver = globalThis.ResizeObserver;
     globalThis.ResizeObserver = class {
