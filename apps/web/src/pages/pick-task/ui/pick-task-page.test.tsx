@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   state: {
     taskFixture: undefined as PickTaskDetail | undefined,
     allocatedTaskFixture: undefined as PickTaskDetail | undefined,
+    nextTaskFixtureAfterExecute: null as PickTaskDetail | null,
+    nextTaskFixtureAfterSkip: null as PickTaskDetail | null,
     allocateFailure: null as Error | null,
     executeFailure: null as Error | null,
     skipFailure: null as Error | null,
@@ -132,6 +134,42 @@ function makeTask(allocated = false): PickTaskDetail {
         sourceLocationCode: null
       })
     ]
+  };
+}
+
+function makeAllocatedStep(
+  seq: number,
+  status: PickStepStatus,
+  overrides: Partial<PickStepDetail> = {}
+): PickStepDetail {
+  return makeStep(seq, status, {
+    sourceCellAddress: `${String.fromCharCode(64 + seq)}-01-0${seq}`,
+    sourceCellId: `cell-${seq}`,
+    sourceFloorId: 'floor-1',
+    sourceLocationId: `loc-${seq}`,
+    sourceLocationCode: `LOC-${seq}`,
+    qtyRequired: 1,
+    qtyPicked: status === 'picked' ? 1 : 0,
+    ...overrides
+  });
+}
+
+function makeTaskFromSteps(steps: PickStepDetail[]): PickTaskDetail {
+  const completedSteps = steps.filter((step) => step.status !== 'pending').length;
+  return {
+    id: TASK_ID,
+    taskNumber: 'T-0042',
+    tenantId: 'tenant-1',
+    sourceType: 'order',
+    sourceId: ORDER_ID,
+    status: 'in_progress',
+    assignedTo: 'worker-1',
+    startedAt: null,
+    completedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    totalSteps: steps.length,
+    completedSteps,
+    steps
   };
 }
 
@@ -319,10 +357,15 @@ vi.mock('@/entities/pick-task/api/mutations', async () => {
       });
     },
     useExecutePickStep: () => {
+      const queryClient = useQueryClient();
       return useMutation({
         mutationFn: async (input: { stepId: string; qtyActual: number; pickContainerId: string }) => {
           mocks.spies.execute(input);
           if (mocks.state.executeFailure) throw mocks.state.executeFailure;
+          if (mocks.state.nextTaskFixtureAfterExecute) {
+            mocks.state.taskFixture = clone(mocks.state.nextTaskFixtureAfterExecute);
+            mocks.state.nextTaskFixtureAfterExecute = null;
+          }
           return {
             stepId: input.stepId,
             status: 'picked' as const,
@@ -333,14 +376,22 @@ vi.mock('@/entities/pick-task/api/mutations', async () => {
             waveStatus: null,
             movementId: null
           };
+        },
+        onSuccess: (result: { taskId: string }) => {
+          void queryClient.invalidateQueries({ queryKey: pickTaskKeys.detail(result.taskId) });
         }
       });
     },
     useSkipPickStep: () => {
+      const queryClient = useQueryClient();
       return useMutation({
         mutationFn: async (input: { stepId: string }) => {
           mocks.spies.skip(input);
           if (mocks.state.skipFailure) throw mocks.state.skipFailure;
+          if (mocks.state.nextTaskFixtureAfterSkip) {
+            mocks.state.taskFixture = clone(mocks.state.nextTaskFixtureAfterSkip);
+            mocks.state.nextTaskFixtureAfterSkip = null;
+          }
           return {
             stepId: input.stepId,
             status: 'skipped' as const,
@@ -351,6 +402,9 @@ vi.mock('@/entities/pick-task/api/mutations', async () => {
             waveStatus: null,
             movementId: null
           };
+        },
+        onSuccess: (result: { taskId: string }) => {
+          void queryClient.invalidateQueries({ queryKey: pickTaskKeys.detail(result.taskId) });
         }
       });
     }
@@ -383,8 +437,9 @@ function makeQueryClient() {
 }
 
 function renderPage() {
-  return render(
-    <QueryClientProvider client={makeQueryClient()}>
+  const queryClient = makeQueryClient();
+  const rendered = render(
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[`/operations/pick-tasks/${TASK_ID}`]}>
         <Routes>
           <Route path="/operations/pick-tasks/:id" element={<PickTaskPage />} />
@@ -392,6 +447,12 @@ function renderPage() {
       </MemoryRouter>
     </QueryClientProvider>
   );
+
+  return { queryClient, ...rendered };
+}
+
+async function selectPickContainer() {
+  fireEvent.click(await screen.findByRole('button', { name: /TOTE-01/ }));
 }
 
 beforeEach(() => {
@@ -403,6 +464,8 @@ beforeEach(() => {
   mocks.state.executeFailure = null;
   mocks.state.skipFailure = null;
   mocks.state.createFailure = null;
+  mocks.state.nextTaskFixtureAfterExecute = null;
+  mocks.state.nextTaskFixtureAfterSkip = null;
   mocks.state.orderDetail = { externalNumber: 'ORD-42' };
   mocks.state.containers = [makeContainer()];
   mocks.state.containerTypes = [makeContainerType()];
@@ -438,10 +501,134 @@ describe('PickTaskPage', () => {
     renderPage();
 
     expect(await screen.findByText('Pick container')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /TOTE-01/ }));
+    await selectPickContainer();
 
     expect(await screen.findByText('Confirm pick')).toBeInTheDocument();
     expect(screen.getByText('Picking into:')).toBeInTheDocument();
+  });
+
+  it('renders one actionable step as the primary guided card with a sticky mobile CTA', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { qtyRequired: 3, itemName: 'Active item' }),
+      makeAllocatedStep(2, 'picked', { itemName: 'Done item' }),
+      makeAllocatedStep(3, 'needs_replenishment', { itemName: 'Blocked item' })
+    ]);
+    renderPage();
+
+    await selectPickContainer();
+
+    expect(screen.getByTestId('guided-pick-step-card')).toBeInTheDocument();
+    expect(screen.getByTestId('guided-pick-sticky-actions')).toBeInTheDocument();
+    expect(screen.getByText('Source location')).toBeInTheDocument();
+    expect(screen.getByText('Active item')).toBeInTheDocument();
+    expect(screen.queryByText('Done item')).not.toBeInTheDocument();
+  });
+
+  it('auto-advances to the next actionable step after execute even when the rendered snapshot is stale', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'First item', qtyRequired: 2 }),
+      makeAllocatedStep(2, 'picked', { itemName: 'Already picked' }),
+      makeAllocatedStep(3, 'pending', { itemName: 'Next actionable' })
+    ]);
+    renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+
+    await waitFor(() =>
+      expect(mocks.spies.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ stepId: 'step-1', pickContainerId: WORKER_CONTAINER_ID })
+      )
+    );
+    expect(await screen.findByText('Next actionable')).toBeInTheDocument();
+    expect(screen.queryByText('First item')).not.toBeInTheDocument();
+  });
+
+  it('auto-advance skips needs_replenishment steps', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'First pending' }),
+      makeAllocatedStep(2, 'needs_replenishment', { itemName: 'Blocked middle' }),
+      makeAllocatedStep(3, 'pending', { itemName: 'Second pending' })
+    ]);
+    renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+
+    expect(await screen.findByText('Second pending')).toBeInTheDocument();
+    expect(screen.queryByText('Blocked middle')).not.toBeInTheDocument();
+  });
+
+  it('manual next navigation skips non-actionable steps when secondary navigation is used', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'Step one' }),
+      makeAllocatedStep(2, 'picked', { itemName: 'Picked middle' }),
+      makeAllocatedStep(3, 'exception', { itemName: 'Excepted middle' }),
+      makeAllocatedStep(4, 'pending', { itemName: 'Step four' })
+    ]);
+    renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
+
+    expect(await screen.findByText('Step four')).toBeInTheDocument();
+    expect(screen.queryByText('Picked middle')).not.toBeInTheDocument();
+    expect(screen.queryByText('Excepted middle')).not.toBeInTheDocument();
+  });
+
+  it('skip mutation advances to the next actionable step', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'Skip me' }),
+      makeAllocatedStep(2, 'pending', { itemName: 'After skip' })
+    ]);
+    renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Problem / skip step' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm skip' }));
+
+    await waitFor(() => expect(mocks.spies.skip).toHaveBeenCalledWith({ stepId: 'step-1' }));
+    expect(await screen.findByText('After skip')).toBeInTheDocument();
+  });
+
+  it('final execute reaches completion state after refreshed canonical data', async () => {
+    const pendingOnlyTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'Last step', qtyRequired: 2 })
+    ]);
+    const completedTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'picked', { itemName: 'Last step', qtyRequired: 2, qtyPicked: 2 })
+    ]);
+    completedTask.status = 'completed';
+    completedTask.completedAt = '2026-01-02T00:00:00.000Z';
+    mocks.state.taskFixture = pendingOnlyTask;
+    mocks.state.nextTaskFixtureAfterExecute = completedTask;
+    renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+
+    await waitFor(() => expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' })));
+    expect(await screen.findByText('Task complete')).toBeInTheDocument();
+  });
+
+  it('final execute with blocked steps remaining reaches blocked state after refreshed canonical data', async () => {
+    const pendingThenBlockedTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { itemName: 'Last actionable' }),
+      makeAllocatedStep(2, 'needs_replenishment', { itemName: 'Still blocked' })
+    ]);
+    const blockedTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'picked', { itemName: 'Last actionable', qtyPicked: 1 }),
+      makeAllocatedStep(2, 'needs_replenishment', { itemName: 'Still blocked' })
+    ]);
+    mocks.state.taskFixture = pendingThenBlockedTask;
+    mocks.state.nextTaskFixtureAfterExecute = blockedTask;
+    renderPage();
+
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+
+    await waitFor(() => expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' })));
+    expect(await screen.findByText('All remaining steps need replenishment')).toBeInTheDocument();
   });
 
   it('renders worker-facing progress buckets with partial and exception called out separately', async () => {
@@ -523,8 +710,8 @@ describe('PickTaskPage', () => {
     mocks.state.skipFailure = new Error('backend skip details leaked');
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: /TOTE-01/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Skip step' }));
+    await selectPickContainer();
+    fireEvent.click(screen.getByRole('button', { name: 'Problem / skip step' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm skip' }));
 
     expect(await screen.findByText('Unable to skip this step. Try again.')).toBeInTheDocument();

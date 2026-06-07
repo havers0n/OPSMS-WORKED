@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   List,
@@ -11,7 +12,7 @@ import {
   RefreshCw,
   Zap
 } from 'lucide-react';
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import type { Container, ContainerType, PickStepDetail, PickTaskDetail } from '@wos/domain';
 import {
@@ -67,6 +68,57 @@ function getPickTaskProgressBuckets(steps: PickStepDetail[]): PickTaskProgressBu
 
 function isAllocatedStep(step: PickStepDetail): boolean {
   return !(step.status === 'pending' && step.sourceLocationId === null && step.sourceCellId === null);
+}
+
+function isActionableGuidedStep(step: PickStepDetail): boolean {
+  return step.status === 'pending';
+}
+
+function getActionableGuidedSteps(steps: PickStepDetail[]): PickStepDetail[] {
+  return steps.filter(isActionableGuidedStep);
+}
+
+function findFirstActionableGuidedStep(steps: PickStepDetail[]): PickStepDetail | null {
+  return getActionableGuidedSteps(steps)[0] ?? null;
+}
+
+function findNextActionableGuidedStep(
+  steps: PickStepDetail[],
+  currentStepId: string,
+  excludedStepId?: string
+): PickStepDetail | null {
+  const currentIndex = steps.findIndex((step) => step.id === currentStepId);
+  if (currentIndex < 0) {
+    return findFirstActionableGuidedStep(
+      excludedStepId ? steps.filter((step) => step.id !== excludedStepId) : steps
+    );
+  }
+
+  for (let index = currentIndex + 1; index < steps.length; index += 1) {
+    const step = steps[index];
+    if (step.id !== excludedStepId && isActionableGuidedStep(step)) {
+      return step;
+    }
+  }
+
+  return null;
+}
+
+function findPreviousActionableGuidedStep(
+  steps: PickStepDetail[],
+  currentStepId: string
+): PickStepDetail | null {
+  const currentIndex = steps.findIndex((step) => step.id === currentStepId);
+  if (currentIndex < 0) return null;
+
+  for (let index = currentIndex - 1; index >= 0; index -= 1) {
+    const step = steps[index];
+    if (isActionableGuidedStep(step)) {
+      return step;
+    }
+  }
+
+  return null;
 }
 
 // ── Container setup (choose existing OR create new) ───────────────────────────
@@ -243,6 +295,8 @@ function PickContainerSetup({
 function GuidedStepCard({
   step,
   pickContainerId,
+  pickContainerLabel,
+  pickContainerTypeLabel,
   taskId,
   taskNumber,
   isWavePick,
@@ -250,10 +304,12 @@ function GuidedStepCard({
 }: {
   step: PickStepDetail;
   pickContainerId: string;
+  pickContainerLabel: string;
+  pickContainerTypeLabel: string | null;
   taskId: string;
   taskNumber: string;
   isWavePick: boolean;
-  onExecuted: () => void;
+  onExecuted: (stepId: string) => void;
 }) {
   // All state resets on remount — parent uses key={step.id}
   const [qtyActual, setQtyActual] = useState(String(step.qtyRequired));
@@ -306,14 +362,14 @@ function GuidedStepCard({
     }
     execute.mutate(
       { stepId: step.id, qtyActual: parsedQty, pickContainerId },
-      { onSuccess: onExecuted }
+      { onSuccess: () => onExecuted(step.id) }
     );
   }
 
   function handleSkipConfirm() {
     skip.mutate(
       { stepId: step.id },
-      { onSuccess: onExecuted }
+      { onSuccess: () => onExecuted(step.id) }
     );
   }
 
@@ -375,37 +431,85 @@ function GuidedStepCard({
 
   // ── Pending: full pick UI ──
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      {/* Product */}
-      <div
-        className={`flex gap-4 p-5 transition-colors duration-300 ${
-          scanState === 'match'
-            ? 'bg-emerald-50'
-            : scanState === 'mismatch'
-              ? 'bg-red-50'
-              : ''
-        }`}
-      >
-        <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
-        <div className="min-w-0 flex-1">
-          {/* Order badge — only shown for wave tasks */}
-          {isWavePick && step.orderNumber && (
-            <div className="mb-1.5 inline-flex items-center rounded-md border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
-              {step.orderNumber}
+    <div
+      className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+      data-testid="guided-pick-step-card"
+    >
+      <div className="border-b border-cyan-200 bg-gradient-to-br from-cyan-600 via-cyan-500 to-sky-500 p-5 text-white sm:p-6">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+          Source location
+        </div>
+        <div className="mt-2 flex items-start gap-3">
+          <MapPin className="mt-1 h-5 w-5 shrink-0 text-cyan-100" />
+          <div className="min-w-0">
+            {step.sourceCellAddress && step.sourceCellId && step.sourceFloorId ? (
+              <Link
+                to={warehouseViewPath({
+                  floorId: step.sourceFloorId,
+                  cellId: step.sourceCellId,
+                  returnTaskId: taskId,
+                  returnTaskNumber: taskNumber
+                })}
+                className="text-3xl font-black tracking-tight text-white underline decoration-cyan-200 underline-offset-4 sm:text-4xl"
+              >
+                {step.sourceCellAddress}
+              </Link>
+            ) : (
+              <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                {step.sourceCellAddress ?? step.sourceLocationCode ?? 'Not allocated'}
+              </div>
+            )}
+            <div className="mt-2 text-sm text-cyan-50">
+              Go to this location before confirming the pick.
             </div>
-          )}
-          <div className="text-lg font-bold leading-snug text-slate-900">{step.itemName}</div>
-          <div className="mt-0.5 text-sm text-slate-500">{step.sku}</div>
-          <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-3 py-1.5 text-sm font-semibold text-cyan-700">
-            <Package className="h-3.5 w-3.5" />
-            Pick {step.qtyRequired}
           </div>
         </div>
       </div>
 
+      <div className="space-y-5 p-5 sm:p-6">
+        <div
+          className={`rounded-3xl border border-slate-200 bg-slate-50 p-4 transition-colors duration-300 ${
+            scanState === 'match'
+              ? 'border-emerald-200 bg-emerald-50'
+              : scanState === 'mismatch'
+                ? 'border-red-200 bg-red-50'
+                : ''
+          }`}
+        >
+          <div className="flex items-start gap-4">
+            <div className="shrink-0">
+              <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
+            </div>
+            <div className="min-w-0 flex-1">
+              {isWavePick && step.orderNumber && (
+                <div className="mb-2 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                  {step.orderNumber}
+                </div>
+              )}
+              <div className="text-2xl font-bold leading-tight text-slate-950">
+                {step.itemName}
+              </div>
+              <div className="mt-2 text-sm font-medium uppercase tracking-wide text-slate-500">
+                SKU
+              </div>
+              <div className="font-mono text-base text-slate-700">{step.sku}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-white px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Required quantity
+            </div>
+            <div className="mt-2 flex items-end gap-2">
+              <span className="text-4xl font-black text-slate-950">{step.qtyRequired}</span>
+              <span className="pb-1 text-sm font-medium text-slate-500">units</span>
+            </div>
+          </div>
+        </div>
+
       {/* ── Scan feedback (optional — only visible after a scan) ── */}
       {scanState === 'match' && (
-        <div className="flex items-center gap-2 border-t border-emerald-200 bg-emerald-50 px-5 py-2.5">
+        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
           <span className="text-sm font-medium text-emerald-800">
             Product verified — confirm to pick
@@ -413,7 +517,7 @@ function GuidedStepCard({
         </div>
       )}
       {scanState === 'mismatch' && (
-        <div className="flex items-start gap-2 border-t border-red-200 bg-red-50 px-5 py-2.5">
+        <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <div>
             <div className="text-sm font-medium text-red-800">Wrong item scanned</div>
@@ -424,60 +528,40 @@ function GuidedStepCard({
         </div>
       )}
 
-      {/* Source location + container */}
-      <div className="grid grid-cols-2 gap-px border-t border-slate-100 bg-slate-100">
-        <div className="bg-white p-4">
-          <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <MapPin className="h-3 w-3" />
-            Pick from
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <Package className="h-3.5 w-3.5" />
+            Source container
           </div>
-          <div className="text-sm font-medium text-slate-900">
-            {step.sourceCellAddress && step.sourceCellId && step.sourceFloorId ? (
-              <Link
-                to={warehouseViewPath({
-                  floorId: step.sourceFloorId,
-                  cellId: step.sourceCellId,
-                  returnTaskId: taskId,
-                  returnTaskNumber: taskNumber
-                })}
-                className="text-cyan-700 underline-offset-2 hover:underline"
-              >
-                {step.sourceCellAddress}
-              </Link>
-            ) : (
-              step.sourceCellAddress ??
-              step.sourceLocationCode ?? (
-                <span className="italic text-slate-400">Not allocated</span>
-              )
-            )}
+          <div className="text-sm font-semibold text-slate-900">
+            {step.sourceContainerCode ?? <span className="italic text-slate-400">Not set</span>}
           </div>
         </div>
-        <div className="bg-white p-4">
-          <div className="mb-1 flex items-center gap-1.5 text-xs text-slate-500">
-            <Package className="h-3 w-3" />
-            Container
+        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-cyan-700">
+            <Package className="h-3.5 w-3.5" />
+            Destination container
           </div>
-          <div className="text-sm font-medium text-slate-900">
-            {step.sourceContainerCode ?? (
-              <span className="italic text-slate-400">Not set</span>
-            )}
-          </div>
+          <div className="text-sm font-semibold text-cyan-950">{pickContainerLabel}</div>
+          {pickContainerTypeLabel && (
+            <div className="mt-0.5 text-xs text-cyan-700">{pickContainerTypeLabel}</div>
+          )}
         </div>
       </div>
 
-      {/* Qty input (hidden during partial confirm) */}
       {!partialConfirm && (
-        <div className="border-t border-slate-100 p-5">
-          <div className="mb-3 text-xs font-medium text-slate-700">
-            Quantity to pick{' '}
-            <span className="font-normal text-slate-400">(required: {step.qtyRequired})</span>
+        <div>
+          <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Picked quantity
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-3">
             <button
               type="button"
               onClick={() => handleQtyChange(String(Math.max(1, Number(qtyActual) - 1)))}
               disabled={parsedQty <= 1 || isBusy}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-30"
+              aria-label="Decrease picked quantity"
             >
               −
             </button>
@@ -488,7 +572,7 @@ function GuidedStepCard({
               value={qtyActual}
               onChange={(e) => handleQtyChange(e.target.value)}
               disabled={isBusy}
-              className="h-11 flex-1 rounded-xl border border-slate-300 text-center text-lg font-semibold outline-none focus:border-cyan-500 disabled:bg-slate-100"
+              className="h-16 flex-1 rounded-2xl border border-slate-300 bg-white px-4 text-center text-3xl font-black text-slate-950 outline-none focus:border-cyan-500 disabled:bg-slate-100"
             />
             <button
               type="button"
@@ -496,7 +580,8 @@ function GuidedStepCard({
                 handleQtyChange(String(Math.min(step.qtyRequired, Number(qtyActual) + 1)))
               }
               disabled={parsedQty >= step.qtyRequired || isBusy}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-30"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-30"
+              aria-label="Increase picked quantity"
             >
               +
             </button>
@@ -522,7 +607,10 @@ function GuidedStepCard({
 
       {/* ── Partial confirmation screen ── */}
       {partialConfirm && (
-        <div className="border-t border-amber-200 bg-amber-50 p-5">
+        <div
+          className="sticky bottom-0 border-t border-amber-200 bg-amber-50/95 p-5 backdrop-blur"
+          data-testid="guided-pick-sticky-actions"
+        >
           <div className="mb-4 flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <div>
@@ -541,7 +629,7 @@ function GuidedStepCard({
               type="button"
               onClick={() => setPartialConfirm(false)}
               disabled={isBusy}
-              className="flex-1 rounded-xl border border-amber-300 bg-white py-2.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+              className="flex-1 rounded-2xl border border-amber-300 bg-white py-3 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
             >
               Go back
             </button>
@@ -549,7 +637,7 @@ function GuidedStepCard({
               type="button"
               disabled={isBusy}
               onClick={handleConfirmClick}
-              className="flex-1 rounded-xl bg-amber-600 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
+              className="flex-1 rounded-2xl bg-amber-600 py-3 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
             >
               {execute.isPending ? 'Confirming…' : 'Confirm partial'}
             </button>
@@ -559,12 +647,15 @@ function GuidedStepCard({
 
       {/* ── Confirm button (normal flow) ── */}
       {!partialConfirm && (
-        <div className="border-t border-slate-100 px-5 pb-5">
+        <div
+          className="sticky bottom-0 border-t border-slate-200 bg-white/95 px-5 pb-5 pt-4 backdrop-blur"
+          data-testid="guided-pick-sticky-actions"
+        >
           <button
             type="button"
             disabled={!isValidQty || isBusy}
             onClick={handleConfirmClick}
-            className="w-full rounded-xl bg-cyan-600 py-3.5 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
+            className="w-full rounded-2xl bg-cyan-600 py-4 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
           >
             {execute.isPending ? 'Confirming…' : 'Confirm pick'}
           </button>
@@ -573,15 +664,15 @@ function GuidedStepCard({
 
       {/* ── Skip step section ── */}
       {!partialConfirm && (
-        <div className="border-t border-slate-100 px-5 pb-5">
+        <div className="px-5 pb-5">
           {!skipConfirm ? (
             <button
               type="button"
               disabled={isBusy}
               onClick={() => setSkipConfirm(true)}
-              className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              className="w-full rounded-2xl border border-slate-200 py-3 text-sm font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
             >
-              Skip step
+              Problem / skip step
             </button>
           ) : (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4">
@@ -621,6 +712,7 @@ function GuidedStepCard({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -694,36 +786,55 @@ function WaveOrderSummary({ steps }: { steps: PickStepDetail[] }) {
 
 function GuidedPickExecution({
   task,
-  pickContainerId,
+  pickContainer,
   taskId,
   taskNumber
 }: {
   task: PickTaskDetail;
-  pickContainerId: string;
+  pickContainer: PickContainer;
   taskId: string;
   taskNumber: string;
 }) {
   const steps = task.steps;
   const isWavePick = task.sourceType === 'wave';
+  const actionableSteps = getActionableGuidedSteps(steps);
+  const [activeStepId, setActiveStepId] = useState<string | null>(
+    () => findFirstActionableGuidedStep(steps)?.id ?? null
+  );
 
-  // Start at first pending step; fall back to 0
-  const [activeIndex, setActiveIndex] = useState<number>(() => {
-    const firstPending = steps.findIndex((s: PickStepDetail) => s.status === 'pending');
-    return firstPending >= 0 ? firstPending : 0;
-  });
-
-  const safeIndex = Math.min(activeIndex, Math.max(0, steps.length - 1));
-  const step = steps[safeIndex];
-  const isFirstStep = safeIndex === 0;
-  const isLastStep = safeIndex === steps.length - 1;
-
-  function handleExecuted() {
-    if (!isLastStep) {
-      setActiveIndex((i) => i + 1);
+  useEffect(() => {
+    const firstActionableStep = actionableSteps[0] ?? null;
+    if (!firstActionableStep) {
+      if (activeStepId !== null) {
+        setActiveStepId(null);
+      }
+      return;
     }
-  }
+
+    if (!activeStepId || !actionableSteps.some((step) => step.id === activeStepId)) {
+      setActiveStepId(firstActionableStep.id);
+    }
+  }, [actionableSteps, activeStepId]);
+
+  const step =
+    (activeStepId
+      ? actionableSteps.find((actionableStep) => actionableStep.id === activeStepId)
+      : null) ??
+    actionableSteps[0] ??
+    null;
 
   if (!step) return null;
+
+  const activeStepIndex = actionableSteps.findIndex(
+    (actionableStep) => actionableStep.id === step.id
+  );
+  const previousActionableStep = findPreviousActionableGuidedStep(steps, step.id);
+  const nextActionableStep = findNextActionableGuidedStep(steps, step.id);
+
+  function handleExecuted(stepId: string) {
+    const nextStep = findNextActionableGuidedStep(steps, stepId, stepId);
+    setActiveStepId(nextStep?.id ?? null);
+  }
 
   return (
     <div className="space-y-4">
@@ -731,74 +842,67 @@ function GuidedPickExecution({
       {isWavePick && <WaveOrderSummary steps={steps} />}
 
       {/* Step navigation row */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
         <button
           type="button"
-          disabled={isFirstStep}
-          onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-30"
+          disabled={!previousActionableStep}
+          onClick={() => previousActionableStep && setActiveStepId(previousActionableStep.id)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-600 disabled:opacity-30"
           aria-label="Previous step"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
 
-        {/* Step progress dots */}
-        <div className="flex flex-1 items-center justify-center gap-1.5 overflow-x-hidden">
-          {steps.map((s: PickStepDetail, i: number) => (
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Current step
+          </div>
+          <div className="mt-1 text-sm font-semibold text-slate-900">
+            {activeStepIndex + 1} of {actionableSteps.length}
+          </div>
+          <div className="mt-1 flex items-center justify-center gap-1.5 overflow-x-hidden">
+            {actionableSteps.map((actionableStep) => (
             <button
-              key={s.id}
+              key={actionableStep.id}
               type="button"
-              onClick={() => setActiveIndex(i)}
-              aria-label={`Go to step ${i + 1}: ${s.itemName}${s.orderNumber ? ` (${s.orderNumber})` : ''}`}
+              onClick={() => setActiveStepId(actionableStep.id)}
+              aria-label={`Go to step ${actionableStep.sequenceNo}: ${actionableStep.itemName}${actionableStep.orderNumber ? ` (${actionableStep.orderNumber})` : ''}`}
               className={`shrink-0 rounded-full transition-all ${
-                i === safeIndex
-                  ? 'h-2.5 w-2.5 bg-cyan-600'
-                  : s.status === 'picked' || s.status === 'partial'
-                    ? 'h-2 w-2 bg-emerald-400 hover:bg-emerald-500'
-                    : s.status === 'needs_replenishment'
-                      ? 'h-2 w-2 bg-amber-400 hover:bg-amber-500'
-                      : s.status === 'skipped' || s.status === 'exception'
-                        ? 'h-2 w-2 bg-slate-400 hover:bg-slate-500'
-                        : 'h-2 w-2 bg-slate-200 hover:bg-slate-300'
+                actionableStep.id === step.id
+                  ? 'h-2.5 w-6 bg-cyan-600'
+                  : 'h-2 w-2 bg-slate-300 hover:bg-slate-400'
               }`}
             />
           ))}
+          </div>
         </div>
 
         <button
           type="button"
-          disabled={isLastStep}
-          onClick={() => setActiveIndex((i) => Math.min(steps.length - 1, i + 1))}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-30"
+          disabled={!nextActionableStep}
+          onClick={() => nextActionableStep && setActiveStepId(nextActionableStep.id)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-600 disabled:opacity-30"
           aria-label="Next step"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Step counter label */}
-      <div className="text-center text-xs text-slate-500">
-        Step{' '}
-        <span className="font-semibold text-slate-900">{safeIndex + 1}</span>
-        {' '}of{' '}
-        <span className="font-semibold text-slate-900">{steps.length}</span>
-        {step.status !== 'pending' && (
-          <span
-            className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${getPickStepStatusColor(step.status)}`}
-          >
-            {getPickStepStatusLabel(step.status)}
-          </span>
-        )}
+      <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+        <ChevronDown className="h-3.5 w-3.5" />
+        Manual step navigation is optional. Guided execution stays on actionable pending steps.
       </div>
 
       {/* Active step — key forces remount on step change, resetting local form state */}
-      <GuidedStepCard
-        key={step.id}
-        step={step}
-        pickContainerId={pickContainerId}
-        taskId={taskId}
-        taskNumber={taskNumber}
-        isWavePick={isWavePick}
+        <GuidedStepCard
+          key={step.id}
+          step={step}
+          pickContainerId={pickContainer.id}
+          pickContainerLabel={pickContainer.label}
+          pickContainerTypeLabel={pickContainer.typeLabel}
+          taskId={taskId}
+          taskNumber={taskNumber}
+          isWavePick={isWavePick}
         onExecuted={handleExecuted}
       />
     </div>
@@ -1381,7 +1485,7 @@ export function PickTaskPage() {
             {viewMode === 'guided' && canUseGuidedMode && (
               <GuidedPickExecution
                 task={task}
-                pickContainerId={pickContainer.id}
+                pickContainer={pickContainer}
                 taskId={task.id}
                 taskNumber={task.taskNumber}
               />
