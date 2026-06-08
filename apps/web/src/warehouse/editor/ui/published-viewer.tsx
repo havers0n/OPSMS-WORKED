@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
@@ -21,6 +21,12 @@ import {
   recordRoutePreviewAppPhaseMark,
   recordCanvasMode
 } from './canvas-diagnostics';
+import { resolveStorageDebugFlags } from './storage-debug-flags';
+import {
+  shouldDisableStorageWorkspace,
+  StorageWorkspaceDebugGate
+} from './storage-workspace-debug-gate';
+import { useStorageDebugLifecycleSnapshots } from './use-storage-debug-lifecycle-snapshots';
 import { ViewWorkspace } from './view-workspace';
 
 /**
@@ -45,6 +51,13 @@ export function PublishedViewer() {
   const viewMode = useViewMode();
   const selectedRackId = useSelectedRackId();
   const setEditorMode = useSetEditorMode();
+  const storageDebugSearch =
+    typeof window === 'undefined' ? '' : window.location.search;
+  const storageDebugFlags = useMemo(
+    () => resolveStorageDebugFlags(storageDebugSearch),
+    [storageDebugSearch]
+  );
+  useStorageDebugLifecycleSnapshots({ flags: storageDebugFlags });
 
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const inspectorWidth = viewMode === 'layout' ? 560 : 320;
@@ -117,12 +130,16 @@ export function PublishedViewer() {
     >
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {viewMode === 'storage' ? (
-          <StorageWorkspaceV2
-            workspace={workspace ?? null}
-            onAddRack={handleAddRack}
-            onOpenInspector={() => undefined}
-            onCloseInspector={handleCloseInspector}
-          />
+          shouldDisableStorageWorkspace(storageDebugFlags) ? (
+            <StorageWorkspaceDebugGate flags={storageDebugFlags} />
+          ) : (
+            <StorageWorkspaceV2
+              workspace={workspace ?? null}
+              onAddRack={handleAddRack}
+              onOpenInspector={() => undefined}
+              onCloseInspector={handleCloseInspector}
+            />
+          )
         ) : viewMode === 'view' ? (
           <ViewWorkspace
             workspace={workspace ?? null}

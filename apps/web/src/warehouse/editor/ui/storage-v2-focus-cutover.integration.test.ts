@@ -23,6 +23,16 @@ let mockPublishedCells: MockCell[] = [];
 let mockFloorStorageRows: LocationStorageSnapshotRow[] = [];
 let mockStorageRowsByLocationId: Record<string, Array<{ locationCode?: string | null; locationType?: string | null; containerId: string; containerStatus: string }>> = {};
 const workspaceCanvasAndPanelSpy = vi.fn();
+let mockStorageDebugFlags = {
+  debugEnabled: false,
+  disableStorageWorkspace: false,
+  disableStorageCanvas: false,
+  forceKonvaPixelRatio1: false,
+  disableStorageData: false,
+  disableInspector: false,
+  disableNavigator: false,
+  disableOccupancyOverlay: false
+};
 
 vi.mock('@/entities/cell/api/use-published-cells', () => ({
   usePublishedCells: () => ({
@@ -57,6 +67,10 @@ vi.mock('./workspace-canvas-and-panel', () => ({
     workspaceCanvasAndPanelSpy(props);
     return createElement('div', { 'data-testid': 'storage-v2-canvas' }, 'Canvas');
   }
+}));
+
+vi.mock('./storage-debug-flags', () => ({
+  readStorageDebugFlagsFromWindow: () => mockStorageDebugFlags
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -208,6 +222,16 @@ describe('Storage V2 focus cutover integration', () => {
       ]
     };
     workspaceCanvasAndPanelSpy.mockClear();
+    mockStorageDebugFlags = {
+      debugEnabled: false,
+      disableStorageWorkspace: false,
+      disableStorageCanvas: false,
+      forceKonvaPixelRatio1: false,
+      disableStorageData: false,
+      disableInspector: false,
+      disableNavigator: false,
+      disableOccupancyOverlay: false
+    };
     act(() => {
       useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });
     });
@@ -323,6 +347,20 @@ describe('Storage V2 focus cutover integration', () => {
     expect(buttonLabels).toContain('L3');
     expect(tree).toContain(translate('storage.state.selectRackOnMap'));
     expect(tree).not.toContain(translate('storage.state.noLocation'));
+  });
+
+  it('does not mount WorkspaceCanvasAndPanel when disableStorageCanvas=1', () => {
+    mockStorageDebugFlags = {
+      ...mockStorageDebugFlags,
+      debugEnabled: true,
+      disableStorageCanvas: true
+    };
+
+    const renderer = renderStorageWorkspaceV2(createWorkspace());
+
+    expect(
+      renderer.root.findByProps({ 'data-testid': 'storage-canvas-disabled-placeholder' })
+    ).toBeTruthy();
   });
 });
 

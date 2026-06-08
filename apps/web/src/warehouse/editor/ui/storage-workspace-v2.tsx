@@ -10,8 +10,9 @@ import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
+import { StorageDebugPlaceholder } from './storage-debug-placeholder';
+import { readStorageDebugFlagsFromWindow } from './storage-debug-flags';
 import {
-  parseStorageDebugFlags,
   recordStorageBreadcrumb,
   clearStorageBreadcrumbs,
   startStorageHeartbeat,
@@ -59,7 +60,13 @@ export function StorageWorkspaceV2({
   onCloseInspector
 }: StorageWorkspaceV2Props) {
   const t = useT();
-  const debugFlags = parseStorageDebugFlags(typeof window !== 'undefined' ? window.location.search : '');
+  const storageDebugFlags = readStorageDebugFlagsFromWindow();
+  const debugFlags = {
+    disableOccupancyOverlay: storageDebugFlags.disableOccupancyOverlay,
+    disableNavigator: storageDebugFlags.disableNavigator,
+    disableInspector: storageDebugFlags.disableInspector,
+    disableStorageData: storageDebugFlags.disableStorageData
+  };
 
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => {
     try {
@@ -136,9 +143,7 @@ export function StorageWorkspaceV2({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const search = window.location.search;
-    const isDebug = new URLSearchParams(search).get('debug') === '1';
-    if (!isDebug) return;
+    if (!storageDebugFlags.debugEnabled) return;
 
     startStorageHeartbeat({
       getRoute: () => window.location.pathname + window.location.search,
@@ -153,7 +158,7 @@ export function StorageWorkspaceV2({
     return () => {
       stopStorageHeartbeat();
     };
-  }, [workspace?.floorId, debugFlags]);
+  }, [storageDebugFlags.debugEnabled, workspace?.floorId, debugFlags]);
 
   useEffect(() => {
     recordClientRuntimeEvent('storage-workspace-v2:mount', {
@@ -186,14 +191,22 @@ export function StorageWorkspaceV2({
     >
       {debugFlags.disableNavigator ? null : <StorageNavigator workspace={workspace} />}
 
-      <WorkspaceCanvasAndPanel
-        workspace={workspace}
-        onAddRack={onAddRack}
-        onOpenInspector={onOpenInspector}
-        onCloseInspector={onCloseInspector}
-        hideRightPanel
-        hideContextPanel
-      />
+      {storageDebugFlags.disableStorageCanvas ? (
+        <StorageDebugPlaceholder
+          testId="storage-canvas-disabled-placeholder"
+          title="Storage canvas disabled"
+          body="Debug flag disableStorageCanvas=1 prevented WorkspaceCanvasAndPanel and EditorCanvas from mounting."
+        />
+      ) : (
+        <WorkspaceCanvasAndPanel
+          workspace={workspace}
+          onAddRack={onAddRack}
+          onOpenInspector={onOpenInspector}
+          onCloseInspector={onCloseInspector}
+          hideRightPanel
+          hideContextPanel
+        />
+      )}
 
       {/* Semi-transparent backdrop behind expanded sheet (mobile only). */}
       {hasSelection && inspectorMode === 'expanded' && (

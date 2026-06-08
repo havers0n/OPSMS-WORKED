@@ -37,21 +37,63 @@ export type ClientRuntimeErrorRecord = {
   context: SerializableContext | null;
 };
 
+export type ClientRuntimeCanvasElementSnapshot = {
+  width: number;
+  height: number;
+  clientWidth: number;
+  clientHeight: number;
+  approximateMiB: number;
+};
+
+export type ClientRuntimeCanvasLifecycleSnapshot = {
+  sessionId: string;
+  timestamp: string;
+  activeWarehouseMode: string;
+  snapshotReason: string;
+  canvasCount: number;
+  canvasElements: ClientRuntimeCanvasElementSnapshot[];
+  totalApproxCanvasMiB: number;
+  konvaStageCount: number;
+  konvaLayerCount: number;
+  stageMountCount: number;
+  stageDestroyCount: number;
+  currentIsolationFlags: SerializableContext | null;
+  effectiveKonvaPixelRatio: number | null;
+  viewport: { width: number; height: number } | null;
+  devicePixelRatio: number | null;
+  dimensionPipeline: {
+    containerClientWidth: number | null;
+    containerClientHeight: number | null;
+    viewportWidth: number | null;
+    viewportHeight: number | null;
+    stageWidth: number | null;
+    stageHeight: number | null;
+    primaryCanvasWidth: number | null;
+    primaryCanvasHeight: number | null;
+    primaryCanvasClientWidth: number | null;
+    primaryCanvasClientHeight: number | null;
+    dprApplication: string;
+  };
+};
+
 type ClientRuntimeDiagnosticsState = {
   currentRoute: string | null;
   lastError: ClientRuntimeErrorRecord | null;
   recentEvents: ClientRuntimeEvent[];
+  recentCanvasSnapshots: ClientRuntimeCanvasLifecycleSnapshot[];
 };
 
 const STORAGE_KEY = 'wos:last-client-runtime-error';
 const MAX_RECENT_EVENTS = 12;
+const MAX_RECENT_CANVAS_SNAPSHOTS = 8;
 const subscribers = new Set<() => void>();
 
 let handlersInstalled = false;
 let state: ClientRuntimeDiagnosticsState = {
   currentRoute: null,
   lastError: loadPersistedError(),
-  recentEvents: []
+  recentEvents: [],
+  recentCanvasSnapshots: []
 };
 
 function loadPersistedError(): ClientRuntimeErrorRecord | null {
@@ -116,7 +158,7 @@ function resolveClientErrorsUrl() {
   return `${baseUrl}/api/client-errors`;
 }
 
-async function postClientRuntimeError(error: ClientRuntimeErrorRecord) {
+async function postClientRuntimeReport(payload: unknown) {
   try {
     await fetch(resolveClientErrorsUrl(), {
       method: 'POST',
@@ -125,7 +167,7 @@ async function postClientRuntimeError(error: ClientRuntimeErrorRecord) {
       },
       credentials: 'include',
       keepalive: true,
-      body: JSON.stringify(error)
+      body: JSON.stringify(payload)
     });
   } catch {
     // diagnostics must never throw
@@ -195,8 +237,28 @@ export function reportClientRuntimeError({
     ...current,
     lastError: error
   }));
-  void postClientRuntimeError(error);
+  void postClientRuntimeReport({
+    kind: 'error',
+    error
+  });
   return error.clientErrorId;
+}
+
+export function recordClientRuntimeCanvasSnapshot(
+  snapshot: ClientRuntimeCanvasLifecycleSnapshot
+) {
+  updateState((current) => ({
+    ...current,
+    recentCanvasSnapshots: [snapshot, ...current.recentCanvasSnapshots].slice(
+      0,
+      MAX_RECENT_CANVAS_SNAPSHOTS
+    )
+  }));
+
+  void postClientRuntimeReport({
+    kind: 'canvas-lifecycle-snapshot',
+    snapshot
+  });
 }
 
 function errorMessageFromUnknown(error: unknown) {
@@ -251,7 +313,8 @@ export function formatClientRuntimeDiagnosticsForClipboard(snapshot: ClientRunti
     {
       route: snapshot.currentRoute,
       lastError: snapshot.lastError,
-      recentEvents: snapshot.recentEvents
+      recentEvents: snapshot.recentEvents,
+      recentCanvasSnapshots: snapshot.recentCanvasSnapshots
     },
     null,
     2
