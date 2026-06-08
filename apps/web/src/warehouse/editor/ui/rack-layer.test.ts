@@ -9,6 +9,7 @@ import {
 } from '@wos/domain';
 import { RackLayer } from './rack-layer';
 import type { CanvasRenderMode } from './canvas-render-mode';
+import type { OperationsCellRuntime } from '@wos/domain';
 import {
   resetCanvasRenderPipelineDiagnostics,
   type RackLayerRenderEvents
@@ -45,6 +46,34 @@ vi.mock('./shapes/rack-body', () => ({
 vi.mock('./shapes/rack-sections', () => ({
   RackSections: (props: Record<string, unknown>) =>
     createElement('RackSections', props)
+}));
+
+let mockDebugFlags: ReturnType<typeof import('./storage-debug-flags')['resolveStorageDebugFlags']> = {
+  debugEnabled: false,
+  disableStorageWorkspace: false,
+  disableStorageCanvas: false,
+  disableRackLayer: false,
+  disableRackCells: false,
+  disableRackRuntimeVisuals: false,
+  disableRackBodies: false,
+  disableCanvasSceneData: false,
+  forceKonvaPixelRatio1: false,
+  disableStorageData: false,
+  disableInspector: false,
+  disableNavigator: false,
+  disableOccupancyOverlay: false
+};
+
+vi.mock('./storage-debug-flags', () => ({
+  readStorageDebugFlagsFromWindow: () => mockDebugFlags,
+  resolveStorageDebugFlags: () => mockDebugFlags,
+  resolveEffectiveKonvaPixelRatio: ({
+    devicePixelRatio,
+    flags
+  }: {
+    devicePixelRatio: number | null | undefined;
+    flags: { forceKonvaPixelRatio1: boolean };
+  }) => (flags.forceKonvaPixelRatio1 ? 1 : (devicePixelRatio ?? 1))
 }));
 
 function createFace(id: string): RackFace {
@@ -185,6 +214,7 @@ function renderRackLayer(params: {
   setHighlightedCellIds?: (cellIds: string[]) => void;
   setPlacementMoveTargetCellId?: (cellId: string | null) => void;
   racks?: Rack[];
+  cellRuntimeById?: Map<string, OperationsCellRuntime>;
   publishedCellsById?: Map<string, Cell>;
   publishedCellsByStructure?: Map<string, Cell>;
   onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
@@ -206,7 +236,7 @@ function renderRackLayer(params: {
         canSelectCells: params.canSelectCells ?? false,
         canSelectRack: params.canSelectRack ?? true,
         canvasSelectedCellId: params.canvasSelectedCellId ?? null,
-        cellRuntimeById: new Map(),
+        cellRuntimeById: params.cellRuntimeById ?? new Map(),
         clearHighlightedCellIds:
           params.clearHighlightedCellIds ?? (() => undefined),
         diagnosticsFlags: {
@@ -1437,5 +1467,119 @@ describe('RackLayer update#1 rackIds identity', () => {
     // 'rackIds' must NOT appear in changedKeys because the string is equal.
     // If this fails, update#1 is a real visible rack-set change, not churn.
     expect(update1Changed).not.toContain('rackIds');
+  });
+
+  describe('RackLayer debug isolation flags', () => {
+    beforeEach(() => {
+      mockDebugFlags = {
+        debugEnabled: false,
+        disableStorageWorkspace: false,
+        disableStorageCanvas: false,
+        disableRackLayer: false,
+        disableRackCells: false,
+        disableRackRuntimeVisuals: false,
+        disableRackBodies: false,
+        disableCanvasSceneData: false,
+        forceKonvaPixelRatio1: false,
+        disableStorageData: false,
+        disableInspector: false,
+        disableNavigator: false,
+        disableOccupancyOverlay: false
+      };
+    });
+
+    it('disableRackCells keeps RackLayer mounted but removes RackCells', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackCells: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const layer = renderer.root.findAll(
+        (node) => String(node.type) === 'Layer'
+      );
+      expect(layer).toHaveLength(1);
+      const rackCells = renderer.root.findAll(
+        (node) => String(node.type) === 'RackCells'
+      );
+      expect(rackCells).toHaveLength(0);
+    });
+
+    it('disableRackRuntimeVisuals keeps base cells but passes empty cellRuntimeById', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackRuntimeVisuals: true
+      };
+      const runtimeCell: OperationsCellRuntime = {
+        cellId: 'test-cell', cellAddress: '', status: 'reserved',
+        pickActive: false, reserved: true, quarantined: false, stocked: false,
+        containerCount: 0, totalQuantity: 0, containers: []
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null,
+        cellRuntimeById: new Map([['test-cell', runtimeCell]])
+      });
+      const rackCells = renderer.root.findAll(
+        (node) => String(node.type) === 'RackCells'
+      );
+      expect(rackCells).toHaveLength(2);
+      const cellRuntimeByIdProp = rackCells[0]!.props.cellRuntimeById;
+      expect(cellRuntimeByIdProp.size).toBe(0);
+    });
+
+    it('disableRackBodies suppresses body shells but preserves cells', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackBodies: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(0);
+      const rackCells = renderer.root.findAll(
+        (node) => String(node.type) === 'RackCells'
+      );
+      expect(rackCells).toHaveLength(2);
+    });
+
+    it('production defaults unchanged with no debug flags', () => {
+      mockDebugFlags = {
+        debugEnabled: false,
+        disableStorageWorkspace: false,
+        disableStorageCanvas: false,
+        disableRackLayer: false,
+        disableRackCells: false,
+        disableRackRuntimeVisuals: false,
+        disableRackBodies: false,
+        disableCanvasSceneData: false,
+        forceKonvaPixelRatio1: false,
+        disableStorageData: false,
+        disableInspector: false,
+        disableNavigator: false,
+        disableOccupancyOverlay: false
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(2);
+      const rackCells = renderer.root.findAll(
+        (node) => String(node.type) === 'RackCells'
+      );
+      expect(rackCells).toHaveLength(2);
+    });
   });
 });

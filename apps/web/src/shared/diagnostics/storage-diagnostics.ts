@@ -20,6 +20,9 @@ export type StorageBreadcrumb = {
 
 export type StorageDebugFlags = {
   disableRackLayer: boolean;
+  disableRackCells?: boolean;
+  disableRackRuntimeVisuals?: boolean;
+  disableRackBodies?: boolean;
   disableCanvasSceneData: boolean;
   disableOccupancyOverlay: boolean;
   disableNavigator: boolean;
