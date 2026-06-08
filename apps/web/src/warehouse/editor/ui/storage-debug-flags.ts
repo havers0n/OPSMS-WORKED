@@ -2,6 +2,8 @@ export type StorageDebugFlags = {
   debugEnabled: boolean;
   disableStorageWorkspace: boolean;
   disableStorageCanvas: boolean;
+  disableRackLayer: boolean;
+  disableCanvasSceneData: boolean;
   forceKonvaPixelRatio1: boolean;
   disableStorageData: boolean;
   disableInspector: boolean;
@@ -21,6 +23,8 @@ export function resolveStorageDebugFlags(search: string): StorageDebugFlags {
     debugEnabled,
     disableStorageWorkspace: debugEnabled && isEnabled(params, 'disableStorageWorkspace'),
     disableStorageCanvas: debugEnabled && isEnabled(params, 'disableStorageCanvas'),
+    disableRackLayer: debugEnabled && isEnabled(params, 'disableRackLayer'),
+    disableCanvasSceneData: debugEnabled && isEnabled(params, 'disableCanvasSceneData'),
     forceKonvaPixelRatio1: debugEnabled && isEnabled(params, 'forceKonvaPixelRatio1'),
     disableStorageData: debugEnabled && isEnabled(params, 'disableStorageData'),
     disableInspector: debugEnabled && isEnabled(params, 'disableInspector'),

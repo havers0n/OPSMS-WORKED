@@ -44,6 +44,10 @@ let obstacleRouteLayerLastProps: Record<string, unknown> | null = null;
 let canvasStageInteractionsLastProps: Record<string, unknown> | null = null;
 let pickingPlanningOverlayLastProps: Record<string, unknown> | null = null;
 let pickingRouteOverlayLayerLastProps: Record<string, unknown> | null = null;
+let useCanvasSceneModelLastArgs: Record<string, unknown> | null = null;
+let recordStorageDebugCanvasSnapshotSpy = vi.fn();
+let registerStorageDebugStageSpy = vi.fn();
+let unregisterStorageDebugStageSpy = vi.fn();
 let storageFocusSelectCellSpy = vi.fn();
 let storageFocusSelectRackSpy = vi.fn();
 let mockSceneLod: 0 | 1 | 2 = 2;
@@ -58,6 +62,8 @@ let mockStorageDebugFlags = {
   debugEnabled: false,
   disableStorageWorkspace: false,
   disableStorageCanvas: false,
+  disableRackLayer: false,
+  disableCanvasSceneData: false,
   forceKonvaPixelRatio1: false,
   disableStorageData: false,
   disableInspector: false,
@@ -280,7 +286,9 @@ vi.mock('./use-canvas-viewport-controller', () => ({
 }));
 
 vi.mock('./use-canvas-scene-model', () => ({
-  useCanvasSceneModel: () => {
+  useCanvasSceneModel: (args: Record<string, unknown>) => {
+    useCanvasSceneModelLastArgs = args;
+    const disableCanvasSceneData = args.disableCanvasSceneData === true;
     const canvasSelectedCellId =
       mockSelection.type === 'cell'
         ? mockSelection.cellId
@@ -323,7 +331,10 @@ vi.mock('./use-canvas-scene-model', () => ({
       },
       layers: {
         placementLayout: mockLayoutDraft,
-        racks: mockLayoutDraft ? Object.values(mockLayoutDraft.racks) : [],
+        racks:
+          disableCanvasSceneData || !mockLayoutDraft
+            ? []
+            : Object.values(mockLayoutDraft.racks),
         walls: [],
         zones: []
       },
@@ -353,6 +364,7 @@ vi.mock('./use-canvas-scene-model', () => ({
 
 vi.mock('./storage-debug-flags', () => ({
   readStorageDebugFlagsFromWindow: () => mockStorageDebugFlags,
+  resolveStorageDebugFlags: () => mockStorageDebugFlags,
   resolveEffectiveKonvaPixelRatio: ({
     devicePixelRatio,
     flags
@@ -360,6 +372,15 @@ vi.mock('./storage-debug-flags', () => ({
     devicePixelRatio: number | null | undefined;
     flags: { forceKonvaPixelRatio1: boolean };
   }) => (flags.forceKonvaPixelRatio1 ? 1 : (devicePixelRatio ?? 1))
+}));
+
+vi.mock('./storage-debug-diagnostics', () => ({
+  recordStorageDebugCanvasSnapshot: (args: unknown) =>
+    recordStorageDebugCanvasSnapshotSpy(args),
+  registerStorageDebugStage: (stage: unknown) => registerStorageDebugStageSpy(stage),
+  setStorageDebugEffectiveKonvaPixelRatio: () => undefined,
+  setStorageDebugViewportSnapshot: () => undefined,
+  unregisterStorageDebugStage: (stage: unknown) => unregisterStorageDebugStageSpy(stage)
 }));
 
 (
@@ -515,6 +536,7 @@ describe('EditorCanvas storage active-rack wiring', () => {
     canvasStageInteractionsLastProps = null;
     pickingPlanningOverlayLastProps = null;
     pickingRouteOverlayLayerLastProps = null;
+    useCanvasSceneModelLastArgs = null;
     storageFocusSelectCellSpy = vi.fn();
     storageFocusSelectRackSpy = vi.fn();
     mockStorageFocusActiveLevel = null;
@@ -532,6 +554,8 @@ describe('EditorCanvas storage active-rack wiring', () => {
       debugEnabled: false,
       disableStorageWorkspace: false,
       disableStorageCanvas: false,
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       forceKonvaPixelRatio1: false,
       disableStorageData: false,
       disableInspector: false,
@@ -555,6 +579,9 @@ describe('EditorCanvas storage active-rack wiring', () => {
     });
     mockIsRackInViewport.mockReset();
     mockIsRackInViewport.mockReturnValue(true);
+    recordStorageDebugCanvasSnapshotSpy = vi.fn();
+    registerStorageDebugStageSpy = vi.fn();
+    unregisterStorageDebugStageSpy = vi.fn();
   });
 
   it('keeps ordinary selected cell parent rack id out of RackLayer in storage mode', () => {
@@ -1860,6 +1887,96 @@ describe('EditorCanvas storage active-rack wiring', () => {
   });
 
   // ── Camera focus request consumption tests ─────────────────────────────────
+
+  it('fires debug canvas mount and unmount snapshots', () => {
+    vi.useFakeTimers();
+    try {
+      const draft = createLayoutDraftFixture();
+      mockLayoutDraft = draft;
+      mockViewMode = 'storage';
+      mockStorageDebugFlags = {
+        ...mockStorageDebugFlags,
+        debugEnabled: true
+      };
+
+      const renderer = renderCanvas({
+        floorId: draft.floorId,
+        activeDraft: draft,
+        latestPublished: draft
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(
+        recordStorageDebugCanvasSnapshotSpy.mock.calls.map(
+          ([arg]) => (arg as { snapshotReason: string }).snapshotReason
+        )
+      ).toEqual([
+        'editor-canvas-mounted',
+        'editor-canvas-mounted:immediate',
+        'editor-canvas-mounted:100ms',
+        'editor-canvas-mounted:500ms',
+        'editor-canvas-mounted:1s',
+        'editor-canvas-mounted:2s',
+        'editor-canvas-mounted:5s'
+      ]);
+
+      act(() => {
+        renderer.unmount();
+      });
+
+      expect(recordStorageDebugCanvasSnapshotSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          snapshotReason: 'editor-canvas-unmounted'
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('disableRackLayer preserves Stage but skips RackLayer mount', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockStorageDebugFlags = {
+      ...mockStorageDebugFlags,
+      debugEnabled: true,
+      disableRackLayer: true
+    };
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(renderer.root.findAll((node) => String(node.type) === 'Stage')).toHaveLength(1);
+    expect(renderer.root.findAll((node) => String(node.type) === 'RackLayer')).toHaveLength(0);
+  });
+
+  it('disableCanvasSceneData preserves Stage and passes the gate into scene construction', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockStorageDebugFlags = {
+      ...mockStorageDebugFlags,
+      debugEnabled: true,
+      disableCanvasSceneData: true
+    };
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(renderer.root.findAll((node) => String(node.type) === 'Stage')).toHaveLength(1);
+    expect(useCanvasSceneModelLastArgs?.disableCanvasSceneData).toBe(true);
+    expect(rackLayerLastProps?.racks).toEqual([]);
+  });
 
   describe('camera focus request consumption', () => {
     beforeEach(() => {

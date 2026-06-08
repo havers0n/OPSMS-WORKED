@@ -16,6 +16,8 @@ describe('parseStorageDebugFlags', () => {
   it('returns all false for empty search', () => {
     const flags = parseStorageDebugFlags('');
     expect(flags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: false,
       disableNavigator: false,
       disableInspector: false,
@@ -26,6 +28,8 @@ describe('parseStorageDebugFlags', () => {
   it('returns all false for search without debug flags', () => {
     const flags = parseStorageDebugFlags('?floor=abc&cell=def');
     expect(flags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: false,
       disableNavigator: false,
       disableInspector: false,
@@ -36,6 +40,8 @@ describe('parseStorageDebugFlags', () => {
   it('parses single flag', () => {
     const flags = parseStorageDebugFlags('?disableNavigator=1');
     expect(flags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: false,
       disableNavigator: true,
       disableInspector: false,
@@ -46,6 +52,8 @@ describe('parseStorageDebugFlags', () => {
   it('parses multiple flags', () => {
     const flags = parseStorageDebugFlags('?disableNavigator=1&disableInspector=1&disableStorageData=1');
     expect(flags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: false,
       disableNavigator: true,
       disableInspector: true,
@@ -58,6 +66,8 @@ describe('parseStorageDebugFlags', () => {
       '?disableOccupancyOverlay=1&disableNavigator=1&disableInspector=1&disableStorageData=1'
     );
     expect(flags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: true,
       disableNavigator: true,
       disableInspector: true,
@@ -68,6 +78,8 @@ describe('parseStorageDebugFlags', () => {
   it('ignores non-1 values', () => {
     const flags = parseStorageDebugFlags('?disableNavigator=true&disableInspector=0');
     expect(flags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: false,
       disableNavigator: false,
       disableInspector: false,
@@ -224,6 +236,8 @@ describe('heartbeat', () => {
 
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.activeDebugFlags).toEqual({
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       disableOccupancyOverlay: false,
       disableNavigator: true,
       disableInspector: false,

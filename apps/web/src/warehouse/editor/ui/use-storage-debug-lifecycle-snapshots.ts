@@ -76,6 +76,14 @@ export function useStorageDebugLifecycleSnapshots({
       }
     });
 
+    if (getState().viewMode === 'storage') {
+      recordStorageDebugCanvasSnapshot({
+        activeWarehouseMode: 'storage',
+        snapshotReason: 'storage-host-mounted',
+        currentIsolationFlags: flags
+      });
+    }
+
     const onPageHide = () => {
       recordStorageDebugCanvasSnapshot({
         activeWarehouseMode: getState().viewMode,

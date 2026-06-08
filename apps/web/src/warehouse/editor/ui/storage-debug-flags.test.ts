@@ -10,6 +10,8 @@ describe('storage debug flags', () => {
       debugEnabled: false,
       disableStorageWorkspace: false,
       disableStorageCanvas: false,
+      disableRackLayer: false,
+      disableCanvasSceneData: false,
       forceKonvaPixelRatio1: false,
       disableStorageData: false,
       disableInspector: false,
@@ -36,5 +38,22 @@ describe('storage debug flags', () => {
         flags: { forceKonvaPixelRatio1: true }
       })
     ).toBe(1);
+  });
+
+  it('keeps the new canvas isolation flags debug-only', () => {
+    expect(
+      resolveStorageDebugFlags('?disableRackLayer=1&disableCanvasSceneData=1')
+    ).toMatchObject({
+      disableRackLayer: false,
+      disableCanvasSceneData: false
+    });
+    expect(
+      resolveStorageDebugFlags(
+        '?debug=1&disableRackLayer=1&disableCanvasSceneData=1'
+      )
+    ).toMatchObject({
+      disableRackLayer: true,
+      disableCanvasSceneData: true
+    });
   });
 });

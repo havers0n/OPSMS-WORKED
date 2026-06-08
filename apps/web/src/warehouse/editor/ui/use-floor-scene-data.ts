@@ -10,6 +10,7 @@ import { indexPublishedCellsByStructure } from '@/entities/cell/lib/published-ce
 type FloorSceneDataParams = {
   viewMode: ViewMode;
   workspace: FloorWorkspace | null;
+  disableCanvasSceneData?: boolean;
 };
 
 /**
@@ -22,12 +23,20 @@ type FloorSceneDataParams = {
  *
  * Does NOT know about: selection, HUD, camera, capabilities, or interaction flow.
  */
-export function useFloorSceneData({ viewMode, workspace }: FloorSceneDataParams) {
+export function useFloorSceneData({
+  viewMode,
+  workspace,
+  disableCanvasSceneData = false
+}: FloorSceneDataParams) {
   const isViewMode = viewMode === 'view';
   const isStorageMode = viewMode === 'storage';
 
-  const placementFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
-  const runtimeFloorId = isViewMode || isStorageMode ? workspace?.floorId ?? null : null;
+  const floorId =
+    disableCanvasSceneData || (!isViewMode && !isStorageMode)
+      ? null
+      : workspace?.floorId ?? null;
+  const placementFloorId = floorId;
+  const runtimeFloorId = floorId;
 
   const floorCellOccupancyQuery = useFloorLocationOccupancy(placementFloorId);
   const floorOperationsCellsQuery = useFloorOperationsCells(runtimeFloorId);
@@ -59,6 +68,6 @@ export function useFloorSceneData({ viewMode, workspace }: FloorSceneDataParams)
     publishedCells,
     publishedCellsById,
     publishedCellsByStructure,
-    publishedCellsQueryStatus: publishedCellsQuery.status
+    publishedCellsQueryStatus: disableCanvasSceneData ? 'success' : publishedCellsQuery.status
   };
 }

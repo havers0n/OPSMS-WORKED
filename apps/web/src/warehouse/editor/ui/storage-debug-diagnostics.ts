@@ -8,11 +8,20 @@ import type { StorageDebugFlags } from './storage-debug-flags';
 
 type SnapshotReason =
   | 'before-entering-storage-mode'
+  | 'storage-host-mounted'
   | 'after-entering-storage-mode'
   | 'after-entering-storage-mode:100ms'
   | 'after-entering-storage-mode:500ms'
   | 'after-entering-storage-mode:1s'
   | 'after-entering-storage-mode:2s'
+  | 'editor-canvas-mounted'
+  | 'editor-canvas-mounted:immediate'
+  | 'editor-canvas-mounted:100ms'
+  | 'editor-canvas-mounted:500ms'
+  | 'editor-canvas-mounted:1s'
+  | 'editor-canvas-mounted:2s'
+  | 'editor-canvas-mounted:5s'
+  | 'editor-canvas-unmounted'
   | 'leaving-storage-mode'
   | 'pagehide';
 
