@@ -759,7 +759,29 @@ export const diagnosticsHeartbeatRequestBodySchema = z.object({
     disableInspector: z.boolean(),
     disableStorageData: z.boolean()
   }),
-  userAgent: z.string()
+  userAgent: z.string(),
+  rackLayerDiagnostics: z.object({
+    renderedRackCount: z.number().int().min(0),
+    renderedCellCount: z.number().int().min(0),
+    rackBodyNodeCount: z.number().int().min(0),
+    rackCellNodeCount: z.number().int().min(0),
+    runtimeVisualNodeCount: z.number().int().min(0),
+    visibleRackCount: z.number().int().min(0),
+    statusCounts: z.object({
+      reserved: z.number().int().min(0),
+      pick_active: z.number().int().min(0),
+      occupied: z.number().int().min(0),
+      empty: z.number().int().min(0),
+      exception: z.number().int().min(0),
+      other: z.number().int().min(0)
+    }),
+    effectiveLod: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+    hitTestEnabled: z.boolean(),
+    cacheEnabled: z.boolean(),
+    rackLayerMountCount: z.number().int().min(0),
+    rackLayerUnmountCount: z.number().int().min(0),
+    rackLayerDrawCount: z.number().int().min(0)
+  }).optional()
 });
 
 export const diagnosticsHeartbeatResponseSchema = z.object({

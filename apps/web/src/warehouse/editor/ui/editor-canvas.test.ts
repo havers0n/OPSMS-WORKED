@@ -71,7 +71,11 @@ let mockStorageDebugFlags = {
   disableStorageData: false,
   disableInspector: false,
   disableNavigator: false,
-  disableOccupancyOverlay: false
+  disableOccupancyOverlay: false,
+  disableRackBodyShadows: false,
+  simpleRackBodyShell: false,
+  disableRackBodyLabels: false,
+  disableRackBodyStrokes: false
 };
 
 vi.mock('react-konva', () => ({
@@ -566,7 +570,11 @@ describe('EditorCanvas storage active-rack wiring', () => {
       disableStorageData: false,
       disableInspector: false,
       disableNavigator: false,
-      disableOccupancyOverlay: false
+      disableOccupancyOverlay: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     };
     act(() => {
       usePickingPlanningOverlayStore.setState({

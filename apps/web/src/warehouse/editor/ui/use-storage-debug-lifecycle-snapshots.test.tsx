@@ -23,7 +23,11 @@ const debugFlags = {
   disableStorageData: false,
   disableInspector: false,
   disableNavigator: false,
-  disableOccupancyOverlay: false
+  disableOccupancyOverlay: false,
+  disableRackBodyShadows: false,
+  simpleRackBodyShell: false,
+  disableRackBodyLabels: false,
+  disableRackBodyStrokes: false
 } as const;
 
 describe('useStorageDebugLifecycleSnapshots', () => {

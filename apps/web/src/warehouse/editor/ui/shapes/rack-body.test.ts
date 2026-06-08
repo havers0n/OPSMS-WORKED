@@ -84,6 +84,10 @@ function renderRackBody(params?: {
   disableStrokes?: boolean;
   isActivelyPanning?: boolean;
   shellRendering?: 'normal' | 'cached';
+  disableShadows?: boolean;
+  simpleShell?: boolean;
+  disableLabels?: boolean;
+  disableBodyStrokes?: boolean;
 }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -104,7 +108,11 @@ function renderRackBody(params?: {
         rackCodePlacement: params?.placement ?? 'lower-left-mid',
         disableStrokes: params?.disableStrokes,
         isActivelyPanning: params?.isActivelyPanning,
-        shellRendering: params?.shellRendering
+        shellRendering: params?.shellRendering,
+        disableShadows: params?.disableShadows,
+        simpleShell: params?.simpleShell,
+        disableLabels: params?.disableLabels,
+        disableBodyStrokes: params?.disableBodyStrokes
       })
     );
   });
@@ -133,7 +141,11 @@ function updateRackBody(
         rackCodePlacement: params?.placement ?? 'lower-left-mid',
         disableStrokes: params?.disableStrokes,
         isActivelyPanning: params?.isActivelyPanning,
-        shellRendering: params?.shellRendering
+        shellRendering: params?.shellRendering,
+        disableShadows: params?.disableShadows,
+        simpleShell: params?.simpleShell,
+        disableLabels: params?.disableLabels,
+        disableBodyStrokes: params?.disableBodyStrokes
       })
     );
   });
@@ -464,5 +476,130 @@ describe('RackBody identity label ownership', () => {
 
     expect(shell.cache).toHaveBeenCalledTimes(1);
     expect(shell.clearCache).toHaveBeenCalledTimes(2);
+  });
+
+  describe('disableShadows prop', () => {
+    it('removes all shadow props from main shell and label pill', () => {
+      const normal = renderRackBody({ isSelected: true });
+      const shadowless = renderRackBody({ isSelected: true, disableShadows: true });
+      const normalRects = getRects(normal);
+      const shadowlessRects = getRects(shadowless);
+
+      const normalMain = normalRects.find((r) => r.props.wosRectRole === 'rack-body-main');
+      const shadowlessMain = shadowlessRects.find((r) => r.props.wosRectRole === 'rack-body-main');
+      expect(normalMain?.props.shadowBlur).toBeGreaterThan(0);
+      expect(normalMain?.props.shadowOpacity).toBeGreaterThan(0);
+      expect(shadowlessMain?.props.shadowBlur).toBe(0);
+      expect(shadowlessMain?.props.shadowOpacity).toBe(0);
+
+      const normalBadge = normalRects.filter((r) => r.props.wosRectRole === 'badge-decoration');
+      const shadowlessBadge = shadowlessRects.filter((r) => r.props.wosRectRole === 'badge-decoration');
+      expect(normalBadge.length).toBeGreaterThan(0);
+      expect(shadowlessBadge.length).toBeGreaterThan(0);
+      for (const badge of shadowlessBadge) {
+        if (badge.props.shadowBlur !== undefined) {
+          expect(badge.props.shadowBlur).toBe(0);
+        }
+      }
+    });
+
+    it('preserves fills, strokes, stripes, labels and selection visuals', () => {
+      const shadowless = renderRackBody({ isSelected: true, disableShadows: true });
+      const rects = getRects(shadowless);
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-main')?.props.fill).toBeTruthy();
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-main')?.props.stroke).toBeTruthy();
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-stripe')).toBeTruthy();
+      expect(rects.find((r) => r.props.wosRectRole === 'selection-highlight')).toBeTruthy();
+      expect(shadowless.root.findAll((n) => String(n.type) === 'Text').length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('simpleShell prop', () => {
+    it('renders only one lightweight main Rect per rack', () => {
+      const renderer = renderRackBody({ simpleShell: true });
+      const rects = getRects(renderer);
+      expect(rects).toHaveLength(1);
+      expect(rects[0]!.props.wosRectRole).toBe('rack-body-main');
+    });
+
+    it('preserves rack position, width, height and base fill', () => {
+      const renderer = renderRackBody({ simpleShell: true, geometry: { ...singleGeometry, width: 300, height: 100, centerX: 150, centerY: 50 } });
+      const rect = getRects(renderer)[0]!;
+      expect(rect.props.width).toBe(300);
+      expect(rect.props.height).toBe(100);
+      expect(rect.props.fill).toBe('#ffffff');
+    });
+
+    it('removes cornerRadius, stroke, shadow', () => {
+      const renderer = renderRackBody({ simpleShell: true, isSelected: true });
+      const rect = getRects(renderer)[0]!;
+      expect(rect.props.cornerRadius).toBe(0);
+      expect(rect.props.stroke).toBeUndefined();
+      expect(rect.props.shadowBlur).toBe(0);
+    });
+
+    it('removes stripes, labels, selection, spine and boundary lines', () => {
+      const renderer = renderRackBody({ simpleShell: true, isSelected: true, isPaired: true, isAsymmetric: true });
+      const rects = getRects(renderer);
+      expect(rects.filter((r) => r.props.wosRectRole === 'rack-body-stripe')).toHaveLength(0);
+      expect(rects.filter((r) => r.props.wosRectRole === 'selection-highlight')).toHaveLength(0);
+      expect(rects.filter((r) => r.props.wosRectRole === 'rack-body-overhang')).toHaveLength(0);
+      expect(renderer.root.findAll((n) => String(n.type) === 'Line')).toHaveLength(0);
+      expect(renderer.root.findAll((n) => String(n.type) === 'Text')).toHaveLength(0);
+    });
+  });
+
+  describe('disableLabels prop', () => {
+    it('suppresses only the label Group subtree', () => {
+      const normal = renderRackBody({ showRackCode: true });
+      const labeless = renderRackBody({ showRackCode: true, disableLabels: true });
+
+      expect(normal.root.findAll((n) => String(n.type) === 'Text').length).toBeGreaterThan(0);
+      expect(labeless.root.findAll((n) => String(n.type) === 'Text')).toHaveLength(0);
+
+      const normalRects = getRects(normal);
+      const labelessRects = getRects(labeless);
+      const normalBadgeCount = normalRects.filter((r) => r.props.wosRectRole === 'badge-decoration').length;
+      const labelessBadgeCount = labelessRects.filter((r) => r.props.wosRectRole === 'badge-decoration').length;
+      expect(labelessBadgeCount).toBe(0);
+      expect(normalBadgeCount).toBeGreaterThan(0);
+    });
+
+    it('preserves main body, fills, strokes, stripes and shadows', () => {
+      const labeless = renderRackBody({ isSelected: true, disableLabels: true });
+      const rects = getRects(labeless);
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-main')?.props.fill).toBeTruthy();
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-main')?.props.stroke).toBeTruthy();
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-main')?.props.shadowBlur).toBeGreaterThan(0);
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-stripe')).toBeTruthy();
+      expect(rects.find((r) => r.props.wosRectRole === 'selection-highlight')).toBeTruthy();
+    });
+  });
+
+  describe('disableBodyStrokes prop', () => {
+    it('suppresses main shell stroke', () => {
+      const renderer = renderRackBody({ disableBodyStrokes: true });
+      const body = getRects(renderer).find((r) => r.props.wosRectRole === 'rack-body-main');
+      expect(body?.props.stroke).toBeUndefined();
+      expect(body?.props.strokeEnabled).toBe(false);
+    });
+
+    it('suppresses spine and boundary lines', () => {
+      const paired = renderRackBody({ isPaired: true, disableBodyStrokes: true });
+      expect(paired.root.findAll((n) => String(n.type) === 'Line')).toHaveLength(0);
+
+      const asymmetric = renderRackBody({ isAsymmetric: true, disableBodyStrokes: true });
+      expect(asymmetric.root.findAll((n) => String(n.type) === 'Line')).toHaveLength(0);
+    });
+
+    it('preserves fills, shadows, stripes and labels', () => {
+      const renderer = renderRackBody({ isSelected: true, disableBodyStrokes: true });
+      const rects = getRects(renderer);
+      const body = rects.find((r) => r.props.wosRectRole === 'rack-body-main');
+      expect(body?.props.fill).toBeTruthy();
+      expect(body?.props.shadowBlur).toBeGreaterThan(0);
+      expect(rects.find((r) => r.props.wosRectRole === 'rack-body-stripe')).toBeTruthy();
+      expect(renderer.root.findAll((n) => String(n.type) === 'Text').length).toBeGreaterThan(0);
+    });
   });
 });

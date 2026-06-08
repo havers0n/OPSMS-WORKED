@@ -18,6 +18,7 @@ import {
   startStorageHeartbeat,
   stopStorageHeartbeat
 } from '@/shared/diagnostics/storage-diagnostics';
+import { getRackLayerDiagnosticsSnapshot } from './canvas-diagnostics';
 
 const INSPECTOR_MODE_KEY = 'wos:storage-inspector-mode';
 
@@ -164,7 +165,8 @@ export function StorageWorkspaceV2({
       getPublishedCellCount: () => 0,
       getOccupancyRowCount: () => 0,
       getNavigatorItemCount: () => null,
-      getDebugFlags: () => debugFlags
+      getDebugFlags: () => debugFlags,
+      getRackLayerDiagnostics: () => getRackLayerDiagnosticsSnapshot()
     });
 
     return () => {

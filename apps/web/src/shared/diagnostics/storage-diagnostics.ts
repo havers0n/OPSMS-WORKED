@@ -18,6 +18,29 @@ export type StorageBreadcrumb = {
   data?: Record<string, unknown>;
 };
 
+export type RackLayerDiagnosticsPayload = {
+  renderedRackCount: number;
+  renderedCellCount: number;
+  rackBodyNodeCount: number;
+  rackCellNodeCount: number;
+  runtimeVisualNodeCount: number;
+  visibleRackCount: number;
+  statusCounts: {
+    reserved: number;
+    pick_active: number;
+    occupied: number;
+    empty: number;
+    exception: number;
+    other: number;
+  };
+  effectiveLod: 0 | 1 | 2;
+  hitTestEnabled: boolean;
+  cacheEnabled: boolean;
+  rackLayerMountCount: number;
+  rackLayerUnmountCount: number;
+  rackLayerDrawCount: number;
+};
+
 export type StorageDebugFlags = {
   disableRackLayer: boolean;
   disableRackCells?: boolean;
@@ -28,6 +51,10 @@ export type StorageDebugFlags = {
   disableNavigator: boolean;
   disableInspector: boolean;
   disableStorageData: boolean;
+  disableRackBodyShadows?: boolean;
+  simpleRackBodyShell?: boolean;
+  disableRackBodyLabels?: boolean;
+  disableRackBodyStrokes?: boolean;
 };
 
 export type HeartbeatPayload = {
@@ -46,6 +73,7 @@ export type HeartbeatPayload = {
   recentBreadcrumbs: StorageBreadcrumb[];
   activeDebugFlags: StorageDebugFlags;
   userAgent: string;
+  rackLayerDiagnostics?: RackLayerDiagnosticsPayload | null;
 };
 
 const MAX_BREADCRUMBS = 20;
@@ -60,7 +88,12 @@ export function parseStorageDebugFlags(search: string): StorageDebugFlags {
     disableOccupancyOverlay: params.get('disableOccupancyOverlay') === '1',
     disableNavigator: params.get('disableNavigator') === '1',
     disableInspector: params.get('disableInspector') === '1',
-    disableStorageData: params.get('disableStorageData') === '1'
+    disableStorageData: params.get('disableStorageData') === '1',
+    disableRackBodies: params.get('disableRackBodies') === '1',
+    disableRackBodyShadows: params.get('disableRackBodyShadows') === '1',
+    simpleRackBodyShell: params.get('simpleRackBodyShell') === '1',
+    disableRackBodyLabels: params.get('disableRackBodyLabels') === '1',
+    disableRackBodyStrokes: params.get('disableRackBodyStrokes') === '1'
   };
 }
 
@@ -115,6 +148,7 @@ export type HeartbeatGetters = {
   getOccupancyRowCount: () => number;
   getNavigatorItemCount: () => number | null;
   getDebugFlags: () => StorageDebugFlags;
+  getRackLayerDiagnostics?: () => RackLayerDiagnosticsPayload | null;
 };
 
 export function startStorageHeartbeat(getters: HeartbeatGetters): void {
@@ -122,6 +156,7 @@ export function startStorageHeartbeat(getters: HeartbeatGetters): void {
 
   const send = () => {
     heartbeatSequence++;
+    const rackLayerDiagnostics = getters.getRackLayerDiagnostics?.() ?? null;
     const payload: HeartbeatPayload = {
       sessionId: getOrCreateSessionId(),
       sequence: heartbeatSequence,
@@ -137,7 +172,8 @@ export function startStorageHeartbeat(getters: HeartbeatGetters): void {
       navigatorItemCount: getters.getNavigatorItemCount(),
       recentBreadcrumbs: getStorageBreadcrumbs().slice(0, 10),
       activeDebugFlags: getters.getDebugFlags(),
-      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : ''
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : '',
+      rackLayerDiagnostics
     };
 
     void sendHeartbeat(payload);

@@ -506,6 +506,10 @@ export const RackLayer = memo(function RackLayer({
   const disableRackBodies = storageDebugFlags.disableRackBodies;
   const disableRackCells = storageDebugFlags.disableRackCells;
   const disableRackRuntimeVisuals = storageDebugFlags.disableRackRuntimeVisuals;
+  const disableRackBodyShadows = storageDebugFlags.disableRackBodyShadows;
+  const simpleRackBodyShell = storageDebugFlags.simpleRackBodyShell;
+  const disableRackBodyLabels = storageDebugFlags.disableRackBodyLabels;
+  const disableRackBodyStrokes = storageDebugFlags.disableRackBodyStrokes;
 
   // When disableRackRuntimeVisuals is active, suppress runtime cell data
   // so visual state resolver sees no runtime statuses (reserved, pick_active,
@@ -784,6 +788,10 @@ export const RackLayer = memo(function RackLayer({
                 disableStrokes={!overlaysEnabled}
                 isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
                 shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
+                disableShadows={disableRackBodyShadows}
+                simpleShell={simpleRackBodyShell}
+                disableLabels={disableRackBodyLabels}
+                disableBodyStrokes={disableRackBodyStrokes}
               />
             </RackLayerChildProfiler>
             )}

@@ -21,7 +21,12 @@ describe('parseStorageDebugFlags', () => {
       disableOccupancyOverlay: false,
       disableNavigator: false,
       disableInspector: false,
-      disableStorageData: false
+      disableStorageData: false,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
   });
 
@@ -33,7 +38,12 @@ describe('parseStorageDebugFlags', () => {
       disableOccupancyOverlay: false,
       disableNavigator: false,
       disableInspector: false,
-      disableStorageData: false
+      disableStorageData: false,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
   });
 
@@ -45,7 +55,12 @@ describe('parseStorageDebugFlags', () => {
       disableOccupancyOverlay: false,
       disableNavigator: true,
       disableInspector: false,
-      disableStorageData: false
+      disableStorageData: false,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
   });
 
@@ -57,7 +72,12 @@ describe('parseStorageDebugFlags', () => {
       disableOccupancyOverlay: false,
       disableNavigator: true,
       disableInspector: true,
-      disableStorageData: true
+      disableStorageData: true,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
   });
 
@@ -71,7 +91,12 @@ describe('parseStorageDebugFlags', () => {
       disableOccupancyOverlay: true,
       disableNavigator: true,
       disableInspector: true,
-      disableStorageData: true
+      disableStorageData: true,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
   });
 
@@ -83,7 +108,12 @@ describe('parseStorageDebugFlags', () => {
       disableOccupancyOverlay: false,
       disableNavigator: false,
       disableInspector: false,
-      disableStorageData: false
+      disableStorageData: false,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
   });
 
@@ -241,8 +271,50 @@ describe('heartbeat', () => {
       disableOccupancyOverlay: false,
       disableNavigator: true,
       disableInspector: false,
-      disableStorageData: true
+      disableStorageData: true,
+      disableRackBodies: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('includes rackLayerDiagnostics when getter is provided', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 202 }));
+    const rackDiag = {
+      renderedRackCount: 12,
+      renderedCellCount: 48,
+      rackBodyNodeCount: 12,
+      rackCellNodeCount: 24,
+      runtimeVisualNodeCount: 16,
+      visibleRackCount: 12,
+      statusCounts: { reserved: 2, pick_active: 0, occupied: 10, empty: 2, exception: 0, other: 0 },
+      effectiveLod: 2 as const,
+      hitTestEnabled: true,
+      cacheEnabled: false,
+      rackLayerMountCount: 1,
+      rackLayerUnmountCount: 0,
+      rackLayerDrawCount: 5
+    };
+
+    startStorageHeartbeat({
+      getRoute: () => '/warehouse/view',
+      getActiveWarehouseMode: () => 'storage',
+      getFloorId: () => null,
+      getPublishedCellCount: () => 0,
+      getOccupancyRowCount: () => 0,
+      getNavigatorItemCount: () => null,
+      getDebugFlags: () => parseStorageDebugFlags(''),
+      getRackLayerDiagnostics: () => rackDiag
+    });
+
+    vi.advanceTimersByTime(2000);
+
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.rackLayerDiagnostics).toEqual(rackDiag);
 
     fetchSpy.mockRestore();
   });
