@@ -222,16 +222,14 @@ describe('StorageNavigator PR7 focus ownership', () => {
     const workspace = createWorkspace();
     const renderer = renderNavigator(workspace);
     const tree = JSON.stringify(renderer.toJSON());
-    const buttonLabels = getAllButtons(renderer).map((node) =>
-      Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
-    );
 
     expect(useStorageFocusStore.getState().selectedRackId).toBeNull();
     expect(tree).toContain(translate('storage.field.rack'));
-    expect(buttonLabels).toContain('L1');
-    expect(buttonLabels).toContain('L2');
-    expect(buttonLabels).toContain('L3');
-    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).toContain(translate('storage.navigator.allRacks'));
+    expect(tree).toContain('R-01');
+    expect(tree).toContain('R-02');
+    expect(tree).not.toContain('L1');
+    expect(tree).not.toContain('L2');
   });
 
   it('clicking a location writes focus transition to storage-focus-store', () => {
@@ -282,18 +280,16 @@ describe('StorageNavigator PR7 focus ownership', () => {
 
     const renderer = renderNavigator(workspace);
     const tree = JSON.stringify(renderer.toJSON());
-    const buttonLabels = getAllButtons(renderer).map((node) =>
-      Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
-    );
     const s = useStorageFocusStore.getState();
 
     expect(s.selectedCellId).toBeNull();
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
-    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
-    expect(buttonLabels).toContain('L1');
-    expect(buttonLabels).toContain('L2');
-    expect(buttonLabels).toContain('L3');
+    expect(tree).toContain(translate('storage.navigator.allRacks'));
+    expect(tree).toContain('R-01');
+    expect(tree).toContain('R-02');
+    expect(tree).not.toContain('L1');
+    expect(tree).not.toContain('L2');
   });
 
   it('does not synthesize fake level 1 for sparse published levels', () => {
