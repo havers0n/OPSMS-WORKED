@@ -59,6 +59,10 @@ import {
   recordCanvasComponentRender,
   recordCanvasKonvaLayerDraw,
   recordCanvasRackLayerNodeCount,
+  recordCanvasRackLayerSnapshot,
+  recordCanvasRackLayerMount,
+  recordCanvasRackLayerUnmount,
+  recordCanvasRackLayerDraw,
   recordRoutePreviewAppPhaseMark,
   refId,
   type CanvasDiagnosticsFlags,
@@ -74,6 +78,7 @@ import {
   isCanvasInteractionRenderMode,
   type CanvasRenderMode
 } from './canvas-render-mode';
+import { readStorageDebugFlagsFromWindow } from './storage-debug-flags';
 
 type SnapGuide = {
   type: 'x' | 'y';
@@ -387,6 +392,7 @@ export const RackLayer = memo(function RackLayer({
       const originalBatchDraw = layer.batchDraw.bind(layer);
       layer.draw = (...args: Parameters<Konva.Layer['draw']>) => {
         recordCanvasKonvaLayerDraw('draw', 'rack-base-layer');
+        recordCanvasRackLayerDraw();
         recordRoutePreviewAppPhaseMark('rack-layer:first-draw-complete', {
           onceKey: 'rack-layer:first-draw-complete'
         });
@@ -394,6 +400,7 @@ export const RackLayer = memo(function RackLayer({
       };
       layer.batchDraw = (...args: Parameters<Konva.Layer['batchDraw']>) => {
         recordCanvasKonvaLayerDraw('batchDraw', 'rack-base-layer');
+        recordCanvasRackLayerDraw();
         recordRoutePreviewAppPhaseMark('rack-layer:first-batch-draw-complete', {
           onceKey: 'rack-layer:first-batch-draw-complete'
         });
@@ -492,6 +499,79 @@ export const RackLayer = memo(function RackLayer({
       publishedCellsById_id: refId(publishedCellsById)
     }
   });
+
+  // Debug-only isolation flags read from URL (?debug=1&disableRackCells=1 etc.)
+  const storageDebugFlags = readStorageDebugFlagsFromWindow();
+
+  const disableRackBodies = storageDebugFlags.disableRackBodies;
+  const disableRackCells = storageDebugFlags.disableRackCells;
+  const disableRackRuntimeVisuals = storageDebugFlags.disableRackRuntimeVisuals;
+
+  // When disableRackRuntimeVisuals is active, suppress runtime cell data
+  // so visual state resolver sees no runtime statuses (reserved, pick_active,
+  // quarantined) and produces only base/occupied fills with no runtime
+  // truth markers.
+  const effectiveCellRuntimeById =
+    disableRackRuntimeVisuals
+      ? new Map<string, OperationsCellRuntime>()
+      : cellRuntimeById;
+
+  // Compute bounded snapshot counts for RackLayer diagnostics
+  const renderedCellCount = racks.reduce((sum, rack) => {
+    const faceA = rack.faces.find((f) => f.side === 'A');
+    if (!faceA) return sum;
+    let count = 0;
+    for (const section of faceA.sections) {
+      for (const level of section.levels) {
+        count += level.slotCount;
+      }
+    }
+    return sum + count;
+  }, 0);
+
+  let reservedCount = 0;
+  let pickActiveCount = 0;
+  let occupiedCount = 0;
+  let emptyCount = 0;
+  let exceptionCount = 0;
+  let otherStatusCount = 0;
+  if (!disableRackRuntimeVisuals) {
+    for (const [_cellId, runtime] of cellRuntimeById) {
+      switch (runtime.status) {
+        case 'reserved': reservedCount++; break;
+        case 'pick_active': pickActiveCount++; break;
+        case 'stocked': occupiedCount++; break;
+        case 'empty': emptyCount++; break;
+        case 'quarantined': exceptionCount++; break;
+        default: otherStatusCount++; break;
+      }
+    }
+  }
+
+  recordCanvasRackLayerSnapshot({
+    renderedRackCount: racks.length,
+    renderedCellCount,
+    rackBodyNodeCount: disableRackBodies ? 0 : racks.length,
+    rackCellNodeCount: disableRackCells ? 0 : racks.length * 2,
+    runtimeVisualNodeCount: disableRackRuntimeVisuals ? 0 : cellRuntimeById.size,
+    statusCounts: {
+      reserved: reservedCount,
+      pick_active: pickActiveCount,
+      occupied: occupiedCount,
+      empty: emptyCount,
+      exception: exceptionCount,
+      other: otherStatusCount
+    },
+    visibleRackCount: racks.length,
+    effectiveLod: lod,
+    hitTestEnabled,
+    cacheEnabled: diagnosticsFlags.rackBodyShell === 'cached'
+  });
+
+  useEffect(() => {
+    recordCanvasRackLayerMount();
+    return () => { recordCanvasRackLayerUnmount(); };
+  }, []);
 
   const handleDragMove = (rackId: string, event: Konva.KonvaEventObject<DragEvent>) => {
     if (!isLayoutEditable) return;
@@ -689,6 +769,7 @@ export const RackLayer = memo(function RackLayer({
               )}
             </RackLayerChildProfiler>
 
+            {!disableRackBodies && (
             <RackLayerChildProfiler childName="RackBody" rackId={rack.id}>
               <RackBody
                 geometry={geometry}
@@ -705,6 +786,7 @@ export const RackLayer = memo(function RackLayer({
                 shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
               />
             </RackLayerChildProfiler>
+            )}
 
             {lod >= 1 && faceA && (
               <RackLayerChildProfiler childName="RackSections" rackId={rack.id}>
@@ -725,7 +807,7 @@ export const RackLayer = memo(function RackLayer({
               </RackLayerChildProfiler>
             )}
 
-            {renderCells && (lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
+            {!disableRackCells && renderCells && (lod >= 2 || (isViewMode && lod >= 1)) && faceA && (
               <RackLayerChildProfiler childName="RackCells" rackId={rack.id}>
                 <RackCells
                   geometry={geometry}
@@ -737,7 +819,7 @@ export const RackLayer = memo(function RackLayer({
                   semanticLevels={semanticLevels}
                   publishedCellsByStructure={publishedCellsByStructure}
                   occupiedCellIds={occupiedCellIds}
-                  cellRuntimeById={cellRuntimeById}
+                  cellRuntimeById={effectiveCellRuntimeById}
                   highlightedCellIds={
                     overlaysEnabled ? baseHighlightedCellIds : EMPTY_CELL_IDS
                   }
