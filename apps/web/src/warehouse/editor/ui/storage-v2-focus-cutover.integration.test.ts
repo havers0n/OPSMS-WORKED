@@ -257,7 +257,9 @@ describe('Storage V2 focus cutover integration', () => {
     expect(s.selectedRackId).toBeNull();
     expect(s.activeLevel).toBeNull();
     tree = JSON.stringify(renderer.toJSON());
-    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).toContain(translate('storage.navigator.allRacks'));
+    expect(tree).toContain('R-01');
+    expect(tree).toContain('R-02');
     expect(tree).not.toContain(translate('storage.state.noLocation'));
   });
 
@@ -277,12 +279,11 @@ describe('Storage V2 focus cutover integration', () => {
       })
     );
     let tree = JSON.stringify(renderer.toJSON());
-    let buttonLabels = getButtonLabels(renderer);
     expect(tree).toContain(translate('storage.placeholder.searchLocation'));
-    expect(buttonLabels).toContain('L1');
-    expect(buttonLabels).toContain('L2');
-    expect(buttonLabels).toContain('L3');
-    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).toContain(translate('storage.navigator.allRacks'));
+    expect(tree).toContain('R-01');
+    expect(tree).toContain('R-02');
+    expect(tree).not.toContain('L1');
     expect(tree).not.toContain(translate('storage.state.noLocation'));
 
     await act(async () => {
@@ -316,12 +317,11 @@ describe('Storage V2 focus cutover integration', () => {
       await Promise.resolve();
     });
     tree = JSON.stringify(renderer.toJSON());
-    buttonLabels = getButtonLabels(renderer);
     expect(tree).toContain(translate('storage.placeholder.searchLocation'));
-    expect(buttonLabels).toContain('L1');
-    expect(buttonLabels).toContain('L2');
-    expect(buttonLabels).toContain('L3');
-    expect(tree).toContain(translate('storage.state.selectRackOnMap'));
+    expect(tree).toContain(translate('storage.navigator.allRacks'));
+    expect(tree).toContain('R-01');
+    expect(tree).toContain('R-02');
+    expect(tree).not.toContain('L1');
     expect(tree).not.toContain(translate('storage.state.noLocation'));
   });
 });

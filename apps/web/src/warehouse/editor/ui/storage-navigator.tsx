@@ -11,6 +11,7 @@ import {
   useStorageFocusSelectedRackId,
   useStorageFocusActiveLevel,
   useStorageFocusSelectCell,
+  useStorageFocusSelectRack,
   useStorageFocusSetActiveLevel,
   useStorageFocusRequestCameraFocus,
 } from '../model/v2/v2-selectors';
@@ -76,6 +77,7 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const activeLevel = useStorageFocusActiveLevel() ?? 1;
 
   const selectCell = useStorageFocusSelectCell();
+  const selectRack = useStorageFocusSelectRack();
   const requestCameraFocus = useStorageFocusRequestCameraFocus();
   const setActiveLevel = useStorageFocusSetActiveLevel();
 
@@ -159,6 +161,29 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
     }
     return map;
   }, [normalizedSearchQuery, publishedCells, storageRowsByCellId, t]);
+
+  const rackStats = useMemo(() => {
+    const stats = new Map<string, { totalCells: number; occupiedCells: number }>();
+    for (const rack of Object.values(rackSource ?? {})) {
+      stats.set(rack.id, { totalCells: 0, occupiedCells: 0 });
+    }
+    for (const cell of publishedCells) {
+      if (cell.status !== 'active') continue;
+      const entry = stats.get(cell.rackId);
+      if (!entry) continue;
+      entry.totalCells++;
+      if (storageRowsByCellId.has(cell.id)) {
+        entry.occupiedCells++;
+      }
+    }
+    return stats;
+  }, [rackSource, publishedCells, storageRowsByCellId]);
+
+  const rackList = useMemo(() => {
+    return Object.values(rackSource ?? {}).sort((a, b) =>
+      (a.displayCode ?? a.id).localeCompare(b.displayCode ?? b.id)
+    );
+  }, [rackSource]);
 
   useEffect(() => {
     if (faceFilter !== 'all' && !availableFaces.includes(faceFilter)) {
@@ -274,28 +299,30 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
         </div>
       </div>
 
-      <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{t('storage.field.level')}</span>
-          <div className="ms-auto flex gap-1">
-            {levelButtons.map((level) => (
-              <button
-                key={level}
-                type="button"
-                disabled={controlsDisabled}
-                className={`min-w-8 rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
-                  activeLevel === level
-                    ? 'border-blue-300 bg-blue-50 text-blue-900'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
-                onClick={() => setActiveLevel(level)}
-              >
-                L{level}
-              </button>
-            ))}
+      {rackId ? (
+        <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{t('storage.field.level')}</span>
+            <div className="ms-auto flex gap-1">
+              {levelButtons.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  disabled={controlsDisabled}
+                  className={`min-w-8 rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
+                    activeLevel === level
+                      ? 'border-blue-300 bg-blue-50 text-blue-900'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  } ${controlsDisabled ? 'cursor-not-allowed opacity-50 hover:bg-white' : ''}`}
+                  onClick={() => setActiveLevel(level)}
+                >
+                  L{level}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2">
         <div className="flex items-center gap-1.5">
@@ -374,9 +401,48 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
       ) : null}
 
       <div className="flex-1 overflow-y-auto">
-        {noRackContext ? (
+        {noRackContext && rackList.length === 0 ? (
           <div className="px-3 py-6 text-sm text-gray-500">
             {t('storage.state.selectRackOnMap')}
+          </div>
+        ) : noRackContext ? (
+          <div>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-1.5">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                {t('storage.navigator.allRacks')}
+              </h3>
+              <span className="text-xs text-gray-500">{rackList.length}</span>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {rackList.map((rack) => {
+                const stats = rackStats.get(rack.id);
+                const occupied = stats?.occupiedCells ?? 0;
+                const total = stats?.totalCells ?? 0;
+                return (
+                  <div
+                    key={rack.id}
+                    className="group flex cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-gray-50 border-l-2 border-transparent"
+                    onClick={() => {
+                      const levels = collectRackPublishedSemanticLevels(publishedCells, rack.id);
+                      selectRack({ rackId: rack.id, level: levels[0] ?? 1 });
+                    }}
+                  >
+                    <span
+                      className={`h-2 w-2 flex-shrink-0 rounded-full ${
+                        occupied > 0 ? 'bg-rose-500' : 'bg-emerald-500'
+                      }`}
+                      aria-hidden
+                    />
+                    <span className="font-mono text-[13px] font-medium text-gray-900" dir="ltr">
+                      {rack.displayCode ?? rack.id}
+                    </span>
+                    <span className="ms-auto text-xs text-gray-500">
+                      {occupied}/{total}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : isLoading ? (
           <div className="px-3 py-6 text-sm text-gray-400">{t('storage.state.loadingLocations')}</div>
