@@ -1,5 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanelRight, X } from 'lucide-react';
 import { useT } from '@/shared/i18n';
 import {
@@ -61,12 +61,24 @@ export function StorageWorkspaceV2({
 }: StorageWorkspaceV2Props) {
   const t = useT();
   const storageDebugFlags = readStorageDebugFlagsFromWindow();
-  const debugFlags = {
-    disableOccupancyOverlay: storageDebugFlags.disableOccupancyOverlay,
-    disableNavigator: storageDebugFlags.disableNavigator,
-    disableInspector: storageDebugFlags.disableInspector,
-    disableStorageData: storageDebugFlags.disableStorageData
-  };
+  const debugFlags = useMemo(
+    () => ({
+      disableRackLayer: storageDebugFlags.disableRackLayer,
+      disableCanvasSceneData: storageDebugFlags.disableCanvasSceneData,
+      disableOccupancyOverlay: storageDebugFlags.disableOccupancyOverlay,
+      disableNavigator: storageDebugFlags.disableNavigator,
+      disableInspector: storageDebugFlags.disableInspector,
+      disableStorageData: storageDebugFlags.disableStorageData
+    }),
+    [
+      storageDebugFlags.disableCanvasSceneData,
+      storageDebugFlags.disableInspector,
+      storageDebugFlags.disableNavigator,
+      storageDebugFlags.disableOccupancyOverlay,
+      storageDebugFlags.disableRackLayer,
+      storageDebugFlags.disableStorageData
+    ]
+  );
 
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => {
     try {

@@ -14,6 +14,8 @@ const debugFlags = {
   debugEnabled: true,
   disableStorageWorkspace: false,
   disableStorageCanvas: false,
+  disableRackLayer: false,
+  disableCanvasSceneData: false,
   forceKonvaPixelRatio1: false,
   disableStorageData: false,
   disableInspector: false,
@@ -67,6 +69,7 @@ describe('useStorageDebugLifecycleSnapshots', () => {
         ([arg]) => (arg as { snapshotReason: string }).snapshotReason
       )
     ).toEqual([
+      'storage-host-mounted',
       'before-entering-storage-mode',
       'after-entering-storage-mode',
       'after-entering-storage-mode:100ms',
@@ -133,5 +136,22 @@ describe('useStorageDebugLifecycleSnapshots', () => {
       expect.any(Function)
     );
     expect(clearTimeoutSpy).toHaveBeenCalled();
+  });
+
+  it('fires a host-mount snapshot when already mounted in storage mode', () => {
+    renderHook(() =>
+      useStorageDebugLifecycleSnapshots({
+        flags: debugFlags,
+        subscribe: () => vi.fn(),
+        getState: () => ({ viewMode: 'storage' })
+      })
+    );
+
+    expect(recordStorageDebugCanvasSnapshotSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshotReason: 'storage-host-mounted',
+        activeWarehouseMode: 'storage'
+      })
+    );
   });
 });

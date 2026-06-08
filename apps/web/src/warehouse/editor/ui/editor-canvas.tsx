@@ -133,13 +133,14 @@ import {
   isPickingRouteDetailedDiagnosticsEnabled
 } from './picking-route-debug-summary';
 import {
+  recordStorageDebugCanvasSnapshot,
   registerStorageDebugStage,
   setStorageDebugEffectiveKonvaPixelRatio,
   setStorageDebugViewportSnapshot,
   unregisterStorageDebugStage
 } from './storage-debug-diagnostics';
 import {
-  readStorageDebugFlagsFromWindow,
+  resolveStorageDebugFlags,
   resolveEffectiveKonvaPixelRatio
 } from './storage-debug-flags';
 
@@ -172,8 +173,14 @@ export function EditorCanvas({
   );
   const canvasReadyRecordedRef = useRef(false);
   const registeredDebugStageRef = useRef<Konva.Stage | null>(null);
+  const debugSnapshotTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const { currentTenantId, memberships } = useAuth();
-  const storageDebugFlags = readStorageDebugFlagsFromWindow();
+  const storageDebugSearch =
+    typeof window === 'undefined' ? '' : window.location.search;
+  const storageDebugFlags = useMemo(
+    () => resolveStorageDebugFlags(storageDebugSearch),
+    [storageDebugSearch]
+  );
   const effectiveKonvaPixelRatio = resolveEffectiveKonvaPixelRatio({
     devicePixelRatio:
       typeof window !== 'undefined' ? window.devicePixelRatio : null,
@@ -454,6 +461,49 @@ export function EditorCanvas({
   }, [effectiveKonvaPixelRatio]);
 
   useEffect(() => {
+    if (!storageDebugFlags.debugEnabled) return undefined;
+
+    const clearTimers = () => {
+      for (const timer of debugSnapshotTimersRef.current) {
+        clearTimeout(timer);
+      }
+      debugSnapshotTimersRef.current = [];
+    };
+
+    recordStorageDebugCanvasSnapshot({
+      activeWarehouseMode: viewMode,
+      snapshotReason: 'editor-canvas-mounted',
+      currentIsolationFlags: storageDebugFlags
+    });
+
+    debugSnapshotTimersRef.current = [
+      { delayMs: 0, reason: 'editor-canvas-mounted:immediate' as const },
+      { delayMs: 100, reason: 'editor-canvas-mounted:100ms' as const },
+      { delayMs: 500, reason: 'editor-canvas-mounted:500ms' as const },
+      { delayMs: 1000, reason: 'editor-canvas-mounted:1s' as const },
+      { delayMs: 2000, reason: 'editor-canvas-mounted:2s' as const },
+      { delayMs: 5000, reason: 'editor-canvas-mounted:5s' as const }
+    ].map(({ delayMs, reason }) =>
+      setTimeout(() => {
+        recordStorageDebugCanvasSnapshot({
+          activeWarehouseMode: viewMode,
+          snapshotReason: reason,
+          currentIsolationFlags: storageDebugFlags
+        });
+      }, delayMs)
+    );
+
+    return () => {
+      clearTimers();
+      recordStorageDebugCanvasSnapshot({
+        activeWarehouseMode: viewMode,
+        snapshotReason: 'editor-canvas-unmounted',
+        currentIsolationFlags: storageDebugFlags
+      });
+    };
+  }, [storageDebugFlags, viewMode]);
+
+  useEffect(() => {
     setStorageDebugViewportSnapshot({
       viewport:
         viewport.width > 0 || viewport.height > 0
@@ -672,6 +722,7 @@ export function EditorCanvas({
     activeTask,
     activeStorageWorkflow,
     canvasOffset,
+    disableCanvasSceneData: storageDebugFlags.disableCanvasSceneData,
     editorMode,
     highlightedCellIds,
     interactionScope,
@@ -795,7 +846,7 @@ export function EditorCanvas({
     shouldShowLayoutZoneBar,
     shouldShowStorageCellBar
   } = scene.hud;
-  const { walls, zones } = scene.layers;
+  const { racks: sceneRacks, walls, zones } = scene.layers;
 
   useEffect(() => {
     if (!layoutDraft) return;
@@ -828,15 +879,15 @@ export function EditorCanvas({
   ]);
   const visibleRacks = useMemo(
     () =>
-      racks.filter(
+      sceneRacks.filter(
         (rack) =>
           forcedVisibleRackIds.has(rack.id) ||
           isRackInViewport(rack, viewport, canvasOffset, zoom)
       ),
-    [canvasOffset, forcedVisibleRackIds, racks, viewport, zoom]
+    [canvasOffset, forcedVisibleRackIds, sceneRacks, viewport, zoom]
   );
   recordCanvasDataSizes({
-    rackCount: racks.length,
+    rackCount: sceneRacks.length,
     visibleRackCount: visibleRacks.length,
     publishedCellsTotal: publishedCellsById.size,
     occupiedCellsCount: occupiedCellIds.size,
@@ -1878,58 +1929,60 @@ export function EditorCanvas({
                 <SnapGuides guides={snapGuides} gridLines={gridLines} />
               </Layer>
 
-              <RackLayer
-                activeCellRackId={rackLayerActiveCellRackId}
-                canSelectCells={canSelectCells}
-                canSelectRack={canSelectRack}
-                diagnosticsFlags={diagnosticsFlags}
-                diagnosticsViewport={diagnosticsViewport}
-                isActivelyPanning={isPanning}
-                labelsDeferred={labelsDeferredAfterInteraction}
-                renderMode={renderMode}
-                renderSelectionOverlay={false}
-                canvasSelectedCellId={rackLayerSelectedCellId}
-                cellRuntimeById={floorOperationsCellsById}
-                clearHighlightedCellIds={clearHighlightedCellIds}
-                highlightedCellIds={rackLayerHighlightedCellIds}
-                hoveredRackId={hoveredRackId}
-                isLayoutEditable={isLayoutEditable}
-                isLayoutMode={isLayoutMode}
-                isPlacing={isPlacing}
-                isRackPassiveScopeActive={interactionScope !== 'idle'}
-                isStorageMode={isStorageMode}
-                isViewMode={isViewMode}
-                isWorkflowScope={isPlacementMoveMode}
-                lod={lod}
-                zoom={zoom}
-                minRackDistance={minRackDistance}
-                moveSourceCellId={moveSourceCellId}
-                moveSourceRackId={moveSourceRackId}
-                temporaryLocateTargetCellId={temporaryLocateTargetCellId}
-                occupiedCellIds={occupiedCellIds}
-                publishedCellsById={publishedCellsById}
-                publishedCellsByStructure={publishedCellsByStructure}
-                primarySelectedRackId={rackLayerPrimarySelectedRackId}
-                rackLookup={(placementLayout ?? layoutDraft).racks}
-                racks={visibleRacks}
-                selectedRackActiveLevel={rackLayerSelectedRackActiveLevel}
-                selectedRackIds={rackLayerSelectedRackIds}
-                setHighlightedCellIds={setHighlightedCellIds}
-                setHoveredRackId={
-                  isDiagnosticsHitTestDisabled
-                    ? noopSetHoveredRackId
-                    : setHoveredRackId
-                }
-                setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}
-                setSelectedCellId={setSelectedCellId}
-                setSelectedRackId={setSelectedRackId}
-                setSelectedRackIds={setSelectedRackIds}
-                setSnapGuides={setSnapGuides}
-                toggleRackSelection={toggleRackSelection}
-                updateRackPosition={updateRackPosition}
-                onV2StorageCellSelect={onV2StorageCellSelect}
-                onV2StorageRackSelect={onV2StorageRackSelect}
-              />
+              {storageDebugFlags.disableRackLayer ? null : (
+                <RackLayer
+                  activeCellRackId={rackLayerActiveCellRackId}
+                  canSelectCells={canSelectCells}
+                  canSelectRack={canSelectRack}
+                  diagnosticsFlags={diagnosticsFlags}
+                  diagnosticsViewport={diagnosticsViewport}
+                  isActivelyPanning={isPanning}
+                  labelsDeferred={labelsDeferredAfterInteraction}
+                  renderMode={renderMode}
+                  renderSelectionOverlay={false}
+                  canvasSelectedCellId={rackLayerSelectedCellId}
+                  cellRuntimeById={floorOperationsCellsById}
+                  clearHighlightedCellIds={clearHighlightedCellIds}
+                  highlightedCellIds={rackLayerHighlightedCellIds}
+                  hoveredRackId={hoveredRackId}
+                  isLayoutEditable={isLayoutEditable}
+                  isLayoutMode={isLayoutMode}
+                  isPlacing={isPlacing}
+                  isRackPassiveScopeActive={interactionScope !== 'idle'}
+                  isStorageMode={isStorageMode}
+                  isViewMode={isViewMode}
+                  isWorkflowScope={isPlacementMoveMode}
+                  lod={lod}
+                  zoom={zoom}
+                  minRackDistance={minRackDistance}
+                  moveSourceCellId={moveSourceCellId}
+                  moveSourceRackId={moveSourceRackId}
+                  temporaryLocateTargetCellId={temporaryLocateTargetCellId}
+                  occupiedCellIds={occupiedCellIds}
+                  publishedCellsById={publishedCellsById}
+                  publishedCellsByStructure={publishedCellsByStructure}
+                  primarySelectedRackId={rackLayerPrimarySelectedRackId}
+                  rackLookup={(placementLayout ?? layoutDraft).racks}
+                  racks={visibleRacks}
+                  selectedRackActiveLevel={rackLayerSelectedRackActiveLevel}
+                  selectedRackIds={rackLayerSelectedRackIds}
+                  setHighlightedCellIds={setHighlightedCellIds}
+                  setHoveredRackId={
+                    isDiagnosticsHitTestDisabled
+                      ? noopSetHoveredRackId
+                      : setHoveredRackId
+                  }
+                  setPlacementMoveTargetCellId={setPlacementMoveTargetCellId}
+                  setSelectedCellId={setSelectedCellId}
+                  setSelectedRackId={setSelectedRackId}
+                  setSelectedRackIds={setSelectedRackIds}
+                  setSnapGuides={setSnapGuides}
+                  toggleRackSelection={toggleRackSelection}
+                  updateRackPosition={updateRackPosition}
+                  onV2StorageCellSelect={onV2StorageCellSelect}
+                  onV2StorageRackSelect={onV2StorageRackSelect}
+                />
+              )}
 
               {isRouteGraphStage && routeGraphFloorId && (
                 <RouteGraphLayer floorId={routeGraphFloorId} />
@@ -1946,23 +1999,25 @@ export function EditorCanvas({
               )}
 
               <Layer name="overlay-layer" listening={false}>
-                {!storageDebugFlags.disableOccupancyOverlay && !isCoarsePointerDevice && (
-                <StorageOccupancyOverlay
-                  isStorageMode={isStorageMode}
-                  racks={visibleRacks}
-                  primarySelectedRackId={primarySelectedRackId}
-                  selectedRackActiveLevel={selectedRackActiveLevelIndex}
-                  publishedCellsByStructure={publishedCellsByStructure}
-                  occupiedCellIds={occupiedCellIds}
-                  cellRuntimeById={floorOperationsCellsById}
-                  diagnosticsFlags={diagnosticsFlags}
-                  diagnosticsViewport={diagnosticsViewport}
-                  renderMode={renderMode}
-                  zoom={zoom}
-                />
+                {!storageDebugFlags.disableRackLayer &&
+                  !storageDebugFlags.disableOccupancyOverlay &&
+                  !isCoarsePointerDevice && (
+                    <StorageOccupancyOverlay
+                      isStorageMode={isStorageMode}
+                      racks={visibleRacks}
+                      primarySelectedRackId={primarySelectedRackId}
+                      selectedRackActiveLevel={selectedRackActiveLevelIndex}
+                      publishedCellsByStructure={publishedCellsByStructure}
+                      occupiedCellIds={occupiedCellIds}
+                      cellRuntimeById={floorOperationsCellsById}
+                      diagnosticsFlags={diagnosticsFlags}
+                      diagnosticsViewport={diagnosticsViewport}
+                      renderMode={renderMode}
+                      zoom={zoom}
+                    />
                 )}
 
-                {cellStateOverlaysEnabled && (
+                {!storageDebugFlags.disableRackLayer && cellStateOverlaysEnabled && (
                   <SelectionOverlayLayer
                     selectedCellId={canvasSelectedCellId}
                     highlightedCellId={cellStateOverlayHighlightedCellId}

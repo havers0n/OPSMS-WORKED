@@ -19,6 +19,8 @@ export type StorageBreadcrumb = {
 };
 
 export type StorageDebugFlags = {
+  disableRackLayer: boolean;
+  disableCanvasSceneData: boolean;
   disableOccupancyOverlay: boolean;
   disableNavigator: boolean;
   disableInspector: boolean;
@@ -50,6 +52,8 @@ let breadcrumbSeq = 0;
 export function parseStorageDebugFlags(search: string): StorageDebugFlags {
   const params = new URLSearchParams(search);
   return {
+    disableRackLayer: params.get('disableRackLayer') === '1',
+    disableCanvasSceneData: params.get('disableCanvasSceneData') === '1',
     disableOccupancyOverlay: params.get('disableOccupancyOverlay') === '1',
     disableNavigator: params.get('disableNavigator') === '1',
     disableInspector: params.get('disableInspector') === '1',

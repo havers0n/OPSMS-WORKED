@@ -86,6 +86,8 @@ describe('client runtime diagnostics', () => {
       currentIsolationFlags: {
         disableStorageWorkspace: false,
         disableStorageCanvas: false,
+        disableRackLayer: false,
+        disableCanvasSceneData: false,
         forceKonvaPixelRatio1: true
       },
       effectiveKonvaPixelRatio: 1,
