@@ -214,6 +214,10 @@ export function EditorCanvas({
   const editorMode = useEditorMode();
   const layoutDraft = useWorkspaceLayout(workspace);
   const diagnosticsFlags = useCanvasDiagnosticsFlags();
+  const isCoarsePointerDevice =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: coarse)').matches
+      : false;
   const isDiagnosticsHitTestDisabled = diagnosticsFlags.hitTest === 'off';
   const isLayoutEditable = useIsLayoutEditable();
   const selectedRackIds = useInteractionStore((state) =>
@@ -1942,6 +1946,7 @@ export function EditorCanvas({
               )}
 
               <Layer name="overlay-layer" listening={false}>
+                {!storageDebugFlags.disableOccupancyOverlay && !isCoarsePointerDevice && (
                 <StorageOccupancyOverlay
                   isStorageMode={isStorageMode}
                   racks={visibleRacks}
@@ -1955,6 +1960,7 @@ export function EditorCanvas({
                   renderMode={renderMode}
                   zoom={zoom}
                 />
+                )}
 
                 {cellStateOverlaysEnabled && (
                   <SelectionOverlayLayer

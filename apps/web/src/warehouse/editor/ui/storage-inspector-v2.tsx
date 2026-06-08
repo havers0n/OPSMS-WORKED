@@ -107,6 +107,10 @@ import {
   recordCanvasMode
 } from './canvas-diagnostics';
 import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
+import {
+  parseStorageDebugFlags,
+  recordStorageBreadcrumb
+} from '@/shared/diagnostics/storage-diagnostics';
 
 type Translator = ReturnType<typeof useT>;
 
@@ -419,7 +423,9 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const queryClient = useQueryClient();
   const racks: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
   const floorId = workspace?.floorId ?? null;
-  const { data: publishedCells = [] } = usePublishedCells(floorId);
+  const debugFlags = parseStorageDebugFlags(typeof window !== 'undefined' ? window.location.search : '');
+  const dataFloorId = debugFlags.disableStorageData ? null : floorId;
+  const { data: publishedCells = [] } = usePublishedCells(dataFloorId);
 
   const cellId = useStorageFocusSelectedCellId();
   const rackId = useStorageFocusSelectedRackId();
@@ -482,6 +488,22 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const [extractErrorMessage, setExtractErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    recordStorageBreadcrumb('inspector-mounted', {
+      floorId,
+      rackId,
+      cellId
+    });
+  }, []);
+
+  useEffect(() => {
+    recordStorageBreadcrumb('occupancy-overlay-mounted', {
+      floorId,
+      cellId,
+      hasStorageData: storageRows.length > 0
+    });
+  }, [cellId]);
+
+  useEffect(() => {
     recordClientRuntimeEvent('storage-inspector-v2:state', {
       floorId,
       rackId,
@@ -505,7 +527,10 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const {
     data: storageContainers = [],
     isLoading: storageContainersLoading
-  } = useQuery(containerListQueryOptions({ operationalRole: 'storage' }));
+  } = useQuery({
+    ...containerListQueryOptions({ operationalRole: 'storage' }),
+    enabled: !debugFlags.disableStorageData
+  });
   const { data: createWithProductSearchResults = [] } = useProductsSearch(createWithProductSearch.trim() || null);
   const { data: createFromPresetSearchResults = [] } = useProductsSearch(createFromPresetProductSearch.trim() || null);
   const { data: addProductSearchResults = [] } = useProductsSearch(addProductSearch.trim() || null);
@@ -517,26 +542,28 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
     enabled: Boolean(createFromPresetSelectedProduct)
   });
 
+  const disabledCellId = debugFlags.disableStorageData ? null : cellId;
   const {
     data: locationRef,
     isLoading: locationRefLoading,
     isError: locationRefIsError,
     error: locationRefError,
     refetch: refetchLocationRef
-  } = useLocationByCell(cellId);
+  } = useLocationByCell(disabledCellId);
   const locationId = locationRef?.locationId ?? null;
 
+  const disabledLocationId = debugFlags.disableStorageData ? null : locationId;
   const {
     data: storageRows = [],
     isLoading: storageLoading,
     isError: storageIsError,
     error: storageError,
     refetch: refetchStorageRows
-  } = useLocationStorage(locationId);
+  } = useLocationStorage(disabledLocationId);
   const {
     data: locationProductAssignments = [],
     isLoading: locationProductAssignmentsLoading
-  } = useLocationProductAssignments(locationId);
+  } = useLocationProductAssignments(disabledLocationId);
   recordCanvasMode('storage');
   recordCanvasComponentRender({
     component: 'StorageInspectorV2',
@@ -612,7 +639,7 @@ export function StorageInspectorV2({ workspace }: StorageInspectorV2Props) {
   const effectiveRoleProductId =
     effectiveRoleActiveProducts.length === 1 ? effectiveRoleActiveProducts[0].id : null;
   const { data: effectiveRoleContext, isLoading: effectiveRoleLoading } = useLocationEffectiveRole(
-    locationId,
+    disabledLocationId,
     effectiveRoleProductId
   );
   const { data: effectiveProductStoragePresets = [] } = useQuery({

@@ -1661,6 +1661,10 @@ describe('EditorCanvas storage active-rack wiring', () => {
     );
   });
 
+  // Coarse-pointer guard is tested at the component level in
+  // storage-occupancy-overlay.test.tsx. The editor-canvas mount guard
+  // duplicates the check at the call site for defence in depth.
+
   it('allows storage entry overview fit when no V2 focus exists', () => {
     const draft = createLayoutDraftFixture();
     mockLayoutDraft = draft;
