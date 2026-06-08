@@ -5806,22 +5806,90 @@ describe('client runtime diagnostics endpoint', () => {
       method: 'POST',
       url: '/api/client-errors',
       payload: {
-        clientErrorId: '6f7ed8b1-6c91-4c08-b68c-55f9b5d79235',
-        source: 'window-error',
-        message: 'Storage page crashed on mobile',
-        stack: 'Error: Storage page crashed on mobile',
-        componentStack: null,
-        route: '/warehouse/view?debug=1',
-        url: 'https://example.com/warehouse/view?debug=1',
-        userAgent: 'Mozilla/5.0 (iPhone)',
-        occurredAt: '2026-06-07T12:00:00.000Z',
-        viewport: {
-          width: 390,
-          height: 844,
-          pixelRatio: 3
-        },
-        context: {
-          viewMode: 'storage'
+        kind: 'error',
+        error: {
+          clientErrorId: '6f7ed8b1-6c91-4c08-b68c-55f9b5d79235',
+          source: 'window-error',
+          message: 'Storage page crashed on mobile',
+          stack: 'Error: Storage page crashed on mobile',
+          componentStack: null,
+          route: '/warehouse/view?debug=1',
+          url: 'https://example.com/warehouse/view?debug=1',
+          userAgent: 'Mozilla/5.0 (iPhone)',
+          occurredAt: '2026-06-07T12:00:00.000Z',
+          viewport: {
+            width: 390,
+            height: 844,
+            pixelRatio: 3
+          },
+          context: {
+            viewMode: 'storage'
+          }
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      accepted: true,
+      requestId: expect.any(String)
+    });
+
+    await app.close();
+  });
+
+  it('accepts validated canvas lifecycle snapshots without auth', async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/client-errors',
+      payload: {
+        kind: 'canvas-lifecycle-snapshot',
+        snapshot: {
+          sessionId: 'debug-session-1',
+          timestamp: '2026-06-08T09:00:00.000Z',
+          activeWarehouseMode: 'storage',
+          snapshotReason: 'after-entering-storage-mode:500ms',
+          canvasCount: 2,
+          canvasElements: [
+            {
+              width: 780,
+              height: 1398,
+              clientWidth: 390,
+              clientHeight: 699,
+              approximateMiB: 4.16
+            }
+          ],
+          totalApproxCanvasMiB: 4.16,
+          konvaStageCount: 1,
+          konvaLayerCount: 4,
+          stageMountCount: 1,
+          stageDestroyCount: 0,
+          currentIsolationFlags: {
+            disableStorageWorkspace: false,
+            disableStorageCanvas: false,
+            forceKonvaPixelRatio1: true
+          },
+          effectiveKonvaPixelRatio: 1,
+          viewport: {
+            width: 390,
+            height: 699
+          },
+          devicePixelRatio: 3,
+          dimensionPipeline: {
+            containerClientWidth: 390,
+            containerClientHeight: 699,
+            viewportWidth: 390,
+            viewportHeight: 699,
+            stageWidth: 390,
+            stageHeight: 699,
+            primaryCanvasWidth: 390,
+            primaryCanvasHeight: 699,
+            primaryCanvasClientWidth: 390,
+            primaryCanvasClientHeight: 699,
+            dprApplication: 'once'
+          }
         }
       }
     });

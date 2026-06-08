@@ -10,6 +10,8 @@ import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
+import { StorageDebugPlaceholder } from './storage-debug-placeholder';
+import { readStorageDebugFlagsFromWindow } from './storage-debug-flags';
 
 const INSPECTOR_MODE_KEY = 'wos:storage-inspector-mode';
 
@@ -52,6 +54,7 @@ export function StorageWorkspaceV2({
   onCloseInspector
 }: StorageWorkspaceV2Props) {
   const t = useT();
+  const storageDebugFlags = readStorageDebugFlagsFromWindow();
 
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => {
     try {
@@ -148,14 +151,22 @@ export function StorageWorkspaceV2({
     >
       <StorageNavigator workspace={workspace} />
 
-      <WorkspaceCanvasAndPanel
-        workspace={workspace}
-        onAddRack={onAddRack}
-        onOpenInspector={onOpenInspector}
-        onCloseInspector={onCloseInspector}
-        hideRightPanel
-        hideContextPanel
-      />
+      {storageDebugFlags.disableStorageCanvas ? (
+        <StorageDebugPlaceholder
+          testId="storage-canvas-disabled-placeholder"
+          title="Storage canvas disabled"
+          body="Debug flag disableStorageCanvas=1 prevented WorkspaceCanvasAndPanel and EditorCanvas from mounting."
+        />
+      ) : (
+        <WorkspaceCanvasAndPanel
+          workspace={workspace}
+          onAddRack={onAddRack}
+          onOpenInspector={onOpenInspector}
+          onCloseInspector={onCloseInspector}
+          hideRightPanel
+          hideContextPanel
+        />
+      )}
 
       {/* Semi-transparent backdrop behind expanded sheet (mobile only). */}
       {hasSelection && inspectorMode === 'expanded' && (

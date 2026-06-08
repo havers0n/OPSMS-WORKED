@@ -132,6 +132,16 @@ import {
   buildPickingRouteDetailedDiagnostics,
   isPickingRouteDetailedDiagnosticsEnabled
 } from './picking-route-debug-summary';
+import {
+  registerStorageDebugStage,
+  setStorageDebugEffectiveKonvaPixelRatio,
+  setStorageDebugViewportSnapshot,
+  unregisterStorageDebugStage
+} from './storage-debug-diagnostics';
+import {
+  readStorageDebugFlagsFromWindow,
+  resolveEffectiveKonvaPixelRatio
+} from './storage-debug-flags';
 
 const EMPTY_RACK_IDS: string[] = [];
 const EMPTY_CELL_ID_SET = new Set<string>();
@@ -161,7 +171,14 @@ export function EditorCanvas({
     typeof performance !== 'undefined' ? performance.now() : Date.now()
   );
   const canvasReadyRecordedRef = useRef(false);
+  const registeredDebugStageRef = useRef<Konva.Stage | null>(null);
   const { currentTenantId, memberships } = useAuth();
+  const storageDebugFlags = readStorageDebugFlagsFromWindow();
+  const effectiveKonvaPixelRatio = resolveEffectiveKonvaPixelRatio({
+    devicePixelRatio:
+      typeof window !== 'undefined' ? window.devicePixelRatio : null,
+    flags: storageDebugFlags
+  });
   const zoom = useCanvasZoom();
   const viewMode = useViewMode();
   const viewStage = useViewStage();
@@ -427,6 +444,46 @@ export function EditorCanvas({
       viewMode,
       zoom
     });
+
+  useEffect(() => {
+    setStorageDebugEffectiveKonvaPixelRatio(effectiveKonvaPixelRatio);
+  }, [effectiveKonvaPixelRatio]);
+
+  useEffect(() => {
+    setStorageDebugViewportSnapshot({
+      viewport:
+        viewport.width > 0 || viewport.height > 0
+          ? { width: viewport.width, height: viewport.height }
+          : null,
+      containerClientSize: containerRef.current
+        ? {
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight
+          }
+        : null
+    });
+  }, [containerRef, viewport.height, viewport.width]);
+
+  useEffect(() => {
+    const currentStage = stageRef.current;
+    if (!currentStage || registeredDebugStageRef.current === currentStage) {
+      return undefined;
+    }
+
+    if (registeredDebugStageRef.current) {
+      unregisterStorageDebugStage(registeredDebugStageRef.current);
+    }
+
+    registerStorageDebugStage(currentStage);
+    registeredDebugStageRef.current = currentStage;
+
+    return () => {
+      if (registeredDebugStageRef.current === currentStage) {
+        unregisterStorageDebugStage(currentStage);
+        registeredDebugStageRef.current = null;
+      }
+    };
+  }, [viewport.height, viewport.width]);
   const [isZooming, setIsZooming] = useState(false);
   const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startZoomInteraction = useCallback(() => {
@@ -1676,7 +1733,7 @@ export function EditorCanvas({
               ref={stageRef}
               width={viewport.width}
               height={viewport.height}
-              pixelRatio={typeof window !== 'undefined' ? window.devicePixelRatio : 1}
+              pixelRatio={effectiveKonvaPixelRatio}
               x={canvasOffset.x}
               y={canvasOffset.y}
               scale={{ x: zoom, y: zoom }}

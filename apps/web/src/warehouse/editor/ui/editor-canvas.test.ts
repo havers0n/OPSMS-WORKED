@@ -54,6 +54,16 @@ let mockMemberships: Array<{
   tenantName: string;
   role: 'platform_admin' | 'tenant_admin' | 'operator';
 }> = [];
+let mockStorageDebugFlags = {
+  debugEnabled: false,
+  disableStorageWorkspace: false,
+  disableStorageCanvas: false,
+  forceKonvaPixelRatio1: false,
+  disableStorageData: false,
+  disableInspector: false,
+  disableNavigator: false,
+  disableOccupancyOverlay: false
+};
 
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -341,6 +351,17 @@ vi.mock('./use-canvas-scene-model', () => ({
   }
 }));
 
+vi.mock('./storage-debug-flags', () => ({
+  readStorageDebugFlagsFromWindow: () => mockStorageDebugFlags,
+  resolveEffectiveKonvaPixelRatio: ({
+    devicePixelRatio,
+    flags
+  }: {
+    devicePixelRatio: number | null | undefined;
+    flags: { forceKonvaPixelRatio1: boolean };
+  }) => (flags.forceKonvaPixelRatio1 ? 1 : (devicePixelRatio ?? 1))
+}));
+
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -507,6 +528,16 @@ describe('EditorCanvas storage active-rack wiring', () => {
     mockMemberships = [];
     mockViewStage = 'map';
     mockSelection = { type: 'none' };
+    mockStorageDebugFlags = {
+      debugEnabled: false,
+      disableStorageWorkspace: false,
+      disableStorageCanvas: false,
+      forceKonvaPixelRatio1: false,
+      disableStorageData: false,
+      disableInspector: false,
+      disableNavigator: false,
+      disableOccupancyOverlay: false
+    };
     act(() => {
       usePickingPlanningOverlayStore.setState({
         source: { kind: 'none' },
@@ -1801,6 +1832,27 @@ describe('EditorCanvas storage active-rack wiring', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('forces Konva pixelRatio to 1 only for the explicit debug flag', () => {
+    const draft = createLayoutDraftFixture();
+    mockLayoutDraft = draft;
+    mockViewMode = 'storage';
+    mockStorageDebugFlags = {
+      ...mockStorageDebugFlags,
+      debugEnabled: true,
+      forceKonvaPixelRatio1: true
+    };
+
+    const renderer = renderCanvas({
+      floorId: draft.floorId,
+      activeDraft: draft,
+      latestPublished: draft
+    });
+
+    expect(
+      renderer.root.findAll((node) => String(node.type) === 'Stage')[0]?.props.pixelRatio
+    ).toBe(1);
   });
 
   // ── Camera focus request consumption tests ─────────────────────────────────
