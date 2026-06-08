@@ -61,7 +61,11 @@ let mockDebugFlags: ReturnType<typeof import('./storage-debug-flags')['resolveSt
   disableStorageData: false,
   disableInspector: false,
   disableNavigator: false,
-  disableOccupancyOverlay: false
+  disableOccupancyOverlay: false,
+  disableRackBodyShadows: false,
+  simpleRackBodyShell: false,
+  disableRackBodyLabels: false,
+  disableRackBodyStrokes: false
 };
 
 vi.mock('./storage-debug-flags', () => ({
@@ -1484,7 +1488,11 @@ describe('RackLayer update#1 rackIds identity', () => {
         disableStorageData: false,
         disableInspector: false,
         disableNavigator: false,
-        disableOccupancyOverlay: false
+        disableOccupancyOverlay: false,
+        disableRackBodyShadows: false,
+        simpleRackBodyShell: false,
+        disableRackBodyLabels: false,
+        disableRackBodyStrokes: false
       };
     });
 
@@ -1566,7 +1574,11 @@ describe('RackLayer update#1 rackIds identity', () => {
         disableStorageData: false,
         disableInspector: false,
         disableNavigator: false,
-        disableOccupancyOverlay: false
+        disableOccupancyOverlay: false,
+        disableRackBodyShadows: false,
+        simpleRackBodyShell: false,
+        disableRackBodyLabels: false,
+        disableRackBodyStrokes: false
       };
       const renderer = renderRackLayer({
         selectedRackIds: [],
@@ -1580,6 +1592,97 @@ describe('RackLayer update#1 rackIds identity', () => {
         (node) => String(node.type) === 'RackCells'
       );
       expect(rackCells).toHaveLength(2);
+    });
+
+    it('disableRackBodyShadows passes disableShadows prop to RackBody', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackBodyShadows: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(2);
+      expect(rackBodies[0]!.props.disableShadows).toBe(true);
+      expect(rackBodies[1]!.props.disableShadows).toBe(true);
+    });
+
+    it('simpleRackBodyShell passes simpleShell prop to RackBody', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        simpleRackBodyShell: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(2);
+      expect(rackBodies[0]!.props.simpleShell).toBe(true);
+      expect(rackBodies[1]!.props.simpleShell).toBe(true);
+    });
+
+    it('disableRackBodyLabels passes disableLabels prop to RackBody', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackBodyLabels: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(2);
+      expect(rackBodies[0]!.props.disableLabels).toBe(true);
+      expect(rackBodies[1]!.props.disableLabels).toBe(true);
+    });
+
+    it('disableRackBodyStrokes passes disableBodyStrokes prop to RackBody', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackBodyStrokes: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(2);
+      expect(rackBodies[0]!.props.disableBodyStrokes).toBe(true);
+      expect(rackBodies[1]!.props.disableBodyStrokes).toBe(true);
+    });
+
+    it('keeps RackBody mounted when new debug flags are active', () => {
+      mockDebugFlags = {
+        ...mockDebugFlags,
+        debugEnabled: true,
+        disableRackBodyShadows: true,
+        simpleRackBodyShell: true,
+        disableRackBodyLabels: true,
+        disableRackBodyStrokes: true
+      };
+      const renderer = renderRackLayer({
+        selectedRackIds: [],
+        primarySelectedRackId: null
+      });
+      const rackBodies = renderer.root.findAll(
+        (node) => String(node.type) === 'RackBody'
+      );
+      expect(rackBodies).toHaveLength(2);
     });
   });
 });

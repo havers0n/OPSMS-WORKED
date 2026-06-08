@@ -35,6 +35,10 @@ type Props = {
   disableStrokes?: boolean;
   isActivelyPanning?: boolean;
   shellRendering?: 'normal' | 'cached';
+  disableShadows?: boolean;
+  simpleShell?: boolean;
+  disableLabels?: boolean;
+  disableBodyStrokes?: boolean;
 };
 
 export function RackBody({
@@ -49,7 +53,11 @@ export function RackBody({
   rackCodePlacement,
   disableStrokes = false,
   isActivelyPanning = false,
-  shellRendering = 'normal'
+  shellRendering = 'normal',
+  disableShadows = false,
+  simpleShell = false,
+  disableLabels = false,
+  disableBodyStrokes = false
 }: Props) {
   const shellRef = useRef<Konva.Group | null>(null);
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
@@ -72,7 +80,11 @@ export function RackBody({
       'rackCodePlacement',
       'disableStrokes',
       'isActivelyPanning',
-      'shellRendering'
+      'shellRendering',
+      'disableShadows',
+      'simpleShell',
+      'disableLabels',
+      'disableBodyStrokes'
     ],
     snapshot: {
       geometryX: geometry.x,
@@ -89,7 +101,11 @@ export function RackBody({
       rackCodePlacement,
       disableStrokes,
       isActivelyPanning,
-      shellRendering
+      shellRendering,
+      disableShadows,
+      simpleShell,
+      disableLabels,
+      disableBodyStrokes
     }
   });
 
@@ -99,6 +115,20 @@ export function RackBody({
   const fill = visualSelected ? C.fillSelected : visualHovered ? C.fillHovered : C.fillDefault;
   const stroke = visualSelected ? C.strokeSelected : visualHovered ? C.strokeHovered : C.strokeDefault;
   const stripeH = Math.max(4, Math.min(8, height * 0.18));
+
+  const hideBodyStrokes = disableBodyStrokes || lightweightVisuals || simpleShell;
+  const hideShadows = disableShadows || lightweightVisuals || simpleShell;
+  const hideLabels = disableLabels || simpleShell;
+  const hideSelectionDecoration = simpleShell;
+  const hideStripesOrOverhangs = simpleShell;
+  const hideSpineBoundary = disableBodyStrokes || lightweightVisuals || simpleShell;
+
+  const mainCornerRadius = simpleShell ? 0 : 8;
+  const mainShadowBlur = hideShadows ? 0 : visualSelected ? 12 : 6;
+  const mainShadowOpacity = hideShadows ? 0 : visualSelected ? 0.12 : 0.07;
+  const mainStroke = hideBodyStrokes ? undefined : stroke;
+  const mainStrokeEnabled = !hideBodyStrokes;
+  const mainStrokeWidth = hideBodyStrokes ? 0 : visualSelected ? 2 : 1.5;
 
   const minFaceW = Math.min(faceAWidth, faceBWidth);
   const isAsymmetric = isPaired && Math.abs(faceAWidth - faceBWidth) > 2;
@@ -214,7 +244,23 @@ export function RackBody({
     spineY,
     stripeH,
     stroke,
-    width
+    width,
+    disableShadows,
+    simpleShell,
+    disableLabels,
+    disableBodyStrokes,
+    hideBodyStrokes,
+    hideShadows,
+    hideLabels,
+    hideSelectionDecoration,
+    hideStripesOrOverhangs,
+    hideSpineBoundary,
+    mainCornerRadius,
+    mainShadowBlur,
+    mainShadowOpacity,
+    mainStroke,
+    mainStrokeEnabled,
+    mainStrokeWidth
   ]);
 
   return (
@@ -228,19 +274,19 @@ export function RackBody({
         y={0}
         width={width}
         height={height}
-        cornerRadius={8}
+        cornerRadius={mainCornerRadius}
         fill={fill}
-        stroke={lightweightVisuals ? undefined : stroke}
-        strokeEnabled={!lightweightVisuals}
-        strokeWidth={lightweightVisuals ? 0 : isSelected ? 2 : 1.5}
+        stroke={mainStroke}
+        strokeEnabled={mainStrokeEnabled}
+        strokeWidth={mainStrokeWidth}
         shadowColor="#0f172a"
-        shadowBlur={lightweightVisuals ? 0 : isSelected ? 12 : 6}
-        shadowOpacity={lightweightVisuals ? 0 : isSelected ? 0.12 : 0.07}
-        shadowOffsetY={3}
+        shadowBlur={mainShadowBlur}
+        shadowOpacity={mainShadowOpacity}
+        shadowOffsetY={hideShadows ? 0 : 3}
         wosRectRole="rack-body-main"
       />
 
-      {isSelected && (
+      {isSelected && !hideSelectionDecoration && (
         <Rect
           x={4}
           y={4}
@@ -248,7 +294,7 @@ export function RackBody({
           height={height - 8}
           cornerRadius={6}
           stroke={C.selectionBorder}
-          strokeWidth={1}
+          strokeWidth={hideBodyStrokes ? 0 : 1}
           dash={[8, 5]}
           opacity={lightweightVisuals ? 0 : 0.7}
           visible={!lightweightVisuals}
@@ -256,7 +302,7 @@ export function RackBody({
         />
       )}
 
-      {isAsymmetric && faceAOverhang && (
+      {!hideStripesOrOverhangs && isAsymmetric && faceAOverhang && (
         <Rect
           x={faceBWidth}
           y={spineY}
@@ -267,7 +313,7 @@ export function RackBody({
           wosRectRole="rack-body-overhang"
         />
       )}
-      {isAsymmetric && faceBOverhang && (
+      {!hideStripesOrOverhangs && isAsymmetric && faceBOverhang && (
         <Rect
           x={faceAWidth}
           y={0}
@@ -279,18 +325,20 @@ export function RackBody({
         />
       )}
 
-      <Rect
-        x={0}
-        y={0}
-        width={faceAWidth}
-        height={stripeH}
-        cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
-        fill={C.stripeA}
-        opacity={visualSelected ? 0.6 : 0.4}
-        wosRectRole="rack-body-stripe"
-      />
+      {!hideStripesOrOverhangs && (
+        <Rect
+          x={0}
+          y={0}
+          width={faceAWidth}
+          height={stripeH}
+          cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
+          fill={C.stripeA}
+          opacity={visualSelected ? 0.6 : 0.4}
+          wosRectRole="rack-body-stripe"
+        />
+      )}
 
-      {isPaired && (
+      {!hideStripesOrOverhangs && isPaired && (
         <Rect
           x={0}
           // Face B band must stay on the outer edge of the paired rack.
@@ -304,7 +352,7 @@ export function RackBody({
         />
       )}
 
-      {isPaired && !lightweightVisuals && (
+      {isPaired && !hideSpineBoundary && (
         <Line
           points={[8, spineY, width - 8, spineY]}
           stroke={C.spine}
@@ -314,7 +362,7 @@ export function RackBody({
         />
       )}
 
-      {isAsymmetric && !lightweightVisuals && (
+      {isAsymmetric && !hideSpineBoundary && (
         <Line
           points={[minFaceW, 4, minFaceW, height - 4]}
           stroke={C.boundaryLine}
@@ -324,7 +372,7 @@ export function RackBody({
         />
       )}
 
-      {showRackCode && (
+      {showRackCode && !hideLabels && (
         <Group x={labelX} y={labelY} rotation={-rotationDeg}>
           <Rect
             x={-labelWidth / 2}
@@ -335,8 +383,8 @@ export function RackBody({
             fill={C.pillBg}
             opacity={labelBgOpacity}
             shadowColor="#0f172a"
-            shadowBlur={lightweightVisuals ? 0 : 4}
-            shadowOpacity={lightweightVisuals ? 0 : labelShadowOpacity}
+            shadowBlur={hideShadows ? 0 : 4}
+            shadowOpacity={hideShadows ? 0 : labelShadowOpacity}
             wosRectRole="badge-decoration"
           />
           <Rect
@@ -345,9 +393,9 @@ export function RackBody({
             width={labelWidth}
             height={labelHeight}
             cornerRadius={999}
-            stroke={lightweightVisuals ? undefined : C.codeText}
-            strokeEnabled={!lightweightVisuals}
-            strokeWidth={lightweightVisuals ? 0 : 0.6}
+            stroke={hideBodyStrokes ? undefined : C.codeText}
+            strokeEnabled={!hideBodyStrokes}
+            strokeWidth={hideBodyStrokes ? 0 : 0.6}
             opacity={lightweightVisuals ? 0 : labelStrokeOpacity}
             listening={false}
             wosRectRole="badge-decoration"

@@ -36,7 +36,11 @@ let mockStorageDebugFlags = {
   disableStorageData: false,
   disableInspector: false,
   disableNavigator: false,
-  disableOccupancyOverlay: false
+  disableOccupancyOverlay: false,
+  disableRackBodyShadows: false,
+  simpleRackBodyShell: false,
+  disableRackBodyLabels: false,
+  disableRackBodyStrokes: false
 };
 
 vi.mock('@/entities/cell/api/use-published-cells', () => ({
@@ -240,7 +244,11 @@ describe('Storage V2 focus cutover integration', () => {
       disableStorageData: false,
       disableInspector: false,
       disableNavigator: false,
-      disableOccupancyOverlay: false
+      disableOccupancyOverlay: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     };
     act(() => {
       useStorageFocusStore.getState().selectRack({ rackId: 'rack-1', level: 1 });

@@ -126,6 +126,70 @@ describe('POST /api/diagnostics/heartbeat', () => {
     await app.close();
   });
 
+  it('accepts heartbeat with bounded rackLayerDiagnostics payload', async () => {
+    const app = buildApp();
+    const payload = createValidHeartbeatPayload();
+    (payload as Record<string, unknown>).rackLayerDiagnostics = {
+      renderedRackCount: 12,
+      renderedCellCount: 48,
+      rackBodyNodeCount: 12,
+      rackCellNodeCount: 24,
+      runtimeVisualNodeCount: 16,
+      visibleRackCount: 12,
+      statusCounts: { reserved: 2, pick_active: 0, occupied: 10, empty: 2, exception: 0, other: 0 },
+      effectiveLod: 2,
+      hitTestEnabled: true,
+      cacheEnabled: false,
+      rackLayerMountCount: 1,
+      rackLayerUnmountCount: 0,
+      rackLayerDrawCount: 5
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/diagnostics/heartbeat',
+      payload
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      accepted: true,
+      requestId: expect.any(String)
+    });
+
+    await app.close();
+  });
+
+  it('rejects heartbeat with invalid rackLayerDiagnostics field types', async () => {
+    const app = buildApp();
+    const payload = createValidHeartbeatPayload();
+    (payload as Record<string, unknown>).rackLayerDiagnostics = {
+      renderedRackCount: -1,
+      renderedCellCount: 'bad' as never,
+      rackBodyNodeCount: 12,
+      rackCellNodeCount: 24,
+      runtimeVisualNodeCount: 16,
+      visibleRackCount: 12,
+      statusCounts: { reserved: 2, pick_active: 0, occupied: 10, empty: 2, exception: 0, other: 0 },
+      effectiveLod: 3,
+      hitTestEnabled: true,
+      cacheEnabled: false,
+      rackLayerMountCount: 1,
+      rackLayerUnmountCount: 0,
+      rackLayerDrawCount: 5
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/diagnostics/heartbeat',
+      payload
+    });
+
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
   it('accepts minimal heartbeat with null fields', async () => {
     const app = buildApp();
     const payload: Record<string, unknown> = createValidHeartbeatPayload();

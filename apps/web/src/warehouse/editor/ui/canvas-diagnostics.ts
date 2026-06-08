@@ -820,6 +820,12 @@ export function recordCanvasRackLayerSnapshot(
   Object.assign(diagnostics.rackLayerSnapshot, snapshot);
 }
 
+export function getRackLayerDiagnosticsSnapshot(): CanvasRenderPipelineDiagnostics['rackLayerSnapshot'] | null {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return null;
+  return { ...diagnostics.rackLayerSnapshot };
+}
+
 export function recordCanvasRackLayerMount() {
   const diagnostics = getActiveRenderPipelineDiagnostics();
   if (!diagnostics) return;

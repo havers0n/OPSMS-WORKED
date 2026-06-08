@@ -12,6 +12,10 @@ export type StorageDebugFlags = {
   disableInspector: boolean;
   disableNavigator: boolean;
   disableOccupancyOverlay: boolean;
+  disableRackBodyShadows: boolean;
+  simpleRackBodyShell: boolean;
+  disableRackBodyLabels: boolean;
+  disableRackBodyStrokes: boolean;
 };
 
 function isEnabled(params: URLSearchParams, key: string) {
@@ -35,7 +39,11 @@ export function resolveStorageDebugFlags(search: string): StorageDebugFlags {
     disableStorageData: debugEnabled && isEnabled(params, 'disableStorageData'),
     disableInspector: debugEnabled && isEnabled(params, 'disableInspector'),
     disableNavigator: debugEnabled && isEnabled(params, 'disableNavigator'),
-    disableOccupancyOverlay: debugEnabled && isEnabled(params, 'disableOccupancyOverlay')
+    disableOccupancyOverlay: debugEnabled && isEnabled(params, 'disableOccupancyOverlay'),
+    disableRackBodyShadows: debugEnabled && isEnabled(params, 'disableRackBodyShadows'),
+    simpleRackBodyShell: debugEnabled && isEnabled(params, 'simpleRackBodyShell'),
+    disableRackBodyLabels: debugEnabled && isEnabled(params, 'disableRackBodyLabels'),
+    disableRackBodyStrokes: debugEnabled && isEnabled(params, 'disableRackBodyStrokes')
   };
 }
 

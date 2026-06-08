@@ -19,7 +19,11 @@ describe('storage debug flags', () => {
       disableStorageData: false,
       disableInspector: false,
       disableNavigator: false,
-      disableOccupancyOverlay: false
+      disableOccupancyOverlay: false,
+      disableRackBodyShadows: false,
+      simpleRackBodyShell: false,
+      disableRackBodyLabels: false,
+      disableRackBodyStrokes: false
     });
 
     expect(
@@ -41,6 +45,58 @@ describe('storage debug flags', () => {
         flags: { forceKonvaPixelRatio1: true }
       })
     ).toBe(1);
+  });
+
+  it('requires debug=1 for disableRackBodyShadows', () => {
+    expect(
+      resolveStorageDebugFlags('?disableRackBodyShadows=1')
+    ).toMatchObject({
+      disableRackBodyShadows: false
+    });
+    expect(
+      resolveStorageDebugFlags('?debug=1&disableRackBodyShadows=1')
+    ).toMatchObject({
+      disableRackBodyShadows: true
+    });
+  });
+
+  it('requires debug=1 for simpleRackBodyShell', () => {
+    expect(
+      resolveStorageDebugFlags('?simpleRackBodyShell=1')
+    ).toMatchObject({
+      simpleRackBodyShell: false
+    });
+    expect(
+      resolveStorageDebugFlags('?debug=1&simpleRackBodyShell=1')
+    ).toMatchObject({
+      simpleRackBodyShell: true
+    });
+  });
+
+  it('requires debug=1 for disableRackBodyLabels', () => {
+    expect(
+      resolveStorageDebugFlags('?disableRackBodyLabels=1')
+    ).toMatchObject({
+      disableRackBodyLabels: false
+    });
+    expect(
+      resolveStorageDebugFlags('?debug=1&disableRackBodyLabels=1')
+    ).toMatchObject({
+      disableRackBodyLabels: true
+    });
+  });
+
+  it('requires debug=1 for disableRackBodyStrokes', () => {
+    expect(
+      resolveStorageDebugFlags('?disableRackBodyStrokes=1')
+    ).toMatchObject({
+      disableRackBodyStrokes: false
+    });
+    expect(
+      resolveStorageDebugFlags('?debug=1&disableRackBodyStrokes=1')
+    ).toMatchObject({
+      disableRackBodyStrokes: true
+    });
   });
 
   it('keeps the new canvas isolation flags debug-only', () => {
