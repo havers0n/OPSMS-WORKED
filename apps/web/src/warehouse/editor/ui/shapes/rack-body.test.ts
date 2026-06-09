@@ -84,6 +84,8 @@ function renderRackBody(params?: {
   disableStrokes?: boolean;
   isActivelyPanning?: boolean;
   shellRendering?: 'normal' | 'cached';
+  suppressShadows?: boolean;
+  disableShadowDebugOverride?: boolean;
 }) {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -104,7 +106,9 @@ function renderRackBody(params?: {
         rackCodePlacement: params?.placement ?? 'lower-left-mid',
         disableStrokes: params?.disableStrokes,
         isActivelyPanning: params?.isActivelyPanning,
-        shellRendering: params?.shellRendering
+        shellRendering: params?.shellRendering,
+        suppressShadows: params?.suppressShadows,
+        disableShadowDebugOverride: params?.disableShadowDebugOverride
       })
     );
   });
@@ -133,7 +137,9 @@ function updateRackBody(
         rackCodePlacement: params?.placement ?? 'lower-left-mid',
         disableStrokes: params?.disableStrokes,
         isActivelyPanning: params?.isActivelyPanning,
-        shellRendering: params?.shellRendering
+        shellRendering: params?.shellRendering,
+        suppressShadows: params?.suppressShadows,
+        disableShadowDebugOverride: params?.disableShadowDebugOverride
       })
     );
   });
@@ -344,6 +350,47 @@ describe('RackBody identity label ownership', () => {
     expect(badgeStroke?.props.strokeEnabled).toBe(true);
   });
 
+  it('suppresses RackBody shadows on coarse-pointer fallback while preserving shell rendering', () => {
+    const renderer = renderRackBody({
+      isSelected: true,
+      suppressShadows: true
+    });
+    const rects = getRects(renderer);
+    const body = rects.find(
+      (rect) => rect.props.wosRectRole === 'rack-body-main'
+    );
+    const selection = rects.find(
+      (rect) => rect.props.wosRectRole === 'selection-highlight'
+    );
+    const badgeBackground = rects
+      .filter((rect) => rect.props.wosRectRole === 'badge-decoration')
+      .find((rect) => rect.props.strokeEnabled !== true);
+
+    expect(body?.props.fill).toBe('#dbeafe');
+    expect(body?.props.strokeEnabled).toBe(true);
+    expect(body?.props.shadowBlur).toBe(0);
+    expect(body?.props.shadowOpacity).toBe(0);
+    expect(selection?.props.visible).not.toBe(false);
+    expect(selection?.props.opacity).toBeGreaterThan(0);
+    expect(badgeBackground?.props.shadowBlur).toBe(0);
+    expect(badgeBackground?.props.shadowOpacity).toBe(0);
+  });
+
+  it('disables RackBody shadows on desktop when the debug override is enabled', () => {
+    const renderer = renderRackBody({
+      isSelected: true,
+      disableShadowDebugOverride: true
+    });
+    const rects = getRects(renderer);
+    const body = rects.find(
+      (rect) => rect.props.wosRectRole === 'rack-body-main'
+    );
+
+    expect(body?.props.strokeEnabled).toBe(true);
+    expect(body?.props.shadowBlur).toBe(0);
+    expect(body?.props.shadowOpacity).toBe(0);
+  });
+
   it('uses lightweight visual props during active pan without removing nodes', () => {
     const renderer = renderRackBody({
       isSelected: true,
@@ -439,7 +486,9 @@ describe('RackBody identity label ownership', () => {
     ['rackCodeProminence', { prominence: 'background' }],
     ['rackCodePlacement', { placement: 'header-left' }],
     ['disableStrokes', { disableStrokes: true }],
-    ['isActivelyPanning', { isActivelyPanning: true }]
+    ['isActivelyPanning', { isActivelyPanning: true }],
+    ['suppressShadows', { suppressShadows: true }],
+    ['disableShadowDebugOverride', { disableShadowDebugOverride: true }]
   ] as const)('refreshes the cached shell when %s changes', (_name, changedProps) => {
     const renderer = renderRackBody({ shellRendering: 'cached' });
     const shell = getCachedShellNode();

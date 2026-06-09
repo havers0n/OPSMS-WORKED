@@ -14,6 +14,7 @@ export type CanvasDiagnosticsFlags = {
   enableProductionCellCulling: boolean;
   rackLayerRenderer: 'layer' | 'fast-layer';
   rackBodyShell?: 'normal' | 'cached';
+  disableRackBodyShadows?: boolean;
 };
 
 export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
@@ -25,7 +26,8 @@ export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   storageOccupancyOverlay: 'on',
   enableProductionCellCulling: true,
   rackLayerRenderer: 'layer',
-  rackBodyShell: 'normal'
+  rackBodyShell: 'normal',
+  disableRackBodyShadows: false
 };
 
 export const CANVAS_DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
@@ -186,6 +188,14 @@ export type CanvasRenderPipelineDiagnostics = {
   forceRenderReasons: Record<CanvasForceRenderReason, number>;
 };
 
+export type RackLayerDiagnosticsSnapshot = {
+  currentRenderMode: CanvasRenderMode;
+  rackLayerNodeCount: number;
+  rackLayerRenders: number;
+  rackBodyRenders: number;
+  rackCellsRenders: number;
+};
+
 export type CanvasCullingMetrics = {
   cellsTotal: number;
   cellsRendered: number;
@@ -324,7 +334,11 @@ export function getCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {
       raw.rackBodyShell,
       ['normal', 'cached'] as const,
       DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.rackBodyShell ?? 'normal'
-    )
+    ),
+    disableRackBodyShadows:
+      typeof raw.disableRackBodyShadows === 'boolean'
+        ? raw.disableRackBodyShadows
+        : DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.disableRackBodyShadows ?? false
   };
 }
 
@@ -497,6 +511,19 @@ function getActiveRenderPipelineDiagnostics(): CanvasRenderPipelineDiagnostics |
 
 export function isCanvasRenderPipelineDiagnosticsEnabled() {
   return getActiveRenderPipelineDiagnostics() !== null;
+}
+
+export function getRackLayerDiagnosticsSnapshot(): RackLayerDiagnosticsSnapshot | null {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return null;
+
+  return {
+    currentRenderMode: diagnostics.currentRenderMode,
+    rackLayerNodeCount: diagnostics.konva.rackLayerNodeCount,
+    rackLayerRenders: diagnostics.components.RackLayer?.renders ?? 0,
+    rackBodyRenders: diagnostics.components.RackBody?.renders ?? 0,
+    rackCellsRenders: diagnostics.components.RackCells?.renders ?? 0
+  };
 }
 
 export function resetCanvasRenderPipelineDiagnostics() {

@@ -14,6 +14,8 @@ import {
   type RackLayerRenderEvents
 } from './canvas-diagnostics';
 
+const useMediaQueryMock = vi.hoisted(() => vi.fn(() => false));
+
 vi.mock('react-konva', () => ({
   Layer: ({ children, ...props }: { children?: React.ReactNode }) =>
     createElement('Layer', props, children),
@@ -45,6 +47,10 @@ vi.mock('./shapes/rack-body', () => ({
 vi.mock('./shapes/rack-sections', () => ({
   RackSections: (props: Record<string, unknown>) =>
     createElement('RackSections', props)
+}));
+
+vi.mock('@/shared/hooks/use-media-query', () => ({
+  useMediaQuery: useMediaQueryMock
 }));
 
 function createFace(id: string): RackFace {
@@ -190,6 +196,7 @@ function renderRackLayer(params: {
   onV2StorageCellSelect?: (params: { cellId: string; rackId: string }) => void;
   onV2StorageRackSelect?: (params: { rackId: string }) => void;
   rackBodyShell?: 'normal' | 'cached';
+  disableRackBodyShadows?: boolean;
 }) {
   const racks = params.racks ?? [
     createRack('rack-1', 0),
@@ -217,7 +224,8 @@ function renderRackLayer(params: {
           cellOverlays: 'normal',
           enableProductionCellCulling: true,
           rackLayerRenderer: 'layer',
-          rackBodyShell: params.rackBodyShell ?? 'normal'
+          rackBodyShell: params.rackBodyShell ?? 'normal',
+          disableRackBodyShadows: params.disableRackBodyShadows ?? false
         },
         diagnosticsViewport: {
           canvasOffset: { x: 0, y: 0 },
@@ -276,6 +284,10 @@ function renderRackLayer(params: {
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('RackLayer high-LOD cell mounting', () => {
+  beforeEach(() => {
+    useMediaQueryMock.mockReturnValue(false);
+  });
+
   it('does not mount RackSections when section rendering is inactive (lod=0)', () => {
     const renderer = renderRackLayer({
       selectedRackIds: ['rack-1'],
@@ -316,6 +328,40 @@ describe('RackLayer high-LOD cell mounting', () => {
     expect(rackCells[0]?.props.activeLevelIndex).toBe(1);
     expect(rackCells[1]?.props.rackId).toBe('rack-2');
     expect(rackCells[1]?.props.activeLevelIndex).toBe(0);
+  });
+
+  it('passes coarse-pointer shadow suppression into RackBody without changing RackCells wiring', () => {
+    useMediaQueryMock.mockReturnValue(true);
+
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1'
+    });
+    const rackBodies = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+    const rackCells = renderer.root.findAll(
+      (node) => String(node.type) === 'RackCells'
+    );
+
+    expect(rackBodies[0]?.props.suppressShadows).toBe(true);
+    expect(rackBodies[0]?.props.disableShadowDebugOverride).toBe(false);
+    expect(rackCells[0]?.props.renderMode).toBe('full');
+    expect(rackCells[0]?.props.forceRenderAllCells).toBe(false);
+  });
+
+  it('passes the RackBody shadow debug override separately from coarse-pointer suppression', () => {
+    const renderer = renderRackLayer({
+      selectedRackIds: ['rack-1'],
+      primarySelectedRackId: 'rack-1',
+      disableRackBodyShadows: true
+    });
+    const rackBodies = renderer.root.findAll(
+      (node) => String(node.type) === 'RackBody'
+    );
+
+    expect(rackBodies[0]?.props.suppressShadows).toBe(false);
+    expect(rackBodies[0]?.props.disableShadowDebugOverride).toBe(true);
   });
 
   it('does not make locked racks draggable in editable layout mode', () => {

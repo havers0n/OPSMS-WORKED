@@ -35,6 +35,8 @@ type Props = {
   disableStrokes?: boolean;
   isActivelyPanning?: boolean;
   shellRendering?: 'normal' | 'cached';
+  suppressShadows?: boolean;
+  disableShadowDebugOverride?: boolean;
 };
 
 export function RackBody({
@@ -49,7 +51,9 @@ export function RackBody({
   rackCodePlacement,
   disableStrokes = false,
   isActivelyPanning = false,
-  shellRendering = 'normal'
+  shellRendering = 'normal',
+  suppressShadows = false,
+  disableShadowDebugOverride = false
 }: Props) {
   const shellRef = useRef<Konva.Group | null>(null);
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
@@ -72,7 +76,9 @@ export function RackBody({
       'rackCodePlacement',
       'disableStrokes',
       'isActivelyPanning',
-      'shellRendering'
+      'shellRendering',
+      'suppressShadows',
+      'disableShadowDebugOverride'
     ],
     snapshot: {
       geometryX: geometry.x,
@@ -89,11 +95,15 @@ export function RackBody({
       rackCodePlacement,
       disableStrokes,
       isActivelyPanning,
-      shellRendering
+      shellRendering,
+      suppressShadows,
+      disableShadowDebugOverride
     }
   });
 
   const lightweightVisuals = disableStrokes || isActivelyPanning;
+  const shadowsDisabled =
+    lightweightVisuals || suppressShadows || disableShadowDebugOverride;
   const visualSelected = isActivelyPanning ? false : isSelected;
   const visualHovered = isActivelyPanning ? false : isHovered;
   const fill = visualSelected ? C.fillSelected : visualHovered ? C.fillHovered : C.fillDefault;
@@ -206,12 +216,14 @@ export function RackBody({
     labelWidth,
     labelX,
     labelY,
+    disableShadowDebugOverride,
     rackCodePlacement,
     rackCodeProminence,
     rotationDeg,
     showRackCode,
     shellRendering,
     spineY,
+    suppressShadows,
     stripeH,
     stroke,
     width
@@ -234,8 +246,8 @@ export function RackBody({
         strokeEnabled={!lightweightVisuals}
         strokeWidth={lightweightVisuals ? 0 : isSelected ? 2 : 1.5}
         shadowColor="#0f172a"
-        shadowBlur={lightweightVisuals ? 0 : isSelected ? 12 : 6}
-        shadowOpacity={lightweightVisuals ? 0 : isSelected ? 0.12 : 0.07}
+        shadowBlur={shadowsDisabled ? 0 : isSelected ? 12 : 6}
+        shadowOpacity={shadowsDisabled ? 0 : isSelected ? 0.12 : 0.07}
         shadowOffsetY={3}
         wosRectRole="rack-body-main"
       />
@@ -335,8 +347,8 @@ export function RackBody({
             fill={C.pillBg}
             opacity={labelBgOpacity}
             shadowColor="#0f172a"
-            shadowBlur={lightweightVisuals ? 0 : 4}
-            shadowOpacity={lightweightVisuals ? 0 : labelShadowOpacity}
+            shadowBlur={shadowsDisabled ? 0 : 4}
+            shadowOpacity={shadowsDisabled ? 0 : labelShadowOpacity}
             wosRectRole="badge-decoration"
           />
           <Rect

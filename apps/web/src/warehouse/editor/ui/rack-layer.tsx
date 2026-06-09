@@ -52,6 +52,7 @@ import {
   getEffectiveRackFaceB,
   resolveCellIdFromFacePoint
 } from './shapes/rack-cell-geometry';
+import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { SelectionOverlayLayer } from './shapes/selection-overlay-layer';
 import { RackSections } from './shapes/rack-sections';
 import {
@@ -294,6 +295,7 @@ export const RackLayer = memo(function RackLayer({
   onV2StorageCellSelect,
   onV2StorageRackSelect,
 }: RackLayerProps) {
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const isInteractionMode = isCanvasInteractionRenderMode(renderMode);
   const isInteractionSkeleton = renderMode === 'interaction-skeleton';
   const isRestoreBase = renderMode === 'restore-base';
@@ -703,6 +705,10 @@ export const RackLayer = memo(function RackLayer({
                 disableStrokes={!overlaysEnabled}
                 isActivelyPanning={isActivelyPanning || isInteractionSkeleton}
                 shellRendering={diagnosticsFlags.rackBodyShell ?? 'normal'}
+                suppressShadows={isCoarsePointer}
+                disableShadowDebugOverride={
+                  diagnosticsFlags.disableRackBodyShadows ?? false
+                }
               />
             </RackLayerChildProfiler>
 
