@@ -3,7 +3,6 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   List,
@@ -311,26 +310,556 @@ function PickContainerSetup({
 
 // ── Guided step card (one step, full focus) ───────────────────────────────────
 
-function GuidedStepCard({
+function PickerTaskHeader({
+  taskNumber,
+  orderLabel,
+  progressLabel,
+  contextLabel
+}: {
+  taskNumber: string;
+  orderLabel: string;
+  progressLabel: string;
+  contextLabel: string | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Picking task
+          </div>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold text-slate-950">{taskNumber}</span>
+            <span className="text-sm text-slate-500">· {orderLabel}</span>
+          </div>
+          {contextLabel && <div className="mt-1 text-xs text-slate-500">{contextLabel}</div>}
+        </div>
+
+        <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-900">
+          {progressLabel}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NextLocationCard({
   step,
-  pickContainerId,
+  taskId,
+  taskNumber
+}: {
+  step: PickStepDetail;
+  taskId: string;
+  taskNumber: string;
+}) {
+  const locationNode =
+    step.sourceCellAddress && step.sourceCellId && step.sourceFloorId ? (
+      <Link
+        to={warehouseViewPath({
+          floorId: step.sourceFloorId,
+          cellId: step.sourceCellId,
+          returnTaskId: taskId,
+          returnTaskNumber: taskNumber
+        })}
+        className="block text-balance text-3xl font-black leading-none tracking-tight text-slate-950 underline-offset-4 hover:underline sm:text-4xl"
+      >
+        {step.sourceCellAddress}
+      </Link>
+    ) : (
+      <div className="text-balance text-3xl font-black leading-none tracking-tight text-slate-950 sm:text-4xl">
+        {step.sourceCellAddress ?? step.sourceLocationCode ?? 'Not allocated'}
+      </div>
+    );
+
+  return (
+    <section
+      className="overflow-hidden rounded-[28px] border border-cyan-200 bg-gradient-to-br from-cyan-600 via-cyan-500 to-sky-500 p-5 text-white shadow-sm"
+      data-testid="guided-pick-location-card"
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+        Next location
+      </div>
+      <div className="mt-3 flex items-start gap-3">
+        <MapPin className="mt-1.5 h-5 w-5 shrink-0 text-cyan-100" />
+        <div className="min-w-0 flex-1">
+          {locationNode}
+          {step.sourceLocationCode && step.sourceLocationCode !== step.sourceCellAddress && (
+            <div className="mt-2 text-sm text-cyan-50">{step.sourceLocationCode}</div>
+          )}
+          <div className="mt-2 text-sm text-cyan-50">
+            Go here before confirming the pick.
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PickerProductCard({
+  step,
+  isWavePick,
+  scanState,
+  lastScanned
+}: {
+  step: PickStepDetail;
+  isWavePick: boolean;
+  scanState: 'idle' | 'match' | 'mismatch';
+  lastScanned: string | null;
+}) {
+  return (
+    <section
+      className={`rounded-[28px] border p-4 shadow-sm transition-colors ${
+        scanState === 'match'
+          ? 'border-emerald-200 bg-emerald-50'
+          : scanState === 'mismatch'
+            ? 'border-red-200 bg-red-50'
+            : 'border-slate-200 bg-white'
+      }`}
+      data-testid="guided-pick-product-card"
+    >
+      <div className="flex items-start gap-4">
+        <div className="shrink-0">
+          <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
+        </div>
+        <div className="min-w-0 flex-1">
+          {isWavePick && step.orderNumber && (
+            <div className="mb-2 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+              {step.orderNumber}
+            </div>
+          )}
+          <div className="text-2xl font-bold leading-tight text-slate-950">{step.itemName}</div>
+          <div className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Product code / SKU
+          </div>
+          <div className="font-mono text-base text-slate-700">{step.sku}</div>
+        </div>
+      </div>
+
+      {scanState === 'match' && (
+        <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="text-sm font-medium text-emerald-800">
+            Product verified. Confirm when ready.
+          </span>
+        </div>
+      )}
+
+      {scanState === 'mismatch' && (
+        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-white px-4 py-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+          <div>
+            <div className="text-sm font-medium text-red-800">Wrong item scanned</div>
+            {lastScanned && (
+              <div className="mt-0.5 font-mono text-xs text-red-600">{lastScanned}</div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PickerQuantityCard({
+  step,
+  qtyActual,
+  parsedQty,
+  isBusy,
+  onDecrease,
+  onIncrease,
+  onChange
+}: {
+  step: PickStepDetail;
+  qtyActual: string;
+  parsedQty: number;
+  isBusy: boolean;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  onChange: (value: string) => void;
+}) {
+  const remainingQuantity = Math.max(0, step.qtyRequired - step.qtyPicked);
+  const isUnderPick = Number.isFinite(parsedQty) && parsedQty < step.qtyRequired;
+
+  return (
+    <section
+      className="rounded-[28px] border border-slate-200 bg-slate-50 p-4 shadow-sm"
+      data-testid="guided-pick-quantity-card"
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        Remaining quantity
+      </div>
+      <div className="mt-2 flex items-end gap-2">
+        <span className="text-4xl font-black tracking-tight text-slate-950">
+          {remainingQuantity}
+        </span>
+        <span className="pb-1 text-sm font-medium text-slate-500">remaining</span>
+      </div>
+      <div className="mt-2 text-sm text-slate-500">
+        Required {step.qtyRequired} · Picked {step.qtyPicked}
+      </div>
+
+      <div className="mt-4 flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-3">
+        <button
+          type="button"
+          onClick={onDecrease}
+          disabled={parsedQty <= 1 || isBusy}
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-30"
+          aria-label="Decrease picked quantity"
+        >
+          –
+        </button>
+        <input
+          type="number"
+          min={1}
+          max={step.qtyRequired}
+          value={qtyActual}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={isBusy}
+          className="h-16 flex-1 rounded-2xl border border-slate-300 bg-white px-4 text-center text-3xl font-black text-slate-950 outline-none focus:border-cyan-500 disabled:bg-slate-100"
+        />
+        <button
+          type="button"
+          onClick={onIncrease}
+          disabled={parsedQty >= step.qtyRequired || isBusy}
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-30"
+          aria-label="Increase picked quantity"
+        >
+          +
+        </button>
+      </div>
+
+      {isUnderPick && (
+        <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Less than required will be recorded as a partial pick exception.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PickerTechnicalDetails({
+  step,
+  waveSteps,
   pickContainerLabel,
   pickContainerTypeLabel,
   taskId,
   taskNumber,
   isWavePick,
-  onExecuted
+  activeStepIndex,
+  actionableStepCount,
+  previousActionableStep,
+  nextActionableStep,
+  viewMode,
+  onChangeViewMode,
+  onNavigateStep
 }: {
   step: PickStepDetail;
-  pickContainerId: string;
+  waveSteps: PickStepDetail[];
   pickContainerLabel: string;
   pickContainerTypeLabel: string | null;
   taskId: string;
   taskNumber: string;
   isWavePick: boolean;
+  activeStepIndex: number;
+  actionableStepCount: number;
+  previousActionableStep: PickStepDetail | null;
+  nextActionableStep: PickStepDetail | null;
+  viewMode: ViewMode;
+  onChangeViewMode: (mode: ViewMode) => void;
+  onNavigateStep: (stepId: string) => void;
+}) {
+  return (
+    <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <summary className="cursor-pointer list-none text-sm font-medium text-slate-600">
+        More details
+      </summary>
+      <div className="mt-4 space-y-4">
+        {isWavePick && <WaveOrderSummary steps={waveSteps} />}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+              <Package className="h-3.5 w-3.5" />
+              Source container
+            </div>
+            <div className="text-sm font-semibold text-slate-900">
+              {step.sourceContainerCode ?? <span className="italic text-slate-400">Not set</span>}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3">
+            <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-cyan-700">
+              <Package className="h-3.5 w-3.5" />
+              Destination container
+            </div>
+            <div className="text-sm font-semibold text-cyan-950">{pickContainerLabel}</div>
+            {pickContainerTypeLabel && (
+              <div className="mt-0.5 text-xs text-cyan-700">{pickContainerTypeLabel}</div>
+            )}
+          </div>
+        </div>
+
+        {isWavePick && step.orderNumber && (
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            Wave order {step.orderNumber}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Navigation
+            </div>
+            <div className="mt-1 text-sm text-slate-600">
+              Manual step navigation stays available here.
+            </div>
+          </div>
+          <ViewModeToggle mode={viewMode} onChange={onChangeViewMode} />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <button
+            type="button"
+            disabled={!previousActionableStep}
+            onClick={() => previousActionableStep && onNavigateStep(previousActionableStep.id)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-600 disabled:opacity-30"
+            aria-label="Previous step"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          <div className="min-w-0 flex-1 text-center">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Current step
+            </div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">
+              {activeStepIndex + 1} / {actionableStepCount}
+            </div>
+            <div className="mt-1 flex items-center justify-center gap-1.5 overflow-x-hidden">
+              <button
+                type="button"
+                onClick={() => onNavigateStep(step.id)}
+                aria-label={`Current step ${step.sequenceNo}: ${step.itemName}`}
+                className="h-2.5 w-6 shrink-0 rounded-full bg-cyan-600"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={!nextActionableStep}
+            onClick={() => nextActionableStep && onNavigateStep(nextActionableStep.id)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-600 disabled:opacity-30"
+            aria-label="Next step"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">
+          Manual step navigation is optional. Guided execution stays on actionable pending steps.
+          <div className="mt-2 text-[11px] text-slate-400">
+            Task {taskNumber} · Step {step.sequenceNo} · {taskId.slice(0, 8)}
+          </div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function PickerStickyActions({
+  step,
+  parsedQty,
+  isBusy,
+  isValidQty,
+  isUnderPick,
+  partialConfirm,
+  skipConfirm,
+  executeError,
+  skipError,
+  onPrimaryConfirm,
+  onPartialBack,
+  onSkipToggle,
+  onSkipCancel,
+  onSkipConfirm
+}: {
+  step: PickStepDetail;
+  parsedQty: number;
+  isBusy: boolean;
+  isValidQty: boolean;
+  isUnderPick: boolean;
+  partialConfirm: boolean;
+  skipConfirm: boolean;
+  executeError: unknown;
+  skipError: unknown;
+  onPrimaryConfirm: () => void;
+  onPartialBack: () => void;
+  onSkipToggle: () => void;
+  onSkipCancel: () => void;
+  onSkipConfirm: () => void;
+}) {
+  return (
+    <div
+      className="sticky bottom-0 rounded-t-[28px] border-t border-slate-200 bg-white/95 px-4 pb-4 pt-4 backdrop-blur"
+      data-testid="guided-pick-sticky-actions"
+    >
+      {partialConfirm ? (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <div className="text-sm font-semibold text-amber-900">Confirm partial pick</div>
+              <div className="mt-0.5 text-sm text-amber-800">
+                You are picking <span className="font-semibold">{parsedQty}</span> of{' '}
+                <span className="font-semibold">{step.qtyRequired}</span> required.
+              </div>
+            </div>
+          </div>
+          {Boolean(executeError) && (
+            <div className="mt-3 text-xs text-red-600">
+              {getWorkerSafeMutationErrorMessage(
+                executeError,
+                'Unable to confirm this pick. Try again.'
+              )}
+            </div>
+          )}
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={onPartialBack}
+              disabled={isBusy}
+              className="flex-1 rounded-2xl border border-amber-300 bg-white py-3 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={onPrimaryConfirm}
+              className="flex-1 rounded-2xl bg-amber-600 py-3 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
+            >
+              {isBusy ? 'Confirming…' : 'Confirm partial'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={!isValidQty || isBusy}
+            onClick={onPrimaryConfirm}
+            className="w-full rounded-2xl bg-cyan-600 py-4 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
+          >
+            {isBusy ? 'Confirming…' : 'Confirm picked quantity'}
+          </button>
+
+          <details className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer list-none text-sm font-medium text-slate-500">
+              Exception actions
+            </summary>
+            <div className="mt-3 space-y-3">
+              {isUnderPick && (
+                <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Lower quantity will be recorded as a partial pick exception.
+                </div>
+              )}
+              {!skipConfirm ? (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={onSkipToggle}
+                  className="w-full rounded-2xl border border-slate-200 bg-white py-3 text-sm font-medium text-slate-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                >
+                  Problem / skip step
+                </button>
+              ) : (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <div className="mb-2 text-sm font-semibold text-red-900">Skip this step?</div>
+                  <div className="mb-3 text-xs text-red-700">
+                    The step will be marked as skipped. This cannot be undone from this screen.
+                  </div>
+                  {Boolean(skipError) && (
+                    <div className="mb-3 text-xs text-red-600">
+                      {getWorkerSafeMutationErrorMessage(
+                        skipError,
+                        'Unable to skip this step. Try again.'
+                      )}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={onSkipCancel}
+                      disabled={isBusy}
+                      className="flex-1 rounded-xl border border-red-200 bg-white py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onSkipConfirm}
+                      disabled={isBusy}
+                      className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
+                    >
+                      {isBusy ? 'Skipping…' : 'Confirm skip'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </details>
+        </>
+      )}
+
+      {Boolean(executeError) && !partialConfirm && (
+        <div className="mt-3 text-xs text-red-600">
+          {getWorkerSafeMutationErrorMessage(
+            executeError,
+            'Unable to confirm this pick. Try again.'
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GuidedStepCard({
+  step,
+  waveSteps,
+  pickContainerId,
+  pickContainerLabel,
+  pickContainerTypeLabel,
+  orderLabel,
+  taskId,
+  taskNumber,
+  isWavePick,
+  activeStepIndex,
+  actionableStepCount,
+  previousActionableStep,
+  nextActionableStep,
+  viewMode,
+  onChangeViewMode,
+  onNavigateStep,
+  onExecuted
+}: {
+  step: PickStepDetail;
+  waveSteps: PickStepDetail[];
+  pickContainerId: string;
+  pickContainerLabel: string;
+  pickContainerTypeLabel: string | null;
+  orderLabel: string;
+  taskId: string;
+  taskNumber: string;
+  isWavePick: boolean;
+  activeStepIndex: number;
+  actionableStepCount: number;
+  previousActionableStep: PickStepDetail | null;
+  nextActionableStep: PickStepDetail | null;
+  viewMode: ViewMode;
+  onChangeViewMode: (mode: ViewMode) => void;
+  onNavigateStep: (stepId: string) => void;
   onExecuted: (stepId: string) => void;
 }) {
-  // All state resets on remount — parent uses key={step.id}
   const [qtyActual, setQtyActual] = useState(String(step.qtyRequired));
   const [partialConfirm, setPartialConfirm] = useState(false);
   const [skipConfirm, setSkipConfirm] = useState(false);
@@ -341,15 +870,12 @@ function GuidedStepCard({
 
   const isBusy = execute.isPending || skip.isPending;
 
-  // ── Barcode scan handler (optional — works even without a scanner) ──
   const handleScan = useCallback(
     (barcode: string) => {
       setLastScanned(barcode);
-      // Normalise both sides: lowercase, strip dashes/spaces
       const norm = (s: string) => s.toLowerCase().replace(/[\s-]/g, '');
       const matches = norm(barcode) === norm(step.sku);
       setScanState(matches ? 'match' : 'mismatch');
-      // Auto-dismiss after 3 s
       setTimeout(() => setScanState('idle'), 3000);
     },
     [step.sku]
@@ -373,7 +899,6 @@ function GuidedStepCard({
 
   function handleConfirmClick() {
     if (!isValidQty) return;
-    // Partial pick: require explicit two-step confirmation
     if (isUnderPick && !partialConfirm) {
       setPartialConfirm(true);
       setSkipConfirm(false);
@@ -386,37 +911,25 @@ function GuidedStepCard({
   }
 
   function handleSkipConfirm() {
-    skip.mutate(
-      { stepId: step.id },
-      { onSuccess: () => onExecuted(step.id) }
-    );
+    skip.mutate({ stepId: step.id }, { onSuccess: () => onExecuted(step.id) });
   }
 
   function handleQtyChange(value: string) {
     setQtyActual(value);
-    setPartialConfirm(false); // reset confirmation if qty changes
+    setPartialConfirm(false);
   }
 
-  // ── Already completed / skipped ──
   if (isPicked) {
     const isSkipped = step.status === 'skipped';
     return (
       <div
         className={`flex flex-col items-center gap-4 rounded-2xl border p-10 text-center ${
-          isSkipped
-            ? 'border-slate-200 bg-slate-50'
-            : 'border-emerald-200 bg-emerald-50'
+          isSkipped ? 'border-slate-200 bg-slate-50' : 'border-emerald-200 bg-emerald-50'
         }`}
       >
-        <CheckCircle2
-          className={`h-12 w-12 ${isSkipped ? 'text-slate-400' : 'text-emerald-500'}`}
-        />
+        <CheckCircle2 className={`h-12 w-12 ${isSkipped ? 'text-slate-400' : 'text-emerald-500'}`} />
         <div>
-          <div
-            className={`text-lg font-semibold ${
-              isSkipped ? 'text-slate-700' : 'text-emerald-900'
-            }`}
-          >
+          <div className={`text-lg font-semibold ${isSkipped ? 'text-slate-700' : 'text-emerald-900'}`}>
             {step.itemName}
           </div>
           <div className={`mt-1 text-sm ${isSkipped ? 'text-slate-500' : 'text-emerald-700'}`}>
@@ -432,7 +945,6 @@ function GuidedStepCard({
     );
   }
 
-  // ── Blocked (needs replenishment) ──
   if (isBlocked) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-10 text-center">
@@ -448,290 +960,74 @@ function GuidedStepCard({
     );
   }
 
-  // ── Pending: full pick UI ──
   return (
     <div
       className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
       data-testid="guided-pick-step-card"
     >
-      <div className="border-b border-cyan-200 bg-gradient-to-br from-cyan-600 via-cyan-500 to-sky-500 p-5 text-white sm:p-6">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
-          Source location
-        </div>
-        <div className="mt-2 flex items-start gap-3">
-          <MapPin className="mt-1 h-5 w-5 shrink-0 text-cyan-100" />
-          <div className="min-w-0">
-            {step.sourceCellAddress && step.sourceCellId && step.sourceFloorId ? (
-              <Link
-                to={warehouseViewPath({
-                  floorId: step.sourceFloorId,
-                  cellId: step.sourceCellId,
-                  returnTaskId: taskId,
-                  returnTaskNumber: taskNumber
-                })}
-                className="text-3xl font-black tracking-tight text-white underline decoration-cyan-200 underline-offset-4 sm:text-4xl"
-              >
-                {step.sourceCellAddress}
-              </Link>
-            ) : (
-              <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                {step.sourceCellAddress ?? step.sourceLocationCode ?? 'Not allocated'}
-              </div>
-            )}
-            <div className="mt-2 text-sm text-cyan-50">
-              Go to this location before confirming the pick.
-            </div>
-          </div>
-        </div>
+      <div className="space-y-4 p-4 sm:p-5">
+        <PickerTaskHeader
+          taskNumber={taskNumber}
+          orderLabel={orderLabel}
+          progressLabel={`${activeStepIndex + 1} / ${actionableStepCount}`}
+          contextLabel={pickContainerTypeLabel}
+        />
+
+        <NextLocationCard step={step} taskId={taskId} taskNumber={taskNumber} />
+
+        <PickerProductCard
+          step={step}
+          isWavePick={isWavePick}
+          scanState={scanState}
+          lastScanned={lastScanned}
+        />
+
+        <PickerQuantityCard
+          step={step}
+          qtyActual={qtyActual}
+          parsedQty={parsedQty}
+          isBusy={isBusy}
+          onDecrease={() => handleQtyChange(String(Math.max(1, Number(qtyActual) - 1)))}
+          onIncrease={() =>
+            handleQtyChange(String(Math.min(step.qtyRequired, Number(qtyActual) + 1)))
+          }
+          onChange={handleQtyChange}
+        />
+
+        <PickerTechnicalDetails
+          step={step}
+          waveSteps={waveSteps}
+          pickContainerLabel={pickContainerLabel}
+          pickContainerTypeLabel={pickContainerTypeLabel}
+          taskId={taskId}
+          taskNumber={taskNumber}
+          isWavePick={isWavePick}
+          activeStepIndex={activeStepIndex}
+          actionableStepCount={actionableStepCount}
+          previousActionableStep={previousActionableStep}
+          nextActionableStep={nextActionableStep}
+          viewMode={viewMode}
+          onChangeViewMode={onChangeViewMode}
+          onNavigateStep={onNavigateStep}
+        />
       </div>
 
-      <div className="space-y-5 p-5 sm:p-6">
-        <div
-          className={`rounded-3xl border border-slate-200 bg-slate-50 p-4 transition-colors duration-300 ${
-            scanState === 'match'
-              ? 'border-emerald-200 bg-emerald-50'
-              : scanState === 'mismatch'
-                ? 'border-red-200 bg-red-50'
-                : ''
-          }`}
-        >
-          <div className="flex items-start gap-4">
-            <div className="shrink-0">
-              <ProductPickPhoto productImageUrl={step.imageUrl} productName={step.itemName} />
-            </div>
-            <div className="min-w-0 flex-1">
-              {isWavePick && step.orderNumber && (
-                <div className="mb-2 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
-                  {step.orderNumber}
-                </div>
-              )}
-              <div className="text-2xl font-bold leading-tight text-slate-950">
-                {step.itemName}
-              </div>
-              <div className="mt-2 text-sm font-medium uppercase tracking-wide text-slate-500">
-                SKU
-              </div>
-              <div className="font-mono text-base text-slate-700">{step.sku}</div>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-2xl bg-white px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Required quantity
-            </div>
-            <div className="mt-2 flex items-end gap-2">
-              <span className="text-4xl font-black text-slate-950">{step.qtyRequired}</span>
-              <span className="pb-1 text-sm font-medium text-slate-500">units</span>
-            </div>
-          </div>
-        </div>
-
-      {/* ── Scan feedback (optional — only visible after a scan) ── */}
-      {scanState === 'match' && (
-        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-          <span className="text-sm font-medium text-emerald-800">
-            Product verified — confirm to pick
-          </span>
-        </div>
-      )}
-      {scanState === 'mismatch' && (
-        <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-          <div>
-            <div className="text-sm font-medium text-red-800">Wrong item scanned</div>
-            {lastScanned && (
-              <div className="mt-0.5 font-mono text-xs text-red-600">{lastScanned}</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">
-            <Package className="h-3.5 w-3.5" />
-            Source container
-          </div>
-          <div className="text-sm font-semibold text-slate-900">
-            {step.sourceContainerCode ?? <span className="italic text-slate-400">Not set</span>}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-cyan-700">
-            <Package className="h-3.5 w-3.5" />
-            Destination container
-          </div>
-          <div className="text-sm font-semibold text-cyan-950">{pickContainerLabel}</div>
-          {pickContainerTypeLabel && (
-            <div className="mt-0.5 text-xs text-cyan-700">{pickContainerTypeLabel}</div>
-          )}
-        </div>
-      </div>
-
-      {!partialConfirm && (
-        <div>
-          <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Picked quantity
-          </div>
-          <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-            <button
-              type="button"
-              onClick={() => handleQtyChange(String(Math.max(1, Number(qtyActual) - 1)))}
-              disabled={parsedQty <= 1 || isBusy}
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-30"
-              aria-label="Decrease picked quantity"
-            >
-              −
-            </button>
-            <input
-              type="number"
-              min={1}
-              max={step.qtyRequired}
-              value={qtyActual}
-              onChange={(e) => handleQtyChange(e.target.value)}
-              disabled={isBusy}
-              className="h-16 flex-1 rounded-2xl border border-slate-300 bg-white px-4 text-center text-3xl font-black text-slate-950 outline-none focus:border-cyan-500 disabled:bg-slate-100"
-            />
-            <button
-              type="button"
-              onClick={() =>
-                handleQtyChange(String(Math.min(step.qtyRequired, Number(qtyActual) + 1)))
-              }
-              disabled={parsedQty >= step.qtyRequired || isBusy}
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-30"
-              aria-label="Increase picked quantity"
-            >
-              +
-            </button>
-          </div>
-
-          {isUnderPick && (
-            <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Less than required — confirming will record a partial pick exception.
-            </div>
-          )}
-
-          {execute.isError && (
-            <div className="mt-3 text-xs text-red-600">
-              {getWorkerSafeMutationErrorMessage(
-                execute.error,
-                'Unable to confirm this pick. Try again.'
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Partial confirmation screen ── */}
-      {partialConfirm && (
-        <div
-          className="sticky bottom-0 border-t border-amber-200 bg-amber-50/95 p-5 backdrop-blur"
-          data-testid="guided-pick-sticky-actions"
-        >
-          <div className="mb-4 flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <div>
-              <div className="text-sm font-semibold text-amber-900">Confirm partial pick</div>
-              <div className="mt-0.5 text-sm text-amber-800">
-                You are picking{' '}
-                <span className="font-semibold">{parsedQty}</span>
-                {' '}of{' '}
-                <span className="font-semibold">{step.qtyRequired}</span>{' '}
-                required. This will be recorded as a partial pick exception.
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPartialConfirm(false)}
-              disabled={isBusy}
-              className="flex-1 rounded-2xl border border-amber-300 bg-white py-3 text-sm font-medium text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
-            >
-              Go back
-            </button>
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={handleConfirmClick}
-              className="flex-1 rounded-2xl bg-amber-600 py-3 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50"
-            >
-              {execute.isPending ? 'Confirming…' : 'Confirm partial'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Confirm button (normal flow) ── */}
-      {!partialConfirm && (
-        <div
-          className="sticky bottom-0 border-t border-slate-200 bg-white/95 px-5 pb-5 pt-4 backdrop-blur"
-          data-testid="guided-pick-sticky-actions"
-        >
-          <button
-            type="button"
-            disabled={!isValidQty || isBusy}
-            onClick={handleConfirmClick}
-            className="w-full rounded-2xl bg-cyan-600 py-4 text-base font-semibold text-white transition hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-50"
-          >
-            {execute.isPending ? 'Confirming…' : 'Confirm pick'}
-          </button>
-        </div>
-      )}
-
-      {/* ── Skip step section ── */}
-      {!partialConfirm && (
-        <div className="px-5 pb-5">
-          {!skipConfirm ? (
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={() => setSkipConfirm(true)}
-              className="w-full rounded-2xl border border-slate-200 py-3 text-sm font-medium text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-            >
-              Problem / skip step
-            </button>
-          ) : (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-              <div className="mb-3 text-sm font-semibold text-red-900">
-                Skip this step?
-              </div>
-              <div className="mb-4 text-xs text-red-700">
-                The step will be marked as skipped. This can't be undone from this screen.
-              </div>
-              {skip.isError && (
-                <div className="mb-3 text-xs text-red-600">
-                  {getWorkerSafeMutationErrorMessage(
-                    skip.error,
-                    'Unable to skip this step. Try again.'
-                  )}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSkipConfirm(false)}
-                  disabled={isBusy}
-                  className="flex-1 rounded-xl border border-red-200 bg-white py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSkipConfirm}
-                  disabled={isBusy}
-                  className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50"
-                >
-                  {skip.isPending ? 'Skipping…' : 'Confirm skip'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      </div>
+      <PickerStickyActions
+        step={step}
+        parsedQty={parsedQty}
+        isBusy={isBusy}
+        isValidQty={isValidQty}
+        isUnderPick={isUnderPick}
+        partialConfirm={partialConfirm}
+        skipConfirm={skipConfirm}
+        executeError={execute.error}
+        skipError={skip.error}
+        onPrimaryConfirm={handleConfirmClick}
+        onPartialBack={() => setPartialConfirm(false)}
+        onSkipToggle={() => setSkipConfirm(true)}
+        onSkipCancel={() => setSkipConfirm(false)}
+        onSkipConfirm={handleSkipConfirm}
+      />
     </div>
   );
 }
@@ -807,12 +1103,18 @@ function GuidedPickExecution({
   task,
   pickContainer,
   taskId,
-  taskNumber
+  taskNumber,
+  orderLabel,
+  viewMode,
+  onChangeViewMode
 }: {
   task: PickTaskDetail;
   pickContainer: PickContainer;
   taskId: string;
   taskNumber: string;
+  orderLabel: string;
+  viewMode: ViewMode;
+  onChangeViewMode: (mode: ViewMode) => void;
 }) {
   const steps = task.steps;
   const isWavePick = task.sourceType === 'wave';
@@ -908,71 +1210,24 @@ function GuidedPickExecution({
 
   return (
     <div className="space-y-4">
-      {/* Wave order summary — only for wave tasks */}
-      {isWavePick && <WaveOrderSummary steps={steps} />}
-
-      {/* Step navigation row */}
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <button
-          type="button"
-          disabled={!previousActionableStep}
-          onClick={() => previousActionableStep && setActiveStepId(previousActionableStep.id)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-600 disabled:opacity-30"
-          aria-label="Previous step"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-
-        <div className="min-w-0 flex-1 text-center">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Current step
-          </div>
-          <div className="mt-1 text-sm font-semibold text-slate-900">
-            {activeStepIndex + 1} of {actionableSteps.length}
-          </div>
-          <div className="mt-1 flex items-center justify-center gap-1.5 overflow-x-hidden">
-            {actionableSteps.map((actionableStep) => (
-            <button
-              key={actionableStep.id}
-              type="button"
-              onClick={() => setActiveStepId(actionableStep.id)}
-              aria-label={`Go to step ${actionableStep.sequenceNo}: ${actionableStep.itemName}${actionableStep.orderNumber ? ` (${actionableStep.orderNumber})` : ''}`}
-              className={`shrink-0 rounded-full transition-all ${
-                actionableStep.id === step.id
-                  ? 'h-2.5 w-6 bg-cyan-600'
-                  : 'h-2 w-2 bg-slate-300 hover:bg-slate-400'
-              }`}
-            />
-          ))}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          disabled={!nextActionableStep}
-          onClick={() => nextActionableStep && setActiveStepId(nextActionableStep.id)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-600 disabled:opacity-30"
-          aria-label="Next step"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-        <ChevronDown className="h-3.5 w-3.5" />
-        Manual step navigation is optional. Guided execution stays on actionable pending steps.
-      </div>
-
-      {/* Active step — key forces remount on step change, resetting local form state */}
-        <GuidedStepCard
-          key={step.id}
-          step={step}
-          pickContainerId={pickContainer.id}
-          pickContainerLabel={pickContainer.label}
-          pickContainerTypeLabel={pickContainer.typeLabel}
-          taskId={taskId}
-          taskNumber={taskNumber}
-          isWavePick={isWavePick}
+      <GuidedStepCard
+        key={step.id}
+        step={step}
+        waveSteps={steps}
+        pickContainerId={pickContainer.id}
+        pickContainerLabel={pickContainer.label}
+        pickContainerTypeLabel={pickContainer.typeLabel}
+        orderLabel={orderLabel}
+        taskId={taskId}
+        taskNumber={taskNumber}
+        isWavePick={isWavePick}
+        activeStepIndex={activeStepIndex}
+        actionableStepCount={actionableSteps.length}
+        previousActionableStep={previousActionableStep}
+        nextActionableStep={nextActionableStep}
+        viewMode={viewMode}
+        onChangeViewMode={onChangeViewMode}
+        onNavigateStep={(stepId) => setActiveStepId(stepId)}
         onExecuted={handleExecuted}
       />
     </div>
@@ -1551,17 +1806,6 @@ export function PickTaskPage() {
               </button>
             </div>
 
-            {/* Mode toggle */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-900">
-                Steps{' '}
-                <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                  {task.steps.length}
-                </span>
-              </div>
-              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
-            </div>
-
             {/* ── Guided mode ── */}
             {viewMode === 'guided' && canUseGuidedMode && (
               <GuidedPickExecution
@@ -1569,6 +1813,9 @@ export function PickTaskPage() {
                 pickContainer={pickContainer}
                 taskId={task.id}
                 taskNumber={task.taskNumber}
+                orderLabel={orderLabel}
+                viewMode={viewMode}
+                onChangeViewMode={setViewMode}
               />
             )}
 

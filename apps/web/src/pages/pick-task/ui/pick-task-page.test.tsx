@@ -472,8 +472,20 @@ async function refreshCanonicalTask(queryClient: QueryClient, task: PickTaskDeta
 
 function expectGuidedExecutionHandoffState() {
   expect(screen.getByText('Updating task...')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Confirm pick' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Confirm picked quantity' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Problem / skip step' })).not.toBeInTheDocument();
+}
+
+async function openTechnicalDetails() {
+  fireEvent.click(screen.getByText('More details'));
+}
+
+async function openExceptionActions() {
+  fireEvent.click(screen.getByText('Exception actions'));
+}
+
+function setPickedQuantity(value: number) {
+  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: String(value) } });
 }
 
 beforeEach(() => {
@@ -510,7 +522,7 @@ describe('PickTaskPage', () => {
 
     expect(await screen.findByText('Allocate steps')).toBeInTheDocument();
     expect(screen.queryByText('Pick container')).not.toBeInTheDocument();
-    expect(screen.queryByText('Confirm pick')).not.toBeInTheDocument();
+    expect(screen.queryByText('Confirm picked quantity')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Allocate steps' }));
 
@@ -526,7 +538,7 @@ describe('PickTaskPage', () => {
     expect(await screen.findByText('Pick container')).toBeInTheDocument();
     await selectPickContainer();
 
-    expect(await screen.findByText('Confirm pick')).toBeInTheDocument();
+    expect(await screen.findByText('Confirm picked quantity')).toBeInTheDocument();
     expect(screen.getByText('Picking into:')).toBeInTheDocument();
   });
 
@@ -542,9 +554,73 @@ describe('PickTaskPage', () => {
 
     expect(screen.getByTestId('guided-pick-step-card')).toBeInTheDocument();
     expect(screen.getByTestId('guided-pick-sticky-actions')).toBeInTheDocument();
-    expect(screen.getByText('Source location')).toBeInTheDocument();
+    expect(screen.getByText('Next location')).toBeInTheDocument();
+    expect(screen.getByText('Active item')).toBeInTheDocument();
+    expect(screen.getByText('Remaining quantity')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm picked quantity' })).toBeInTheDocument();
+    expect(screen.getByText('Source container')).not.toBeVisible();
+    expect(screen.getByText('Destination container')).not.toBeVisible();
+    await openTechnicalDetails();
+    expect(screen.getByText('Source container')).toBeInTheDocument();
+    expect(screen.getByText('Destination container')).toBeInTheDocument();
     expect(screen.getByText('Active item')).toBeInTheDocument();
     expect(screen.queryByText('Done item')).not.toBeInTheDocument();
+  });
+
+  it('confirms a partial pick with the entered under-pick quantity and reaches the neutral handoff while stale', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { qtyRequired: 3, qtyPicked: 0, itemName: 'Partial item' })
+    ]);
+    const completedTask = makeTaskFromSteps([
+      makeAllocatedStep(1, 'picked', { qtyRequired: 3, qtyPicked: 2, itemName: 'Partial item' })
+    ]);
+    completedTask.status = 'completed';
+    completedTask.completedAt = '2026-01-02T00:00:00.000Z';
+    mocks.state.deferCanonicalRefreshAfterExecute = true;
+    mocks.state.nextTaskFixtureAfterExecute = completedTask;
+    const { queryClient } = renderPage();
+
+    await selectPickContainer();
+    setPickedQuantity(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
+
+    expect(await screen.findByRole('button', { name: 'Confirm partial' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm partial' }));
+
+    await waitFor(() =>
+      expect(mocks.spies.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stepId: 'step-1',
+          qtyActual: 2,
+          pickContainerId: WORKER_CONTAINER_ID
+        })
+      )
+    );
+    expectGuidedExecutionHandoffState();
+    expect(screen.queryByText('Partial item')).not.toBeInTheDocument();
+
+    await refreshCanonicalTask(queryClient, completedTask);
+    expect(await screen.findByText('Task complete')).toBeInTheDocument();
+  });
+
+  it('shows a worker-safe error inside the partial-confirm branch and allows backing out after a failed confirm', async () => {
+    mocks.state.taskFixture = makeTaskFromSteps([
+      makeAllocatedStep(1, 'pending', { qtyRequired: 3, qtyPicked: 0, itemName: 'Partial item' })
+    ]);
+    mocks.state.executeFailure = new Error('backend execution details leaked');
+    renderPage();
+
+    await selectPickContainer();
+    setPickedQuantity(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm partial' }));
+
+    expect(await screen.findByText('Unable to confirm this pick. Try again.')).toBeInTheDocument();
+    expect(screen.queryByText('backend execution details leaked')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('button', { name: 'Confirm picked quantity' })).toBeInTheDocument();
   });
 
   it('uses the canonical execute hook and immediately advances to the next guided actionable step while the snapshot is stale', async () => {
@@ -556,7 +632,7 @@ describe('PickTaskPage', () => {
     renderPage();
 
     await selectPickContainer();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     await waitFor(() =>
       expect(mocks.spies.execute).toHaveBeenCalledWith(
@@ -577,7 +653,7 @@ describe('PickTaskPage', () => {
     renderPage();
 
     await selectPickContainer();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     expect(await screen.findByText('Second pending')).toBeInTheDocument();
     expect(screen.queryByText('Blocked middle')).not.toBeInTheDocument();
@@ -593,6 +669,7 @@ describe('PickTaskPage', () => {
     renderPage();
 
     await selectPickContainer();
+    await openTechnicalDetails();
     fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
 
     expect(await screen.findByText('Step four')).toBeInTheDocument();
@@ -608,6 +685,7 @@ describe('PickTaskPage', () => {
     renderPage();
 
     await selectPickContainer();
+    await openExceptionActions();
     fireEvent.click(screen.getByRole('button', { name: 'Problem / skip step' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm skip' }));
 
@@ -629,7 +707,7 @@ describe('PickTaskPage', () => {
     const { queryClient } = renderPage();
 
     await selectPickContainer();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     await waitFor(() =>
       expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' }))
@@ -655,7 +733,7 @@ describe('PickTaskPage', () => {
     const { queryClient } = renderPage();
 
     await selectPickContainer();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     await waitFor(() =>
       expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' }))
@@ -682,6 +760,7 @@ describe('PickTaskPage', () => {
     const { queryClient } = renderPage();
 
     await selectPickContainer();
+    await openExceptionActions();
     fireEvent.click(screen.getByRole('button', { name: 'Problem / skip step' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm skip' }));
 
@@ -709,7 +788,7 @@ describe('PickTaskPage', () => {
     const { queryClient } = renderPage();
 
     await selectPickContainer();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     await waitFor(() =>
       expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-1' }))
@@ -717,7 +796,7 @@ describe('PickTaskPage', () => {
     expect(await screen.findByText('Second stale action')).toBeInTheDocument();
     expect(screen.queryByText('First stale action')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     await waitFor(() =>
       expect(mocks.spies.execute).toHaveBeenCalledWith(expect.objectContaining({ stepId: 'step-2' }))
@@ -791,7 +870,7 @@ describe('PickTaskPage', () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: /TOTE-01/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm pick' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm picked quantity' }));
 
     expect(await screen.findByText('Unable to confirm this pick. Try again.')).toBeInTheDocument();
     expect(screen.queryByText('backend execution details leaked')).not.toBeInTheDocument();
@@ -810,6 +889,7 @@ describe('PickTaskPage', () => {
     renderPage();
 
     await selectPickContainer();
+    await openExceptionActions();
     fireEvent.click(screen.getByRole('button', { name: 'Problem / skip step' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm skip' }));
 
