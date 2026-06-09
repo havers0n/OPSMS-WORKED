@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useActiveFloorId } from '@/app/store/ui-selectors';
 import { useFloorWorkspace } from '@/entities/layout-version/api/use-floor-workspace';
 import { useLayoutDraftAutosave } from '@/features/layout-draft-save/model/use-layout-draft-autosave';
@@ -11,14 +11,8 @@ import {
 } from '@/warehouse/editor/model/editor-selectors';
 import { useModeStore } from '@/warehouse/editor/model/mode-store';
 import { useT } from '@/shared/i18n';
-import { resolveStorageDebugFlags } from './storage-debug-flags';
-import {
-  shouldDisableStorageWorkspace,
-  StorageWorkspaceDebugGate
-} from './storage-workspace-debug-gate';
 import { StorageWorkspaceV2 } from './storage-workspace-v2';
 import { ToolRail } from './tool-rail';
-import { useStorageDebugLifecycleSnapshots } from './use-storage-debug-lifecycle-snapshots';
 import { ViewWorkspace } from './view-workspace';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 
@@ -34,13 +28,6 @@ export function WarehouseEditor() {
   const resetDraft = useResetDraft();
   const clearSelection = useClearSelection();
   const setEditorMode = useSetEditorMode();
-  const storageDebugSearch =
-    typeof window === 'undefined' ? '' : window.location.search;
-  const storageDebugFlags = useMemo(
-    () => resolveStorageDebugFlags(storageDebugSearch),
-    [storageDebugSearch]
-  );
-  useStorageDebugLifecycleSnapshots({ flags: storageDebugFlags });
 
   useEffect(() => {
     if (!activeFloorId) {
@@ -101,10 +88,6 @@ export function WarehouseEditor() {
   };
 
   if (viewMode === 'storage') {
-    if (shouldDisableStorageWorkspace(storageDebugFlags)) {
-      return <StorageWorkspaceDebugGate flags={storageDebugFlags} />;
-    }
-
     return (
       <StorageWorkspaceV2
         workspace={workspace ?? null}

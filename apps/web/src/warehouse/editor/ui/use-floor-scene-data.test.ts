@@ -76,11 +76,7 @@ function createOperationsCell(cellId: string, status: OperationsCellRuntime['sta
   };
 }
 
-function renderSceneData(params: {
-  viewMode: 'layout' | 'view' | 'storage';
-  workspace: FloorWorkspace | null;
-  disableCanvasSceneData?: boolean;
-}) {
+function renderSceneData(params: { viewMode: 'layout' | 'view' | 'storage'; workspace: FloorWorkspace | null }) {
   let result!: SceneDataResult;
 
   function Harness() {
@@ -180,25 +176,5 @@ describe('useFloorSceneData characterization', () => {
     expect(storageResult.floorOperationsCellsById).toEqual(viewResult.floorOperationsCellsById);
     expect(storageResult.publishedCellsById).toEqual(viewResult.publishedCellsById);
     expect(storageResult.publishedCellsByStructure).toEqual(viewResult.publishedCellsByStructure);
-  });
-
-  it('disables canvas scene-data queries while keeping the hook contract stable', () => {
-    mockOccupancyRows = [{ cellId: 'cell-2' }];
-    mockOperationsCells = [createOperationsCell('cell-2', 'pick_active')];
-    mockPublishedCells = [createCell('cell-2', 2)];
-
-    const result = renderSceneData({
-      viewMode: 'storage',
-      workspace: createWorkspace(),
-      disableCanvasSceneData: true
-    });
-
-    expect(occupancySpy).toHaveBeenCalledWith(null);
-    expect(operationsSpy).toHaveBeenCalledWith(null);
-    expect(publishedSpy).toHaveBeenCalledWith(null);
-    expect(result.occupiedCellIds.size).toBe(0);
-    expect(result.floorOperationsCellsById.size).toBe(0);
-    expect(result.publishedCells).toEqual([]);
-    expect(result.publishedCellsQueryStatus).toBe('success');
   });
 });

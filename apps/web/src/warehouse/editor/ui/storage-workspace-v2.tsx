@@ -1,5 +1,5 @@
 import type { FloorWorkspace } from '@wos/domain';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PanelRight, X } from 'lucide-react';
 import { useT } from '@/shared/i18n';
 import {
@@ -10,15 +10,6 @@ import { StorageInspectorV2 } from './storage-inspector-v2';
 import { StorageNavigator } from './storage-navigator';
 import { WorkspaceCanvasAndPanel } from './workspace-canvas-and-panel';
 import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
-import { StorageDebugPlaceholder } from './storage-debug-placeholder';
-import { readStorageDebugFlagsFromWindow } from './storage-debug-flags';
-import {
-  recordStorageBreadcrumb,
-  clearStorageBreadcrumbs,
-  startStorageHeartbeat,
-  stopStorageHeartbeat
-} from '@/shared/diagnostics/storage-diagnostics';
-import { getRackLayerDiagnosticsSnapshot } from './canvas-diagnostics';
 
 const INSPECTOR_MODE_KEY = 'wos:storage-inspector-mode';
 
@@ -61,25 +52,6 @@ export function StorageWorkspaceV2({
   onCloseInspector
 }: StorageWorkspaceV2Props) {
   const t = useT();
-  const storageDebugFlags = readStorageDebugFlagsFromWindow();
-  const debugFlags = useMemo(
-    () => ({
-      disableRackLayer: storageDebugFlags.disableRackLayer,
-      disableCanvasSceneData: storageDebugFlags.disableCanvasSceneData,
-      disableOccupancyOverlay: storageDebugFlags.disableOccupancyOverlay,
-      disableNavigator: storageDebugFlags.disableNavigator,
-      disableInspector: storageDebugFlags.disableInspector,
-      disableStorageData: storageDebugFlags.disableStorageData
-    }),
-    [
-      storageDebugFlags.disableCanvasSceneData,
-      storageDebugFlags.disableInspector,
-      storageDebugFlags.disableNavigator,
-      storageDebugFlags.disableOccupancyOverlay,
-      storageDebugFlags.disableRackLayer,
-      storageDebugFlags.disableStorageData
-    ]
-  );
 
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>(() => {
     try {
@@ -146,35 +118,6 @@ export function StorageWorkspaceV2({
   const inspectorVisible = inspectorMode !== 'hidden';
 
   useEffect(() => {
-    recordStorageBreadcrumb('storage-mode-entered', {
-      floorId: workspace?.floorId ?? null,
-      hasWorkspace: Boolean(workspace),
-      debugFlags
-    });
-    clearStorageBreadcrumbs();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!storageDebugFlags.debugEnabled) return;
-
-    startStorageHeartbeat({
-      getRoute: () => window.location.pathname + window.location.search,
-      getActiveWarehouseMode: () => 'storage',
-      getFloorId: () => workspace?.floorId ?? null,
-      getPublishedCellCount: () => 0,
-      getOccupancyRowCount: () => 0,
-      getNavigatorItemCount: () => null,
-      getDebugFlags: () => debugFlags,
-      getRackLayerDiagnostics: () => getRackLayerDiagnosticsSnapshot()
-    });
-
-    return () => {
-      stopStorageHeartbeat();
-    };
-  }, [storageDebugFlags.debugEnabled, workspace?.floorId, debugFlags]);
-
-  useEffect(() => {
     recordClientRuntimeEvent('storage-workspace-v2:mount', {
       hasWorkspace: Boolean(workspace)
     });
@@ -203,24 +146,16 @@ export function StorageWorkspaceV2({
       aria-label={t('warehouse.storage.region')}
       className="relative flex h-full w-full overflow-hidden"
     >
-      {debugFlags.disableNavigator ? null : <StorageNavigator workspace={workspace} />}
+      <StorageNavigator workspace={workspace} />
 
-      {storageDebugFlags.disableStorageCanvas ? (
-        <StorageDebugPlaceholder
-          testId="storage-canvas-disabled-placeholder"
-          title="Storage canvas disabled"
-          body="Debug flag disableStorageCanvas=1 prevented WorkspaceCanvasAndPanel and EditorCanvas from mounting."
-        />
-      ) : (
-        <WorkspaceCanvasAndPanel
-          workspace={workspace}
-          onAddRack={onAddRack}
-          onOpenInspector={onOpenInspector}
-          onCloseInspector={onCloseInspector}
-          hideRightPanel
-          hideContextPanel
-        />
-      )}
+      <WorkspaceCanvasAndPanel
+        workspace={workspace}
+        onAddRack={onAddRack}
+        onOpenInspector={onOpenInspector}
+        onCloseInspector={onCloseInspector}
+        hideRightPanel
+        hideContextPanel
+      />
 
       {/* Semi-transparent backdrop behind expanded sheet (mobile only). */}
       {hasSelection && inspectorMode === 'expanded' && (
@@ -295,12 +230,12 @@ export function StorageWorkspaceV2({
             />
           </button>
 
-          {inspectorVisible && !debugFlags.disableInspector && <StorageInspectorV2 workspace={workspace} />}
+          {inspectorVisible && <StorageInspectorV2 workspace={workspace} />}
         </div>
       )}
 
       {/* No selection: render inspector so its hooks keep running (returns null internally). */}
-      {!hasSelection && !debugFlags.disableInspector && <StorageInspectorV2 workspace={workspace} />}
+      {!hasSelection && <StorageInspectorV2 workspace={workspace} />}
     </div>
   );
 }

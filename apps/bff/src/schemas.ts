@@ -650,7 +650,7 @@ export const errorResponseSchema = z.object({
   errorId: z.string()
 });
 
-const clientRuntimeErrorRecordSchema = z.object({
+export const clientErrorReportRequestBodySchema = z.object({
   clientErrorId: z.string().uuid(),
   source: z.enum(['window-error', 'unhandled-rejection', 'react-error-boundary', 'manual-debug']),
   message: z.string().trim().min(1),
@@ -671,120 +671,7 @@ const clientRuntimeErrorRecordSchema = z.object({
   context: z.record(z.string(), z.unknown()).optional()
 });
 
-const clientRuntimeCanvasLifecycleSnapshotSchema = z.object({
-  sessionId: z.string().trim().min(1),
-  timestamp: z.string().trim().min(1),
-  activeWarehouseMode: z.string().trim().min(1),
-  snapshotReason: z.string().trim().min(1),
-  canvasCount: z.number().int().min(0),
-  canvasElements: z.array(
-    z.object({
-      width: z.number().int().min(0),
-      height: z.number().int().min(0),
-      clientWidth: z.number().int().min(0),
-      clientHeight: z.number().int().min(0),
-      approximateMiB: z.number().min(0)
-    })
-  ),
-  totalApproxCanvasMiB: z.number().min(0),
-  konvaStageCount: z.number().int().min(0),
-  konvaLayerCount: z.number().int().min(0),
-  stageMountCount: z.number().int().min(0),
-  stageDestroyCount: z.number().int().min(0),
-  currentIsolationFlags: z.record(z.string(), z.unknown()).nullable().optional(),
-  effectiveKonvaPixelRatio: z.number().positive().nullable().optional(),
-  viewport: z
-    .object({
-      width: z.number().int().min(0),
-      height: z.number().int().min(0)
-    })
-    .nullable()
-    .optional(),
-  devicePixelRatio: z.number().positive().nullable().optional(),
-  dimensionPipeline: z.object({
-    containerClientWidth: z.number().int().min(0).nullable(),
-    containerClientHeight: z.number().int().min(0).nullable(),
-    viewportWidth: z.number().int().min(0).nullable(),
-    viewportHeight: z.number().int().min(0).nullable(),
-    stageWidth: z.number().int().min(0).nullable(),
-    stageHeight: z.number().int().min(0).nullable(),
-    primaryCanvasWidth: z.number().int().min(0).nullable(),
-    primaryCanvasHeight: z.number().int().min(0).nullable(),
-    primaryCanvasClientWidth: z.number().int().min(0).nullable(),
-    primaryCanvasClientHeight: z.number().int().min(0).nullable(),
-    dprApplication: z.string().trim().min(1)
-  })
-});
-
-export const clientErrorReportRequestBodySchema = z.union([
-  z.object({
-    kind: z.literal('error'),
-    error: clientRuntimeErrorRecordSchema
-  }),
-  z.object({
-    kind: z.literal('canvas-lifecycle-snapshot'),
-    snapshot: clientRuntimeCanvasLifecycleSnapshotSchema
-  }),
-  clientRuntimeErrorRecordSchema
-]);
-
 export const clientErrorReportResponseSchema = z.object({
-  accepted: z.literal(true),
-  requestId: z.string()
-});
-
-export const diagnosticsHeartbeatRequestBodySchema = z.object({
-  sessionId: z.string().uuid(),
-  sequence: z.number().int().positive(),
-  timestamp: z.string().trim().min(1),
-  route: z.string(),
-  activeWarehouseMode: z.string(),
-  floorId: z.string().nullable(),
-  viewportWidth: z.number().int().min(0),
-  viewportHeight: z.number().int().min(0),
-  devicePixelRatio: z.number().positive().nullable(),
-  publishedCellCount: z.number().int().min(0),
-  occupancyRowCount: z.number().int().min(0),
-  navigatorItemCount: z.number().int().min(0).nullable(),
-  recentBreadcrumbs: z.array(
-    z.object({
-      name: z.string(),
-      timestamp: z.string(),
-      data: z.record(z.string(), z.unknown()).optional()
-    })
-  ),
-  activeDebugFlags: z.object({
-    disableOccupancyOverlay: z.boolean(),
-    disableNavigator: z.boolean(),
-    disableInspector: z.boolean(),
-    disableStorageData: z.boolean()
-  }),
-  userAgent: z.string(),
-  rackLayerDiagnostics: z.object({
-    renderedRackCount: z.number().int().min(0),
-    renderedCellCount: z.number().int().min(0),
-    rackBodyNodeCount: z.number().int().min(0),
-    rackCellNodeCount: z.number().int().min(0),
-    runtimeVisualNodeCount: z.number().int().min(0),
-    visibleRackCount: z.number().int().min(0),
-    statusCounts: z.object({
-      reserved: z.number().int().min(0),
-      pick_active: z.number().int().min(0),
-      occupied: z.number().int().min(0),
-      empty: z.number().int().min(0),
-      exception: z.number().int().min(0),
-      other: z.number().int().min(0)
-    }),
-    effectiveLod: z.union([z.literal(0), z.literal(1), z.literal(2)]),
-    hitTestEnabled: z.boolean(),
-    cacheEnabled: z.boolean(),
-    rackLayerMountCount: z.number().int().min(0),
-    rackLayerUnmountCount: z.number().int().min(0),
-    rackLayerDrawCount: z.number().int().min(0)
-  }).optional()
-});
-
-export const diagnosticsHeartbeatResponseSchema = z.object({
   accepted: z.literal(true),
   requestId: z.string()
 });

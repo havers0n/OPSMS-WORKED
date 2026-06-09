@@ -23,7 +23,6 @@ type UseCanvasSceneModelParams = {
   activeTask: ActiveLayoutTask;
   activeStorageWorkflow: ActiveStorageWorkflow;
   canvasOffset: CanvasOffset;
-  disableCanvasSceneData: boolean;
   editorMode: EditorMode;
   highlightedCellIds: string[];
   interactionScope: InteractionScope;
@@ -62,7 +61,6 @@ export function useCanvasSceneModel({
   activeTask,
   activeStorageWorkflow,
   canvasOffset,
-  disableCanvasSceneData,
   editorMode,
   highlightedCellIds,
   interactionScope,
@@ -87,7 +85,7 @@ export function useCanvasSceneModel({
     publishedCellsById,
     publishedCellsByStructure,
     publishedCellsQueryStatus
-  } = useFloorSceneData({ viewMode, workspace, disableCanvasSceneData });
+  } = useFloorSceneData({ viewMode, workspace });
 
   const capabilities = useCanvasCapabilities({
     activeStorageWorkflow,
@@ -136,23 +134,17 @@ export function useCanvasSceneModel({
   // — Layer lists — use placementLayout when present (view/storage mode) so zones and walls
   // come from the same version as racks; fall back to layoutDraft in layout/edit mode.
   const zones = useMemo(() => {
-    if (disableCanvasSceneData) return [];
     const layout = placementLayout ?? layoutDraft;
     return layout
       ? layout.zoneIds.map((id) => layout.zones[id]).filter((zone) => Boolean(zone))
       : [];
-  }, [disableCanvasSceneData, placementLayout, layoutDraft]);
+  }, [placementLayout, layoutDraft]);
   const walls = useMemo(() => {
-    if (disableCanvasSceneData) return [];
     const layout = placementLayout ?? layoutDraft;
     return layout
       ? layout.wallIds.map((id) => layout.walls[id]).filter((wall) => Boolean(wall))
       : [];
-  }, [disableCanvasSceneData, placementLayout, layoutDraft]);
-  const visibleRacks = useMemo(
-    () => (disableCanvasSceneData ? [] : racks),
-    [disableCanvasSceneData, racks]
-  );
+  }, [placementLayout, layoutDraft]);
   const highlightedCellIdSet = useMemo(() => new Set(highlightedCellIds), [highlightedCellIds]);
 
   return useMemo(
@@ -176,7 +168,7 @@ export function useCanvasSceneModel({
       },
       layers: {
         placementLayout,
-        racks: visibleRacks,
+        racks,
         walls,
         zones
       },
@@ -214,7 +206,7 @@ export function useCanvasSceneModel({
       placementLayout,
       publishedCellsByStructure,
       publishedCellsQueryStatus,
-      visibleRacks,
+      racks,
       resolvedSelection,
       walls,
       workflow,

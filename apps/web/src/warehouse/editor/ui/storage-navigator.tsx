@@ -24,10 +24,6 @@ import {
 } from './canvas-diagnostics';
 import { resolveCellSearchPresentation, type ProductSubtitlePresentation } from './storage-navigator-search';
 import { recordClientRuntimeEvent } from '@/shared/diagnostics/client-runtime-diagnostics';
-import {
-  parseStorageDebugFlags,
-  recordStorageBreadcrumb
-} from '@/shared/diagnostics/storage-diagnostics';
 
 interface StorageNavigatorProps {
   workspace: FloorWorkspace | null;
@@ -75,8 +71,6 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const t = useT();
   const floorId = workspace?.floorId ?? null;
   const rackSource: Record<string, Rack> | undefined = workspace?.latestPublished?.racks;
-  const debugFlags = parseStorageDebugFlags(typeof window !== 'undefined' ? window.location.search : '');
-  const dataFloorId = debugFlags.disableStorageData ? null : floorId;
 
   const selectedCellId = useStorageFocusSelectedCellId();
   const rackId = useStorageFocusSelectedRackId();
@@ -87,50 +81,8 @@ export function StorageNavigator({ workspace }: StorageNavigatorProps) {
   const requestCameraFocus = useStorageFocusRequestCameraFocus();
   const setActiveLevel = useStorageFocusSetActiveLevel();
 
-  const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(dataFloorId);
-  const { data: storageRows = [], isLoading: storageLoading } = useFloorLocationStorage(dataFloorId);
-
-  useEffect(() => {
-    if (dataFloorId === null) return;
-    recordStorageBreadcrumb('published-cells-fetch-started', { floorId: dataFloorId });
-    recordStorageBreadcrumb('occupancy-fetch-started', { floorId: dataFloorId });
-  }, [dataFloorId]);
-
-  useEffect(() => {
-    if (dataFloorId === null || cellsLoading) return;
-    recordStorageBreadcrumb('published-cells-loaded', {
-      floorId: dataFloorId,
-      count: publishedCells.length
-    });
-  }, [dataFloorId, cellsLoading, publishedCells.length]);
-
-  useEffect(() => {
-    if (dataFloorId === null || storageLoading) return;
-    recordStorageBreadcrumb('occupancy-loaded', {
-      floorId: dataFloorId,
-      count: storageRows.length
-    });
-  }, [dataFloorId, storageLoading, storageRows.length]);
-
-  useEffect(() => {
-    if (dataFloorId === null) return;
-    const hasCells = publishedCells.length > 0;
-    const isReady = !cellsLoading && !storageLoading;
-    if (isReady && hasCells) {
-      recordStorageBreadcrumb('storage-derived-model-built', {
-        cellCount: publishedCells.length,
-        storageRowCount: storageRows.length
-      });
-    }
-  }, [dataFloorId, cellsLoading, storageLoading, publishedCells.length, storageRows.length]);
-
-  useEffect(() => {
-    recordStorageBreadcrumb('navigator-mounted', {
-      rackId,
-      activeLevel,
-      isCollapsed
-    });
-  }, []);
+  const { data: publishedCells = [], isLoading: cellsLoading } = usePublishedCells(floorId);
+  const { data: storageRows = [], isLoading: storageLoading } = useFloorLocationStorage(floorId);
 
   const isCollapsed = useIsNavigatorCollapsed();
   const toggle = useToggleNavigator();

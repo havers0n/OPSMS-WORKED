@@ -14,6 +14,7 @@ export type CanvasDiagnosticsFlags = {
   enableProductionCellCulling: boolean;
   rackLayerRenderer: 'layer' | 'fast-layer';
   rackBodyShell?: 'normal' | 'cached';
+  disableRackBodyShadows?: boolean;
 };
 
 export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
@@ -25,7 +26,8 @@ export const DEFAULT_CANVAS_DIAGNOSTICS_FLAGS: CanvasDiagnosticsFlags = {
   storageOccupancyOverlay: 'on',
   enableProductionCellCulling: true,
   rackLayerRenderer: 'layer',
-  rackBodyShell: 'normal'
+  rackBodyShell: 'normal',
+  disableRackBodyShadows: false
 };
 
 export const CANVAS_DIAGNOSTICS_EVENT = 'wos:canvas-perf-diagnostics-change';
@@ -184,28 +186,14 @@ export type CanvasRenderPipelineDiagnostics = {
     unresolvedCount: number;
   };
   forceRenderReasons: Record<CanvasForceRenderReason, number>;
-  rackLayerSnapshot: {
-    renderedRackCount: number;
-    renderedCellCount: number;
-    rackBodyNodeCount: number;
-    rackCellNodeCount: number;
-    runtimeVisualNodeCount: number;
-    statusCounts: {
-      reserved: number;
-      pick_active: number;
-      occupied: number;
-      empty: number;
-      exception: number;
-      other: number;
-    };
-    visibleRackCount: number;
-    effectiveLod: 0 | 1 | 2;
-    hitTestEnabled: boolean;
-    cacheEnabled: boolean;
-    rackLayerMountCount: number;
-    rackLayerUnmountCount: number;
-    rackLayerDrawCount: number;
-  };
+};
+
+export type RackLayerDiagnosticsSnapshot = {
+  currentRenderMode: CanvasRenderMode;
+  rackLayerNodeCount: number;
+  rackLayerRenders: number;
+  rackBodyRenders: number;
+  rackCellsRenders: number;
 };
 
 export type CanvasCullingMetrics = {
@@ -346,7 +334,11 @@ export function getCanvasDiagnosticsFlags(): CanvasDiagnosticsFlags {
       raw.rackBodyShell,
       ['normal', 'cached'] as const,
       DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.rackBodyShell ?? 'normal'
-    )
+    ),
+    disableRackBodyShadows:
+      typeof raw.disableRackBodyShadows === 'boolean'
+        ? raw.disableRackBodyShadows
+        : DEFAULT_CANVAS_DIAGNOSTICS_FLAGS.disableRackBodyShadows ?? false
   };
 }
 
@@ -508,28 +500,6 @@ export function createCanvasRenderPipelineDiagnostics(): CanvasRenderPipelineDia
       locate: 0,
       workflow: 0,
       debug: 0
-    },
-    rackLayerSnapshot: {
-      renderedRackCount: 0,
-      renderedCellCount: 0,
-      rackBodyNodeCount: 0,
-      rackCellNodeCount: 0,
-      runtimeVisualNodeCount: 0,
-      statusCounts: {
-        reserved: 0,
-        pick_active: 0,
-        occupied: 0,
-        empty: 0,
-        exception: 0,
-        other: 0
-      },
-      visibleRackCount: 0,
-      effectiveLod: 2,
-      hitTestEnabled: false,
-      cacheEnabled: false,
-      rackLayerMountCount: 0,
-      rackLayerUnmountCount: 0,
-      rackLayerDrawCount: 0
     }
   };
 }
@@ -541,6 +511,19 @@ function getActiveRenderPipelineDiagnostics(): CanvasRenderPipelineDiagnostics |
 
 export function isCanvasRenderPipelineDiagnosticsEnabled() {
   return getActiveRenderPipelineDiagnostics() !== null;
+}
+
+export function getRackLayerDiagnosticsSnapshot(): RackLayerDiagnosticsSnapshot | null {
+  const diagnostics = getActiveRenderPipelineDiagnostics();
+  if (!diagnostics) return null;
+
+  return {
+    currentRenderMode: diagnostics.currentRenderMode,
+    rackLayerNodeCount: diagnostics.konva.rackLayerNodeCount,
+    rackLayerRenders: diagnostics.components.RackLayer?.renders ?? 0,
+    rackBodyRenders: diagnostics.components.RackBody?.renders ?? 0,
+    rackCellsRenders: diagnostics.components.RackCells?.renders ?? 0
+  };
 }
 
 export function resetCanvasRenderPipelineDiagnostics() {
@@ -810,38 +793,6 @@ export function recordCanvasLayerNodeCount(
 
 export function recordCanvasRackLayerNodeCount(nodeCount: number) {
   recordCanvasLayerNodeCount('rack-base-layer', nodeCount);
-}
-
-export function recordCanvasRackLayerSnapshot(
-  snapshot: Partial<CanvasRenderPipelineDiagnostics['rackLayerSnapshot']>
-) {
-  const diagnostics = getActiveRenderPipelineDiagnostics();
-  if (!diagnostics) return;
-  Object.assign(diagnostics.rackLayerSnapshot, snapshot);
-}
-
-export function getRackLayerDiagnosticsSnapshot(): CanvasRenderPipelineDiagnostics['rackLayerSnapshot'] | null {
-  const diagnostics = getActiveRenderPipelineDiagnostics();
-  if (!diagnostics) return null;
-  return { ...diagnostics.rackLayerSnapshot };
-}
-
-export function recordCanvasRackLayerMount() {
-  const diagnostics = getActiveRenderPipelineDiagnostics();
-  if (!diagnostics) return;
-  diagnostics.rackLayerSnapshot.rackLayerMountCount += 1;
-}
-
-export function recordCanvasRackLayerUnmount() {
-  const diagnostics = getActiveRenderPipelineDiagnostics();
-  if (!diagnostics) return;
-  diagnostics.rackLayerSnapshot.rackLayerUnmountCount += 1;
-}
-
-export function recordCanvasRackLayerDraw() {
-  const diagnostics = getActiveRenderPipelineDiagnostics();
-  if (!diagnostics) return;
-  diagnostics.rackLayerSnapshot.rackLayerDrawCount += 1;
 }
 
 export function recordCanvasSelectionOverlayMetrics({

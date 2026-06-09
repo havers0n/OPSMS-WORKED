@@ -35,10 +35,8 @@ type Props = {
   disableStrokes?: boolean;
   isActivelyPanning?: boolean;
   shellRendering?: 'normal' | 'cached';
-  disableShadows?: boolean;
-  simpleShell?: boolean;
-  disableLabels?: boolean;
-  disableBodyStrokes?: boolean;
+  suppressShadows?: boolean;
+  disableShadowDebugOverride?: boolean;
 };
 
 export function RackBody({
@@ -54,10 +52,8 @@ export function RackBody({
   disableStrokes = false,
   isActivelyPanning = false,
   shellRendering = 'normal',
-  disableShadows = false,
-  simpleShell = false,
-  disableLabels = false,
-  disableBodyStrokes = false
+  suppressShadows = false,
+  disableShadowDebugOverride = false
 }: Props) {
   const shellRef = useRef<Konva.Group | null>(null);
   const { width, height, faceAWidth, faceBWidth, isPaired, spineY } = geometry;
@@ -81,10 +77,8 @@ export function RackBody({
       'disableStrokes',
       'isActivelyPanning',
       'shellRendering',
-      'disableShadows',
-      'simpleShell',
-      'disableLabels',
-      'disableBodyStrokes'
+      'suppressShadows',
+      'disableShadowDebugOverride'
     ],
     snapshot: {
       geometryX: geometry.x,
@@ -102,33 +96,19 @@ export function RackBody({
       disableStrokes,
       isActivelyPanning,
       shellRendering,
-      disableShadows,
-      simpleShell,
-      disableLabels,
-      disableBodyStrokes
+      suppressShadows,
+      disableShadowDebugOverride
     }
   });
 
   const lightweightVisuals = disableStrokes || isActivelyPanning;
+  const shadowsDisabled =
+    lightweightVisuals || suppressShadows || disableShadowDebugOverride;
   const visualSelected = isActivelyPanning ? false : isSelected;
   const visualHovered = isActivelyPanning ? false : isHovered;
   const fill = visualSelected ? C.fillSelected : visualHovered ? C.fillHovered : C.fillDefault;
   const stroke = visualSelected ? C.strokeSelected : visualHovered ? C.strokeHovered : C.strokeDefault;
   const stripeH = Math.max(4, Math.min(8, height * 0.18));
-
-  const hideBodyStrokes = disableBodyStrokes || lightweightVisuals || simpleShell;
-  const hideShadows = disableShadows || lightweightVisuals || simpleShell;
-  const hideLabels = disableLabels || simpleShell;
-  const hideSelectionDecoration = simpleShell;
-  const hideStripesOrOverhangs = simpleShell;
-  const hideSpineBoundary = disableBodyStrokes || lightweightVisuals || simpleShell;
-
-  const mainCornerRadius = simpleShell ? 0 : 8;
-  const mainShadowBlur = hideShadows ? 0 : visualSelected ? 12 : 6;
-  const mainShadowOpacity = hideShadows ? 0 : visualSelected ? 0.12 : 0.07;
-  const mainStroke = hideBodyStrokes ? undefined : stroke;
-  const mainStrokeEnabled = !hideBodyStrokes;
-  const mainStrokeWidth = hideBodyStrokes ? 0 : visualSelected ? 2 : 1.5;
 
   const minFaceW = Math.min(faceAWidth, faceBWidth);
   const isAsymmetric = isPaired && Math.abs(faceAWidth - faceBWidth) > 2;
@@ -236,31 +216,17 @@ export function RackBody({
     labelWidth,
     labelX,
     labelY,
+    disableShadowDebugOverride,
     rackCodePlacement,
     rackCodeProminence,
     rotationDeg,
     showRackCode,
     shellRendering,
     spineY,
+    suppressShadows,
     stripeH,
     stroke,
-    width,
-    disableShadows,
-    simpleShell,
-    disableLabels,
-    disableBodyStrokes,
-    hideBodyStrokes,
-    hideShadows,
-    hideLabels,
-    hideSelectionDecoration,
-    hideStripesOrOverhangs,
-    hideSpineBoundary,
-    mainCornerRadius,
-    mainShadowBlur,
-    mainShadowOpacity,
-    mainStroke,
-    mainStrokeEnabled,
-    mainStrokeWidth
+    width
   ]);
 
   return (
@@ -274,19 +240,19 @@ export function RackBody({
         y={0}
         width={width}
         height={height}
-        cornerRadius={mainCornerRadius}
+        cornerRadius={8}
         fill={fill}
-        stroke={mainStroke}
-        strokeEnabled={mainStrokeEnabled}
-        strokeWidth={mainStrokeWidth}
+        stroke={lightweightVisuals ? undefined : stroke}
+        strokeEnabled={!lightweightVisuals}
+        strokeWidth={lightweightVisuals ? 0 : isSelected ? 2 : 1.5}
         shadowColor="#0f172a"
-        shadowBlur={mainShadowBlur}
-        shadowOpacity={mainShadowOpacity}
-        shadowOffsetY={hideShadows ? 0 : 3}
+        shadowBlur={shadowsDisabled ? 0 : isSelected ? 12 : 6}
+        shadowOpacity={shadowsDisabled ? 0 : isSelected ? 0.12 : 0.07}
+        shadowOffsetY={3}
         wosRectRole="rack-body-main"
       />
 
-      {isSelected && !hideSelectionDecoration && (
+      {isSelected && (
         <Rect
           x={4}
           y={4}
@@ -294,7 +260,7 @@ export function RackBody({
           height={height - 8}
           cornerRadius={6}
           stroke={C.selectionBorder}
-          strokeWidth={hideBodyStrokes ? 0 : 1}
+          strokeWidth={1}
           dash={[8, 5]}
           opacity={lightweightVisuals ? 0 : 0.7}
           visible={!lightweightVisuals}
@@ -302,7 +268,7 @@ export function RackBody({
         />
       )}
 
-      {!hideStripesOrOverhangs && isAsymmetric && faceAOverhang && (
+      {isAsymmetric && faceAOverhang && (
         <Rect
           x={faceBWidth}
           y={spineY}
@@ -313,7 +279,7 @@ export function RackBody({
           wosRectRole="rack-body-overhang"
         />
       )}
-      {!hideStripesOrOverhangs && isAsymmetric && faceBOverhang && (
+      {isAsymmetric && faceBOverhang && (
         <Rect
           x={faceAWidth}
           y={0}
@@ -325,20 +291,18 @@ export function RackBody({
         />
       )}
 
-      {!hideStripesOrOverhangs && (
-        <Rect
-          x={0}
-          y={0}
-          width={faceAWidth}
-          height={stripeH}
-          cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
-          fill={C.stripeA}
-          opacity={visualSelected ? 0.6 : 0.4}
-          wosRectRole="rack-body-stripe"
-        />
-      )}
+      <Rect
+        x={0}
+        y={0}
+        width={faceAWidth}
+        height={stripeH}
+        cornerRadius={[8, faceAOverhang || !isPaired ? 8 : 0, 0, 0] as unknown as number}
+        fill={C.stripeA}
+        opacity={visualSelected ? 0.6 : 0.4}
+        wosRectRole="rack-body-stripe"
+      />
 
-      {!hideStripesOrOverhangs && isPaired && (
+      {isPaired && (
         <Rect
           x={0}
           // Face B band must stay on the outer edge of the paired rack.
@@ -352,7 +316,7 @@ export function RackBody({
         />
       )}
 
-      {isPaired && !hideSpineBoundary && (
+      {isPaired && !lightweightVisuals && (
         <Line
           points={[8, spineY, width - 8, spineY]}
           stroke={C.spine}
@@ -362,7 +326,7 @@ export function RackBody({
         />
       )}
 
-      {isAsymmetric && !hideSpineBoundary && (
+      {isAsymmetric && !lightweightVisuals && (
         <Line
           points={[minFaceW, 4, minFaceW, height - 4]}
           stroke={C.boundaryLine}
@@ -372,7 +336,7 @@ export function RackBody({
         />
       )}
 
-      {showRackCode && !hideLabels && (
+      {showRackCode && (
         <Group x={labelX} y={labelY} rotation={-rotationDeg}>
           <Rect
             x={-labelWidth / 2}
@@ -383,8 +347,8 @@ export function RackBody({
             fill={C.pillBg}
             opacity={labelBgOpacity}
             shadowColor="#0f172a"
-            shadowBlur={hideShadows ? 0 : 4}
-            shadowOpacity={hideShadows ? 0 : labelShadowOpacity}
+            shadowBlur={shadowsDisabled ? 0 : 4}
+            shadowOpacity={shadowsDisabled ? 0 : labelShadowOpacity}
             wosRectRole="badge-decoration"
           />
           <Rect
@@ -393,9 +357,9 @@ export function RackBody({
             width={labelWidth}
             height={labelHeight}
             cornerRadius={999}
-            stroke={hideBodyStrokes ? undefined : C.codeText}
-            strokeEnabled={!hideBodyStrokes}
-            strokeWidth={hideBodyStrokes ? 0 : 0.6}
+            stroke={lightweightVisuals ? undefined : C.codeText}
+            strokeEnabled={!lightweightVisuals}
+            strokeWidth={lightweightVisuals ? 0 : 0.6}
             opacity={lightweightVisuals ? 0 : labelStrokeOpacity}
             listening={false}
             wosRectRole="badge-decoration"
