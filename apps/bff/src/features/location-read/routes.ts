@@ -2,25 +2,26 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 
 const cellIdListSchema = z.array(z.string().uuid());
-import { ApiError } from '../errors.js';
-import { createLocationReadRepo } from '../features/location-read/location-read-repo.js';
+import { ApiError } from '../../errors.js';
+import { createLocationReadRepo } from './location-read-repo.js';
 import {
   attachProductsToRows,
   type ProductAwareRow
-} from '../inventory-product-resolution.js';
+} from '../../inventory-product-resolution.js';
 import {
   mapLocationOccupancyRowToDomain,
   mapLocationStorageSnapshotRowToDomain
-} from '../mappers.js';
-import type { RouteDeps } from '../route-deps.js';
+} from '../../mappers.js';
+import type { RouteDeps } from '../../route-deps.js';
 import {
   idResponseSchema,
   locationOccupancyRowsResponseSchema,
   locationReferenceResponseSchema,
   locationStorageSnapshotRowsResponseSchema,
-  nonRackLocationsResponseSchema
-} from '../schemas.js';
-import { parseOrThrow } from '../validation.js';
+  nonRackLocationsResponseSchema,
+  patchLocationGeometryBodySchema
+} from '../../schemas.js';
+import { parseOrThrow } from '../../validation.js';
 
 type LocationReadRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
 
@@ -183,4 +184,29 @@ export function registerLocationReadRoutes(app: FastifyInstance, deps: LocationR
     );
   });
 
+  app.patch('/api/locations/:locationId/geometry', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const locationId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { locationId: string }).locationId
+    }).id;
+    const body = parseOrThrow(patchLocationGeometryBodySchema, request.body);
+    const supabase = deps.getUserSupabase(auth);
+    const locationReadRepo = createLocationReadRepo(supabase);
+    const row = await locationReadRepo.updateLocationGeometry(locationId, body.floorX, body.floorY);
+
+    if (!row) {
+      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Location not found or is a rack slot' });
+    }
+
+    return {
+      id: row.id,
+      code: row.code,
+      locationType: row.location_type,
+      floorX: row.floor_x,
+      floorY: row.floor_y,
+      status: row.status
+    };
+  });
 }
