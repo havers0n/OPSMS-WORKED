@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { pickerTasksQueryOptions } from '@/entities/picker/api/queries';
 import { pickerTaskPath } from '@/shared/config/routes';
 
@@ -22,33 +22,11 @@ function statusChipClass(status: string): string {
 }
 
 export function PickerPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const workerId = searchParams.get('workerId');
 
-  const { data: tasks, isLoading, isError, refetch } = useQuery(
-    pickerTasksQueryOptions(workerId)
+  const { data: tasks, isLoading, isError, error, refetch } = useQuery(
+    pickerTasksQueryOptions()
   );
-
-  if (!workerId) {
-    return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
-        data-testid="picker-missing-worker"
-      >
-        <div className="text-4xl mb-4">⚠️</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
-        <p className="text-sm text-gray-500 mb-4">לא נמצאה הפעלת עובד.</p>
-        <button
-          onClick={() => navigate('/')}
-          className="text-blue-600 text-sm font-medium underline"
-          data-testid="picker-return-home"
-        >
-          חזור לדף הראשי
-        </button>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -62,6 +40,27 @@ export function PickerPage() {
   }
 
   if (isError) {
+    const bffError = error as { code?: string };
+    if (bffError?.code === 'PICKER_WORKER_NOT_BOUND') {
+      return (
+        <div
+          className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
+          data-testid="picker-missing-worker"
+        >
+          <div className="text-4xl mb-4">⚠️</div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
+          <p className="text-sm text-gray-500 mb-4">לא נמצא חשבון משויך לעובד. פנה למנהל המערכת.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="text-blue-600 text-sm font-medium underline"
+            data-testid="picker-return-home"
+          >
+            חזור לדף הראשי
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div
         className="flex min-h-screen flex-col items-center justify-center p-6 bg-white"
@@ -107,7 +106,7 @@ export function PickerPage() {
             key={task.id}
             type="button"
             className="w-full rounded-xl bg-white border border-gray-200 p-4 text-left active:bg-gray-50 transition-colors shadow-sm"
-            onClick={() => navigate(pickerTaskPath(task.id, workerId))}
+            onClick={() => navigate(pickerTaskPath(task.id))}
             data-testid="picker-task-item"
           >
             <div className="flex items-center justify-between gap-2 mb-2">

@@ -67,9 +67,13 @@ function createManualRepoMock(): ManualShiftsRepo {
       role: 'picker' as const,
       active: true,
       sortOrder: 1,
+      authUserId: null,
       createdAt: '2026-05-28T09:00:00.000Z',
       updatedAt: '2026-05-28T09:00:00.000Z'
     })),
+    findWorkerByAuthUserId: vi.fn(async () => null),
+    setWorkerAuthUser: vi.fn(async () => undefined),
+    listBindableUsers: vi.fn(async () => []),
     createWorker: vi.fn(),
     updateWorker: vi.fn(),
     findActiveShiftByDate: vi.fn(),
@@ -144,6 +148,7 @@ describe('picker service', () => {
       role: 'picker' as const,
       active: false,
       sortOrder: 1,
+      authUserId: null,
       createdAt: '2026-05-28T09:00:00.000Z',
       updatedAt: '2026-05-28T09:00:00.000Z'
     });
@@ -171,6 +176,7 @@ describe('picker service', () => {
       role: 'picker' as const,
       active: true,
       sortOrder: 1,
+      authUserId: null,
       createdAt: '2026-05-28T09:00:00.000Z',
       updatedAt: '2026-05-28T09:00:00.000Z'
     });
@@ -393,5 +399,61 @@ describe('picker service', () => {
     expect(pickerRepo.updateTaskStatus).toHaveBeenCalledWith(ids.task, 'in_progress', '2026-05-28T10:20:00.000Z');
     expect(pickerRepo.updateTaskStatus).not.toHaveBeenCalledWith(ids.task, 'completed', expect.any(String));
     expect(manualRepo.updateOrder).not.toHaveBeenCalled();
+  });
+
+  describe('resolveWorker', () => {
+    it('resolves worker when auth_user_id matches an active worker', async () => {
+      const pickerRepo = createPickerRepoMock();
+      const manualRepo = createManualRepoMock();
+      (manualRepo.findWorkerByAuthUserId as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: ids.worker,
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        name: 'Worker',
+        role: 'picker' as const,
+        active: true,
+        sortOrder: 1,
+        authUserId: 'auth-user-1',
+        createdAt: '2026-05-28T09:00:00.000Z',
+        updatedAt: '2026-05-28T09:00:00.000Z'
+      });
+      const service = createPickerService(pickerRepo, manualRepo);
+
+      const result = await service.resolveWorker(ids.tenant, 'auth-user-1');
+      expect(result).toEqual({ workerId: ids.worker });
+    });
+
+    it('throws PICKER_WORKER_NOT_BOUND when no worker matches auth user', async () => {
+      const pickerRepo = createPickerRepoMock();
+      const manualRepo = createManualRepoMock();
+      (manualRepo.findWorkerByAuthUserId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+      const service = createPickerService(pickerRepo, manualRepo);
+
+      await expect(
+        service.resolveWorker(ids.tenant, 'unknown-user')
+      ).rejects.toMatchObject({ code: 'PICKER_WORKER_NOT_BOUND' });
+    });
+
+    it('throws PICKER_WORKER_INACTIVE when worker is inactive', async () => {
+      const pickerRepo = createPickerRepoMock();
+      const manualRepo = createManualRepoMock();
+      (manualRepo.findWorkerByAuthUserId as ReturnType<typeof vi.fn>).mockResolvedValue({
+        id: ids.worker,
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        name: 'Inactive',
+        role: 'picker' as const,
+        active: false,
+        sortOrder: 1,
+        authUserId: 'some-user',
+        createdAt: '2026-05-28T09:00:00.000Z',
+        updatedAt: '2026-05-28T09:00:00.000Z'
+      });
+      const service = createPickerService(pickerRepo, manualRepo);
+
+      await expect(
+        service.resolveWorker(ids.tenant, 'some-user')
+      ).rejects.toMatchObject({ code: 'PICKER_WORKER_INACTIVE' });
+    });
   });
 });

@@ -83,6 +83,30 @@ export function manualShiftPickerWorkerInvalid(
   );
 }
 
+export function manualShiftWorkerAuthUserForbidden(workerId: string) {
+  return new ApiError(
+    403,
+    'WORKER_AUTH_USER_FORBIDDEN',
+    `Worker ${workerId} does not belong to current tenant.`
+  );
+}
+
+export function manualShiftWorkerAuthUserNotInTenant(authUserId: string) {
+  return new ApiError(
+    422,
+    'WORKER_AUTH_USER_FORBIDDEN',
+    `Selected auth user ${authUserId} does not belong to current tenant.`
+  );
+}
+
+export function manualShiftWorkerAuthUserAlreadyBound(authUserId: string, existingWorkerId: string) {
+  return new ApiError(
+    409,
+    'WORKER_AUTH_USER_ALREADY_BOUND',
+    `Auth user ${authUserId} is already bound to worker ${existingWorkerId}.`
+  );
+}
+
 export function manualShiftOrderNoPickerWorker(orderId: string) {
   return new ApiError(
     422,

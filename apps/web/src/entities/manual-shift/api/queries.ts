@@ -1,4 +1,5 @@
 import type {
+  BindableUser,
   ManualShiftTodayResponse,
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
@@ -27,7 +28,8 @@ export const manualShiftKeys = {
     [...manualShiftKeys.all, 'people-summary', shiftId] as const,
   daySummary: (shiftId: string) => [...manualShiftKeys.all, 'day-summary', shiftId] as const,
   shiftOpenAshlamot: (shiftId: string) =>
-    [...manualShiftKeys.all, 'shift-open-ashlamot', shiftId] as const
+    [...manualShiftKeys.all, 'shift-open-ashlamot', shiftId] as const,
+  bindableUsers: () => [...manualShiftKeys.all, 'bindable-users'] as const
 };
 
 async function fetchTodayShift(): Promise<ManualShiftTodayResponse> {
@@ -168,5 +170,17 @@ export function shiftOpenAshlamotQueryOptions(shiftId: string) {
     queryFn: () => fetchShiftOpenAshlamot(shiftId),
     enabled: !!shiftId,
     staleTime: 10_000
+  });
+}
+
+async function fetchBindableUsers(): Promise<BindableUser[]> {
+  return bffRequest<BindableUser[]>('/api/manual-shifts/worker-bindable-users');
+}
+
+export function bindableUsersQueryOptions() {
+  return queryOptions({
+    queryKey: manualShiftKeys.bindableUsers(),
+    queryFn: fetchBindableUsers,
+    staleTime: 30_000
   });
 }

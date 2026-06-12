@@ -6,6 +6,7 @@ import { ZodError } from 'zod';
 import * as XLSX from 'xlsx';
 import type {
   ApplyDailyManualShiftImportResponse,
+  BindableUser,
   DailyManualShiftImportPreview,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
@@ -127,6 +128,7 @@ function createWorker(): ManualShiftWorker {
     role: 'picker',
     active: true,
     sortOrder: 1,
+    authUserId: null,
     createdAt: '2026-05-26T07:00:00.000Z',
     updatedAt: '2026-05-26T07:00:00.000Z'
   };
@@ -268,6 +270,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     createOrderError: vi.fn(async () => createOrderError()),
     getPeopleSummary: vi.fn(async () => peopleSummary),
     getDaySummary: vi.fn(async () => daySummary),
+    listBindableUsers: vi.fn(async () => [] as BindableUser[]),
     ...overrides
   };
 }
@@ -282,7 +285,13 @@ async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedReq
   });
 
   registerManualShiftsRoutes(app, {
-    getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => auth,
+    getAuthContext: async (_request: FastifyRequest, reply: FastifyReply) => {
+      if (!auth) {
+        await reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Missing bearer token.' });
+        return null;
+      }
+      return auth;
+    },
     getManualShiftsService: () => service,
     getUserSupabase: () => ({} as never)
   });
@@ -1074,5 +1083,119 @@ describe('manual shifts routes', () => {
     expect(response.json()).toMatchObject({ code });
 
     await app.close();
+  });
+
+  describe('worker-bindable-users', () => {
+    const bindableUsers: BindableUser[] = [
+      { userId: ids.user, displayName: 'Test User', email: 'test@wos.local', boundWorkerId: null },
+      { userId: '99999999-9999-4999-8999-999999999999', displayName: 'Bound User', email: 'bound@wos.local', boundWorkerId: ids.worker }
+    ];
+
+    it('returns bindable users for current tenant', async () => {
+      const service = createServiceMock({ listBindableUsers: vi.fn(async () => bindableUsers) });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/manual-shifts/worker-bindable-users'
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toHaveLength(2);
+      expect(body[0]).toMatchObject({ userId: ids.user, boundWorkerId: null });
+      expect(body[1].boundWorkerId).toBe(ids.worker);
+
+      await app.close();
+    });
+
+    it('returns 401 when unauthenticated', async () => {
+      const service = createServiceMock();
+      const app = await buildTestApp(service, null);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/manual-shifts/worker-bindable-users'
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+    });
+
+    it('returns 403 for operator role', async () => {
+      const service = createServiceMock();
+      const operatorAuth = {
+        ...authContext,
+        currentTenant: { ...authContext.currentTenant!, role: 'operator' as const }
+      };
+      const app = await buildTestApp(service, operatorAuth);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/manual-shifts/worker-bindable-users'
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ code: 'FORBIDDEN' });
+
+      await app.close();
+    });
+  });
+
+  describe('patch worker auth binding', () => {
+    it('rejects operator role from PATCH authUserId', async () => {
+      const service = createServiceMock();
+      const operatorAuth = {
+        ...authContext,
+        currentTenant: { ...authContext.currentTenant!, role: 'operator' as const }
+      };
+      const app = await buildTestApp(service, operatorAuth);
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/manual-shift-workers/${ids.worker}`,
+        payload: { authUserId: ids.user }
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ code: 'FORBIDDEN' });
+
+      await app.close();
+    });
+
+    it('allows tenant_admin to PATCH authUserId', async () => {
+      const service = createServiceMock({ patchWorker: vi.fn(async () => createWorker()) });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/manual-shift-workers/${ids.worker}`,
+        payload: { authUserId: ids.user }
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      await app.close();
+    });
+
+    it('allows platform_admin to PATCH authUserId', async () => {
+      const service = createServiceMock({ patchWorker: vi.fn(async () => createWorker()) });
+      const platformAuth = {
+        ...authContext,
+        currentTenant: { ...authContext.currentTenant!, role: 'platform_admin' as const }
+      };
+      const app = await buildTestApp(service, platformAuth);
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/manual-shift-workers/${ids.worker}`,
+        payload: { authUserId: ids.user }
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      await app.close();
+    });
   });
 });

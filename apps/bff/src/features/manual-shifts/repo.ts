@@ -23,6 +23,13 @@ type PostgrestLikeError = {
   details?: string;
 };
 
+export type BindableUser = {
+  userId: string;
+  displayName: string | null;
+  email: string | null;
+  boundWorkerId: string | null;
+};
+
 type ManualShiftSessionRow = {
   id: string;
   tenant_id: string;
@@ -55,6 +62,7 @@ type ManualShiftWorkerRow = {
   role: ManualShiftWorkerRole;
   active: boolean;
   sort_order: number;
+  auth_user_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -186,7 +194,7 @@ const sessionColumns =
 const lineColumns =
   'id,tenant_id,shift_id,name,sort_order,created_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const workerColumns =
-  'id,tenant_id,shift_id,name,role,active,sort_order,created_at,updated_at';
+  'id,tenant_id,shift_id,name,role,active,sort_order,auth_user_id,created_at,updated_at';
 const orderColumns =
   'id,tenant_id,shift_id,line_id,order_number,customer_name,point_name,pallet_count,picker_name,picker_worker_id,checker_name,line_count,sort_order,size,status,started_at,check_started_at,waiting_check_at,checked_at,finished_at,comment,created_at,updated_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const checkUnitColumns =
@@ -274,6 +282,7 @@ function mapWorkerRow(row: ManualShiftWorkerRow): ManualShiftWorker {
     role: row.role,
     active: row.active,
     sortOrder: row.sort_order,
+    authUserId: row.auth_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -466,18 +475,23 @@ export type ManualShiftLinePatch = {
 export type ManualShiftsRepo = {
   listShiftWorkers(shiftId: string): Promise<ManualShiftWorker[]>;
   findWorkerById(workerId: string): Promise<ManualShiftWorker | null>;
+  findWorkerByAuthUserId(tenantId: string, authUserId: string): Promise<ManualShiftWorker | null>;
+  setWorkerAuthUser(workerId: string, authUserId: string | null): Promise<void>;
+  listBindableUsers(tenantId: string): Promise<BindableUser[]>;
   createWorker(input: {
     tenantId: string;
     shiftId: string;
     name: string;
     role: ManualShiftWorkerRole;
     sortOrder: number;
+    authUserId?: string | null;
   }): Promise<ManualShiftWorker>;
   updateWorker(workerId: string, patch: {
     name?: string;
     role?: ManualShiftWorkerRole;
     active?: boolean;
     sortOrder?: number;
+    authUserId?: string | null;
   }): Promise<ManualShiftWorker | null>;
   findActiveShiftByDate(tenantId: string, date: string): Promise<ManualShiftSession | null>;
   findShiftByDate(tenantId: string, date: string): Promise<ManualShiftSession | null>;
@@ -627,6 +641,46 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       return data ? mapWorkerRow(data as ManualShiftWorkerRow) : null;
     },
 
+    async findWorkerByAuthUserId(tenantId, authUserId) {
+      const { data, error } = await supabase
+        .from('manual_shift_workers')
+        .select(workerColumns)
+        .eq('tenant_id', tenantId)
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data ? mapWorkerRow(data as ManualShiftWorkerRow) : null;
+    },
+
+    async listBindableUsers(tenantId) {
+      const { data, error } = await supabase.rpc('list_manual_shift_bindable_users', {
+        p_tenant_id: tenantId
+      });
+
+      if (error) throw error;
+      return (data ?? []).map((row: {
+        user_id: string;
+        display_name: string | null;
+        email: string | null;
+        bound_worker_id: string | null;
+      }): BindableUser => ({
+        userId: row.user_id,
+        displayName: row.display_name,
+        email: row.email,
+        boundWorkerId: row.bound_worker_id
+      }));
+    },
+
+    async setWorkerAuthUser(workerId, authUserId) {
+      const { error } = await supabase.rpc('set_manual_shift_worker_auth_user', {
+        p_worker_id: workerId,
+        p_auth_user_id: authUserId
+      });
+
+      if (error) throw error;
+    },
+
     async createWorker(input) {
       const { data, error } = await supabase
         .from('manual_shift_workers')
@@ -635,7 +689,8 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
           shift_id: input.shiftId,
           name: input.name,
           role: input.role,
-          sort_order: input.sortOrder
+          sort_order: input.sortOrder,
+          auth_user_id: input.authUserId ?? null
         })
         .select(workerColumns)
         .single();
@@ -650,6 +705,7 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       if (patch.role !== undefined) payload.role = patch.role;
       if (patch.active !== undefined) payload.active = patch.active;
       if (patch.sortOrder !== undefined) payload.sort_order = patch.sortOrder;
+      if (patch.authUserId !== undefined) payload.auth_user_id = patch.authUserId;
 
       const { data, error } = await supabase
         .from('manual_shift_workers')

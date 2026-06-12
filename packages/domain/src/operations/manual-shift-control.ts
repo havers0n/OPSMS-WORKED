@@ -18,10 +18,19 @@ export const manualShiftWorkerSchema = z.object({
   role: manualShiftWorkerRoleSchema,
   active: z.boolean(),
   sortOrder: z.number().int(),
+  authUserId: z.string().uuid().nullable(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
 export type ManualShiftWorker = z.infer<typeof manualShiftWorkerSchema>;
+
+export const bindableUserSchema = z.object({
+  userId: z.string().uuid(),
+  displayName: z.string().nullable(),
+  email: z.string().nullable(),
+  boundWorkerId: z.string().uuid().nullable()
+});
+export type BindableUser = z.infer<typeof bindableUserSchema>;
 
 export const manualShiftSessionStatusSchema = z.enum(['active', 'closed']);
 export type ManualShiftSessionStatus = z.infer<typeof manualShiftSessionStatusSchema>;

@@ -250,7 +250,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
                     type="button"
                     onClick={() => {
                       if (!order.pickerWorkerId) return;
-                      navigate(pickerPath(order.pickerWorkerId));
+                      navigate(pickerPath());
                     }}
                     className="w-full rounded-xl border border-blue-200 bg-blue-50 h-12 font-bold text-base text-blue-700"
                   >

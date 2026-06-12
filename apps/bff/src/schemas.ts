@@ -82,7 +82,8 @@ import {
   manualShiftOrderErrorTypeSchema,
   manualShiftWorkerSchema,
   manualShiftWorkerRoleSchema,
-  openAshlamaBoardItemSchema
+  openAshlamaBoardItemSchema,
+  bindableUserSchema
   ,
   dailyManualShiftImportPreviewSchema,
   applyDailyManualShiftImportRequestSchema,
@@ -417,14 +418,16 @@ export const patchManualShiftLineBodySchema = z.object({
 export const createManualShiftWorkerBodySchema = z.object({
   name: z.string().trim().min(1),
   role: manualShiftWorkerRoleSchema.default('picker'),
-  sortOrder: z.number().int().default(0)
+  sortOrder: z.number().int().default(0),
+  authUserId: z.string().uuid().nullable().optional()
 });
 
 export const patchManualShiftWorkerBodySchema = z.object({
   name: z.string().trim().min(1).optional(),
   role: manualShiftWorkerRoleSchema.optional(),
   active: z.boolean().optional(),
-  sortOrder: z.number().int().optional()
+  sortOrder: z.number().int().optional(),
+  authUserId: z.string().uuid().nullable().optional()
 });
 
 export const createManualShiftOrderBodySchema = z.object({
@@ -546,6 +549,7 @@ export const manualShiftBulkAddResponseSchema = manualShiftBulkAddResultSchema;
 export const manualShiftWorkerResponseSchema = manualShiftWorkerSchema;
 export const openAshlamaBoardResponseSchema = z.array(openAshlamaBoardItemSchema);
 export const manualShiftWorkersResponseSchema = z.array(manualShiftWorkerSchema);
+export const bindableUsersResponseSchema = z.array(bindableUserSchema);
 export const manualShiftImportPreviewResponseSchema = z.object({
   preview: dailyManualShiftImportPreviewSchema
 });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Plus, User, X } from 'lucide-react';
-import type { ManualShiftPeopleSummaryItem, ManualShiftWorker, ManualShiftWorkerRole } from '@wos/domain';
+import type { BindableUser, ManualShiftPeopleSummaryItem, ManualShiftWorker, ManualShiftWorkerRole } from '@wos/domain';
 import { MANUAL_SHIFT_WORKER_ROLE_LABELS } from '@wos/domain';
 import {
   useCreateManualShiftWorker,
@@ -9,7 +9,8 @@ import {
 } from '@/entities/manual-shift/api/mutations';
 import {
   peopleSummaryQueryOptions,
-  shiftWorkersQueryOptions
+  shiftWorkersQueryOptions,
+  bindableUsersQueryOptions
 } from '@/entities/manual-shift/api/queries';
 
 interface PeopleTabProps {
@@ -25,6 +26,7 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
   const { data: peopleSummary, isLoading: summaryLoading } = useQuery(
     peopleSummaryQueryOptions(shiftId)
   );
+  const { data: bindableUsers } = useQuery(bindableUsersQueryOptions());
 
   const isLoading = workersLoading || summaryLoading;
 
@@ -74,6 +76,7 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
           worker={worker}
           summary={summaryByName.get(worker.name) ?? null}
           shiftId={shiftId}
+          bindableUsers={bindableUsers ?? []}
         />
       ))}
 
@@ -96,15 +99,27 @@ export function PeopleTab({ shiftId }: PeopleTabProps) {
 function WorkerCard({
   worker,
   summary,
-  shiftId
+  shiftId,
+  bindableUsers
 }: {
   worker: ManualShiftWorker;
   summary: ManualShiftPeopleSummaryItem | null;
   shiftId: string;
+  bindableUsers: BindableUser[];
 }) {
   const patchWorker = usePatchManualShiftWorker(shiftId);
   const name = worker.name;
   const roleLabel = MANUAL_SHIFT_WORKER_ROLE_LABELS[worker.role];
+
+  const boundUser = bindableUsers.find(u => u.userId === worker.authUserId);
+  const availableAccounts = bindableUsers;
+
+  function handleAccountChange(userId: string) {
+    const value = userId === '__unbound' ? null : userId;
+    patchWorker.mutate({ workerId: worker.id, authUserId: value });
+  }
+
+  const showUnboundWarning = worker.role === 'picker' && worker.active && !worker.authUserId;
 
   return (
     <div
@@ -132,6 +147,35 @@ function WorkerCard({
               </span>
             )}
           </div>
+          <div className="mt-2">
+            <select
+              value={worker.authUserId ?? '__unbound'}
+              onChange={e => handleAccountChange(e.target.value)}
+              disabled={patchWorker.isPending}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              data-testid="worker-account-select"
+            >
+              <option value="__unbound">ללא חשבון</option>
+              {availableAccounts.map(account => (
+                <option
+                  key={account.userId}
+                  value={account.userId}
+                  disabled={!!account.boundWorkerId && account.boundWorkerId !== worker.id}
+                >
+                  {account.displayName || account.email || account.userId}
+                  {account.boundWorkerId && account.boundWorkerId !== worker.id ? ' (כבר משויך)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {showUnboundWarning && (
+            <div
+              className="mt-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium"
+              data-testid="worker-unbound-warning"
+            >
+              ⚠ יש לשייך חשבון לעובד זה כדי לאפשר שימוש בממשק הקטיף.
+            </div>
+          )}
           {summary?.currentActiveOrder && (
             <p className="text-sm text-blue-600 truncate mt-0.5">
               פעיל: {summary.currentActiveOrder.pointName ?? 'ללא נקודה'}

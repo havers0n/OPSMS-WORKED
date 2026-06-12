@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, MapPin, Minus, Package, Plus } from 'lucide-react';
 import { pickerTaskDetailQueryOptions } from '@/entities/picker/api/queries';
 import { useConfirmPickStep } from '@/entities/picker/api/mutations';
@@ -185,12 +185,10 @@ function PickStepScreen({
 
 export function PickStepPage() {
   const { taskId, stepId } = useParams<{ taskId: string; stepId: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const workerId = searchParams.get('workerId') ?? '';
 
   const { data: task, isLoading, isError, refetch } = useQuery(
-    pickerTaskDetailQueryOptions(taskId ?? null, workerId || null)
+    pickerTaskDetailQueryOptions(taskId ?? null)
   );
 
   const step = task?.steps.find((s) => s.id === stepId);
@@ -201,23 +199,22 @@ export function PickStepPage() {
 
   const effectiveQty = qtyOverride ?? step?.qtyRequired ?? 0;
 
-  const handleBack = () => navigate(pickerTaskPath(taskId ?? '', workerId));
+  const handleBack = () => navigate(pickerTaskPath(taskId ?? ''));
 
   const handleConfirm = async () => {
-    if (!taskId || !stepId || !workerId) return;
+    if (!taskId || !stepId) return;
     setConfirmError(null);
     try {
       const updatedTask = await confirm.mutateAsync({
         taskId,
         stepId,
-        workerId,
         qtyPicked: effectiveQty,
       });
       const nextPending = updatedTask.steps.find((s) => s.status === 'pending');
       if (nextPending) {
-        navigate(pickerStepPath(taskId, nextPending.id, workerId), { replace: true });
+        navigate(pickerStepPath(taskId, nextPending.id), { replace: true });
       } else {
-        navigate(pickerTaskPath(taskId, workerId), { replace: true });
+        navigate(pickerTaskPath(taskId), { replace: true });
       }
     } catch (err) {
       const status = (err as { status?: number }).status;
@@ -232,26 +229,6 @@ export function PickStepPage() {
       }
     }
   };
-
-  if (!workerId) {
-    return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
-        data-testid="pick-step-missing-worker"
-      >
-        <div className="text-4xl mb-4">⚠️</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
-        <p className="text-sm text-gray-500 mb-4">לא נמצאה הפעלת עובד.</p>
-        <button
-          onClick={() => navigate('/')}
-          className="text-blue-600 text-sm font-medium underline"
-          data-testid="pick-step-return-home"
-        >
-          חזור לדף הראשי
-        </button>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
