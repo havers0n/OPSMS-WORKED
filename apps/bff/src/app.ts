@@ -13,7 +13,7 @@ import { registerPickingPlanningPreviewRoutes } from './features/picking-plannin
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerClientErrorsRoutes } from './routes/client-errors.routes.js';
-import { registerMeRoutes } from './routes/me.routes.js';
+import { registerMeRoutes } from './features/me/routes.js';
 import { registerSitesRoutes } from './features/sites/routes.js';
 import { registerFloorsRoutes } from './features/floors/routes.js';
 import { registerLayoutRoutes } from './features/layout/routes.js';
