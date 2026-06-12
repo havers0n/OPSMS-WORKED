@@ -36,7 +36,7 @@ export function pickTaskDetailPath(
   if (!context) return `/operations/pick-tasks/${id}`;
   const params = new URLSearchParams();
   if (context.orderId) params.set('order', context.orderId);
-  if (context.wave) params.set('wave', context.wave);
+  if (context.waveId) params.set('wave', context.waveId);
   const qs = params.toString();
   return `/operations/pick-tasks/${id}${qs ? `?${qs}` : ''}`;
 }
