@@ -19,6 +19,7 @@ import { registerFloorsRoutes } from './features/floors/routes.js';
 import { registerLayoutRoutes } from './features/layout/routes.js';
 import { registerContainersRoutes } from './features/containers/routes.js';
 import { registerLocationReadRoutes } from './features/location-read/routes.js';
+import { registerPlacementRoutes } from './features/placement/routes.js';
 import { registerContainerMovementRoutes } from './routes/container-movement.routes.js';
 import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
 import { registerStoragePresetsRoutes } from './features/storage-presets/routes.js';
@@ -95,7 +96,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerLayoutRoutes(app, { getAuthContext, getUserSupabase, getLayoutService });
   registerContainersRoutes(app, { getAuthContext, getContainersService, getInventoryService, getUserSupabase });
   registerLocationReadRoutes(app, { getAuthContext, getUserSupabase });
-  registerContainerMovementRoutes(app, { getAuthContext, getPlacementService, getUserSupabase });
+  registerPlacementRoutes(app, { getAuthContext, getPlacementService });
+  registerContainerMovementRoutes(app, { getAuthContext, getUserSupabase });
   registerStoragePresetsRoutes(app, { getAuthContext, getStoragePresetsService: deps.getStoragePresetsService });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
