@@ -86,6 +86,7 @@ function createWorker(overrides: Partial<ManualShiftWorker> = {}): ManualShiftWo
     role: 'picker',
     active: true,
     sortOrder: 1,
+    authUserId: null,
     createdAt: nowIso,
     updatedAt: nowIso,
     ...overrides
@@ -561,7 +562,10 @@ function createRepo() {
     })),
     listShiftErrors: vi.fn(async (shiftId: string) => {
       return state.errors.filter((error) => error.shiftId === shiftId);
-    })
+    }),
+    findWorkerByAuthUserId: vi.fn(async (_tenantId: string, _authUserId: string) => null),
+    setWorkerAuthUser: vi.fn(async (_workerId: string, _authUserId: string | null) => {}),
+    listBindableUsers: vi.fn(async (_tenantId: string) => [])
   };
 
   return { repo, state };
@@ -1391,7 +1395,8 @@ describe('manual shift workers service', () => {
               !k.startsWith('create') && !k.startsWith('update') &&
               !k.startsWith('close') && !k.startsWith('patch') &&
               !k.startsWith('list') &&
-              k !== 'applyDailyImport'
+              k !== 'applyDailyImport' &&
+              k !== 'setWorkerAuthUser'
     );
     expect(canonicalKeys).toEqual([]);
   });

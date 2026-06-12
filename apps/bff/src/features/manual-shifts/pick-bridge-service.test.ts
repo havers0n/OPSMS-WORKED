@@ -131,6 +131,7 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
         role: 'picker' as const,
         active: true,
         sortOrder: 0,
+        authUserId: null,
         createdAt: nowIso,
         updatedAt: nowIso
       };
@@ -163,7 +164,10 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     createOrderError: vi.fn(async () => { throw new Error('not used'); }),
     createLineEvent: vi.fn(async () => { throw new Error('not used'); }),
     listShiftErrors: vi.fn(async () => []),
-    listOrderEvents: vi.fn(async () => [])
+    listOrderEvents: vi.fn(async () => []),
+    findWorkerByAuthUserId: vi.fn(async () => null),
+    setWorkerAuthUser: vi.fn(async () => {}),
+    listBindableUsers: vi.fn(async () => [])
   };
 }
 
