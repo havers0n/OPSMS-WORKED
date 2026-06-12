@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { ApiError, mapSupabaseError } from '../errors.js';
-import { mapStoragePresetError } from '../features/storage-presets/errors.js';
-import type { RouteDeps } from '../route-deps.js';
+import { ApiError, mapSupabaseError } from '../../errors.js';
+import { mapStoragePresetError } from './errors.js';
+import type { RouteDeps } from '../../route-deps.js';
 import {
   idResponseSchema,
   storagePresetsResponseSchema,
@@ -11,8 +11,8 @@ import {
   createContainerFromStoragePresetRequestBodySchema,
   createContainerFromStoragePresetResponseSchema,
   setPreferredStoragePresetRequestBodySchema
-} from '../schemas.js';
-import { parseOrThrow } from '../validation.js';
+} from '../../schemas.js';
+import { parseOrThrow } from '../../validation.js';
 
 type StoragePresetsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getStoragePresetsService'>;
 

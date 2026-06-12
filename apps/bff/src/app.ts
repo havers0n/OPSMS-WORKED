@@ -24,7 +24,7 @@ import { registerLocationReadRoutes } from './routes/location-read.routes.js';
 import { registerLocationMutationsRoutes } from './routes/location-mutations.routes.js';
 import { registerContainerMovementRoutes } from './routes/container-movement.routes.js';
 import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
-import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js';
+import { registerStoragePresetsRoutes } from './features/storage-presets/routes.js';
 import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
 import { registerRackInspectorRoutes } from './features/rack-inspector/routes.js';
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
