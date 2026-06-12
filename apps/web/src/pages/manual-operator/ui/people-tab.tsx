@@ -111,7 +111,6 @@ function WorkerCard({
   const name = worker.name;
   const roleLabel = MANUAL_SHIFT_WORKER_ROLE_LABELS[worker.role];
 
-  const boundUser = bindableUsers.find(u => u.userId === worker.authUserId);
   const availableAccounts = bindableUsers;
 
   function handleAccountChange(userId: string) {
