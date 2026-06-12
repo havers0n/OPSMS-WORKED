@@ -13,19 +13,16 @@ import { registerPickingPlanningPreviewRoutes } from './features/picking-plannin
 import { registerProductLocationRolesRoutes } from './features/product-location-roles/routes.js';
 import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerClientErrorsRoutes } from './routes/client-errors.routes.js';
-import { registerMeRoutes } from './routes/me.routes.js';
+import { registerMeRoutes } from './features/me/routes.js';
 import { registerSitesRoutes } from './features/sites/routes.js';
 import { registerFloorsRoutes } from './features/floors/routes.js';
-import { registerLayoutReadRoutes } from './routes/layout-read.routes.js';
-import { registerLayoutMutationsRoutes } from './routes/layout-mutations.routes.js';
-import { registerContainerReadRoutes } from './routes/container-read.routes.js';
-import { registerContainerMutationsRoutes } from './routes/container-mutations.routes.js';
-import { registerLocationReadRoutes } from './routes/location-read.routes.js';
-import { registerLocationMutationsRoutes } from './routes/location-mutations.routes.js';
-import { registerContainerMovementRoutes } from './routes/container-movement.routes.js';
-import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
-import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js';
-import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
+import { registerLayoutRoutes } from './features/layout/routes.js';
+import { registerContainersRoutes } from './features/containers/routes.js';
+import { registerLocationReadRoutes } from './features/location-read/routes.js';
+import { registerPlacementRoutes } from './features/placement/routes.js';
+import { registerExecutionRoutes } from './features/execution/routes.js';
+import { registerStoragePresetsRoutes } from './features/storage-presets/routes.js';
+import { registerPickingRoutes } from './features/picking/routes.js';
 import { registerRackInspectorRoutes } from './features/rack-inspector/routes.js';
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
 import { registerFloorRoutingRoutes } from './features/floor-routing/routes.js';
@@ -95,27 +92,24 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerSitesRoutes(app, { getAuthContext, getSitesService });
   registerFloorsRoutes(app, { getAuthContext, getSitesService, getFloorsService, getUserSupabase });
-  registerLayoutReadRoutes(app, { getAuthContext, getUserSupabase });
-  registerLayoutMutationsRoutes(app, { getAuthContext, getLayoutService });
-  registerContainerReadRoutes(app, { getAuthContext, getContainersService, getUserSupabase });
-  registerContainerMutationsRoutes(app, { getAuthContext, getContainersService, getInventoryService });
+  registerLayoutRoutes(app, { getAuthContext, getUserSupabase, getLayoutService });
+  registerContainersRoutes(app, { getAuthContext, getContainersService, getInventoryService, getUserSupabase });
   registerLocationReadRoutes(app, { getAuthContext, getUserSupabase });
-  registerLocationMutationsRoutes(app, { getAuthContext, getUserSupabase });
-  registerContainerMovementRoutes(app, { getAuthContext, getPlacementService, getUserSupabase });
+  registerPlacementRoutes(app, { getAuthContext, getPlacementService });
+  registerExecutionRoutes(app, { getAuthContext, getUserSupabase });
   registerStoragePresetsRoutes(app, { getAuthContext, getStoragePresetsService: deps.getStoragePresetsService });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
   registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
 
   registerMeRoutes(app, { getAuthContext });
-  registerInventoryMovementRoutes(app, { getAuthContext, getUserSupabase });
 
   // ── Orders ───────────────────────────────────────────────────────────────────
 
   registerOrdersRoutes(app, { getAuthContext, getUserSupabase, getOrdersService });
   registerPickingPlanningPreviewRoutes(app, { getAuthContext, getPickingPlanningPreviewService });
 
-  registerPickingExecutionRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
+  registerPickingRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
   registerRackInspectorRoutes(app, { getAuthContext, getUserSupabase });
   registerOperationsCellsRoutes(app, { getAuthContext, getUserSupabase });
   registerFloorRoutingRoutes(app, { getAuthContext, getFloorRoutingService });

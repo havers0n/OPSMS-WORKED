@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { ApiError } from '../errors.js';
-import type { RouteDeps } from '../route-deps.js';
+import { ApiError } from '../../errors.js';
+import type { RouteDeps } from '../../route-deps.js';
 import {
   allocatePickStepsResponseSchema,
   executePickStepBodySchema,
@@ -9,15 +9,15 @@ import {
   idResponseSchema,
   pickTaskDetailResponseSchema,
   pickTasksResponseSchema
-} from '../schemas.js';
-import { createOrdersRepo } from '../features/orders/repo.js';
-import { mapPickingError } from '../features/picking/errors.js';
-import { createPickReadRepo } from '../features/picking/pick-read-repo.js';
-import { parseOrThrow } from '../validation.js';
+} from '../../schemas.js';
+import { createOrdersRepo } from '../orders/repo.js';
+import { mapPickingError } from './errors.js';
+import { createPickReadRepo } from './pick-read-repo.js';
+import { parseOrThrow } from '../../validation.js';
 
 type PickingExecutionRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase' | 'getPickingService'>;
 
-export function registerPickingExecutionRoutes(app: FastifyInstance, deps: PickingExecutionRouteDeps): void {
+export function registerPickingRoutes(app: FastifyInstance, deps: PickingExecutionRouteDeps): void {
   app.get('/api/orders/:orderId/execution', async (request, reply) => {
     const auth = await deps.getAuthContext(request, reply);
     if (!auth) return;
