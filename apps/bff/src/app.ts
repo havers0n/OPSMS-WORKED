@@ -26,7 +26,7 @@ import { registerContainerMovementRoutes } from './routes/container-movement.rou
 import { registerInventoryMovementRoutes } from './routes/inventory-movement.routes.js';
 import { registerStoragePresetsRoutes } from './routes/storage-presets.routes.js';
 import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
-import { registerRackInspectorRoutes } from './routes/rack-inspector.routes.js';
+import { registerRackInspectorRoutes } from './features/rack-inspector/routes.js';
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
 import { registerFloorRoutingRoutes } from './features/floor-routing/routes.js';
 import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';

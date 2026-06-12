@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { ApiError } from '../errors.js';
-import { createRackInspectorRepo } from '../features/rack-inspector/rack-inspector-repo.js';
-import type { RouteDeps } from '../route-deps.js';
-import { idResponseSchema, rackInspectorPayloadSchema } from '../schemas.js';
-import { parseOrThrow } from '../validation.js';
+import { ApiError } from '../../errors.js';
+import { createRackInspectorRepo } from './rack-inspector-repo.js';
+import type { RouteDeps } from '../../route-deps.js';
+import { idResponseSchema, rackInspectorPayloadSchema } from '../../schemas.js';
+import { parseOrThrow } from '../../validation.js';
 
 type RackInspectorRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
 
