@@ -1,28 +1,35 @@
 import type { FastifyInstance } from 'fastify';
-import { ApiError } from '../errors.js';
-import { createLocationReadRepo } from '../features/location-read/location-read-repo.js';
+import { ApiError } from '../../errors.js';
+import { createLocationReadRepo } from '../location-read/location-read-repo.js';
 import {
   attachProductsToRows,
   type ProductAwareRow
-} from '../inventory-product-resolution.js';
+} from '../../inventory-product-resolution.js';
 import {
-  mapContainerStorageSnapshotRowToDomain
-} from '../mappers.js';
-import type { RouteDeps } from '../route-deps.js';
+  mapContainerStorageSnapshotRowToDomain,
+  mapInventoryUnitRowToLegacyInventoryItemDomain,
+} from '../../mappers.js';
+import type { RouteDeps } from '../../route-deps.js';
 import {
+  addInventoryToContainerBodySchema,
   containerCurrentLocationResponseSchema,
   containerResponseSchema,
   containerStorageSnapshotResponseSchema,
   containerTypesResponseSchema,
   containersResponseSchema,
+  createContainerBodySchema,
+  createContainerResponseSchema,
   idResponseSchema,
-  listContainersQuerySchema
-} from '../schemas.js';
-import { parseOrThrow } from '../validation.js';
+  inventoryItemResponseSchema,
+  listContainersQuerySchema,
+  removeContainerResponseSchema,
+} from '../../schemas.js';
+import { type ProductRow } from '../../inventory-product-resolution.js';
+import { parseOrThrow } from '../../validation.js';
 
-type ContainerReadRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getContainersService' | 'getUserSupabase'>;
+type ContainersRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getContainersService' | 'getInventoryService' | 'getUserSupabase'>;
 
-export function registerContainerReadRoutes(app: FastifyInstance, deps: ContainerReadRouteDeps): void {
+export function registerContainersRoutes(app: FastifyInstance, deps: ContainersRouteDeps): void {
   app.get('/api/container-types', async (request, reply) => {
     const auth = await deps.getAuthContext(request, reply);
     if (!auth) return;
@@ -119,5 +126,74 @@ export function registerContainerReadRoutes(app: FastifyInstance, deps: Containe
     }
 
     return parseOrThrow(containerCurrentLocationResponseSchema, currentLocation);
+  });
+
+  app.post('/api/containers', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const body = parseOrThrow(createContainerBodySchema, request.body);
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for container creation.');
+    }
+
+    const container = await deps.getContainersService(auth).createContainer({
+      tenantId: auth.currentTenant.tenantId,
+      containerTypeId: body.containerTypeId,
+      externalCode: body.externalCode,
+      operationalRole: body.operationalRole,
+      createdBy: auth.user.id
+    });
+
+    return parseOrThrow(createContainerResponseSchema, {
+      containerId: container.id,
+      systemCode: container.systemCode,
+      externalCode: container.externalCode,
+      containerTypeId: container.containerTypeId,
+      status: container.status,
+      operationalRole: container.operationalRole
+    });
+  });
+
+  app.post('/api/containers/:containerId/remove', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const data = await deps.getContainersService(auth).removeContainer(containerId, auth.user.id);
+    return parseOrThrow(removeContainerResponseSchema, data);
+  });
+
+  app.post('/api/containers/:containerId/inventory', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const containerId = parseOrThrow(idResponseSchema, { id: (request.params as { containerId: string }).containerId }).id;
+    const body = parseOrThrow(addInventoryToContainerBodySchema, request.body);
+    if (!auth.currentTenant) {
+      throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for inventory writes.');
+    }
+
+    const inventoryService = deps.getInventoryService(auth);
+    const rpcResult = await inventoryService.receiveInventoryUnit({
+      tenantId: auth.currentTenant.tenantId,
+      containerId,
+      productId: body.productId,
+      quantity: body.quantity,
+      uom: body.uom,
+      actorId: auth.user.id,
+      packagingState: body.packagingState,
+      productPackagingLevelId: body.productPackagingLevelId ?? null,
+      packCount: body.packCount ?? null,
+      receiptCorrelationKey: body.receiptCorrelationKey
+    });
+
+    return parseOrThrow(
+      inventoryItemResponseSchema,
+      mapInventoryUnitRowToLegacyInventoryItemDomain({
+        ...rpcResult.inventoryUnit,
+        product: rpcResult.product as ProductRow
+      })
+    );
   });
 }

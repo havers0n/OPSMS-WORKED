@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { currentWorkspaceResponseSchema } from '../schemas.js';
-import type { RouteDeps } from '../route-deps.js';
-import { parseOrThrow } from '../validation.js';
+import { currentWorkspaceResponseSchema } from '../../schemas.js';
+import type { RouteDeps } from '../../route-deps.js';
+import { parseOrThrow } from '../../validation.js';
 
 type MeRouteDeps = Pick<RouteDeps, 'getAuthContext'>;
 
