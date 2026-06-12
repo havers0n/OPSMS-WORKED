@@ -22,7 +22,7 @@ import { registerLocationReadRoutes } from './features/location-read/routes.js';
 import { registerPlacementRoutes } from './features/placement/routes.js';
 import { registerExecutionRoutes } from './features/execution/routes.js';
 import { registerStoragePresetsRoutes } from './features/storage-presets/routes.js';
-import { registerPickingExecutionRoutes } from './routes/picking-execution.routes.js';
+import { registerPickingRoutes } from './features/picking/routes.js';
 import { registerRackInspectorRoutes } from './features/rack-inspector/routes.js';
 import { registerOperationsCellsRoutes } from './features/operations-cells/routes.js';
 import { registerFloorRoutingRoutes } from './features/floor-routing/routes.js';
@@ -109,7 +109,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerOrdersRoutes(app, { getAuthContext, getUserSupabase, getOrdersService });
   registerPickingPlanningPreviewRoutes(app, { getAuthContext, getPickingPlanningPreviewService });
 
-  registerPickingExecutionRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
+  registerPickingRoutes(app, { getAuthContext, getUserSupabase, getPickingService });
   registerRackInspectorRoutes(app, { getAuthContext, getUserSupabase });
   registerOperationsCellsRoutes(app, { getAuthContext, getUserSupabase });
   registerFloorRoutingRoutes(app, { getAuthContext, getFloorRoutingService });
