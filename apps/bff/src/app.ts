@@ -16,8 +16,7 @@ import { registerClientErrorsRoutes } from './routes/client-errors.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
 import { registerSitesRoutes } from './features/sites/routes.js';
 import { registerFloorsRoutes } from './features/floors/routes.js';
-import { registerLayoutReadRoutes } from './routes/layout-read.routes.js';
-import { registerLayoutMutationsRoutes } from './routes/layout-mutations.routes.js';
+import { registerLayoutRoutes } from './features/layout/routes.js';
 import { registerContainerReadRoutes } from './routes/container-read.routes.js';
 import { registerContainerMutationsRoutes } from './routes/container-mutations.routes.js';
 import { registerLocationReadRoutes } from './routes/location-read.routes.js';
@@ -95,8 +94,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   registerSitesRoutes(app, { getAuthContext, getSitesService });
   registerFloorsRoutes(app, { getAuthContext, getSitesService, getFloorsService, getUserSupabase });
-  registerLayoutReadRoutes(app, { getAuthContext, getUserSupabase });
-  registerLayoutMutationsRoutes(app, { getAuthContext, getLayoutService });
+  registerLayoutRoutes(app, { getAuthContext, getUserSupabase, getLayoutService });
   registerContainerReadRoutes(app, { getAuthContext, getContainersService, getUserSupabase });
   registerContainerMutationsRoutes(app, { getAuthContext, getContainersService, getInventoryService });
   registerLocationReadRoutes(app, { getAuthContext, getUserSupabase });
