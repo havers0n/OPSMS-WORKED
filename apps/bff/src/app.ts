@@ -15,7 +15,7 @@ import { registerHealthRoutes } from './routes/health.routes.js';
 import { registerClientErrorsRoutes } from './routes/client-errors.routes.js';
 import { registerMeRoutes } from './routes/me.routes.js';
 import { registerSitesRoutes } from './features/sites/routes.js';
-import { registerFloorsRoutes } from './routes/floors.routes.js';
+import { registerFloorsRoutes } from './features/floors/routes.js';
 import { registerLayoutReadRoutes } from './routes/layout-read.routes.js';
 import { registerLayoutMutationsRoutes } from './routes/layout-mutations.routes.js';
 import { registerContainerReadRoutes } from './routes/container-read.routes.js';
