@@ -16,6 +16,7 @@ type ConfirmStepCommand = {
 };
 
 export type PickerService = {
+  resolveWorker(tenantId: string, authUserId: string): Promise<{ workerId: string }>;
   listTasks(input: { tenantId: string; workerId: string }): Promise<PickTaskSummary[]>;
   getTaskDetail(input: { tenantId: string; workerId: string; taskId: string }): Promise<PickTaskDetail>;
   confirmStep(input: ConfirmStepCommand): Promise<PickTaskDetail>;
@@ -40,6 +41,19 @@ export function createPickerService(
   }
 
   return {
+    async resolveWorker(tenantId, authUserId) {
+      const worker = await manualShiftsRepo.findWorkerByAuthUserId(tenantId, authUserId);
+      if (!worker) {
+        throw new ApiError(403, 'PICKER_WORKER_NOT_BOUND', 'Authenticated user is not bound to any manual shift worker in this tenant.');
+      }
+
+      if (!worker.active) {
+        throw new ApiError(403, 'PICKER_WORKER_INACTIVE', `Worker ${worker.id} is inactive.`);
+      }
+
+      return { workerId: worker.id };
+    },
+
     async listTasks(input) {
       await assertWorkerAccess(input.tenantId, input.workerId);
       return pickerRepo.listActiveTasksByWorker(input.tenantId, input.workerId);
@@ -99,8 +113,6 @@ export function createPickerService(
       const allConfirmed = taskSteps.length > 0 && taskSteps.every((taskStep) => taskStep.status === 'picked');
 
       if (allConfirmed) {
-        // Limitation: this is not a DB transaction; task and source-order updates can partially succeed.
-        // Order below is intentional: complete task first, then transition manual_shift_order if still picking.
         await pickerRepo.updateTaskStatus(input.taskId, 'completed', nowIso);
 
         if (detail.sourceType === 'manual_shift_order') {

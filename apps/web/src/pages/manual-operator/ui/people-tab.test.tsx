@@ -37,6 +37,7 @@ function makeWorker(overrides: Record<string, unknown> = {}) {
     role: 'picker',
     active: true,
     sortOrder: 1,
+    authUserId: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides
@@ -61,11 +62,12 @@ function makeSummaryItem(pickerName: string, overrides: Record<string, unknown> 
 }
 
 // Helper: mock both endpoints
-function mockBoth(workers: unknown[], summaryItems: unknown[]) {
+function mockBoth(workers: unknown[], summaryItems: unknown[], bindableUsers: unknown[] = []) {
   mockedBffRequest.mockImplementation((url: unknown) => {
     const u = String(url);
-    if (u.includes('/workers')) return Promise.resolve(workers);
+    if (u.includes('/worker-bindable-users')) return Promise.resolve(bindableUsers);
     if (u.includes('/people-summary')) return Promise.resolve(makePeopleSummary(summaryItems));
+    if (u.includes('/workers')) return Promise.resolve(workers);
     return Promise.reject(new Error(`unexpected: ${u}`));
   });
 }
@@ -297,5 +299,106 @@ describe('PeopleTab', () => {
 
   it('does not access supabase directly — uses bffRequest', () => {
     expect(mockedBffRequest).toBeDefined();
+  });
+
+  describe('account binding', () => {
+    const bindableUsers = [
+      { userId: 'u1', displayName: 'User One', email: 'one@wos.local', boundWorkerId: null },
+      { userId: 'u2', displayName: 'User Two', email: 'two@wos.local', boundWorkerId: 'w-other' }
+    ];
+
+    it('renders account dropdown with unbound option', async () => {
+      mockBoth([makeWorker()], [], bindableUsers);
+      renderPeopleTab();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('worker-account-select')).toBeTruthy();
+      });
+
+      const select = screen.getByTestId('worker-account-select') as HTMLSelectElement;
+      expect(select.value).toBe('__unbound');
+      expect(screen.getByText('ללא חשבון')).toBeTruthy();
+    });
+
+    it('displays current binding in dropdown', async () => {
+      const worker = makeWorker({ authUserId: 'u1' });
+      mockBoth([worker], [], bindableUsers);
+      renderPeopleTab();
+
+      await waitFor(() => {
+        const select = screen.getByTestId('worker-account-select') as HTMLSelectElement;
+        expect(select.value).toBe('u1');
+      });
+    });
+
+    it('disables account already bound to another worker', async () => {
+      mockedBffRequest.mockImplementation((url: unknown) => {
+        const u = String(url);
+        if (u.includes('/worker-bindable-users')) return Promise.resolve(bindableUsers);
+        if (u.includes('/people-summary')) return Promise.resolve(makePeopleSummary([]));
+        if (u.includes('/workers')) return Promise.resolve([makeWorker()]);
+        return Promise.reject(new Error(`unexpected: ${u}`));
+      });
+
+      renderPeopleTab();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('worker-account-select')).toBeTruthy();
+      });
+
+      const select = screen.getByTestId('worker-account-select') as HTMLSelectElement;
+      const options = Array.from(select.options);
+      const boundOption = options.find(o => o.value === 'u2');
+      expect(boundOption).toBeTruthy();
+      expect(boundOption?.disabled).toBe(true);
+    });
+
+    it('shows warning for unbound picker', async () => {
+      const worker = makeWorker({ role: 'picker', active: true, authUserId: null });
+      mockBoth([worker], [], bindableUsers);
+      renderPeopleTab();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('worker-unbound-warning')).toBeTruthy();
+      });
+
+      expect(screen.getByText(/יש לשייך חשבון לעובד זה/)).toBeTruthy();
+    });
+
+    it('does not show warning for non-picker without account', async () => {
+      const worker = makeWorker({ role: 'checker', active: true, authUserId: null });
+      mockBoth([worker], [], bindableUsers);
+      renderPeopleTab();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('worker-account-select')).toBeTruthy();
+      });
+
+      expect(screen.queryByTestId('worker-unbound-warning')).toBeFalsy();
+    });
+
+    it('does not show warning for inactive picker', async () => {
+      const worker = makeWorker({ role: 'picker', active: false, authUserId: null });
+      mockBoth([worker], [], bindableUsers);
+      renderPeopleTab();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('worker-account-select')).toBeTruthy();
+      });
+
+      expect(screen.queryByTestId('worker-unbound-warning')).toBeFalsy();
+    });
+
+    it('does not show warning for bound picker', async () => {
+      const worker = makeWorker({ role: 'picker', active: true, authUserId: 'u1' });
+      mockBoth([worker], [], bindableUsers);
+      renderPeopleTab();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('worker-account-select')).toBeTruthy();
+      });
+
+      expect(screen.queryByTestId('worker-unbound-warning')).toBeFalsy();
+    });
   });
 });

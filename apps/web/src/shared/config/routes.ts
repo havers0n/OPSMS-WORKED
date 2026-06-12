@@ -36,7 +36,7 @@ export function pickTaskDetailPath(
   if (!context) return `/operations/pick-tasks/${id}`;
   const params = new URLSearchParams();
   if (context.orderId) params.set('order', context.orderId);
-  if (context.waveId) params.set('wave', context.waveId);
+  if (context.wave) params.set('wave', context.wave);
   const qs = params.toString();
   return `/operations/pick-tasks/${id}${qs ? `?${qs}` : ''}`;
 }
@@ -45,16 +45,16 @@ export function productDetailPath(productId: string) {
   return `/products/${productId}`;
 }
 
-export function pickerPath(workerId: string): string {
-  return `/picker?workerId=${encodeURIComponent(workerId)}`;
+export function pickerPath(): string {
+  return '/picker';
 }
 
-export function pickerTaskPath(taskId: string, workerId: string): string {
-  return `/picker/task/${taskId}?workerId=${encodeURIComponent(workerId)}`;
+export function pickerTaskPath(taskId: string): string {
+  return `/picker/task/${taskId}`;
 }
 
-export function pickerStepPath(taskId: string, stepId: string, workerId: string): string {
-  return `/picker/task/${taskId}/step/${stepId}?workerId=${encodeURIComponent(workerId)}`;
+export function pickerStepPath(taskId: string, stepId: string): string {
+  return `/picker/task/${taskId}/step/${stepId}`;
 }
 
 export function warehouseViewPath(opts?: {

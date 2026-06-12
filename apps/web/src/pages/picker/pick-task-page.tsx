@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { pickerTaskDetailQueryOptions } from '@/entities/picker/api/queries';
 import { pickerPath, pickerStepPath } from '@/shared/config/routes';
@@ -26,35 +26,13 @@ function stepStatusLabel(status: string): string {
 
 export function PickTaskPage() {
   const { taskId } = useParams<{ taskId: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const workerId = searchParams.get('workerId') ?? '';
 
-  const { data: task, isLoading, isError, refetch } = useQuery(
-    pickerTaskDetailQueryOptions(taskId ?? null, workerId || null)
+  const { data: task, isLoading, isError, error, refetch } = useQuery(
+    pickerTaskDetailQueryOptions(taskId ?? null)
   );
 
-  const goBack = () => navigate(pickerPath(workerId));
-
-  if (!workerId) {
-    return (
-      <div
-        className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
-        data-testid="pick-task-missing-worker"
-      >
-        <div className="text-4xl mb-4">⚠️</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
-        <p className="text-sm text-gray-500 mb-4">לא נמצאה הפעלת עובד.</p>
-        <button
-          onClick={() => navigate('/')}
-          className="text-blue-600 text-sm font-medium underline"
-          data-testid="pick-task-return-home"
-        >
-          חזור לדף הראשי
-        </button>
-      </div>
-    );
-  }
+  const goBack = () => navigate(pickerPath());
 
   if (isLoading) {
     return (
@@ -68,6 +46,27 @@ export function PickTaskPage() {
   }
 
   if (isError) {
+    const bffError = error as { code?: string };
+    if (bffError?.code === 'PICKER_WORKER_NOT_BOUND') {
+      return (
+        <div
+          className="flex min-h-screen flex-col items-center justify-center p-6 bg-white text-center"
+          data-testid="pick-task-missing-worker"
+        >
+          <div className="text-4xl mb-4">⚠️</div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">הפעלה לא מזוהה</h1>
+          <p className="text-sm text-gray-500 mb-4">לא נמצא חשבון משויך לעובד. פנה למנהל המערכת.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="text-blue-600 text-sm font-medium underline"
+            data-testid="pick-task-return-home"
+          >
+            חזור לדף הראשי
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-white p-6" data-testid="pick-task-error">
         <button
@@ -170,7 +169,7 @@ export function PickTaskPage() {
                   : 'bg-white border-gray-200 active:bg-blue-50'
               }`}
               onClick={() => {
-                if (!isDone) navigate(pickerStepPath(task.id, step.id, workerId));
+                if (!isDone) navigate(pickerStepPath(task.id, step.id));
               }}
               data-testid={`pick-step-item-${step.status}`}
             >

@@ -19,18 +19,14 @@ vi.mock('@/entities/picker/api/queries', async () => {
     ...actual,
     fetchPickerTasks: vi.fn(),
     fetchPickerTaskDetail: vi.fn(),
-    pickerTasksQueryOptions: (workerId: string | null) => ({
-      queryKey: ['picker', 'tasks', workerId ?? 'none'],
-      queryFn: workerId ? () => vi.mocked(fetchPickerTasks)(workerId) : () => Promise.resolve([]),
-      enabled: Boolean(workerId),
+    pickerTasksQueryOptions: () => ({
+      queryKey: ['picker', 'tasks'],
+      queryFn: () => vi.mocked(fetchPickerTasks)(),
     }),
-    pickerTaskDetailQueryOptions: (taskId: string | null, workerId: string | null) => ({
-      queryKey: ['picker', 'task', taskId ?? 'none', workerId ?? 'none'],
-      queryFn:
-        taskId && workerId
-          ? () => vi.mocked(fetchPickerTaskDetail)(taskId, workerId)
-          : () => Promise.resolve(null),
-      enabled: Boolean(taskId) && Boolean(workerId),
+    pickerTaskDetailQueryOptions: (taskId: string | null) => ({
+      queryKey: ['picker', 'task', taskId ?? 'none'],
+      queryFn: taskId ? () => vi.mocked(fetchPickerTaskDetail)(taskId) : () => Promise.resolve(null),
+      enabled: Boolean(taskId),
     }),
   };
 });
@@ -48,7 +44,6 @@ vi.mock('@/entities/picker/api/mutations', () => ({
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-const WORKER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TASK_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const STEP_ID_1 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const STEP_ID_2 = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
@@ -63,7 +58,7 @@ function makeTask(overrides: Partial<PickTaskDetail> = {}): PickTaskDetail {
     sourceType: 'order',
     sourceId: SOURCE_ID,
     status: 'in_progress',
-    assignedTo: WORKER_ID,
+    assignedTo: null,
     startedAt: null,
     completedAt: null,
     createdAt: new Date().toISOString(),
@@ -128,7 +123,6 @@ function LocationEcho() {
   return <div data-testid="location-echo">{`${location.pathname}${location.search}`}</div>;
 }
 
-// Renders outside <Routes> so it always tracks current URL regardless of which route is active.
 function PersistentLocationEcho({ children }: { children: ReactNode }) {
   const location = useLocation();
   return (
@@ -143,14 +137,14 @@ function makeQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
-function renderPickerPage(search = '') {
+function renderPickerPage() {
   return render(
     createElement(
       QueryClientProvider,
       { client: makeQueryClient() },
       createElement(
         MemoryRouter,
-        { initialEntries: [`/picker${search}`] },
+        { initialEntries: ['/picker'] },
         createElement(
           Routes,
           null,
@@ -165,14 +159,14 @@ function renderPickerPage(search = '') {
   );
 }
 
-function renderPickTaskPage(taskId = TASK_ID, search = `?workerId=${WORKER_ID}`) {
+function renderPickTaskPage(taskId = TASK_ID) {
   return render(
     createElement(
       QueryClientProvider,
       { client: makeQueryClient() },
       createElement(
         MemoryRouter,
-        { initialEntries: [`/picker/task/${taskId}${search}`] },
+        { initialEntries: [`/picker/task/${taskId}`] },
         createElement(
           Routes,
           null,
@@ -191,19 +185,14 @@ function renderPickTaskPage(taskId = TASK_ID, search = `?workerId=${WORKER_ID}`)
   );
 }
 
-function renderPickStepPage(
-  taskId = TASK_ID,
-  stepId = STEP_ID_1,
-  search = `?workerId=${WORKER_ID}`
-) {
+function renderPickStepPage(taskId = TASK_ID, stepId = STEP_ID_1) {
   return render(
     createElement(
       QueryClientProvider,
       { client: makeQueryClient() },
       createElement(
         MemoryRouter,
-        { initialEntries: [`/picker/task/${taskId}/step/${stepId}${search}`] },
-        // PersistentLocationEcho is outside Routes so it always reflects the active URL.
+        { initialEntries: [`/picker/task/${taskId}/step/${stepId}`] },
         createElement(
           PersistentLocationEcho,
           null,
@@ -234,16 +223,10 @@ describe('PickerPage', () => {
     mockMutateAsync.mockReset();
   });
 
-  it('shows missing worker identity state with return action when workerId is absent', () => {
-    renderPickerPage();
-    expect(screen.getByTestId('picker-missing-worker')).toBeTruthy();
-    expect(screen.getByTestId('picker-return-home')).toBeTruthy();
-  });
-
-  it('shows error state with retry action on list query failure', async () => {
+  it('shows error with retry action on list query failure', async () => {
     vi.mocked(fetchPickerTasks).mockRejectedValue(new Error('Network error'));
 
-    renderPickerPage(`?workerId=${WORKER_ID}`);
+    renderPickerPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('picker-error')).toBeTruthy();
@@ -251,10 +234,23 @@ describe('PickerPage', () => {
     });
   });
 
-  it('renders assigned tasks when workerId is present', async () => {
+  it('shows auth-binding error state when PICKER_WORKER_NOT_BOUND', async () => {
+    vi.mocked(fetchPickerTasks).mockRejectedValue(
+      Object.assign(new Error('not bound'), { code: 'PICKER_WORKER_NOT_BOUND' })
+    );
+
+    renderPickerPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('picker-missing-worker')).toBeTruthy();
+      expect(screen.getByTestId('picker-return-home')).toBeTruthy();
+    });
+  });
+
+  it('renders assigned tasks', async () => {
     vi.mocked(fetchPickerTasks).mockResolvedValue([makeTask()]);
 
-    renderPickerPage(`?workerId=${WORKER_ID}`);
+    renderPickerPage();
 
     await waitFor(() => {
       expect(screen.getByTestId('picker-task-list')).toBeTruthy();
@@ -262,10 +258,10 @@ describe('PickerPage', () => {
     });
   });
 
-  it('clicking a task navigates to task detail preserving workerId', async () => {
+  it('clicking a task navigates to task detail', async () => {
     vi.mocked(fetchPickerTasks).mockResolvedValue([makeTask()]);
 
-    renderPickerPage(`?workerId=${WORKER_ID}`);
+    renderPickerPage();
 
     await waitFor(() => expect(screen.getByTestId('picker-task-item')).toBeTruthy());
 
@@ -273,8 +269,7 @@ describe('PickerPage', () => {
 
     await waitFor(() => {
       const echo = screen.getByTestId('location-echo').textContent ?? '';
-      expect(echo).toContain(`/picker/task/${TASK_ID}`);
-      expect(echo).toContain(`workerId=${WORKER_ID}`);
+      expect(echo).toBe(`/picker/task/${TASK_ID}`);
     });
   });
 });
@@ -283,12 +278,6 @@ describe('PickTaskPage', () => {
   beforeEach(() => {
     vi.mocked(fetchPickerTaskDetail).mockReset();
     mockMutateAsync.mockReset();
-  });
-
-  it('shows missing worker state with return action when workerId is absent', () => {
-    renderPickTaskPage(TASK_ID, '');
-    expect(screen.getByTestId('pick-task-missing-worker')).toBeTruthy();
-    expect(screen.getByTestId('pick-task-return-home')).toBeTruthy();
   });
 
   it('shows error state with retry action on task query failure', async () => {
@@ -328,18 +317,26 @@ describe('PickTaskPage', () => {
     expect(statuses).toContain('Pending');
     expect(statuses).toContain('Picked');
   });
+
+  it('back button navigates to /picker', async () => {
+    vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
+
+    renderPickTaskPage();
+
+    await waitFor(() => expect(screen.getByTestId('pick-task-back')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('pick-task-back'));
+
+    await waitFor(() => {
+      const echo = screen.getByTestId('location-echo').textContent ?? '';
+      expect(echo).toBe('/picker');
+    });
+  });
 });
 
 describe('PickStepPage', () => {
   beforeEach(() => {
     vi.mocked(fetchPickerTaskDetail).mockReset();
     mockMutateAsync.mockReset();
-  });
-
-  it('shows missing worker state with return action when workerId is absent', () => {
-    renderPickStepPage(TASK_ID, STEP_ID_1, '');
-    expect(screen.getByTestId('pick-step-missing-worker')).toBeTruthy();
-    expect(screen.getByTestId('pick-step-return-home')).toBeTruthy();
   });
 
   it('renders product name, location, and required qty', async () => {
@@ -353,18 +350,6 @@ describe('PickStepPage', () => {
       expect(screen.getByTestId('pick-step-location').textContent).toContain('A-04-02');
       expect(screen.getByTestId('pick-step-qty-required').textContent).toContain('3');
     });
-  });
-
-  it('does not render coming-soon location button and shows location passively', async () => {
-    vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
-
-    renderPickStepPage();
-
-    await waitFor(() => {
-      expect(screen.getByTestId('pick-step-location')).toBeTruthy();
-    });
-
-    expect(screen.queryByTestId('pick-step-where-is-it')).toBeNull();
   });
 
   it('omits location block when source location is missing', async () => {
@@ -392,17 +377,14 @@ describe('PickStepPage', () => {
     const increase = screen.getByTestId('pick-step-qty-increase');
     const value = () => screen.getByTestId('pick-step-qty-value').textContent?.trim();
 
-    // initial value equals qtyRequired (3)
     expect(value()).toBe('3');
 
-    // increment is clamped at qtyRequired
     fireEvent.click(increase);
     expect(value()).toBe('3');
 
     fireEvent.click(decrease);
     expect(value()).toBe('2');
 
-    // drive to 0 then try to go below
     fireEvent.click(decrease);
     fireEvent.click(decrease);
     expect(value()).toBe('0');
@@ -418,20 +400,17 @@ describe('PickStepPage', () => {
 
     await waitFor(() => expect(screen.getByTestId('pick-step-qty-value')).toBeTruthy());
 
-    // initial qtyPicked = qtyRequired = 3, so + button should be disabled
     const increase = screen.getByTestId('pick-step-qty-increase') as HTMLButtonElement;
     expect(increase.disabled).toBe(true);
 
-    // decrease to 2, button should be enabled again
     fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));
     expect(increase.disabled).toBe(false);
 
-    // increase back to 3, button should be disabled again
     fireEvent.click(increase);
     expect(increase.disabled).toBe(true);
   });
 
-  it('confirm calls API with current qtyPicked and workerId', async () => {
+  it('confirm calls API with taskId, stepId, and current qtyPicked', async () => {
     vi.mocked(fetchPickerTaskDetail).mockResolvedValue(makeTask());
     mockMutateAsync.mockResolvedValue({ ...makeTask(), steps: [] });
 
@@ -445,7 +424,6 @@ describe('PickStepPage', () => {
       expect(mockMutateAsync).toHaveBeenCalledWith({
         taskId: TASK_ID,
         stepId: STEP_ID_1,
-        workerId: WORKER_ID,
         qtyPicked: 3,
       });
     });
@@ -515,7 +493,6 @@ describe('PickStepPage', () => {
     await waitFor(() => {
       const echo = screen.getByTestId('active-url').textContent ?? '';
       expect(echo).toContain(`/picker/task/${TASK_ID}/step/${pendingStep2Id}`);
-      expect(echo).toContain(`workerId=${WORKER_ID}`);
     });
   });
 
@@ -561,8 +538,6 @@ describe('PickStepPage', () => {
     await waitFor(() => {
       const echo = screen.getByTestId('active-url').textContent ?? '';
       expect(echo).toContain(`/picker/task/${TASK_ID}`);
-      expect(echo).toContain(`workerId=${WORKER_ID}`);
-      // should NOT be on a step sub-path
       expect(echo).not.toContain('/step/');
     });
   });
@@ -586,7 +561,6 @@ describe('PickStepPage', () => {
   });
 
   it('shows not-found state when stepId is absent from task detail', async () => {
-    // Task has no step matching STEP_ID_1
     vi.mocked(fetchPickerTaskDetail).mockResolvedValue(
       makeTask({ steps: [] })
     );
@@ -605,7 +579,6 @@ describe('PickStepPage', () => {
 
     await waitFor(() => expect(screen.getByTestId('pick-step-qty-value')).toBeTruthy());
 
-    // Decrease below required (3 → 1)
     fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));
     fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));
 
@@ -622,7 +595,6 @@ describe('PickStepPage', () => {
 
     await waitFor(() => expect(screen.getByTestId('pick-step-qty-value')).toBeTruthy());
 
-    // Drive to 0
     fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));
     fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));
     fireEvent.click(screen.getByTestId('pick-step-qty-decrease'));

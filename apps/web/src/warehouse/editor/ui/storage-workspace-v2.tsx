@@ -145,8 +145,11 @@ export function StorageWorkspaceV2({
       role="region"
       aria-label={t('warehouse.storage.region')}
       className="relative flex h-full w-full overflow-hidden"
+      dir="ltr"
     >
-      <StorageNavigator workspace={workspace} />
+      <div className="contents" dir="rtl">
+        <StorageNavigator workspace={workspace} />
+      </div>
 
       <WorkspaceCanvasAndPanel
         workspace={workspace}
@@ -186,6 +189,7 @@ export function StorageWorkspaceV2({
             'max-sm:transition-[height] max-sm:duration-300 max-sm:ease-in-out',
             mobileSheetClass
           ].join(' ')}
+          dir="rtl"
         >
           {/* Mobile sheet header: centered drag handle (peek ↔ expanded) + close button. */}
           <div className="sm:hidden flex items-center justify-between px-3 pt-2 pb-1 flex-shrink-0">
@@ -235,7 +239,7 @@ export function StorageWorkspaceV2({
       )}
 
       {/* No selection: render inspector so its hooks keep running (returns null internally). */}
-      {!hasSelection && <StorageInspectorV2 workspace={workspace} />}
+      {!hasSelection && <div className="contents" dir="rtl"><StorageInspectorV2 workspace={workspace} /></div>}
     </div>
   );
 }

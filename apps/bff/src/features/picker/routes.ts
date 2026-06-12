@@ -4,7 +4,7 @@ import type { RouteDeps } from '../../route-deps.js';
 import { ApiError } from '../../errors.js';
 import { parseOrThrow } from '../../validation.js';
 import { idResponseSchema, pickTaskDetailResponseSchema, pickTasksResponseSchema } from '../../schemas.js';
-import { pickerConfirmStepBodySchema, pickerWorkerQuerySchema } from './schemas.js';
+import { pickerConfirmStepBodySchema } from './schemas.js';
 import { createPickerServiceFromSupabase } from './service.js';
 
 type PickerRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getUserSupabase'>;
@@ -23,12 +23,14 @@ export function registerPickerRoutes(app: FastifyInstance, deps: PickerRouteDeps
     if (!auth) return;
 
     const tenantId = requireTenantId(auth.currentTenant);
-    // TODO: replace workerId query with auth.uid() -> manual_shift_workers.auth_user_id resolution.
-    const query = parseOrThrow(pickerWorkerQuerySchema, request.query ?? {});
+    const authUserId = auth.user.id;
+
     const pickerService = createPickerServiceFromSupabase(deps.getUserSupabase(auth));
+    const { workerId } = await pickerService.resolveWorker(tenantId, authUserId);
+
     const tasks = await pickerService.listTasks({
       tenantId,
-      workerId: query.workerId
+      workerId
     });
 
     return parseOrThrow(pickTasksResponseSchema, tasks);
@@ -39,17 +41,18 @@ export function registerPickerRoutes(app: FastifyInstance, deps: PickerRouteDeps
     if (!auth) return;
 
     const tenantId = requireTenantId(auth.currentTenant);
-    // TODO: replace workerId query with auth.uid() -> manual_shift_workers.auth_user_id resolution.
-    const query = parseOrThrow(pickerWorkerQuerySchema, request.query ?? {});
+    const authUserId = auth.user.id;
+
     const taskId = parseOrThrow(
       idResponseSchema,
       { id: (request.params as { taskId: string }).taskId }
     ).id;
     const pickerService = createPickerServiceFromSupabase(deps.getUserSupabase(auth));
+    const { workerId } = await pickerService.resolveWorker(tenantId, authUserId);
 
     const task = await pickerService.getTaskDetail({
       tenantId,
-      workerId: query.workerId,
+      workerId,
       taskId
     });
 
@@ -61,8 +64,8 @@ export function registerPickerRoutes(app: FastifyInstance, deps: PickerRouteDeps
     if (!auth) return;
 
     const tenantId = requireTenantId(auth.currentTenant);
-    // TODO: replace workerId query with auth.uid() -> manual_shift_workers.auth_user_id resolution.
-    const query = parseOrThrow(pickerWorkerQuerySchema, request.query ?? {});
+    const authUserId = auth.user.id;
+
     const params = parseOrThrow(
       z.object({
         taskId: z.string().uuid(),
@@ -72,10 +75,11 @@ export function registerPickerRoutes(app: FastifyInstance, deps: PickerRouteDeps
     );
     const body = parseOrThrow(pickerConfirmStepBodySchema, request.body);
     const pickerService = createPickerServiceFromSupabase(deps.getUserSupabase(auth));
+    const { workerId } = await pickerService.resolveWorker(tenantId, authUserId);
 
     const task = await pickerService.confirmStep({
       tenantId,
-      workerId: query.workerId,
+      workerId,
       taskId: params.taskId,
       stepId: params.stepId,
       qtyPicked: body.qtyPicked

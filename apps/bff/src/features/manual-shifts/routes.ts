@@ -36,6 +36,7 @@ import {
   manualShiftDeleteRestoreBodySchema,
   manualShiftWorkerResponseSchema,
   manualShiftWorkersResponseSchema,
+  bindableUsersResponseSchema,
   patchManualShiftLineBodySchema,
   patchManualShiftOrderBodySchema,
   patchManualShiftOrderCheckUnitBodySchema,
@@ -681,7 +682,8 @@ export function registerManualShiftsRoutes(
       shiftId,
       name: body.name,
       role: body.role,
-      sortOrder: body.sortOrder
+      sortOrder: body.sortOrder,
+      authUserId: body.authUserId
     });
 
     void reply.code(201);
@@ -693,6 +695,9 @@ export function registerManualShiftsRoutes(
     if (!auth) return;
 
     const tenantId = requireTenant(auth);
+    if (auth.currentTenant?.role !== 'tenant_admin' && auth.currentTenant?.role !== 'platform_admin') {
+      throw new ApiError(403, 'FORBIDDEN', 'Operator or admin access required.');
+    }
     const workerId = parseOrThrow(idResponseSchema, {
       id: (request.params as { workerId: string }).workerId
     }).id;
@@ -703,7 +708,8 @@ export function registerManualShiftsRoutes(
       name: body.name,
       role: body.role,
       active: body.active,
-      sortOrder: body.sortOrder
+      sortOrder: body.sortOrder,
+      authUserId: body.authUserId
     });
     return parseOrThrow(manualShiftWorkerResponseSchema, worker);
   });
@@ -718,6 +724,19 @@ export function registerManualShiftsRoutes(
     }).id;
     const worker = await getManualShiftsService(auth).deactivateWorker({ tenantId, workerId });
     return parseOrThrow(manualShiftWorkerResponseSchema, worker);
+  });
+
+  app.get('/api/manual-shifts/worker-bindable-users', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    if (!auth.currentTenant || (auth.currentTenant.role !== 'tenant_admin' && auth.currentTenant.role !== 'platform_admin')) {
+      throw new ApiError(403, 'FORBIDDEN', 'Operator or admin access required.');
+    }
+
+    const users = await getManualShiftsService(auth).listBindableUsers(tenantId);
+    return parseOrThrow(bindableUsersResponseSchema, users);
   });
 
   app.get('/api/manual-shifts/:shiftId/people-summary', async (request, reply) => {

@@ -1,5 +1,6 @@
 import type {
   ApplyDailyManualShiftImportResponse,
+  BindableUser,
   DailyManualShiftImportPreview,
   ManualShiftBulkAddInputRow,
   ManualShiftBulkAddResult,
@@ -52,6 +53,8 @@ import {
   manualShiftAshlamaCheckUnitOrderMismatch,
   manualShiftPickerWorkerInvalid,
   manualShiftWorkerNotFound,
+  manualShiftWorkerAuthUserNotInTenant,
+  manualShiftWorkerAuthUserAlreadyBound,
   manualShiftImportShiftDateMismatch,
   manualShiftImportShiftNotActive,
   manualShiftImportShiftNotEmpty,
@@ -78,6 +81,7 @@ export type ManualShiftsService = {
     name: string;
     role: ManualShiftWorkerRole;
     sortOrder: number;
+    authUserId?: string | null;
   }): Promise<ManualShiftWorker>;
   patchWorker(input: {
     tenantId: string;
@@ -86,8 +90,10 @@ export type ManualShiftsService = {
     role?: ManualShiftWorkerRole;
     active?: boolean;
     sortOrder?: number;
+    authUserId?: string | null;
   }): Promise<ManualShiftWorker>;
   deactivateWorker(input: { tenantId: string; workerId: string }): Promise<ManualShiftWorker>;
+  listBindableUsers(tenantId: string): Promise<BindableUser[]>;
   getTodayShift(tenantId: string): Promise<ManualShiftTodayResponse>;
   getShiftByDate(tenantId: string, date: string): Promise<ManualShiftTodayResponse>;
   createShift(input: { tenantId: string; date?: string; name: string; actor: ActorContext }): Promise<ManualShiftSession>;
@@ -442,17 +448,47 @@ export function createManualShiftsServiceFromRepo(
     async createWorker(input) {
       const shift = await requireActiveShift(input.shiftId);
       if (shift.tenantId !== input.tenantId) throw manualShiftNotFound(input.shiftId);
-      return repo.createWorker(input);
+      return repo.createWorker({
+        tenantId: input.tenantId,
+        shiftId: input.shiftId,
+        name: input.name,
+        role: input.role,
+        sortOrder: input.sortOrder,
+        authUserId: input.authUserId
+      });
     },
 
     async patchWorker(input) {
       const worker = await requireWorker(input.workerId);
       if (worker.tenantId !== input.tenantId) throw manualShiftWorkerNotFound(input.workerId);
+
+      if (input.authUserId !== undefined) {
+        try {
+          await repo.setWorkerAuthUser(input.workerId, input.authUserId);
+        } catch (err) {
+          const pgErr = err as { code?: string; message?: string } | null;
+          if (pgErr?.code === 'P0001') {
+            switch (pgErr.message) {
+              case 'WORKER_AUTH_USER_FORBIDDEN':
+                throw manualShiftWorkerAuthUserNotInTenant(input.authUserId ?? 'unknown');
+              case 'WORKER_AUTH_USER_ALREADY_BOUND':
+                throw manualShiftWorkerAuthUserAlreadyBound(input.authUserId ?? 'unknown', 'unknown');
+              case 'FORBIDDEN':
+                throw manualShiftWorkerAuthUserForbidden(input.workerId);
+              case 'WORKER_NOT_FOUND':
+                throw manualShiftWorkerNotFound(input.workerId);
+            }
+          }
+          throw err;
+        }
+      }
+
       const updated = await repo.updateWorker(input.workerId, {
         name: input.name,
         role: input.role,
         active: input.active,
-        sortOrder: input.sortOrder
+        sortOrder: input.sortOrder,
+        authUserId: input.authUserId
       });
       if (!updated) throw manualShiftWorkerNotFound(input.workerId);
       return updated;
@@ -464,6 +500,10 @@ export function createManualShiftsServiceFromRepo(
       const updated = await repo.updateWorker(input.workerId, { active: false });
       if (!updated) throw manualShiftWorkerNotFound(input.workerId);
       return updated;
+    },
+
+    async listBindableUsers(tenantId) {
+      return repo.listBindableUsers(tenantId);
     },
 
     async getTodayShift(tenantId) {

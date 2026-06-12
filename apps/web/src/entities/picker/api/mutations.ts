@@ -6,18 +6,16 @@ import { pickerKeys } from './queries';
 type ConfirmPickStepInput = {
   taskId: string;
   stepId: string;
-  workerId: string;
   qtyPicked: number;
 };
 
 export async function confirmPickStep({
   taskId,
   stepId,
-  workerId,
   qtyPicked,
 }: ConfirmPickStepInput): Promise<PickTaskDetail> {
   return bffRequest<PickTaskDetail>(
-    `/api/picker/tasks/${taskId}/steps/${stepId}/confirm?workerId=${encodeURIComponent(workerId)}`,
+    `/api/picker/tasks/${taskId}/steps/${stepId}/confirm`,
     {
       method: 'POST',
       body: JSON.stringify({ qtyPicked }),
@@ -30,9 +28,9 @@ export function useConfirmPickStep() {
   return useMutation({
     mutationFn: confirmPickStep,
     onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: pickerKeys.tasks(variables.workerId) });
+      void queryClient.invalidateQueries({ queryKey: pickerKeys.tasks() });
       void queryClient.invalidateQueries({
-        queryKey: pickerKeys.taskDetail(variables.taskId, variables.workerId),
+        queryKey: pickerKeys.taskDetail(variables.taskId),
       });
     },
   });

@@ -364,7 +364,7 @@ describe('OrderDetail check-units section', () => {
     renderDetail(makeOrder({ status: 'picking', pickerWorkerId: 'worker-1' }));
     fireEvent.click(await screen.findByRole('button', { name: 'פתח ממשק מלקט' }));
 
-    expect(screen.getByTestId('location-probe').textContent).toBe(pickerPath('worker-1'));
+    expect(screen.getByTestId('location-probe').textContent).toBe(pickerPath());
   });
 
   it('picking order keeps finish-picking override and check-start flow', async () => {

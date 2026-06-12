@@ -38,6 +38,7 @@ type PatchWorkerInput = {
   role?: ManualShiftWorkerRole;
   active?: boolean;
   sortOrder?: number;
+  authUserId?: string | null;
 };
 
 type CreateOrderInput = {

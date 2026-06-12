@@ -12,9 +12,24 @@ const SUPABASE_ANON_KEY =
   process.env.E2E_SUPABASE_ANON_KEY ??
   process.env.VITE_SUPABASE_ANON_KEY ??
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
-const SERVICE_ROLE_KEY =
-  process.env.E2E_SUPABASE_SERVICE_ROLE_KEY ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
+
+const IS_LOOPBACK_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(SUPABASE_URL);
+
+if (!process.env.E2E_SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error(
+    'E2E_SUPABASE_SERVICE_ROLE_KEY env var is required. ' +
+    'Set it to your local Supabase service_role JWT (e.g. from http://127.0.0.1:54423/project/default/settings/api).'
+  );
+}
+
+const SERVICE_ROLE_KEY = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY;
+
+if (!IS_LOOPBACK_URL) {
+  throw new Error(
+    `E2E service-role helper requires a loopback Supabase URL (localhost or 127.0.0.1). ` +
+    `Got ${SUPABASE_URL}. Set E2E_SUPABASE_URL=http://127.0.0.1:54421 for local runs.`
+  );
+}
 const DEV_AUTH_EMAIL = process.env.E2E_DEV_AUTH_EMAIL ?? process.env.VITE_DEV_AUTH_EMAIL ?? 'admin@wos.local';
 const DEV_AUTH_PASSWORD = process.env.E2E_DEV_AUTH_PASSWORD ?? process.env.VITE_DEV_AUTH_PASSWORD ?? 'warehouse123';
 const E2E_ALLOW_WAREHOUSE_RESET = process.env.E2E_ALLOW_WAREHOUSE_RESET === 'true';

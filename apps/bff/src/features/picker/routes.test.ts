@@ -8,6 +8,7 @@ import type { PickerService } from './service.js';
 
 const ids = {
   tenant: '11111111-1111-4111-8111-111111111111',
+  authUser: '88888888-8888-4888-8888-888888888888',
   workerA: '22222222-2222-4222-8222-222222222222',
   workerB: '33333333-3333-4333-8333-333333333333',
   taskA: '44444444-4444-4444-8444-444444444444',
@@ -16,28 +17,30 @@ const ids = {
   stepB: '77777777-7777-4777-8777-777777777777'
 };
 
-const authContext = {
-  accessToken: 'token',
-  user: {
-    id: '88888888-8888-4888-8888-888888888888',
-    email: 'picker@wos.local'
-  },
-  displayName: 'Picker User',
-  memberships: [
-    {
-      tenantId: ids.tenant,
+function makeAuth(overrides: Partial<{ userId: string; tenantId: string }> = {}): AuthenticatedRequestContext {
+  return {
+    accessToken: 'token',
+    user: {
+      id: overrides.userId ?? ids.authUser,
+      email: 'picker@wos.local'
+    },
+    displayName: 'Picker User',
+    memberships: [
+      {
+        tenantId: overrides.tenantId ?? ids.tenant,
+        tenantCode: 'default',
+        tenantName: 'Default Tenant',
+        role: 'tenant_admin' as const
+      }
+    ],
+    currentTenant: {
+      tenantId: overrides.tenantId ?? ids.tenant,
       tenantCode: 'default',
       tenantName: 'Default Tenant',
       role: 'tenant_admin' as const
     }
-  ],
-  currentTenant: {
-    tenantId: ids.tenant,
-    tenantCode: 'default',
-    tenantName: 'Default Tenant',
-    role: 'tenant_admin' as const
-  }
-} as unknown as AuthenticatedRequestContext;
+  } as unknown as AuthenticatedRequestContext;
+}
 
 function taskSummary(taskId: string, workerId: string) {
   return {
@@ -136,6 +139,7 @@ function taskDetail(taskId: string, workerId: string, overrides: Partial<{ statu
 
 const serviceMocks = vi.hoisted(() => {
   return {
+    resolveWorker: vi.fn<PickerService['resolveWorker']>(),
     listTasks: vi.fn<PickerService['listTasks']>(),
     getTaskDetail: vi.fn<PickerService['getTaskDetail']>(),
     confirmStep: vi.fn<PickerService['confirmStep']>()
@@ -146,11 +150,17 @@ vi.mock('./service.js', () => ({
   createPickerServiceFromSupabase: () => serviceMocks
 }));
 
-async function buildTestApp(auth: AuthenticatedRequestContext | null = authContext) {
+async function buildTestApp(auth: AuthenticatedRequestContext | null = makeAuth()) {
   const app = Fastify({ logger: false });
 
   registerPickerRoutes(app, {
-    getAuthContext: async (_request: FastifyRequest, _reply: FastifyReply) => auth,
+    getAuthContext: async (_request: FastifyRequest, reply: FastifyReply) => {
+      if (!auth) {
+        await reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Missing bearer token.' });
+        return null;
+      }
+      return auth;
+    },
     getUserSupabase: () => ({} as never)
   });
 
@@ -169,8 +179,9 @@ async function buildTestApp(auth: AuthenticatedRequestContext | null = authConte
   return app;
 }
 
-describe('picker routes', () => {
+describe('picker routes — auth-based worker resolution', () => {
   beforeEach(() => {
+    serviceMocks.resolveWorker.mockReset();
     serviceMocks.listTasks.mockReset();
     serviceMocks.getTaskDetail.mockReset();
     serviceMocks.confirmStep.mockReset();
@@ -180,139 +191,150 @@ describe('picker routes', () => {
     vi.restoreAllMocks();
   });
 
-  it('GET /api/picker/tasks returns only tasks assigned to workerId', async () => {
-    serviceMocks.listTasks.mockResolvedValue([taskSummary(ids.taskA, ids.workerA)]);
-    const app = await buildTestApp();
-
-    const response = await app.inject({
-      method: 'GET',
-      url: `/api/picker/tasks?workerId=${ids.workerA}`
+  describe('unauthenticated', () => {
+    it('GET /api/picker/tasks returns 401', async () => {
+      const app = await buildTestApp(null);
+      const response = await app.inject({ method: 'GET', url: '/api/picker/tasks' });
+      expect(response.statusCode).toBe(401);
+      await app.close();
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toHaveLength(1);
-    expect(serviceMocks.listTasks).toHaveBeenCalledWith({ tenantId: ids.tenant, workerId: ids.workerA });
+    it('GET /api/picker/tasks/:taskId returns 401', async () => {
+      const app = await buildTestApp(null);
+      const response = await app.inject({ method: 'GET', url: `/api/picker/tasks/${ids.taskA}` });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
 
-    await app.close();
+    it('POST confirm step returns 401', async () => {
+      const app = await buildTestApp(null);
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepA}/confirm`,
+        payload: { qtyPicked: 2 }
+      });
+      expect(response.statusCode).toBe(401);
+      await app.close();
+    });
   });
 
-  it('GET /api/picker/tasks does not return tasks assigned to another worker', async () => {
-    serviceMocks.listTasks.mockResolvedValue([]);
-    const app = await buildTestApp();
+  describe('unbound account', () => {
+    it('returns 403 PICKER_WORKER_NOT_BOUND when no worker is bound to auth user', async () => {
+      serviceMocks.resolveWorker.mockRejectedValue(new ApiError(403, 'PICKER_WORKER_NOT_BOUND', 'not bound'));
+      const app = await buildTestApp();
 
-    const response = await app.inject({
-      method: 'GET',
-      url: `/api/picker/tasks?workerId=${ids.workerB}`
+      const response = await app.inject({ method: 'GET', url: '/api/picker/tasks' });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ code: 'PICKER_WORKER_NOT_BOUND' });
+
+      await app.close();
     });
-
-    expect(response.statusCode).toBe(200);
-    expect(serviceMocks.listTasks).toHaveBeenCalledWith({ tenantId: ids.tenant, workerId: ids.workerB });
-    expect(response.json()).toEqual([]);
-
-    await app.close();
   });
 
-  it('GET /api/picker/tasks/:taskId returns detail for assigned worker', async () => {
-    serviceMocks.getTaskDetail.mockResolvedValue(taskDetail(ids.taskA, ids.workerA));
-    const app = await buildTestApp();
+  describe('inactive worker', () => {
+    it('returns 403 PICKER_WORKER_INACTIVE when worker is inactive', async () => {
+      serviceMocks.resolveWorker.mockRejectedValue(new ApiError(403, 'PICKER_WORKER_INACTIVE', 'inactive'));
+      const app = await buildTestApp();
 
-    const response = await app.inject({
-      method: 'GET',
-      url: `/api/picker/tasks/${ids.taskA}?workerId=${ids.workerA}`
+      const response = await app.inject({ method: 'GET', url: '/api/picker/tasks' });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ code: 'PICKER_WORKER_INACTIVE' });
+
+      await app.close();
     });
-
-    expect(response.statusCode).toBe(200);
-    expect(serviceMocks.getTaskDetail).toHaveBeenCalledWith({
-      tenantId: ids.tenant,
-      workerId: ids.workerA,
-      taskId: ids.taskA
-    });
-
-    await app.close();
   });
 
-  it('GET detail rejects task for wrong worker', async () => {
-    serviceMocks.getTaskDetail.mockRejectedValue(new ApiError(404, 'PICK_TASK_NOT_FOUND', 'not found'));
-    const app = await buildTestApp();
+  describe('bound active worker', () => {
+    it('GET /api/picker/tasks returns only own tasks', async () => {
+      serviceMocks.resolveWorker.mockResolvedValue({ workerId: ids.workerA });
+      serviceMocks.listTasks.mockResolvedValue([taskSummary(ids.taskA, ids.workerA)]);
+      const app = await buildTestApp();
 
-    const response = await app.inject({
-      method: 'GET',
-      url: `/api/picker/tasks/${ids.taskA}?workerId=${ids.workerB}`
+      const response = await app.inject({ method: 'GET', url: '/api/picker/tasks' });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toHaveLength(1);
+      expect(serviceMocks.resolveWorker).toHaveBeenCalledWith(ids.tenant, ids.authUser);
+      expect(serviceMocks.listTasks).toHaveBeenCalledWith({ tenantId: ids.tenant, workerId: ids.workerA });
+
+      await app.close();
     });
 
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toMatchObject({ code: 'PICK_TASK_NOT_FOUND' });
+    it('GET /api/picker/tasks/:taskId returns task detail', async () => {
+      serviceMocks.resolveWorker.mockResolvedValue({ workerId: ids.workerA });
+      serviceMocks.getTaskDetail.mockResolvedValue(taskDetail(ids.taskA, ids.workerA));
+      const app = await buildTestApp();
 
-    await app.close();
+      const response = await app.inject({ method: 'GET', url: `/api/picker/tasks/${ids.taskA}` });
+
+      expect(response.statusCode).toBe(200);
+      expect(serviceMocks.getTaskDetail).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        workerId: ids.workerA,
+        taskId: ids.taskA
+      });
+
+      await app.close();
+    });
+
+    it('confirm step calls confirmStep with resolved worker', async () => {
+      serviceMocks.resolveWorker.mockResolvedValue({ workerId: ids.workerA });
+      serviceMocks.confirmStep.mockResolvedValue(taskDetail(ids.taskA, ids.workerA));
+      const app = await buildTestApp();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepA}/confirm`,
+        payload: { qtyPicked: 2 }
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(serviceMocks.confirmStep).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        workerId: ids.workerA,
+        taskId: ids.taskA,
+        stepId: ids.stepA,
+        qtyPicked: 2
+      });
+
+      await app.close();
+    });
+
+    it('confirming final step marks task completed', async () => {
+      serviceMocks.resolveWorker.mockResolvedValue({ workerId: ids.workerA });
+      serviceMocks.confirmStep.mockResolvedValue(taskDetail(ids.taskA, ids.workerA, { status: 'completed', completedSteps: 2 }));
+      const app = await buildTestApp();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepB}/confirm`,
+        payload: { qtyPicked: 1 }
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ status: 'completed', completedSteps: 2, totalSteps: 2 });
+
+      await app.close();
+    });
   });
 
-  it('confirm step updates qtyPicked and step status', async () => {
-    serviceMocks.confirmStep.mockResolvedValue(taskDetail(ids.taskA, ids.workerA, { status: 'in_progress', completedSteps: 1 }));
-    const app = await buildTestApp();
+  describe('workerId query injection is ignored', () => {
+    it('ignores ?workerId= query param and resolves from auth', async () => {
+      serviceMocks.resolveWorker.mockResolvedValue({ workerId: ids.workerA });
+      serviceMocks.listTasks.mockResolvedValue([taskSummary(ids.taskA, ids.workerA)]);
+      const app = await buildTestApp();
 
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepA}/confirm?workerId=${ids.workerA}`,
-      payload: { qtyPicked: 2 }
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/picker/tasks?workerId=${ids.workerB}`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(serviceMocks.listTasks).toHaveBeenCalledWith({ tenantId: ids.tenant, workerId: ids.workerA });
+
+      await app.close();
     });
-
-    expect(response.statusCode).toBe(200);
-    expect(serviceMocks.confirmStep).toHaveBeenCalledWith({
-      tenantId: ids.tenant,
-      workerId: ids.workerA,
-      taskId: ids.taskA,
-      stepId: ids.stepA,
-      qtyPicked: 2
-    });
-
-    await app.close();
-  });
-
-  it('confirm step rejects wrong worker', async () => {
-    serviceMocks.confirmStep.mockRejectedValue(new ApiError(404, 'PICK_TASK_NOT_FOUND', 'not found'));
-    const app = await buildTestApp();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepA}/confirm?workerId=${ids.workerB}`,
-      payload: { qtyPicked: 1 }
-    });
-
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toMatchObject({ code: 'PICK_TASK_NOT_FOUND' });
-
-    await app.close();
-  });
-
-  it('confirming final step marks task completed and manual-shift order waiting_check', async () => {
-    serviceMocks.confirmStep.mockResolvedValue(taskDetail(ids.taskA, ids.workerA, { status: 'completed', completedSteps: 2 }));
-    const app = await buildTestApp();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepB}/confirm?workerId=${ids.workerA}`,
-      payload: { qtyPicked: 1 }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ status: 'completed', completedSteps: 2, totalSteps: 2 });
-
-    await app.close();
-  });
-
-  it('confirming one of multiple steps does not complete task/order yet', async () => {
-    serviceMocks.confirmStep.mockResolvedValue(taskDetail(ids.taskA, ids.workerA, { status: 'in_progress', completedSteps: 1, totalSteps: 2 }));
-    const app = await buildTestApp();
-
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/picker/tasks/${ids.taskA}/steps/${ids.stepA}/confirm?workerId=${ids.workerA}`,
-      payload: { qtyPicked: 2 }
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ status: 'in_progress', completedSteps: 1, totalSteps: 2 });
-
-    await app.close();
   });
 });
