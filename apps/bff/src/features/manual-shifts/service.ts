@@ -55,6 +55,7 @@ import {
   manualShiftWorkerNotFound,
   manualShiftWorkerAuthUserNotInTenant,
   manualShiftWorkerAuthUserAlreadyBound,
+  manualShiftWorkerAuthUserForbidden,
   manualShiftImportShiftDateMismatch,
   manualShiftImportShiftNotActive,
   manualShiftImportShiftNotEmpty,
