@@ -173,12 +173,6 @@ function clickButtonByLabel(renderer: TestRenderer.ReactTestRenderer, label: str
   });
 }
 
-function getButtonLabels(renderer: TestRenderer.ReactTestRenderer) {
-  return renderer.root.findAllByType('button').map((node) =>
-    Array.isArray(node.children) ? node.children.join('') : String(node.children ?? '')
-  );
-}
-
 describe('Storage V2 focus cutover integration', () => {
   beforeEach(() => {
     resetStorageFocusStore();
