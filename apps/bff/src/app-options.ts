@@ -15,6 +15,7 @@ import type { FloorRoutingService } from './features/floor-routing/service.js';
 import type { ProductLocationRolesService } from './features/product-location-roles/service.js';
 import type { StoragePresetsService } from './features/storage-presets/service.js';
 import type { ManualShiftsService } from './features/manual-shifts/service.js';
+import type { WarehouseLabelsService } from './features/warehouse-labels/service.js';
 import type { requireAuth } from './auth.js';
 
 export type UserClientFactory = (context: AuthenticatedRequestContext) => SupabaseClient;
@@ -37,6 +38,7 @@ export type ProductLocationRolesServiceFactory = (
 ) => ProductLocationRolesService;
 export type StoragePresetsServiceFactory = (context: AuthenticatedRequestContext) => StoragePresetsService;
 export type ManualShiftsServiceFactory = (context: AuthenticatedRequestContext) => ManualShiftsService;
+export type WarehouseLabelsServiceFactory = (context: AuthenticatedRequestContext) => WarehouseLabelsService;
 
 export type BuildAppOptions = {
   getAuthContext?: typeof requireAuth;
@@ -55,6 +57,7 @@ export type BuildAppOptions = {
   getProductLocationRolesService?: ProductLocationRolesServiceFactory;
   getStoragePresetsService?: StoragePresetsServiceFactory;
   getManualShiftsService?: ManualShiftsServiceFactory;
+  getWarehouseLabelsService?: WarehouseLabelsServiceFactory;
   getPickingPlanningPreviewService?: PickingPlanningPreviewServiceFactory;
   getFloorRoutingService?: FloorRoutingServiceFactory;
 };

@@ -87,7 +87,9 @@ import {
   ,
   dailyManualShiftImportPreviewSchema,
   applyDailyManualShiftImportRequestSchema,
-  applyDailyManualShiftImportResponseSchema
+  applyDailyManualShiftImportResponseSchema,
+  warehouseLabelPreviewRequestSchema as warehouseLabelPreviewRequestDtoSchema,
+  warehouseLabelPreviewResponseSchema as warehouseLabelPreviewResponseDtoSchema
 } from '@wos/domain';
 
 // ── Rack Inspector ──────────────────────────────────────────────────────────
@@ -555,6 +557,8 @@ export const manualShiftImportPreviewResponseSchema = z.object({
 });
 export const applyManualShiftImportRequestSchema = applyDailyManualShiftImportRequestSchema;
 export const applyManualShiftImportResponseSchema = applyDailyManualShiftImportResponseSchema;
+export const warehouseLabelPreviewRequestBodySchema = warehouseLabelPreviewRequestDtoSchema;
+export const warehouseLabelPreviewResponseSchema = warehouseLabelPreviewResponseDtoSchema;
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 

@@ -42,6 +42,7 @@ export * from './warehouse/site';
 export * from './warehouse/floor';
 export * from './warehouse/floor-aisle-topology';
 export * from './warehouse/floor-workspace';
+export * from './warehouse/warehouse-labels';
 export * from './warehouse/setup-state';
 export * from './contracts/readiness';
 export * from './operations/order';
