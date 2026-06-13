@@ -27,7 +27,7 @@ function createRepoStub(overrides?: Partial<WarehouseLabelsRepo>): WarehouseLabe
     listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([]),
     listTenantLocationsByIds: vi.fn().mockResolvedValue([]),
     listCellsByIds: vi.fn().mockResolvedValue([]),
-    listLayoutVersionsByIds: vi.fn().mockResolvedValue([]),
+    listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([]),
     ...overrides
   };
 }
@@ -58,6 +58,7 @@ function createCell(overrides: Partial<WarehouseLabelCellRow> = {}): WarehouseLa
 function createLayoutVersion(overrides: Partial<WarehouseLabelLayoutVersionRow> = {}): WarehouseLabelLayoutVersionRow {
   return {
     id: ids.layoutPublished,
+    floor_id: ids.floor,
     state: 'published',
     ...overrides
   };
@@ -68,7 +69,7 @@ describe('warehouse label preview service', () => {
     const repo = createRepoStub({
       listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([createLocation()]),
       listCellsByIds: vi.fn().mockResolvedValue([createCell()]),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
     });
     const service = createWarehouseLabelsService(repo);
 
@@ -129,7 +130,7 @@ describe('warehouse label preview service', () => {
           address_sort_key: '0003-A-02-03-04'
         })
       ]),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
     });
     const service = createWarehouseLabelsService(repo);
 
@@ -155,7 +156,7 @@ describe('warehouse label preview service', () => {
     ]);
   });
 
-  it('rejects missing requested ids', async () => {
+  it('returns the generic not-found error for missing requested ids', async () => {
     const service = createWarehouseLabelsService(
       createRepoStub({
         listTenantLocationsByIds: vi.fn().mockResolvedValue([createLocation()])
@@ -182,14 +183,15 @@ describe('warehouse label preview service', () => {
     });
   });
 
-  it('rejects a requested location from another floor', async () => {
+  it('returns the generic not-found error for a requested location from another floor', async () => {
     const service = createWarehouseLabelsService(
       createRepoStub({
         listTenantLocationsByIds: vi.fn().mockResolvedValue([
           createLocation({
             floor_id: ids.otherFloor
           })
-        ])
+        ]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
       })
     );
 
@@ -208,12 +210,12 @@ describe('warehouse label preview service', () => {
         }
       })
     ).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'LOCATION_FLOOR_MISMATCH'
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
     });
   });
 
-  it('rejects a requested non-rack_slot location', async () => {
+  it('returns the generic not-found error for a requested non-rack_slot location', async () => {
     const service = createWarehouseLabelsService(
       createRepoStub({
         listTenantLocationsByIds: vi.fn().mockResolvedValue([
@@ -221,7 +223,8 @@ describe('warehouse label preview service', () => {
             location_type: 'staging',
             geometry_slot_id: null
           })
-        ])
+        ]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
       })
     );
 
@@ -240,8 +243,8 @@ describe('warehouse label preview service', () => {
         }
       })
     ).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'LOCATION_TYPE_INVALID'
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
     });
   });
 
@@ -272,14 +275,15 @@ describe('warehouse label preview service', () => {
     });
   });
 
-  it('rejects disabled or invalid geometry-linked locations', async () => {
+  it('returns the generic not-found error for disabled locations', async () => {
     const service = createWarehouseLabelsService(
       createRepoStub({
         listTenantLocationsByIds: vi.fn().mockResolvedValue([
           createLocation({
             status: 'disabled'
           })
-        ])
+        ]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
       })
     );
 
@@ -298,12 +302,12 @@ describe('warehouse label preview service', () => {
         }
       })
     ).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'LOCATION_NOT_PRINTABLE'
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
     });
   });
 
-  it('rejects geometry cells that are inactive or not published', async () => {
+  it('returns the generic not-found error for inactive geometry cells', async () => {
     const repo = createRepoStub({
       listTenantLocationsByIds: vi.fn().mockResolvedValue([createLocation()]),
       listCellsByIds: vi.fn().mockResolvedValue([
@@ -312,7 +316,7 @@ describe('warehouse label preview service', () => {
           layout_version_id: ids.layoutDraft
         })
       ]),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([
         createLayoutVersion({
           id: ids.layoutDraft,
           state: 'draft'
@@ -336,8 +340,211 @@ describe('warehouse label preview service', () => {
         }
       })
     ).rejects.toMatchObject({
-      statusCode: 409,
-      code: 'LOCATION_NOT_PRINTABLE'
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
+    });
+  });
+
+  it('returns the generic not-found error for stale geometry links', async () => {
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantLocationsByIds: vi.fn().mockResolvedValue([
+          createLocation({
+            geometry_slot_id: 'aaaaaaaa-0000-4000-8000-000000000000'
+          })
+        ]),
+        listCellsByIds: vi.fn().mockResolvedValue([]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    await expect(
+      service.previewLabels({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: {
+            mode: 'location-ids',
+            locationIds: [ids.locationA]
+          },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
+    });
+  });
+
+  it('excludes corrupted geometry linked to a published cell on a different floor for entire-floor previews', async () => {
+    const repo = createRepoStub({
+      listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([
+        createLocation({
+          id: ids.locationA,
+          geometry_slot_id: ids.cellA
+        }),
+        createLocation({
+          id: ids.locationB,
+          geometry_slot_id: ids.cellB,
+          code: '03-A.02.03.05'
+        })
+      ]),
+      listCellsByIds: vi.fn().mockResolvedValue([
+        createCell({
+          id: ids.cellA,
+          address_sort_key: '0003-A-02-03-04'
+        }),
+        createCell({
+          id: ids.cellB,
+          address_sort_key: '0003-A-02-03-05',
+          layout_version_id: ids.layoutDraft
+        })
+      ]),
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([
+        createLayoutVersion({
+          id: ids.layoutPublished,
+          floor_id: ids.floor
+        })
+      ])
+    });
+    const service = createWarehouseLabelsService(repo);
+
+    const result = await service.previewLabels({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(result.labelCount).toBe(1);
+    expect(result.sampleLabels).toEqual([
+      {
+        locationId: ids.locationA,
+        address: '03-A.02.03.04',
+        barcodeValue: '03-A.02.03.04'
+      }
+    ]);
+  });
+
+  it('returns the generic not-found error when explicit ids point to published geometry from a different floor', async () => {
+    const repo = createRepoStub({
+      listTenantLocationsByIds: vi.fn().mockResolvedValue([
+        createLocation({
+          geometry_slot_id: ids.cellB
+        })
+      ]),
+      listCellsByIds: vi.fn().mockResolvedValue([
+        createCell({
+          id: ids.cellB,
+          layout_version_id: ids.layoutDraft
+        })
+      ]),
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([
+        createLayoutVersion({
+          id: ids.layoutPublished,
+          floor_id: ids.floor
+        })
+      ])
+    });
+    const service = createWarehouseLabelsService(repo);
+
+    await expect(
+      service.previewLabels({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: {
+            mode: 'location-ids',
+            locationIds: [ids.locationA]
+          },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
+    });
+  });
+
+  it('excludes corrupted geometry linked to a published cell from another tenant lineage for entire-floor previews', async () => {
+    const repo = createRepoStub({
+      listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([createLocation()]),
+      listCellsByIds: vi.fn().mockResolvedValue([
+        createCell({
+          layout_version_id: ids.layoutDraft
+        })
+      ]),
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([])
+    });
+    const service = createWarehouseLabelsService(repo);
+
+    const result = await service.previewLabels({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(result).toEqual({
+      labelCount: 0,
+      pageCount: 0,
+      resolvedPreset: {
+        id: 'rack-slot-100x50',
+        widthMm: 100,
+        heightMm: 50
+      },
+      resolvedLayout: {
+        mode: 'single-label-page',
+        pageWidthMm: 100,
+        pageHeightMm: 50,
+        labelsPerPage: 1
+      },
+      sampleLabels: [],
+      warnings: []
+    });
+  });
+
+  it('returns the generic not-found error when explicit ids point to geometry outside the tenant floor lineage', async () => {
+    const repo = createRepoStub({
+      listTenantLocationsByIds: vi.fn().mockResolvedValue([createLocation()]),
+      listCellsByIds: vi.fn().mockResolvedValue([
+        createCell({
+          layout_version_id: ids.layoutDraft
+        })
+      ]),
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([])
+    });
+    const service = createWarehouseLabelsService(repo);
+
+    await expect(
+      service.previewLabels({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: {
+            mode: 'location-ids',
+            locationIds: [ids.locationA]
+          },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
     });
   });
 
@@ -359,7 +566,7 @@ describe('warehouse label preview service', () => {
       createRepoStub({
         listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(manyLocations),
         listCellsByIds: vi.fn().mockResolvedValue(manyCells),
-        listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
       })
     );
 
@@ -409,7 +616,7 @@ describe('warehouse label preview service', () => {
           address_sort_key: '0003-A-02-03-06'
         })
       ]),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
     });
     const service = createWarehouseLabelsService(repo);
 
@@ -445,7 +652,7 @@ describe('warehouse label preview service', () => {
     const repo = createRepoStub({
       listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([createLocation()]),
       listCellsByIds: vi.fn().mockResolvedValue([createCell()]),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
     });
     const service = createWarehouseLabelsService(repo);
 
@@ -487,7 +694,7 @@ describe('warehouse label preview service', () => {
     const repo = createRepoStub({
       listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(locations),
       listCellsByIds: vi.fn().mockResolvedValue(cells),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
     });
     const service = createWarehouseLabelsService(repo);
 
@@ -515,7 +722,7 @@ describe('warehouse label preview service', () => {
         })
       ]),
       listCellsByIds: vi.fn().mockResolvedValue([createCell()]),
-      listLayoutVersionsByIds: vi.fn().mockResolvedValue([createLayoutVersion()])
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
     });
     const service = createWarehouseLabelsService(repo);
 
@@ -533,5 +740,43 @@ describe('warehouse label preview service', () => {
     expect(result.warnings).toEqual([
       '1 label address exceeds recommended length 14 for preset rack-slot-70x40.'
     ]);
+  });
+
+  it('returns an empty successful preview for an empty entire-floor selection', async () => {
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    const result = await service.previewLabels({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(result).toEqual({
+      labelCount: 0,
+      pageCount: 0,
+      resolvedPreset: {
+        id: 'rack-slot-100x50',
+        widthMm: 100,
+        heightMm: 50
+      },
+      resolvedLayout: {
+        mode: 'single-label-page',
+        pageWidthMm: 100,
+        pageHeightMm: 50,
+        labelsPerPage: 1
+      },
+      sampleLabels: [],
+      warnings: []
+    });
   });
 });

@@ -19,6 +19,7 @@ export type WarehouseLabelCellRow = {
 
 export type WarehouseLabelLayoutVersionRow = {
   id: string;
+  floor_id: string;
   state: 'draft' | 'published' | 'archived';
 };
 
@@ -26,7 +27,7 @@ export type WarehouseLabelsRepo = {
   listTenantFloorRackSlotLocations(tenantId: string, floorId: string): Promise<WarehouseLabelLocationRow[]>;
   listTenantLocationsByIds(tenantId: string, locationIds: string[]): Promise<WarehouseLabelLocationRow[]>;
   listCellsByIds(cellIds: string[]): Promise<WarehouseLabelCellRow[]>;
-  listLayoutVersionsByIds(layoutVersionIds: string[]): Promise<WarehouseLabelLayoutVersionRow[]>;
+  listPublishedLayoutVersionsForFloor(tenantId: string, floorId: string): Promise<WarehouseLabelLayoutVersionRow[]>;
 };
 
 export function createWarehouseLabelsRepo(supabase: SupabaseClient): WarehouseLabelsRepo {
@@ -81,21 +82,23 @@ export function createWarehouseLabelsRepo(supabase: SupabaseClient): WarehouseLa
       return (data ?? []) as WarehouseLabelCellRow[];
     },
 
-    async listLayoutVersionsByIds(layoutVersionIds) {
-      if (layoutVersionIds.length === 0) {
-        return [];
-      }
-
+    async listPublishedLayoutVersionsForFloor(tenantId, floorId) {
       const { data, error } = await supabase
         .from('layout_versions')
-        .select('id,state')
-        .in('id', layoutVersionIds);
+        .select('id,floor_id,state,floors!inner(id,sites!inner(tenant_id))')
+        .eq('floor_id', floorId)
+        .eq('state', 'published')
+        .eq('floors.sites.tenant_id', tenantId);
 
       if (error) {
         throw error;
       }
 
-      return (data ?? []) as WarehouseLabelLayoutVersionRow[];
+      return ((data ?? []) as Array<WarehouseLabelLayoutVersionRow & { floors?: unknown }>).map((row) => ({
+        id: row.id,
+        floor_id: row.floor_id,
+        state: row.state
+      }));
     }
   };
 }

@@ -66,24 +66,8 @@ function limitExceededError(): ApiError {
   );
 }
 
-function locationNotFoundError(locationId: string): ApiError {
-  return new ApiError(404, 'LOCATION_NOT_FOUND', `Location ${locationId} was not found.`);
-}
-
-function locationFloorMismatchError(locationId: string, floorId: string): ApiError {
-  return new ApiError(409, 'LOCATION_FLOOR_MISMATCH', `Location ${locationId} does not belong to floor ${floorId}.`);
-}
-
-function locationTypeInvalidError(locationId: string, locationType: string): ApiError {
-  return new ApiError(
-    409,
-    'LOCATION_TYPE_INVALID',
-    `Location ${locationId} has type ${locationType} and cannot be printed as a rack-slot label.`
-  );
-}
-
-function locationNotPrintableError(locationId: string, reason: string): ApiError {
-  return new ApiError(409, 'LOCATION_NOT_PRINTABLE', `Location ${locationId} is not printable: ${reason}.`);
+function requestedLocationsNotFoundError(): ApiError {
+  return new ApiError(404, 'LOCATION_NOT_FOUND', 'One or more requested locations were not found.');
 }
 
 function buildResolvedLayout(request: WarehouseLabelPreviewRequest): WarehouseLabelResolvedLayout {
@@ -152,41 +136,39 @@ function buildResponse(request: WarehouseLabelPreviewRequest, labels: ResolvedLa
   });
 }
 
-function validateLocationRow(location: WarehouseLabelLocationRow, floorId: string): void {
+function resolvePrintableLabelOrNull(
+  location: WarehouseLabelLocationRow,
+  cellsById: Map<string, WarehouseLabelCellRow>,
+  publishedLayoutVersionIds: Set<string>,
+  floorId: string
+): ResolvedLabel | null {
   if (location.floor_id !== floorId) {
-    throw locationFloorMismatchError(location.id, floorId);
+    return null;
   }
 
   if (location.location_type !== 'rack_slot') {
-    throw locationTypeInvalidError(location.id, location.location_type);
+    return null;
   }
 
   if (location.status !== 'active') {
-    throw locationNotPrintableError(location.id, `status ${location.status}`);
+    return null;
   }
 
   if (!location.geometry_slot_id) {
-    throw locationNotPrintableError(location.id, 'missing geometry slot');
+    return null;
   }
-}
 
-function resolvePrintableLabel(
-  location: WarehouseLabelLocationRow,
-  cellsById: Map<string, WarehouseLabelCellRow>,
-  layoutStateById: Map<string, 'draft' | 'published' | 'archived'>
-): ResolvedLabel {
-  const cell = cellsById.get(location.geometry_slot_id as string);
+  const cell = cellsById.get(location.geometry_slot_id);
   if (!cell) {
-    throw locationNotPrintableError(location.id, 'geometry slot is missing');
+    return null;
   }
 
   if (cell.status !== 'active') {
-    throw locationNotPrintableError(location.id, `geometry slot status ${cell.status}`);
+    return null;
   }
 
-  const layoutState = layoutStateById.get(cell.layout_version_id);
-  if (layoutState !== 'published') {
-    throw locationNotPrintableError(location.id, 'geometry slot is not in a published layout');
+  if (!publishedLayoutVersionIds.has(cell.layout_version_id)) {
+    return null;
   }
 
   return {
@@ -198,11 +180,19 @@ function resolvePrintableLabel(
 
 async function resolveLabels(
   repo: WarehouseLabelsRepo,
+  tenantId: string,
   request: WarehouseLabelPreviewRequest,
   locations: WarehouseLabelLocationRow[]
 ): Promise<ResolvedLabel[]> {
-  for (const location of locations) {
-    validateLocationRow(location, request.floorId);
+  const publishedLayoutVersions = await repo.listPublishedLayoutVersionsForFloor(tenantId, request.floorId);
+  const publishedLayoutVersionIds = new Set(
+    publishedLayoutVersions
+      .filter((layoutVersion) => layoutVersion.floor_id === request.floorId && layoutVersion.state === 'published')
+      .map((layoutVersion) => layoutVersion.id)
+  );
+
+  if (publishedLayoutVersionIds.size === 0) {
+    return [];
   }
 
   const cellIds = dedupeIds(
@@ -212,12 +202,10 @@ async function resolveLabels(
   );
   const cells = await repo.listCellsByIds(cellIds);
   const cellsById = new Map(cells.map((cell) => [cell.id, cell]));
-  const layoutVersionIds = dedupeIds(cells.map((cell) => cell.layout_version_id));
-  const layoutVersions = await repo.listLayoutVersionsByIds(layoutVersionIds);
-  const layoutStateById = new Map(layoutVersions.map((layoutVersion) => [layoutVersion.id, layoutVersion.state]));
 
   return locations
-    .map((location) => resolvePrintableLabel(location, cellsById, layoutStateById))
+    .map((location) => resolvePrintableLabelOrNull(location, cellsById, publishedLayoutVersionIds, request.floorId))
+    .filter((label): label is ResolvedLabel => label !== null)
     .sort(compareResolvedLabels);
 }
 
@@ -244,21 +232,20 @@ export function createWarehouseLabelsService(
         }
 
         const locations = await repo.listTenantLocationsByIds(tenantId, locationIds);
-        const locationsById = new Map(locations.map((location) => [location.id, location]));
-        const orderedLocations = locationIds.map((locationId) => {
-          const location = locationsById.get(locationId);
-          if (!location) {
-            throw locationNotFoundError(locationId);
-          }
+        if (locations.length !== locationIds.length) {
+          throw requestedLocationsNotFoundError();
+        }
 
-          return location;
-        });
+        const labels = await resolveLabels(repo, tenantId, request, locations);
+        if (labels.length !== locationIds.length) {
+          throw requestedLocationsNotFoundError();
+        }
 
-        return buildResponse(request, await resolveLabels(repo, request, orderedLocations));
+        return buildResponse(request, labels);
       }
 
       const locations = await repo.listTenantFloorRackSlotLocations(tenantId, request.floorId);
-      const labels = await resolveLabels(repo, request, locations);
+      const labels = await resolveLabels(repo, tenantId, request, locations);
 
       if (labels.length > MAX_LABELS_PER_REQUEST) {
         throw limitExceededError();
