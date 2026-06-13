@@ -237,6 +237,10 @@ export async function resolveWarehouseLabelsForRequest(
   }
 
   const locations = await repo.listTenantFloorRackSlotLocations(tenantId, request.floorId);
+  if (locations.length > MAX_LABELS_PER_REQUEST) {
+    throw limitExceededError();
+  }
+
   const labels = await resolveLabels(repo, tenantId, request, locations);
 
   if (labels.length > MAX_LABELS_PER_REQUEST) {
