@@ -109,3 +109,12 @@ export const warehouseLabelPresets = {
 export function getWarehouseLabelPreset(id: WarehouseLabelPresetId): WarehouseLabelResolvedPreset {
   return warehouseLabelResolvedPresetSchema.parse(warehouseLabelPresets[id]);
 }
+
+export const rackSlotLocationRefSchema = z.object({
+  locationId: z.string().uuid(),
+  cellId: z.string().uuid()
+});
+export type RackSlotLocationRef = z.infer<typeof rackSlotLocationRefSchema>;
+
+export const rackSlotLocationRefsResponseSchema = z.array(rackSlotLocationRefSchema);
+export type RackSlotLocationRefsResponse = z.infer<typeof rackSlotLocationRefsResponseSchema>;

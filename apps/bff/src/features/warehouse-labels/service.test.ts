@@ -65,6 +65,51 @@ function createLayoutVersion(overrides: Partial<WarehouseLabelLayoutVersionRow> 
 }
 
 describe('warehouse label preview service', () => {
+  it('returns deterministic minimal rack-slot location refs for the floor', async () => {
+    const repo = createRepoStub({
+      listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([
+        createLocation({
+          id: ids.locationB,
+          geometry_slot_id: ids.cellA
+        }),
+        createLocation({
+          id: ids.locationA,
+          geometry_slot_id: ids.cellA
+        }),
+        createLocation({
+          id: ids.locationC,
+          geometry_slot_id: ids.cellB
+        }),
+        createLocation({
+          id: 'aaaaaaaa-1111-4111-8111-111111111111',
+          geometry_slot_id: null
+        }),
+        createLocation({
+          id: 'bbbbbbbb-1111-4111-8111-111111111111',
+          geometry_slot_id: ids.cellC,
+          status: 'disabled'
+        })
+      ])
+    });
+    const service = createWarehouseLabelsService(repo);
+
+    const result = await service.getRackSlotLocationRefs({
+      tenantId: ids.tenant,
+      floorId: ids.floor
+    });
+
+    expect(result).toEqual([
+      {
+        locationId: ids.locationA,
+        cellId: ids.cellA
+      },
+      {
+        locationId: ids.locationC,
+        cellId: ids.cellB
+      }
+    ]);
+  });
+
   it('resolves entire-floor previews and uses locations.code for address and barcode', async () => {
     const repo = createRepoStub({
       listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([createLocation()]),

@@ -4,6 +4,8 @@ import type { AuthenticatedRequestContext } from '../../auth.js';
 import { ApiError } from '../../errors.js';
 import type { RouteDeps } from '../../route-deps.js';
 import {
+  idResponseSchema,
+  rackSlotLocationRefsResponseSchema,
   warehouseLabelPreviewRequestBodySchema,
   warehouseLabelPreviewResponseSchema
 } from '../../schemas.js';
@@ -20,6 +22,22 @@ function requireCurrentTenant(auth: AuthenticatedRequestContext) {
 }
 
 export function registerWarehouseLabelRoutes(app: FastifyInstance, deps: WarehouseLabelsRouteDeps): void {
+  app.get('/api/floors/:floorId/rack-slot-location-refs', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenant = requireCurrentTenant(auth);
+    const floorId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { floorId: string }).floorId
+    }).id;
+    const response = await deps.getWarehouseLabelsService(auth).getRackSlotLocationRefs({
+      tenantId: tenant.tenantId,
+      floorId
+    });
+
+    return parseOrThrow(rackSlotLocationRefsResponseSchema, response);
+  });
+
   app.post('/api/warehouse-labels/preview', async (request, reply) => {
     const auth = await deps.getAuthContext(request, reply);
     if (!auth) return;

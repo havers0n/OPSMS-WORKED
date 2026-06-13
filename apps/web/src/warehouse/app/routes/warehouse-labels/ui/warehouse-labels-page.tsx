@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { WarehouseLabelPresetId, WarehouseLabelPreviewResponse } from '@wos/domain';
 import { warehouseLabelPresetIds } from '@wos/domain';
 import { useActiveFloorId, useActiveSiteId } from '@/app/store/ui-selectors';
+import { usePublishedCells } from '@/entities/cell/api/use-published-cells';
 import { useFloors } from '@/entities/floor/api/use-floors';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { routes } from '@/shared/config/routes';
@@ -16,10 +17,16 @@ import {
   computePreviewFingerprint,
   fingerprintsMatch,
   triggerBlobDownload,
+  useRackSlotLocationRefs,
   useWarehouseLabelPdfDownload,
   useWarehouseLabelPreview,
   type PreviewFingerprint
 } from '../api/warehouse-labels-api';
+import {
+  buildRackLevelOptions,
+  buildWarehouseLabelSelection,
+  type LabelSelectionState
+} from './warehouse-label-selection';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -48,14 +55,12 @@ export function WarehouseLabelsPage() {
 
   const resolvedFloorId = useMemo(() => {
     if (paramFloorId && UUID_REGEX.test(paramFloorId)) return paramFloorId;
-    if (activeFloorId) {
-      if (!paramFloorId && activeFloorId) {
-        return activeFloorId;
-      }
-      return activeFloorId;
-    }
+    if (activeFloorId) return activeFloorId;
     return null;
   }, [paramFloorId, activeFloorId]);
+
+  const publishedCellsQuery = usePublishedCells(resolvedFloorId);
+  const rackSlotLocationRefsQuery = useRackSlotLocationRefs(resolvedFloorId);
 
   useEffect(() => {
     if (paramFloorId === '' && activeFloorId) {
@@ -64,6 +69,7 @@ export function WarehouseLabelsPage() {
   }, [paramFloorId, activeFloorId, setSearchParams]);
 
   const [preset, setPreset] = useState<WarehouseLabelPresetId>('rack-slot-100x50');
+  const [selectionState, setSelectionState] = useState<LabelSelectionState>({ mode: 'entire-floor' });
   const [previewData, setPreviewData] = useState<WarehouseLabelPreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewFingerprint, setPreviewFingerprint] = useState<PreviewFingerprint | null>(null);
@@ -71,8 +77,17 @@ export function WarehouseLabelsPage() {
   const previewMutation = useWarehouseLabelPreview();
   const pdfMutation = useWarehouseLabelPdfDownload();
 
-  const currentFingerprint = resolvedFloorId
-    ? computePreviewFingerprint(resolvedFloorId, preset)
+  const rackLevelOptions = useMemo(
+    () => buildRackLevelOptions(publishedCellsQuery.data ?? [], rackSlotLocationRefsQuery.data ?? []),
+    [publishedCellsQuery.data, rackSlotLocationRefsQuery.data]
+  );
+  const requestSelection = useMemo(
+    () => buildWarehouseLabelSelection(selectionState, rackLevelOptions),
+    [selectionState, rackLevelOptions]
+  );
+
+  const currentFingerprint = resolvedFloorId && requestSelection
+    ? computePreviewFingerprint(resolvedFloorId, preset, requestSelection)
     : null;
 
   const isPreviewStale = !fingerprintsMatch(currentFingerprint, previewFingerprint);
@@ -92,18 +107,75 @@ export function WarehouseLabelsPage() {
     return error.message;
   }
 
-  const handlePresetChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handlePresetChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     if (warehouseLabelPresetIds.includes(value as WarehouseLabelPresetId)) {
       setPreset(value as WarehouseLabelPresetId);
     }
   }, []);
 
+  const handleSelectionModeChange = useCallback((mode: LabelSelectionState['mode']) => {
+    setSelectionState(mode === 'entire-floor' ? { mode: 'entire-floor' } : { mode: 'by-rack', selected: {} });
+  }, []);
+
+  const handleRackSelectionChange = useCallback((rackId: string, checked: boolean) => {
+    setSelectionState((current) => {
+      const selected = current.mode === 'by-rack' ? current.selected : {};
+      if (!checked) {
+        const { [rackId]: _removed, ...rest } = selected;
+        return { mode: 'by-rack', selected: rest };
+      }
+
+      return {
+        mode: 'by-rack',
+        selected: {
+          ...selected,
+          [rackId]: 'all'
+        }
+      };
+    });
+  }, []);
+
+  const handleLevelSelectionChange = useCallback((rackId: string, levelKey: string, checked: boolean) => {
+    setSelectionState((current) => {
+      const selected = current.mode === 'by-rack' ? current.selected : {};
+      const rack = rackLevelOptions.find((entry) => entry.rackId === rackId);
+      if (!rack) {
+        return { mode: 'by-rack', selected };
+      }
+
+      const allLevelKeys = rack.levels.map((level) => level.key);
+      const currentLevelKeys =
+        selected[rackId] === 'all'
+          ? allLevelKeys
+          : Array.isArray(selected[rackId])
+            ? selected[rackId]
+            : [];
+      const nextLevelKeys = checked
+        ? Array.from(new Set([...currentLevelKeys, levelKey]))
+        : currentLevelKeys.filter((value) => value !== levelKey);
+      const orderedLevelKeys = allLevelKeys.filter((value) => nextLevelKeys.includes(value));
+
+      if (orderedLevelKeys.length === 0) {
+        const { [rackId]: _removed, ...rest } = selected;
+        return { mode: 'by-rack', selected: rest };
+      }
+
+      return {
+        mode: 'by-rack',
+        selected: {
+          ...selected,
+          [rackId]: orderedLevelKeys.length === allLevelKeys.length ? 'all' : orderedLevelKeys
+        }
+      };
+    });
+  }, [rackLevelOptions]);
+
   const handlePreview = useCallback(() => {
-    if (!resolvedFloorId) return;
+    if (!resolvedFloorId || !requestSelection) return;
     const request = {
       floorId: resolvedFloorId,
-      selection: { mode: 'entire-floor' as const },
+      selection: requestSelection,
       labelPreset: preset,
       layout: { mode: 'single-label-page' as const },
       sort: 'address' as const
@@ -113,7 +185,7 @@ export function WarehouseLabelsPage() {
     previewMutation.mutate(request, {
       onSuccess: (data) => {
         setPreviewData(data);
-        setPreviewFingerprint(computePreviewFingerprint(resolvedFloorId, preset));
+        setPreviewFingerprint(computePreviewFingerprint(resolvedFloorId, preset, requestSelection));
       },
       onError: (error) => {
         setPreviewData(null);
@@ -125,13 +197,13 @@ export function WarehouseLabelsPage() {
         }
       }
     });
-  }, [resolvedFloorId, preset, previewMutation, t]);
+  }, [resolvedFloorId, requestSelection, preset, previewMutation, t]);
 
   const handleDownload = useCallback(() => {
-    if (!resolvedFloorId || isPreviewStale || !previewData) return;
+    if (!resolvedFloorId || !requestSelection || isPreviewStale || !previewData) return;
     const request = {
       floorId: resolvedFloorId,
-      selection: { mode: 'entire-floor' as const },
+      selection: requestSelection,
       labelPreset: preset,
       layout: { mode: 'single-label-page' as const },
       sort: 'address' as const
@@ -146,10 +218,12 @@ export function WarehouseLabelsPage() {
         setPreviewError(message ?? t('warehouse.labels.downloadFailed'));
       }
     });
-  }, [resolvedFloorId, preset, isPreviewStale, previewData, pdfMutation, t]);
+  }, [resolvedFloorId, requestSelection, preset, isPreviewStale, previewData, pdfMutation, t]);
 
+  const canPreview = Boolean(resolvedFloorId) && Boolean(requestSelection) && !previewMutation.isPending;
   const canDownload =
     resolvedFloorId &&
+    requestSelection &&
     previewData &&
     !isPreviewStale &&
     previewData.labelCount > 0 &&
@@ -207,6 +281,7 @@ export function WarehouseLabelsPage() {
 
   const sortedSampleLabels = previewData && !isPreviewStale ? previewData.sampleLabels : [];
   const warnings = previewData && !isPreviewStale ? previewData.warnings : [];
+  const concretePreviewLabel = sortedSampleLabels[0] ?? null;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -225,9 +300,74 @@ export function WarehouseLabelsPage() {
             </Section>
 
             <Section title={t('warehouse.labels.selectionLabel')}>
-              <p className="text-sm text-slate-500">
-                {t('warehouse.labels.entireFloor')}
-              </p>
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="label-selection-mode"
+                    checked={selectionState.mode === 'entire-floor'}
+                    onChange={() => handleSelectionModeChange('entire-floor')}
+                  />
+                  <span>{t('warehouse.labels.entireFloor')}</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="radio"
+                    name="label-selection-mode"
+                    checked={selectionState.mode === 'by-rack'}
+                    onChange={() => handleSelectionModeChange('by-rack')}
+                  />
+                  <span>{t('warehouse.labels.byRack')}</span>
+                </label>
+
+                {selectionState.mode === 'by-rack' && (
+                  <div className="space-y-3 rounded-md border border-slate-200 p-3">
+                    {rackSlotLocationRefsQuery.isLoading || publishedCellsQuery.isLoading ? (
+                      <p className="text-sm text-slate-500">{t('warehouse.labels.loading')}</p>
+                    ) : rackLevelOptions.length === 0 ? (
+                      <p className="text-sm text-slate-500">{t('warehouse.labels.noRackSlotLocations')}</p>
+                    ) : (
+                      rackLevelOptions.map((rack) => {
+                        const rackSelection = selectionState.selected[rack.rackId];
+                        const selectedLevelKeys =
+                          rackSelection === 'all'
+                            ? rack.levels.map((level) => level.key)
+                            : rackSelection ?? [];
+
+                        return (
+                          <div key={rack.rackId} className="space-y-2">
+                            <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(rackSelection)}
+                                onChange={(event) => handleRackSelectionChange(rack.rackId, event.target.checked)}
+                              />
+                              <span>{rack.rackLabel}</span>
+                              <span className="text-xs font-normal text-slate-500">
+                                {t('warehouse.labels.allLevels')}
+                              </span>
+                            </label>
+                            <div className="flex flex-wrap gap-3 pl-6">
+                              {rack.levels.map((level) => (
+                                <label key={level.key} className="flex items-center gap-2 text-sm text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedLevelKeys.includes(level.key)}
+                                    onChange={(event) =>
+                                      handleLevelSelectionChange(rack.rackId, level.key, event.target.checked)
+                                    }
+                                  />
+                                  <span>{level.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
             </Section>
 
             <Section title={t('warehouse.labels.preset')}>
@@ -256,7 +396,7 @@ export function WarehouseLabelsPage() {
                 variant="solid"
                 size="sm"
                 onClick={handlePreview}
-                disabled={!resolvedFloorId || previewMutation.isPending}
+                disabled={!canPreview}
                 className="text-white disabled:opacity-50"
                 style={{ background: 'var(--accent)' }}
               >
@@ -290,10 +430,10 @@ export function WarehouseLabelsPage() {
 
                   {sortedSampleLabels.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium text-slate-700 mb-1">
+                      <p className="mb-1 text-sm font-medium text-slate-700">
                         {t('warehouse.labels.sampleLabels')}:
                       </p>
-                      <ul className="text-sm text-slate-600 space-y-0.5">
+                      <ul className="space-y-0.5 text-sm text-slate-600">
                         {sortedSampleLabels.map((sample) => (
                           <li key={sample.locationId} className="font-mono">
                             {sample.address}
@@ -303,12 +443,33 @@ export function WarehouseLabelsPage() {
                     </div>
                   )}
 
+                  {concretePreviewLabel && (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <p className="mb-2 text-sm font-medium text-slate-700">
+                        {t('warehouse.labels.previewCard')}
+                      </p>
+                      <div className="flex max-w-xs flex-col gap-2 rounded-md border border-dashed border-slate-300 bg-white p-3">
+                        <div className="font-mono text-base text-slate-900">{concretePreviewLabel.address}</div>
+                        <div
+                          aria-hidden="true"
+                          className="h-12 rounded bg-[repeating-linear-gradient(90deg,#0f172a_0px,#0f172a_2px,transparent_2px,transparent_4px,#0f172a_4px,#0f172a_5px,transparent_5px,transparent_7px)]"
+                        />
+                        <div className="font-mono text-xs tracking-[0.2em] text-slate-700">
+                          {concretePreviewLabel.barcodeValue}
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          {t('warehouse.labels.barcodeApproximation')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {warnings.length > 0 && (
                     <div>
-                      <p className="text-sm font-medium text-amber-600 mb-1">
+                      <p className="mb-1 text-sm font-medium text-amber-600">
                         {t('warehouse.labels.warnings')}:
                       </p>
-                      <ul className="text-sm text-amber-600 space-y-0.5">
+                      <ul className="space-y-0.5 text-sm text-amber-600">
                         {warnings.map((warning, index) => (
                           <li key={index}>{warning}</li>
                         ))}
@@ -317,7 +478,7 @@ export function WarehouseLabelsPage() {
                   )}
 
                   {previewData.labelCount === 0 && (
-                    <p className="text-sm text-slate-500 italic">
+                    <p className="text-sm italic text-slate-500">
                       {t('warehouse.labels.emptyPreview')}
                     </p>
                   )}

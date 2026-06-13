@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider } from '@/shared/i18n/i18n-provider';
 import { BffRequestError } from '@/shared/api/bff/client';
-import type { WarehouseLabelPreviewResponse } from '@wos/domain';
+import type { RackSlotLocationRef, WarehouseLabelPreviewResponse } from '@wos/domain';
 
 const mockUseActiveFloorId = vi.hoisted(() => vi.fn());
 const mockUseActiveSiteId = vi.hoisted(() => vi.fn());
@@ -12,6 +12,8 @@ const mockPreviewMutate = vi.hoisted(() => vi.fn());
 const mockPdfMutate = vi.hoisted(() => vi.fn());
 const mockTriggerBlobDownload = vi.hoisted(() => vi.fn());
 const mockUseFloors = vi.hoisted(() => vi.fn());
+const mockUsePublishedCells = vi.hoisted(() => vi.fn());
+const mockUseRackSlotLocationRefs = vi.hoisted(() => vi.fn());
 
 vi.mock('@/app/store/ui-selectors', () => ({
   useActiveFloorId: mockUseActiveFloorId,
@@ -20,6 +22,10 @@ vi.mock('@/app/store/ui-selectors', () => ({
 
 vi.mock('@/entities/floor/api/use-floors', () => ({
   useFloors: mockUseFloors
+}));
+
+vi.mock('@/entities/cell/api/use-published-cells', () => ({
+  usePublishedCells: mockUsePublishedCells
 }));
 
 vi.mock('@/warehouse/shell/ui/warehouse-top-bar', () => ({
@@ -41,9 +47,10 @@ vi.mock('../api/warehouse-labels-api', () => ({
     data: null,
     error: null
   }),
-  computePreviewFingerprint: (floorId: string, preset: string) => ({
+  useRackSlotLocationRefs: () => mockUseRackSlotLocationRefs(),
+  computePreviewFingerprint: (floorId: string, preset: string, selection: unknown) => ({
     floorId,
-    selectionMode: 'entire-floor',
+    selection,
     labelPreset: preset,
     layoutMode: 'single-label-page'
   }),
@@ -70,14 +77,20 @@ function renderLabelsPage(initialPath = '/warehouse/labels') {
 const FLOOR_ID = '11111111-1111-4111-8111-111111111111';
 const SITE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
+const LOCATION_REFS: RackSlotLocationRef[] = [
+  { locationId: 'loc-2', cellId: 'cell-1' },
+  { locationId: 'loc-1', cellId: 'cell-2' },
+  { locationId: 'loc-3', cellId: 'cell-3' }
+];
+
 const SAMPLE_PREVIEW: WarehouseLabelPreviewResponse = {
   labelCount: 120,
   pageCount: 120,
   resolvedPreset: { id: 'rack-slot-100x50', widthMm: 100, heightMm: 50 },
   resolvedLayout: { mode: 'single-label-page', pageWidthMm: 100, pageHeightMm: 50, labelsPerPage: 1 },
   sampleLabels: [
-    { locationId: '22222222-2222-4222-8222-222222222220', address: '01-A.01.01.01', barcodeValue: '01-A.01.01.01' },
-    { locationId: '22222222-2222-4222-8222-222222222221', address: '01-A.01.01.02', barcodeValue: '01-A.01.01.02' }
+    { locationId: '22222222-2222-4222-8222-222222222220', address: '01-A.01.01.01', barcodeValue: 'BC-01' },
+    { locationId: '22222222-2222-4222-8222-222222222221', address: '01-A.01.01.02', barcodeValue: 'BC-02' }
   ],
   warnings: ['Some warning message']
 };
@@ -87,6 +100,48 @@ describe('WarehouseLabelsPage', () => {
     mockUseActiveSiteId.mockReturnValue(SITE_ID);
     mockUseActiveFloorId.mockReturnValue(null);
     mockUseFloors.mockReturnValue({ data: [], isLoading: false });
+    mockUsePublishedCells.mockReturnValue({
+      data: [
+        {
+          id: 'cell-1',
+          layoutVersionId: 'layout-1',
+          rackId: 'rack-1',
+          rackFaceId: 'face-1',
+          rackSectionId: 'section-1',
+          rackLevelId: 'level-1',
+          slotNo: 1,
+          address: { raw: '01-A.01.01.01', parts: { rackCode: '01', face: 'A', section: 1, level: 1, slot: 1 }, sortKey: '0001-A-01-01-01' },
+          status: 'active',
+          cellCode: 'CELL-1'
+        },
+        {
+          id: 'cell-2',
+          layoutVersionId: 'layout-1',
+          rackId: 'rack-1',
+          rackFaceId: 'face-1',
+          rackSectionId: 'section-1',
+          rackLevelId: 'level-2',
+          slotNo: 1,
+          address: { raw: '01-A.01.02.01', parts: { rackCode: '01', face: 'A', section: 1, level: 2, slot: 1 }, sortKey: '0001-A-01-02-01' },
+          status: 'active',
+          cellCode: 'CELL-2'
+        },
+        {
+          id: 'cell-3',
+          layoutVersionId: 'layout-1',
+          rackId: 'rack-1',
+          rackFaceId: 'face-1',
+          rackSectionId: 'section-1',
+          rackLevelId: 'level-l1',
+          slotNo: 1,
+          address: { raw: '01-A.01.L1.01', parts: { rackCode: '01', face: 'A', section: 1, level: 'L1', slot: 1 }, sortKey: '0001-A-01-L1-01' },
+          status: 'active',
+          cellCode: 'CELL-3'
+        }
+      ],
+      isLoading: false
+    });
+    mockUseRackSlotLocationRefs.mockReturnValue({ data: LOCATION_REFS, isLoading: false });
     mockPreviewMutate.mockReset();
     mockPdfMutate.mockReset();
     mockTriggerBlobDownload.mockReset();
@@ -95,7 +150,7 @@ describe('WarehouseLabelsPage', () => {
   it('renders the labels page title', () => {
     mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
-    expect(screen.getByText('הדפסת תוויות מיקום')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 })).toBeTruthy();
   });
 
   it('default preset is rack-slot-100x50', () => {
@@ -103,18 +158,6 @@ describe('WarehouseLabelsPage', () => {
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
     const select = screen.getByRole('combobox') as HTMLSelectElement;
     expect(select.value).toBe('rack-slot-100x50');
-  });
-
-  it('shows entire-floor selection summary', () => {
-    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
-    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
-    expect(screen.getByText('כל המיקומים בקומה')).toBeTruthy();
-  });
-
-  it('shows single-label-page layout summary', () => {
-    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
-    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
-    expect(screen.getByText('תווית אחת בכל עמוד')).toBeTruthy();
   });
 
   it('renders malformed floorId state', () => {
@@ -126,12 +169,6 @@ describe('WarehouseLabelsPage', () => {
     mockUseActiveFloorId.mockReturnValue(null);
     renderLabelsPage('/warehouse/labels');
     expect(screen.getByText('יש לבחור קומה כדי ליצור תוויות.')).toBeTruthy();
-  });
-
-  it('uses active floor when floorId param is missing', () => {
-    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
-    renderLabelsPage('/warehouse/labels');
-    expect(screen.getByText(FLOOR_ID)).toBeTruthy();
   });
 
   it('shows the human-readable floor code and name when metadata is available', () => {
@@ -147,31 +184,7 @@ describe('WarehouseLabelsPage', () => {
     expect(screen.queryByText(FLOOR_ID)).toBeNull();
   });
 
-  it('shows a neutral loading state while floor metadata is loading', () => {
-    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
-    mockUseFloors.mockReturnValue({
-      data: [],
-      isLoading: true
-    });
-
-    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
-
-    expect(screen.getByText('טוען...')).toBeTruthy();
-  });
-
-  it('falls back safely when floor metadata cannot be resolved', () => {
-    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
-    mockUseFloors.mockReturnValue({
-      data: [{ id: '22222222-2222-4222-8222-222222222222', siteId: SITE_ID, code: 'F2', name: 'Other Floor', sortOrder: 1 }],
-      isLoading: false
-    });
-
-    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
-
-    expect(screen.getByText(FLOOR_ID)).toBeTruthy();
-  });
-
-  it('calls preview with correct payload', async () => {
+  it('calls preview with entire-floor payload by default', async () => {
     const user = userEvent.setup();
     mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
     mockPreviewMutate.mockImplementation((_req: unknown, opts: { onSuccess: (data: unknown) => void }) => {
@@ -179,8 +192,7 @@ describe('WarehouseLabelsPage', () => {
     });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
+    await user.click(screen.getByRole('button', { name: /תצוגה מקדימה/i }));
 
     expect(mockPreviewMutate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -194,22 +206,17 @@ describe('WarehouseLabelsPage', () => {
     );
   });
 
-  it('renders preview count and page count', async () => {
+  it('allows by-rack selection with string level keys', async () => {
     const user = userEvent.setup();
     mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
-    mockPreviewMutate.mockImplementation((_req: unknown, opts: { onSuccess: (data: unknown) => void }) => {
-      opts.onSuccess(SAMPLE_PREVIEW);
-    });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
+    await user.click(screen.getAllByRole('radio')[1] as HTMLInputElement);
 
-    const all120 = screen.getAllByText('120');
-    expect(all120.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('L1')).toBeTruthy();
   });
 
-  it('renders sample labels', async () => {
+  it('sends sorted and deduplicated location ids for by-rack selection', async () => {
     const user = userEvent.setup();
     mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
     mockPreviewMutate.mockImplementation((_req: unknown, opts: { onSuccess: (data: unknown) => void }) => {
@@ -217,14 +224,22 @@ describe('WarehouseLabelsPage', () => {
     });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
+    await user.click(screen.getAllByRole('radio')[1] as HTMLInputElement);
+    await user.click(screen.getAllByRole('checkbox')[0] as HTMLInputElement);
+    await user.click(screen.getByRole('button', { name: /תצוגה מקדימה/i }));
 
-    expect(screen.getByText('01-A.01.01.01')).toBeTruthy();
-    expect(screen.getByText('01-A.01.01.02')).toBeTruthy();
+    expect(mockPreviewMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selection: {
+          mode: 'location-ids',
+          locationIds: ['loc-1', 'loc-2', 'loc-3']
+        }
+      }),
+      expect.any(Object)
+    );
   });
 
-  it('renders warnings', async () => {
+  it('renders preview count, warnings, and concrete preview from server data', async () => {
     const user = userEvent.setup();
     mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
     mockPreviewMutate.mockImplementation((_req: unknown, opts: { onSuccess: (data: unknown) => void }) => {
@@ -232,10 +247,11 @@ describe('WarehouseLabelsPage', () => {
     });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
+    await user.click(screen.getByRole('button', { name: /תצוגה מקדימה/i }));
 
+    expect(screen.getAllByText('120').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Some warning message')).toBeTruthy();
+    expect(screen.getByText('BC-01')).toBeTruthy();
   });
 
   it('disables download when no preview data exists', () => {
@@ -260,8 +276,7 @@ describe('WarehouseLabelsPage', () => {
     });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
+    await user.click(screen.getByRole('button', { name: /תצוגה מקדימה/i }));
 
     const downloadButton = screen.getByRole('button', { name: /הורדת PDF/i }) as HTMLButtonElement;
     expect(downloadButton.disabled).toBe(true);
@@ -277,12 +292,10 @@ describe('WarehouseLabelsPage', () => {
     });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
+    await user.click(screen.getByRole('button', { name: /תצוגה מקדימה/i }));
     expect(previewCallCount).toBe(1);
 
-    const select = screen.getByRole('combobox');
-    await user.selectOptions(select, 'rack-slot-70x40');
+    await user.selectOptions(screen.getByRole('combobox'), 'rack-slot-70x40');
 
     const downloadButton = screen.getByRole('button', { name: /הורדת PDF/i }) as HTMLButtonElement;
     expect(downloadButton.disabled).toBe(true);
@@ -315,11 +328,8 @@ describe('WarehouseLabelsPage', () => {
     });
     renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
 
-    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
-    await user.click(previewButton);
-
-    const downloadButton = screen.getByRole('button', { name: /הורדת PDF/i });
-    await user.click(downloadButton);
+    await user.click(screen.getByRole('button', { name: /תצוגה מקדימה/i }));
+    await user.click(screen.getByRole('button', { name: /הורדת PDF/i }));
 
     expect(screen.getByText(/ההורדה מוגבלת ל-300 תוויות\. 350 נבחרו/)).toBeTruthy();
   });

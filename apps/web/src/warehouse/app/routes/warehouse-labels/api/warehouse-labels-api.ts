@@ -1,6 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import type {
+  RackSlotLocationRef,
   WarehouseLabelPresetId,
+  WarehouseLabelSelection,
   WarehouseLabelPreviewRequest,
   WarehouseLabelPreviewResponse
 } from '@wos/domain';
@@ -9,7 +11,9 @@ import type { BffBlobDownload } from '@/shared/api/bff/client';
 
 export const warehouseLabelKeys = {
   preview: (floorId: string, preset: WarehouseLabelPresetId) =>
-    ['warehouse-labels', 'preview', floorId, preset] as const
+    ['warehouse-labels', 'preview', floorId, preset] as const,
+  rackSlotLocationRefs: (floorId: string | null) =>
+    ['warehouse-labels', 'rack-slot-location-refs', floorId ?? 'none'] as const
 };
 
 async function previewWarehouseLabels(
@@ -30,6 +34,10 @@ async function downloadWarehouseLabelsPdf(
   });
 }
 
+async function fetchRackSlotLocationRefs(floorId: string): Promise<RackSlotLocationRef[]> {
+  return bffRequest<RackSlotLocationRef[]>(`/api/floors/${floorId}/rack-slot-location-refs`);
+}
+
 export function useWarehouseLabelPreview() {
   return useMutation({
     mutationFn: previewWarehouseLabels
@@ -42,20 +50,35 @@ export function useWarehouseLabelPdfDownload() {
   });
 }
 
+export function useRackSlotLocationRefs(floorId: string | null) {
+  return useQuery({
+    queryKey: warehouseLabelKeys.rackSlotLocationRefs(floorId),
+    queryFn: () => fetchRackSlotLocationRefs(floorId as string),
+    enabled: Boolean(floorId)
+  });
+}
+
 export type PreviewFingerprint = {
   floorId: string;
-  selectionMode: string;
+  selection: WarehouseLabelSelection;
   labelPreset: WarehouseLabelPresetId;
   layoutMode: string;
 };
 
 export function computePreviewFingerprint(
   floorId: string,
-  preset: WarehouseLabelPresetId
+  preset: WarehouseLabelPresetId,
+  selection: WarehouseLabelSelection
 ): PreviewFingerprint {
   return {
     floorId,
-    selectionMode: 'entire-floor',
+    selection:
+      selection.mode === 'location-ids'
+        ? {
+            mode: 'location-ids',
+            locationIds: Array.from(new Set(selection.locationIds)).sort((left, right) => left.localeCompare(right))
+          }
+        : selection,
     labelPreset: preset,
     layoutMode: 'single-label-page'
   };
@@ -66,12 +89,27 @@ export function fingerprintsMatch(
   b: PreviewFingerprint | null
 ): boolean {
   if (a === null || b === null) return false;
-  return (
-    a.floorId === b.floorId &&
-    a.selectionMode === b.selectionMode &&
-    a.labelPreset === b.labelPreset &&
-    a.layoutMode === b.layoutMode
-  );
+  if (
+    a.floorId !== b.floorId ||
+    a.labelPreset !== b.labelPreset ||
+    a.layoutMode !== b.layoutMode ||
+    a.selection.mode !== b.selection.mode
+  ) {
+    return false;
+  }
+
+  if (a.selection.mode === 'entire-floor') {
+    return true;
+  }
+
+  const aLocationIds = a.selection.locationIds;
+  const bLocationIds = b.selection.mode === 'location-ids' ? b.selection.locationIds : [];
+
+  if (aLocationIds.length !== bLocationIds.length) {
+    return false;
+  }
+
+  return aLocationIds.every((locationId, index) => locationId === bLocationIds[index]);
 }
 
 export function triggerBlobDownload(download: BffBlobDownload): void {
