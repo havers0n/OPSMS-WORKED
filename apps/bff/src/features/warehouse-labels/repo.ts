@@ -28,6 +28,8 @@ type FloorTenantRow = {
   sites?: { tenant_id?: string | null } | { tenant_id?: string | null }[] | null;
 };
 
+const POSTGREST_ID_CHUNK_SIZE = 100;
+
 function isVisibleFloorRow(row: FloorTenantRow | null, tenantId: string): boolean {
   if (!row) {
     return false;
@@ -35,6 +37,19 @@ function isVisibleFloorRow(row: FloorTenantRow | null, tenantId: string): boolea
 
   const site = Array.isArray(row.sites) ? row.sites[0] : row.sites;
   return site?.tenant_id === tenantId;
+}
+
+function chunkIds(ids: string[], chunkSize: number): string[][] {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += chunkSize) {
+    chunks.push(ids.slice(index, index + chunkSize));
+  }
+
+  return chunks;
 }
 
 export type WarehouseLabelsRepo = {
@@ -66,17 +81,24 @@ export function createWarehouseLabelsRepo(supabase: SupabaseClient): WarehouseLa
         return [];
       }
 
-      const { data, error } = await supabase
-        .from('locations')
-        .select('id,tenant_id,floor_id,code,location_type,geometry_slot_id,status')
-        .eq('tenant_id', tenantId)
-        .in('id', locationIds);
+      const chunks = chunkIds(locationIds, POSTGREST_ID_CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunks.map(async (chunk) => {
+          const { data, error } = await supabase
+            .from('locations')
+            .select('id,tenant_id,floor_id,code,location_type,geometry_slot_id,status')
+            .eq('tenant_id', tenantId)
+            .in('id', chunk);
 
-      if (error) {
-        throw error;
-      }
+          if (error) {
+            throw error;
+          }
 
-      return (data ?? []) as WarehouseLabelLocationRow[];
+          return (data ?? []) as WarehouseLabelLocationRow[];
+        })
+      );
+
+      return chunkResults.flat();
     },
 
     async listCellsByIds(cellIds) {
@@ -84,16 +106,23 @@ export function createWarehouseLabelsRepo(supabase: SupabaseClient): WarehouseLa
         return [];
       }
 
-      const { data, error } = await supabase
-        .from('cells')
-        .select('id,address_sort_key,status,layout_version_id')
-        .in('id', cellIds);
+      const chunks = chunkIds(cellIds, POSTGREST_ID_CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunks.map(async (chunk) => {
+          const { data, error } = await supabase
+            .from('cells')
+            .select('id,address_sort_key,status,layout_version_id')
+            .in('id', chunk);
 
-      if (error) {
-        throw error;
-      }
+          if (error) {
+            throw error;
+          }
 
-      return (data ?? []) as WarehouseLabelCellRow[];
+          return (data ?? []) as WarehouseLabelCellRow[];
+        })
+      );
+
+      return chunkResults.flat();
     },
 
     async listPublishedLayoutVersionsForFloor(tenantId, floorId) {

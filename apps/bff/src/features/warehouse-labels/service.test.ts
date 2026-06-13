@@ -562,10 +562,11 @@ describe('warehouse label preview service', () => {
         address_sort_key: `0003-A-02-03-${String(index + 1).padStart(2, '0')}`
       })
     );
+    const listCellsByIds = vi.fn().mockResolvedValue(manyCells);
     const service = createWarehouseLabelsService(
       createRepoStub({
         listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(manyLocations),
-        listCellsByIds: vi.fn().mockResolvedValue(manyCells),
+        listCellsByIds,
         listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
       })
     );
@@ -585,6 +586,44 @@ describe('warehouse label preview service', () => {
       statusCode: 422,
       code: 'WAREHOUSE_LABEL_LIMIT_EXCEEDED'
     });
+    expect(listCellsByIds).not.toHaveBeenCalled();
+  });
+
+  it('allows exactly 1000 printable entire-floor labels', async () => {
+    const locations = Array.from({ length: 1000 }, (_, index) =>
+      createLocation({
+        id: `74000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        geometry_slot_id: `75000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        code: `03-A.02.04.${String(index + 1).padStart(4, '0')}`
+      })
+    );
+    const cells = locations.map((location, index) =>
+      createCell({
+        id: location.geometry_slot_id as string,
+        address_sort_key: `0003-A-02-04-${String(index + 1).padStart(4, '0')}`
+      })
+    );
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(locations),
+        listCellsByIds: vi.fn().mockResolvedValue(cells),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    const result = await service.previewLabels({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(result.labelCount).toBe(1000);
+    expect(result.pageCount).toBe(1000);
   });
 
   it('calculates A4 grid dimensions and page count', async () => {
@@ -918,6 +957,107 @@ describe('warehouse label preview service', () => {
       statusCode: 404,
       code: 'LOCATION_NOT_FOUND'
     });
+  });
+
+  it('preserves dedupe and atomic generic 404 behavior for explicit location ids', async () => {
+    const listTenantLocationsByIds = vi.fn().mockResolvedValue([
+      createLocation({
+        id: ids.locationA,
+        geometry_slot_id: ids.cellA
+      }),
+      createLocation({
+        id: ids.locationB,
+        code: '03-A.02.03.05',
+        geometry_slot_id: ids.cellB
+      })
+    ]);
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantLocationsByIds,
+        listCellsByIds: vi.fn().mockResolvedValue([
+          createCell({
+            id: ids.cellA,
+            address_sort_key: '0003-A-02-03-04'
+          }),
+          createCell({
+            id: ids.cellB,
+            address_sort_key: '0003-A-02-03-05',
+            status: 'inactive',
+            layout_version_id: ids.layoutPublished
+          })
+        ]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    await expect(
+      service.previewLabels({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: {
+            mode: 'location-ids',
+            locationIds: [ids.locationA, ids.locationB, ids.locationA]
+          },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
+    });
+    expect(listTenantLocationsByIds).toHaveBeenCalledWith(ids.tenant, [ids.locationA, ids.locationB]);
+  });
+
+  it('keeps preview and PDF resolution on the same shared explicit-id path', async () => {
+    const listTenantLocationsByIds = vi
+      .fn()
+      .mockResolvedValue([
+        createLocation({
+          id: ids.locationA,
+          geometry_slot_id: ids.cellA
+        })
+      ]);
+    const listCellsByIds = vi
+      .fn()
+      .mockResolvedValue([
+        createCell({
+          id: ids.cellA,
+          address_sort_key: '0003-A-02-03-04'
+        })
+      ]);
+    const repo = createRepoStub({
+      listTenantLocationsByIds,
+      listCellsByIds,
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+    });
+    const service = createWarehouseLabelsService(repo);
+    const request = {
+      floorId: ids.floor,
+      selection: {
+        mode: 'location-ids' as const,
+        locationIds: [ids.locationA]
+      },
+      labelPreset: 'rack-slot-100x50' as const,
+      layout: { mode: 'single-label-page' as const },
+      sort: 'address' as const
+    };
+
+    const preview = await service.previewLabels({
+      tenantId: ids.tenant,
+      request
+    });
+    const pdf = await service.generateLabelsPdf({
+      tenantId: ids.tenant,
+      request
+    });
+
+    expect(preview.labelCount).toBe(1);
+    expect(pdf.labelCount).toBe(1);
+    expect(listTenantLocationsByIds).toHaveBeenCalledTimes(2);
+    expect(listCellsByIds).toHaveBeenCalledTimes(2);
   });
 
   it('preserves the batch limit for PDF generation', async () => {
