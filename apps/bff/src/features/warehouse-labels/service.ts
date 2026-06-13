@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  type RackSlotLocationRef,
   type WarehouseLabelPreviewRequest,
   type WarehouseLabelPreviewResponse
 } from '@wos/domain';
@@ -33,6 +34,7 @@ export type GeneratedWarehouseLabelsPdf = {
 };
 
 export type WarehouseLabelsService = {
+  getRackSlotLocationRefs(input: { tenantId: string; floorId: string }): Promise<RackSlotLocationRef[]>;
   previewLabels(input: PreviewLabelsInput): Promise<WarehouseLabelPreviewResponse>;
   generateLabelsPdf(input: GenerateLabelsPdfInput): Promise<GeneratedWarehouseLabelsPdf>;
 };
@@ -46,6 +48,39 @@ export function createWarehouseLabelsService(
       : createWarehouseLabelsRepo(repoOrSupabase);
 
   return {
+    async getRackSlotLocationRefs(input) {
+      const locations = await repo.listTenantFloorRackSlotLocations(input.tenantId, input.floorId);
+      const refsByCellId = new Map<string, RackSlotLocationRef>();
+
+      for (const location of locations) {
+        if (
+          location.floor_id !== input.floorId ||
+          location.location_type !== 'rack_slot' ||
+          location.status !== 'active' ||
+          typeof location.geometry_slot_id !== 'string'
+        ) {
+          continue;
+        }
+
+        const existing = refsByCellId.get(location.geometry_slot_id);
+        if (!existing || location.id.localeCompare(existing.locationId) < 0) {
+          refsByCellId.set(location.geometry_slot_id, {
+            locationId: location.id,
+            cellId: location.geometry_slot_id
+          });
+        }
+      }
+
+      return Array.from(refsByCellId.values()).sort((left, right) => {
+        const cellComparison = left.cellId.localeCompare(right.cellId);
+        if (cellComparison !== 0) {
+          return cellComparison;
+        }
+
+        return left.locationId.localeCompare(right.locationId);
+      });
+    },
+
     async previewLabels(input) {
       const { tenantId, request } = input;
       const labels = await resolveWarehouseLabelsForRequest(repo, tenantId, request);

@@ -4,6 +4,7 @@ import { ApiError } from '../../errors.js';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 
 let previewLabels: ReturnType<typeof vi.fn>;
+let getRackSlotLocationRefs: ReturnType<typeof vi.fn>;
 let generateLabelsPdf: ReturnType<typeof vi.fn>;
 
 const authContext = {
@@ -47,6 +48,12 @@ describe('warehouse label routes', () => {
       }],
       warnings: []
     });
+    getRackSlotLocationRefs = vi.fn().mockResolvedValue([
+      {
+        locationId: 'f1000000-0000-4000-8000-000000000001',
+        cellId: 'f2000000-0000-4000-8000-000000000002'
+      }
+    ]);
     generateLabelsPdf = vi.fn().mockResolvedValue({
       bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]),
       labelCount: 1
@@ -55,6 +62,31 @@ describe('warehouse label routes', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('returns rack-slot location refs for a floor', async () => {
+    const app = buildApp({
+      getAuthContext: async () => authContext,
+      getWarehouseLabelsService: () => ({ getRackSlotLocationRefs }) as never
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/floors/f3000000-0000-4000-8000-000000000003/rack-slot-location-refs'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      {
+        locationId: 'f1000000-0000-4000-8000-000000000001',
+        cellId: 'f2000000-0000-4000-8000-000000000002'
+      }
+    ]);
+    expect(getRackSlotLocationRefs).toHaveBeenCalledWith({
+      tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      floorId: 'f3000000-0000-4000-8000-000000000003'
+    });
+    await app.close();
   });
 
   it('forwards valid requests to the warehouse labels service', async () => {

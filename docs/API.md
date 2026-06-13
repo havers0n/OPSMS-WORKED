@@ -100,9 +100,13 @@ Storage preset domain in product context:
 
 ## Warehouse labels
 
+- `GET /api/floors/:floorId/rack-slot-location-refs`
 - `POST /api/warehouse-labels/preview`
 - `POST /api/warehouse-labels/pdf`
 - Both endpoints continue to accept `floorId` as the floor UUID.
+- `GET /api/floors/:floorId/rack-slot-location-refs` returns minimal `{ locationId, cellId }[]` for active `rack_slot` locations on the floor.
+- If multiple active `rack_slot` locations reference the same `cellId`, the response deterministically keeps the lexicographically smallest `locationId` for that cell.
+- `location-ids` label requests are normalized to sorted, deduplicated `locationIds` before client fingerprinting/submission.
 - Tenant/floor isolation remains enforced through tenant-visible floor validation plus published-layout resolution for the same floor before labels are generated.
 
 ## Location/product role endpoints

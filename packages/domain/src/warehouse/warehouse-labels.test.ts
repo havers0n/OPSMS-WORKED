@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getWarehouseLabelPreset,
+  rackSlotLocationRefsResponseSchema,
   warehouseLabelPreviewRequestSchema,
   warehouseLabelPreviewResponseSchema
 } from './warehouse-labels';
@@ -77,5 +78,21 @@ describe('warehouse label schemas', () => {
         warnings: []
       })
     ).toThrow();
+  });
+
+  it('parses minimal rack-slot location refs', () => {
+    expect(
+      rackSlotLocationRefsResponseSchema.parse([
+        {
+          locationId: '11111111-1111-4111-8111-111111111111',
+          cellId: '22222222-2222-4222-8222-222222222222'
+        }
+      ])
+    ).toEqual([
+      {
+        locationId: '11111111-1111-4111-8111-111111111111',
+        cellId: '22222222-2222-4222-8222-222222222222'
+      }
+    ]);
   });
 });
