@@ -98,6 +98,13 @@ Storage preset domain in product context:
 - `POST /api/picking-planning/preview/orders`
 - `POST /api/picking-planning/preview/wave`
 
+## Warehouse labels
+
+- `POST /api/warehouse-labels/preview`
+- `POST /api/warehouse-labels/pdf`
+- Both endpoints continue to accept `floorId` as the floor UUID.
+- Tenant/floor isolation remains enforced through tenant-visible floor validation plus published-layout resolution for the same floor before labels are generated.
+
 ## Location/product role endpoints
 
 - `GET /api/locations/:locationId/product-assignments`

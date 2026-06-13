@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { WarehouseLabelPresetId, WarehouseLabelPreviewResponse } from '@wos/domain';
 import { warehouseLabelPresetIds } from '@wos/domain';
-import { useActiveFloorId } from '@/app/store/ui-selectors';
+import { useActiveFloorId, useActiveSiteId } from '@/app/store/ui-selectors';
+import { useFloors } from '@/entities/floor/api/use-floors';
 import { BffRequestError } from '@/shared/api/bff/client';
 import { routes } from '@/shared/config/routes';
 import type { TranslationKey } from '@/shared/i18n/translations';
@@ -37,7 +38,10 @@ export function WarehouseLabelsPage() {
   const t = useT();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const activeSiteId = useActiveSiteId();
   const activeFloorId = useActiveFloorId();
+  const floorsQuery = useFloors(activeSiteId);
+  const floors = floorsQuery.data ?? [];
 
   const paramFloorId = searchParams.get('floorId') ?? '';
   const isValidFloorIdParam = paramFloorId === '' || UUID_REGEX.test(paramFloorId);
@@ -139,6 +143,19 @@ export function WarehouseLabelsPage() {
     previewData.labelCount > 0 &&
     !pdfMutation.isPending;
 
+  const resolvedFloor = floors.find((floor) => floor.id === resolvedFloorId);
+  const floorLabel = resolvedFloor
+    ? resolvedFloor.name.trim()
+      ? `${resolvedFloor.code} — ${resolvedFloor.name}`
+      : resolvedFloor.code
+    : null;
+  const isFloorMetadataLoading =
+    Boolean(resolvedFloorId) &&
+    Boolean(activeSiteId) &&
+    floorsQuery.isLoading &&
+    floors.length === 0;
+  const visibleFloorLabel = floorLabel ?? (isFloorMetadataLoading ? t('warehouse.labels.loading') : resolvedFloorId);
+
   if (!isValidFloorIdParam) {
     return (
       <div className="flex h-full w-full flex-col overflow-hidden">
@@ -190,7 +207,9 @@ export function WarehouseLabelsPage() {
 
           <div className="mt-6 space-y-5">
             <Section title={t('warehouse.labels.floorContext')}>
-              <p className="text-sm text-slate-700 font-mono">{resolvedFloorId}</p>
+              <p className={floorLabel ? 'text-sm text-slate-700' : 'text-sm text-slate-700 font-mono'}>
+                {visibleFloorLabel}
+              </p>
             </Section>
 
             <Section title={t('warehouse.labels.selectionLabel')}>
