@@ -230,6 +230,40 @@ describe('warehouse label routes', () => {
     await app.close();
   });
 
+  it('returns the PDF limit exceeded error for too many labels', async () => {
+    generateLabelsPdf.mockRejectedValue(
+      new ApiError(
+        422,
+        'WAREHOUSE_LABEL_PDF_LIMIT_EXCEEDED',
+        'Warehouse label PDF generation is limited to 300 labels per request. 301 labels were selected.'
+      )
+    );
+    const app = buildApp({
+      getAuthContext: async () => authContext,
+      getWarehouseLabelsService: () => ({ previewLabels, generateLabelsPdf }) as never
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/warehouse-labels/pdf',
+      payload: {
+        floorId: 'f3000000-0000-4000-8000-000000000003',
+        selection: {
+          mode: 'entire-floor'
+        },
+        labelPreset: 'rack-slot-100x50',
+        layout: {
+          mode: 'single-label-page'
+        },
+        sort: 'address'
+      }
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('WAREHOUSE_LABEL_PDF_LIMIT_EXCEEDED');
+    await app.close();
+  });
+
   it('returns validation error for invalid floorId uuid', async () => {
     const app = buildApp({
       getAuthContext: async () => authContext,

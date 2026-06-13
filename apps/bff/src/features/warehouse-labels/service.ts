@@ -11,6 +11,8 @@ import { generateWarehouseLabelsPdf } from './pdf.js';
 import {
   buildPreviewResponse,
   emptyPdfSelectionError,
+  MAX_PDF_LABELS_PER_REQUEST,
+  pdfLimitExceededError,
   resolveWarehouseLabelsForRequest,
   unsupportedPdfLayoutModeError
 } from './resolution.js';
@@ -52,11 +54,19 @@ export function createWarehouseLabelsService(
 
     async generateLabelsPdf(input) {
       const { tenantId, request } = input;
+      const startMs = Date.now();
+      const safeFloorId = request.floorId.replace(/[^a-zA-Z0-9._-]/g, '-');
+
       if (request.layout.mode !== 'single-label-page') {
         throw unsupportedPdfLayoutModeError();
       }
 
       const labels = await resolveWarehouseLabelsForRequest(repo, tenantId, request);
+
+      if (labels.length > MAX_PDF_LABELS_PER_REQUEST) {
+        throw pdfLimitExceededError(labels.length);
+      }
+
       if (labels.length === 0) {
         throw emptyPdfSelectionError();
       }
@@ -65,6 +75,23 @@ export function createWarehouseLabelsService(
         labels,
         labelPreset: request.labelPreset
       });
+
+      const durationMs = Date.now() - startMs;
+      const outputBytes = bytes.byteLength;
+
+      console.log(
+        JSON.stringify({
+          event: 'warehouse-labels-pdf-generated',
+          tenantId,
+          floorId: safeFloorId,
+          labelCount: labels.length,
+          pageCount: labels.length,
+          preset: request.labelPreset,
+          durationMs,
+          outputBytes,
+          timestamp: new Date().toISOString()
+        })
+      );
 
       return {
         bytes,

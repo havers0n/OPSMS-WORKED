@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider } from '@/shared/i18n/i18n-provider';
+import { BffRequestError } from '@/shared/api/bff/client';
 import type { WarehouseLabelPreviewResponse } from '@wos/domain';
 
 const mockUseActiveFloorId = vi.hoisted(() => vi.fn());
@@ -285,6 +286,42 @@ describe('WarehouseLabelsPage', () => {
 
     const downloadButton = screen.getByRole('button', { name: /הורדת PDF/i }) as HTMLButtonElement;
     expect(downloadButton.disabled).toBe(true);
+  });
+
+  it('shows PDF limit exceeded error with selected count and limit', async () => {
+    const user = userEvent.setup();
+    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
+    mockUseFloors.mockReturnValue({
+      data: [{ id: FLOOR_ID, siteId: SITE_ID, code: 'F1', name: 'Main Floor', sortOrder: 0 }],
+      isLoading: false
+    });
+    mockPreviewMutate.mockImplementation((_req: unknown, opts: { onSuccess: (data: unknown) => void }) => {
+      opts.onSuccess({
+        ...SAMPLE_PREVIEW,
+        labelCount: 350,
+        pageCount: 350
+      });
+    });
+    mockPdfMutate.mockImplementation((_req: unknown, opts: { onError: (error: unknown) => void }) => {
+      opts.onError(
+        new BffRequestError(
+          422,
+          'WAREHOUSE_LABEL_PDF_LIMIT_EXCEEDED',
+          'Warehouse label PDF generation is limited to 300 labels per request. 350 labels were selected.',
+          'request-1',
+          null
+        )
+      );
+    });
+    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
+
+    const previewButton = screen.getByRole('button', { name: /תצוגה מקדימה/i });
+    await user.click(previewButton);
+
+    const downloadButton = screen.getByRole('button', { name: /הורדת PDF/i });
+    await user.click(downloadButton);
+
+    expect(screen.getByText(/ההורדה מוגבלת ל-300 תוויות\. 350 נבחרו/)).toBeTruthy();
   });
 
   it('malformed floorId does not call backend', () => {

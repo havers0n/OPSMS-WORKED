@@ -77,6 +77,21 @@ export function WarehouseLabelsPage() {
 
   const isPreviewStale = !fingerprintsMatch(currentFingerprint, previewFingerprint);
 
+  const pdfLimit = 300;
+
+  function resolvePdfErrorMessage(error: unknown): string | null {
+    if (!(error instanceof BffRequestError)) {
+      return null;
+    }
+
+    if (error.code === 'WAREHOUSE_LABEL_PDF_LIMIT_EXCEEDED') {
+      const count = previewData?.labelCount ?? 0;
+      return t('warehouse.labels.pdfLimitExceeded', { limit: pdfLimit, count });
+    }
+
+    return error.message;
+  }
+
   const handlePresetChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     if (warehouseLabelPresetIds.includes(value as WarehouseLabelPresetId)) {
@@ -127,11 +142,8 @@ export function WarehouseLabelsPage() {
         triggerBlobDownload(download);
       },
       onError: (error) => {
-        if (error instanceof BffRequestError) {
-          setPreviewError(error.message);
-        } else {
-          setPreviewError(t('warehouse.labels.downloadFailed'));
-        }
+        const message = resolvePdfErrorMessage(error);
+        setPreviewError(message ?? t('warehouse.labels.downloadFailed'));
       }
     });
   }, [resolvedFloorId, preset, isPreviewStale, previewData, pdfMutation, t]);
