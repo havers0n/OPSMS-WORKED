@@ -779,4 +779,43 @@ describe('warehouse label preview service', () => {
       warnings: []
     });
   });
+
+  it('returns an empty successful A4 preview for an empty entire-floor selection', async () => {
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    const result = await service.previewLabels({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: {
+          mode: 'a4-sheet',
+          marginMm: 5,
+          gapMm: 2
+        },
+        sort: 'address'
+      }
+    });
+
+    expect(result.labelCount).toBe(0);
+    expect(result.pageCount).toBe(0);
+    expect(result.sampleLabels).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.resolvedLayout).toEqual({
+      mode: 'a4-sheet',
+      pageWidthMm: 210,
+      pageHeightMm: 297,
+      marginMm: 5,
+      gapMm: 2,
+      columns: 1,
+      rows: 5,
+      labelsPerPage: 5
+    });
+  });
 });
