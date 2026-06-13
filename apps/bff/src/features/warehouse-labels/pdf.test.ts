@@ -130,4 +130,22 @@ describe('warehouse label PDF generation', () => {
       code: 'WAREHOUSE_LABEL_TEXT_OVERFLOW'
     });
   });
+
+  it('maps failing injected barcode renderers to the stable barcode rendering error', async () => {
+    const failingBarcodeRenderer = vi.fn(async (_value: string) => {
+      throw new Error('bwip exploded');
+    });
+
+    await expect(
+      generateWarehouseLabelsPdf({
+        labelPreset: 'rack-slot-100x50',
+        labels: [createResolvedLabel('10000000-0000-4000-8000-000000000001', '03-A.02.03.04', '0001')],
+        barcodeRenderer: failingBarcodeRenderer
+      })
+    ).rejects.toMatchObject({
+      statusCode: 500,
+      code: 'WAREHOUSE_LABEL_BARCODE_RENDER_FAILED',
+      message: 'Warehouse label barcode rendering failed.'
+    });
+  });
 });

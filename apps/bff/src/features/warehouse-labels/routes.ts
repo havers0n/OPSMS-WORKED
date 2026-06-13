@@ -13,7 +13,7 @@ type WarehouseLabelsRouteDeps = Pick<RouteDeps, 'getAuthContext' | 'getWarehouse
 
 function requireCurrentTenant(auth: AuthenticatedRequestContext) {
   if (!auth.currentTenant) {
-    throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'No active tenant workspace is available for warehouse label preview.');
+    throw new ApiError(403, 'WORKSPACE_UNAVAILABLE', 'Warehouse labels are unavailable without an active workspace.');
   }
 
   return auth.currentTenant;

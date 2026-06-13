@@ -190,6 +190,18 @@ export async function renderCode128Png(value: string): Promise<Uint8Array> {
   }
 }
 
+async function renderBarcodeBytes(barcodeRenderer: BarcodeRenderer, value: string): Promise<Uint8Array> {
+  try {
+    return await barcodeRenderer(value);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error.code === 'WAREHOUSE_LABEL_BARCODE_RENDER_FAILED' ? error : barcodeRenderError();
+    }
+
+    throw barcodeRenderError();
+  }
+}
+
 async function embedBarcodeImage(pdf: PDFDocument, barcodeBytes: Uint8Array): Promise<PDFImage> {
   try {
     return await pdf.embedPng(barcodeBytes);
@@ -287,7 +299,7 @@ export async function generateWarehouseLabelsPdf({
 
     for (const label of labels) {
       const page = pdf.addPage([pageSize.width, pageSize.height]);
-      const barcodeBytes = await barcodeRenderer(createRenderableWarehouseLabel(label).barcodeValue);
+      const barcodeBytes = await renderBarcodeBytes(barcodeRenderer, createRenderableWarehouseLabel(label).barcodeValue);
       const barcodeImage = await embedBarcodeImage(pdf, barcodeBytes);
       drawLabelPage(page, font, barcodeImage, label, spec);
     }

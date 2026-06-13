@@ -48,7 +48,7 @@ describe('warehouse label routes', () => {
       warnings: []
     });
     generateLabelsPdf = vi.fn().mockResolvedValue({
-      bytes: new Uint8Array([37, 80, 68, 70]),
+      bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55]),
       labelCount: 1
     });
   });
@@ -114,6 +114,7 @@ describe('warehouse label routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.body.startsWith('%PDF-')).toBe(true);
     expect(response.headers['content-type']).toContain('application/pdf');
     expect(response.headers['content-disposition']).toBe(
       'attachment; filename="warehouse-labels-f3000000-0000-4000-8000-000000000003.pdf"'
