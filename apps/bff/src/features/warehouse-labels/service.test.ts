@@ -818,4 +818,103 @@ describe('warehouse label preview service', () => {
       labelsPerPage: 5
     });
   });
+
+  it('rejects empty entire-floor PDF selections with a stable client error', async () => {
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([]),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    await expect(
+      service.generateLabelsPdf({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: { mode: 'entire-floor' },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'LABEL_SELECTION_EMPTY'
+    });
+  });
+
+  it('rejects PDF generation for unsupported A4 layout mode', async () => {
+    const service = createWarehouseLabelsService(createRepoStub());
+
+    await expect(
+      service.generateLabelsPdf({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: { mode: 'entire-floor' },
+          labelPreset: 'rack-slot-100x50',
+          layout: {
+            mode: 'a4-sheet',
+            marginMm: 5,
+            gapMm: 2
+          },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'WAREHOUSE_LABEL_PDF_LAYOUT_UNSUPPORTED'
+    });
+  });
+
+  it('preserves the generic not-found behavior for explicit ids during PDF generation', async () => {
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantLocationsByIds: vi.fn().mockResolvedValue([])
+      })
+    );
+
+    await expect(
+      service.generateLabelsPdf({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: {
+            mode: 'location-ids',
+            locationIds: [ids.locationA]
+          },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      code: 'LOCATION_NOT_FOUND'
+    });
+  });
+
+  it('preserves the batch limit for PDF generation', async () => {
+    const service = createWarehouseLabelsService(createRepoStub());
+
+    await expect(
+      service.generateLabelsPdf({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: {
+            mode: 'location-ids',
+            locationIds: Array.from({ length: 1001 }, (_, index) => `80000000-0000-4000-8000-${String(index).padStart(12, '0')}`)
+          },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'WAREHOUSE_LABEL_LIMIT_EXCEEDED'
+    });
+  });
 });

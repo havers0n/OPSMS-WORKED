@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
+import { ApiError } from '../../errors.js';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 
 let previewLabels: ReturnType<typeof vi.fn>;
+let generateLabelsPdf: ReturnType<typeof vi.fn>;
 
 const authContext = {
   accessToken: 'token',
@@ -45,6 +47,10 @@ describe('warehouse label routes', () => {
       }],
       warnings: []
     });
+    generateLabelsPdf = vi.fn().mockResolvedValue({
+      bytes: new Uint8Array([37, 80, 68, 70]),
+      labelCount: 1
+    });
   });
 
   afterEach(() => {
@@ -81,6 +87,145 @@ describe('warehouse label routes', () => {
         labelPreset: 'rack-slot-100x50'
       })
     });
+    await app.close();
+  });
+
+  it('returns a PDF attachment for valid requests', async () => {
+    const app = buildApp({
+      getAuthContext: async () => authContext,
+      getWarehouseLabelsService: () => ({ previewLabels, generateLabelsPdf }) as never
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/warehouse-labels/pdf',
+      payload: {
+        floorId: 'f3000000-0000-4000-8000-000000000003',
+        selection: {
+          mode: 'location-ids',
+          locationIds: ['f1000000-0000-4000-8000-000000000001']
+        },
+        labelPreset: 'rack-slot-100x50',
+        layout: {
+          mode: 'single-label-page'
+        },
+        sort: 'address'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('application/pdf');
+    expect(response.headers['content-disposition']).toBe(
+      'attachment; filename="warehouse-labels-f3000000-0000-4000-8000-000000000003.pdf"'
+    );
+    expect(generateLabelsPdf).toHaveBeenCalledWith({
+      tenantId: '9a22f6a8-8db3-46d8-97be-4ca3b164fe1a',
+      request: expect.objectContaining({
+        floorId: 'f3000000-0000-4000-8000-000000000003',
+        layout: {
+          mode: 'single-label-page'
+        }
+      })
+    });
+    await app.close();
+  });
+
+  it('returns the stable unsupported-layout error for A4 PDF requests', async () => {
+    generateLabelsPdf.mockRejectedValue(
+      new ApiError(
+        422,
+        'WAREHOUSE_LABEL_PDF_LAYOUT_UNSUPPORTED',
+        'PDF rendering for the selected layout mode is not supported yet.'
+      )
+    );
+    const app = buildApp({
+      getAuthContext: async () => authContext,
+      getWarehouseLabelsService: () => ({ previewLabels, generateLabelsPdf }) as never
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/warehouse-labels/pdf',
+      payload: {
+        floorId: 'f3000000-0000-4000-8000-000000000003',
+        selection: {
+          mode: 'entire-floor'
+        },
+        labelPreset: 'rack-slot-100x50',
+        layout: {
+          mode: 'a4-sheet',
+          marginMm: 5,
+          gapMm: 2
+        },
+        sort: 'address'
+      }
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('WAREHOUSE_LABEL_PDF_LAYOUT_UNSUPPORTED');
+    await app.close();
+  });
+
+  it('maps PDF rendering failures to stable client-visible errors', async () => {
+    generateLabelsPdf.mockRejectedValue(
+      new ApiError(
+        422,
+        'WAREHOUSE_LABEL_TEXT_OVERFLOW',
+        'Warehouse label address does not fit the selected preset.'
+      )
+    );
+    const app = buildApp({
+      getAuthContext: async () => authContext,
+      getWarehouseLabelsService: () => ({ previewLabels, generateLabelsPdf }) as never
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/warehouse-labels/pdf',
+      payload: {
+        floorId: 'f3000000-0000-4000-8000-000000000003',
+        selection: {
+          mode: 'entire-floor'
+        },
+        labelPreset: 'rack-slot-70x40',
+        layout: {
+          mode: 'single-label-page'
+        },
+        sort: 'address'
+      }
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().code).toBe('WAREHOUSE_LABEL_TEXT_OVERFLOW');
+    await app.close();
+  });
+
+  it('preserves the generic explicit-id not-found error for PDF requests', async () => {
+    generateLabelsPdf.mockRejectedValue(new ApiError(404, 'LOCATION_NOT_FOUND', 'One or more requested locations were not found.'));
+    const app = buildApp({
+      getAuthContext: async () => authContext,
+      getWarehouseLabelsService: () => ({ previewLabels, generateLabelsPdf }) as never
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/warehouse-labels/pdf',
+      payload: {
+        floorId: 'f3000000-0000-4000-8000-000000000003',
+        selection: {
+          mode: 'location-ids',
+          locationIds: ['f1000000-0000-4000-8000-000000000001']
+        },
+        labelPreset: 'rack-slot-100x50',
+        layout: {
+          mode: 'single-label-page'
+        },
+        sort: 'address'
+      }
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().code).toBe('LOCATION_NOT_FOUND');
     await app.close();
   });
 

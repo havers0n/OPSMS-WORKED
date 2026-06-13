@@ -33,4 +33,22 @@ export function registerWarehouseLabelRoutes(app: FastifyInstance, deps: Warehou
 
     return parseOrThrow(warehouseLabelPreviewResponseSchema, response);
   });
+
+  app.post('/api/warehouse-labels/pdf', async (request, reply) => {
+    const auth = await deps.getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenant = requireCurrentTenant(auth);
+    const body = parseOrThrow(warehouseLabelPreviewRequestBodySchema, request.body);
+    const response = await deps.getWarehouseLabelsService(auth).generateLabelsPdf({
+      tenantId: tenant.tenantId,
+      request: body
+    });
+    const safeFloorId = body.floorId.replace(/[^a-zA-Z0-9._-]/g, '-');
+
+    return reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="warehouse-labels-${safeFloorId}.pdf"`)
+      .send(Buffer.from(response.bytes));
+  });
 }
