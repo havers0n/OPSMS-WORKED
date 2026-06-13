@@ -22,7 +22,7 @@ export class BffRequestError extends Error {
   }
 }
 
-export async function buildHeaders(init?: RequestInit) {
+async function buildHeaders(init?: RequestInit) {
   const headers = new Headers(init?.headers);
 
   if (init?.body !== undefined && !(init.body instanceof FormData)) {

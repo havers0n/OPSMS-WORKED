@@ -294,12 +294,6 @@ export function WarehouseLabelsPage() {
               </Panel>
             )}
 
-            {previewData && !isPreviewStale && previewData.labelCount === 0 && (
-              <Panel tone="muted" padding="sm">
-                <p className="text-sm text-slate-500">{t('warehouse.labels.emptyPreview')}</p>
-              </Panel>
-            )}
-
             <div className="flex justify-start">
               <Button
                 variant="solid"
