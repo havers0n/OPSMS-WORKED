@@ -151,3 +151,75 @@ export async function bffRequest<T>(path: string, init?: BffRequestInit): Promis
     abort.dispose();
   }
 }
+
+export type BffBlobDownload = {
+  blob: Blob;
+  filename: string;
+};
+
+function extractFilenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = header.match(/filename\*?=(?:UTF-8'')?["']?([^;"'\n]+)/i);
+  if (match && match[1]) {
+    return decodeURIComponent(match[1].trim());
+  }
+  return null;
+}
+
+export async function bffRequestBlob(
+  path: string,
+  init?: BffRequestInit
+): Promise<BffBlobDownload> {
+  const headers = await buildHeaders(init);
+  const abort = createRequestAbortSignal({
+    signal: init?.signal,
+    timeoutMs: init?.timeoutMs
+  });
+
+  try {
+    const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+    const response = await fetch(resolveBffUrl(env.bffUrl, path), {
+      ...requestInit,
+      signal: abort.signal,
+      headers
+    });
+
+    if (!response.ok) {
+      if (isJsonResponse(response)) {
+        const errorBody =
+          (await readJsonBody<BffErrorBody>(response).catch(() => null)) ?? null;
+        const requestId = errorBody?.requestId ?? response.headers.get('x-request-id');
+        const errorId = errorBody?.errorId ?? null;
+        const message =
+          errorBody?.message ??
+          `BFF request failed with status ${response.status}${requestId ? ` [request ${requestId}]` : ''}${errorId ? ` [error ${errorId}]` : ''}`;
+
+        throw new BffRequestError(
+          response.status,
+          errorBody?.code ?? null,
+          message,
+          requestId,
+          errorId,
+          errorBody?.details ?? null
+        );
+      }
+
+      throw new BffRequestError(
+        response.status,
+        null,
+        `BFF request failed with status ${response.status}`,
+        response.headers.get('x-request-id'),
+        null
+      );
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('content-disposition');
+    const filename =
+      extractFilenameFromContentDisposition(contentDisposition) ?? 'warehouse-labels.pdf';
+
+    return { blob, filename };
+  } finally {
+    abort.dispose();
+  }
+}

@@ -3,6 +3,8 @@ export const routes = {
   operatorManual: '/operator/manual',
   warehouse: '/warehouse',
   warehouseView: '/warehouse/view',
+  warehouseActions: '/warehouse/actions',
+  warehouseLabels: '/warehouse/labels',
   products: '/products',
   productDetail: '/products/:productId',
   operations: '/operations',
@@ -55,6 +57,13 @@ export function pickerTaskPath(taskId: string): string {
 
 export function pickerStepPath(taskId: string, stepId: string): string {
   return `/picker/task/${taskId}/step/${stepId}`;
+}
+
+export function warehouseLabelsPath(opts?: { floorId?: string }) {
+  if (!opts?.floorId) return routes.warehouseLabels;
+  const params = new URLSearchParams();
+  params.set('floorId', opts.floorId);
+  return `${routes.warehouseLabels}?${params.toString()}`;
 }
 
 export function warehouseViewPath(opts?: {

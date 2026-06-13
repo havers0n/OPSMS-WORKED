@@ -1,4 +1,4 @@
-import { BarChart3, CheckSquare, Layers, LayoutGrid, Package, Settings2, X } from 'lucide-react';
+import { BarChart3, CheckSquare, Layers, LayoutGrid, Package, Settings2, Wrench, X } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useIsDrawerCollapsed, useToggleDrawer } from '@/app/store/ui-selectors';
 import { routes } from '@/shared/config/routes';
@@ -20,6 +20,13 @@ export function LeftDrawer() {
       description: t('app.navigation.warehouse.description'),
       icon: LayoutGrid,
       to: routes.warehouse,
+      enabled: true
+    },
+    {
+      label: t('app.navigation.actions'),
+      description: t('app.navigation.actions.description'),
+      icon: Wrench,
+      to: routes.warehouseActions,
       enabled: true
     },
     {
