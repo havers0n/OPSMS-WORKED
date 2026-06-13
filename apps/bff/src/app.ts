@@ -28,6 +28,7 @@ import { registerOperationsCellsRoutes } from './features/operations-cells/route
 import { registerFloorRoutingRoutes } from './features/floor-routing/routes.js';
 import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';
 import { registerPickerRoutes } from './features/picker/routes.js';
+import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes.js';
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
@@ -60,6 +61,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     getProductsService,
     getProductLocationRolesService,
     getManualShiftsService,
+    getWarehouseLabelsService,
     getPickingPlanningPreviewService,
     getFloorRoutingService
   } = deps;
@@ -98,6 +100,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerPlacementRoutes(app, { getAuthContext, getPlacementService });
   registerExecutionRoutes(app, { getAuthContext, getUserSupabase });
   registerStoragePresetsRoutes(app, { getAuthContext, getStoragePresetsService: deps.getStoragePresetsService });
+  registerWarehouseLabelRoutes(app, { getAuthContext, getWarehouseLabelsService });
 
   registerProductsRoutes(app, { getAuthContext, getProductsService });
   registerProductLocationRolesRoutes(app, { getAuthContext, getProductLocationRolesService });
