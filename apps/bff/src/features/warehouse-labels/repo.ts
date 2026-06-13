@@ -23,6 +23,20 @@ export type WarehouseLabelLayoutVersionRow = {
   state: 'draft' | 'published' | 'archived';
 };
 
+type FloorTenantRow = {
+  id: string;
+  sites?: { tenant_id?: string | null } | { tenant_id?: string | null }[] | null;
+};
+
+function isVisibleFloorRow(row: FloorTenantRow | null, tenantId: string): boolean {
+  if (!row) {
+    return false;
+  }
+
+  const site = Array.isArray(row.sites) ? row.sites[0] : row.sites;
+  return site?.tenant_id === tenantId;
+}
+
 export type WarehouseLabelsRepo = {
   listTenantFloorRackSlotLocations(tenantId: string, floorId: string): Promise<WarehouseLabelLocationRow[]>;
   listTenantLocationsByIds(tenantId: string, locationIds: string[]): Promise<WarehouseLabelLocationRow[]>;
@@ -83,18 +97,32 @@ export function createWarehouseLabelsRepo(supabase: SupabaseClient): WarehouseLa
     },
 
     async listPublishedLayoutVersionsForFloor(tenantId, floorId) {
+      const { data: floorRow, error: floorError } = await supabase
+        .from('floors')
+        .select('id,sites!inner(tenant_id)')
+        .eq('id', floorId)
+        .eq('sites.tenant_id', tenantId)
+        .maybeSingle();
+
+      if (floorError) {
+        throw floorError;
+      }
+
+      if (!isVisibleFloorRow(floorRow as FloorTenantRow | null, tenantId)) {
+        return [];
+      }
+
       const { data, error } = await supabase
         .from('layout_versions')
-        .select('id,floor_id,state,floors!inner(id,sites!inner(tenant_id))')
+        .select('id,floor_id,state')
         .eq('floor_id', floorId)
-        .eq('state', 'published')
-        .eq('floors.sites.tenant_id', tenantId);
+        .eq('state', 'published');
 
       if (error) {
         throw error;
       }
 
-      return ((data ?? []) as Array<WarehouseLabelLayoutVersionRow & { floors?: unknown }>).map((row) => ({
+      return ((data ?? []) as WarehouseLabelLayoutVersionRow[]).map((row) => ({
         id: row.id,
         floor_id: row.floor_id,
         state: row.state

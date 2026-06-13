@@ -6,12 +6,19 @@ import { I18nProvider } from '@/shared/i18n/i18n-provider';
 import type { WarehouseLabelPreviewResponse } from '@wos/domain';
 
 const mockUseActiveFloorId = vi.hoisted(() => vi.fn());
+const mockUseActiveSiteId = vi.hoisted(() => vi.fn());
 const mockPreviewMutate = vi.hoisted(() => vi.fn());
 const mockPdfMutate = vi.hoisted(() => vi.fn());
 const mockTriggerBlobDownload = vi.hoisted(() => vi.fn());
+const mockUseFloors = vi.hoisted(() => vi.fn());
 
 vi.mock('@/app/store/ui-selectors', () => ({
-  useActiveFloorId: mockUseActiveFloorId
+  useActiveFloorId: mockUseActiveFloorId,
+  useActiveSiteId: mockUseActiveSiteId
+}));
+
+vi.mock('@/entities/floor/api/use-floors', () => ({
+  useFloors: mockUseFloors
 }));
 
 vi.mock('@/warehouse/shell/ui/warehouse-top-bar', () => ({
@@ -60,6 +67,7 @@ function renderLabelsPage(initialPath = '/warehouse/labels') {
 }
 
 const FLOOR_ID = '11111111-1111-4111-8111-111111111111';
+const SITE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const SAMPLE_PREVIEW: WarehouseLabelPreviewResponse = {
   labelCount: 120,
@@ -75,7 +83,9 @@ const SAMPLE_PREVIEW: WarehouseLabelPreviewResponse = {
 
 describe('WarehouseLabelsPage', () => {
   beforeEach(() => {
+    mockUseActiveSiteId.mockReturnValue(SITE_ID);
     mockUseActiveFloorId.mockReturnValue(null);
+    mockUseFloors.mockReturnValue({ data: [], isLoading: false });
     mockPreviewMutate.mockReset();
     mockPdfMutate.mockReset();
     mockTriggerBlobDownload.mockReset();
@@ -120,6 +130,43 @@ describe('WarehouseLabelsPage', () => {
   it('uses active floor when floorId param is missing', () => {
     mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
     renderLabelsPage('/warehouse/labels');
+    expect(screen.getByText(FLOOR_ID)).toBeTruthy();
+  });
+
+  it('shows the human-readable floor code and name when metadata is available', () => {
+    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
+    mockUseFloors.mockReturnValue({
+      data: [{ id: FLOOR_ID, siteId: SITE_ID, code: 'F1', name: 'Main Floor', sortOrder: 0 }],
+      isLoading: false
+    });
+
+    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
+
+    expect(screen.getByText('F1 — Main Floor')).toBeTruthy();
+    expect(screen.queryByText(FLOOR_ID)).toBeNull();
+  });
+
+  it('shows a neutral loading state while floor metadata is loading', () => {
+    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
+    mockUseFloors.mockReturnValue({
+      data: [],
+      isLoading: true
+    });
+
+    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
+
+    expect(screen.getByText('טוען...')).toBeTruthy();
+  });
+
+  it('falls back safely when floor metadata cannot be resolved', () => {
+    mockUseActiveFloorId.mockReturnValue(FLOOR_ID);
+    mockUseFloors.mockReturnValue({
+      data: [{ id: '22222222-2222-4222-8222-222222222222', siteId: SITE_ID, code: 'F2', name: 'Other Floor', sortOrder: 1 }],
+      isLoading: false
+    });
+
+    renderLabelsPage(`/warehouse/labels?floorId=${FLOOR_ID}`);
+
     expect(screen.getByText(FLOOR_ID)).toBeTruthy();
   });
 

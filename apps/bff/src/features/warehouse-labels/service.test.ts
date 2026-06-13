@@ -844,6 +844,31 @@ describe('warehouse label preview service', () => {
     });
   });
 
+  it('uses the same tenant-safe published layout resolver for PDF generation', async () => {
+    const repo = createRepoStub({
+      listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue([createLocation()]),
+      listCellsByIds: vi.fn().mockResolvedValue([createCell()]),
+      listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+    });
+    const service = createWarehouseLabelsService(repo);
+
+    const result = await service.generateLabelsPdf({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(repo.listPublishedLayoutVersionsForFloor).toHaveBeenCalledWith(ids.tenant, ids.floor);
+    expect(result.labelCount).toBe(1);
+    expect(result.bytes).toBeInstanceOf(Uint8Array);
+    expect(result.bytes.length).toBeGreaterThan(0);
+  });
+
   it('rejects PDF generation for unsupported A4 layout mode', async () => {
     const service = createWarehouseLabelsService(createRepoStub());
 
