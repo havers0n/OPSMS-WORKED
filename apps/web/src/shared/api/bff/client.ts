@@ -166,6 +166,8 @@ function extractFilenameFromContentDisposition(header: string | null): string | 
   return null;
 }
 
+const MAX_ERROR_BODY_LENGTH = 500;
+
 export async function bffRequestBlob(
   path: string,
   init?: BffRequestInit
@@ -204,10 +206,28 @@ export async function bffRequestBlob(
         );
       }
 
+      let rawBody = '';
+      try {
+        const text = await response.text();
+        rawBody = text.slice(0, MAX_ERROR_BODY_LENGTH).trim();
+      } catch {
+        // ignore body read failures
+      }
+
+      const snippet = rawBody
+        ? rawBody.length > 200
+          ? rawBody.slice(0, 200) + '...'
+          : rawBody
+        : '';
+
+      const message = rawBody
+        ? `BFF request failed with status ${response.status}: ${snippet}`
+        : `BFF request failed with status ${response.status}`;
+
       throw new BffRequestError(
         response.status,
         null,
-        `BFF request failed with status ${response.status}`,
+        message,
         response.headers.get('x-request-id'),
         null
       );

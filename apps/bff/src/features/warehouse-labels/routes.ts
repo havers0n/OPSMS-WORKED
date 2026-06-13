@@ -40,15 +40,45 @@ export function registerWarehouseLabelRoutes(app: FastifyInstance, deps: Warehou
 
     const tenant = requireCurrentTenant(auth);
     const body = parseOrThrow(warehouseLabelPreviewRequestBodySchema, request.body);
-    const response = await deps.getWarehouseLabelsService(auth).generateLabelsPdf({
-      tenantId: tenant.tenantId,
-      request: body
-    });
     const safeFloorId = body.floorId.replace(/[^a-zA-Z0-9._-]/g, '-');
 
-    return reply
-      .header('Content-Type', 'application/pdf')
-      .header('Content-Disposition', `attachment; filename="warehouse-labels-${safeFloorId}.pdf"`)
-      .send(Buffer.from(response.bytes));
+    console.log(
+      JSON.stringify({
+        event: 'warehouse-labels-pdf-request-started',
+        tenantId: tenant.tenantId,
+        floorId: safeFloorId,
+        preset: body.labelPreset,
+        layoutMode: body.layout.mode,
+        timestamp: new Date().toISOString()
+      })
+    );
+
+    try {
+      const response = await deps.getWarehouseLabelsService(auth).generateLabelsPdf({
+        tenantId: tenant.tenantId,
+        request: body
+      });
+
+      return reply
+        .header('Content-Type', 'application/pdf')
+        .header('Content-Disposition', `attachment; filename="warehouse-labels-${safeFloorId}.pdf"`)
+        .send(Buffer.from(response.bytes));
+    } catch (error) {
+      const errorCode = error instanceof ApiError ? error.code : 'UNKNOWN';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      console.log(
+        JSON.stringify({
+          event: 'warehouse-labels-pdf-failed',
+          tenantId: tenant.tenantId,
+          floorId: safeFloorId,
+          errorCode,
+          errorMessage,
+          timestamp: new Date().toISOString()
+        })
+      );
+
+      throw error;
+    }
   });
 }

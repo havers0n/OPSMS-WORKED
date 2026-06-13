@@ -107,4 +107,41 @@ describe('bffRequestBlob', () => {
       })
     ).rejects.toThrow('BFF request failed with status 500');
   });
+
+  it('includes plain text error body in the error message', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response('<html><body>502 Gateway Timeout</body></html>', {
+        status: 502,
+        headers: {
+          'content-type': 'text/html'
+        }
+      })
+    );
+
+    await expect(
+      bffRequestBlob('/api/warehouse-labels/pdf', {
+        method: 'POST',
+        body: JSON.stringify({})
+      })
+    ).rejects.toThrow('BFF request failed with status 502: <html><body>502 Gateway Timeout</body></html>');
+  });
+
+  it('truncates long non-JSON error bodies', async () => {
+    const longMessage = 'x'.repeat(1000);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(longMessage, {
+        status: 502,
+        headers: {
+          'content-type': 'text/plain'
+        }
+      })
+    );
+
+    await expect(
+      bffRequestBlob('/api/warehouse-labels/pdf', {
+        method: 'POST',
+        body: JSON.stringify({})
+      })
+    ).rejects.toThrow(/^BFF request failed with status 502: x{200}\.{3}$/);
+  });
 });

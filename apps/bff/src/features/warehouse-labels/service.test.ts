@@ -1082,4 +1082,117 @@ describe('warehouse label preview service', () => {
       code: 'WAREHOUSE_LABEL_LIMIT_EXCEEDED'
     });
   });
+
+  it('rejects PDF generation when resolved labels exceed the PDF-specific limit', async () => {
+    const manyLocations = Array.from({ length: 301 }, (_, index) =>
+      createLocation({
+        id: `90000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        geometry_slot_id: `91000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        code: `03-A.02.03.${String(index + 1).padStart(3, '0')}`
+      })
+    );
+    const manyCells = manyLocations.map((location, index) =>
+      createCell({
+        id: location.geometry_slot_id as string,
+        address_sort_key: `0003-A-02-03-${String(index + 1).padStart(3, '0')}`
+      })
+    );
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(manyLocations),
+        listCellsByIds: vi.fn().mockResolvedValue(manyCells),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    await expect(
+      service.generateLabelsPdf({
+        tenantId: ids.tenant,
+        request: {
+          floorId: ids.floor,
+          selection: { mode: 'entire-floor' },
+          labelPreset: 'rack-slot-100x50',
+          layout: { mode: 'single-label-page' },
+          sort: 'address'
+        }
+      })
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'WAREHOUSE_LABEL_PDF_LIMIT_EXCEEDED'
+    });
+  });
+
+  it('allows PDF generation for exactly the maximum PDF labels', { timeout: 30000 }, async () => {
+    const manyLocations = Array.from({ length: 300 }, (_, index) =>
+      createLocation({
+        id: `a0000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        geometry_slot_id: `a1000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        code: `03-A.02.03.${String(index + 1).padStart(3, '0')}`
+      })
+    );
+    const manyCells = manyLocations.map((location, index) =>
+      createCell({
+        id: location.geometry_slot_id as string,
+        address_sort_key: `0003-A-02-03-${String(index + 1).padStart(3, '0')}`
+      })
+    );
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(manyLocations),
+        listCellsByIds: vi.fn().mockResolvedValue(manyCells),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    const result = await service.generateLabelsPdf({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(result.labelCount).toBe(300);
+    expect(result.bytes).toBeInstanceOf(Uint8Array);
+    expect(result.bytes.length).toBeGreaterThan(0);
+  });
+
+  it('preview still allows up to the existing preview limit when PDF limit is lower', async () => {
+    const manyLocations = Array.from({ length: 500 }, (_, index) =>
+      createLocation({
+        id: `b0000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        geometry_slot_id: `b1000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        code: `03-A.02.03.${String(index + 1).padStart(3, '0')}`
+      })
+    );
+    const manyCells = manyLocations.map((location, index) =>
+      createCell({
+        id: location.geometry_slot_id as string,
+        address_sort_key: `0003-A-02-03-${String(index + 1).padStart(3, '0')}`
+      })
+    );
+    const service = createWarehouseLabelsService(
+      createRepoStub({
+        listTenantFloorRackSlotLocations: vi.fn().mockResolvedValue(manyLocations),
+        listCellsByIds: vi.fn().mockResolvedValue(manyCells),
+        listPublishedLayoutVersionsForFloor: vi.fn().mockResolvedValue([createLayoutVersion()])
+      })
+    );
+
+    const result = await service.previewLabels({
+      tenantId: ids.tenant,
+      request: {
+        floorId: ids.floor,
+        selection: { mode: 'entire-floor' },
+        labelPreset: 'rack-slot-100x50',
+        layout: { mode: 'single-label-page' },
+        sort: 'address'
+      }
+    });
+
+    expect(result.labelCount).toBe(500);
+  });
 });

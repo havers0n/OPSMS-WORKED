@@ -14,6 +14,7 @@ import type {
 import type { ResolvedWarehouseLabel } from './pdf.js';
 
 export const MAX_LABELS_PER_REQUEST = 1000;
+export const MAX_PDF_LABELS_PER_REQUEST = 300;
 const SAMPLE_LABEL_LIMIT = 10;
 const A4_PAGE_WIDTH_MM = 210;
 const A4_PAGE_HEIGHT_MM = 297;
@@ -51,6 +52,14 @@ export function limitExceededError(): ApiError {
     422,
     'WAREHOUSE_LABEL_LIMIT_EXCEEDED',
     `Warehouse label preview is limited to ${MAX_LABELS_PER_REQUEST} resolved labels per request.`
+  );
+}
+
+export function pdfLimitExceededError(labelCount: number): ApiError {
+  return new ApiError(
+    422,
+    'WAREHOUSE_LABEL_PDF_LIMIT_EXCEEDED',
+    `Warehouse label PDF generation is limited to ${MAX_PDF_LABELS_PER_REQUEST} labels per request. ${labelCount} labels were selected.`
   );
 }
 
