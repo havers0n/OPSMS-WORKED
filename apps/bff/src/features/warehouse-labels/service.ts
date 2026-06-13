@@ -1,216 +1,38 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  getWarehouseLabelPreset,
-  warehouseLabelPreviewResponseSchema,
   type WarehouseLabelPreviewRequest,
-  type WarehouseLabelPreviewResponse,
-  type WarehouseLabelResolvedLayout
+  type WarehouseLabelPreviewResponse
 } from '@wos/domain';
-import { ApiError } from '../../errors.js';
 import {
   createWarehouseLabelsRepo,
-  type WarehouseLabelCellRow,
-  type WarehouseLabelLocationRow,
   type WarehouseLabelsRepo
 } from './repo.js';
-
-const MAX_LABELS_PER_REQUEST = 1000;
-const SAMPLE_LABEL_LIMIT = 10;
-const A4_PAGE_WIDTH_MM = 210;
-const A4_PAGE_HEIGHT_MM = 297;
-
-const presetWarningThresholds = {
-  'rack-slot-100x50': 18,
-  'rack-slot-100x60': 22,
-  'rack-slot-70x40': 14
-} as const;
+import { generateWarehouseLabelsPdf } from './pdf.js';
+import {
+  buildPreviewResponse,
+  emptyPdfSelectionError,
+  resolveWarehouseLabelsForRequest,
+  unsupportedPdfLayoutModeError
+} from './resolution.js';
 
 type PreviewLabelsInput = {
   tenantId: string;
   request: WarehouseLabelPreviewRequest;
 };
 
-type ResolvedLabel = {
-  locationId: string;
-  locationCode: string;
-  addressSortKey: string;
+type GenerateLabelsPdfInput = {
+  tenantId: string;
+  request: WarehouseLabelPreviewRequest;
 };
 
-function compareResolvedLabels(left: ResolvedLabel, right: ResolvedLabel): number {
-  const addressComparison = left.addressSortKey.localeCompare(right.addressSortKey);
-  if (addressComparison !== 0) {
-    return addressComparison;
-  }
-
-  const codeComparison = left.locationCode.localeCompare(right.locationCode);
-  if (codeComparison !== 0) {
-    return codeComparison;
-  }
-
-  return left.locationId.localeCompare(right.locationId);
-}
-
-function dedupeIds(ids: string[]): string[] {
-  return Array.from(new Set(ids));
-}
-
-function impossibleLayoutError(): ApiError {
-  return new ApiError(400, 'VALIDATION_ERROR', 'A4 layout is impossible for the selected preset, margin, and gap.');
-}
-
-function limitExceededError(): ApiError {
-  return new ApiError(
-    422,
-    'WAREHOUSE_LABEL_LIMIT_EXCEEDED',
-    `Warehouse label preview is limited to ${MAX_LABELS_PER_REQUEST} resolved labels per request.`
-  );
-}
-
-function requestedLocationsNotFoundError(): ApiError {
-  return new ApiError(404, 'LOCATION_NOT_FOUND', 'One or more requested locations were not found.');
-}
-
-function buildResolvedLayout(request: WarehouseLabelPreviewRequest): WarehouseLabelResolvedLayout {
-  const preset = getWarehouseLabelPreset(request.labelPreset);
-
-  if (request.layout.mode === 'single-label-page') {
-    return {
-      mode: 'single-label-page',
-      pageWidthMm: preset.widthMm,
-      pageHeightMm: preset.heightMm,
-      labelsPerPage: 1
-    };
-  }
-
-  const usableWidth = A4_PAGE_WIDTH_MM - 2 * request.layout.marginMm;
-  const usableHeight = A4_PAGE_HEIGHT_MM - 2 * request.layout.marginMm;
-  const columns = Math.floor((usableWidth + request.layout.gapMm) / (preset.widthMm + request.layout.gapMm));
-  const rows = Math.floor((usableHeight + request.layout.gapMm) / (preset.heightMm + request.layout.gapMm));
-  const labelsPerPage = columns * rows;
-
-  if (columns < 1 || rows < 1 || labelsPerPage < 1) {
-    throw impossibleLayoutError();
-  }
-
-  return {
-    mode: 'a4-sheet',
-    pageWidthMm: A4_PAGE_WIDTH_MM,
-    pageHeightMm: A4_PAGE_HEIGHT_MM,
-    marginMm: request.layout.marginMm,
-    gapMm: request.layout.gapMm,
-    columns,
-    rows,
-    labelsPerPage
-  };
-}
-
-function buildWarnings(request: WarehouseLabelPreviewRequest, labels: ResolvedLabel[]): string[] {
-  const threshold = presetWarningThresholds[request.labelPreset];
-  const overlongCount = labels.filter((label) => label.locationCode.length > threshold).length;
-
-  if (overlongCount === 0) {
-    return [];
-  }
-
-  return [
-    `${overlongCount} label address${overlongCount === 1 ? ' exceeds' : 'es exceed'} recommended length ${threshold} for preset ${request.labelPreset}.`
-  ];
-}
-
-function buildResponse(request: WarehouseLabelPreviewRequest, labels: ResolvedLabel[]): WarehouseLabelPreviewResponse {
-  const resolvedPreset = getWarehouseLabelPreset(request.labelPreset);
-  const resolvedLayout = buildResolvedLayout(request);
-  const pageCount = labels.length === 0 ? 0 : Math.ceil(labels.length / resolvedLayout.labelsPerPage);
-
-  return warehouseLabelPreviewResponseSchema.parse({
-    labelCount: labels.length,
-    pageCount,
-    resolvedPreset,
-    resolvedLayout,
-    sampleLabels: labels.slice(0, SAMPLE_LABEL_LIMIT).map((label) => ({
-      locationId: label.locationId,
-      address: label.locationCode,
-      barcodeValue: label.locationCode
-    })),
-    warnings: buildWarnings(request, labels)
-  });
-}
-
-function resolvePrintableLabelOrNull(
-  location: WarehouseLabelLocationRow,
-  cellsById: Map<string, WarehouseLabelCellRow>,
-  publishedLayoutVersionIds: Set<string>,
-  floorId: string
-): ResolvedLabel | null {
-  if (location.floor_id !== floorId) {
-    return null;
-  }
-
-  if (location.location_type !== 'rack_slot') {
-    return null;
-  }
-
-  if (location.status !== 'active') {
-    return null;
-  }
-
-  if (!location.geometry_slot_id) {
-    return null;
-  }
-
-  const cell = cellsById.get(location.geometry_slot_id);
-  if (!cell) {
-    return null;
-  }
-
-  if (cell.status !== 'active') {
-    return null;
-  }
-
-  if (!publishedLayoutVersionIds.has(cell.layout_version_id)) {
-    return null;
-  }
-
-  return {
-    locationId: location.id,
-    locationCode: location.code,
-    addressSortKey: cell.address_sort_key
-  };
-}
-
-async function resolveLabels(
-  repo: WarehouseLabelsRepo,
-  tenantId: string,
-  request: WarehouseLabelPreviewRequest,
-  locations: WarehouseLabelLocationRow[]
-): Promise<ResolvedLabel[]> {
-  const publishedLayoutVersions = await repo.listPublishedLayoutVersionsForFloor(tenantId, request.floorId);
-  const publishedLayoutVersionIds = new Set(
-    publishedLayoutVersions
-      .filter((layoutVersion) => layoutVersion.floor_id === request.floorId && layoutVersion.state === 'published')
-      .map((layoutVersion) => layoutVersion.id)
-  );
-
-  if (publishedLayoutVersionIds.size === 0) {
-    return [];
-  }
-
-  const cellIds = dedupeIds(
-    locations
-      .map((location) => location.geometry_slot_id)
-      .filter((cellId): cellId is string => typeof cellId === 'string')
-  );
-  const cells = await repo.listCellsByIds(cellIds);
-  const cellsById = new Map(cells.map((cell) => [cell.id, cell]));
-
-  return locations
-    .map((location) => resolvePrintableLabelOrNull(location, cellsById, publishedLayoutVersionIds, request.floorId))
-    .filter((label): label is ResolvedLabel => label !== null)
-    .sort(compareResolvedLabels);
-}
+export type GeneratedWarehouseLabelsPdf = {
+  bytes: Uint8Array;
+  labelCount: number;
+};
 
 export type WarehouseLabelsService = {
   previewLabels(input: PreviewLabelsInput): Promise<WarehouseLabelPreviewResponse>;
+  generateLabelsPdf(input: GenerateLabelsPdfInput): Promise<GeneratedWarehouseLabelsPdf>;
 };
 
 export function createWarehouseLabelsService(
@@ -224,34 +46,30 @@ export function createWarehouseLabelsService(
   return {
     async previewLabels(input) {
       const { tenantId, request } = input;
+      const labels = await resolveWarehouseLabelsForRequest(repo, tenantId, request);
+      return buildPreviewResponse(request, labels);
+    },
 
-      if (request.selection.mode === 'location-ids') {
-        const locationIds = dedupeIds(request.selection.locationIds);
-        if (locationIds.length > MAX_LABELS_PER_REQUEST) {
-          throw limitExceededError();
-        }
-
-        const locations = await repo.listTenantLocationsByIds(tenantId, locationIds);
-        if (locations.length !== locationIds.length) {
-          throw requestedLocationsNotFoundError();
-        }
-
-        const labels = await resolveLabels(repo, tenantId, request, locations);
-        if (labels.length !== locationIds.length) {
-          throw requestedLocationsNotFoundError();
-        }
-
-        return buildResponse(request, labels);
+    async generateLabelsPdf(input) {
+      const { tenantId, request } = input;
+      if (request.layout.mode !== 'single-label-page') {
+        throw unsupportedPdfLayoutModeError();
       }
 
-      const locations = await repo.listTenantFloorRackSlotLocations(tenantId, request.floorId);
-      const labels = await resolveLabels(repo, tenantId, request, locations);
-
-      if (labels.length > MAX_LABELS_PER_REQUEST) {
-        throw limitExceededError();
+      const labels = await resolveWarehouseLabelsForRequest(repo, tenantId, request);
+      if (labels.length === 0) {
+        throw emptyPdfSelectionError();
       }
 
-      return buildResponse(request, labels);
+      const bytes = await generateWarehouseLabelsPdf({
+        labels,
+        labelPreset: request.labelPreset
+      });
+
+      return {
+        bytes,
+        labelCount: labels.length
+      };
     }
   };
 }
