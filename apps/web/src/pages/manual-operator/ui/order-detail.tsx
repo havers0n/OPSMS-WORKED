@@ -14,6 +14,7 @@ import { DeleteConfirmSheet } from './delete-confirm-sheet';
 import { EditOrderSheet } from './edit-order-sheet';
 import { ErrorFlow } from './error-flow';
 import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
+import { OrderItemsSection } from './order-items-section';
 import { OrderAshlamotSection } from './order-ashlamot-section';
 import { OrderHistoryOverlay } from './order-history-overlay';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
@@ -185,6 +186,8 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
             )}
           </div>
         </div>
+
+        <OrderItemsSection orderId={order.id} mode="mobile" />
 
         <OrderAshlamotSection
           orderId={order.id}

@@ -2,6 +2,7 @@ import type {
   BindableUser,
   ManualShiftTodayResponse,
   ManualShiftOrder,
+  ManualShiftOrderItem,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderAshlama,
   ManualShiftOrderEvent,
@@ -20,6 +21,7 @@ export const manualShiftKeys = {
   lines: (shiftId: string) => [...manualShiftKeys.all, 'lines', shiftId] as const,
   lineOrders: (lineId: string) => [...manualShiftKeys.all, 'line-orders', lineId] as const,
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
+  orderItems: (orderId: string) => [...manualShiftKeys.all, 'order-items', orderId] as const,
   orderCheckUnits: (orderId: string) => [...manualShiftKeys.all, 'order-check-units', orderId] as const,
   orderAshlamot: (orderId: string) => [...manualShiftKeys.all, 'order-ashlamot', orderId] as const,
   orderEvents: (orderId: string) => [...manualShiftKeys.all, 'order-events', orderId] as const,
@@ -78,6 +80,19 @@ export function shiftOrdersQueryOptions(shiftId: string) {
     queryKey: manualShiftKeys.shiftOrders(shiftId),
     queryFn: () => fetchShiftOrders(shiftId),
     enabled: !!shiftId,
+    staleTime: 10_000
+  });
+}
+
+async function fetchOrderItems(orderId: string) {
+  return (await bffRequest<ManualShiftOrderItem[]>(`/api/manual-shift-orders/${orderId}/items`)) ?? [];
+}
+
+export function orderItemsQueryOptions(orderId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.orderItems(orderId),
+    queryFn: () => fetchOrderItems(orderId),
+    enabled: !!orderId,
     staleTime: 10_000
   });
 }

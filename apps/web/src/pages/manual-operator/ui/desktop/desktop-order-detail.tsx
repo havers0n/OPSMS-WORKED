@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import type { OrderDetail } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftOrderStatus } from '@wos/domain';
+import type { OrderDetail } from '@/entities/manual-shift/model/shift-selectors';
 import { formatDateTimeHe } from '@/shared/lib/format-date-time';
+import { OrderItemsSection } from '../order-items-section';
 import { getElapsedFromIso } from '../order-utils';
 
 interface DesktopOrderDetailProps {
@@ -112,11 +113,13 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
         <p className="text-sm text-gray-700">{detail.lineName ?? MISSING_VALUE}</p>
       </header>
 
-      <Section title="פרטי הזמנה">
+      <OrderItemsSection orderId={detail.orderId} defaultExpanded mode="desktop" />
+
+      <Section title="פרטי ההזמנה">
         <Row label="קו" value={detail.lineName ?? MISSING_VALUE} />
         <Row label="נקודה" value={detail.pointName ?? MISSING_VALUE} />
         <Row label="לקוח" value={detail.customerName ?? MISSING_VALUE} />
-        <Row label="מספר הזמנה" value={detail.orderNumber ?? MISSING_VALUE} />
+        <Row label="מספר ההזמנה" value={detail.orderNumber ?? MISSING_VALUE} />
         <Row label="סטטוס" value={STATUS_LABEL[detail.status]} />
       </Section>
 
@@ -140,12 +143,14 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
 
       {parallelCheckElapsed && (
         <section className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-          <p className="text-xs font-semibold text-amber-800">בדיקה במקביל · <span dir="ltr">{parallelCheckElapsed}</span></p>
+          <p className="text-xs font-semibold text-amber-800">
+            בדיקה במקביל · <span dir="ltr">{parallelCheckElapsed}</span>
+          </p>
         </section>
       )}
 
       <Section title="משכי שלבים">
-        <Row label="זמן ליקוט" value={diffMinutes(detail.startedAt, detail.waitingCheckAt)} />
+        <Row label="זמן לליקוט" value={diffMinutes(detail.startedAt, detail.waitingCheckAt)} />
         <Row label="המתנה לבדיקה" value={diffMinutes(detail.waitingCheckAt, detail.checkedAt)} />
         <Row label="זמן אריזה" value={diffMinutes(detail.checkedAt, detail.finishedAt)} />
       </Section>

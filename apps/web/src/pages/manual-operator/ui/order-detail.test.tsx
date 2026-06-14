@@ -80,6 +80,28 @@ function makeCheckUnit(
   };
 }
 
+function makeOrderItem(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'item-1',
+    tenantId: '22222222-2222-4222-8222-222222222222',
+    shiftId: '33333333-3333-4333-8333-333333333333',
+    lineId: '44444444-4444-4444-8444-444444444444',
+    orderId: '11111111-1111-4111-8111-111111111111',
+    sku: 'SKU-1',
+    description: 'First product',
+    category: 'Cat A',
+    quantity: 3,
+    notes: 'Handle with care',
+    zone: 'Z1',
+    sourceSheet: 'Sheet1',
+    sourceRows: [2, 3],
+    sourceFile: 'monthly.xlsx',
+    sortOrder: 1,
+    createdAt: '2026-05-29T09:00:00.000Z',
+    ...overrides
+  };
+}
+
 function LocationProbe() {
   const location = useLocation();
   return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
@@ -590,5 +612,99 @@ describe('OrderDetail history', () => {
     await waitFor(() => expect(screen.getByText('נוספה יחידת בדיקה 1')).toBeTruthy());
     expect(screen.queryByText('cu-1')).toBeNull();
     expect(screen.queryByText('checkUnitId')).toBeNull();
+  });
+});
+
+describe('OrderDetail imported products', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders collapsed products section and loads order items lazily when expanded', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/items') && method === 'GET') {
+        return [makeOrderItem()];
+      }
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail();
+
+    const productsButton = await screen.findByRole('button', { name: /מוצרים בהזמנה/ });
+    expect(screen.queryByText('First product')).toBeNull();
+
+    fireEvent.click(productsButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('First product')).toBeTruthy();
+      expect(screen.getByText('SKU-1')).toBeTruthy();
+      expect(screen.getByText('Cat A')).toBeTruthy();
+      expect(screen.getByText('Handle with care')).toBeTruthy();
+    });
+  });
+
+  it('shows empty state when no imported items exist', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/items') && method === 'GET') {
+        return [];
+      }
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: /מוצרים בהזמנה/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('אין מוצרים להזמנה זו.')).toBeTruthy();
+    });
+  });
+
+  it('shows inline error and retry when items request fails', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/items') && method === 'GET') {
+        throw new Error('items failed');
+      }
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: /מוצרים בהזמנה/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('לא ניתן לטעון את פריטי ההזמנה.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'נסה שוב' })).toBeTruthy();
+    });
+  });
+
+  it('shows loading state while products are still fetching', async () => {
+    let resolveItems: ((value: unknown) => void) | undefined;
+    const pendingItems = new Promise((resolve: (value: unknown) => void) => {
+      resolveItems = resolve;
+    });
+
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/items') && method === 'GET') {
+        return pendingItems;
+      }
+      if (path.includes('/check-units') && method === 'GET') return [];
+      return [];
+    });
+
+    renderDetail();
+    fireEvent.click(await screen.findByRole('button', { name: /מוצרים בהזמנה/ }));
+
+    expect(screen.getByText('טוען מוצרים...')).toBeTruthy();
+    resolveItems?.([makeOrderItem()]);
   });
 });
