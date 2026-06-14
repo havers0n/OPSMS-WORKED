@@ -174,6 +174,26 @@ export const manualShiftOrderCheckUnitSchema = z.object({
 });
 export type ManualShiftOrderCheckUnit = z.infer<typeof manualShiftOrderCheckUnitSchema>;
 
+export const manualShiftOrderItemSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  shiftId: z.string().uuid(),
+  lineId: z.string().uuid(),
+  orderId: z.string().uuid(),
+  sku: z.string().trim().min(1),
+  description: z.string().trim().min(1).nullable(),
+  category: z.string().trim().min(1).nullable(),
+  quantity: z.number(),
+  notes: z.string().trim().min(1).nullable(),
+  zone: z.string().trim().min(1).nullable(),
+  sourceSheet: z.string().trim().min(1).nullable(),
+  sourceRows: z.array(z.number().int()).nullable(),
+  sourceFile: z.string().trim().min(1).nullable(),
+  sortOrder: z.number().int(),
+  createdAt: z.string()
+});
+export type ManualShiftOrderItem = z.infer<typeof manualShiftOrderItemSchema>;
+
 export const manualShiftOrderAshlamaSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

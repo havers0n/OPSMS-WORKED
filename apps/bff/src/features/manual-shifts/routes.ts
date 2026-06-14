@@ -24,6 +24,8 @@ import {
   manualShiftOrderAshlamaResponseSchema,
   manualShiftOrderAshlamotResponseSchema,
   manualShiftOrderEventsResponseSchema,
+  manualShiftOrderItemResponseSchema,
+  manualShiftOrderItemsResponseSchema,
   manualShiftOrderResponseSchema,
   manualShiftOrdersResponseSchema,
   manualShiftPeopleSummaryResponseSchema,
@@ -283,6 +285,18 @@ export function registerManualShiftsRoutes(
     }).id;
     const events = await getManualShiftsService(auth).listOrderEvents({ tenantId, orderId });
     return parseOrThrow(manualShiftOrderEventsResponseSchema, events);
+  });
+
+  app.get('/api/manual-shift-orders/:orderId/items', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const orderId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { orderId: string }).orderId
+    }).id;
+    const items = await getManualShiftsService(auth).listOrderItems({ tenantId, orderId });
+    return parseOrThrow(manualShiftOrderItemsResponseSchema, items);
   });
 
   app.post('/api/manual-shift-lines/:lineId/orders', async (request, reply) => {

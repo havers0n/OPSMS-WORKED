@@ -11,6 +11,7 @@ import type {
   ManualShiftOrderError,
   ManualShiftOrderAshlama,
   ManualShiftOrderEvent,
+  ManualShiftOrderItem,
   ManualShiftSession,
   ManualShiftWorker,
   ManualShiftWorkerRole,
@@ -128,6 +129,25 @@ type ManualShiftOrderAshlamaRow = {
   updated_at: string;
 };
 
+type ManualShiftOrderItemRow = {
+  id: string;
+  tenant_id: string;
+  shift_id: string;
+  line_id: string;
+  order_id: string;
+  sku: string;
+  description: string | null;
+  category: string | null;
+  quantity: number;
+  notes: string | null;
+  zone: string | null;
+  source_sheet: string | null;
+  source_rows: number[] | null;
+  source_file: string | null;
+  sort_order: number;
+  created_at: string;
+};
+
 type ManualShiftLineEventRow = {
   id: string;
   tenant_id: string;
@@ -201,6 +221,8 @@ const checkUnitColumns =
   'id,tenant_id,shift_id,line_id,order_id,unit_number,status,note,reason,checked_at,returned_at,voided_at,created_at,updated_at';
 const ashlamaColumns =
   'id,tenant_id,shift_id,line_id,order_id,check_unit_id,source,status,text,created_at,updated_at';
+const itemColumns =
+  'id,tenant_id,shift_id,line_id,order_id,sku,description,category,quantity,notes,zone,source_sheet,source_rows,source_file,sort_order,created_at';
 const lineEventColumns =
   'id,tenant_id,shift_id,line_id,event_type,actor_name,actor_profile_id,payload,created_at';
 const eventColumns =
@@ -352,6 +374,27 @@ function mapAshlamaRow(row: ManualShiftOrderAshlamaRow): ManualShiftOrderAshlama
     text: row.text,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function mapOrderItemRow(row: ManualShiftOrderItemRow): ManualShiftOrderItem {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    shiftId: row.shift_id,
+    lineId: row.line_id,
+    orderId: row.order_id,
+    sku: row.sku,
+    description: row.description,
+    category: row.category,
+    quantity: Number(row.quantity),
+    notes: row.notes,
+    zone: row.zone,
+    sourceSheet: row.source_sheet,
+    sourceRows: row.source_rows,
+    sourceFile: row.source_file,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at
   };
 }
 
@@ -521,6 +564,7 @@ export type ManualShiftsRepo = {
   listOrderAshlamot(orderId: string): Promise<ManualShiftOrderAshlama[]>;
   listOpenShiftAshlamot(tenantId: string, shiftId: string): Promise<OpenAshlamaBoardItem[]>;
   listOrderEvents(orderId: string): Promise<ManualShiftOrderEvent[]>;
+  listOrderItems(tenantId: string, orderId: string): Promise<ManualShiftOrderItem[]>;
   findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
   findOrderAshlamaById(ashlamaId: string): Promise<ManualShiftOrderAshlama | null>;
   createOrderCheckUnit(input: {
@@ -1002,6 +1046,19 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (error) throw error;
       return ((data ?? []) as ManualShiftOrderEventRow[]).map(mapEventRow);
+    },
+
+    async listOrderItems(tenantId, orderId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_items')
+        .select(itemColumns)
+        .eq('tenant_id', tenantId)
+        .eq('order_id', orderId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftOrderItemRow[]).map(mapOrderItemRow);
     },
 
     async findOrderAshlamaById(ashlamaId) {

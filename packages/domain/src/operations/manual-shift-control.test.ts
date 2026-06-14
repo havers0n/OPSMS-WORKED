@@ -8,6 +8,7 @@ import {
   manualShiftBulkAddResultSchema,
   manualShiftDaySummarySchema,
   manualShiftOrderCheckUnitSchema,
+  manualShiftOrderItemSchema,
   manualShiftOrderSchema,
   summarizeManualShiftOrderCheckUnits,
   manualShiftTodayResponseSchema
@@ -295,6 +296,69 @@ describe('manual shift control contracts', () => {
         units: [{ status: 'checked' }]
       })
     ).toBe(3);
+  });
+});
+
+describe('manual shift order item schema', () => {
+  const validItem = {
+    id: 'c86c6e80-2c6f-4d5f-8c1c-d2d8a1e32f7c',
+    tenantId: '4caa9e8d-4349-4623-ad98-9e2f2af193c0',
+    shiftId: '1e4a2d96-cd70-4881-a73e-aa0c086a9bc8',
+    lineId: '945e796c-1fd6-471d-8992-a7810fd3567f',
+    orderId: 'a89d5d4a-5f0c-44a7-b75f-eaf3138fbfbf',
+    sku: '474089',
+    description: 'בידורית BEAT IT',
+    category: 'חשמל',
+    quantity: 2,
+    notes: 'מוכן במחסן',
+    zone: 'שפלה 1',
+    sourceSheet: 'יוני 26',
+    sourceRows: [709, 710],
+    sourceFile: 'רוני קובץ 2026.xlsx',
+    sortOrder: 1,
+    createdAt: '2026-06-14T10:00:00.000Z'
+  };
+
+  it('parses a valid order item', () => {
+    const item = manualShiftOrderItemSchema.parse(validItem);
+    expect(item.sku).toBe('474089');
+    expect(item.quantity).toBe(2);
+    expect(item.sourceRows).toEqual([709, 710]);
+  });
+
+  it('rejects blank sku', () => {
+    expect(() => manualShiftOrderItemSchema.parse({ ...validItem, sku: '' })).toThrow();
+    expect(() => manualShiftOrderItemSchema.parse({ ...validItem, sku: '   ' })).toThrow();
+  });
+
+  it('accepts negative quantity', () => {
+    const item = manualShiftOrderItemSchema.parse({ ...validItem, quantity: -1 });
+    expect(item.quantity).toBe(-1);
+  });
+
+  it('accepts null for all nullable text fields', () => {
+    const item = manualShiftOrderItemSchema.parse({
+      ...validItem,
+      description: null,
+      category: null,
+      notes: null,
+      zone: null,
+      sourceSheet: null,
+      sourceFile: null,
+      sourceRows: null
+    });
+    expect(item.description).toBeNull();
+    expect(item.category).toBeNull();
+    expect(item.notes).toBeNull();
+    expect(item.zone).toBeNull();
+    expect(item.sourceSheet).toBeNull();
+    expect(item.sourceFile).toBeNull();
+    expect(item.sourceRows).toBeNull();
+  });
+
+  it('accepts sourceRows as array of integers', () => {
+    const item = manualShiftOrderItemSchema.parse({ ...validItem, sourceRows: [747, 748] });
+    expect(item.sourceRows).toEqual([747, 748]);
   });
 });
 
