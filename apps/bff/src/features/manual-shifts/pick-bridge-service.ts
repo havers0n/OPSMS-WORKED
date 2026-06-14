@@ -40,22 +40,25 @@ export function createPickBridgeService(
         throw manualShiftOrderNotFound(input.orderId);
       }
 
-      if (!order.pickerWorkerId) {
+      const pickerName = order.pickerName?.trim();
+      if (!order.pickerWorkerId && !pickerName) {
         throw manualShiftOrderNoPickerWorker(input.orderId);
       }
 
-      const worker = await manualShiftsRepo.findWorkerById(order.pickerWorkerId);
-      if (!worker) {
-        throw manualShiftWorkerNotFound(order.pickerWorkerId);
-      }
-      if (worker.tenantId !== input.tenantId) {
-        throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'WRONG_TENANT');
-      }
-      if (worker.shiftId !== order.shiftId) {
-        throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'WRONG_SHIFT');
-      }
-      if (!worker.active) {
-        throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'INACTIVE');
+      if (order.pickerWorkerId) {
+        const worker = await manualShiftsRepo.findWorkerById(order.pickerWorkerId);
+        if (!worker) {
+          throw manualShiftWorkerNotFound(order.pickerWorkerId);
+        }
+        if (worker.tenantId !== input.tenantId) {
+          throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'WRONG_TENANT');
+        }
+        if (worker.shiftId !== order.shiftId) {
+          throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'WRONG_SHIFT');
+        }
+        if (!worker.active) {
+          throw manualShiftPickerWorkerInvalid(order.pickerWorkerId, 'INACTIVE');
+        }
       }
 
       if (order.status !== 'queued' && order.status !== 'picking') {

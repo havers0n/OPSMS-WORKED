@@ -1,4 +1,4 @@
-﻿import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ManualShiftOrder, ManualShiftOrderCheckUnit } from '@wos/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -313,7 +313,7 @@ describe('OrderDetail check-units section', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('queued order without pickerWorkerId disables start and shows explanation', async () => {
+  it('queued order without any picker disables start and shows explanation', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
@@ -321,7 +321,7 @@ describe('OrderDetail check-units section', () => {
       return [];
     });
 
-    renderDetail(makeOrder({ status: 'queued', pickerWorkerId: null }));
+    renderDetail(makeOrder({ status: 'queued', pickerName: null, pickerWorkerId: null }));
 
     expect(screen.getByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'התחל ליקוט' }) as HTMLButtonElement).disabled).toBe(true);
@@ -330,6 +330,72 @@ describe('OrderDetail check-units section', () => {
         String(url).includes('/start-picking')
       )
     ).toBe(false);
+  });
+
+  it('enables start immediately after saving a free-text picker in the detail sheet', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.includes('/workers') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111') && method === 'PATCH') {
+        return makeOrder({ status: 'queued', pickerName: 'Adam', pickerWorkerId: null });
+      }
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'queued', pickerName: null, pickerWorkerId: null }));
+
+    expect(screen.getByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeTruthy();
+    fireEvent.click(screen.getByText('ללא מלקט'));
+    fireEvent.change(await screen.findByPlaceholderText('שם המלקט'), { target: { value: 'Adam' } });
+    fireEvent.click(screen.getByText('שמור שם חופשי'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Adam')).toBeTruthy();
+      expect(screen.queryByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeNull();
+      expect((screen.getByRole('button', { name: 'התחל ליקוט' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it('queued order with free-text pickerName but no pickerWorkerId can start picking', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shifts/orders/11111111-1111-4111-8111-111111111111/start-picking') && method === 'POST') {
+        return {
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          taskNumber: 'PT-1',
+          tenantId: '22222222-2222-4222-8222-222222222222',
+          sourceType: 'manual_shift_order',
+          sourceId: '11111111-1111-4111-8111-111111111111',
+          status: 'assigned',
+          assignedTo: null,
+          assignedWorkerId: null,
+          startedAt: null,
+          completedAt: null,
+          createdAt: '2026-05-29T09:00:00.000Z',
+          totalSteps: 1,
+          completedSteps: 0,
+          steps: []
+        };
+      }
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'queued', pickerName: 'Free Picker', pickerWorkerId: null }));
+
+    expect(screen.queryByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeNull();
+    expect((screen.getByRole('button', { name: 'התחל ליקוט' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'התחל ליקוט' }));
+
+    await waitFor(() => {
+      expect(mockedBffRequest).toHaveBeenCalledWith(
+        '/api/manual-shifts/orders/11111111-1111-4111-8111-111111111111/start-picking',
+        { method: 'POST' }
+      );
+    });
   });
 
   it('bridge failure shows the backend error and stays on the operator screen', async () => {
