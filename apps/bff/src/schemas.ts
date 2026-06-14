@@ -69,6 +69,7 @@ import {
   manualShiftOrderCheckUnitSchema,
   manualShiftOrderAshlamaSchema,
   manualShiftOrderEventSchema,
+  manualShiftOrderItemSchema,
   manualShiftOrderAshlamaStatusSchema,
   manualShiftOrderCheckUnitStatusSchema,
   manualShiftLineSummarySchema,
@@ -543,6 +544,8 @@ export const manualShiftOrderCheckUnitsResponseSchema = z.array(manualShiftOrder
 export const manualShiftOrderAshlamaResponseSchema = manualShiftOrderAshlamaSchema;
 export const manualShiftOrderAshlamotResponseSchema = z.array(manualShiftOrderAshlamaSchema);
 export const manualShiftOrderEventsResponseSchema = z.array(manualShiftOrderEventSchema);
+export const manualShiftOrderItemResponseSchema = manualShiftOrderItemSchema;
+export const manualShiftOrderItemsResponseSchema = z.array(manualShiftOrderItemSchema);
 export const manualShiftLineSummaryResponseSchema = z.array(manualShiftLineSummarySchema);
 export const manualShiftTodayResponseSchema = manualShiftTodayDtoSchema;
 export const manualShiftPeopleSummaryResponseSchema = manualShiftPeopleSummarySchema;

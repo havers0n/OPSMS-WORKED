@@ -254,6 +254,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     listOrderAshlamot: vi.fn(async () => [ashlama]),
     listOpenShiftAshlamot: vi.fn(async () => []),
     listOrderEvents: vi.fn(async () => [createEvent()]),
+    listOrderItems: vi.fn(async () => []),
     createOrderAshlama: vi.fn(async () => ashlama),
     patchOrderAshlamaStatus: vi.fn(async () => ({ ...ashlama, status: 'done' as const })),
     createOrderCheckUnit: vi.fn(async () => createCheckUnit()),

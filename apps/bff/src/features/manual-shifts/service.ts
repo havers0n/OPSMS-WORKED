@@ -14,6 +14,7 @@ import type {
   ManualShiftOrderCheckUnitStatus,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
+  ManualShiftOrderItem,
   ManualShiftOrderStatus,
   ManualShiftOrderSize,
   ManualShiftPeopleSummary,
@@ -120,6 +121,7 @@ export type ManualShiftsService = {
   listOrderAshlamot(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderAshlama[]>;
   listOpenShiftAshlamot(input: { tenantId: string; shiftId: string }): Promise<OpenAshlamaBoardItem[]>;
   listOrderEvents(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderEvent[]>;
+  listOrderItems(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderItem[]>;
   createOrderAshlama(input: {
     tenantId: string;
     orderId: string;
@@ -742,6 +744,14 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftOrderNotFound(input.orderId);
       }
       return repo.listOrderEvents(input.orderId);
+    },
+
+    async listOrderItems(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+      return repo.listOrderItems(input.orderId);
     },
 
     async createOrderAshlama(input) {
