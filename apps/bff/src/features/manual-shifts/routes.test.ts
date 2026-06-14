@@ -1059,6 +1059,7 @@ describe('manual shifts routes', () => {
           pointFallbackRows: 1,
           pickupNoteRows: 2,
           ashlamaNoteRows: 1,
+          invalidDistributionDateRows: [],
           missingRequiredFields: []
         },
         lines: [
@@ -1067,7 +1068,8 @@ describe('manual shifts routes', () => {
             points: 2,
             uniqueOrderNumbers: 2,
             orderGroups: 2,
-            itemRows: 2,
+            itemRows: 3,
+            aggregatedSkuGroups: 2,
             uniqueSkus: 2,
             totalQuantity: 4,
             negativeQuantityRows: 1,

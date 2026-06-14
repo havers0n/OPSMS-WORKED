@@ -80,6 +80,13 @@ describe('manual shift monthly import parser', () => {
         notes: ['איסוף']
       })
     ]);
+    expect(result.preview.lines).toEqual([
+      expect.objectContaining({
+        lineName: 'עמקים',
+        itemRows: 2,
+        aggregatedSkuGroups: 1
+      })
+    ]);
   });
 
   it('supports adapter-normalized date values and skips rows from other dates', () => {
@@ -203,6 +210,69 @@ describe('manual shift monthly import parser', () => {
       code: 'MISSING_REQUIRED_FIELDS'
     }));
     expect(result.groups).toEqual([]);
+  });
+
+  it('does not block selected-date preview for missing fields on other valid dates', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'Line A/Point A',
+        customerName: 'Customer A',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '5.6.26',
+        rawDistributionValue: 'Line B/Point B',
+        customerName: 'Customer B',
+        orderNumber: 'SO-2',
+        sku: '   ',
+        quantity: '   '
+      }
+    ]));
+
+    expect(result.preview.dateSummary).toMatchObject({
+      matchingRows: 1,
+      skippedOtherDateRows: 1
+    });
+    expect(result.preview.anomalies.missingRequiredFields).toEqual([]);
+    expect(result.preview.warnings.map((warning) => warning.code)).not.toContain('MISSING_REQUIRED_FIELDS');
+    expect(result.preview.totals.orderGroups).toBe(1);
+  });
+
+  it('reports rows with missing or invalid distribution date separately', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: 'not-a-date',
+        rawDistributionValue: 'Line A/Point A',
+        customerName: 'Customer A',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'Line B/Point B',
+        customerName: 'Customer B',
+        orderNumber: 'SO-2',
+        sku: '1002',
+        quantity: 1
+      }
+    ]));
+
+    expect(result.preview.anomalies.invalidDistributionDateRows).toEqual([2]);
+    expect(result.preview.anomalies.missingRequiredFields).toEqual([]);
+    expect(result.preview.warnings).toContainEqual(expect.objectContaining({
+      severity: 'blocking',
+      code: 'INVALID_DISTRIBUTION_DATE_ROWS',
+      rows: [2]
+    }));
+    expect(result.preview.totals.orderGroups).toBe(1);
   });
 
   it('returns blocking warning and zero matching groups when selected date is not found', () => {

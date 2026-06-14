@@ -149,6 +149,7 @@ export function MonthlyImportPreviewSheet({ selectedDate, onClose }: MonthlyImpo
                   <div>fallback מלקוח: {preview.anomalies.pointFallbackRows}</div>
                   <div>איסוף: {preview.anomalies.pickupNoteRows}</div>
                   <div>השלמה: {preview.anomalies.ashlamaNoteRows}</div>
+                  <div>תאריכי הפצה לא תקינים: {preview.anomalies.invalidDistributionDateRows.length}</div>
                   <div className="col-span-2">שדות חובה חסרים: {preview.anomalies.missingRequiredFields.length}</div>
                 </div>
               </div>
@@ -173,7 +174,8 @@ export function MonthlyImportPreviewSheet({ selectedDate, onClose }: MonthlyImpo
                     <div key={line.lineName} className="p-4 text-sm space-y-1">
                       <p className="font-medium text-gray-900">{line.lineName}</p>
                       <p>נקודות: {line.points} | הזמנות ייחודיות: {line.uniqueOrderNumbers} | קבוצות הזמנה: {line.orderGroups}</p>
-                      <p>שורות פריט: {line.itemRows} | SKU ייחודיים: {line.uniqueSkus} | כמות כוללת: {line.totalQuantity}</p>
+                      <p>שורות פריט: {line.itemRows} | קבוצות SKU מאוגדות: {line.aggregatedSkuGroups} | SKU ייחודיים: {line.uniqueSkus}</p>
+                      <p>כמות כוללת: {line.totalQuantity}</p>
                       <p>שורות שליליות: {line.negativeQuantityRows} | אנומליות: {line.anomalyCount}</p>
                     </div>
                   ))}

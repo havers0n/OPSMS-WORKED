@@ -49,6 +49,7 @@ const previewPayload = {
     pointFallbackRows: 1,
     pickupNoteRows: 2,
     ashlamaNoteRows: 1,
+    invalidDistributionDateRows: [],
     missingRequiredFields: []
   },
   lines: [
@@ -57,7 +58,8 @@ const previewPayload = {
       points: 2,
       uniqueOrderNumbers: 2,
       orderGroups: 2,
-      itemRows: 2,
+      itemRows: 3,
+      aggregatedSkuGroups: 2,
       uniqueSkus: 2,
       totalQuantity: 4,
       negativeQuantityRows: 1,

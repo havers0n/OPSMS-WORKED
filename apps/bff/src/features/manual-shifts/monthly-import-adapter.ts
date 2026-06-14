@@ -76,7 +76,7 @@ function normalizeDistributionDate(
 export function parseManualShiftMonthlyImportWorkbook(input: {
   fileName: string;
   buffer: Buffer;
-}): ParseManualShiftMonthlyPreviewInput {
+}): Omit<ParseManualShiftMonthlyPreviewInput, 'selectedDate'> {
   ensureWorkbookBuffer(input.buffer);
 
   let workbook: XLSX.WorkBook;
@@ -172,7 +172,6 @@ export function parseManualShiftMonthlyImportWorkbook(input: {
       fileName: input.fileName,
       sheetName
     },
-    selectedDate: '2000-01-01',
     rows
   };
 }

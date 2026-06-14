@@ -38,6 +38,7 @@ export const manualShiftMonthlyPreviewLineSchema = z.object({
   uniqueOrderNumbers: z.number().int().min(0),
   orderGroups: z.number().int().min(0),
   itemRows: z.number().int().min(0),
+  aggregatedSkuGroups: z.number().int().min(0),
   uniqueSkus: z.number().int().min(0),
   totalQuantity: z.number(),
   negativeQuantityRows: z.number().int().min(0),
@@ -79,6 +80,7 @@ export const manualShiftMonthlyPreviewSchema = z.object({
     pointFallbackRows: z.number().int().min(0),
     pickupNoteRows: z.number().int().min(0),
     ashlamaNoteRows: z.number().int().min(0),
+    invalidDistributionDateRows: z.array(z.number().int().min(1)),
     missingRequiredFields: z.array(manualShiftMonthlyMissingFieldSchema)
   }),
   lines: z.array(manualShiftMonthlyPreviewLineSchema),
@@ -290,6 +292,7 @@ export function parseManualShiftMonthlyPreview(
   const workingRows = input.rows.map(buildWorkingRow);
 
   const availableDates = new Map<string, { raws: Set<string>; rows: number }>();
+  const invalidDistributionDateRows: number[] = [];
   const missingRequiredFields: ManualShiftMonthlyMissingField[] = [];
   const groups = new Map<string, ManualShiftMonthlyAggregatedGroup>();
   const topWarnings: ManualShiftMonthlyWarning[] = [];
@@ -298,6 +301,7 @@ export function parseManualShiftMonthlyPreview(
     orderNumbers: Set<string>;
     orderGroups: Set<string>;
     skus: Set<string>;
+    itemRows: number;
     totalQuantity: number;
     negativeQuantityRows: number;
     anomalyCount: number;
@@ -333,8 +337,15 @@ export function parseManualShiftMonthlyPreview(
       skippedOtherDateRows += 1;
     }
 
+    if (!row.normalizedDate) {
+      invalidDistributionDateRows.push(row.rowIndex);
+    }
+
+    if (row.normalizedDate !== input.selectedDate) {
+      continue;
+    }
+
     const missingFields: ManualShiftMonthlyMissingField['fields'] = [];
-    if (!row.normalizedDate) missingFields.push('distributionDate');
     if (!row.lineName) missingFields.push('line');
     if (!row.pointName) missingFields.push('point');
     if (!row.orderNumber) missingFields.push('orderNumber');
@@ -343,10 +354,6 @@ export function parseManualShiftMonthlyPreview(
 
     if (missingFields.length > 0) {
       missingRequiredFields.push({ rowIndex: row.rowIndex, fields: missingFields });
-    }
-
-    if (row.normalizedDate !== input.selectedDate) {
-      continue;
     }
 
     if (row.rawDistributionValue) {
@@ -421,12 +428,14 @@ export function parseManualShiftMonthlyPreview(
       orderNumbers: new Set<string>(),
       orderGroups: new Set<string>(),
       skus: new Set<string>(),
+      itemRows: 0,
       totalQuantity: 0,
       negativeQuantityRows: 0,
       anomalyCount: 0,
       warningRows: []
     };
 
+    lineEntry.itemRows += 1;
     lineEntry.pointNames.add(row.pointName);
     lineEntry.orderNumbers.add(row.orderNumber);
     lineEntry.orderGroups.add(`${row.pointName}\u0001${row.orderNumber}`);
@@ -465,9 +474,19 @@ export function parseManualShiftMonthlyPreview(
     topWarnings.push({
       severity: 'blocking',
       code: 'MISSING_REQUIRED_FIELDS',
-      message: 'Rows with missing required fields were found in the workbook preview.',
+      message: 'Selected-date rows with missing required fields were found in the workbook preview.',
       count: missingRequiredFields.length,
       rows: missingRequiredFields.map((entry) => entry.rowIndex).sort((a, b) => a - b)
+    });
+  }
+
+  if (invalidDistributionDateRows.length > 0) {
+    topWarnings.push({
+      severity: 'blocking',
+      code: 'INVALID_DISTRIBUTION_DATE_ROWS',
+      message: 'Meaningful rows with missing or invalid distribution date could not be classified.',
+      count: invalidDistributionDateRows.length,
+      rows: invalidDistributionDateRows.slice().sort((a, b) => a - b)
     });
   }
 
@@ -533,7 +552,8 @@ export function parseManualShiftMonthlyPreview(
         points: entry.pointNames.size,
         uniqueOrderNumbers: entry.orderNumbers.size,
         orderGroups: entry.orderGroups.size,
-        itemRows: Array.from(groups.values()).filter((group) => group.lineName === lineName).length,
+        itemRows: entry.itemRows,
+        aggregatedSkuGroups: Array.from(groups.values()).filter((group) => group.lineName === lineName).length,
         uniqueSkus: entry.skus.size,
         totalQuantity: entry.totalQuantity,
         negativeQuantityRows: entry.negativeQuantityRows,
@@ -585,6 +605,7 @@ export function parseManualShiftMonthlyPreview(
         pointFallbackRows,
         pickupNoteRows,
         ashlamaNoteRows,
+        invalidDistributionDateRows: invalidDistributionDateRows.sort((a, b) => a - b),
         missingRequiredFields
       },
       lines: lineSummaries,
