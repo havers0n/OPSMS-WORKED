@@ -332,6 +332,32 @@ describe('OrderDetail check-units section', () => {
     ).toBe(false);
   });
 
+  it('enables start immediately after saving a free-text picker in the detail sheet', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      const method = init?.method ?? 'GET';
+      if (path.includes('/check-units') && method === 'GET') return [];
+      if (path.includes('/workers') && method === 'GET') return [];
+      if (path.endsWith('/api/manual-shift-orders/11111111-1111-4111-8111-111111111111') && method === 'PATCH') {
+        return makeOrder({ status: 'queued', pickerName: 'Adam', pickerWorkerId: null });
+      }
+      return [];
+    });
+
+    renderDetail(makeOrder({ status: 'queued', pickerName: null, pickerWorkerId: null }));
+
+    expect(screen.getByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeTruthy();
+    fireEvent.click(screen.getByText('ללא מלקט'));
+    fireEvent.change(await screen.findByPlaceholderText('שם המלקט'), { target: { value: 'Adam' } });
+    fireEvent.click(screen.getByText('שמור שם חופשי'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Adam')).toBeTruthy();
+      expect(screen.queryByText('יש לשייך מלקט לפני תחילת ליקוט.')).toBeNull();
+      expect((screen.getByRole('button', { name: 'התחל ליקוט' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
   it('queued order with free-text pickerName but no pickerWorkerId can start picking', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);

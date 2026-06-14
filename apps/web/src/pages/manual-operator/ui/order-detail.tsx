@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, History, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -24,8 +24,13 @@ interface OrderDetailProps {
   onDeleted: (order: ManualShiftOrder) => void;
 }
 
-export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
+export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetailProps) {
   const navigate = useNavigate();
+  const [order, setOrder] = useState(orderProp);
+
+  useEffect(() => {
+    setOrder(orderProp);
+  }, [orderProp]);
   const [showErrorFlow, setShowErrorFlow] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [checkUnitsActiveCount, setCheckUnitsActiveCount] = useState<number | null>(null);
@@ -319,7 +324,13 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
         />
       )}
 
-      {showAssignPicker && <AssignPickerSheet order={order} onClose={() => setShowAssignPicker(false)} />}
+      {showAssignPicker && (
+        <AssignPickerSheet
+          order={order}
+          onClose={() => setShowAssignPicker(false)}
+          onSaved={setOrder}
+        />
+      )}
       {showEditOrder && <EditOrderSheet order={order} onClose={() => setShowEditOrder(false)} />}
       {showHistory && <OrderHistoryOverlay orderId={order.id} onClose={() => setShowHistory(false)} />}
     </div>
