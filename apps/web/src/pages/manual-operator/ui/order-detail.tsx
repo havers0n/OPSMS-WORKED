@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, History, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -73,8 +73,10 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
     });
   }
 
+  const hasAssignedPicker = Boolean(order.pickerWorkerId || order.pickerName?.trim());
+
   function handleStartPicking() {
-    if (!order.pickerWorkerId) return;
+    if (!hasAssignedPicker) return;
     startPicking.reset();
     startPicking.mutate({
       orderId: order.id,
@@ -224,7 +226,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
           <>
             {order.status === 'queued' && (
               <div className="flex flex-col gap-2">
-                {!order.pickerWorkerId && (
+                {!hasAssignedPicker && (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                     יש לשייך מלקט לפני תחילת ליקוט.
                   </p>
@@ -236,7 +238,7 @@ export function OrderDetail({ order, onClose, onDeleted }: OrderDetailProps) {
                 )}
                 <button
                   onClick={handleStartPicking}
-                  disabled={startPicking.isPending || !order.pickerWorkerId}
+                  disabled={startPicking.isPending || !hasAssignedPicker}
                   className="w-full bg-blue-600 text-white rounded-xl h-14 font-bold text-lg disabled:opacity-50"
                 >
                   {startPicking.isPending ? '...' : 'התחל ליקוט'}

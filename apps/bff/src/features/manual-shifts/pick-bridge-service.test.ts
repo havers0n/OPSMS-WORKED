@@ -219,8 +219,26 @@ describe('PickBridgeService.startPicking', () => {
     expect(result.steps).toHaveLength(1);
   });
 
-  it('rejects order without pickerWorkerId', async () => {
-    const order = createOrder({ pickerWorkerId: null });
+  it('creates task for a free-text picker without pickerWorkerId', async () => {
+    const order = createOrder({ pickerWorkerId: null, pickerName: 'Free Picker' });
+    const shiftsRepo = createManualShiftsRepoMock(order);
+    const bridgeRepo = createPickBridgeRepoMock();
+    const service = createPickBridgeService(shiftsRepo, bridgeRepo, { getNowIso: () => nowIso });
+
+    await service.startPicking({ tenantId: ids.tenant, orderId: ids.order, actor });
+
+    expect(shiftsRepo.findWorkerById).not.toHaveBeenCalled();
+    expect(bridgeRepo.createPickTask).toHaveBeenCalledWith(
+      expect.objectContaining({ assignedTo: null, assignedWorkerId: null })
+    );
+    expect(shiftsRepo.updateOrder).toHaveBeenCalledWith(
+      ids.order,
+      expect.objectContaining({ status: 'picking', startedAt: nowIso })
+    );
+  });
+
+  it('rejects order without any picker assignment', async () => {
+    const order = createOrder({ pickerWorkerId: null, pickerName: null });
     const shiftsRepo = createManualShiftsRepoMock(order);
     const bridgeRepo = createPickBridgeRepoMock();
     const service = createPickBridgeService(shiftsRepo, bridgeRepo, { getNowIso: () => nowIso });
