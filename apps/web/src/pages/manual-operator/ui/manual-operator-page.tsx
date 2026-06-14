@@ -31,6 +31,7 @@ import { CheckTab } from './check-tab';
 import { PeopleTab } from './people-tab';
 import { DayTab } from './day-tab';
 import { ImportExcelSheet } from './import-excel-sheet';
+import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
 
 function getTodayDateIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -70,6 +71,7 @@ export function ManualOperatorPage() {
   const [activeTab, setActiveTab] = useState<OperatorTab>('queue');
   const [showAddLine, setShowAddLine] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
+  const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
   const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
@@ -190,6 +192,8 @@ export function ManualOperatorPage() {
     setActiveTab('queue');
     setSelectedLine(null);
     setSelectedDesktopDetail(null);
+    setShowMonthlyPreview(false);
+    setShowImportExcel(false);
     setImportSuccessMessage(null);
   }
 
@@ -224,9 +228,11 @@ export function ManualOperatorPage() {
                   lines={lines}
                   onSelectLine={setSelectedLine}
                   canImport={!isReadOnly && shift.status === 'active' && lines.length === 0 && canImportExcelByRole}
+                  canPreviewMonthly={!isReadOnly && shift.status === 'active' && lines.length === 0 && canImportExcelByRole}
                   canAddManual={!isReadOnly}
                   showNoShiftHint={!shift}
                   onImportExcel={() => setShowImportExcel(true)}
+                  onPreviewMonthly={() => setShowMonthlyPreview(true)}
                   onAddLineManually={() => setShowAddLine(true)}
                 />
                 {selectedLine && (
@@ -252,6 +258,12 @@ export function ManualOperatorPage() {
               setShowImportExcel(false);
               setImportSuccessMessage(`יובאו: ${linesCreated} קווים, ${ordersCreated} הזמנות`);
             }}
+          />
+        )}
+        {showMonthlyPreview && shift && !isReadOnly && (
+          <MonthlyImportPreviewSheet
+            selectedDate={selectedDate}
+            onClose={() => setShowMonthlyPreview(false)}
           />
         )}
       </MobileOperatorShell>

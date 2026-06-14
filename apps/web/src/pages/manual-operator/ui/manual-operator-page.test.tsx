@@ -79,7 +79,8 @@ describe('ManualOperatorPage queue import placement', () => {
       expect(screen.getByText('אין קווים בתור')).toBeTruthy();
     });
 
-    expect(screen.getByRole('button', { name: 'ייבוא אקסל' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'ייבוא יומי קיים' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'הוסף קו ידנית' })).toBeTruthy();
   });
 
@@ -113,7 +114,8 @@ describe('ManualOperatorPage queue import placement', () => {
       expect(screen.getByText('אין קווים בתור')).toBeTruthy();
     });
 
-    expect(screen.getByRole('button', { name: 'ייבוא אקסל' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'ייבוא יומי קיים' })).toBeTruthy();
   });
 
   it('non-empty queue hides Import Excel CTA', async () => {
@@ -158,7 +160,8 @@ describe('ManualOperatorPage queue import placement', () => {
       expect(screen.getByText('????')).toBeTruthy();
     });
 
-    expect(screen.queryByRole('button', { name: 'ייבוא אקסל' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ייבוא יומי קיים' })).toBeNull();
   });
 
   it('operator membership hides Import Excel but keeps manual action', async () => {
@@ -191,7 +194,8 @@ describe('ManualOperatorPage queue import placement', () => {
       expect(screen.getByText('אין קווים בתור')).toBeTruthy();
     });
 
-    expect(screen.queryByRole('button', { name: 'ייבוא אקסל' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'ייבוא יומי קיים' })).toBeNull();
     expect(screen.getByRole('button', { name: 'הוסף קו ידנית' })).toBeTruthy();
   });
 
@@ -207,7 +211,7 @@ describe('ManualOperatorPage queue import placement', () => {
     expect(screen.getByText('אין משמרת פתוחה להיום. פתח משמרת כדי להתחיל בתור.')).toBeTruthy();
   });
 
-  it('opens import sheet from empty queue CTA', async () => {
+  it('opens daily import sheet from empty queue CTA', async () => {
     mockedBffRequest.mockResolvedValue({
       shift: {
         id: 'shift-1',
@@ -225,10 +229,10 @@ describe('ManualOperatorPage queue import placement', () => {
     renderPage(makeQueryClient());
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'ייבוא אקסל' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'ייבוא יומי קיים' })).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'ייבוא אקסל' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ייבוא יומי קיים' }));
     expect(screen.getByText('ייבוא קווים מאקסל')).toBeTruthy();
   });
 });

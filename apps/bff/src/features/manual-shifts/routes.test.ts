@@ -353,6 +353,20 @@ function buildRepresentativeWorkbookBuffer(): Buffer {
   return Buffer.isBuffer(output) ? output : Buffer.from(output);
 }
 
+function buildMonthlyPreviewWorkbookBuffer(): Buffer {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['תאריך הזמנה', 'שם לקוח', 'הזמנה', "מק''ט", 'תיאור', 'קטגוריה', 'כמות', 'קו הפצה', 'תאריך הפצה', 'הערות', 'איזור הפצה'],
+    ['27.5.26', 'לקוח א', 'SO-1', '1001', 'מוצר א', 'cat', 2, 'עמקים/נקודה א', '14.6.26', 'איסוף', 'north'],
+    ['27.5.26', 'לקוח ב', 'SO-1', '1001', 'מוצר א', 'cat', '3', 'עמקים/נקודה א', '14.06.26', 'איסוף', 'north'],
+    ['27.5.26', 'לקוח fallback', 'תעודה קיימת', '1002', 'מוצר ב', 'cat', -1, 'עמקים', '14.6.26', 'השלמה', 'north'],
+    ['27.5.26', 'לקוח ג', 'SO-3', '1003', 'מוצר ג', 'cat', 1, 'קו דרום/נקודה ג', '5.6.26', null, 'south']
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, 'יוני 26');
+  const output = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+}
+
 function buildMultipartBody(fieldName: string, fileName: string, contentType: string, fileBuffer: Buffer) {
   const boundary = '----wos-manual-shift-boundary';
   const head = Buffer.from(
@@ -380,6 +394,35 @@ function buildMultipartBodies(parts: Array<{ fieldName: string; fileName: string
     chunks.push(Buffer.from('\r\n'));
   }
   chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return {
+    body: Buffer.concat(chunks),
+    contentType: `multipart/form-data; boundary=${boundary}`
+  };
+}
+
+function buildMultipartFileWithFields(
+  fieldName: string,
+  fileName: string,
+  contentType: string,
+  fileBuffer: Buffer,
+  fields: Record<string, string>
+) {
+  const boundary = '----wos-manual-shift-boundary-fields';
+  const chunks: Buffer[] = [];
+  for (const [name, value] of Object.entries(fields)) {
+    chunks.push(Buffer.from(
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
+      `${value}\r\n`
+    ));
+  }
+  chunks.push(Buffer.from(
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="${fieldName}"; filename="${fileName}"\r\n` +
+    `Content-Type: ${contentType}\r\n\r\n`
+  ));
+  chunks.push(fileBuffer);
+  chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`));
   return {
     body: Buffer.concat(chunks),
     contentType: `multipart/form-data; boundary=${boundary}`
@@ -954,6 +997,198 @@ describe('manual shifts routes', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
+
+    await app.close();
+  });
+
+  it('returns monthly preview for selected date with metrics and warnings', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-14' }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      preview: {
+        source: {
+          fileName: 'monthly.xlsx',
+          sheetName: 'יוני 26'
+        },
+        selectedDate: {
+          raw: '14.06.26',
+          normalized: '2026-06-14'
+        },
+        dateSummary: {
+          totalRows: 4,
+          matchingRows: 3,
+          skippedOtherDateRows: 1,
+          availableDates: [
+            { raw: '5.6.26', normalized: '2026-06-05', rows: 1 },
+            { raw: '14.06.26', normalized: '2026-06-14', rows: 3 }
+          ]
+        },
+        totals: {
+          lines: 1,
+          rawDistributionValues: 2,
+          derivedPoints: 2,
+          uniqueOrderNumbers: 2,
+          orderGroups: 2,
+          skuRows: 3,
+          aggregatedSkuGroups: 2,
+          uniqueSkus: 2,
+          totalQuantity: 4
+        },
+        anomalies: {
+          negativeQuantityRows: 1,
+          nonSoOrderRows: 1,
+          rowsWithoutDistributionSlash: 1,
+          pointFallbackRows: 1,
+          pickupNoteRows: 2,
+          ashlamaNoteRows: 1,
+          invalidDistributionDateRows: [],
+          missingRequiredFields: []
+        },
+        lines: [
+          {
+            lineName: 'עמקים',
+            points: 2,
+            uniqueOrderNumbers: 2,
+            orderGroups: 2,
+            itemRows: 3,
+            aggregatedSkuGroups: 2,
+            uniqueSkus: 2,
+            totalQuantity: 4,
+            negativeQuantityRows: 1,
+            anomalyCount: 7,
+            warnings: [
+              {
+                severity: 'warning',
+                code: 'NEGATIVE_QUANTITY_ROWS',
+                message: 'Line contains rows with negative quantity values.',
+                count: 1
+              },
+              {
+                severity: 'warning',
+                code: 'LINE_ANOMALIES',
+                message: 'Line contains preview anomalies that require review.',
+                count: 3,
+                rows: [2, 3, 4]
+              }
+            ]
+          }
+        ],
+        warnings: [
+          {
+            severity: 'warning',
+            code: 'NEGATIVE_QUANTITY_ROWS',
+            message: 'Negative quantity rows are present in the preview and require manual handling later.',
+            count: 1
+          },
+          {
+            severity: 'warning',
+            code: 'NON_SO_ORDER_ROWS',
+            message: 'Order values not starting with SO are present in the preview.',
+            count: 1
+          },
+          {
+            severity: 'warning',
+            code: 'POINT_FALLBACK_ROWS',
+            message: 'Some rows used customer name as the derived point because the distribution value had no slash.',
+            count: 1
+          }
+        ]
+      }
+    });
+    expect(service.applyDailyImport).not.toHaveBeenCalled();
+    expect(service.createLine).not.toHaveBeenCalled();
+    expect(service.createOrder).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns blocking warning with zero matching groups when selected date is absent', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-20' }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      preview: {
+        selectedDate: {
+          raw: null,
+          normalized: '2026-06-20'
+        },
+        dateSummary: {
+          matchingRows: 0,
+          skippedOtherDateRows: 4
+        },
+        totals: {
+          orderGroups: 0,
+          skuRows: 0,
+          aggregatedSkuGroups: 0
+        },
+        warnings: [
+          expect.objectContaining({
+            severity: 'blocking',
+            code: 'SELECTED_DATE_NOT_FOUND'
+          })
+        ]
+      }
+    });
+
+    await app.close();
+  });
+
+  it('returns INVALID_DATE for missing selected date field on monthly preview', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer()
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'INVALID_DATE' });
 
     await app.close();
   });

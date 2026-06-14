@@ -14,6 +14,7 @@ import type {
   ManualShiftWorker,
   ManualShiftWorkerRole,
   DailyManualShiftImportPreview,
+  ManualShiftMonthlyPreview,
   ApplyDailyManualShiftImportResponse,
   PickTaskDetail
 } from '@wos/domain';
@@ -145,6 +146,10 @@ type DeleteRestoreLineContext = {
 
 type DailyManualShiftImportPreviewResponse = {
   preview: DailyManualShiftImportPreview;
+};
+
+type ManualShiftMonthlyPreviewResponse = {
+  preview: ManualShiftMonthlyPreview;
 };
 
 type ApplyDailyManualShiftImportInput = {
@@ -505,6 +510,18 @@ async function previewManualShiftExcelImport(
   });
 }
 
+async function previewManualShiftMonthlyImport(
+  input: { file: File; selectedDate: string }
+): Promise<ManualShiftMonthlyPreviewResponse> {
+  const formData = new FormData();
+  formData.append('file', input.file);
+  formData.append('selectedDate', input.selectedDate);
+  return bffRequest<ManualShiftMonthlyPreviewResponse>('/api/manual-shifts/import/monthly-preview', {
+    method: 'POST',
+    body: formData
+  });
+}
+
 async function applyManualShiftExcelImport(
   input: ApplyDailyManualShiftImportInput
 ): Promise<ApplyDailyManualShiftImportResponse> {
@@ -639,6 +656,12 @@ export function useRestoreManualShiftLine(lineId: string, context: DeleteRestore
 export function usePreviewManualShiftExcelImport() {
   return useMutation({
     mutationFn: previewManualShiftExcelImport
+  });
+}
+
+export function usePreviewManualShiftMonthlyImport(selectedDate: string) {
+  return useMutation({
+    mutationFn: (file: File) => previewManualShiftMonthlyImport({ file, selectedDate })
   });
 }
 
