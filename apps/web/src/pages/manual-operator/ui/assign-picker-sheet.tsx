@@ -8,9 +8,10 @@ import { shiftWorkersQueryOptions } from '@/entities/manual-shift/api/queries';
 interface AssignPickerSheetProps {
   order: ManualShiftOrder;
   onClose: () => void;
+  onSaved?: (order: ManualShiftOrder) => void;
 }
 
-export function AssignPickerSheet({ order, onClose }: AssignPickerSheetProps) {
+export function AssignPickerSheet({ order, onClose, onSaved }: AssignPickerSheetProps) {
   const [freePickerName, setFreePickerName] = useState(order.pickerWorkerId ? '' : (order.pickerName ?? ''));
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(order.pickerWorkerId ?? null);
   const patchOrder = usePatchManualShiftOrder();
@@ -27,7 +28,12 @@ export function AssignPickerSheet({ order, onClose }: AssignPickerSheetProps) {
         shiftId: order.shiftId,
         pickerWorkerId: workerId
       },
-      { onSuccess: onClose }
+      {
+        onSuccess: (updatedOrder) => {
+          onSaved?.(updatedOrder);
+          onClose();
+        }
+      }
     );
   }
 
@@ -40,7 +46,12 @@ export function AssignPickerSheet({ order, onClose }: AssignPickerSheetProps) {
         pickerWorkerId: null,
         pickerName: freePickerName.trim() || null
       },
-      { onSuccess: onClose }
+      {
+        onSuccess: (updatedOrder) => {
+          onSaved?.(updatedOrder);
+          onClose();
+        }
+      }
     );
   }
 
@@ -53,7 +64,12 @@ export function AssignPickerSheet({ order, onClose }: AssignPickerSheetProps) {
         pickerWorkerId: null,
         pickerName: null
       },
-      { onSuccess: onClose }
+      {
+        onSuccess: (updatedOrder) => {
+          onSaved?.(updatedOrder);
+          onClose();
+        }
+      }
     );
   }
 
