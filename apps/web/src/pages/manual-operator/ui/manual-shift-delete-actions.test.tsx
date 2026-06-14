@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ManualShiftLine, ManualShiftOrder } from '@wos/domain';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ManualOperatorPage } from './manual-operator-page';
 
@@ -126,9 +127,11 @@ function makeQueryClient() {
 
 function renderPage(queryClient: QueryClient) {
   return render(
-    <QueryClientProvider client={queryClient}>
-      <ManualOperatorPage />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <ManualOperatorPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 

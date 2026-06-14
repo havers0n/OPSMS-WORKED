@@ -201,10 +201,10 @@ describe('ManualOperatorPage queue import placement', () => {
     renderPage(makeQueryClient());
 
     await waitFor(() => {
-      expect(screen.getByText('No shift')).toBeTruthy();
+      expect(screen.getByText('אין משמרת')).toBeTruthy();
     });
 
-    expect(screen.getByText('No open shift for today. Open a shift to start the queue.')).toBeTruthy();
+    expect(screen.getByText('אין משמרת פתוחה להיום. פתח משמרת כדי להתחיל בתור.')).toBeTruthy();
   });
 
   it('opens import sheet from empty queue CTA', async () => {

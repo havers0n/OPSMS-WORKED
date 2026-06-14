@@ -12,11 +12,11 @@ export function ShiftEmptyState({ onCreateShift, isCreating }: ShiftEmptyStatePr
         <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-3xl">
           {isPastDate ? '-' : '+'}
         </div>
-        <h2 className="font-bold text-xl text-gray-900">No shift</h2>
+        <h2 className="font-bold text-xl text-gray-900">אין משמרת</h2>
         <p className="text-gray-500 text-sm leading-relaxed">
           {isPastDate
-            ? 'No shift found for this date. Create or open a shift before importing the Excel file.'
-            : 'No open shift for today. Open a shift to start the queue.'}
+            ? 'לא נמצאה משמרת לתאריך זה. צור או פתח משמרת לפני ייבוא קובץ האקסל.'
+            : 'אין משמרת פתוחה להיום. פתח משמרת כדי להתחיל בתור.'}
         </p>
       </div>
 
@@ -26,7 +26,7 @@ export function ShiftEmptyState({ onCreateShift, isCreating }: ShiftEmptyStatePr
           disabled={isCreating}
           className="w-full max-w-xs bg-gray-900 text-white font-bold py-4 px-6 rounded-2xl active:scale-95 transition-transform disabled:opacity-50 text-lg"
         >
-          {isCreating ? 'Opening shift...' : 'Open shift for today'}
+          {isCreating ? 'פותח משמרת...' : 'פתח משמרת להיום'}
         </button>
       )}
     </div>
