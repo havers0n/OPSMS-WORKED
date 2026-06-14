@@ -3,13 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   ManualShiftImportError,
   parseDailyManualShiftImport,
-  parseManualShiftMonthlyPreview
+  parseManualShiftMonthlyPreview,
+  planManualShiftMonthlyImportApply
 } from '@wos/domain';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ManualShiftsService } from './service.js';
 import { ApiError } from '../../errors.js';
 import { parseManualShiftImportWorkbook } from './import-adapter.js';
 import { parseManualShiftMonthlyImportWorkbook } from './monthly-import-adapter.js';
+import { manualShiftMonthlyImportBlockingWarnings } from './errors.js';
 import {
   bulkCreateManualShiftOrdersBodySchema,
   createManualShiftBodySchema,
@@ -39,6 +41,7 @@ import {
   manualShiftBulkAddResponseSchema,
   manualShiftImportPreviewResponseSchema,
   manualShiftMonthlyImportPreviewResponseSchema,
+  manualShiftMonthlyApplyResponseSchema,
   applyManualShiftImportRequestSchema,
   applyManualShiftImportResponseSchema,
   manualShiftDeleteRestoreBodySchema,
@@ -529,6 +532,49 @@ export function registerManualShiftsRoutes(
     return parseOrThrow(manualShiftMonthlyImportPreviewResponseSchema, {
       preview: parsed.preview
     });
+  });
+
+  app.post('/api/manual-shifts/import/monthly-apply', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    const tenantId = requireTenant(auth);
+
+    const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
+      allowedFieldNames: ['selectedDate', 'shiftId']
+    });
+    const selectedDate = fields.get('selectedDate')?.trim() ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      throw new ApiError(400, 'INVALID_DATE', 'Multipart field "selectedDate" must be in YYYY-MM-DD format.');
+    }
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: fields.get('shiftId')?.trim() ?? ''
+    }).id;
+
+    const workbook = parseManualShiftMonthlyImportWorkbook({
+      fileName,
+      buffer: fileBuffer
+    });
+    const parsed = parseManualShiftMonthlyPreview({
+      ...workbook,
+      selectedDate
+    });
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    if (plan.blockingWarnings.length > 0) {
+      throw manualShiftMonthlyImportBlockingWarnings({
+        preview: parsed.preview,
+        warnings: plan.blockingWarnings
+      });
+    }
+
+    const result = await getManualShiftsService(auth).applyMonthlyImport({
+      tenantId,
+      shiftId,
+      selectedDate,
+      plan
+    });
+
+    return parseOrThrow(manualShiftMonthlyApplyResponseSchema, result);
   });
 
   app.post('/api/manual-shifts/import/apply', async (request, reply) => {

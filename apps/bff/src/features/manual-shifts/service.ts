@@ -2,6 +2,8 @@ import type {
   ApplyDailyManualShiftImportResponse,
   BindableUser,
   DailyManualShiftImportPreview,
+  ManualShiftMonthlyApplyPlan,
+  ManualShiftMonthlyApplyResponse,
   ManualShiftBulkAddInputRow,
   ManualShiftBulkAddResult,
   ManualShiftDaySummary,
@@ -62,7 +64,8 @@ import {
   manualShiftImportShiftNotEmpty,
   manualShiftImportShiftNotFound,
   manualShiftImportInvalidPreviewPayload,
-  manualShiftImportForbidden
+  manualShiftImportForbidden,
+  manualShiftMonthlyImportRequiresEmptyShift
 } from './errors.js';
 import type { ManualShiftsRepo } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
@@ -244,6 +247,12 @@ export type ManualShiftsService = {
     preview: DailyManualShiftImportPreview;
     actor: ActorContext;
   }): Promise<ApplyDailyManualShiftImportResponse>;
+  applyMonthlyImport(input: {
+    tenantId: string;
+    shiftId: string;
+    selectedDate: string;
+    plan: ManualShiftMonthlyApplyPlan;
+  }): Promise<ManualShiftMonthlyApplyResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1189,6 +1198,68 @@ export function createManualShiftsServiceFromRepo(
           }
           if (dbError.message === 'SHIFT_NOT_EMPTY') {
             throw manualShiftImportShiftNotEmpty(input.shiftId);
+          }
+          if (dbError.message === 'INVALID_PREVIEW_PAYLOAD') {
+            throw manualShiftImportInvalidPreviewPayload();
+          }
+        }
+        if (dbError?.code === '22007' || dbError?.code === '22P02') {
+          throw manualShiftImportInvalidPreviewPayload();
+        }
+        if (dbError?.code === '42501') {
+          throw manualShiftImportForbidden();
+        }
+        throw error;
+      }
+    },
+
+    async applyMonthlyImport(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      if (shift.status !== 'active') {
+        throw manualShiftImportShiftNotActive(input.shiftId);
+      }
+
+      if (shift.date !== input.selectedDate) {
+        throw manualShiftImportShiftDateMismatch(input.shiftId, shift.date, input.selectedDate);
+      }
+
+      const [lines, orders] = await Promise.all([
+        repo.listShiftLines(input.shiftId),
+        repo.listShiftOrders(input.shiftId)
+      ]);
+      if (lines.length > 0 || orders.length > 0) {
+        throw manualShiftMonthlyImportRequiresEmptyShift(input.shiftId);
+      }
+
+      if (input.plan.blockingWarnings.length > 0) {
+        throw manualShiftImportInvalidPreviewPayload();
+      }
+
+      try {
+        return await repo.applyMonthlyImport({
+          tenantId: input.tenantId,
+          shiftId: input.shiftId,
+          selectedDate: input.selectedDate,
+          plan: input.plan
+        });
+      } catch (error) {
+        const dbError = error as { code?: string; message?: string };
+        if (dbError?.code === 'P0001') {
+          if (dbError.message === 'SHIFT_NOT_FOUND') {
+            throw manualShiftImportShiftNotFound(input.shiftId);
+          }
+          if (dbError.message === 'SHIFT_NOT_ACTIVE') {
+            throw manualShiftImportShiftNotActive(input.shiftId);
+          }
+          if (dbError.message === 'SHIFT_DATE_MISMATCH') {
+            throw manualShiftImportShiftDateMismatch(input.shiftId, shift.date, input.selectedDate);
+          }
+          if (dbError.message === 'SHIFT_NOT_EMPTY') {
+            throw manualShiftMonthlyImportRequiresEmptyShift(input.shiftId);
           }
           if (dbError.message === 'INVALID_PREVIEW_PAYLOAD') {
             throw manualShiftImportInvalidPreviewPayload();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseManualShiftMonthlyPreview,
+  planManualShiftMonthlyImportApply,
   type ParseManualShiftMonthlyPreviewInput
 } from './manual-shift-monthly-import';
 
@@ -300,5 +301,66 @@ describe('manual shift monthly import parser', () => {
       severity: 'blocking',
       code: 'SELECTED_DATE_NOT_FOUND'
     }));
+  });
+
+  it('plans apply only positive source rows when a grouped sku mixes positive, negative, and zero rows', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
+        customerName: 'ЧњЧ§Ч•Ч— Чђ',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+        category: 'cat',
+        quantity: 5,
+        notes: 'first'
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
+        customerName: 'ЧњЧ§Ч•Ч— Чђ',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+        category: 'cat',
+        quantity: -1,
+        notes: 'second'
+      },
+      {
+        rowIndex: 4,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Ч‘',
+        customerName: 'ЧњЧ§Ч•Ч— Ч‘',
+        orderNumber: 'SO-2',
+        sku: '1002',
+        description: 'ЧћЧ•Ч¦ЧЁ Ч‘',
+        category: 'cat',
+        quantity: 0
+      }
+    ]));
+
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.skippedGroups).toBe(1);
+    expect(plan.skippedNegativeQuantityRows).toBe(1);
+    expect(plan.skippedGroups).toBe(1);
+    expect(plan.skippedNegativeQuantityRows).toBe(1);
+    expect(plan.skippedZeroQuantityRows).toBe(1);
+    expect(plan.lines).toHaveLength(1);
+    expect(plan.lines[0]).toMatchObject({
+      orders: [{
+        orderNumber: 'SO-1',
+        totalQuantity: 5,
+        items: [{
+          sku: '1001',
+          quantity: 5,
+          notes: 'first',
+          sourceRows: [2]
+        }]
+      }]
+    });
   });
 });

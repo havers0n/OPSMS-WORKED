@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ApplyDailyManualShiftImportResponse,
   DailyManualShiftImportPreview,
+  ManualShiftMonthlyApplyPlan,
+  ManualShiftMonthlyApplyResponse,
   ManualShiftDaySummaryByError,
   ManualShiftLine,
   ManualShiftLineEvent,
@@ -625,6 +627,12 @@ export type ManualShiftsRepo = {
     shiftId: string;
     preview: DailyManualShiftImportPreview;
   }): Promise<ApplyDailyManualShiftImportResponse>;
+  applyMonthlyImport(input: {
+    tenantId: string;
+    shiftId: string;
+    selectedDate: string;
+    plan: ManualShiftMonthlyApplyPlan;
+  }): Promise<ManualShiftMonthlyApplyResponse>;
   updateOrder(orderId: string, patch: ManualShiftOrderPatch): Promise<ManualShiftOrder | null>;
   createOrderEvent(input: {
     tenantId: string;
@@ -1235,6 +1243,36 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
         shiftId: row.shift_id,
         linesCreated: Number(row.lines_created ?? 0),
         ordersCreated: Number(row.orders_created ?? 0)
+      };
+    },
+
+    async applyMonthlyImport(input) {
+      const { data, error } = await supabase.rpc('manual_shift_apply_monthly_import', {
+        p_tenant_id: input.tenantId,
+        p_shift_id: input.shiftId,
+        p_selected_date: input.selectedDate,
+        p_plan: input.plan
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      return {
+        shiftId: row.shift_id,
+        selectedDate: input.selectedDate,
+        linesCreated: Number(row.lines_created ?? 0),
+        ordersCreated: Number(row.orders_created ?? 0),
+        orderItemsCreated: Number(row.order_items_created ?? 0),
+        appliedGroups: Number(row.applied_groups ?? input.plan.appliedGroups),
+        skippedGroups: Number(row.skipped_groups ?? input.plan.skippedGroups),
+        skippedNegativeQuantityRows: Number(row.skipped_negative_quantity_rows ?? input.plan.skippedNegativeQuantityRows),
+        skippedZeroQuantityRows: Number(row.skipped_zero_quantity_rows ?? input.plan.skippedZeroQuantityRows),
+        warningSummary: input.plan.warningSummary,
+        warnings: input.plan.preview.warnings,
+        previewTotals: input.plan.preview.totals,
+        previewAnomalies: input.plan.preview.anomalies
       };
     },
 

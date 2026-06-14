@@ -15,6 +15,7 @@ import type {
   ManualShiftWorkerRole,
   DailyManualShiftImportPreview,
   ManualShiftMonthlyPreview,
+  ManualShiftMonthlyApplyResponse,
   ApplyDailyManualShiftImportResponse,
   PickTaskDetail
 } from '@wos/domain';
@@ -150,6 +151,11 @@ type DailyManualShiftImportPreviewResponse = {
 
 type ManualShiftMonthlyPreviewResponse = {
   preview: ManualShiftMonthlyPreview;
+};
+
+type ApplyMonthlyManualShiftImportInput = {
+  shiftId: string;
+  file: File;
 };
 
 type ApplyDailyManualShiftImportInput = {
@@ -531,6 +537,19 @@ async function applyManualShiftExcelImport(
   });
 }
 
+async function applyManualShiftMonthlyImport(
+  input: { selectedDate: string } & ApplyMonthlyManualShiftImportInput
+): Promise<ManualShiftMonthlyApplyResponse> {
+  const formData = new FormData();
+  formData.append('file', input.file);
+  formData.append('selectedDate', input.selectedDate);
+  formData.append('shiftId', input.shiftId);
+  return bffRequest<ManualShiftMonthlyApplyResponse>('/api/manual-shifts/import/monthly-apply', {
+    method: 'POST',
+    body: formData
+  });
+}
+
 export function useUpdateManualShiftOrderCheckUnitStatus() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -662,6 +681,22 @@ export function usePreviewManualShiftExcelImport() {
 export function usePreviewManualShiftMonthlyImport(selectedDate: string) {
   return useMutation({
     mutationFn: (file: File) => previewManualShiftMonthlyImport({ file, selectedDate })
+  });
+}
+
+export function useApplyManualShiftMonthlyImport(selectedDate: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ApplyMonthlyManualShiftImportInput) =>
+      applyManualShiftMonthlyImport({ ...input, selectedDate }),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.byDate(selectedDate) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(variables.shiftId) });
+    }
   });
 }
 

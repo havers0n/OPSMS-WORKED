@@ -33,6 +33,23 @@ export function manualShiftImportShiftNotEmpty(shiftId: string) {
   return new ApiError(409, 'SHIFT_NOT_EMPTY', `Manual shift ${shiftId} already has lines or orders.`);
 }
 
+export function manualShiftMonthlyImportRequiresEmptyShift(shiftId: string) {
+  return new ApiError(
+    409,
+    'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT',
+    `Manual shift ${shiftId} already has lines or orders.`
+  );
+}
+
+export function manualShiftMonthlyImportBlockingWarnings(details: unknown) {
+  return new ApiError(
+    409,
+    'MONTHLY_IMPORT_BLOCKED_BY_WARNINGS',
+    'Monthly import preview contains blocking warnings.',
+    details
+  );
+}
+
 export function manualShiftImportInvalidPreviewPayload() {
   return new ApiError(400, 'INVALID_PREVIEW_PAYLOAD', 'Import preview payload is invalid.');
 }

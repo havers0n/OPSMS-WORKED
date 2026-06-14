@@ -263,6 +263,24 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     createOrder: vi.fn(async () => createOrder('queued')),
     bulkCreateOrders: vi.fn(async () => bulkResult),
     applyDailyImport: vi.fn(async () => applyResponse),
+    applyMonthlyImport: vi.fn(async (input: Parameters<ManualShiftsService['applyMonthlyImport']>[0]) => ({
+      shiftId: input.shiftId,
+      selectedDate: input.selectedDate,
+      linesCreated: input.plan.lines.length,
+      ordersCreated: input.plan.lines.reduce<number>((sum, line) => sum + line.orders.length, 0),
+      orderItemsCreated: input.plan.lines.reduce<number>(
+        (sum, line) => sum + line.orders.reduce<number>((orderSum, order) => orderSum + order.items.length, 0),
+        0
+      ),
+      appliedGroups: input.plan.appliedGroups,
+      skippedGroups: input.plan.skippedGroups,
+      skippedNegativeQuantityRows: input.plan.skippedNegativeQuantityRows,
+      skippedZeroQuantityRows: input.plan.skippedZeroQuantityRows,
+      warningSummary: input.plan.warningSummary,
+      warnings: input.plan.preview.warnings,
+      previewTotals: input.plan.preview.totals,
+      previewAnomalies: input.plan.preview.anomalies
+    })),
     patchOrder: vi.fn(async () => ({ ...createOrder('queued'), comment: 'Updated' })),
     startOrderCheck: vi.fn(async () => ({ ...createOrder('picking'), checkStartedAt: '2026-05-26T07:25:00.000Z' })),
     deleteOrder: vi.fn(async () => ({ ...createOrder('queued'), deletedAt: '2026-05-26T08:00:00.000Z', deletedByProfileId: ids.user, deletedByName: 'Shift Dispatcher', deleteReason: 'cleanup' })),
@@ -1189,6 +1207,174 @@ describe('manual shifts routes', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ code: 'INVALID_DATE' });
+
+    await app.close();
+  });
+
+  it('returns INVALID_DATE for missing selected date field on monthly apply', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer()
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-apply',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'INVALID_DATE' });
+
+    await app.close();
+  });
+
+  it('returns MISSING_FILE for missing multipart file on monthly apply', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-apply',
+      headers: {
+        'content-type': 'multipart/form-data; boundary=----wos-empty'
+      },
+      payload: '------wos-empty--\r\n'
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'MISSING_FILE' });
+
+    await app.close();
+  });
+
+  it('rejects monthly apply when the target shift is not empty', async () => {
+    const service = createServiceMock({
+      applyMonthlyImport: vi.fn(async () => {
+        throw new ApiError(409, 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT', 'Manual shift already has lines or orders.');
+      })
+    });
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-14', shiftId: ids.shift }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-apply',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT' });
+    expect(service.applyMonthlyImport).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it('rejects monthly apply when preview has blocking warnings', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-20', shiftId: ids.shift }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-apply',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'MONTHLY_IMPORT_BLOCKED_BY_WARNINGS' });
+    expect(service.applyMonthlyImport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('applies sanitized monthly workbook into service with skipped negative groups', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-14', shiftId: ids.shift }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-apply',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      linesCreated: 1,
+      ordersCreated: 1,
+      orderItemsCreated: 1,
+      appliedGroups: 1,
+      skippedGroups: 1,
+      skippedNegativeQuantityRows: 1,
+      skippedZeroQuantityRows: 0
+    });
+
+    expect(service.applyMonthlyImport).toHaveBeenCalledTimes(1);
+    const [call] = vi.mocked(service.applyMonthlyImport).mock.calls;
+    expect(call?.[0]).toMatchObject({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14'
+    });
+    expect(call?.[0].plan).toMatchObject({
+      appliedGroups: 1,
+      skippedGroups: 1,
+      skippedNegativeQuantityRows: 1,
+      skippedZeroQuantityRows: 0
+    });
+    expect(call?.[0].plan.lines).toHaveLength(1);
+    expect(call?.[0].plan.lines[0]).toMatchObject({
+      orders: [
+        expect.objectContaining({
+          orderNumber: 'SO-1',
+          totalQuantity: 5,
+          items: [
+            expect.objectContaining({
+              sku: '1001',
+              quantity: 5,
+              sourceRows: [2, 3]
+            })
+          ]
+        })
+      ]
+    });
 
     await app.close();
   });

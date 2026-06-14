@@ -8,6 +8,10 @@ import type {
   ManualShiftSession,
   ManualShiftWorker
 } from '@wos/domain';
+import {
+  parseManualShiftMonthlyPreview,
+  planManualShiftMonthlyImportApply
+} from '@wos/domain';
 import { createManualShiftsServiceFromRepo } from './service.js';
 import type { ManualShiftsRepo } from './repo.js';
 
@@ -562,6 +566,21 @@ function createRepo() {
       shiftId: input.shiftId,
       linesCreated: 0,
       ordersCreated: 0
+    })),
+    applyMonthlyImport: vi.fn(async (input) => ({
+      shiftId: input.shiftId,
+      selectedDate: input.selectedDate,
+      linesCreated: 0,
+      ordersCreated: 0,
+      orderItemsCreated: 0,
+      appliedGroups: input.plan.appliedGroups,
+      skippedGroups: input.plan.skippedGroups,
+      skippedNegativeQuantityRows: input.plan.skippedNegativeQuantityRows,
+      skippedZeroQuantityRows: input.plan.skippedZeroQuantityRows,
+      warningSummary: input.plan.warningSummary,
+      warnings: input.plan.preview.warnings,
+      previewTotals: input.plan.preview.totals,
+      previewAnomalies: input.plan.preview.anomalies
     })),
     listShiftErrors: vi.fn(async (shiftId: string) => {
       return state.errors.filter((error) => error.shiftId === shiftId);
@@ -1399,6 +1418,7 @@ describe('manual shift workers service', () => {
               !k.startsWith('close') && !k.startsWith('patch') &&
               !k.startsWith('list') &&
               k !== 'applyDailyImport' &&
+              k !== 'applyMonthlyImport' &&
               k !== 'setWorkerAuthUser'
     );
     expect(canonicalKeys).toEqual([]);
@@ -3154,6 +3174,117 @@ describe('manual shift daily import apply', () => {
         actor: { actorProfileId: ids.actor, actorName: 'Dispatcher' }
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('manual shift monthly import apply', () => {
+  function makeMonthlyApplyService() {
+    const { repo, state } = createRepo();
+    state.shifts[0].date = '2026-06-14';
+    state.lines = [];
+    state.orders = [];
+    const service = createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+    return { repo, service, state };
+  }
+
+  function buildMonthlyPreview() {
+    return parseManualShiftMonthlyPreview({
+      source: {
+        fileName: 'monthly.xlsx',
+        sheetName: 'Ч™Ч•Ч Ч™ 26'
+      },
+      selectedDate: '2026-06-14',
+      rows: [
+        {
+          rowIndex: 2,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
+          customerName: 'ЧњЧ§Ч•Ч— Чђ',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+          category: 'cat',
+          quantity: 2,
+          notes: 'note-a'
+        },
+        {
+          rowIndex: 3,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
+          customerName: 'ЧњЧ§Ч•Ч— Чђ',
+          orderNumber: 'SO-1',
+          sku: '1001',
+          description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+          category: 'cat',
+          quantity: 3,
+          notes: 'note-b'
+        },
+        {
+          rowIndex: 4,
+          distributionDateRaw: '14.6.26',
+          rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Ч‘',
+          customerName: 'ЧњЧ§Ч•Ч— Ч‘',
+          orderNumber: 'SO-2',
+          sku: '1002',
+          description: 'ЧћЧ•Ч¦ЧЁ Ч‘',
+          category: 'cat',
+          quantity: -1
+        }
+      ]
+    });
+  }
+
+  it('applies a sanitized monthly plan through the repository', async () => {
+    const { repo, service } = makeMonthlyApplyService();
+    const parsed = buildMonthlyPreview();
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    const result = await service.applyMonthlyImport({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      plan
+    });
+
+    expect(result).toMatchObject({
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14'
+    });
+    expect(repo.applyMonthlyImport).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      plan
+    });
+  });
+
+  it('rejects monthly apply when the shift already has rows', async () => {
+    const { repo, service, state } = makeMonthlyApplyService();
+    state.lines.push({
+      id: ids.line,
+      tenant_id: ids.tenant,
+      shift_id: ids.shift,
+      name: 'Existing line',
+      sort_order: 1,
+      created_at: nowIso,
+      deleted_at: null,
+      deleted_by_profile_id: null,
+      deleted_by_name: null,
+      delete_reason: null
+    } as never);
+    const parsed = buildMonthlyPreview();
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    await expect(
+      service.applyMonthlyImport({
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        selectedDate: '2026-06-14',
+        plan
+      })
+    ).rejects.toMatchObject({ code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT' });
+
+    expect(repo.applyMonthlyImport).not.toHaveBeenCalled();
   });
 });
 

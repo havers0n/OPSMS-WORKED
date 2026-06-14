@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   useApplyManualShiftExcelImport,
+  useApplyManualShiftMonthlyImport,
   usePreviewManualShiftExcelImport,
   usePreviewManualShiftMonthlyImport,
   useCreateManualShiftOrderCheckUnit,
@@ -203,6 +204,71 @@ describe('manual shift import mutations', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.byDate('2026-06-01') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lines('s1') });
+  });
+
+  it('monthly apply mutation sends FormData with file, selected date, and shift id', async () => {
+    vi.mocked(bffRequest).mockResolvedValueOnce({
+      shiftId: 's1',
+      selectedDate: '2026-06-14',
+      linesCreated: 1,
+      ordersCreated: 1,
+      orderItemsCreated: 1,
+      appliedGroups: 1,
+      skippedGroups: 0,
+      skippedNegativeQuantityRows: 0,
+      skippedZeroQuantityRows: 0,
+      warningSummary: { info: 0, warning: 0, blocking: 0 },
+      warnings: [],
+      previewTotals: {
+        lines: 1,
+        rawDistributionValues: 1,
+        derivedPoints: 1,
+        uniqueOrderNumbers: 1,
+        orderGroups: 1,
+        skuRows: 1,
+        aggregatedSkuGroups: 1,
+        uniqueSkus: 1,
+        totalQuantity: 1
+      },
+      previewAnomalies: {
+        negativeQuantityRows: 0,
+        nonSoOrderRows: 0,
+        rowsWithoutDistributionSlash: 0,
+        pointFallbackRows: 0,
+        pickupNoteRows: 0,
+        ashlamaNoteRows: 0,
+        invalidDistributionDateRows: [],
+        missingRequiredFields: []
+      }
+    });
+    const { wrapper, invalidateSpy } = createWrapper();
+    const { result } = renderHook(() => useApplyManualShiftMonthlyImport('2026-06-14'), { wrapper });
+    const file = new File(['xlsx-binary'], 'monthly.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({ shiftId: 's1', file });
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/manual-shifts/import/monthly-apply',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData)
+      })
+    );
+    const call = vi.mocked(bffRequest).mock.calls.find((entry) => entry[0] === '/api/manual-shifts/import/monthly-apply');
+    const formData = call?.[1]?.body as FormData;
+    expect(formData.get('file')).toBe(file);
+    expect(formData.get('selectedDate')).toBe('2026-06-14');
+    expect(formData.get('shiftId')).toBe('s1');
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.byDate('2026-06-14') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
