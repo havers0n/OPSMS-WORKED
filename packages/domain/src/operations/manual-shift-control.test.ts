@@ -75,6 +75,7 @@ describe('manual shift control contracts', () => {
         size: 'L',
         status: 'queued',
         startedAt: null,
+        checkStartedAt: null,
         waitingCheckAt: null,
         checkedAt: null,
         finishedAt: null,
