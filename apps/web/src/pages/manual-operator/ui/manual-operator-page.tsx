@@ -262,8 +262,12 @@ export function ManualOperatorPage() {
         )}
         {showMonthlyPreview && shift && !isReadOnly && (
           <MonthlyImportPreviewSheet
+            shiftId={shift.id}
             selectedDate={selectedDate}
             onClose={() => setShowMonthlyPreview(false)}
+            onSuccess={({ linesCreated, ordersCreated, orderItemsCreated }) => {
+              setImportSuccessMessage(`Monthly import applied: ${linesCreated} lines, ${ordersCreated} orders, ${orderItemsCreated} items`);
+            }}
           />
         )}
       </MobileOperatorShell>

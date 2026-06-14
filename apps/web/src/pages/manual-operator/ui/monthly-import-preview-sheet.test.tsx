@@ -4,10 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
 
 const monthlyPreviewMutateAsync = vi.fn();
+const monthlyApplyMutateAsync = vi.fn();
 
 vi.mock('@/entities/manual-shift/api/mutations', () => ({
   usePreviewManualShiftMonthlyImport: () => ({
     mutateAsync: monthlyPreviewMutateAsync,
+    isPending: false,
+    error: null
+  }),
+  useApplyManualShiftMonthlyImport: () => ({
+    mutateAsync: monthlyApplyMutateAsync,
     isPending: false,
     error: null
   })
@@ -16,7 +22,7 @@ vi.mock('@/entities/manual-shift/api/mutations', () => ({
 const previewPayload = {
   source: {
     fileName: 'monthly.xlsx',
-    sheetName: 'יוני 26'
+    sheetName: 'Ч™Ч•Ч Ч™ 26'
   },
   selectedDate: {
     raw: '14.6.26',
@@ -54,7 +60,7 @@ const previewPayload = {
   },
   lines: [
     {
-      lineName: 'עמקים',
+      lineName: 'ЧўЧћЧ§Ч™Чќ',
       points: 2,
       uniqueOrderNumbers: 2,
       orderGroups: 2,
@@ -83,36 +89,122 @@ describe('MonthlyImportPreviewSheet', () => {
   });
 
   it('file input accepts xlsx', () => {
-    render(<MonthlyImportPreviewSheet selectedDate="2026-06-14" onClose={() => undefined} />);
-    expect(screen.getByLabelText('בחר קובץ אקסל חודשי').getAttribute('accept')).toBe(
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        onClose={() => undefined}
+        onSuccess={() => undefined}
+      />
+    );
+    expect(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™').getAttribute('accept')).toBe(
       '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
   });
 
   it('requests preview and renders metrics, dates, anomalies, and lines', async () => {
     monthlyPreviewMutateAsync.mockResolvedValueOnce({ preview: previewPayload });
-    render(<MonthlyImportPreviewSheet selectedDate="2026-06-14" onClose={() => undefined} />);
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        onClose={() => undefined}
+        onSuccess={() => undefined}
+      />
+    );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), { target: { files: [file] } });
 
     await waitFor(() => expect(monthlyPreviewMutateAsync).toHaveBeenCalledWith(file));
 
     expect(screen.getByText(/monthly.xlsx/)).toBeTruthy();
-    expect(screen.getByText(/יוני 26/)).toBeTruthy();
-    expect(screen.getByText(/סה״כ שורות:/)).toBeTruthy();
-    expect(screen.getByText(/עמקים/)).toBeTruthy();
-    expect(screen.getByText(/Apply Import לא זמין/)).toBeTruthy();
+    expect(screen.getByText('Batch 2 preview only')).toBeTruthy();
+    expect(screen.getByText(/ЧЎЧ”ЧґЧ› Ч©Ч•ЧЁЧ•ЧЄ:/)).toBeTruthy();
+    expect(screen.getByText(/ЧўЧћЧ§Ч™Чќ/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Apply Import' })).toBeTruthy();
   });
 
   it('shows translated error when preview request fails', async () => {
     monthlyPreviewMutateAsync.mockRejectedValueOnce(new Error('preview failed'));
-    render(<MonthlyImportPreviewSheet selectedDate="2026-06-14" onClose={() => undefined} />);
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        onClose={() => undefined}
+        onSuccess={() => undefined}
+      />
+    );
 
-    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), {
+    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), {
       target: { files: [new File(['x'], 'monthly.xlsx')] }
     });
 
     await waitFor(() => expect(screen.getByText('preview failed')).toBeTruthy());
+  });
+
+  it('disables apply when blocking warnings exist', async () => {
+    monthlyPreviewMutateAsync.mockResolvedValueOnce({ preview: previewPayload });
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        onClose={() => undefined}
+        onSuccess={() => undefined}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), {
+      target: { files: [new File(['x'], 'monthly.xlsx')] }
+    });
+
+    await waitFor(() => expect(monthlyPreviewMutateAsync).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Apply Import' }).getAttribute('disabled')).toBe('');
+  });
+
+  it('applies the same file, selected date, and shift id', async () => {
+    const onSuccess = vi.fn();
+    monthlyPreviewMutateAsync.mockResolvedValueOnce({
+      preview: {
+        ...previewPayload,
+        warnings: []
+      }
+    });
+    monthlyApplyMutateAsync.mockResolvedValueOnce({
+      shiftId: 'shift-1',
+      selectedDate: '2026-06-14',
+      linesCreated: 1,
+      ordersCreated: 1,
+      orderItemsCreated: 1,
+      appliedGroups: 1,
+      skippedGroups: 0,
+      skippedNegativeQuantityRows: 0,
+      skippedZeroQuantityRows: 0,
+      warningSummary: { info: 0, warning: 0, blocking: 0 },
+      warnings: [],
+      previewTotals: previewPayload.totals,
+      previewAnomalies: previewPayload.anomalies
+    });
+
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        onClose={() => undefined}
+        onSuccess={onSuccess}
+      />
+    );
+
+    const file = new File(['x'], 'monthly.xlsx');
+    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply Import' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Import' }));
+
+    await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shiftId: 'shift-1', file }));
+    expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({
+      shiftId: 'shift-1',
+      selectedDate: '2026-06-14'
+    }));
   });
 });

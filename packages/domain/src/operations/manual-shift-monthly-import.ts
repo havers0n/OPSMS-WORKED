@@ -125,6 +125,11 @@ export const manualShiftMonthlyAggregatedGroupSchema = z.object({
   totalQuantity: z.number(),
   notes: z.array(z.string().min(1)),
   sourceRows: z.array(z.number().int().min(1)).min(1),
+  rows: z.array(z.object({
+    rowIndex: z.number().int().min(1),
+    quantity: z.number(),
+    notes: z.string().nullable()
+  })).min(1),
   hasNegativeQuantity: z.boolean()
 });
 export type ManualShiftMonthlyAggregatedGroup = z.infer<typeof manualShiftMonthlyAggregatedGroupSchema>;
@@ -134,6 +139,71 @@ export const manualShiftMonthlyParseResultSchema = z.object({
   groups: z.array(manualShiftMonthlyAggregatedGroupSchema)
 });
 export type ManualShiftMonthlyParseResult = z.infer<typeof manualShiftMonthlyParseResultSchema>;
+
+export const manualShiftMonthlyApplyItemSchema = z.object({
+  sku: z.string().min(1),
+  description: z.string().nullable(),
+  category: z.string().nullable(),
+  quantity: z.number().positive(),
+  notes: z.string().nullable(),
+  sourceRows: z.array(z.number().int().min(1)).min(1),
+  sortOrder: z.number().int().min(1)
+});
+export type ManualShiftMonthlyApplyItem = z.infer<typeof manualShiftMonthlyApplyItemSchema>;
+
+export const manualShiftMonthlyApplyOrderSchema = z.object({
+  pointName: z.string().min(1),
+  orderNumber: z.string().min(1),
+  totalQuantity: z.number().positive(),
+  sourceRows: z.array(z.number().int().min(1)).min(1),
+  sortOrder: z.number().int().min(1),
+  items: z.array(manualShiftMonthlyApplyItemSchema).min(1)
+});
+export type ManualShiftMonthlyApplyOrder = z.infer<typeof manualShiftMonthlyApplyOrderSchema>;
+
+export const manualShiftMonthlyApplyLineSchema = z.object({
+  lineName: z.string().min(1),
+  sortOrder: z.number().int().min(1),
+  orders: z.array(manualShiftMonthlyApplyOrderSchema).min(1)
+});
+export type ManualShiftMonthlyApplyLine = z.infer<typeof manualShiftMonthlyApplyLineSchema>;
+
+export const manualShiftMonthlyApplyPlanSchema = z.object({
+  preview: manualShiftMonthlyPreviewSchema,
+  lines: z.array(manualShiftMonthlyApplyLineSchema),
+  appliedGroups: z.number().int().min(0),
+  skippedGroups: z.number().int().min(0),
+  skippedNegativeQuantityRows: z.number().int().min(0),
+  skippedZeroQuantityRows: z.number().int().min(0),
+  warningSummary: z.object({
+    info: z.number().int().min(0),
+    warning: z.number().int().min(0),
+    blocking: z.number().int().min(0)
+  }),
+  blockingWarnings: z.array(manualShiftMonthlyWarningSchema)
+});
+export type ManualShiftMonthlyApplyPlan = z.infer<typeof manualShiftMonthlyApplyPlanSchema>;
+
+export const manualShiftMonthlyApplyResponseSchema = z.object({
+  shiftId: z.string().uuid(),
+  selectedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  linesCreated: z.number().int().min(0),
+  ordersCreated: z.number().int().min(0),
+  orderItemsCreated: z.number().int().min(0),
+  appliedGroups: z.number().int().min(0),
+  skippedGroups: z.number().int().min(0),
+  skippedNegativeQuantityRows: z.number().int().min(0),
+  skippedZeroQuantityRows: z.number().int().min(0),
+  warningSummary: z.object({
+    info: z.number().int().min(0),
+    warning: z.number().int().min(0),
+    blocking: z.number().int().min(0)
+  }),
+  warnings: z.array(manualShiftMonthlyWarningSchema),
+  previewTotals: manualShiftMonthlyPreviewSchema.shape.totals,
+  previewAnomalies: manualShiftMonthlyPreviewSchema.shape.anomalies
+});
+export type ManualShiftMonthlyApplyResponse = z.infer<typeof manualShiftMonthlyApplyResponseSchema>;
 
 function normalizeTrimmedString(value: string | null | undefined): string | null {
   if (value === null || value === undefined) {
@@ -403,6 +473,11 @@ export function parseManualShiftMonthlyPreview(
     if (existingGroup) {
       existingGroup.totalQuantity += row.quantity;
       existingGroup.sourceRows.push(row.rowIndex);
+      existingGroup.rows.push({
+        rowIndex: row.rowIndex,
+        quantity: row.quantity,
+        notes: row.notes
+      });
       if (row.notes) {
         existingGroup.notes.push(row.notes);
       }
@@ -419,6 +494,11 @@ export function parseManualShiftMonthlyPreview(
         totalQuantity: row.quantity,
         notes: row.notes ? [row.notes] : [],
         sourceRows: [row.rowIndex],
+        rows: [{
+          rowIndex: row.rowIndex,
+          quantity: row.quantity,
+          notes: row.notes
+        }],
         hasNegativeQuantity: row.quantity < 0
       });
     }
@@ -616,5 +696,115 @@ export function parseManualShiftMonthlyPreview(
       notes: Array.from(new Set(group.notes)).sort(compareStrings),
       sourceRows: Array.from(new Set(group.sourceRows)).sort((a, b) => a - b)
     }))
+  });
+}
+
+export function planManualShiftMonthlyImportApply(
+  parsed: ManualShiftMonthlyParseResult
+): ManualShiftMonthlyApplyPlan {
+  const blockingWarnings = parsed.preview.warnings.filter((warning) => warning.severity === 'blocking');
+  const warningSummary = {
+    info: parsed.preview.warnings.filter((warning) => warning.severity === 'info').length,
+    warning: parsed.preview.warnings.filter((warning) => warning.severity === 'warning').length,
+    blocking: blockingWarnings.length
+  };
+
+  const byLine = new Map<string, Map<string, ManualShiftMonthlyApplyOrder>>();
+  let appliedGroups = 0;
+  let skippedGroups = 0;
+  let skippedNegativeQuantityRows = 0;
+  let skippedZeroQuantityRows = 0;
+
+  for (const group of parsed.groups) {
+    const positiveRows = group.rows.filter((row) => row.quantity > 0);
+    const negativeRows = group.rows.filter((row) => row.quantity < 0);
+    const zeroRows = group.rows.filter((row) => row.quantity === 0);
+
+    skippedNegativeQuantityRows += negativeRows.length;
+    skippedZeroQuantityRows += zeroRows.length;
+
+    if (positiveRows.length === 0) {
+      skippedGroups += 1;
+      continue;
+    }
+
+    appliedGroups += 1;
+    const lineOrders = byLine.get(group.lineName) ?? new Map<string, ManualShiftMonthlyApplyOrder>();
+    byLine.set(group.lineName, lineOrders);
+
+    const orderKey = `${group.pointName}\u0001${group.orderNumber}`;
+    const existingOrder = lineOrders.get(orderKey);
+    const sourceRows = positiveRows.map((row) => row.rowIndex).sort((a, b) => a - b);
+    const itemNotes = Array.from(
+      new Set(positiveRows.flatMap((row) => (row.notes ? [row.notes] : [])))
+    );
+    const itemQuantity = positiveRows.reduce((sum, row) => sum + row.quantity, 0);
+    const item = {
+      sku: group.sku,
+      description: group.description,
+      category: group.category,
+      quantity: itemQuantity,
+      notes: itemNotes.length > 0 ? itemNotes.join('\n') : null,
+      sourceRows,
+      sortOrder: existingOrder ? existingOrder.items.length + 1 : 1
+    };
+
+    if (existingOrder) {
+      existingOrder.items.push(item);
+      existingOrder.totalQuantity += itemQuantity;
+      existingOrder.sourceRows = Array.from(
+        new Set([...existingOrder.sourceRows, ...sourceRows])
+      ).sort((a, b) => a - b);
+      continue;
+    }
+
+    lineOrders.set(orderKey, {
+      pointName: group.pointName,
+      orderNumber: group.orderNumber,
+      totalQuantity: itemQuantity,
+      sourceRows,
+      sortOrder: lineOrders.size + 1,
+      items: [item]
+    });
+  }
+
+  const lines = Array.from(byLine.entries())
+    .map(([lineName, orders]) => ({
+      lineName,
+      sortOrder: 0,
+      orders: Array.from(orders.values())
+        .sort((a, b) =>
+          compareStrings(a.pointName, b.pointName) ||
+          compareStrings(a.orderNumber, b.orderNumber)
+        )
+        .map((order, orderIndex) => ({
+          ...order,
+          sortOrder: orderIndex + 1,
+          sourceRows: Array.from(new Set(order.sourceRows)).sort((a, b) => a - b),
+          items: order.items
+            .slice()
+            .sort((a, b) => compareStrings(a.sku, b.sku))
+            .map((item, itemIndex) => ({
+              ...item,
+              sortOrder: itemIndex + 1,
+              sourceRows: Array.from(new Set(item.sourceRows)).sort((a, b) => a - b)
+            }))
+        }))
+    }))
+    .sort((a, b) => compareStrings(a.lineName, b.lineName))
+    .map((line, lineIndex) => ({
+      ...line,
+      sortOrder: lineIndex + 1
+    }));
+
+  return manualShiftMonthlyApplyPlanSchema.parse({
+    preview: parsed.preview,
+    lines,
+    appliedGroups,
+    skippedGroups,
+    skippedNegativeQuantityRows,
+    skippedZeroQuantityRows,
+    warningSummary,
+    blockingWarnings
   });
 }

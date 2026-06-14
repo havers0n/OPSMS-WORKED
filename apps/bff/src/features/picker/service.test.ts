@@ -132,6 +132,44 @@ function createManualRepoMock(): ManualShiftsRepo {
     createLineEvent: vi.fn(),
     createOrderError: vi.fn(),
     listShiftErrors: vi.fn(),
+    applyMonthlyImport: vi.fn(async () => ({
+      shiftId: ids.shift,
+      selectedDate: '2026-05-28',
+      linesCreated: 0,
+      ordersCreated: 0,
+      orderItemsCreated: 0,
+      appliedGroups: 0,
+      skippedGroups: 0,
+      skippedNegativeQuantityRows: 0,
+      skippedZeroQuantityRows: 0,
+      warningSummary: {
+        info: 0,
+        warning: 0,
+        blocking: 0
+      },
+      warnings: [],
+      previewTotals: {
+        lines: 0,
+        rawDistributionValues: 0,
+        derivedPoints: 0,
+        uniqueOrderNumbers: 0,
+        orderGroups: 0,
+        skuRows: 0,
+        aggregatedSkuGroups: 0,
+        uniqueSkus: 0,
+        totalQuantity: 0
+      },
+      previewAnomalies: {
+        negativeQuantityRows: 0,
+        nonSoOrderRows: 0,
+        rowsWithoutDistributionSlash: 0,
+        pointFallbackRows: 0,
+        pickupNoteRows: 0,
+        ashlamaNoteRows: 0,
+        invalidDistributionDateRows: [],
+        missingRequiredFields: []
+      }
+    })),
     listOrderEvents: vi.fn(async () => []),
     listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => [])
   };
