@@ -585,19 +585,17 @@ describe('PR4 – Line Detail & Manual Orders', () => {
       return { order, qc };
     }
 
-    it('queued → picking: calls PATCH /status with { status: "picking" }', async () => {
+    it('queued → picking: calls POST /start-picking bridge', async () => {
       await setupOrderAndOpen('queued');
       fireEvent.click(screen.getByText('התחל ליקוט'));
 
       await waitFor(() => {
         const call = mockedBffRequest.mock.calls.find(
           ([url, init]) =>
-            String(url).includes('/order-1/status') &&
-            (init as RequestInit | undefined)?.method === 'PATCH'
+            String(url).includes('/api/manual-shifts/orders/order-1/start-picking') &&
+            (init as RequestInit | undefined)?.method === 'POST'
         );
         expect(call).toBeTruthy();
-        const body = JSON.parse((call![1] as RequestInit).body as string);
-        expect(body.status).toBe('picking');
       });
     });
 
