@@ -137,6 +137,10 @@ export function ManualOperatorPage() {
   const canImportExcelByRole =
     currentMembership?.role === 'tenant_admin' ||
     currentMembership?.role === 'platform_admin';
+  const canMonthlyImport =
+    !!shift && shift.status === 'active' && lines.length === 0 && canImportExcelByRole;
+  const handleCreateShift = () =>
+    createShift.mutate({ name: generateShiftName(), date: selectedDate });
 
   if (isDesktop) {
     return (
@@ -157,13 +161,13 @@ export function ManualOperatorPage() {
           onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
           onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
           onCloseDetail={() => setSelectedDesktopDetail(null)}
-          onCreateShift={() => createShift.mutate({ name: generateShiftName() })}
-          isCreatingShift={createShift.isPending}
           selectedDate={selectedDate}
           todayDate={todayDate}
           onChangeDate={handleSelectDate}
           onOpenDatePicker={() => setShowDatePicker(true)}
           canInteract={!isReadOnly}
+          onCreateShift={handleCreateShift}
+          isCreatingShift={createShift.isPending}
         />
         {showDatePicker && (
           <ShiftDatePicker
@@ -212,8 +216,9 @@ export function ManualOperatorPage() {
           <MobileLoadingState />
         ) : !shift ? (
           <ShiftEmptyState
-            onCreateShift={isToday ? () => createShift.mutate({ name: generateShiftName() }) : undefined}
+            onCreateShift={handleCreateShift}
             isCreating={createShift.isPending}
+            isToday={isToday}
           />
         ) : (
           <>
@@ -227,8 +232,8 @@ export function ManualOperatorPage() {
                 <LineList
                   lines={lines}
                   onSelectLine={setSelectedLine}
-                  canImport={!isReadOnly && shift.status === 'active' && lines.length === 0 && canImportExcelByRole}
-                  canPreviewMonthly={!isReadOnly && shift.status === 'active' && lines.length === 0 && canImportExcelByRole}
+                  canImport={canMonthlyImport}
+                  canPreviewMonthly={canMonthlyImport}
                   canAddManual={!isReadOnly}
                   showNoShiftHint={!shift}
                   onImportExcel={() => setShowImportExcel(true)}
@@ -249,7 +254,7 @@ export function ManualOperatorPage() {
         {showAddLine && shift && !isReadOnly && (
           <AddLineSheet shiftId={shift.id} onClose={() => setShowAddLine(false)} />
         )}
-        {showImportExcel && shift && !isReadOnly && (
+        {showImportExcel && shift && canMonthlyImport && (
           <ImportExcelSheet
             shiftId={shift.id}
             selectedDate={selectedDate}
@@ -260,7 +265,7 @@ export function ManualOperatorPage() {
             }}
           />
         )}
-        {showMonthlyPreview && shift && !isReadOnly && (
+        {showMonthlyPreview && shift && canMonthlyImport && (
           <MonthlyImportPreviewSheet
             shiftId={shift.id}
             selectedDate={selectedDate}

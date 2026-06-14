@@ -1,10 +1,11 @@
 interface ShiftEmptyStateProps {
   onCreateShift?: () => void;
   isCreating?: boolean;
+  isToday: boolean;
 }
 
-export function ShiftEmptyState({ onCreateShift, isCreating }: ShiftEmptyStateProps) {
-  const isPastDate = !onCreateShift;
+export function ShiftEmptyState({ onCreateShift, isCreating, isToday }: ShiftEmptyStateProps) {
+  const isPastDate = !isToday;
 
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[400px] px-8 gap-6 text-center" dir="rtl">
@@ -20,13 +21,18 @@ export function ShiftEmptyState({ onCreateShift, isCreating }: ShiftEmptyStatePr
         </p>
       </div>
 
-      {!isPastDate && (
+      {onCreateShift && (
         <button
+          aria-label={isPastDate ? 'פתח משמרת לתאריך זה' : 'פתח משמרת להיום'}
           onClick={onCreateShift}
           disabled={isCreating}
           className="w-full max-w-xs bg-gray-900 text-white font-bold py-4 px-6 rounded-2xl active:scale-95 transition-transform disabled:opacity-50 text-lg"
         >
-          {isCreating ? 'פותח משמרת...' : 'פתח משמרת להיום'}
+          {isCreating
+            ? 'פותח משמרת...'
+            : isPastDate
+              ? 'פתח משמרת לתאריך זה'
+              : 'פתח משמרת להיום'}
         </button>
       )}
     </div>
