@@ -5,8 +5,10 @@ interface LineListProps {
   lines: ManualShiftLineSummary[];
   onSelectLine: (summary: ManualShiftLineSummary) => void;
   canImport: boolean;
+  canPreviewMonthly: boolean;
   canAddManual: boolean;
   onImportExcel: () => void;
+  onPreviewMonthly: () => void;
   onAddLineManually: () => void;
   showNoShiftHint: boolean;
 }
@@ -15,8 +17,10 @@ export function LineList({
   lines,
   onSelectLine,
   canImport,
+  canPreviewMonthly,
   canAddManual,
   onImportExcel,
+  onPreviewMonthly,
   onAddLineManually,
   showNoShiftHint
 }: LineListProps) {
@@ -31,13 +35,22 @@ export function LineList({
           <p className="text-gray-500 text-sm">צור או פתח משמרת לפני ייבוא קובץ האקסל.</p>
         ) : (
           <div className="w-full max-w-xs flex flex-col gap-2">
+            {canPreviewMonthly && (
+              <button
+                type="button"
+                onClick={onPreviewMonthly}
+                className="w-full bg-gray-900 text-white font-medium py-3 rounded-xl"
+              >
+                תצוגה מקדימה חודשית
+              </button>
+            )}
             {canImport && (
               <button
                 type="button"
                 onClick={onImportExcel}
-                className="w-full bg-gray-900 text-white font-medium py-3 rounded-xl"
+                className="w-full border border-gray-300 text-gray-800 font-medium py-3 rounded-xl"
               >
-                ייבוא אקסל
+                ייבוא יומי קיים
               </button>
             )}
             {canAddManual && (

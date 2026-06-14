@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   useApplyManualShiftExcelImport,
   usePreviewManualShiftExcelImport,
+  usePreviewManualShiftMonthlyImport,
   useCreateManualShiftOrderCheckUnit,
   usePatchManualShiftOrder,
   usePatchManualShiftOrderCheckUnit,
@@ -143,6 +144,30 @@ describe('manual shift import mutations', () => {
     const call = vi.mocked(bffRequest).mock.calls.find((entry) => entry[0] === '/api/manual-shifts/import/preview');
     const formData = call?.[1]?.body as FormData;
     expect(formData.get('file')).toBe(file);
+  });
+
+  it('monthly preview mutation sends FormData with selected date and file', async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => usePreviewManualShiftMonthlyImport('2026-06-14'), { wrapper });
+    const file = new File(['xlsx-binary'], 'monthly.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync(file);
+    });
+
+    expect(bffRequest).toHaveBeenCalledWith(
+      '/api/manual-shifts/import/monthly-preview',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData)
+      })
+    );
+    const call = vi.mocked(bffRequest).mock.calls.find((entry) => entry[0] === '/api/manual-shifts/import/monthly-preview');
+    const formData = call?.[1]?.body as FormData;
+    expect(formData.get('file')).toBe(file);
+    expect(formData.get('selectedDate')).toBe('2026-06-14');
   });
 
   it('apply mutation invalidates queue-related keys', async () => {

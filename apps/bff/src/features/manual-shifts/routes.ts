@@ -1,10 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ManualShiftImportError, parseDailyManualShiftImport } from '@wos/domain';
+import {
+  ManualShiftImportError,
+  parseDailyManualShiftImport,
+  parseManualShiftMonthlyPreview
+} from '@wos/domain';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ManualShiftsService } from './service.js';
 import { ApiError } from '../../errors.js';
 import { parseManualShiftImportWorkbook } from './import-adapter.js';
+import { parseManualShiftMonthlyImportWorkbook } from './monthly-import-adapter.js';
 import {
   bulkCreateManualShiftOrdersBodySchema,
   createManualShiftBodySchema,
@@ -33,6 +38,7 @@ import {
   manualShiftTodayResponseSchema,
   manualShiftBulkAddResponseSchema,
   manualShiftImportPreviewResponseSchema,
+  manualShiftMonthlyImportPreviewResponseSchema,
   applyManualShiftImportRequestSchema,
   applyManualShiftImportResponseSchema,
   manualShiftDeleteRestoreBodySchema,
@@ -60,6 +66,15 @@ type GetAuthContext = (
 type GetManualShiftsService = (context: AuthenticatedRequestContext) => ManualShiftsService;
 type GetUserSupabase = (context: AuthenticatedRequestContext) => SupabaseClient;
 
+type MultipartFilePart = {
+  type: 'file' | 'field';
+  fieldname?: string;
+  filename?: string;
+  file?: { resume: () => void };
+  toBuffer?: () => Promise<Buffer>;
+  value?: string;
+};
+
 function requireTenant(auth: AuthenticatedRequestContext) {
   if (!auth.currentTenant) {
     throw new ApiError(403, 'NO_TENANT', 'No tenant context.');
@@ -73,6 +88,71 @@ function actorFromAuth(auth: AuthenticatedRequestContext, actorNameOverride?: st
     actorProfileId: auth.user.id ?? null,
     actorName: actorNameOverride ?? auth.displayName ?? auth.user.email ?? 'system'
   };
+}
+
+async function readMultipartUpload(
+  request: FastifyRequest,
+  options?: { allowedFieldNames?: string[] }
+) {
+  const allowedFieldNames = new Set(options?.allowedFieldNames ?? []);
+  const multipartRequest = request as FastifyRequest & {
+    parts: () => AsyncIterable<MultipartFilePart>;
+  };
+
+  let fileName: string | null = null;
+  let fileBuffer: Buffer | null = null;
+  const fields = new Map<string, string>();
+
+  try {
+    for await (const part of multipartRequest.parts()) {
+      if (part.type === 'field') {
+        if (!part.fieldname || !allowedFieldNames.has(part.fieldname)) {
+          throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Unexpected multipart field.');
+        }
+        fields.set(part.fieldname, String(part.value ?? ''));
+        continue;
+      }
+
+      if (part.fieldname !== 'file' || !part.filename || !part.toBuffer) {
+        part.file?.resume();
+        throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Unexpected multipart file field.');
+      }
+      if (fileBuffer !== null) {
+        part.file?.resume();
+        throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
+      }
+      fileName = part.filename;
+      fileBuffer = await part.toBuffer();
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
+    ) {
+      throw new ApiError(400, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.');
+    }
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === 'FST_FILES_LIMIT'
+    ) {
+      throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
+    }
+    throw error;
+  }
+
+  if (!fileName || !fileBuffer) {
+    throw new ApiError(400, 'MISSING_FILE', 'Multipart file field "file" is required.');
+  }
+  if (!fileName.toLowerCase().endsWith('.xlsx')) {
+    throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Only .xlsx files are supported.');
+  }
+
+  return { fileName, fileBuffer, fields };
 }
 
 export function registerManualShiftsRoutes(
@@ -406,62 +486,7 @@ export function registerManualShiftsRoutes(
     const auth = await getAuthContext(request, reply);
     if (!auth) return;
     requireTenant(auth);
-
-    const multipartRequest = request as FastifyRequest & {
-      parts: () => AsyncIterable<{
-        type: 'file' | 'field';
-        fieldname?: string;
-        filename?: string;
-        file?: { resume: () => void };
-        toBuffer?: () => Promise<Buffer>;
-      }>;
-    };
-
-    let fileName: string | null = null;
-    let fileBuffer: Buffer | null = null;
-    try {
-      for await (const part of multipartRequest.parts()) {
-        if (part.type !== 'file') {
-          continue;
-        }
-        if (part.fieldname !== 'file' || !part.filename || !part.toBuffer) {
-          part.file?.resume();
-          throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Unexpected multipart file field.');
-        }
-        if (fileBuffer !== null) {
-          part.file?.resume();
-          throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
-        }
-        fileName = part.filename;
-        fileBuffer = await part.toBuffer();
-      }
-    } catch (error) {
-      if (error instanceof ApiError) throw error;
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
-      ) {
-        throw new ApiError(400, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.');
-      }
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === 'FST_FILES_LIMIT'
-      ) {
-        throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
-      }
-      throw error;
-    }
-
-    if (!fileName || !fileBuffer) {
-      throw new ApiError(400, 'MISSING_FILE', 'Multipart file field "file" is required.');
-    }
-    if (!fileName.toLowerCase().endsWith('.xlsx')) {
-      throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Only .xlsx files are supported.');
-    }
+    const { fileName, fileBuffer } = await readMultipartUpload(request);
 
     const workbook = parseManualShiftImportWorkbook({
       fileName,
@@ -477,6 +502,33 @@ export function registerManualShiftsRoutes(
       }
       throw error;
     }
+  });
+
+  app.post('/api/manual-shifts/import/monthly-preview', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+    requireTenant(auth);
+
+    const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
+      allowedFieldNames: ['selectedDate']
+    });
+    const selectedDate = fields.get('selectedDate')?.trim() ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      throw new ApiError(400, 'INVALID_DATE', 'Multipart field "selectedDate" must be in YYYY-MM-DD format.');
+    }
+
+    const workbook = parseManualShiftMonthlyImportWorkbook({
+      fileName,
+      buffer: fileBuffer
+    });
+    const parsed = parseManualShiftMonthlyPreview({
+      ...workbook,
+      selectedDate
+    });
+
+    return parseOrThrow(manualShiftMonthlyImportPreviewResponseSchema, {
+      preview: parsed.preview
+    });
   });
 
   app.post('/api/manual-shifts/import/apply', async (request, reply) => {
