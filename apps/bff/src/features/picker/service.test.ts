@@ -133,7 +133,7 @@ function createManualRepoMock(): ManualShiftsRepo {
     createOrderError: vi.fn(),
     listShiftErrors: vi.fn(),
     listOrderEvents: vi.fn(async () => []),
-    listOrderItems: vi.fn(async () => [])
+    listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => [])
   };
 }
 

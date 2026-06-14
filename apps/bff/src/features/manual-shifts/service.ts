@@ -751,7 +751,7 @@ export function createManualShiftsServiceFromRepo(
       if (order.tenantId !== input.tenantId || order.deletedAt) {
         throw manualShiftOrderNotFound(input.orderId);
       }
-      return repo.listOrderItems(input.orderId);
+      return repo.listOrderItems(input.tenantId, input.orderId);
     },
 
     async createOrderAshlama(input) {

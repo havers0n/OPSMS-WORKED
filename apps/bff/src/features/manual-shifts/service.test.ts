@@ -379,7 +379,7 @@ function createRepo() {
         .filter((e) => e['orderId'] === orderId)
         .sort((a, b) => String(b['createdAt']).localeCompare(String(a['createdAt']))) as never;
     }),
-    listOrderItems: vi.fn(async (_orderId: string) => {
+    listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => {
       return [];
     }),
     findOrderAshlamaById: vi.fn(async (ashlamaId: string) => {
