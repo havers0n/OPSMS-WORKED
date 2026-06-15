@@ -386,6 +386,18 @@ function createRepo() {
     listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => {
       return [];
     }),
+    countMonthlyImportShiftRows: vi.fn(async ({ tenantId, shiftId }) => {
+      const lines = state.lines.filter((line) => line.shift_id === shiftId && line.tenant_id === tenantId);
+      const orders = state.orders.filter((order) => order.shiftId === shiftId && order.tenantId === tenantId);
+
+      return {
+        shiftId,
+        activeLinesCount: lines.filter((line) => line.deleted_at === null).length,
+        activeOrdersCount: orders.filter((order) => order.deletedAt === null).length,
+        softDeletedLinesCount: lines.filter((line) => line.deleted_at !== null).length,
+        softDeletedOrdersCount: orders.filter((order) => order.deletedAt !== null).length
+      };
+    }),
     findOrderAshlamaById: vi.fn(async (ashlamaId: string) => {
       return state.ashlamot.find((ashlama) => ashlama.id === ashlamaId) ?? null;
     }),
@@ -1418,6 +1430,7 @@ describe('manual shift workers service', () => {
               !k.startsWith('close') && !k.startsWith('patch') &&
               !k.startsWith('list') &&
               k !== 'applyDailyImport' &&
+              k !== 'countMonthlyImportShiftRows' &&
               k !== 'applyMonthlyImport' &&
               k !== 'setWorkerAuthUser'
     );
@@ -3258,7 +3271,50 @@ describe('manual shift monthly import apply', () => {
     });
   });
 
-  it('rejects monthly apply when the shift already has rows', async () => {
+  it('applies monthly import when the shift only has soft-deleted rows', async () => {
+    const { repo, service, state } = makeMonthlyApplyService();
+    state.lines.push({
+      id: ids.line,
+      tenant_id: ids.tenant,
+      shift_id: ids.shift,
+      name: 'Archived line',
+      sort_order: 1,
+      created_at: nowIso,
+      deleted_at: nowIso,
+      deleted_by_profile_id: ids.actor,
+      deleted_by_name: 'Dispatcher',
+      delete_reason: 'cleanup'
+    } as never);
+    state.orders.push(
+      createOrder({
+        deletedAt: nowIso,
+        deletedByProfileId: ids.actor,
+        deletedByName: 'Dispatcher',
+        deleteReason: 'cleanup'
+      })
+    );
+    const parsed = buildMonthlyPreview();
+    const plan = planManualShiftMonthlyImportApply(parsed);
+
+    const result = await service.applyMonthlyImport({
+      tenantId: ids.tenant,
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14',
+      plan
+    });
+
+    expect(result).toMatchObject({
+      shiftId: ids.shift,
+      selectedDate: '2026-06-14'
+    });
+    expect(repo.countMonthlyImportShiftRows).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      shiftId: ids.shift
+    });
+    expect(repo.applyMonthlyImport).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects monthly apply when active rows still exist and includes count details', async () => {
     const { repo, service, state } = makeMonthlyApplyService();
     state.lines.push({
       id: ids.line,
@@ -3272,6 +3328,7 @@ describe('manual shift monthly import apply', () => {
       deleted_by_name: null,
       delete_reason: null
     } as never);
+    state.orders.push(createOrder());
     const parsed = buildMonthlyPreview();
     const plan = planManualShiftMonthlyImportApply(parsed);
 
@@ -3282,8 +3339,18 @@ describe('manual shift monthly import apply', () => {
         selectedDate: '2026-06-14',
         plan
       })
-    ).rejects.toMatchObject({ code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT' });
+    ).rejects.toMatchObject({
+      code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT',
+      details: {
+        shiftId: ids.shift,
+        activeLinesCount: 1,
+        activeOrdersCount: 1,
+        softDeletedLinesCount: 0,
+        softDeletedOrdersCount: 0
+      }
+    });
 
+    expect(repo.countMonthlyImportShiftRows).toHaveBeenCalledTimes(1);
     expect(repo.applyMonthlyImport).not.toHaveBeenCalled();
   });
 });

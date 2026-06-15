@@ -1,5 +1,6 @@
 import { ApiError } from '../../errors.js';
 import type { ManualShiftOrderCheckUnitStatus, ManualShiftOrderStatus } from '@wos/domain';
+import type { MonthlyImportShiftCounts } from './repo.js';
 
 export function manualShiftNotFound(shiftId: string) {
   return new ApiError(404, 'MANUAL_SHIFT_NOT_FOUND', `Manual shift ${shiftId} was not found.`);
@@ -33,11 +34,15 @@ export function manualShiftImportShiftNotEmpty(shiftId: string) {
   return new ApiError(409, 'SHIFT_NOT_EMPTY', `Manual shift ${shiftId} already has lines or orders.`);
 }
 
-export function manualShiftMonthlyImportRequiresEmptyShift(shiftId: string) {
+export function manualShiftMonthlyImportRequiresEmptyShift(
+  shiftId: string,
+  details?: MonthlyImportShiftCounts
+) {
   return new ApiError(
     409,
     'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT',
-    `Manual shift ${shiftId} already has lines or orders.`
+    `Manual shift ${shiftId} already has lines or orders.`,
+    details
   );
 }
 

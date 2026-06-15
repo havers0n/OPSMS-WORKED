@@ -1468,7 +1468,13 @@ describe('manual shifts routes', () => {
   it('rejects monthly apply when the target shift is not empty', async () => {
     const service = createServiceMock({
       applyMonthlyImport: vi.fn(async () => {
-        throw new ApiError(409, 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT', 'Manual shift already has lines or orders.');
+        throw new ApiError(409, 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT', 'Manual shift already has lines or orders.', {
+          shiftId: ids.shift,
+          activeLinesCount: 1,
+          activeOrdersCount: 1,
+          softDeletedLinesCount: 2,
+          softDeletedOrdersCount: 3
+        });
       })
     });
     const app = await buildTestApp(service);
@@ -1490,7 +1496,16 @@ describe('manual shifts routes', () => {
     });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT' });
+    expect(response.json()).toMatchObject({
+      code: 'MONTHLY_IMPORT_REQUIRES_EMPTY_SHIFT',
+      details: {
+        shiftId: ids.shift,
+        activeLinesCount: 1,
+        activeOrdersCount: 1,
+        softDeletedLinesCount: 2,
+        softDeletedOrdersCount: 3
+      }
+    });
     expect(service.applyMonthlyImport).toHaveBeenCalledTimes(1);
 
     await app.close();

@@ -67,7 +67,7 @@ import {
   manualShiftImportForbidden,
   manualShiftMonthlyImportRequiresEmptyShift
 } from './errors.js';
-import type { ManualShiftsRepo } from './repo.js';
+import type { ManualShiftsRepo, MonthlyImportShiftCounts } from './repo.js';
 import { createManualShiftsRepo } from './repo.js';
 import { mapManualShiftLineRowToDomain } from './repo.js';
 
@@ -290,6 +290,16 @@ function buildLineSummaries(lines: ManualShiftLine[], orders: ManualShiftOrder[]
 
 async function buildShiftLineSummariesLite(repo: ManualShiftsRepo, shiftId: string, tenantId: string) {
   return repo.listShiftLineSummaries(shiftId, tenantId);
+}
+
+function buildMonthlyImportShiftGuardDetails(counts: MonthlyImportShiftCounts): MonthlyImportShiftCounts {
+  return {
+    shiftId: counts.shiftId,
+    activeLinesCount: counts.activeLinesCount,
+    activeOrdersCount: counts.activeOrdersCount,
+    softDeletedLinesCount: counts.softDeletedLinesCount,
+    softDeletedOrdersCount: counts.softDeletedOrdersCount
+  };
 }
 
 function deriveOrderSize(
@@ -1227,12 +1237,15 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftImportShiftDateMismatch(input.shiftId, shift.date, input.selectedDate);
       }
 
-      const [lines, orders] = await Promise.all([
-        repo.listShiftLines(input.shiftId),
-        repo.listShiftOrders(input.shiftId)
-      ]);
-      if (lines.length > 0 || orders.length > 0) {
-        throw manualShiftMonthlyImportRequiresEmptyShift(input.shiftId);
+      const monthlyImportShiftCounts = await repo.countMonthlyImportShiftRows({
+        tenantId: input.tenantId,
+        shiftId: input.shiftId
+      });
+      if (monthlyImportShiftCounts.activeLinesCount > 0 || monthlyImportShiftCounts.activeOrdersCount > 0) {
+        throw manualShiftMonthlyImportRequiresEmptyShift(
+          input.shiftId,
+          buildMonthlyImportShiftGuardDetails(monthlyImportShiftCounts)
+        );
       }
 
       if (input.plan.blockingWarnings.length > 0) {
@@ -1259,7 +1272,10 @@ export function createManualShiftsServiceFromRepo(
             throw manualShiftImportShiftDateMismatch(input.shiftId, shift.date, input.selectedDate);
           }
           if (dbError.message === 'SHIFT_NOT_EMPTY') {
-            throw manualShiftMonthlyImportRequiresEmptyShift(input.shiftId);
+            throw manualShiftMonthlyImportRequiresEmptyShift(
+              input.shiftId,
+              buildMonthlyImportShiftGuardDetails(monthlyImportShiftCounts)
+            );
           }
           if (dbError.message === 'INVALID_PREVIEW_PAYLOAD') {
             throw manualShiftImportInvalidPreviewPayload();

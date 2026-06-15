@@ -517,6 +517,14 @@ export type ManualShiftLinePatch = {
   deleteReason?: string | null;
 };
 
+export type MonthlyImportShiftCounts = {
+  shiftId: string;
+  activeLinesCount: number;
+  activeOrdersCount: number;
+  softDeletedLinesCount: number;
+  softDeletedOrdersCount: number;
+};
+
 export type ManualShiftsRepo = {
   listShiftWorkers(shiftId: string): Promise<ManualShiftWorker[]>;
   findWorkerById(workerId: string): Promise<ManualShiftWorker | null>;
@@ -569,6 +577,10 @@ export type ManualShiftsRepo = {
   listOrderItems(tenantId: string, orderId: string): Promise<ManualShiftOrderItem[]>;
   findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
   findOrderAshlamaById(ashlamaId: string): Promise<ManualShiftOrderAshlama | null>;
+  countMonthlyImportShiftRows(input: {
+    tenantId: string;
+    shiftId: string;
+  }): Promise<MonthlyImportShiftCounts>;
   createOrderCheckUnit(input: {
     tenantId: string;
     shiftId: string;
@@ -1067,6 +1079,59 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (error) throw error;
       return ((data ?? []) as ManualShiftOrderItemRow[]).map(mapOrderItemRow);
+    },
+
+    async countMonthlyImportShiftRows({ tenantId, shiftId }) {
+      const [
+        activeLinesResult,
+        softDeletedLinesResult,
+        activeOrdersResult,
+        softDeletedOrdersResult
+      ] = await Promise.all([
+        supabase
+          .from('manual_shift_lines')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null),
+        supabase
+          .from('manual_shift_lines')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .not('deleted_at', 'is', null),
+        supabase
+          .from('manual_shift_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .is('deleted_at', null),
+        supabase
+          .from('manual_shift_orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('shift_id', shiftId)
+          .not('deleted_at', 'is', null)
+      ]);
+
+      const errors = [
+        activeLinesResult.error,
+        softDeletedLinesResult.error,
+        activeOrdersResult.error,
+        softDeletedOrdersResult.error
+      ].filter(Boolean);
+
+      if (errors.length > 0) {
+        throw errors[0];
+      }
+
+      return {
+        shiftId,
+        activeLinesCount: activeLinesResult.count ?? 0,
+        activeOrdersCount: activeOrdersResult.count ?? 0,
+        softDeletedLinesCount: softDeletedLinesResult.count ?? 0,
+        softDeletedOrdersCount: softDeletedOrdersResult.count ?? 0
+      };
     },
 
     async findOrderAshlamaById(ashlamaId) {
