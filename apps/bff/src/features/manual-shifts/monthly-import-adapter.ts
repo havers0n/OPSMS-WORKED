@@ -1,30 +1,30 @@
-import * as XLSX from 'xlsx';
+﻿import * as XLSX from 'xlsx';
 import type { ManualShiftMonthlyParsedRow, ParseManualShiftMonthlyPreviewInput } from '@wos/domain';
 import { ApiError } from '../../errors.js';
 
-const MONTHLY_MANUAL_SHIFT_SHEET_NAME = 'Ч™Ч•Ч Ч™ 26';
+const MONTHLY_MANUAL_SHIFT_SHEET_NAME = 'יוני 26';
 const REQUIRED_HEADERS = [
-  'ЧЄЧђЧЁЧ™Чљ Ч”Ч¤Ч¦Ч”',
-  'Ч§Ч• Ч”Ч¤Ч¦Ч”',
-  'Ч©Чќ ЧњЧ§Ч•Ч—',
-  'Ч”Ч–ЧћЧ Ч”',
-  "ЧћЧ§''Ч",
-  'Ч›ЧћЧ•ЧЄ'
+  'תאריך הפצה',
+  'קו הפצה',
+  'שם לקוח',
+  'הזמנה',
+  "מק''ט",
+  'כמות'
 ] as const;
 
-type HeaderName = typeof REQUIRED_HEADERS[number] | 'ЧЄЧ™ЧђЧ•ЧЁ' | 'Ч§ЧЧ’Ч•ЧЁЧ™Ч”' | 'Ч”ЧўЧЁЧ•ЧЄ' | 'ЧђЧ™Ч–Ч•ЧЁ Ч”Ч¤Ч¦Ч”';
+type HeaderName = typeof REQUIRED_HEADERS[number] | 'תיאור' | 'קטגוריה' | 'הערות' | 'איזור הפצה';
 
 const FALLBACK_MONTHLY_COLUMN_INDEX: Record<HeaderName, number> = {
-  'ЧЄЧђЧЁЧ™Чљ Ч”Ч¤Ч¦Ч”': 8,
-  'Ч§Ч• Ч”Ч¤Ч¦Ч”': 7,
-  'Ч©Чќ ЧњЧ§Ч•Ч—': 1,
-  'Ч”Ч–ЧћЧ Ч”': 2,
-  "ЧћЧ§''Ч": 3,
-  'Ч›ЧћЧ•ЧЄ': 6,
-  'ЧЄЧ™ЧђЧ•ЧЁ': 4,
-  'Ч§ЧЧ’Ч•ЧЁЧ™Ч”': 5,
-  'Ч”ЧўЧЁЧ•ЧЄ': 9,
-  'ЧђЧ™Ч–Ч•ЧЁ Ч”Ч¤Ч¦Ч”': 10
+  'תאריך הפצה': 8,
+  'קו הפצה': 7,
+  'שם לקוח': 1,
+  'הזמנה': 2,
+  "מק''ט": 3,
+  'כמות': 6,
+  'תיאור': 4,
+  'קטגוריה': 5,
+  'הערות': 9,
+  'איזור הפצה': 10
 };
 
 type ImportLogger = {
@@ -34,10 +34,7 @@ type ImportLogger = {
 };
 
 function ensureWorkbookBuffer(buffer: Buffer) {
-  const isZipContainer = buffer.length >= 4 &&
-    buffer[0] === 0x50 &&
-    buffer[1] === 0x4b;
-
+  const isZipContainer = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b;
   if (!isZipContainer) {
     throw new ApiError(422, 'INVALID_WORKBOOK', 'Uploaded file is not a valid .xlsx workbook.');
   }
@@ -59,6 +56,35 @@ function normalizeStringCell(value: unknown): string | null {
 
   const normalized = String(value).trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function createMissingSheetDetails(availableSheets: string[], selectedDate: string | undefined) {
+  return {
+    expectedSheet: MONTHLY_MANUAL_SHIFT_SHEET_NAME,
+    availableSheets,
+    importKind: 'monthly',
+    selectedDate: selectedDate ?? null
+  } as const;
+}
+
+function failMissingSheet(
+  input: { fileName: string; selectedDate?: string; logger?: ImportLogger },
+  availableSheets: string[]
+): never {
+  const details = createMissingSheetDetails(availableSheets, input.selectedDate);
+  input.logger?.warn?.(
+    {
+      fileName: input.fileName,
+      ...details
+    },
+    'monthly manual shift workbook sheet missing'
+  );
+  throw new ApiError(
+    422,
+    'MISSING_SHEET',
+    `Workbook is missing required sheet ${MONTHLY_MANUAL_SHIFT_SHEET_NAME}.`,
+    details
+  );
 }
 
 function normalizeDistributionDate(
@@ -95,6 +121,7 @@ function normalizeDistributionDate(
 export function parseManualShiftMonthlyImportWorkbook(input: {
   fileName: string;
   buffer: Buffer;
+  selectedDate?: string;
   logger?: ImportLogger;
 }): Omit<ParseManualShiftMonthlyPreviewInput, 'selectedDate'> {
   input.logger?.info(
@@ -122,41 +149,17 @@ export function parseManualShiftMonthlyImportWorkbook(input: {
   const exactSheetName = workbook.SheetNames.find((name) => name.trim() === MONTHLY_MANUAL_SHIFT_SHEET_NAME) ?? null;
   const candidateSheetName = exactSheetName ?? (workbook.SheetNames.length === 1 ? workbook.SheetNames[0] : null);
   if (!candidateSheetName) {
-    input.logger?.warn?.(
-      {
-        fileName: input.fileName,
-        sheetName: MONTHLY_MANUAL_SHIFT_SHEET_NAME,
-        workbookSheets: workbook.SheetNames
-      },
-      'monthly manual shift workbook sheet missing'
-    );
-    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MONTHLY_MANUAL_SHIFT_SHEET_NAME}.`);
+    failMissingSheet(input, workbook.SheetNames);
   }
 
   const candidateSheet = workbook.Sheets[candidateSheetName];
   if (!candidateSheet?.['!ref']) {
-    input.logger?.warn?.(
-      {
-        fileName: input.fileName,
-        sheetName: candidateSheetName,
-        workbookSheets: workbook.SheetNames
-      },
-      'monthly manual shift workbook sheet missing'
-    );
-    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MONTHLY_MANUAL_SHIFT_SHEET_NAME}.`);
+    failMissingSheet(input, workbook.SheetNames);
   }
 
   const candidateRange = XLSX.utils.decode_range(candidateSheet['!ref']);
   if (!exactSheetName && candidateRange.e.c - candidateRange.s.c + 1 < 2) {
-    input.logger?.warn?.(
-      {
-        fileName: input.fileName,
-        sheetName: candidateSheetName,
-        workbookSheets: workbook.SheetNames
-      },
-      'monthly manual shift workbook sheet missing'
-    );
-    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MONTHLY_MANUAL_SHIFT_SHEET_NAME}.`);
+    failMissingSheet(input, workbook.SheetNames);
   }
 
   const sheetName = candidateSheetName;
@@ -235,24 +238,21 @@ export function parseManualShiftMonthlyImportWorkbook(input: {
       return sheet[cellAddress];
     };
 
-    const distributionDateCell = getCell('ЧЄЧђЧЁЧ™Чљ Ч”Ч¤Ч¦Ч”');
-    const normalizedDate = normalizeDistributionDate(
-      distributionDateCell?.v,
-      distributionDateCell?.w ?? distributionDateCell?.v
-    );
+    const distributionDateCell = getCell('תאריך הפצה');
+    const normalizedDate = normalizeDistributionDate(distributionDateCell?.v, distributionDateCell?.w ?? distributionDateCell?.v);
 
     rows.push({
       rowIndex: rowIndex + 1,
       ...normalizedDate,
-      rawDistributionValue: normalizeStringCell(getCell('Ч§Ч• Ч”Ч¤Ч¦Ч”')?.w ?? getCell('Ч§Ч• Ч”Ч¤Ч¦Ч”')?.v),
-      customerName: normalizeStringCell(getCell('Ч©Чќ ЧњЧ§Ч•Ч—')?.w ?? getCell('Ч©Чќ ЧњЧ§Ч•Ч—')?.v),
-      orderNumber: normalizeStringCell(getCell('Ч”Ч–ЧћЧ Ч”')?.w ?? getCell('Ч”Ч–ЧћЧ Ч”')?.v),
-      sku: getCell("ЧћЧ§''Ч")?.w ?? getCell("ЧћЧ§''Ч")?.v ?? null,
-      description: normalizeStringCell(getCell('ЧЄЧ™ЧђЧ•ЧЁ')?.w ?? getCell('ЧЄЧ™ЧђЧ•ЧЁ')?.v),
-      category: normalizeStringCell(getCell('Ч§ЧЧ’Ч•ЧЁЧ™Ч”')?.w ?? getCell('Ч§ЧЧ’Ч•ЧЁЧ™Ч”')?.v),
-      quantity: getCell('Ч›ЧћЧ•ЧЄ')?.v ?? getCell('Ч›ЧћЧ•ЧЄ')?.w ?? null,
-      notes: normalizeStringCell(getCell('Ч”ЧўЧЁЧ•ЧЄ')?.w ?? getCell('Ч”ЧўЧЁЧ•ЧЄ')?.v),
-      zone: normalizeStringCell(getCell('ЧђЧ™Ч–Ч•ЧЁ Ч”Ч¤Ч¦Ч”')?.w ?? getCell('ЧђЧ™Ч–Ч•ЧЁ Ч”Ч¤Ч¦Ч”')?.v)
+      rawDistributionValue: normalizeStringCell(getCell('קו הפצה')?.w ?? getCell('קו הפצה')?.v),
+      customerName: normalizeStringCell(getCell('שם לקוח')?.w ?? getCell('שם לקוח')?.v),
+      orderNumber: normalizeStringCell(getCell('הזמנה')?.w ?? getCell('הזמנה')?.v),
+      sku: getCell("מק''ט")?.w ?? getCell("מק''ט")?.v ?? null,
+      description: normalizeStringCell(getCell('תיאור')?.w ?? getCell('תיאור')?.v),
+      category: normalizeStringCell(getCell('קטגוריה')?.w ?? getCell('קטגוריה')?.v),
+      quantity: getCell('כמות')?.v ?? getCell('כמות')?.w ?? null,
+      notes: normalizeStringCell(getCell('הערות')?.w ?? getCell('הערות')?.v),
+      zone: normalizeStringCell(getCell('איזור הפצה')?.w ?? getCell('איזור הפצה')?.v)
     });
   }
 

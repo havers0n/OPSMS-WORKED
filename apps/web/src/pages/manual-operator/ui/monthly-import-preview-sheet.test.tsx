@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
@@ -22,7 +22,7 @@ vi.mock('@/entities/manual-shift/api/mutations', () => ({
 const previewPayload = {
   source: {
     fileName: 'monthly.xlsx',
-    sheetName: 'Ч™Ч•Ч Ч™ 26'
+    sheetName: 'יוני 26'
   },
   selectedDate: {
     raw: '14.6.26',
@@ -60,7 +60,7 @@ const previewPayload = {
   },
   lines: [
     {
-      lineName: 'ЧўЧћЧ§Ч™Чќ',
+      lineName: 'עמקים',
       points: 2,
       uniqueOrderNumbers: 2,
       orderGroups: 2,
@@ -88,7 +88,7 @@ describe('MonthlyImportPreviewSheet', () => {
     vi.clearAllMocks();
   });
 
-  it('file input accepts xlsx', () => {
+  it('accepts xlsx files', () => {
     render(
       <MonthlyImportPreviewSheet
         shiftId="shift-1"
@@ -97,7 +97,7 @@ describe('MonthlyImportPreviewSheet', () => {
         onSuccess={() => undefined}
       />
     );
-    expect(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™').getAttribute('accept')).toBe(
+    expect(screen.getByLabelText('בחר קובץ אקסל חודשי').getAttribute('accept')).toBe(
       '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
   });
@@ -114,15 +114,16 @@ describe('MonthlyImportPreviewSheet', () => {
     );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
 
     await waitFor(() => expect(monthlyPreviewMutateAsync).toHaveBeenCalledWith(file));
 
+    expect(screen.getByText('תצוגה מקדימה חודשית')).toBeTruthy();
+    expect(screen.getByText('ייבוא חודשי לפי תאריך המשמרת שנבחרה')).toBeTruthy();
     expect(screen.getByText(/monthly.xlsx/)).toBeTruthy();
-    expect(screen.getByText('Batch 2 preview only')).toBeTruthy();
-    expect(screen.getByText(/ЧЎЧ”ЧґЧ› Ч©Ч•ЧЁЧ•ЧЄ:/)).toBeTruthy();
-    expect(screen.getByText(/ЧўЧћЧ§Ч™Чќ/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Apply Import' })).toBeTruthy();
+    expect(screen.getByText(/תאריך משמרת:/)).toBeTruthy();
+    expect(screen.getByText(/עמקים/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'אשר ייבוא' })).toBeTruthy();
   });
 
   it('shows translated error when preview request fails', async () => {
@@ -136,7 +137,7 @@ describe('MonthlyImportPreviewSheet', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), {
+    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), {
       target: { files: [new File(['x'], 'monthly.xlsx')] }
     });
 
@@ -154,12 +155,12 @@ describe('MonthlyImportPreviewSheet', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), {
+    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), {
       target: { files: [new File(['x'], 'monthly.xlsx')] }
     });
 
     await waitFor(() => expect(monthlyPreviewMutateAsync).toHaveBeenCalled());
-    expect(screen.getByRole('button', { name: 'Apply Import' }).getAttribute('disabled')).toBe('');
+    expect(screen.getByRole('button', { name: 'אשר ייבוא' }).getAttribute('disabled')).toBe('');
   });
 
   it('applies the same file, selected date, and shift id', async () => {
@@ -196,10 +197,10 @@ describe('MonthlyImportPreviewSheet', () => {
     );
 
     const file = new File(['x'], 'monthly.xlsx');
-    fireEvent.change(screen.getByLabelText('Ч‘Ч—ЧЁ Ч§Ч•Ч‘ЧҐ ЧђЧ§ЧЎЧњ Ч—Ч•Ч“Ч©Ч™'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply Import' })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Import' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'אשר ייבוא' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'אשר ייבוא' }));
 
     await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shiftId: 'shift-1', file }));
     expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({

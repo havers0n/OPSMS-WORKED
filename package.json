@@ -17,6 +17,7 @@
     "verify:bff:quick": "npm run lint --workspace @wos/bff && npm run typecheck --workspace @wos/bff",
     "verify:domain:quick": "npm run lint --workspace @wos/domain && npm run typecheck --workspace @wos/domain",
     "verify:quick": "npm run verify:web:quick && npm run verify:bff:quick && npm run verify:domain:quick",
+    "check:mojibake": "node ./scripts/check-mojibake.mjs",
     "agent:preflight": "powershell -ExecutionPolicy Bypass -File ./scripts/agent-preflight.ps1",
     "products:generate-seed": "node apps/supabase/scripts/generate-products-catalog-seed.mjs",
     "gen:types": "supabase gen types typescript --workdir apps/supabase --local --schema public 2>/dev/null > apps/web/src/shared/api/supabase/types.ts"

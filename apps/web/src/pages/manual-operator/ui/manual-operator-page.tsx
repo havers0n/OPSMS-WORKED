@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary } from '@wos/domain';
@@ -271,7 +271,7 @@ export function ManualOperatorPage() {
             selectedDate={selectedDate}
             onClose={() => setShowMonthlyPreview(false)}
             onSuccess={({ linesCreated, ordersCreated, orderItemsCreated }) => {
-              setImportSuccessMessage(`Monthly import applied: ${linesCreated} lines, ${ordersCreated} orders, ${orderItemsCreated} items`);
+              setImportSuccessMessage(`ייבוא חודשי הושלם: ${linesCreated} קווים, ${ordersCreated} הזמנות, ${orderItemsCreated} פריטים`);
             }}
           />
         )}
@@ -288,3 +288,4 @@ export function ManualOperatorPage() {
     </>
   );
 }
+

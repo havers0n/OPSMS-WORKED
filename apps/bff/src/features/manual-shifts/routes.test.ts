@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+﻿import { afterEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import multipart from '@fastify/multipart';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -1097,7 +1097,15 @@ describe('manual shifts routes', () => {
     });
 
     expect(response.statusCode).toBe(422);
-    expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
+    expect(response.json()).toMatchObject({
+      code: 'MISSING_SHEET',
+      details: {
+        expectedSheet: 'סכימות',
+        availableSheets: expect.any(Array),
+        importKind: 'daily',
+        selectedDate: null
+      }
+    });
 
     await app.close();
   });
@@ -1370,7 +1378,15 @@ describe('manual shifts routes', () => {
     });
 
     expect(response.statusCode).toBe(422);
-    expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
+    expect(response.json()).toMatchObject({
+      code: 'MISSING_SHEET',
+      details: {
+        expectedSheet: 'יוני 26',
+        availableSheets: expect.any(Array),
+        importKind: 'monthly',
+        selectedDate: '2026-06-14'
+      }
+    });
 
     await app.close();
   });
@@ -1846,3 +1862,4 @@ describe('manual shifts routes', () => {
     });
   });
 });
+

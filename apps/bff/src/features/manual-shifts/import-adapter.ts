@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { ApiError } from '../../errors.js';
 import type { RawManualShiftImport } from '@wos/domain';
 
-const MANUAL_SHIFT_SHEET_NAME = 'ЧЎЧ›Ч™ЧћЧ•ЧЄ';
+const MANUAL_SHIFT_SHEET_NAME = 'סכימות';
 
 type ImportLogger = {
   info: (data: Record<string, unknown>, message?: string) => void;
@@ -16,6 +16,15 @@ function normalizeCellValue(value: XLSX.CellObject['v']): string | null {
   }
 
   return String(value);
+}
+
+function createMissingSheetDetails(availableSheets: string[]) {
+  return {
+    expectedSheet: MANUAL_SHIFT_SHEET_NAME,
+    availableSheets,
+    importKind: 'daily',
+    selectedDate: null
+  } as const;
 }
 
 export function parseManualShiftImportWorkbook(input: {
@@ -64,12 +73,11 @@ export function parseManualShiftImportWorkbook(input: {
     input.logger?.warn?.(
       {
         fileName: input.fileName,
-        workbookSheets: workbook.SheetNames,
-        sheetName: MANUAL_SHIFT_SHEET_NAME
+        ...createMissingSheetDetails(workbook.SheetNames)
       },
       'manual shift workbook sheet missing'
     );
-    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`);
+    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`, createMissingSheetDetails(workbook.SheetNames));
   }
 
   const sheet = workbook.Sheets[sheetName];
@@ -77,12 +85,11 @@ export function parseManualShiftImportWorkbook(input: {
     input.logger?.warn?.(
       {
         fileName: input.fileName,
-        sheetName,
-        workbookSheets: workbook.SheetNames
+        ...createMissingSheetDetails(workbook.SheetNames)
       },
       'manual shift workbook sheet missing'
     );
-    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`);
+    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`, createMissingSheetDetails(workbook.SheetNames));
   }
 
   input.logger?.info(

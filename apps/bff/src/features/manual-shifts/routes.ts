@@ -696,6 +696,7 @@ export function registerManualShiftsRoutes(
       const workbook = parseManualShiftMonthlyImportWorkbook({
         fileName,
         buffer: fileBuffer,
+        selectedDate,
         logger: request.log
       });
       logImportStage(request, '/api/manual-shifts/import/monthly-preview', 'workbook_parse_done', {
@@ -751,6 +752,7 @@ export function registerManualShiftsRoutes(
       const workbook = parseManualShiftMonthlyImportWorkbook({
         fileName,
         buffer: fileBuffer,
+        selectedDate,
         logger: request.log
       });
       logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'workbook_parse_done', {
