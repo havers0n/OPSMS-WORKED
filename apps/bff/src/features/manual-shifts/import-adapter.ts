@@ -2,37 +2,96 @@ import * as XLSX from 'xlsx';
 import { ApiError } from '../../errors.js';
 import type { RawManualShiftImport } from '@wos/domain';
 
-const MANUAL_SHIFT_SHEET_NAME = 'סכימות';
+const MANUAL_SHIFT_SHEET_NAME = 'ЧЎЧ›Ч™ЧћЧ•ЧЄ';
+
+type ImportLogger = {
+  info: (data: Record<string, unknown>, message?: string) => void;
+  warn?: (data: Record<string, unknown>, message?: string) => void;
+  error?: (data: Record<string, unknown>, message?: string) => void;
+};
 
 function normalizeCellValue(value: XLSX.CellObject['v']): string | null {
   if (value === null || value === undefined) {
     return null;
   }
+
   return String(value);
 }
 
 export function parseManualShiftImportWorkbook(input: {
   fileName: string;
   buffer: Buffer;
+  logger?: ImportLogger;
 }): RawManualShiftImport {
+  input.logger?.info(
+    {
+      fileName: input.fileName,
+      bufferLength: input.buffer.length,
+      sheetName: MANUAL_SHIFT_SHEET_NAME
+    },
+    'manual shift workbook parse started'
+  );
+
   const isZipContainer = input.buffer.length >= 4 &&
     input.buffer[0] === 0x50 &&
     input.buffer[1] === 0x4b;
   if (!isZipContainer) {
-    throw new ApiError(400, 'INVALID_WORKBOOK', 'Uploaded file is not a valid .xlsx workbook.');
+    throw new ApiError(422, 'INVALID_WORKBOOK', 'Uploaded file is not a valid .xlsx workbook.');
   }
 
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(input.buffer, { type: 'buffer', cellText: true });
   } catch {
-    throw new ApiError(400, 'INVALID_WORKBOOK', 'Uploaded file is not a valid .xlsx workbook.');
+    throw new ApiError(422, 'INVALID_WORKBOOK', 'Uploaded file is not a valid .xlsx workbook.');
   }
 
-  const sheet = workbook.Sheets[MANUAL_SHIFT_SHEET_NAME];
-  if (!sheet) {
-    throw new ApiError(400, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`);
+  const sheetName =
+    workbook.SheetNames.find((name) => name.trim() === MANUAL_SHIFT_SHEET_NAME) ??
+    workbook.SheetNames.find((name) => {
+      const sheet = workbook.Sheets[name];
+      if (!sheet) {
+        return false;
+      }
+
+      const hasDateCell = sheet.C1 !== undefined;
+      const hasImportRow = Object.keys(sheet).some((cellRef) => /^B\d+$/.test(cellRef) && Number(cellRef.slice(1)) >= 4);
+      return hasDateCell && hasImportRow;
+    }) ??
+    null;
+
+  if (!sheetName) {
+    input.logger?.warn?.(
+      {
+        fileName: input.fileName,
+        workbookSheets: workbook.SheetNames,
+        sheetName: MANUAL_SHIFT_SHEET_NAME
+      },
+      'manual shift workbook sheet missing'
+    );
+    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`);
   }
+
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) {
+    input.logger?.warn?.(
+      {
+        fileName: input.fileName,
+        sheetName,
+        workbookSheets: workbook.SheetNames
+      },
+      'manual shift workbook sheet missing'
+    );
+    throw new ApiError(422, 'MISSING_SHEET', `Workbook is missing required sheet ${MANUAL_SHIFT_SHEET_NAME}.`);
+  }
+
+  input.logger?.info(
+    {
+      fileName: input.fileName,
+      sheetName
+    },
+    'manual shift workbook sheet found'
+  );
 
   const dateCell = sheet.C1;
   const dateRaw = normalizeCellValue(dateCell?.w ?? dateCell?.v);
@@ -45,15 +104,25 @@ export function parseManualShiftImportWorkbook(input: {
     if (!cellValue || cellValue.trim().length === 0) {
       continue;
     }
+
     rows.push({
       rowIndex,
       value: cellValue
     });
   }
 
+  input.logger?.info(
+    {
+      fileName: input.fileName,
+      sheetName: MANUAL_SHIFT_SHEET_NAME,
+      rowCount: rows.length
+    },
+    'manual shift workbook parse done'
+  );
+
   return {
     fileName: input.fileName,
-    sheetName: MANUAL_SHIFT_SHEET_NAME,
+    sheetName,
     dateRaw,
     dateExcelSerial,
     rows

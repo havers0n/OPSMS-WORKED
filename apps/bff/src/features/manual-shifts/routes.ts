@@ -8,7 +8,7 @@ import {
 } from '@wos/domain';
 import type { AuthenticatedRequestContext } from '../../auth.js';
 import type { ManualShiftsService } from './service.js';
-import { ApiError } from '../../errors.js';
+import { ApiError, sendApiError } from '../../errors.js';
 import { parseManualShiftImportWorkbook } from './import-adapter.js';
 import { parseManualShiftMonthlyImportWorkbook } from './monthly-import-adapter.js';
 import { manualShiftMonthlyImportBlockingWarnings } from './errors.js';
@@ -73,10 +73,13 @@ type MultipartFilePart = {
   type: 'file' | 'field';
   fieldname?: string;
   filename?: string;
+  mimetype?: string;
   file?: { resume: () => void };
   toBuffer?: () => Promise<Buffer>;
   value?: string;
 };
+
+const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
 
 function requireTenant(auth: AuthenticatedRequestContext) {
   if (!auth.currentTenant) {
@@ -93,9 +96,103 @@ function actorFromAuth(auth: AuthenticatedRequestContext, actorNameOverride?: st
   };
 }
 
+function mapMultipartError(error: unknown) {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return null;
+  }
+
+  const code = (error as { code?: string }).code;
+  switch (code) {
+    case 'FST_REQ_FILE_TOO_LARGE':
+      return new ApiError(413, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.');
+    case 'FST_FILES_LIMIT':
+    case 'FST_FIELDS_LIMIT':
+    case 'FST_PARTS_LIMIT':
+      return new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Multipart upload contains unexpected parts.');
+    case 'FST_INVALID_MULTIPART_CONTENT_TYPE':
+      return new ApiError(400, 'INVALID_MULTIPART_REQUEST', 'Request must use multipart/form-data.');
+    default:
+      return null;
+  }
+}
+
+function mapManualShiftImportError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  const multipartError = mapMultipartError(error);
+  if (multipartError) {
+    return multipartError;
+  }
+
+  if (error instanceof ManualShiftImportError) {
+    switch (error.code) {
+      case 'MISSING_DATE':
+        return new ApiError(400, error.code, error.message);
+      case 'MISSING_SHEET':
+      case 'INVALID_DATE':
+      case 'EMPTY_IMPORT':
+      case 'EMPTY_LINE_NAME':
+      case 'EMPTY_ORDER_POINT_NAME':
+      case 'ORPHAN_CHILD_ROW':
+      case 'LINE_PREFIX_MISMATCH':
+      case 'DUPLICATE_LINE':
+      case 'DUPLICATE_CHILD_WITHIN_LINE':
+        return new ApiError(422, error.code, error.message);
+      default:
+        return new ApiError(422, error.code, error.message);
+    }
+  }
+
+  return new ApiError(500, 'INTERNAL_IMPORT_ERROR', error instanceof Error ? error.message : 'Unexpected import error');
+}
+
+function logImportStage(
+  request: FastifyRequest,
+  route: string,
+  stage: string,
+  data: Record<string, unknown> = {}
+) {
+  request.log.info(
+    {
+      route,
+      stage,
+      ...data
+    },
+    `manual shift import ${stage}`
+  );
+}
+
+async function handleManualShiftImportRoute<T>(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  route: string,
+  handler: () => Promise<T>
+) {
+  logImportStage(request, route, 'route_entered');
+  try {
+    const result = await handler();
+    logImportStage(request, route, 'response_sent');
+    return result;
+  } catch (error) {
+    const apiError = mapManualShiftImportError(error);
+    request.log.error(
+      {
+        err: error,
+        route,
+        statusCode: apiError.statusCode,
+        errorCode: apiError.code
+      },
+      'manual shift import route failed'
+    );
+    return sendApiError(reply, apiError, request.id);
+  }
+}
+
 async function readMultipartUpload(
   request: FastifyRequest,
-  options?: { allowedFieldNames?: string[] }
+  options?: { allowedFieldNames?: string[]; route?: string }
 ) {
   const allowedFieldNames = new Set(options?.allowedFieldNames ?? []);
   const multipartRequest = request as FastifyRequest & {
@@ -107,6 +204,9 @@ async function readMultipartUpload(
   const fields = new Map<string, string>();
 
   try {
+    logImportStage(request, options?.route ?? 'manual_shift_import', 'multipart_read_started', {
+      allowedFieldNames: Array.from(allowedFieldNames)
+    });
     for await (const part of multipartRequest.parts()) {
       if (part.type === 'field') {
         if (!part.fieldname || !allowedFieldNames.has(part.fieldname)) {
@@ -125,27 +225,22 @@ async function readMultipartUpload(
         throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
       }
       fileName = part.filename;
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'multipart_file_received', {
+        fieldName: part.fieldname,
+        fileName: part.filename,
+        mimetype: part.mimetype ?? null
+      });
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'buffer_read_started', {
+        fileName: part.filename
+      });
       fileBuffer = await part.toBuffer();
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'buffer_read_done', {
+        fileName: part.filename,
+        size: fileBuffer.length
+      });
     }
   } catch (error) {
-    if (error instanceof ApiError) throw error;
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
-    ) {
-      throw new ApiError(400, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.');
-    }
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      (error as { code?: string }).code === 'FST_FILES_LIMIT'
-    ) {
-      throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
-    }
-    throw error;
+    throw mapManualShiftImportError(error);
   }
 
   if (!fileName || !fileBuffer) {
@@ -154,6 +249,12 @@ async function readMultipartUpload(
   if (!fileName.toLowerCase().endsWith('.xlsx')) {
     throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Only .xlsx files are supported.');
   }
+
+  logImportStage(request, options?.route ?? 'manual_shift_import', 'multipart_complete', {
+    fileName,
+    size: fileBuffer.length,
+    fields: Array.from(fields.keys())
+  });
 
   return { fileName, fileBuffer, fields };
 }
@@ -486,95 +587,168 @@ export function registerManualShiftsRoutes(
   });
 
   app.post('/api/manual-shifts/import/preview', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-    requireTenant(auth);
-    const { fileName, fileBuffer } = await readMultipartUpload(request);
+    return handleManualShiftImportRoute(request, reply, '/api/manual-shifts/import/preview', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      logImportStage(request, '/api/manual-shifts/import/preview', 'auth_resolved', {
+        userId: auth.user.id ?? null,
+        tenantId: auth.currentTenant?.tenantId ?? null
+      });
 
-    const workbook = parseManualShiftImportWorkbook({
-      fileName,
-      buffer: fileBuffer
-    });
+      const tenantId = requireTenant(auth);
+      logImportStage(request, '/api/manual-shifts/import/preview', 'tenant_resolved', { tenantId });
 
-    try {
+      const { fileName, fileBuffer } = await readMultipartUpload(request, {
+        route: '/api/manual-shifts/import/preview'
+      });
+
+      const workbook = parseManualShiftImportWorkbook({
+        fileName,
+        buffer: fileBuffer,
+        logger: request.log
+      });
+      logImportStage(request, '/api/manual-shifts/import/preview', 'workbook_parse_done', {
+        fileName,
+        sheetName: workbook.sheetName,
+        rowCount: workbook.rows.length
+      });
+
       const preview = parseDailyManualShiftImport(workbook);
+      logImportStage(request, '/api/manual-shifts/import/preview', 'preview_result', {
+        fileName: preview.fileName,
+        lineCount: preview.lineCount,
+        orderCount: preview.orderCount
+      });
+
       return parseOrThrow(manualShiftImportPreviewResponseSchema, { preview });
-    } catch (error) {
-      if (error instanceof ManualShiftImportError) {
-        throw new ApiError(400, error.code, error.message);
-      }
-      throw error;
-    }
+    });
   });
 
   app.post('/api/manual-shifts/import/monthly-preview', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-    requireTenant(auth);
+    return handleManualShiftImportRoute(request, reply, '/api/manual-shifts/import/monthly-preview', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      logImportStage(request, '/api/manual-shifts/import/monthly-preview', 'auth_resolved', {
+        userId: auth.user.id ?? null,
+        tenantId: auth.currentTenant?.tenantId ?? null
+      });
 
-    const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
-      allowedFieldNames: ['selectedDate']
-    });
-    const selectedDate = fields.get('selectedDate')?.trim() ?? '';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
-      throw new ApiError(400, 'INVALID_DATE', 'Multipart field "selectedDate" must be in YYYY-MM-DD format.');
-    }
+      const tenantId = requireTenant(auth);
+      logImportStage(request, '/api/manual-shifts/import/monthly-preview', 'tenant_resolved', { tenantId });
 
-    const workbook = parseManualShiftMonthlyImportWorkbook({
-      fileName,
-      buffer: fileBuffer
-    });
-    const parsed = parseManualShiftMonthlyPreview({
-      ...workbook,
-      selectedDate
-    });
+      const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
+        allowedFieldNames: ['selectedDate'],
+        route: '/api/manual-shifts/import/monthly-preview'
+      });
+      const selectedDate = fields.get('selectedDate')?.trim() ?? '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+        throw new ApiError(400, 'INVALID_DATE', 'Multipart field "selectedDate" must be in YYYY-MM-DD format.');
+      }
+      logImportStage(request, '/api/manual-shifts/import/monthly-preview', 'selected_date_resolved', {
+        selectedDate
+      });
 
-    return parseOrThrow(manualShiftMonthlyImportPreviewResponseSchema, {
-      preview: parsed.preview
+      const workbook = parseManualShiftMonthlyImportWorkbook({
+        fileName,
+        buffer: fileBuffer,
+        logger: request.log
+      });
+      logImportStage(request, '/api/manual-shifts/import/monthly-preview', 'workbook_parse_done', {
+        fileName,
+        sheetName: workbook.source.sheetName,
+        rowCount: workbook.rows.length
+      });
+
+      const parsed = parseManualShiftMonthlyPreview({
+        ...workbook,
+        selectedDate
+      });
+      logImportStage(request, '/api/manual-shifts/import/monthly-preview', 'preview_result', {
+        fileName: parsed.preview.source.fileName,
+        lineCount: parsed.preview.lines.length,
+        warningCount: parsed.preview.warnings.length
+      });
+
+      return parseOrThrow(manualShiftMonthlyImportPreviewResponseSchema, {
+        preview: parsed.preview
+      });
     });
   });
 
   app.post('/api/manual-shifts/import/monthly-apply', async (request, reply) => {
-    const auth = await getAuthContext(request, reply);
-    if (!auth) return;
-    const tenantId = requireTenant(auth);
-
-    const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
-      allowedFieldNames: ['selectedDate', 'shiftId']
-    });
-    const selectedDate = fields.get('selectedDate')?.trim() ?? '';
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
-      throw new ApiError(400, 'INVALID_DATE', 'Multipart field "selectedDate" must be in YYYY-MM-DD format.');
-    }
-    const shiftId = parseOrThrow(idResponseSchema, {
-      id: fields.get('shiftId')?.trim() ?? ''
-    }).id;
-
-    const workbook = parseManualShiftMonthlyImportWorkbook({
-      fileName,
-      buffer: fileBuffer
-    });
-    const parsed = parseManualShiftMonthlyPreview({
-      ...workbook,
-      selectedDate
-    });
-    const plan = planManualShiftMonthlyImportApply(parsed);
-
-    if (plan.blockingWarnings.length > 0) {
-      throw manualShiftMonthlyImportBlockingWarnings({
-        preview: parsed.preview,
-        warnings: plan.blockingWarnings
+    return handleManualShiftImportRoute(request, reply, '/api/manual-shifts/import/monthly-apply', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'auth_resolved', {
+        userId: auth.user.id ?? null,
+        tenantId: auth.currentTenant?.tenantId ?? null
       });
-    }
 
-    const result = await getManualShiftsService(auth).applyMonthlyImport({
-      tenantId,
-      shiftId,
-      selectedDate,
-      plan
+      const tenantId = requireTenant(auth);
+      logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'tenant_resolved', { tenantId });
+
+      const { fileName, fileBuffer, fields } = await readMultipartUpload(request, {
+        allowedFieldNames: ['selectedDate', 'shiftId'],
+        route: '/api/manual-shifts/import/monthly-apply'
+      });
+      const selectedDate = fields.get('selectedDate')?.trim() ?? '';
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+        throw new ApiError(400, 'INVALID_DATE', 'Multipart field "selectedDate" must be in YYYY-MM-DD format.');
+      }
+      const shiftId = parseOrThrow(idResponseSchema, {
+        id: fields.get('shiftId')?.trim() ?? ''
+      }).id;
+      logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'selected_date_resolved', {
+        selectedDate,
+        shiftId
+      });
+
+      const workbook = parseManualShiftMonthlyImportWorkbook({
+        fileName,
+        buffer: fileBuffer,
+        logger: request.log
+      });
+      logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'workbook_parse_done', {
+        fileName,
+        sheetName: workbook.source.sheetName,
+        rowCount: workbook.rows.length
+      });
+
+      const parsed = parseManualShiftMonthlyPreview({
+        ...workbook,
+        selectedDate
+      });
+      const plan = planManualShiftMonthlyImportApply(parsed);
+      logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'preview_result', {
+        fileName: parsed.preview.source.fileName,
+        lineCount: parsed.preview.lines.length,
+        warningCount: parsed.preview.warnings.length,
+        blockingWarningCount: plan.blockingWarnings.length
+      });
+
+      if (plan.blockingWarnings.length > 0) {
+        throw manualShiftMonthlyImportBlockingWarnings({
+          preview: parsed.preview,
+          warnings: plan.blockingWarnings
+        });
+      }
+
+      const result = await getManualShiftsService(auth).applyMonthlyImport({
+        tenantId,
+        shiftId,
+        selectedDate,
+        plan
+      });
+
+      logImportStage(request, '/api/manual-shifts/import/monthly-apply', 'service_result', {
+        shiftId,
+        selectedDate,
+        linesCreated: result.linesCreated,
+        ordersCreated: result.ordersCreated
+      });
+
+      return parseOrThrow(manualShiftMonthlyApplyResponseSchema, result);
     });
-
-    return parseOrThrow(manualShiftMonthlyApplyResponseSchema, result);
   });
 
   app.post('/api/manual-shifts/import/apply', async (request, reply) => {

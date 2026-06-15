@@ -30,6 +30,8 @@ import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';
 import { registerPickerRoutes } from './features/picker/routes.js';
 import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes.js';
 
+const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
+
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -73,7 +75,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   void app.register(multipart, {
     limits: {
       files: 1,
-      fileSize: 5 * 1024 * 1024
+      fields: 3,
+      parts: 4,
+      fileSize: MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES
     }
   });
 
@@ -121,6 +125,47 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerPickerRoutes(app, { getAuthContext, getUserSupabase });
 
   app.setErrorHandler((error, request, reply) => {
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+      const multipartCode = (error as { code?: string }).code;
+      if (multipartCode === 'FST_REQ_FILE_TOO_LARGE') {
+        request.log.warn(
+          {
+            err: error,
+            requestId: request.id,
+            route: request.routeOptions.url,
+            statusCode: 413,
+            errorCode: 'FILE_TOO_LARGE'
+          },
+          'multipart upload rejected'
+        );
+        void sendApiError(reply, new ApiError(413, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.'), request.id);
+        return;
+      }
+      if (
+        multipartCode === 'FST_FILES_LIMIT' ||
+        multipartCode === 'FST_FIELDS_LIMIT' ||
+        multipartCode === 'FST_PARTS_LIMIT' ||
+        multipartCode === 'FST_INVALID_MULTIPART_CONTENT_TYPE'
+      ) {
+        request.log.warn(
+          {
+            err: error,
+            requestId: request.id,
+            route: request.routeOptions.url,
+            statusCode: 400,
+            errorCode: 'INVALID_MULTIPART_REQUEST'
+          },
+          'multipart upload rejected'
+        );
+        void sendApiError(
+          reply,
+          new ApiError(400, 'INVALID_MULTIPART_REQUEST', 'Multipart upload could not be processed.'),
+          request.id
+        );
+        return;
+      }
+    }
+
     const mappedSupabaseError = mapSupabaseError(error);
 
     const apiError =

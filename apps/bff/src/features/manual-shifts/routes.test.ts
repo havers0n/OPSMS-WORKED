@@ -4,6 +4,8 @@ import multipart from '@fastify/multipart';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import * as XLSX from 'xlsx';
+import * as importWorkbookAdapter from './import-adapter.js';
+import * as monthlyImportWorkbookAdapter from './monthly-import-adapter.js';
 import type {
   ApplyDailyManualShiftImportResponse,
   BindableUser,
@@ -962,7 +964,7 @@ describe('manual shifts routes', () => {
       payload: multipartPayload.body
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(422);
     expect(response.json()).toMatchObject({ code: 'INVALID_WORKBOOK' });
 
     await app.close();
@@ -988,8 +990,33 @@ describe('manual shifts routes', () => {
       payload: multipartPayload.body
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(413);
     expect(response.json()).toMatchObject({ code: 'FILE_TOO_LARGE' });
+
+    await app.close();
+  });
+
+  it('returns INVALID_WORKBOOK for empty .xlsx upload', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      Buffer.alloc(0)
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: 'INVALID_WORKBOOK' });
 
     await app.close();
   });
@@ -1013,8 +1040,37 @@ describe('manual shifts routes', () => {
       payload: multipartPayload.body
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(422);
     expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
+
+    await app.close();
+  });
+
+  it('returns JSON 500 when workbook parser throws unexpectedly', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const spy = vi.spyOn(importWorkbookAdapter, 'parseManualShiftImportWorkbook').mockImplementation(() => {
+      throw new Error('unexpected workbook crash');
+    });
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildWorkbookBuffer(true)
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({ code: 'INTERNAL_IMPORT_ERROR' });
+    expect(spy).toHaveBeenCalledTimes(1);
 
     await app.close();
   });
@@ -1211,6 +1267,88 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
+  it('returns INVALID_DATE for malformed selected date on monthly preview', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: 'not-a-date' }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'INVALID_DATE' });
+
+    await app.close();
+  });
+
+  it('returns MISSING_SHEET for monthly preview workbook without the expected sheet', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildWorkbookBuffer(false),
+      { selectedDate: '2026-06-14' }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: 'MISSING_SHEET' });
+
+    await app.close();
+  });
+
+  it('returns JSON 500 when monthly workbook parser throws unexpectedly', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const spy = vi.spyOn(monthlyImportWorkbookAdapter, 'parseManualShiftMonthlyImportWorkbook').mockImplementation(() => {
+      throw new Error('unexpected monthly workbook crash');
+    });
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-14' }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-preview',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({ code: 'INTERNAL_IMPORT_ERROR' });
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
   it('returns INVALID_DATE for missing selected date field on monthly apply', async () => {
     const service = createServiceMock();
     const app = await buildTestApp(service);
@@ -1309,6 +1447,37 @@ describe('manual shifts routes', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ code: 'MONTHLY_IMPORT_BLOCKED_BY_WARNINGS' });
     expect(service.applyMonthlyImport).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('returns JSON 500 when monthly apply service throws unexpectedly', async () => {
+    const service = createServiceMock({
+      applyMonthlyImport: vi.fn(async () => {
+        throw new Error('monthly apply crash');
+      })
+    });
+    const app = await buildTestApp(service);
+    const multipartPayload = buildMultipartFileWithFields(
+      'file',
+      'monthly.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buildMonthlyPreviewWorkbookBuffer(),
+      { selectedDate: '2026-06-14', shiftId: ids.shift }
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/manual-shifts/import/monthly-apply',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({ code: 'INTERNAL_IMPORT_ERROR' });
+    expect(service.applyMonthlyImport).toHaveBeenCalledTimes(1);
 
     await app.close();
   });
