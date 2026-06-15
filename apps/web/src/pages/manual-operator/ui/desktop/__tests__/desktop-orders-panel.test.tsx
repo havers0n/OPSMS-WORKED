@@ -17,7 +17,7 @@ describe('DesktopOrdersPanel', () => {
 
   it('shows empty state heading when orders array is empty', () => {
     render(<DesktopOrdersPanel orders={[]} lineSummaries={[]} />);
-    expect(screen.getByText(/אין|Чђ/i)).toBeTruthy();
+    expect(screen.getByText('אין הזמנות פעילות')).toBeTruthy();
   });
 
   it('renders dash for null age (returned)', () => {

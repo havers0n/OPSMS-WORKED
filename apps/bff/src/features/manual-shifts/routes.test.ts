@@ -1384,21 +1384,21 @@ describe('manual shifts routes', () => {
     const app = await buildTestApp(service);
     const preview: DailyManualShiftImportPreview = {
       fileName: 'manual.xlsx',
-      sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+      sheetName: 'סכימות',
       importDateRaw: '2.6.26',
       importDate: '2026-06-02',
       lineCount: 1,
       orderCount: 1,
       lines: [
         {
-          name: 'Ч“ЧЁЧ•Чќ',
-          rawLabel: 'Ч“ЧЁЧ•Чќ',
+          name: 'דרום',
+          rawLabel: 'דרום',
           sourceRow: 4,
           sortOrder: 1,
           orders: [
             {
-              pointName: 'ЧЎЧњЧ•ЧњЧЁ',
-              rawLabel: 'Ч“ЧЁЧ•Чќ/ЧЎЧњЧ•ЧњЧЁ',
+              pointName: 'סלולר',
+              rawLabel: 'דרום/סלולר',
               sourceRow: 5,
               sortOrder: 1
             }
@@ -1446,7 +1446,7 @@ describe('manual shifts routes', () => {
         shiftId: ids.shift,
         preview: {
           fileName: 'manual.xlsx',
-          sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+      sheetName: 'סכימות',
           importDateRaw: '2.6.26',
           importDate: '2026-06-02',
           lineCount: 1,
@@ -1491,7 +1491,7 @@ describe('manual shifts routes', () => {
         shiftId: ids.shift,
         preview: {
           fileName: 'manual.xlsx',
-          sheetName: 'ЧЎЧ›Ч™ЧћЧ•ЧЄ',
+      sheetName: 'סכימות',
           importDateRaw: '2.6.26',
           importDate: '2026-06-02',
           lineCount: 1,
