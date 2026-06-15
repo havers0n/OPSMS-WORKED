@@ -86,7 +86,7 @@ type MultipartSingleFile = {
   toBuffer: () => Promise<Buffer>;
 };
 
-const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
+const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 20 * 1024 * 1024;
 
 function requireTenant(auth: AuthenticatedRequestContext) {
   if (!auth.currentTenant) {
@@ -111,7 +111,7 @@ function mapMultipartError(error: unknown) {
   const code = (error as { code?: string }).code;
   switch (code) {
     case 'FST_REQ_FILE_TOO_LARGE':
-      return new ApiError(413, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.');
+      return new ApiError(413, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 20MB limit.');
     case 'FST_FILES_LIMIT':
     case 'FST_FIELDS_LIMIT':
     case 'FST_PARTS_LIMIT':

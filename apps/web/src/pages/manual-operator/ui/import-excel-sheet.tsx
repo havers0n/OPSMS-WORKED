@@ -102,7 +102,7 @@ export function ImportExcelSheet({ shiftId, selectedDate, onClose, onSuccess }: 
 
           <div className="rounded-xl border border-gray-200 p-4 space-y-2">
             <p className="font-medium text-gray-900">בחר קובץ ‎.xlsx</p>
-            <p className="text-sm text-gray-500">גודל מרבי: 5MB</p>
+            <p className="text-sm text-gray-500">גודל מרבי: 20MB</p>
             <input
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -301,7 +301,7 @@ async function buildTestApp(service: ManualShiftsService, auth: AuthenticatedReq
   await app.register(multipart, {
     limits: {
       files: 1,
-      fileSize: 5 * 1024 * 1024
+      fileSize: 20 * 1024 * 1024
     }
   });
 
@@ -970,10 +970,10 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
-  it('returns FILE_TOO_LARGE for file above 5MB', async () => {
+  it('returns FILE_TOO_LARGE for file above 20MB', async () => {
     const service = createServiceMock();
     const app = await buildTestApp(service);
-    const oversizedBuffer = Buffer.alloc(5 * 1024 * 1024 + 1, 65);
+    const oversizedBuffer = Buffer.alloc(20 * 1024 * 1024 + 1, 65);
     const multipartPayload = buildMultipartBody(
       'file',
       'manual.xlsx',

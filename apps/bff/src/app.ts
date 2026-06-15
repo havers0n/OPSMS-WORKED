@@ -30,8 +30,8 @@ import { registerManualShiftsRoutes } from './features/manual-shifts/routes.js';
 import { registerPickerRoutes } from './features/picker/routes.js';
 import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes.js';
 
-const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
-const MANUAL_SHIFT_IMPORT_BODY_LIMIT_BYTES = 10 * 1024 * 1024;
+const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 20 * 1024 * 1024;
+const MANUAL_SHIFT_IMPORT_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
@@ -208,7 +208,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
           },
           'multipart upload rejected'
         );
-        void sendApiError(reply, new ApiError(413, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 5MB limit.'), request.id);
+        void sendApiError(reply, new ApiError(413, 'FILE_TOO_LARGE', 'Uploaded file exceeds the 20MB limit.'), request.id);
         return;
       }
       if (

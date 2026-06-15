@@ -27,6 +27,8 @@ Current production Docker files:
 - `apps/web/nginx.conf`
 - `apps/bff/Dockerfile`
 
+The production web image uses `apps/web/nginx.conf` as its reverse proxy config. For large manual-shift Excel uploads, keep the `/api/` location body limit aligned with the BFF upload limits. The current target is `client_max_body_size 20m;`.
+
 ## 2. Server Prerequisites
 
 Assumptions:
