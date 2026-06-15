@@ -1021,6 +1021,62 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
+  it('returns file metadata from debug upload for a valid xlsx file', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service);
+    const workbookBuffer = buildWorkbookBuffer(true);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      workbookBuffer
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/debug/upload',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      fileName: 'manual.xlsx',
+      mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      size: workbookBuffer.length
+    });
+
+    await app.close();
+  });
+
+  it('requires authentication for debug upload', async () => {
+    const service = createServiceMock();
+    const app = await buildTestApp(service, null);
+    const workbookBuffer = buildWorkbookBuffer(true);
+    const multipartPayload = buildMultipartBody(
+      'file',
+      'manual.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      workbookBuffer
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/debug/upload',
+      headers: {
+        'content-type': multipartPayload.contentType
+      },
+      payload: multipartPayload.body
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'UNAUTHORIZED' });
+
+    await app.close();
+  });
+
   it('returns validation error for invalid workbook structure', async () => {
     const service = createServiceMock();
     const app = await buildTestApp(service);

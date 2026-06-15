@@ -31,9 +31,11 @@ import { registerPickerRoutes } from './features/picker/routes.js';
 import { registerWarehouseLabelRoutes } from './features/warehouse-labels/routes.js';
 
 const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
+const MANUAL_SHIFT_IMPORT_BODY_LIMIT_BYTES = 10 * 1024 * 1024;
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
+    bodyLimit: MANUAL_SHIFT_IMPORT_BODY_LIMIT_BYTES,
     logger: {
       level: env.logLevel,
       base: {
@@ -81,6 +83,59 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
   });
 
+  app.addHook('onRequest', async (request, reply) => {
+    if (!request.url.startsWith('/api/manual-shifts/import/')) {
+      return;
+    }
+
+    request.log.info(
+      {
+        route: request.url,
+        method: request.method,
+        requestId: request.id,
+        contentType: request.headers['content-type'] ?? null,
+        contentLength: request.headers['content-length'] ?? null
+      },
+      'manual shift import request entered'
+    );
+
+    request.raw.on('aborted', () => {
+      request.log.error(
+        {
+          route: request.url,
+          method: request.method,
+          requestId: request.id
+        },
+        'manual shift import request aborted'
+      );
+    });
+
+    request.raw.on('close', () => {
+      request.log.info(
+        {
+          route: request.url,
+          method: request.method,
+          requestId: request.id,
+          aborted: request.raw.aborted
+        },
+        'manual shift import request raw closed'
+      );
+    });
+
+    reply.raw.on('close', () => {
+      request.log.info(
+        {
+          route: request.url,
+          method: request.method,
+          requestId: request.id,
+          writableEnded: reply.raw.writableEnded,
+          destroyed: reply.raw.destroyed
+        },
+        'manual shift import reply raw closed'
+      );
+    });
+  });
+
   app.addHook('onResponse', async (request, reply) => {
     request.log.info(
       {
@@ -125,6 +180,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   registerPickerRoutes(app, { getAuthContext, getUserSupabase });
 
   app.setErrorHandler((error, request, reply) => {
+    const errorCode = typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: string }).code : undefined;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack ?? null : null;
+    const errorLog = {
+      err: error,
+      errorCode,
+      errorMessage,
+      errorStack,
+      requestId: request.id,
+      method: request.method,
+      url: request.url
+    };
+
+    console.error('[bff] request error', errorLog);
+
     if (typeof error === 'object' && error !== null && 'code' in error) {
       const multipartCode = (error as { code?: string }).code;
       if (multipartCode === 'FST_REQ_FILE_TOO_LARGE') {

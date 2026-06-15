@@ -79,6 +79,13 @@ type MultipartFilePart = {
   value?: string;
 };
 
+type MultipartSingleFile = {
+  filename?: string;
+  mimetype?: string;
+  truncated?: boolean;
+  toBuffer: () => Promise<Buffer>;
+};
+
 const MANUAL_SHIFT_IMPORT_FILE_SIZE_LIMIT_BYTES = 5 * 1024 * 1024;
 
 function requireTenant(auth: AuthenticatedRequestContext) {
@@ -164,6 +171,39 @@ function logImportStage(
   );
 }
 
+async function readDebugUploadFile(request: FastifyRequest, route: string) {
+  const multipartRequest = request as FastifyRequest & {
+    file: () => Promise<MultipartSingleFile | undefined>;
+  };
+
+  logImportStage(request, route, 'request_file_started');
+  const file = await multipartRequest.file();
+  logImportStage(request, route, 'request_file_resolved', {
+    fileName: file?.filename ?? null,
+    mimetype: file?.mimetype ?? null,
+    truncated: (file as { truncated?: boolean } | undefined)?.truncated ?? null
+  });
+
+  if (!file || !file.filename) {
+    throw new ApiError(400, 'MISSING_FILE', 'Multipart file field "file" is required.');
+  }
+
+  logImportStage(request, route, 'file_to_buffer_started', {
+    fileName: file.filename
+  });
+  const buffer = await file.toBuffer();
+  logImportStage(request, route, 'file_to_buffer_done', {
+    fileName: file.filename,
+    size: buffer.length
+  });
+
+  return {
+    fileName: file.filename,
+    mimetype: file.mimetype ?? null,
+    fileBuffer: buffer
+  };
+}
+
 async function handleManualShiftImportRoute<T>(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -224,17 +264,22 @@ async function readMultipartUpload(
         part.file?.resume();
         throw new ApiError(400, 'UNSUPPORTED_FILE_TYPE', 'Exactly one file upload is allowed.');
       }
-      fileName = part.filename;
-      logImportStage(request, options?.route ?? 'manual_shift_import', 'multipart_file_received', {
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'request_file_resolved', {
         fieldName: part.fieldname,
         fileName: part.filename,
         mimetype: part.mimetype ?? null
       });
-      logImportStage(request, options?.route ?? 'manual_shift_import', 'buffer_read_started', {
+      fileName = part.filename;
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'file_to_buffer_started', {
+        fieldName: part.fieldname,
+        fileName: part.filename,
+        mimetype: part.mimetype ?? null
+      });
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'file_to_buffer_started', {
         fileName: part.filename
       });
       fileBuffer = await part.toBuffer();
-      logImportStage(request, options?.route ?? 'manual_shift_import', 'buffer_read_done', {
+      logImportStage(request, options?.route ?? 'manual_shift_import', 'file_to_buffer_done', {
         fileName: part.filename,
         size: fileBuffer.length
       });
@@ -748,6 +793,32 @@ export function registerManualShiftsRoutes(
       });
 
       return parseOrThrow(manualShiftMonthlyApplyResponseSchema, result);
+    });
+  });
+
+  app.post('/api/debug/upload', async (request, reply) => {
+    return handleManualShiftImportRoute(request, reply, '/api/debug/upload', async () => {
+      const auth = await getAuthContext(request, reply);
+      if (!auth) return;
+      logImportStage(request, '/api/debug/upload', 'auth_resolved', {
+        userId: auth.user.id ?? null,
+        tenantId: auth.currentTenant?.tenantId ?? null
+      });
+
+      const tenantId = requireTenant(auth);
+      logImportStage(request, '/api/debug/upload', 'tenant_resolved', { tenantId });
+
+      if (process.env.NODE_ENV === 'production') {
+        throw new ApiError(404, 'NOT_FOUND', 'Not found.');
+      }
+
+      const file = await readDebugUploadFile(request, '/api/debug/upload');
+      void reply.code(200);
+      return {
+        fileName: file.fileName,
+        mimetype: file.mimetype,
+        size: file.fileBuffer.length
+      };
     });
   });
 
