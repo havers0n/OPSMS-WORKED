@@ -388,6 +388,20 @@ function createRepo() {
     listOrderItems: vi.fn(async (_tenantId: string, orderId: string) => {
       return state.items.filter((item) => item.orderId === orderId);
     }),
+    listOrdersItemRollups: vi.fn(async (orderIds: string[]) => {
+      const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+      for (const item of state.items) {
+        if (!orderIds.includes(item.orderId)) continue;
+        let entry = rollups.get(item.orderId);
+        if (!entry) {
+          entry = { lineCount: 0, totalQuantity: 0 };
+          rollups.set(item.orderId, entry);
+        }
+        entry.lineCount += 1;
+        entry.totalQuantity += item.quantity;
+      }
+      return rollups;
+    }),
     countMonthlyImportShiftRows: vi.fn(async ({ tenantId, shiftId }) => {
       const lines = state.lines.filter((line) => line.shift_id === shiftId && line.tenant_id === tenantId);
       const orders = state.orders.filter((order) => order.shiftId === shiftId && order.tenantId === tenantId);
@@ -3061,6 +3075,133 @@ describe('listOrderEvents access control', () => {
     await expect(
       service.listOrderEvents({ tenantId: ids.tenant, orderId: ids.order })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
+  });
+});
+
+describe('listOrders with item rollups', () => {
+  const nowIso = '2026-05-26T07:00:00.000Z';
+
+  function makeService(repo: ReturnType<typeof createRepo>['repo']) {
+    return createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+  }
+
+  it('computes lineCount and totalQuantity from items when stored line_count is null', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({ id: ids.order, lineCount: null }),
+      createOrder({ id: ids.orderTwo, lineCount: 5 })
+    );
+    state.items.push(
+      {
+        id: '11111111-1111-4111-8111-111111111112',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        sku: '475659',
+        description: null,
+        category: null,
+        quantity: 30,
+        notes: null,
+        zone: null,
+        sourceSheet: null,
+        sourceRows: null,
+        sourceFile: null,
+        sortOrder: 1,
+        createdAt: nowIso
+      },
+      {
+        id: '11111111-1111-4111-8111-111111111113',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        sku: '519496',
+        description: null,
+        category: null,
+        quantity: 2,
+        notes: null,
+        zone: null,
+        sourceSheet: null,
+        sourceRows: null,
+        sourceFile: null,
+        sortOrder: 2,
+        createdAt: nowIso
+      }
+    );
+    const service = makeService(repo);
+
+    const orders = await service.listShiftOrders({ tenantId: ids.tenant, shiftId: ids.shift }) as Array<ManualShiftOrder & { totalQuantity: number }>;
+
+    const orderOne = orders.find((o) => o.id === ids.order);
+    expect(orderOne?.lineCount).toBe(2);
+    expect(orderOne?.totalQuantity).toBe(32);
+
+    const orderTwo = orders.find((o) => o.id === ids.orderTwo);
+    expect(orderTwo?.lineCount).toBe(5);
+    expect(orderTwo?.totalQuantity).toBe(0);
+  });
+
+  it('uses stored line_count when no items exist', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({ id: ids.order, lineCount: 3 })
+    );
+    const service = makeService(repo);
+
+    const orders = await service.listShiftOrders({ tenantId: ids.tenant, shiftId: ids.shift }) as Array<ManualShiftOrder & { totalQuantity: number }>;
+
+    const order = orders.find((o) => o.id === ids.order);
+    expect(order?.lineCount).toBe(3);
+    expect(order?.totalQuantity).toBe(0);
+  });
+
+  it('returns totalQuantity 0 when no items exist and line_count is null', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({ id: ids.order, lineCount: null })
+    );
+    const service = makeService(repo);
+
+    const orders = await service.listShiftOrders({ tenantId: ids.tenant, shiftId: ids.shift }) as Array<ManualShiftOrder & { totalQuantity: number }>;
+
+    const order = orders.find((o) => o.id === ids.order);
+    expect(order?.lineCount).toBeNull();
+    expect(order?.totalQuantity).toBe(0);
+  });
+
+  it('computes rollups in listLineOrders as well', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(
+      createOrder({ id: ids.order, lineCount: null, lineId: ids.line }),
+      createOrder({ id: ids.orderTwo, lineCount: 1, lineId: ids.lineTwo })
+    );
+    state.items.push(
+      {
+        id: '11111111-1111-4111-8111-111111111112',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        sku: '1001',
+        description: null,
+        category: null,
+        quantity: 10,
+        notes: null,
+        zone: null,
+        sourceSheet: null,
+        sourceRows: null,
+        sourceFile: null,
+        sortOrder: 1,
+        createdAt: nowIso
+      }
+    );
+    const service = makeService(repo);
+
+    const lineOrders = await service.listLineOrders({ tenantId: ids.tenant, lineId: ids.line }) as Array<ManualShiftOrder & { totalQuantity: number }>;
+    expect(lineOrders).toHaveLength(1);
+    expect(lineOrders[0]?.lineCount).toBe(1);
+    expect(lineOrders[0]?.totalQuantity).toBe(10);
   });
 });
 

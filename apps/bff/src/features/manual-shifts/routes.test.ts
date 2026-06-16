@@ -572,6 +572,59 @@ describe('manual shifts routes', () => {
     await app.close();
   });
 
+  it('returns shift orders list with lineCount and totalQuantity', async () => {
+    const service = createServiceMock({
+      listShiftOrders: vi.fn(async () => [
+        { ...createOrder('queued'), lineCount: 2, totalQuantity: 32 },
+        { ...createOrder('picking'), id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', lineCount: 5, totalQuantity: 0 }
+      ] as unknown as ManualShiftOrder[])
+    });
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shifts/${ids.shift}/orders`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toHaveLength(2);
+    expect(body[0]).toMatchObject({
+      lineCount: 2,
+      totalQuantity: 32
+    });
+    expect(body[1]).toMatchObject({
+      lineCount: 5,
+      totalQuantity: 0
+    });
+
+    await app.close();
+  });
+
+  it('returns line orders list with lineCount and totalQuantity', async () => {
+    const service = createServiceMock({
+      listLineOrders: vi.fn(async () => [
+        { ...createOrder('queued'), lineCount: 1, totalQuantity: 10 }
+      ] as unknown as ManualShiftOrder[])
+    });
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shift-lines/${ids.line}/orders`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toHaveLength(1);
+    expect(body[0]).toMatchObject({
+      lineCount: 1,
+      totalQuantity: 10
+    });
+
+    await app.close();
+  });
+
   it('returns order detail with computed item totals when line_count is null', async () => {
     const service = createServiceMock({
       getOrderDetail: vi.fn(async () => ({
