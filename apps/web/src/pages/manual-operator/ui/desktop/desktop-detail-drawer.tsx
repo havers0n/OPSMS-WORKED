@@ -1,10 +1,8 @@
-import type { LineDetail, OrderDetail, PickerDetail } from '@/entities/manual-shift/model/shift-selectors';
-import { DesktopLineDetail } from './desktop-line-detail';
+import type { OrderDetail, PickerDetail } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopOrderDetail } from './desktop-order-detail';
 import { DesktopPickerDetail } from './desktop-picker-detail';
 
 type DesktopDetailDrawerState =
-  | { type: 'line'; detail: LineDetail }
   | { type: 'picker'; detail: PickerDetail }
   | { type: 'order'; detail: OrderDetail | null }
   | null;
@@ -22,7 +20,7 @@ export function DesktopDetailDrawer({ state, onClose, onSelectOrder }: DesktopDe
     <aside className="w-[480px] bg-white border-r border-gray-200 overflow-y-auto shrink-0" dir="rtl">
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <p className="text-sm font-semibold text-gray-900">
-          {state.type === 'line' ? 'פרטי קו' : state.type === 'picker' ? 'פרטי מלקט' : 'פרטי הזמנה'}
+          {state.type === 'picker' ? 'פרטי מלקט' : 'פרטי הזמנה'}
         </p>
         <button
           type="button"
@@ -33,9 +31,6 @@ export function DesktopDetailDrawer({ state, onClose, onSelectOrder }: DesktopDe
         </button>
       </div>
 
-      {state.type === 'line' && (
-        <DesktopLineDetail detail={state.detail} onClose={onClose} onSelectOrder={onSelectOrder} />
-      )}
       {state.type === 'picker' && (
         <DesktopPickerDetail detail={state.detail} onClose={onClose} onSelectOrder={onSelectOrder} />
       )}
