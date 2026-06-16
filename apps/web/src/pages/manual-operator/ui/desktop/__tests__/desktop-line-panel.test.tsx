@@ -30,4 +30,20 @@ describe('DesktopLinePanel', () => {
 
     expect(screen.getAllByRole('progressbar')).toHaveLength(mockLines.length);
   });
+
+  it('applies selected highlight when selectedLineId matches a line', () => {
+    const { container } = render(
+      <DesktopLinePanel lines={mockLines} selectedLineId="line-1" />
+    );
+    const firstRow = container.querySelector('[aria-label="פתח פרטי קו קו צפון"]');
+    expect(firstRow?.className).toContain('bg-blue-50');
+  });
+
+  it('does not apply selected highlight when selectedLineId does not match', () => {
+    const { container } = render(
+      <DesktopLinePanel lines={mockLines} selectedLineId="line-1" />
+    );
+    const secondRow = container.querySelector('[aria-label="פתח פרטי קו קו דרום"]');
+    expect(secondRow?.className).not.toContain('bg-blue-50');
+  });
 });

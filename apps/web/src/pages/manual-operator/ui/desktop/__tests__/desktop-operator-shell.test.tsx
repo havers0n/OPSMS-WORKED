@@ -24,7 +24,9 @@ import {
   mockOrderDetail,
   mockPickerDetail,
   mockPickers,
-  mockShift
+  mockShift,
+  mockLineHierarchySummaries,
+  mockPointSummaries
 } from './fixtures';
 
 const mockedBffRequest = vi.mocked(bffRequest);
@@ -41,10 +43,18 @@ const defaultProps = {
   pickerDetail: null,
   orderDetail: null,
   selectedDetailType: null as 'line' | 'picker' | 'order' | null,
+  selectedLineId: null as string | null,
+  selectedPointName: null as string | null,
+  lineHierarchySummaries: mockLineHierarchySummaries,
+  pointSummaries: mockPointSummaries,
   onSelectLine: vi.fn(),
   onSelectPicker: vi.fn(),
   onSelectOrder: vi.fn(),
   onCloseDetail: vi.fn(),
+  onSelectHierarchyLine: vi.fn(),
+  onSelectHierarchyPoint: vi.fn(),
+  onClearHierarchyLine: vi.fn(),
+  onClearHierarchyPoint: vi.fn(),
   onCreateShift: vi.fn(),
   isCreatingShift: false,
   selectedDate: '2026-05-28',
@@ -129,11 +139,11 @@ describe('DesktopOperatorShell', () => {
     expect(onCloseDetail).toHaveBeenCalledOnce();
   });
 
-  it('clicking active order row calls onSelectOrder', () => {
-    const onSelectOrder = vi.fn();
-    renderShell({ onSelectOrder });
-    fireEvent.click(screen.getByTestId(`active-order-row-${mockActiveOrders[0].orderId}`));
-    expect(onSelectOrder).toHaveBeenCalledWith(mockActiveOrders[0].orderId);
+  it('clicking line summary card calls onSelectHierarchyLine', () => {
+    const onSelectHierarchyLine = vi.fn();
+    renderShell({ onSelectHierarchyLine });
+    fireEvent.click(screen.getByTestId('line-summary-card-line-1'));
+    expect(onSelectHierarchyLine).toHaveBeenCalledWith('line-1');
   });
 
   it('clicking line detail order row calls onSelectOrder', () => {

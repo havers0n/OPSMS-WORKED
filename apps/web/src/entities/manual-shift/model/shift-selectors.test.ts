@@ -11,7 +11,12 @@ import {
   selectPickerDetail,
   selectOrderDetail,
   summarizeManualShiftOrderCheckUnits,
-  canCloseOrderFromCheckUnits
+  canCloseOrderFromCheckUnits,
+  selectLineHierarchySummaries,
+  selectPointSummaries,
+  normalizePointName,
+  NO_POINT_LABEL,
+  type ShiftListOrder
 } from './shift-selectors';
 import type {
   ManualShiftDaySummary,
@@ -824,5 +829,204 @@ describe('manual shift order check unit aggregates', () => {
     expect(result.voidedUnits).toBe(1);
     expect(result.physicallyChecked).toBe(false);
     expect(canCloseOrderFromCheckUnits([unit('voided')], 1)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// normalizePointName
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('normalizePointName', () => {
+  it('returns NO_POINT_LABEL for null', () => {
+    expect(normalizePointName(null)).toBe(NO_POINT_LABEL);
+  });
+
+  it('returns NO_POINT_LABEL for undefined', () => {
+    expect(normalizePointName(undefined)).toBe(NO_POINT_LABEL);
+  });
+
+  it('returns NO_POINT_LABEL for empty string', () => {
+    expect(normalizePointName('')).toBe(NO_POINT_LABEL);
+  });
+
+  it('returns NO_POINT_LABEL for whitespace-only string', () => {
+    expect(normalizePointName('   ')).toBe(NO_POINT_LABEL);
+  });
+
+  it('returns trimmed non-empty string', () => {
+    expect(normalizePointName('  ג.גפנר  ')).toBe('ג.גפנר');
+  });
+
+  it('returns the string when no trimming needed', () => {
+    expect(normalizePointName('שרון')).toBe('שרון');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// selectLineHierarchySummaries
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('selectLineHierarchySummaries', () => {
+  it('derives ordersCount and itemLinesCount from lineSummaries', () => {
+    const lineSummaries = selectLineSummaries(
+      [makeLineSummary(LINE_A, 'Route A', { totalOrders: 5 })],
+      [makeOrder({ id: 'o1', lineId: LINE_A, lineCount: 3 })]
+    );
+    const result = selectLineHierarchySummaries(lineSummaries, [makeOrder({ id: 'o1', lineId: LINE_A, lineCount: 3, status: 'queued' })]);
+    expect(result).toHaveLength(1);
+    expect(result[0].ordersCount).toBe(1);
+    expect(result[0].itemLinesCount).toBe(3);
+  });
+
+  it('sums totalQuantity from orders', () => {
+    const lineSummaries = selectLineSummaries(
+      [makeLineSummary(LINE_A, 'Route A')],
+      [makeOrder({ id: 'o1', lineId: LINE_A, lineCount: 2 })]
+    );
+    const orders = [
+      { ...makeOrder({ id: 'o1', lineId: LINE_A, lineCount: 2 }), totalQuantity: 10 },
+      { ...makeOrder({ id: 'o2', lineId: LINE_A, lineCount: 3 }), totalQuantity: 22 }
+    ] as ManualShiftOrder[] & { totalQuantity?: number }[];
+    const result = selectLineHierarchySummaries(lineSummaries, orders as ShiftListOrder[]);
+    expect(result[0].totalQuantity).toBe(32);
+  });
+
+  it('computes status breakdown from lineSummary data', () => {
+    const lineSummaries = selectLineSummaries(
+      [makeLineSummary(LINE_A, 'Route A')],
+      [
+        makeOrder({ id: 'o1', lineId: LINE_A, status: 'queued' }),
+        makeOrder({ id: 'o2', lineId: LINE_A, status: 'picking' }),
+        makeOrder({ id: 'o3', lineId: LINE_A, status: 'waiting_check' }),
+        makeOrder({ id: 'o4', lineId: LINE_A, status: 'returned' }),
+        makeOrder({ id: 'o5', lineId: LINE_A, status: 'done' })
+      ]
+    );
+    const result = selectLineHierarchySummaries(lineSummaries, [
+      makeOrder({ id: 'o1', lineId: LINE_A, status: 'queued' }),
+      makeOrder({ id: 'o2', lineId: LINE_A, status: 'picking' }),
+      makeOrder({ id: 'o3', lineId: LINE_A, status: 'waiting_check' }),
+      makeOrder({ id: 'o4', lineId: LINE_A, status: 'returned' }),
+      makeOrder({ id: 'o5', lineId: LINE_A, status: 'done' })
+    ]);
+    expect(result[0].statusBreakdown).toEqual({
+      queued: 1, picking: 1, waitingCheck: 1, returned: 1, done: 1
+    });
+  });
+
+  it('preserves zero-order lines from byLine', () => {
+    const lineSummaries = selectLineSummaries(
+      [makeLineSummary(LINE_A, 'Route A'), makeLineSummary(LINE_B, 'Route B')],
+      []
+    );
+    const result = selectLineHierarchySummaries(lineSummaries, []);
+    expect(result).toHaveLength(2);
+    expect(result[0].lineId).toBe(LINE_A);
+    expect(result[0].ordersCount).toBe(0);
+    expect(result[1].lineId).toBe(LINE_B);
+  });
+
+  it('returns empty array for empty lineSummaries', () => {
+    const result = selectLineHierarchySummaries([], []);
+    expect(result).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// selectPointSummaries
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('selectPointSummaries', () => {
+  it('groups orders by pointName under a line', () => {
+    const orders = [
+      makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'ג.גפנר', lineCount: 2 }),
+      makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'ג.גפנר', lineCount: 3 }),
+      makeOrder({ id: 'o3', lineId: LINE_A, pointName: 'ירושלים', lineCount: 5 })
+    ];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result).toHaveLength(2);
+    const gfenster = result.find((p) => p.pointName === 'ג.גפנר')!;
+    const jerusalem = result.find((p) => p.pointName === 'ירושלים')!;
+    expect(gfenster.ordersCount).toBe(2);
+    expect(gfenster.itemLinesCount).toBe(5);
+    expect(jerusalem.ordersCount).toBe(1);
+    expect(jerusalem.itemLinesCount).toBe(5);
+  });
+
+  it('normalizes null pointName to ללא נקודה', () => {
+    const orders = [
+      makeOrder({ id: 'o1', lineId: LINE_A, pointName: null }),
+      makeOrder({ id: 'o2', lineId: LINE_A, pointName: '' })
+    ];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result).toHaveLength(1);
+    expect(result[0].pointName).toBe(NO_POINT_LABEL);
+    expect(result[0].ordersCount).toBe(2);
+  });
+
+  it('does not merge duplicate point names across different lines', () => {
+    const orders = [
+      makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'תל אביב' }),
+      makeOrder({ id: 'o2', lineId: LINE_B, pointName: 'תל אביב' })
+    ];
+    const resultA = selectPointSummaries(LINE_A, orders);
+    const resultB = selectPointSummaries(LINE_B, orders);
+    expect(resultA).toHaveLength(1);
+    expect(resultA[0].ordersCount).toBe(1);
+    expect(resultB).toHaveLength(1);
+    expect(resultB[0].ordersCount).toBe(1);
+  });
+
+  it('computes ordersCount, itemLinesCount, totalQuantity for each point', () => {
+    const orders = [
+      { ...makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'שרון', lineCount: 2, status: 'picking' }), totalQuantity: 32 },
+      { ...makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'שרון', lineCount: 1, status: 'queued' }), totalQuantity: 10 }
+    ] as ShiftListOrder[];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result[0].ordersCount).toBe(2);
+    expect(result[0].itemLinesCount).toBe(3);
+    expect(result[0].totalQuantity).toBe(42);
+  });
+
+  it('computes status breakdown per point', () => {
+    const orders = [
+      makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'שרון', status: 'picking' }),
+      makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'שרון', status: 'queued' }),
+      makeOrder({ id: 'o3', lineId: LINE_A, pointName: 'שרון', status: 'returned' })
+    ];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result[0].statusBreakdown).toEqual({
+      queued: 1, picking: 1, waitingCheck: 0, returned: 1, done: 0
+    });
+  });
+
+  it('includes orders array in each point summary', () => {
+    const orders = [
+      makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'שרון', orderNumber: 'SO-001' })
+    ];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result[0].orders).toHaveLength(1);
+    expect(result[0].orders[0].orderId).toBe('o1');
+    expect(result[0].orders[0].orderNumber).toBe('SO-001');
+  });
+
+  it('returns empty array when no orders match lineId', () => {
+    const orders = [makeOrder({ id: 'o1', lineId: LINE_B })];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result).toEqual([]);
+  });
+
+  it('sorts points by ordersCount descending', () => {
+    const orders = [
+      makeOrder({ id: 'o1', lineId: LINE_A, pointName: 'קטן' }),
+      makeOrder({ id: 'o2', lineId: LINE_A, pointName: 'גדול' }),
+      makeOrder({ id: 'o3', lineId: LINE_A, pointName: 'גדול' }),
+      makeOrder({ id: 'o4', lineId: LINE_A, pointName: 'גדול' })
+    ];
+    const result = selectPointSummaries(LINE_A, orders);
+    expect(result[0].pointName).toBe('גדול');
+    expect(result[0].ordersCount).toBe(3);
+    expect(result[1].pointName).toBe('קטן');
+    expect(result[1].ordersCount).toBe(1);
   });
 });
