@@ -16,7 +16,10 @@ import {
   selectCheckQueue,
   selectLineDetail,
   selectPickerDetail,
-  selectOrderDetail
+  selectOrderDetail,
+  selectLineHierarchySummaries,
+  selectPointSummaries,
+  type ShiftListOrder
 } from '@/entities/manual-shift/model/shift-selectors';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { useAuth } from '@/app/providers/auth-provider';
@@ -74,12 +77,14 @@ export function ManualOperatorPage() {
   const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
-  const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
+const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
     | { type: 'line'; lineId: string }
     | { type: 'picker'; pickerKey: string }
     | { type: 'order'; orderId: string }
     | null
   >(null);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [selectedPointName, setSelectedPointName] = useState<string | null>(null);
 
   const isToday = selectedDate === todayDate;
 
@@ -125,10 +130,20 @@ export function ManualOperatorPage() {
       lineSummaries
     );
   }, [selectedDesktopDetail, pickerWorkloads, shiftOrders, lineSummaries]);
-  const orderDetail = useMemo(() => {
+const orderDetail = useMemo(() => {
     if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'order') return null;
     return selectOrderDetail(selectedDesktopDetail.orderId, shiftOrders, lineSummaries);
   }, [selectedDesktopDetail, shiftOrders, lineSummaries]);
+
+  const shiftListOrders = shiftOrders as ShiftListOrder[];
+  const lineHierarchySummaries = useMemo(
+    () => selectLineHierarchySummaries(lineSummaries, shiftListOrders),
+    [lineSummaries, shiftListOrders]
+  );
+  const pointSummaries = useMemo(
+    () => (selectedLineId ? selectPointSummaries(selectedLineId, shiftListOrders) : []),
+    [selectedLineId, shiftListOrders]
+  );
 
   const createShift = useCreateShift();
   const currentMembership = currentTenantId
@@ -137,15 +152,45 @@ export function ManualOperatorPage() {
   const canImportExcelByRole =
     currentMembership?.role === 'tenant_admin' ||
     currentMembership?.role === 'platform_admin';
-  const canMonthlyImport =
+const canMonthlyImport =
     !!shift && shift.status === 'active' && lines.length === 0 && canImportExcelByRole;
   const handleCreateShift = () =>
     createShift.mutate({ name: generateShiftName(), date: selectedDate });
 
+  function handleSelectDate(date: string) {
+    setSelectedDate(date);
+    setActiveTab('queue');
+    setSelectedLine(null);
+    setSelectedDesktopDetail(null);
+    setSelectedLineId(null);
+    setSelectedPointName(null);
+    setShowMonthlyPreview(false);
+    setShowImportExcel(false);
+    setImportSuccessMessage(null);
+  }
+
+  function handleSelectHierarchyLine(lineId: string) {
+    setSelectedLineId(lineId);
+    setSelectedPointName(null);
+  }
+
+  function handleSelectHierarchyPoint(pointName: string) {
+    setSelectedPointName(pointName);
+  }
+
+  function handleClearHierarchyLine() {
+    setSelectedLineId(null);
+    setSelectedPointName(null);
+  }
+
+  function handleClearHierarchyPoint() {
+    setSelectedPointName(null);
+  }
+
   if (isDesktop) {
     return (
       <>
-        <DesktopOperatorShell
+<DesktopOperatorShell
           shift={shift}
           isLoading={isLoading || (!!shift && isDaySummaryLoading)}
           kpi={kpi}
@@ -157,10 +202,18 @@ export function ManualOperatorPage() {
           pickerDetail={pickerDetail}
           orderDetail={orderDetail}
           selectedDetailType={selectedDesktopDetail?.type ?? null}
+          selectedLineId={selectedLineId}
+          selectedPointName={selectedPointName}
+          lineHierarchySummaries={lineHierarchySummaries}
+          pointSummaries={pointSummaries}
           onSelectLine={(lineId) => setSelectedDesktopDetail({ type: 'line', lineId })}
           onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
           onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
           onCloseDetail={() => setSelectedDesktopDetail(null)}
+          onSelectHierarchyLine={handleSelectHierarchyLine}
+          onSelectHierarchyPoint={handleSelectHierarchyPoint}
+          onClearHierarchyLine={handleClearHierarchyLine}
+          onClearHierarchyPoint={handleClearHierarchyPoint}
           selectedDate={selectedDate}
           todayDate={todayDate}
           onChangeDate={handleSelectDate}
@@ -186,19 +239,9 @@ export function ManualOperatorPage() {
       ? { ariaLabel: 'Add line', onClick: () => setShowAddLine(true) }
       : undefined;
 
-  function handleChangeTab(tab: OperatorTab) {
+function handleChangeTab(tab: OperatorTab) {
     setActiveTab(tab);
     setSelectedLine(null);
-  }
-
-  function handleSelectDate(date: string) {
-    setSelectedDate(date);
-    setActiveTab('queue');
-    setSelectedLine(null);
-    setSelectedDesktopDetail(null);
-    setShowMonthlyPreview(false);
-    setShowImportExcel(false);
-    setImportSuccessMessage(null);
   }
 
   return (

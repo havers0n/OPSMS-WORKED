@@ -4,17 +4,19 @@ import type {
   ActiveOrder,
   CheckQueue,
   LineDetail,
+  LineHierarchySummary,
   OrderDetail,
   LineSummary,
   PickerDetail,
   PickerWorkload,
+  PointHierarchySummary,
   ShiftSummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import { DesktopDetailDrawer } from './desktop-detail-drawer';
 import { DesktopEmptyState } from './desktop-empty-state';
+import { DesktopHierarchyPanel } from './desktop-hierarchy-panel';
 import { DesktopKpiRow } from './desktop-kpi-row';
 import { DesktopLinePanel } from './desktop-line-panel';
-import { DesktopOrdersPanel } from './desktop-orders-panel';
 import { DesktopPickerPanel } from './desktop-picker-panel';
 import { ShiftOpenAshlamotBoard } from '../shift-open-ashlamot-board';
 
@@ -30,10 +32,18 @@ export interface DesktopOperatorShellProps {
   pickerDetail: PickerDetail | null;
   orderDetail: OrderDetail | null;
   selectedDetailType: 'line' | 'picker' | 'order' | null;
+  selectedLineId: string | null;
+  selectedPointName: string | null;
+  lineHierarchySummaries: LineHierarchySummary[];
+  pointSummaries: PointHierarchySummary[];
   onSelectLine: (lineId: string) => void;
   onSelectPicker: (pickerKey: string) => void;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
+  onSelectHierarchyLine: (lineId: string) => void;
+  onSelectHierarchyPoint: (pointName: string) => void;
+  onClearHierarchyLine: () => void;
+  onClearHierarchyPoint: () => void;
   onCreateShift: () => void;
   isCreatingShift: boolean;
   selectedDate: string;
@@ -92,17 +102,25 @@ export function DesktopOperatorShell({
   isLoading,
   kpi,
   lineSummaries,
-  activeOrders,
+  activeOrders: _activeOrders,
   pickerWorkloads,
   checkQueue,
   lineDetail,
   pickerDetail,
   orderDetail,
   selectedDetailType,
-  onSelectLine,
+  selectedLineId,
+  selectedPointName,
+  lineHierarchySummaries,
+  pointSummaries,
+  onSelectLine: _onSelectLine,
   onSelectPicker,
   onSelectOrder,
   onCloseDetail,
+  onSelectHierarchyLine,
+  onSelectHierarchyPoint,
+  onClearHierarchyLine,
+  onClearHierarchyPoint,
   onCreateShift,
   isCreatingShift,
   selectedDate,
@@ -200,14 +218,20 @@ export function DesktopOperatorShell({
       ) : (
         <div className="flex flex-1 overflow-hidden gap-px">
           <aside className="w-72 bg-white overflow-y-auto shrink-0">
-            <DesktopLinePanel lines={lineSummaries} onSelectLine={onSelectLine} />
+            <DesktopLinePanel lines={lineSummaries} selectedLineId={selectedLineId} onSelectLine={onSelectHierarchyLine} />
           </aside>
 
           <main className="flex-1 bg-white overflow-y-auto min-w-0">
-            <DesktopOrdersPanel
-              orders={activeOrders}
-              lineSummaries={lineSummaries}
+            <DesktopHierarchyPanel
+              selectedLineId={selectedLineId}
+              selectedPointName={selectedPointName}
+              lineHierarchySummaries={lineHierarchySummaries}
+              pointSummaries={pointSummaries}
+              onSelectLine={onSelectHierarchyLine}
+              onSelectPoint={onSelectHierarchyPoint}
               onSelectOrder={onSelectOrder}
+              onClearLine={onClearHierarchyLine}
+              onClearPoint={onClearHierarchyPoint}
             />
           </main>
 

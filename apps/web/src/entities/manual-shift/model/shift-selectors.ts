@@ -645,6 +645,141 @@ export function selectPickerDetail(
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hierarchy selectors (Line → Point → Order drill-down)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ShiftListOrder = ManualShiftOrder & { totalQuantity?: number };
+
+export const NO_POINT_LABEL = 'ללא נקודה';
+
+export function normalizePointName(pointName: string | null | undefined): string {
+  if (pointName === null || pointName === undefined || pointName.trim() === '') return NO_POINT_LABEL;
+  return pointName.trim();
+}
+
+export interface StatusBreakdown {
+  queued: number;
+  picking: number;
+  waitingCheck: number;
+  returned: number;
+  done: number;
+}
+
+export interface LineHierarchySummary {
+  lineId: string;
+  lineName: string;
+  lineStatus: LineSummary['lineStatus'];
+  ordersCount: number;
+  itemLinesCount: number;
+  totalQuantity: number;
+  statusBreakdown: StatusBreakdown;
+}
+
+export interface HierarchyOrder {
+  orderId: string;
+  orderNumber: string | null;
+  status: ManualShiftOrderStatus;
+  pointName: string;
+  pickerName: string | null;
+  checkerName: string | null;
+  lineCount: number;
+  totalQuantity: number;
+}
+
+export interface PointHierarchySummary {
+  pointName: string;
+  ordersCount: number;
+  itemLinesCount: number;
+  totalQuantity: number;
+  statusBreakdown: StatusBreakdown;
+  orders: HierarchyOrder[];
+}
+
+export function selectLineHierarchySummaries(
+  lineSummaries: LineSummary[],
+  orders: ShiftListOrder[]
+): LineHierarchySummary[] {
+  const qtyByLine = new Map<string, number>();
+  for (const order of orders) {
+    const prev = qtyByLine.get(order.lineId) ?? 0;
+    qtyByLine.set(order.lineId, prev + (order.totalQuantity ?? 0));
+  }
+
+  return lineSummaries.map((line): LineHierarchySummary => ({
+    lineId: line.lineId,
+    lineName: line.lineName,
+    lineStatus: line.lineStatus,
+    ordersCount: line.totalOrders,
+    itemLinesCount: line.totalLineCount,
+    totalQuantity: qtyByLine.get(line.lineId) ?? 0,
+    statusBreakdown: {
+      queued: line.queued,
+      picking: line.picking,
+      waitingCheck: line.waitingCheck,
+      returned: line.returned,
+      done: line.done
+    }
+  }));
+}
+
+export function selectPointSummaries(
+  lineId: string,
+  orders: ShiftListOrder[]
+): PointHierarchySummary[] {
+  const lineOrders = orders.filter((o) => o.lineId === lineId);
+  const byPoint = new Map<string, ShiftListOrder[]>();
+  for (const order of lineOrders) {
+    const pn = normalizePointName(order.pointName);
+    const bucket = byPoint.get(pn);
+    if (bucket) bucket.push(order);
+    else byPoint.set(pn, [order]);
+  }
+
+  const result: PointHierarchySummary[] = [];
+  for (const [pointName, pointOrders] of byPoint) {
+    let queued = 0, picking = 0, waitingCheck = 0, returned = 0, done = 0;
+    let itemLinesCount = 0, totalQuantity = 0;
+    const hierarchyOrders: HierarchyOrder[] = [];
+    for (const o of pointOrders) {
+      switch (o.status) {
+        case 'queued': queued++; break;
+        case 'picking': picking++; break;
+        case 'waiting_check': waitingCheck++; break;
+        case 'returned': returned++; break;
+        case 'done': done++; break;
+      }
+      itemLinesCount += o.lineCount ?? 0;
+      totalQuantity += o.totalQuantity ?? 0;
+      hierarchyOrders.push({
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        pointName: normalizePointName(o.pointName),
+        pickerName: o.pickerName,
+        checkerName: o.checkerName,
+        lineCount: o.lineCount ?? 0,
+        totalQuantity: o.totalQuantity ?? 0
+      });
+    }
+    result.push({
+      pointName,
+      ordersCount: pointOrders.length,
+      itemLinesCount,
+      totalQuantity,
+      statusBreakdown: { queued, picking, waitingCheck, returned, done },
+      orders: hierarchyOrders
+    });
+  }
+
+  result.sort((a, b) => b.ordersCount - a.ordersCount);
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OrderDetail
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function selectOrderDetail(
   orderId: string,
   orders: ManualShiftOrder[],

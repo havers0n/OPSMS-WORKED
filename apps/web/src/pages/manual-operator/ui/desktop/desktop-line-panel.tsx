@@ -2,6 +2,7 @@ import type { LineSummary } from '@/entities/manual-shift/model/shift-selectors'
 
 interface DesktopLinePanelProps {
   lines: LineSummary[];
+  selectedLineId?: string | null;
   onSelectLine?: (lineId: string) => void;
 }
 
@@ -11,12 +12,12 @@ const STATUS_DOT: Record<string, string> = {
   done: 'bg-green-500'
 };
 
-function LineRow({ line, onSelectLine }: { line: LineSummary; onSelectLine?: (lineId: string) => void }) {
+function LineRow({ line, isSelected, onSelectLine }: { line: LineSummary; isSelected: boolean; onSelectLine?: (lineId: string) => void }) {
   const donePercent = Math.min(100, line.donePercent);
   return (
     <button
       type="button"
-      className="px-3 py-3 border-b border-gray-100 w-full text-right hover:bg-gray-50"
+      className={`px-3 py-3 border-b border-gray-100 w-full text-right hover:bg-gray-50 ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : ''}`}
       onClick={() => onSelectLine?.(line.lineId)}
       aria-label={`פתח פרטי קו ${line.lineName}`}
     >
@@ -48,7 +49,7 @@ function LineRow({ line, onSelectLine }: { line: LineSummary; onSelectLine?: (li
   );
 }
 
-export function DesktopLinePanel({ lines, onSelectLine }: DesktopLinePanelProps) {
+export function DesktopLinePanel({ lines, selectedLineId, onSelectLine }: DesktopLinePanelProps) {
   if (lines.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 px-4">
@@ -63,7 +64,7 @@ export function DesktopLinePanel({ lines, onSelectLine }: DesktopLinePanelProps)
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">קווים</p>
       </div>
       {lines.map((line) => (
-        <LineRow key={line.lineId} line={line} onSelectLine={onSelectLine} />
+        <LineRow key={line.lineId} line={line} isSelected={line.lineId === selectedLineId} onSelectLine={onSelectLine} />
       ))}
     </div>
   );

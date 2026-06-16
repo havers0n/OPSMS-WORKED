@@ -6,7 +6,9 @@ import type {
   CheckQueue,
   LineDetail,
   PickerDetail,
-  OrderDetail
+  OrderDetail,
+  LineHierarchySummary,
+  PointHierarchySummary
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftSession } from '@wos/domain';
 
@@ -240,3 +242,56 @@ export const mockOrderDetail: OrderDetail = {
   finishedAt: null,
   ageSeconds: 120
 };
+
+export const mockLineHierarchySummaries: LineHierarchySummary[] = [
+  {
+    lineId: 'line-1',
+    lineName: 'קו צפון',
+    lineStatus: 'in_progress',
+    ordersCount: 10,
+    itemLinesCount: 50,
+    totalQuantity: 320,
+    statusBreakdown: { queued: 3, picking: 4, waitingCheck: 2, returned: 1, done: 0 }
+  },
+  {
+    lineId: 'line-2',
+    lineName: 'קו דרום',
+    lineStatus: 'open',
+    ordersCount: 10,
+    itemLinesCount: 30,
+    totalQuantity: 0,
+    statusBreakdown: { queued: 10, picking: 0, waitingCheck: 0, returned: 0, done: 0 }
+  }
+];
+
+export const mockPointSummaries: PointHierarchySummary[] = [
+  {
+    pointName: 'נקודה א',
+    ordersCount: 2,
+    itemLinesCount: 8,
+    totalQuantity: 32,
+    statusBreakdown: { queued: 0, picking: 1, waitingCheck: 0, returned: 1, done: 0 },
+    orders: [
+      {
+        orderId: 'order-1',
+        orderNumber: 'ORD-001',
+        status: 'picking',
+        pointName: 'נקודה א',
+        pickerName: 'דוד',
+        checkerName: null,
+        lineCount: 5,
+        totalQuantity: 32
+      },
+      {
+        orderId: 'order-3',
+        orderNumber: null,
+        status: 'returned',
+        pointName: 'ללא נקודה',
+        pickerName: 'שרה',
+        checkerName: null,
+        lineCount: 3,
+        totalQuantity: 0
+      }
+    ]
+  }
+];
