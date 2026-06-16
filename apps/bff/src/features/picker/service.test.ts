@@ -178,7 +178,8 @@ function createManualRepoMock(): ManualShiftsRepo {
       }
     })),
     listOrderEvents: vi.fn(async () => []),
-    listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => [])
+    listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => []),
+    listOrdersItemRollups: vi.fn(async (_orderIds: string[]) => new Map())
   };
 }
 

@@ -575,6 +575,7 @@ export type ManualShiftsRepo = {
   listOpenShiftAshlamot(tenantId: string, shiftId: string): Promise<OpenAshlamaBoardItem[]>;
   listOrderEvents(orderId: string): Promise<ManualShiftOrderEvent[]>;
   listOrderItems(tenantId: string, orderId: string): Promise<ManualShiftOrderItem[]>;
+  listOrdersItemRollups(orderIds: string[]): Promise<Map<string, { lineCount: number; totalQuantity: number }>>;
   findOrderCheckUnitById(checkUnitId: string): Promise<ManualShiftOrderCheckUnit | null>;
   findOrderAshlamaById(ashlamaId: string): Promise<ManualShiftOrderAshlama | null>;
   countMonthlyImportShiftRows(input: {
@@ -1079,6 +1080,32 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
 
       if (error) throw error;
       return ((data ?? []) as ManualShiftOrderItemRow[]).map(mapOrderItemRow);
+    },
+
+    async listOrdersItemRollups(orderIds) {
+      if (orderIds.length === 0) return new Map();
+
+      const { data, error } = await supabase
+        .from('manual_shift_order_items')
+        .select('order_id, quantity')
+        .in('order_id', orderIds);
+
+      if (error) throw error;
+
+      const rows = (data ?? []) as Array<{ order_id: string; quantity: number }>;
+      const rollups = new Map<string, { lineCount: number; totalQuantity: number }>();
+
+      for (const row of rows) {
+        let entry = rollups.get(row.order_id);
+        if (!entry) {
+          entry = { lineCount: 0, totalQuantity: 0 };
+          rollups.set(row.order_id, entry);
+        }
+        entry.lineCount += 1;
+        entry.totalQuantity += row.quantity;
+      }
+
+      return rollups;
     },
 
     async countMonthlyImportShiftRows({ tenantId, shiftId }) {

@@ -554,7 +554,11 @@ export const manualShiftLineSummaryResponseSchema = z.array(manualShiftLineSumma
 export const manualShiftTodayResponseSchema = manualShiftTodayDtoSchema;
 export const manualShiftPeopleSummaryResponseSchema = manualShiftPeopleSummarySchema;
 export const manualShiftDaySummaryResponseSchema = manualShiftDaySummarySchema;
-export const manualShiftOrdersResponseSchema = z.array(manualShiftOrderSchema);
+export const manualShiftOrdersResponseSchema = z.array(
+  manualShiftOrderSchema.extend({
+    totalQuantity: z.number().min(0)
+  })
+);
 export const manualShiftBulkAddResponseSchema = manualShiftBulkAddResultSchema;
 export const manualShiftWorkerResponseSchema = manualShiftWorkerSchema;
 export const openAshlamaBoardResponseSchema = z.array(openAshlamaBoardItemSchema);

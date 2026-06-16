@@ -722,7 +722,15 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftNotFound(input.shiftId);
       }
 
-      return repo.listShiftOrders(input.shiftId);
+      const orders = await repo.listShiftOrders(input.shiftId);
+      const rollups = await repo.listOrdersItemRollups(orders.map((o) => o.id));
+      return orders.map((order) => {
+        const rollup = rollups.get(order.id);
+        if (rollup) {
+          return { ...order, lineCount: rollup.lineCount, totalQuantity: rollup.totalQuantity } as ManualShiftOrder;
+        }
+        return { ...order, totalQuantity: 0 } as ManualShiftOrder;
+      });
     },
 
     async listLineOrders(input) {
@@ -731,7 +739,15 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftLineNotFound(input.lineId);
       }
 
-      return repo.listLineOrders(input.lineId);
+      const orders = await repo.listLineOrders(input.lineId);
+      const rollups = await repo.listOrdersItemRollups(orders.map((o) => o.id));
+      return orders.map((order) => {
+        const rollup = rollups.get(order.id);
+        if (rollup) {
+          return { ...order, lineCount: rollup.lineCount, totalQuantity: rollup.totalQuantity } as ManualShiftOrder;
+        }
+        return { ...order, totalQuantity: 0 } as ManualShiftOrder;
+      });
     },
 
     async listOrderCheckUnits(input) {
