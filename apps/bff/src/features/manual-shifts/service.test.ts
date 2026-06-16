@@ -4,6 +4,7 @@ import type {
   ManualShiftOrder,
   ManualShiftOrderCheckUnit,
   ManualShiftOrderAshlama,
+  ManualShiftOrderItem,
   ManualShiftOrderError,
   ManualShiftSession,
   ManualShiftWorker
@@ -157,6 +158,7 @@ function createRepo() {
     workers: [] as ManualShiftWorker[],
     checkUnits: [] as ManualShiftOrderCheckUnit[],
     ashlamot: [] as ManualShiftOrderAshlama[],
+    items: [] as ManualShiftOrderItem[],
     events: [] as Array<Record<string, unknown>>,
     errors: [] as ManualShiftOrderError[]
   };
@@ -383,8 +385,8 @@ function createRepo() {
         .filter((e) => e['orderId'] === orderId)
         .sort((a, b) => String(b['createdAt']).localeCompare(String(a['createdAt']))) as never;
     }),
-    listOrderItems: vi.fn(async (_tenantId: string, _orderId: string) => {
-      return [];
+    listOrderItems: vi.fn(async (_tenantId: string, orderId: string) => {
+      return state.items.filter((item) => item.orderId === orderId);
     }),
     countMonthlyImportShiftRows: vi.fn(async ({ tenantId, shiftId }) => {
       const lines = state.lines.filter((line) => line.shift_id === shiftId && line.tenant_id === tenantId);
@@ -3058,6 +3060,76 @@ describe('listOrderEvents access control', () => {
 
     await expect(
       service.listOrderEvents({ tenantId: ids.tenant, orderId: ids.order })
+    ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
+  });
+});
+
+describe('getOrderDetail', () => {
+  const nowIso = '2026-05-26T07:00:00.000Z';
+
+  function makeService(repo: ReturnType<typeof createRepo>['repo']) {
+    return createManualShiftsServiceFromRepo(repo, { getNowIso: () => nowIso });
+  }
+
+  it('returns computed lineCount and totalQuantity from order items when line_count is null', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order, lineCount: null }));
+    state.items.push(
+      {
+        id: '11111111-1111-4111-8111-111111111112',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        sku: 'SKU-1',
+        description: 'Item 1',
+        category: null,
+        quantity: 12,
+        notes: null,
+        zone: null,
+        sourceSheet: null,
+        sourceRows: [1],
+        sourceFile: null,
+        sortOrder: 1,
+        createdAt: nowIso
+      },
+      {
+        id: '11111111-1111-4111-8111-111111111113',
+        tenantId: ids.tenant,
+        shiftId: ids.shift,
+        lineId: ids.line,
+        orderId: ids.order,
+        sku: 'SKU-2',
+        description: 'Item 2',
+        category: null,
+        quantity: 20,
+        notes: null,
+        zone: null,
+        sourceSheet: null,
+        sourceRows: [2],
+        sourceFile: null,
+        sortOrder: 2,
+        createdAt: nowIso
+      }
+    );
+    const service = makeService(repo);
+
+    const detail = await service.getOrderDetail({ tenantId: ids.tenant, orderId: ids.order });
+
+    expect(detail.lineCount).toBe(2);
+    expect(detail.totalQuantity).toBe(32);
+    expect(detail.items).toHaveLength(2);
+    expect(detail.items[0]?.sku).toBe('SKU-1');
+    expect(detail.items[1]?.sku).toBe('SKU-2');
+  });
+
+  it('rejects a deleted order', async () => {
+    const { repo, state } = createRepo();
+    state.orders.push(createOrder({ id: ids.order, deletedAt: nowIso }));
+    const service = makeService(repo);
+
+    await expect(
+      service.getOrderDetail({ tenantId: ids.tenant, orderId: ids.order })
     ).rejects.toMatchObject({ code: 'MANUAL_SHIFT_ORDER_NOT_FOUND' });
   });
 });

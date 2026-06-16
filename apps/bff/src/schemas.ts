@@ -70,6 +70,7 @@ import {
   manualShiftOrderAshlamaSchema,
   manualShiftOrderEventSchema,
   manualShiftOrderItemSchema,
+  manualShiftOrderDetailSchema,
   manualShiftOrderAshlamaStatusSchema,
   manualShiftOrderCheckUnitStatusSchema,
   manualShiftLineSummarySchema,
@@ -540,6 +541,7 @@ export const bulkCreateManualShiftOrdersBodySchema = z.union([
 export const manualShiftSessionResponseSchema = manualShiftSessionSchema;
 export const manualShiftLineResponseSchema = manualShiftLineSchema;
 export const manualShiftOrderResponseSchema = manualShiftOrderSchema;
+export const manualShiftOrderDetailResponseSchema = manualShiftOrderDetailSchema;
 export const manualShiftOrderErrorResponseSchema = manualShiftOrderErrorSchema;
 export const manualShiftOrderCheckUnitResponseSchema = manualShiftOrderCheckUnitSchema;
 export const manualShiftOrderCheckUnitsResponseSchema = z.array(manualShiftOrderCheckUnitSchema);

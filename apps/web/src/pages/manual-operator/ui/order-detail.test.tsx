@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ManualShiftOrder, ManualShiftOrderCheckUnit } from '@wos/domain';
+import type { ManualShiftOrder, ManualShiftOrderCheckUnit, ManualShiftOrderDetail } from '@wos/domain';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { OrderDetail } from './order-detail';
@@ -56,6 +56,16 @@ function makeOrder(overrides: Partial<ManualShiftOrder> = {}): ManualShiftOrder 
   };
 }
 
+function makeOrderDetailResponse(overrides: Partial<ManualShiftOrderDetail> = {}): ManualShiftOrderDetail {
+  return {
+    ...makeOrder(),
+    lineCount: makeOrder().lineCount ?? 0,
+    totalQuantity: 0,
+    items: [],
+    ...overrides
+  };
+}
+
 function makeCheckUnit(
   unitNumber: number,
   status: ManualShiftOrderCheckUnit['status'],
@@ -103,16 +113,18 @@ function renderDetail(order: ManualShiftOrder = makeOrder()) {
 describe('OrderDetail check-units section', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('shows empty state when no check units exist', async () => {
     mockedBffRequest.mockImplementation(async (url, init) => {
       const path = String(url);
       const method = init?.method ?? 'GET';
+      if (path.endsWith(`/manual-shift-orders/${makeOrder().id}`) && method === 'GET') {
+        return makeOrderDetailResponse();
+      }
       if (path.includes('/check-units') && method === 'GET') return [];
       return [];
     });
+  });
 
+  it('shows empty state when no check units exist', async () => {
     renderDetail();
     await waitFor(() => {
       expect(screen.getByText('עדיין לא נוספו משטחים')).toBeTruthy();

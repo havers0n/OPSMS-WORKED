@@ -16,6 +16,7 @@ import type {
   ManualShiftOrder,
   ManualShiftOrderAshlama,
   ManualShiftOrderCheckUnit,
+  ManualShiftOrderItem,
   ManualShiftOrderError,
   ManualShiftOrderEvent,
   ManualShiftPeopleSummary,
@@ -257,6 +258,49 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     listOpenShiftAshlamot: vi.fn(async () => []),
     listOrderEvents: vi.fn(async () => [createEvent()]),
     listOrderItems: vi.fn(async () => []),
+    getOrderDetail: vi.fn(async () => ({
+      ...createOrder('queued'),
+      lineCount: 2,
+      totalQuantity: 32,
+      items: [
+        {
+          id: '11111111-1111-4111-8111-111111111112',
+          tenantId: ids.tenant,
+          shiftId: ids.shift,
+          lineId: ids.line,
+          orderId: ids.order,
+          sku: 'SKU-1',
+          description: 'Item 1',
+          category: null,
+          quantity: 12,
+          notes: null,
+          zone: null,
+          sourceSheet: null,
+          sourceRows: [1],
+          sourceFile: null,
+          sortOrder: 1,
+          createdAt: '2026-05-26T07:00:00.000Z'
+        } as ManualShiftOrderItem,
+        {
+          id: '11111111-1111-4111-8111-111111111113',
+          tenantId: ids.tenant,
+          shiftId: ids.shift,
+          lineId: ids.line,
+          orderId: ids.order,
+          sku: 'SKU-2',
+          description: 'Item 2',
+          category: null,
+          quantity: 20,
+          notes: null,
+          zone: null,
+          sourceSheet: null,
+          sourceRows: [2],
+          sourceFile: null,
+          sortOrder: 2,
+          createdAt: '2026-05-26T07:01:00.000Z'
+        } as ManualShiftOrderItem
+      ]
+    })),
     createOrderAshlama: vi.fn(async () => ashlama),
     patchOrderAshlamaStatus: vi.fn(async () => ({ ...ashlama, status: 'done' as const })),
     createOrderCheckUnit: vi.fn(async () => createCheckUnit()),
@@ -523,6 +567,77 @@ describe('manual shifts routes', () => {
         actorProfileId: ids.user,
         actorName: 'Shift Dispatcher'
       }
+    });
+
+    await app.close();
+  });
+
+  it('returns order detail with computed item totals when line_count is null', async () => {
+    const service = createServiceMock({
+      getOrderDetail: vi.fn(async () => ({
+        ...createOrder('queued'),
+        lineCount: 2,
+        totalQuantity: 32,
+        items: [
+          {
+            id: '11111111-1111-4111-8111-111111111112',
+            tenantId: ids.tenant,
+            shiftId: ids.shift,
+            lineId: ids.line,
+            orderId: ids.order,
+            sku: 'SKU-1',
+            description: 'Item 1',
+            category: null,
+            quantity: 12,
+            notes: null,
+            zone: null,
+            sourceSheet: null,
+            sourceRows: [1],
+            sourceFile: null,
+            sortOrder: 1,
+            createdAt: '2026-05-26T07:00:00.000Z'
+          },
+          {
+            id: '11111111-1111-4111-8111-111111111113',
+            tenantId: ids.tenant,
+            shiftId: ids.shift,
+            lineId: ids.line,
+            orderId: ids.order,
+            sku: 'SKU-2',
+            description: 'Item 2',
+            category: null,
+            quantity: 20,
+            notes: null,
+            zone: null,
+            sourceSheet: null,
+            sourceRows: [2],
+            sourceFile: null,
+            sortOrder: 2,
+            createdAt: '2026-05-26T07:01:00.000Z'
+          }
+        ]
+      }))
+    });
+    const app = await buildTestApp(service);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/manual-shift-orders/${ids.order}`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      orderNumber: '502481',
+      lineCount: 2,
+      totalQuantity: 32,
+      items: [
+        expect.objectContaining({ sku: 'SKU-1', quantity: 12 }),
+        expect.objectContaining({ sku: 'SKU-2', quantity: 20 })
+      ]
+    });
+    expect(service.getOrderDetail).toHaveBeenCalledWith({
+      tenantId: ids.tenant,
+      orderId: ids.order
     });
 
     await app.close();
