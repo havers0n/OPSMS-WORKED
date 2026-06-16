@@ -3,7 +3,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type {
   ActiveOrder,
   CheckQueue,
-  LineDetail,
   LineHierarchySummary,
   OrderDetail,
   LineSummary,
@@ -28,15 +27,13 @@ export interface DesktopOperatorShellProps {
   activeOrders: ActiveOrder[];
   pickerWorkloads: PickerWorkload[];
   checkQueue: CheckQueue;
-  lineDetail: LineDetail | null;
   pickerDetail: PickerDetail | null;
   orderDetail: OrderDetail | null;
-  selectedDetailType: 'line' | 'picker' | 'order' | null;
+  selectedDetailType: 'picker' | 'order' | null;
   selectedLineId: string | null;
   selectedPointName: string | null;
   lineHierarchySummaries: LineHierarchySummary[];
   pointSummaries: PointHierarchySummary[];
-  onSelectLine: (lineId: string) => void;
   onSelectPicker: (pickerKey: string) => void;
   onSelectOrder: (orderId: string) => void;
   onCloseDetail: () => void;
@@ -105,7 +102,6 @@ export function DesktopOperatorShell({
   activeOrders: _activeOrders,
   pickerWorkloads,
   checkQueue,
-  lineDetail,
   pickerDetail,
   orderDetail,
   selectedDetailType,
@@ -113,7 +109,6 @@ export function DesktopOperatorShell({
   selectedPointName,
   lineHierarchySummaries,
   pointSummaries,
-  onSelectLine: _onSelectLine,
   onSelectPicker,
   onSelectOrder,
   onCloseDetail,
@@ -138,15 +133,13 @@ export function DesktopOperatorShell({
   }
 
   const drawerState =
-    selectedDetailType === 'line'
-      ? { type: 'line' as const, detail: lineDetail ?? { summary: null, orders: [] } }
-      : selectedDetailType === 'picker'
-        ? {
-            type: 'picker' as const,
-            detail: pickerDetail ?? { summary: null, orders: [], lineBreakdown: [] }
-          }
-        : selectedDetailType === 'order'
-          ? { type: 'order' as const, detail: orderDetail }
+    selectedDetailType === 'picker'
+      ? {
+          type: 'picker' as const,
+          detail: pickerDetail ?? { summary: null, orders: [], lineBreakdown: [] }
+        }
+      : selectedDetailType === 'order'
+        ? { type: 'order' as const, detail: orderDetail }
         : null;
   const isTodaySelected = selectedDate === todayDate;
   const headerTitle = shift?.name ?? 'אין משמרת פעילה';
@@ -235,20 +228,22 @@ export function DesktopOperatorShell({
             />
           </main>
 
-          <aside className="w-72 bg-white overflow-y-auto shrink-0">
-            <div className="p-3 border-b border-gray-100">
-              <ShiftOpenAshlamotBoard
-                shiftId={shift.id}
-                canInteract={canInteract}
-                variant="desktop"
+          {!drawerState && (
+            <aside className="w-72 bg-white overflow-y-auto shrink-0">
+              <div className="p-3 border-b border-gray-100">
+                <ShiftOpenAshlamotBoard
+                  shiftId={shift.id}
+                  canInteract={canInteract}
+                  variant="desktop"
+                />
+              </div>
+              <DesktopPickerPanel
+                pickers={pickerWorkloads}
+                checkQueue={checkQueue}
+                onSelectPicker={onSelectPicker}
               />
-            </div>
-            <DesktopPickerPanel
-              pickers={pickerWorkloads}
-              checkQueue={checkQueue}
-              onSelectPicker={onSelectPicker}
-            />
-          </aside>
+            </aside>
+          )}
 
           <DesktopDetailDrawer
             state={drawerState}

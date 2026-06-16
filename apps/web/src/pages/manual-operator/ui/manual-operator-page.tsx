@@ -14,7 +14,6 @@ import {
   selectActiveOrders,
   selectPickerWorkloads,
   selectCheckQueue,
-  selectLineDetail,
   selectPickerDetail,
   selectOrderDetail,
   selectLineHierarchySummaries,
@@ -78,7 +77,6 @@ export function ManualOperatorPage() {
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
 const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
-    | { type: 'line'; lineId: string }
     | { type: 'picker'; pickerKey: string }
     | { type: 'order'; orderId: string }
     | null
@@ -117,11 +115,7 @@ const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
   const activeOrders = useMemo(() => selectActiveOrders(shiftOrders), [shiftOrders]);
   const pickerWorkloads = useMemo(() => selectPickerWorkloads(shiftOrders), [shiftOrders]);
   const checkQueue = useMemo(() => selectCheckQueue(shiftOrders), [shiftOrders]);
-  const lineDetail = useMemo(() => {
-    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'line') return null;
-    return selectLineDetail(selectedDesktopDetail.lineId, lineSummaries, shiftOrders);
-  }, [selectedDesktopDetail, lineSummaries, shiftOrders]);
-  const pickerDetail = useMemo(() => {
+const pickerDetail = useMemo(() => {
     if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'picker') return null;
     return selectPickerDetail(
       selectedDesktopDetail.pickerKey,
@@ -198,7 +192,6 @@ const canMonthlyImport =
           activeOrders={activeOrders}
           pickerWorkloads={pickerWorkloads}
           checkQueue={checkQueue}
-          lineDetail={lineDetail}
           pickerDetail={pickerDetail}
           orderDetail={orderDetail}
           selectedDetailType={selectedDesktopDetail?.type ?? null}
@@ -206,7 +199,6 @@ const canMonthlyImport =
           selectedPointName={selectedPointName}
           lineHierarchySummaries={lineHierarchySummaries}
           pointSummaries={pointSummaries}
-          onSelectLine={(lineId) => setSelectedDesktopDetail({ type: 'line', lineId })}
           onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
           onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
           onCloseDetail={() => setSelectedDesktopDetail(null)}
