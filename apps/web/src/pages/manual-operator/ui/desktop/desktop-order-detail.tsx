@@ -34,11 +34,11 @@ function formatAge(status: ManualShiftOrderStatus, seconds: number | null): stri
   if (status === 'returned') return MISSING_VALUE;
   if (seconds === null) return MISSING_VALUE;
   if (seconds < 60) return `${seconds}ש`;
-  const m = Math.floor(seconds / 60);
-  if (m < 60) return `${m}ד`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return `${h}:${String(rem).padStart(2, '0')}`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}ד`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `${hours}:${String(remainder).padStart(2, '0')}`;
 }
 
 function diffMinutes(from: string | null, to: string | null): string {
@@ -46,9 +46,9 @@ function diffMinutes(from: string | null, to: string | null): string {
   const mins = Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 60000);
   if (mins < 0) return MISSING_VALUE;
   if (mins < 60) return `${mins}ד`;
-  const h = Math.floor(mins / 60);
-  const rem = mins % 60;
-  return `${h}:${String(rem).padStart(2, '0')}`;
+  const hours = Math.floor(mins / 60);
+  const remainder = mins % 60;
+  return `${hours}:${String(remainder).padStart(2, '0')}`;
 }
 
 function Row({
@@ -61,21 +61,38 @@ function Row({
   valueDir?: 'ltr' | 'rtl';
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
+    <div className="flex items-start justify-between gap-3 py-1.5">
       <span className="text-sm text-gray-500">{label}</span>
-      <span dir={valueDir} className="text-sm font-medium text-gray-900 text-left break-all">
+      <span dir={valueDir} className="text-right text-sm font-medium text-gray-900 break-all">
         {value ?? MISSING_VALUE}
       </span>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  children,
+  testId
+}: {
+  title: string;
+  children: ReactNode;
+  testId?: string;
+}) {
   return (
-    <section className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
-      <h3 className="mb-1 text-xs font-semibold text-gray-700">{title}</h3>
+    <section className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3" data-testid={testId}>
+      <h3 className="mb-2 text-xs font-semibold text-gray-700">{title}</h3>
       <div className="space-y-1">{children}</div>
     </section>
+  );
+}
+
+function HeaderMetric({ label, value }: { label: string; value: string | number | null }) {
+  return (
+    <div className="rounded-xl bg-gray-50 px-3 py-2">
+      <div className="text-[11px] font-medium text-gray-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-gray-900">{value ?? MISSING_VALUE}</div>
+    </div>
   );
 }
 
@@ -104,30 +121,30 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
 
   return (
     <div className="space-y-3 p-4" dir="rtl" data-testid="order-detail-view">
-      <header className="space-y-1 rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-base font-semibold text-gray-900">
-            {detail.pointName ?? detail.customerName ?? MISSING_VALUE}
-          </p>
-          <span
-            className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLASS[detail.status]}`}
-          >
+      <header className="rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-wide text-gray-500">הזמנה</p>
+            <p className="mt-1 break-all font-mono text-lg font-semibold text-gray-900">
+              {detail.orderNumber ?? MISSING_VALUE}
+            </p>
+          </div>
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLASS[detail.status]}`}>
             {STATUS_LABEL[detail.status]}
           </span>
         </div>
-        {detail.orderNumber && <p className="text-xs text-gray-500">{detail.orderNumber}</p>}
-        <p className="text-sm text-gray-700">{detail.lineName ?? MISSING_VALUE}</p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <HeaderMetric label="קו" value={detail.lineName ?? MISSING_VALUE} />
+          <HeaderMetric label="נקודה" value={detail.pointName ?? MISSING_VALUE} />
+          <HeaderMetric label="סטטוס" value={STATUS_LABEL[detail.status]} />
+          <HeaderMetric label="לקוח" value={detail.customerName ?? MISSING_VALUE} />
+        </div>
       </header>
 
-      <Section title="פרטי הזמנה">
-        <Row label="קו" value={detail.lineName ?? MISSING_VALUE} />
-        <Row label="נקודה" value={detail.pointName ?? MISSING_VALUE} />
-        <Row label="לקוח" value={detail.customerName ?? MISSING_VALUE} />
-        <Row label="מספר הזמנה" value={detail.orderNumber ?? MISSING_VALUE} />
-        <Row label="סטטוס" value={STATUS_LABEL[detail.status]} />
-      </Section>
+      <OrderItemsSection items={orderDetail?.items ?? []} totalQuantity={totalQuantity} />
 
-      <Section title="עבודה">
+      <Section title="עבודה" testId="order-secondary-section">
         <Row label="מלקט" value={detail.pickerName ?? MISSING_VALUE} />
         <Row label="בודק" value={detail.checkerName ?? MISSING_VALUE} />
         <Row label="גודל" value={detail.size ?? MISSING_VALUE} />
@@ -136,13 +153,20 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
         ) : (
           <Row label="פריטים" value={orderDetail?.items?.length ?? MISSING_VALUE} />
         )}
-        <Row label="משטחים" value={detail.palletCount ?? MISSING_VALUE} />
+          <Row label="משטחים" value={detail.palletCount ?? MISSING_VALUE} />
+          <Row label="כמות כוללת" value={hasItemRows ? totalQuantity : MISSING_VALUE} />
         <Row label="גיל סטטוס" value={formatAge(detail.status, detail.ageSeconds)} />
       </Section>
 
-      <OrderItemsSection items={orderDetail?.items ?? []} totalQuantity={totalQuantity} />
+      {parallelCheckElapsed && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-amber-800">
+            בדיקה במקביל · <span dir="ltr">{parallelCheckElapsed}</span>
+          </p>
+        </section>
+      )}
 
-      <Section title="זמנים">
+      <Section title="זמנים" testId="order-times-section">
         <Row label="נוצרה" value={formatDateTimeHe(detail.createdAt)} valueDir="ltr" />
         <Row label="התחלת ליקוט" value={formatDateTimeHe(detail.startedAt)} valueDir="ltr" />
         <Row label="הבדיקה התחילה" value={formatDateTimeHe(detail.checkStartedAt)} valueDir="ltr" />
@@ -151,13 +175,7 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
         <Row label="הסתיים" value={formatDateTimeHe(detail.finishedAt)} valueDir="ltr" />
       </Section>
 
-      {parallelCheckElapsed && (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-          <p className="text-xs font-semibold text-amber-800">בדיקה במקביל · <span dir="ltr">{parallelCheckElapsed}</span></p>
-        </section>
-      )}
-
-      <Section title="משכי שלבים">
+      <Section title="משך שלבים">
         <Row label="זמן ליקוט" value={diffMinutes(detail.startedAt, detail.waitingCheckAt)} />
         <Row label="המתנה לבדיקה" value={diffMinutes(detail.waitingCheckAt, detail.checkedAt)} />
         <Row label="זמן אריזה" value={diffMinutes(detail.checkedAt, detail.finishedAt)} />

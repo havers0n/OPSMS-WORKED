@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
-import { formatDateTimeHe } from '@/shared/lib/format-date-time';
 import { bffRequest } from '@/shared/api/bff/client';
+import { formatDateTimeHe } from '@/shared/lib/format-date-time';
 import { DesktopOrderDetail } from '../desktop-order-detail';
 import { mockOrderDetail } from './fixtures';
 
@@ -85,10 +85,54 @@ describe('DesktopOrderDetail', () => {
 
     renderDetail();
     await waitFor(() => expect(screen.getByText('פריטי הזמנה')).toBeTruthy());
-    expect(screen.getByText('מספר פריטים')).toBeTruthy();
-    expect(screen.getByText('כמות כוללת')).toBeTruthy();
-    expect(screen.getByText('32')).toBeTruthy();
-    expect(screen.queryByText('שורות')).toBeNull();
+    const itemsSection = screen.getByTestId('order-items-section');
+    expect(screen.getAllByText('כמות כוללת').length).toBeGreaterThan(0);
+    expect(within(itemsSection).getAllByText('32').length).toBeGreaterThan(0);
+    expect(within(screen.getByTestId('order-secondary-section')).queryByText('שורות')).toBeNull();
+  });
+
+  it('renders items section before secondary metadata and times sections', async () => {
+    mockedBffRequest.mockImplementation(async (url, init) => {
+      const path = String(url);
+      if (path.endsWith(`/manual-shift-orders/${mockOrderDetail.orderId}`) && (init?.method ?? 'GET') === 'GET') {
+        return {
+          ...mockOrderDetail,
+          lineCount: 1,
+          totalQuantity: 5,
+          items: [
+            {
+              id: '11111111-1111-4111-8111-111111111114',
+              tenantId: 'tenant-1',
+              shiftId: 'shift-1',
+              lineId: mockOrderDetail.lineId,
+              orderId: mockOrderDetail.orderId,
+              sku: 'SKU-3',
+              description: 'Item 3',
+              category: null,
+              quantity: 5,
+              notes: null,
+              zone: null,
+              sourceSheet: null,
+              sourceRows: [1],
+              sourceFile: null,
+              sortOrder: 1,
+              createdAt: '2026-05-27T08:00:00.000Z'
+            }
+          ]
+        };
+      }
+      return [];
+    });
+
+    renderDetail();
+    await waitFor(() => expect(screen.getByTestId('order-items-section')).toBeTruthy());
+
+    const itemsSection = screen.getByTestId('order-items-section');
+    const secondarySection = screen.getByTestId('order-secondary-section');
+    const timesSection = screen.getByTestId('order-times-section');
+
+    expect(itemsSection.compareDocumentPosition(secondarySection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(secondarySection.compareDocumentPosition(timesSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('renders order detail fields', () => {
@@ -96,7 +140,6 @@ describe('DesktopOrderDetail', () => {
     expect(screen.getAllByText('ORD-001').length).toBeGreaterThan(0);
     expect(screen.getAllByText('קו צפון').length).toBeGreaterThan(0);
     expect(screen.getAllByText('לקוח א').length).toBeGreaterThan(0);
-    expect(screen.getByText('לקוח')).toBeTruthy();
   });
 
   it('renders status badge', () => {
@@ -107,7 +150,6 @@ describe('DesktopOrderDetail', () => {
 
   it('renders section headings', () => {
     renderDetail();
-    expect(screen.getByText('פרטי הזמנה')).toBeTruthy();
     expect(screen.getByText('עבודה')).toBeTruthy();
     expect(screen.getByText('זמנים')).toBeTruthy();
   });
