@@ -194,6 +194,15 @@ export const manualShiftOrderItemSchema = z.object({
 });
 export type ManualShiftOrderItem = z.infer<typeof manualShiftOrderItemSchema>;
 
+export const manualShiftOrderDetailSchema = manualShiftOrderSchema
+  .omit({ lineCount: true })
+  .extend({
+    lineCount: z.number().int().min(0),
+    totalQuantity: z.number().min(0),
+    items: z.array(manualShiftOrderItemSchema)
+  });
+export type ManualShiftOrderDetail = z.infer<typeof manualShiftOrderDetailSchema>;
+
 export const manualShiftOrderAshlamaSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

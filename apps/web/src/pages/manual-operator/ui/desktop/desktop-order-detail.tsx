@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { OrderDetail } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualShiftOrderStatus } from '@wos/domain';
+import { orderDetailQueryOptions } from '@/entities/manual-shift/api/queries';
 import { formatDateTimeHe } from '@/shared/lib/format-date-time';
 import { getElapsedFromIso } from '../order-utils';
+import { OrderItemsSection } from '../order-items-section';
 
 interface DesktopOrderDetailProps {
   detail: OrderDetail | null;
@@ -94,6 +97,10 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
 
   const parallelCheckElapsed =
     detail.status === 'picking' && detail.checkStartedAt ? getElapsedFromIso(detail.checkStartedAt) : null;
+  const { data: orderDetail, isLoading: isOrderDetailLoading } = useQuery(orderDetailQueryOptions(detail.orderId));
+  const hasItemRows = (orderDetail?.items?.length ?? 0) > 0;
+  const lineCountDisplay = orderDetail?.lineCount ?? detail.lineCount;
+  const totalQuantity = orderDetail?.totalQuantity ?? 0;
 
   return (
     <div className="space-y-3 p-4" dir="rtl" data-testid="order-detail-view">
@@ -124,10 +131,16 @@ export function DesktopOrderDetail({ detail, onClose }: DesktopOrderDetailProps)
         <Row label="מלקט" value={detail.pickerName ?? MISSING_VALUE} />
         <Row label="בודק" value={detail.checkerName ?? MISSING_VALUE} />
         <Row label="גודל" value={detail.size ?? MISSING_VALUE} />
-        <Row label="שורות" value={detail.lineCount ?? MISSING_VALUE} />
+        {!hasItemRows && !isOrderDetailLoading ? (
+          <Row label="שורות" value={lineCountDisplay ?? MISSING_VALUE} />
+        ) : (
+          <Row label="פריטים" value={orderDetail?.items?.length ?? MISSING_VALUE} />
+        )}
         <Row label="משטחים" value={detail.palletCount ?? MISSING_VALUE} />
         <Row label="גיל סטטוס" value={formatAge(detail.status, detail.ageSeconds)} />
       </Section>
+
+      <OrderItemsSection items={orderDetail?.items ?? []} totalQuantity={totalQuantity} />
 
       <Section title="זמנים">
         <Row label="נוצרה" value={formatDateTimeHe(detail.createdAt)} valueDir="ltr" />

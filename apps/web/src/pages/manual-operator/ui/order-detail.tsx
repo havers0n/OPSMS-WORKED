@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { ManualShiftOrder } from '@wos/domain';
 import { ArrowRight, CheckCircle, Clock, History, Package, Pencil, Trash2, User, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +9,7 @@ import {
   useStartManualShiftOrderCheck,
   useUpdateManualShiftOrderStatus
 } from '@/entities/manual-shift/api/mutations';
+import { orderDetailQueryOptions } from '@/entities/manual-shift/api/queries';
 import { pickerPath } from '@/shared/config/routes';
 import { AssignPickerSheet } from './assign-picker-sheet';
 import { DeleteConfirmSheet } from './delete-confirm-sheet';
@@ -16,6 +18,7 @@ import { ErrorFlow } from './error-flow';
 import { ManualOrderCheckUnitsPanel } from './manual-order-check-units-panel';
 import { OrderAshlamotSection } from './order-ashlamot-section';
 import { OrderHistoryOverlay } from './order-history-overlay';
+import { OrderItemsSection } from './order-items-section';
 import { getElapsedFromIso, getOrderStatusColor, getOrderStatusLabel } from './order-utils';
 
 interface OrderDetailProps {
@@ -40,6 +43,7 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
   const [showAssignPicker, setShowAssignPicker] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const { data: orderDetail, isLoading: isOrderDetailLoading } = useQuery(orderDetailQueryOptions(order.id));
   const updateStatus = useUpdateManualShiftOrderStatus();
   const startPicking = useStartManualShiftOrderPicking();
   const startOrderCheck = useStartManualShiftOrderCheck();
@@ -60,6 +64,9 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
           : null;
   const elapsed = getElapsedFromIso(stageTimerSource);
   const parallelCheckElapsed = order.status === 'picking' ? getElapsedFromIso(order.checkStartedAt) : null;
+  const hasItemRows = (orderDetail?.items?.length ?? 0) > 0;
+  const lineCountDisplay = orderDetail?.lineCount ?? order.lineCount;
+  const totalQuantity = orderDetail?.totalQuantity ?? 0;
 
   function transition(status: ManualShiftOrder['status']) {
     updateStatus.mutate({ orderId: order.id, lineId: order.lineId, status });
@@ -162,10 +169,16 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
             <div className="flex items-center gap-3">
               <Package className="text-gray-400 shrink-0" size={20} />
               <div className="flex flex-col">
-                <span className="text-sm text-gray-500 font-medium">שורות ליקוט</span>
+                <span className="text-sm text-gray-500 font-medium">פרטי הזמנה</span>
                 <div className="flex items-center gap-2 font-bold text-lg">
                   {order.size !== 'unknown' && <span className="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-sm">{order.size}</span>}
-                  {order.lineCount != null ? <span>{order.lineCount} שורות</span> : <span className="text-gray-400">-</span>}
+                  {!hasItemRows && !isOrderDetailLoading ? (
+                    lineCountDisplay != null ? <span>{lineCountDisplay} שורות</span> : <span className="text-gray-400">-</span>
+                  ) : hasItemRows ? (
+                    <span>{orderDetail?.items?.length ?? 0} פריטים</span>
+                  ) : (
+                    <span className="text-gray-400">...</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -185,6 +198,8 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
             )}
           </div>
         </div>
+
+        <OrderItemsSection items={orderDetail?.items ?? []} totalQuantity={totalQuantity} />
 
         <OrderAshlamotSection
           orderId={order.id}

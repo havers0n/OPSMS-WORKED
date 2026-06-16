@@ -1,11 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
+import { bffRequest } from '@/shared/api/bff/client';
 
 vi.mock('../../shift-open-ashlamot-board', () => ({
   ShiftOpenAshlamotBoard: () => null
 }));
 
+vi.mock('@/shared/api/bff/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/api/bff/client')>();
+  return { ...actual, bffRequest: vi.fn() };
+});
+
 import { DesktopOperatorShell } from '../desktop-operator-shell';
+import type { DesktopOperatorShellProps } from '../desktop-operator-shell';
 import {
   emptyCheckQueue,
   mockActiveOrders,
@@ -18,6 +26,8 @@ import {
   mockPickers,
   mockShift
 } from './fixtures';
+
+const mockedBffRequest = vi.mocked(bffRequest);
 
 const defaultProps = {
   shift: mockShift,
@@ -44,91 +54,113 @@ const defaultProps = {
   canInteract: true
 };
 
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false }
+    }
+  });
+}
+
+function renderShell(props: Partial<DesktopOperatorShellProps> = {}) {
+  const queryClient = makeQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <DesktopOperatorShell {...defaultProps} {...props} />
+    </QueryClientProvider>
+  );
+}
+
+mockedBffRequest.mockImplementation(async (url, init) => {
+  const path = String(url);
+  if (path.endsWith(`/manual-shift-orders/${mockOrderDetail.orderId}`) && (init?.method ?? 'GET') === 'GET') {
+    return {
+      ...mockOrderDetail,
+      lineCount: 5,
+      totalQuantity: 0,
+      items: []
+    };
+  }
+  return [];
+});
+
 describe('DesktopOperatorShell', () => {
   it('renders loading skeleton when isLoading is true', () => {
-    render(<DesktopOperatorShell {...defaultProps} isLoading={true} />);
-    expect(screen.getByLabelText(/טוען|loading/i)).toBeTruthy();
+    renderShell({ isLoading: true });
+    expect(screen.getByLabelText('טוען נתונים')).toBeTruthy();
   });
 
   it('renders empty state when shift is null', () => {
-    render(<DesktopOperatorShell {...defaultProps} shift={null} isLoading={false} />);
+    renderShell({ shift: null, isLoading: false });
     expect(screen.getAllByText('אין משמרת פעילה').length).toBeGreaterThan(0);
-    expect(screen.getByText('פתח משמרת להיום')).toBeTruthy();
+    expect(screen.getByText('פתח משמרת כדי להתחיל לעקוב אחר ההזמנות')).toBeTruthy();
   });
 
   it('passes check queue data to picker panel', () => {
-    render(<DesktopOperatorShell {...defaultProps} checkQueue={mockCheckQueue} />);
+    renderShell({ checkQueue: mockCheckQueue });
     expect(screen.getByText(/ממתינים לבדיקה/)).toBeTruthy();
   });
 
   it('renders line detail drawer when line detail is selected', () => {
-    render(<DesktopOperatorShell {...defaultProps} selectedDetailType="line" lineDetail={mockLineDetail} />);
-    expect(screen.getByRole('button', { name: /סגור|close/i })).toBeTruthy();
+    renderShell({ selectedDetailType: 'line', lineDetail: mockLineDetail });
+    expect(screen.getByRole('button', { name: /סגור/i })).toBeTruthy();
   });
 
   it('renders picker detail drawer when picker detail is selected', () => {
-    render(<DesktopOperatorShell {...defaultProps} selectedDetailType="picker" pickerDetail={mockPickerDetail} />);
-    expect(screen.getByRole('button', { name: /סגור|close/i })).toBeTruthy();
+    renderShell({ selectedDetailType: 'picker', pickerDetail: mockPickerDetail });
+    expect(screen.getByRole('button', { name: /סגור/i })).toBeTruthy();
   });
 
   it('renders order detail drawer when order detail is selected', () => {
-    render(<DesktopOperatorShell {...defaultProps} selectedDetailType="order" orderDetail={mockOrderDetail} />);
+    renderShell({ selectedDetailType: 'order', orderDetail: mockOrderDetail });
     expect(screen.getByTestId('order-detail-view')).toBeTruthy();
   });
 
   it('calls onCloseDetail when close button is clicked', () => {
     const onCloseDetail = vi.fn();
-    render(
-      <DesktopOperatorShell
-        {...defaultProps}
-        onCloseDetail={onCloseDetail}
-        selectedDetailType="line"
-        lineDetail={mockLineDetail}
-      />
-    );
+    renderShell({
+      onCloseDetail,
+      selectedDetailType: 'line',
+      lineDetail: mockLineDetail
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: /סגור|close/i }));
+    fireEvent.click(screen.getByRole('button', { name: /סגור/i }));
     expect(onCloseDetail).toHaveBeenCalledOnce();
   });
 
   it('clicking active order row calls onSelectOrder', () => {
     const onSelectOrder = vi.fn();
-    render(<DesktopOperatorShell {...defaultProps} onSelectOrder={onSelectOrder} />);
+    renderShell({ onSelectOrder });
     fireEvent.click(screen.getByTestId(`active-order-row-${mockActiveOrders[0].orderId}`));
     expect(onSelectOrder).toHaveBeenCalledWith(mockActiveOrders[0].orderId);
   });
 
   it('clicking line detail order row calls onSelectOrder', () => {
     const onSelectOrder = vi.fn();
-    render(
-      <DesktopOperatorShell
-        {...defaultProps}
-        selectedDetailType="line"
-        lineDetail={mockLineDetail}
-        onSelectOrder={onSelectOrder}
-      />
-    );
+    renderShell({
+      selectedDetailType: 'line',
+      lineDetail: mockLineDetail,
+      onSelectOrder
+    });
     fireEvent.click(screen.getByTestId(`detail-order-row-${mockLineDetail.orders[0].orderId}`));
     expect(onSelectOrder).toHaveBeenCalledWith(mockLineDetail.orders[0].orderId);
   });
 
   it('clicking picker detail order row calls onSelectOrder', () => {
     const onSelectOrder = vi.fn();
-    render(
-      <DesktopOperatorShell
-        {...defaultProps}
-        selectedDetailType="picker"
-        pickerDetail={mockPickerDetail}
-        onSelectOrder={onSelectOrder}
-      />
-    );
+    renderShell({
+      selectedDetailType: 'picker',
+      pickerDetail: mockPickerDetail,
+      onSelectOrder
+    });
     fireEvent.click(screen.getByTestId(`detail-order-row-${mockPickerDetail.orders[0].orderId}`));
     expect(onSelectOrder).toHaveBeenCalledWith(mockPickerDetail.orders[0].orderId);
   });
 
   it('date navigation buttons call onChangeDate', () => {
     const onChangeDate = vi.fn();
-    render(<DesktopOperatorShell {...defaultProps} onChangeDate={onChangeDate} />);
+    renderShell({ onChangeDate });
     fireEvent.click(screen.getByRole('button', { name: 'תאריך קודם' }));
     fireEvent.click(screen.getByRole('button', { name: 'תאריך הבא' }));
     fireEvent.click(screen.getByRole('button', { name: 'היום' }));
@@ -139,18 +171,16 @@ describe('DesktopOperatorShell', () => {
 
   it('clicking date label calls onOpenDatePicker', () => {
     const onOpenDatePicker = vi.fn();
-    render(<DesktopOperatorShell {...defaultProps} onOpenDatePicker={onOpenDatePicker} />);
+    renderShell({ onOpenDatePicker });
     fireEvent.click(screen.getByRole('button', { name: 'פתח לוח שנה' }));
     expect(onOpenDatePicker).toHaveBeenCalledOnce();
   });
 
   it('board wrapper div appears in the aside before DesktopPickerPanel', () => {
-    const { container } = render(<DesktopOperatorShell {...defaultProps} />);
-    // The board is mounted inside a dedicated wrapper div with these classes
+    const { container } = renderShell();
     const boardWrapper = container.querySelector('.p-3.border-b');
     const pickerHeader = screen.getByText('מלקטים');
     expect(boardWrapper).toBeTruthy();
-    // DOCUMENT_POSITION_FOLLOWING means pickerHeader comes AFTER boardWrapper
     expect(boardWrapper!.compareDocumentPosition(pickerHeader) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

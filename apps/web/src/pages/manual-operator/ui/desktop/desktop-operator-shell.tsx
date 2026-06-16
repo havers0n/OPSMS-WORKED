@@ -18,7 +18,7 @@ import { DesktopOrdersPanel } from './desktop-orders-panel';
 import { DesktopPickerPanel } from './desktop-picker-panel';
 import { ShiftOpenAshlamotBoard } from '../shift-open-ashlamot-board';
 
-interface DesktopOperatorShellProps {
+export interface DesktopOperatorShellProps {
   shift: ManualShiftSession | null;
   isLoading: boolean;
   kpi: ShiftSummary | undefined;

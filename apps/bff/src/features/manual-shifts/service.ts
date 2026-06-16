@@ -17,6 +17,7 @@ import type {
   ManualShiftOrderError,
   ManualShiftOrderEvent,
   ManualShiftOrderItem,
+  ManualShiftOrderDetail,
   ManualShiftOrderStatus,
   ManualShiftOrderSize,
   ManualShiftPeopleSummary,
@@ -125,6 +126,7 @@ export type ManualShiftsService = {
   listOpenShiftAshlamot(input: { tenantId: string; shiftId: string }): Promise<OpenAshlamaBoardItem[]>;
   listOrderEvents(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderEvent[]>;
   listOrderItems(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderItem[]>;
+  getOrderDetail(input: { tenantId: string; orderId: string }): Promise<ManualShiftOrderDetail>;
   createOrderAshlama(input: {
     tenantId: string;
     orderId: string;
@@ -771,6 +773,24 @@ export function createManualShiftsServiceFromRepo(
         throw manualShiftOrderNotFound(input.orderId);
       }
       return repo.listOrderItems(input.tenantId, input.orderId);
+    },
+
+    async getOrderDetail(input) {
+      const order = await requireOrder(input.orderId);
+      if (order.tenantId !== input.tenantId || order.deletedAt) {
+        throw manualShiftOrderNotFound(input.orderId);
+      }
+
+      const items = await repo.listOrderItems(input.tenantId, input.orderId);
+      const lineCount = items.length > 0 ? items.length : order.lineCount ?? 0;
+      const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+      return {
+        ...order,
+        lineCount,
+        totalQuantity,
+        items
+      };
     },
 
     async createOrderAshlama(input) {
