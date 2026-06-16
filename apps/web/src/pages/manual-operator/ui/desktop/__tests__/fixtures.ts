@@ -4,7 +4,6 @@ import type {
   ActiveOrder,
   PickerWorkload,
   CheckQueue,
-  LineDetail,
   PickerDetail,
   OrderDetail,
   LineHierarchySummary,
@@ -173,24 +172,6 @@ export const emptyCheckQueue: CheckQueue = {
   orders: [],
   count: 0,
   oldestOrder: null
-};
-
-export const mockLineDetail: LineDetail = {
-  summary: mockLines[0],
-  orders: [
-    {
-      orderId: 'order-1',
-      status: 'returned',
-      pointName: 'נקודה א',
-      customerName: null,
-      orderNumber: 'ORD-001',
-      pickerName: 'דוד',
-      size: 'M',
-      lineCount: 5,
-      palletCount: 2,
-      ageSeconds: null
-    }
-  ]
 };
 
 export const mockPickerDetail: PickerDetail = {

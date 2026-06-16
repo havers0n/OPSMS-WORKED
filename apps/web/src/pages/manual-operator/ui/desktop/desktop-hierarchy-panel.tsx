@@ -91,8 +91,8 @@ export function DesktopHierarchyPanel({
         <button
           type="button"
           className="text-xs text-blue-600 hover:text-blue-800"
-          onClick={onClearPoint}
-          aria-label="חזרה לנקודות"
+          onClick={onClearLine}
+          aria-label="חזרה לקווים"
         >
           קווים
         </button>
