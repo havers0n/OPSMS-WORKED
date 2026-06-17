@@ -303,6 +303,192 @@ describe('manual shift monthly import parser', () => {
     }));
   });
 
+  it('parses distribution area and hierarchy fields with slash — area separate from group prefix', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'דרום'
+      }
+    ]));
+
+    expect(result.groups[0]).toMatchObject({
+      distributionArea: 'דרום',
+      lineRawName: 'קו דרום/סלולר',
+      lineGroupName: 'קו דרום',
+      lineBucketName: 'סלולר'
+    });
+    expect(result.groups[0].lineName).toBe('קו דרום');
+    expect(result.groups[0].pointName).toBe('סלולר');
+  });
+
+  it('does not use prefix before slash as distribution area — area comes from zone field', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'שפלה צפונית/פז עוקף רמלה',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'שפלה 1'
+      }
+    ]));
+
+    expect(result.groups[0]).toMatchObject({
+      distributionArea: 'שפלה 1',
+      lineGroupName: 'שפלה צפונית',
+      lineBucketName: 'פז עוקף רמלה'
+    });
+    expect(result.groups[0].lineName).toBe('שפלה צפונית');
+    expect(result.groups[0].pointName).toBe('פז עוקף רמלה');
+  });
+
+  it('handles no-slash case with null lineBucketName and preserved legacy fallback', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום',
+        customerName: 'לקוח fallback',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'דרום'
+      }
+    ]));
+
+    expect(result.groups[0]).toMatchObject({
+      distributionArea: 'דרום',
+      lineRawName: 'קו דרום',
+      lineGroupName: 'קו דרום',
+      lineBucketName: null
+    });
+    expect(result.groups[0].lineName).toBe('קו דרום');
+    expect(result.groups[0].pointName).toBe('לקוח fallback');
+  });
+
+  it('sets isPickupRow true when notes contain איסוף', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        notes: 'איסוף',
+        zone: 'דרום'
+      }
+    ]));
+
+    expect(result.groups[0].isPickupRow).toBe(true);
+  });
+
+  it('sets isPickupRow false when notes lack איסוף', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'דרום'
+      }
+    ]));
+
+    expect(result.groups[0].isPickupRow).toBe(false);
+  });
+
+  it('includes distributionArea and lineGroupName in preview lines', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'דרום'
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/פז השקמה',
+        customerName: 'פז',
+        orderNumber: 'SO-2',
+        sku: '1002',
+        quantity: 1,
+        zone: 'דרום'
+      }
+    ]));
+
+    expect(result.preview.lines[0]).toMatchObject({
+      lineName: 'קו דרום',
+      distributionArea: 'דרום',
+      lineGroupName: 'קו דרום'
+    });
+    expect(Object.keys(result.preview.lines[0])).not.toContain('lineBucketName');
+    expect(Object.keys(result.preview.lines[0])).not.toContain('lineRawName');
+  });
+
+  it('includes distributionArea and lineGroupName in apply plan lines', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'דרום'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.lines[0]).toMatchObject({
+      lineName: 'קו דרום',
+      distributionArea: 'דרום',
+      lineGroupName: 'קו דרום'
+    });
+    expect(Object.keys(plan.lines[0])).not.toContain('lineBucketName');
+    expect(Object.keys(plan.lines[0])).not.toContain('lineRawName');
+  });
+
+  it('preserves hierarchy fields with null zone (no distribution area column)', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      }
+    ]));
+
+    expect(result.groups[0]).toMatchObject({
+      distributionArea: null,
+      lineRawName: 'קו דרום/סלולר',
+      lineGroupName: 'קו דרום',
+      lineBucketName: 'סלולר'
+    });
+    expect(result.groups[0].lineName).toBe('קו דרום');
+    expect(result.groups[0].pointName).toBe('סלולר');
+  });
+
   it('plans apply only positive source rows when a grouped sku mixes positive, negative, and zero rows', () => {
     const preview = parseManualShiftMonthlyPreview(buildInput([
       {

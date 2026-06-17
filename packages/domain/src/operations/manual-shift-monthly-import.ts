@@ -34,6 +34,8 @@ export type ManualShiftMonthlyAvailableDate = z.infer<typeof manualShiftMonthlyA
 
 export const manualShiftMonthlyPreviewLineSchema = z.object({
   lineName: z.string().min(1),
+  distributionArea: z.string().nullable(),
+  lineGroupName: z.string().nullable(),
   points: z.number().int().min(0),
   uniqueOrderNumbers: z.number().int().min(0),
   orderGroups: z.number().int().min(0),
@@ -130,7 +132,12 @@ export const manualShiftMonthlyAggregatedGroupSchema = z.object({
     quantity: z.number(),
     notes: z.string().nullable()
   })).min(1),
-  hasNegativeQuantity: z.boolean()
+  hasNegativeQuantity: z.boolean(),
+  distributionArea: z.string().nullable(),
+  lineRawName: z.string().nullable(),
+  lineGroupName: z.string().nullable(),
+  lineBucketName: z.string().nullable(),
+  isPickupRow: z.boolean()
 });
 export type ManualShiftMonthlyAggregatedGroup = z.infer<typeof manualShiftMonthlyAggregatedGroupSchema>;
 
@@ -163,6 +170,8 @@ export type ManualShiftMonthlyApplyOrder = z.infer<typeof manualShiftMonthlyAppl
 
 export const manualShiftMonthlyApplyLineSchema = z.object({
   lineName: z.string().min(1),
+  distributionArea: z.string().nullable(),
+  lineGroupName: z.string().nullable(),
   sortOrder: z.number().int().min(1),
   orders: z.array(manualShiftMonthlyApplyOrderSchema).min(1)
 });
@@ -305,6 +314,11 @@ type WorkingRow = {
   rawDistributionValue: string | null;
   usedPointFallback: boolean;
   hadSlash: boolean;
+  distributionArea: string | null;
+  lineRawName: string | null;
+  lineGroupName: string | null;
+  lineBucketName: string | null;
+  isPickupRow: boolean;
 };
 
 function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
@@ -323,6 +337,8 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
   let pointName: string | null = null;
   let hadSlash = false;
   let usedPointFallback = false;
+  let lineGroupName: string | null = null;
+  let lineBucketName: string | null = null;
 
   if (rawDistributionValue) {
     const slashIndex = rawDistributionValue.indexOf('/');
@@ -330,10 +346,14 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
       hadSlash = true;
       lineName = normalizeTrimmedString(rawDistributionValue.slice(0, slashIndex));
       pointName = normalizeTrimmedString(rawDistributionValue.slice(slashIndex + 1));
+      lineGroupName = lineName;
+      lineBucketName = pointName;
     } else {
       lineName = rawDistributionValue;
       pointName = customerName;
       usedPointFallback = pointName !== null;
+      lineGroupName = rawDistributionValue;
+      lineBucketName = null;
     }
   }
 
@@ -351,7 +371,12 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
     notes: normalizeTrimmedString(row.notes),
     rawDistributionValue,
     usedPointFallback,
-    hadSlash
+    hadSlash,
+    distributionArea: normalizeTrimmedString(row.zone),
+    lineRawName: rawDistributionValue,
+    lineGroupName,
+    lineBucketName,
+    isPickupRow: (normalizeTrimmedString(row.notes)?.includes('איסוף')) ?? false
   };
 }
 
@@ -367,6 +392,8 @@ export function parseManualShiftMonthlyPreview(
   const groups = new Map<string, ManualShiftMonthlyAggregatedGroup>();
   const topWarnings: ManualShiftMonthlyWarning[] = [];
   const lines = new Map<string, {
+    distributionArea: string | null;
+    lineGroupName: string | null;
     pointNames: Set<string>;
     orderNumbers: Set<string>;
     orderGroups: Set<string>;
@@ -499,11 +526,18 @@ export function parseManualShiftMonthlyPreview(
           quantity: row.quantity,
           notes: row.notes
         }],
-        hasNegativeQuantity: row.quantity < 0
+        hasNegativeQuantity: row.quantity < 0,
+        distributionArea: row.distributionArea,
+        lineRawName: row.lineRawName,
+        lineGroupName: row.lineGroupName,
+        lineBucketName: row.lineBucketName,
+        isPickupRow: row.isPickupRow
       });
     }
 
     const lineEntry = lines.get(row.lineName) ?? {
+      distributionArea: row.distributionArea,
+      lineGroupName: row.lineGroupName,
       pointNames: new Set<string>(),
       orderNumbers: new Set<string>(),
       orderGroups: new Set<string>(),
@@ -514,6 +548,8 @@ export function parseManualShiftMonthlyPreview(
       anomalyCount: 0,
       warningRows: []
     };
+    lineEntry.distributionArea ??= row.distributionArea;
+    lineEntry.lineGroupName ??= row.lineGroupName;
 
     lineEntry.itemRows += 1;
     lineEntry.pointNames.add(row.pointName);
@@ -629,6 +665,8 @@ export function parseManualShiftMonthlyPreview(
 
       return {
         lineName,
+        distributionArea: entry.distributionArea,
+        lineGroupName: entry.lineGroupName,
         points: entry.pointNames.size,
         uniqueOrderNumbers: entry.orderNumbers.size,
         orderGroups: entry.orderGroups.size,
@@ -709,7 +747,11 @@ export function planManualShiftMonthlyImportApply(
     blocking: blockingWarnings.length
   };
 
-  const byLine = new Map<string, Map<string, ManualShiftMonthlyApplyOrder>>();
+  const byLine = new Map<string, {
+    orders: Map<string, ManualShiftMonthlyApplyOrder>;
+    distributionArea: string | null;
+    lineGroupName: string | null;
+  }>();
   let appliedGroups = 0;
   let skippedGroups = 0;
   let skippedNegativeQuantityRows = 0;
@@ -729,8 +771,16 @@ export function planManualShiftMonthlyImportApply(
     }
 
     appliedGroups += 1;
-    const lineOrders = byLine.get(group.lineName) ?? new Map<string, ManualShiftMonthlyApplyOrder>();
-    byLine.set(group.lineName, lineOrders);
+    let lineEntry = byLine.get(group.lineName);
+    if (!lineEntry) {
+      lineEntry = {
+        orders: new Map<string, ManualShiftMonthlyApplyOrder>(),
+        distributionArea: group.distributionArea,
+        lineGroupName: group.lineGroupName
+      };
+      byLine.set(group.lineName, lineEntry);
+    }
+    const lineOrders = lineEntry.orders;
 
     const orderKey = `${group.pointName}\u0001${group.orderNumber}`;
     const existingOrder = lineOrders.get(orderKey);
@@ -769,10 +819,12 @@ export function planManualShiftMonthlyImportApply(
   }
 
   const lines = Array.from(byLine.entries())
-    .map(([lineName, orders]) => ({
+    .map(([lineName, lineEntry]) => ({
       lineName,
+      distributionArea: lineEntry.distributionArea,
+      lineGroupName: lineEntry.lineGroupName,
       sortOrder: 0,
-      orders: Array.from(orders.values())
+      orders: Array.from(lineEntry.orders.values())
         .sort((a, b) =>
           compareStrings(a.pointName, b.pointName) ||
           compareStrings(a.orderNumber, b.orderNumber)
