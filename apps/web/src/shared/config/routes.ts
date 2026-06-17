@@ -1,6 +1,14 @@
 export const routes = {
   login: '/login',
   operatorManual: '/operator/manual',
+  operatorManualWork: '/operator/manual/work',
+  operatorManualSummary: '/operator/manual/summary',
+  operatorManualCheck: '/operator/manual/check',
+  operatorManualPeople: '/operator/manual/people',
+  operatorManualProducts: '/operator/manual/products',
+  operatorManualAshlamot: '/operator/manual/ashlamot',
+  operatorManualPrinting: '/operator/manual/printing',
+  operatorManualImport: '/operator/manual/import',
   warehouse: '/warehouse',
   warehouseView: '/warehouse/view',
   warehouseActions: '/warehouse/actions',
@@ -22,6 +30,27 @@ export const routes = {
   pickerTask: '/picker/task/:taskId',
   pickerStep: '/picker/task/:taskId/step/:stepId',
 } as const;
+
+export const manualOperatorSections = [
+  'work',
+  'summary',
+  'check',
+  'people',
+  'products',
+  'ashlamot',
+  'printing',
+  'import'
+] as const;
+
+export type ManualOperatorSection = (typeof manualOperatorSections)[number];
+
+export function manualOperatorSectionPath(section: ManualOperatorSection) {
+  return `${routes.operatorManual}/${section}`;
+}
+
+export function isManualOperatorSection(value: string | undefined | null): value is ManualOperatorSection {
+  return !!value && (manualOperatorSections as readonly string[]).includes(value);
+}
 
 export function orderDetailPath(orderId: string) {
   return `/operations/orders/${orderId}`;
