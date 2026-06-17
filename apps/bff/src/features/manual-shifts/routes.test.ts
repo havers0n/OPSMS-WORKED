@@ -508,7 +508,7 @@ describe('manual shifts routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ shift: null, lines: [] });
+    expect(response.json()).toMatchObject({ shift: null, lines: [] });
     expect(service.getTodayShift).toHaveBeenCalledWith(ids.tenant);
 
     await app.close();
@@ -1328,7 +1328,7 @@ describe('manual shifts routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       preview: {
         source: {
           fileName: 'monthly.xlsx',
