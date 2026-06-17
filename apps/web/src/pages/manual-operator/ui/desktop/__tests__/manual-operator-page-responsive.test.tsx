@@ -75,7 +75,7 @@ describe('ManualOperatorPage responsive rendering', () => {
       renderPage(makeQC());
 
       // Mobile shell bottom nav is always present
-      expect(screen.getByRole('button', { name: 'תור' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'עבודה' })).toBeTruthy();
       expect(screen.getByRole('button', { name: 'בדיקה' })).toBeTruthy();
     });
 

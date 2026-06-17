@@ -23,8 +23,8 @@ describe('AppRouter lazy routes', () => {
     vi.resetAllMocks();
   });
 
-  it('renders ManualOperatorPage at /operator/manual', async () => {
-    window.history.pushState({}, '', routes.operatorManual);
+  it('renders ManualOperatorPage at /operator/manual/work', async () => {
+    window.history.pushState({}, '', routes.operatorManualWork);
     const { AppRouter } = await import('./routes');
 
     render(
@@ -35,6 +35,20 @@ describe('AppRouter lazy routes', () => {
 
     const header = await screen.findByText('Artos Operator');
     expect(header).toBeTruthy();
+  });
+
+  it('redirects /operator/manual to /operator/manual/work', async () => {
+    window.history.pushState({}, '', routes.operatorManual);
+    const { AppRouter } = await import('./routes');
+
+    render(
+      <I18nProvider>
+        <AppRouter />
+      </I18nProvider>
+    );
+
+    await screen.findByText('Artos Operator');
+    expect(window.location.pathname).toBe(routes.operatorManualWork);
   });
 
   it('renders ProductsPage at /products', async () => {

@@ -83,6 +83,10 @@ export function AppRouter() {
         />
         <Route
           path={routes.operatorManual}
+          element={<Navigate to={routes.operatorManualWork} replace />}
+        />
+        <Route
+          path={`${routes.operatorManual}/*`}
           element={
             <ProtectedRoute>
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center text-sm text-[var(--text-muted)]">{t('app.loading.session')}</div>}>
