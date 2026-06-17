@@ -85,6 +85,7 @@ function makeLineSummary(
       tenantId: TENANT_ID,
       shiftId: SHIFT_ID,
       name: lineName,
+      distributionArea: null,
       sortOrder: 0,
       status: 'open',
       createdAt: '2026-05-27T08:00:00.000Z',

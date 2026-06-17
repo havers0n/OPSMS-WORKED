@@ -116,6 +116,7 @@ describe('manual shift control contracts', () => {
               tenantId: '4caa9e8d-4349-4623-ad98-9e2f2af193c0',
               shiftId: 'a89d5d4a-5f0c-44a7-b75f-eaf3138fbfbf',
               name: 'שרון דרומי',
+              distributionArea: null,
               sortOrder: 1,
               status: 'in_progress',
               createdAt: '2026-05-26T06:10:00.000Z',

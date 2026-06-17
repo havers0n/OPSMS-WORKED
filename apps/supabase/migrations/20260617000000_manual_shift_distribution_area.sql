@@ -1,0 +1,444 @@
+-- Description: PR3C — store distributionArea on manual_shift_lines.
+
+-- 1. Add nullable distribution_area column
+alter table if exists public.manual_shift_lines
+  add column if not exists distribution_area text;
+
+-- 2. Update monthly apply RPC to read distributionArea from plan and store it
+create or replace function public.manual_shift_apply_monthly_import(
+  p_tenant_id uuid,
+  p_shift_id uuid,
+  p_selected_date date,
+  p_plan jsonb
+)
+returns table (
+  shift_id uuid,
+  selected_date date,
+  lines_created integer,
+  orders_created integer,
+  order_items_created integer
+)
+language plpgsql
+security invoker
+as $$
+declare
+  v_shift public.manual_shift_sessions%rowtype;
+  v_profile public.profiles%rowtype;
+  v_session_actor_id uuid;
+  v_session_actor_name text;
+  v_line record;
+  v_order record;
+  v_item record;
+  v_created_line_id uuid;
+  v_created_order_id uuid;
+  v_lines_created integer := 0;
+  v_orders_created integer := 0;
+  v_order_items_created integer := 0;
+  v_source_rows integer[];
+  v_source_sheet text;
+  v_source_file text;
+  v_active_lines_count integer := 0;
+  v_active_orders_count integer := 0;
+  v_soft_deleted_lines_count integer := 0;
+  v_soft_deleted_orders_count integer := 0;
+begin
+  v_session_actor_id := auth.uid();
+  if v_session_actor_id is null then
+    raise insufficient_privilege using message = 'FORBIDDEN';
+  end if;
+  if not public.can_manage_tenant(p_tenant_id) then
+    raise insufficient_privilege using message = 'FORBIDDEN';
+  end if;
+
+  select *
+  into v_profile
+  from public.profiles p
+  where p.id = v_session_actor_id;
+  if v_profile.id is null then
+    raise insufficient_privilege using message = 'FORBIDDEN';
+  end if;
+  v_session_actor_name := coalesce(
+    nullif(btrim(v_profile.display_name), ''),
+    nullif(btrim(v_profile.email), ''),
+    'operator'
+  );
+
+  if p_plan is null or jsonb_typeof(p_plan) <> 'object' then
+    raise exception 'INVALID_PREVIEW_PAYLOAD';
+  end if;
+  if jsonb_typeof(coalesce(p_plan -> 'lines', 'null'::jsonb)) <> 'array' then
+    raise exception 'INVALID_PREVIEW_PAYLOAD';
+  end if;
+
+  select *
+  into v_shift
+  from public.manual_shift_sessions s
+  where s.id = p_shift_id
+    and s.tenant_id = p_tenant_id
+  for update;
+
+  if not found then
+    raise exception 'SHIFT_NOT_FOUND';
+  end if;
+
+  if v_shift.status <> 'active' then
+    raise exception 'SHIFT_NOT_ACTIVE';
+  end if;
+
+  if v_shift.date <> p_selected_date then
+    raise exception 'SHIFT_DATE_MISMATCH';
+  end if;
+
+  select count(*)::int
+  into v_active_lines_count
+  from public.manual_shift_lines l
+  where l.shift_id = p_shift_id
+    and l.tenant_id = p_tenant_id
+    and l.deleted_at is null;
+
+  select count(*)::int
+  into v_soft_deleted_lines_count
+  from public.manual_shift_lines l
+  where l.shift_id = p_shift_id
+    and l.tenant_id = p_tenant_id
+    and l.deleted_at is not null;
+
+  select count(*)::int
+  into v_active_orders_count
+  from public.manual_shift_orders o
+  where o.shift_id = p_shift_id
+    and o.tenant_id = p_tenant_id
+    and o.deleted_at is null;
+
+  select count(*)::int
+  into v_soft_deleted_orders_count
+  from public.manual_shift_orders o
+  where o.shift_id = p_shift_id
+    and o.tenant_id = p_tenant_id
+    and o.deleted_at is not null;
+
+  if v_active_lines_count > 0
+    or v_active_orders_count > 0
+    or exists (
+      select 1
+      from public.manual_shift_order_items i
+      join public.manual_shift_orders o
+        on o.id = i.order_id
+       and o.shift_id = p_shift_id
+       and o.tenant_id = p_tenant_id
+       and o.deleted_at is null
+      where i.shift_id = p_shift_id
+        and i.tenant_id = p_tenant_id
+    )
+  then
+    raise exception 'SHIFT_NOT_EMPTY';
+  end if;
+
+  v_source_sheet := nullif(btrim(coalesce(p_plan -> 'preview' -> 'source' ->> 'sheetName', '')), '');
+  v_source_file := nullif(btrim(coalesce(p_plan -> 'preview' -> 'source' ->> 'fileName', '')), '');
+
+  for v_line in
+    select *
+    from jsonb_to_recordset(p_plan -> 'lines') as l(
+      "lineName" text,
+      "sortOrder" integer,
+      "distributionArea" text,
+      orders jsonb
+    )
+    order by l."sortOrder" asc, l."lineName" asc
+  loop
+    if coalesce(btrim(v_line."lineName"), '') = '' then
+      raise exception 'INVALID_PREVIEW_PAYLOAD';
+    end if;
+    if v_line."sortOrder" is null or v_line."sortOrder" < 1 then
+      raise exception 'INVALID_PREVIEW_PAYLOAD';
+    end if;
+    if v_line.orders is null or jsonb_typeof(v_line.orders) <> 'array' then
+      raise exception 'INVALID_PREVIEW_PAYLOAD';
+    end if;
+
+    insert into public.manual_shift_lines (
+      tenant_id,
+      shift_id,
+      name,
+      sort_order,
+      distribution_area
+    )
+    values (
+      p_tenant_id,
+      p_shift_id,
+      v_line."lineName",
+      v_line."sortOrder",
+      nullif(btrim(v_line."distributionArea"), '')
+    )
+    returning id into v_created_line_id;
+
+    v_lines_created := v_lines_created + 1;
+
+    for v_order in
+      select *
+      from jsonb_to_recordset(v_line.orders) as o(
+        "pointName" text,
+        "orderNumber" text,
+        "totalQuantity" numeric,
+        "sourceRows" jsonb,
+        "sortOrder" integer,
+        items jsonb
+      )
+      order by o."sortOrder" asc, o."pointName" asc, o."orderNumber" asc
+    loop
+      if coalesce(btrim(v_order."pointName"), '') = '' then
+        raise exception 'INVALID_PREVIEW_PAYLOAD';
+      end if;
+      if coalesce(btrim(v_order."orderNumber"), '') = '' then
+        raise exception 'INVALID_PREVIEW_PAYLOAD';
+      end if;
+      if v_order."sortOrder" is null or v_order."sortOrder" < 1 then
+        raise exception 'INVALID_PREVIEW_PAYLOAD';
+      end if;
+      if v_order.items is null or jsonb_typeof(v_order.items) <> 'array' then
+        raise exception 'INVALID_PREVIEW_PAYLOAD';
+      end if;
+
+      insert into public.manual_shift_orders (
+        tenant_id,
+        shift_id,
+        line_id,
+        order_number,
+        customer_name,
+        point_name,
+        pallet_count,
+        picker_worker_id,
+        picker_name,
+        checker_name,
+        line_count,
+        sort_order,
+        size,
+        status
+      )
+      values (
+        p_tenant_id,
+        p_shift_id,
+        v_created_line_id,
+        v_order."orderNumber",
+        null,
+        v_order."pointName",
+        null,
+        null,
+        null,
+        null,
+        null,
+        v_order."sortOrder",
+        'unknown',
+        'queued'
+      )
+      returning id into v_created_order_id;
+
+      v_orders_created := v_orders_created + 1;
+
+      insert into public.manual_shift_order_events (
+        tenant_id,
+        shift_id,
+        line_id,
+        order_id,
+        event_type,
+        actor_profile_id,
+        actor_name,
+        from_status,
+        to_status,
+        payload
+      )
+      values (
+        p_tenant_id,
+        p_shift_id,
+        v_created_line_id,
+        v_created_order_id,
+        'created',
+        v_session_actor_id,
+        v_session_actor_name,
+        null,
+        'queued',
+        jsonb_build_object(
+          'source', 'monthly_xlsx_import',
+          'selectedDate', p_selected_date,
+          'pointName', v_order."pointName",
+          'orderNumber', v_order."orderNumber",
+          'totalQuantity', v_order."totalQuantity"
+        )
+      );
+
+      for v_item in
+        select *
+        from jsonb_to_recordset(v_order.items) as i(
+          sku text,
+          description text,
+          category text,
+          quantity numeric,
+          notes text,
+          "sourceRows" jsonb,
+          "sortOrder" integer
+        )
+        order by i."sortOrder" asc, i.sku asc
+      loop
+        if coalesce(btrim(v_item.sku), '') = '' then
+          raise exception 'INVALID_PREVIEW_PAYLOAD';
+        end if;
+        if v_item.quantity is null or v_item.quantity <= 0 then
+          raise exception 'INVALID_PREVIEW_PAYLOAD';
+        end if;
+        if v_item."sortOrder" is null or v_item."sortOrder" < 1 then
+          raise exception 'INVALID_PREVIEW_PAYLOAD';
+        end if;
+
+        select coalesce(array_agg(value::integer order by ordinality), '{}'::integer[])
+        into v_source_rows
+        from jsonb_array_elements_text(coalesce(v_item."sourceRows", '[]'::jsonb)) with ordinality as source_rows(value, ordinality);
+
+        if v_source_rows is null or cardinality(v_source_rows) = 0 then
+          raise exception 'INVALID_PREVIEW_PAYLOAD';
+        end if;
+
+        insert into public.manual_shift_order_items (
+          tenant_id,
+          shift_id,
+          line_id,
+          order_id,
+          sku,
+          description,
+          category,
+          quantity,
+          notes,
+          zone,
+          source_sheet,
+          source_rows,
+          source_file,
+          sort_order
+        )
+        values (
+          p_tenant_id,
+          p_shift_id,
+          v_created_line_id,
+          v_created_order_id,
+          v_item.sku,
+          v_item.description,
+          v_item.category,
+          v_item.quantity,
+          v_item.notes,
+          null,
+          v_source_sheet,
+          v_source_rows,
+          v_source_file,
+          v_item."sortOrder"
+        );
+
+        v_order_items_created := v_order_items_created + 1;
+      end loop;
+    end loop;
+  end loop;
+
+  return query
+  select
+    p_shift_id,
+    p_selected_date,
+    v_lines_created,
+    v_orders_created,
+    v_order_items_created;
+end;
+$$;
+
+revoke all on function public.manual_shift_apply_monthly_import(uuid, uuid, date, jsonb) from public;
+revoke all on function public.manual_shift_apply_monthly_import(uuid, uuid, date, jsonb) from anon;
+revoke all on function public.manual_shift_apply_monthly_import(uuid, uuid, date, jsonb) from authenticated;
+grant execute on function public.manual_shift_apply_monthly_import(uuid, uuid, date, jsonb) to authenticated;
+
+-- 3. Update line summaries RPC to return distribution_area
+create or replace function public.manual_shift_list_line_summaries(p_shift_id uuid, p_tenant_id uuid)
+returns table (
+  line_id uuid,
+  tenant_id uuid,
+  shift_id uuid,
+  name text,
+  sort_order integer,
+  status text,
+  distribution_area text,
+  created_at timestamptz,
+  deleted_at timestamptz,
+  deleted_by_profile_id uuid,
+  deleted_by_name text,
+  delete_reason text,
+  total_orders integer,
+  queued_orders integer,
+  picking_orders integer,
+  waiting_check_orders integer,
+  returned_orders integer,
+  done_orders integer,
+  error_count integer
+)
+language sql
+stable
+security invoker
+as $$
+with active_orders as (
+  select *
+  from public.manual_shift_orders o
+  where o.shift_id = p_shift_id
+    and o.tenant_id = p_tenant_id
+    and o.deleted_at is null
+),
+orders_agg as (
+  select
+    o.line_id,
+    count(*)::int as total_orders,
+    count(*) filter (where o.status = 'queued')::int as queued_orders,
+    count(*) filter (where o.status = 'picking')::int as picking_orders,
+    count(*) filter (where o.status = 'waiting_check')::int as waiting_check_orders,
+    count(*) filter (where o.status = 'returned')::int as returned_orders,
+    count(*) filter (where o.status = 'done')::int as done_orders
+  from active_orders o
+  group by o.line_id
+),
+errors_agg as (
+  select
+    e.line_id,
+    count(*)::int as error_count
+  from public.manual_shift_order_errors e
+  join active_orders o on o.id = e.order_id
+  where e.shift_id = p_shift_id
+    and e.tenant_id = p_tenant_id
+  group by e.line_id
+)
+select
+  l.id as line_id,
+  l.tenant_id,
+  l.shift_id,
+  l.name,
+  l.sort_order,
+  case
+    when coalesce(o.total_orders, 0) = 0 then 'open'
+    when coalesce(o.queued_orders, 0) = coalesce(o.total_orders, 0) then 'open'
+    when coalesce(o.done_orders, 0) = coalesce(o.total_orders, 0) then 'done'
+    else 'in_progress'
+  end as status,
+  l.distribution_area,
+  l.created_at,
+  l.deleted_at,
+  l.deleted_by_profile_id,
+  l.deleted_by_name,
+  l.delete_reason,
+  coalesce(o.total_orders, 0) as total_orders,
+  coalesce(o.queued_orders, 0) as queued_orders,
+  coalesce(o.picking_orders, 0) as picking_orders,
+  coalesce(o.waiting_check_orders, 0) as waiting_check_orders,
+  coalesce(o.returned_orders, 0) as returned_orders,
+  coalesce(o.done_orders, 0) as done_orders,
+  coalesce(e.error_count, 0) as error_count
+from public.manual_shift_lines l
+left join orders_agg o on o.line_id = l.id
+left join errors_agg e on e.line_id = l.id
+where l.shift_id = p_shift_id
+  and l.tenant_id = p_tenant_id
+  and l.deleted_at is null
+order by l.sort_order asc, l.created_at asc;
+$$;
+
+grant execute on function public.manual_shift_list_line_summaries(uuid, uuid) to authenticated;

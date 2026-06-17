@@ -49,6 +49,7 @@ type ManualShiftLineRow = {
   tenant_id: string;
   shift_id: string;
   name: string;
+  distribution_area: string | null;
   sort_order: number;
   created_at: string;
   deleted_at: string | null;
@@ -195,6 +196,7 @@ type ManualShiftLineSummaryAggRow = {
   tenant_id: string;
   shift_id: string;
   name: string;
+  distribution_area: string | null;
   sort_order: number;
   status: ManualShiftLine['status'];
   created_at: string;
@@ -214,7 +216,7 @@ type ManualShiftLineSummaryAggRow = {
 const sessionColumns =
   'id,tenant_id,date,name,status,created_by_name,created_at,closed_at';
 const lineColumns =
-  'id,tenant_id,shift_id,name,sort_order,created_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
+  'id,tenant_id,shift_id,name,distribution_area,sort_order,created_at,deleted_at,deleted_by_profile_id,deleted_by_name,delete_reason';
 const workerColumns =
   'id,tenant_id,shift_id,name,role,active,sort_order,auth_user_id,created_at,updated_at';
 const orderColumns =
@@ -262,6 +264,7 @@ function mapLineRow(row: ManualShiftLineRow, status: ManualShiftLine['status']):
     tenantId: row.tenant_id,
     shiftId: row.shift_id,
     name: row.name,
+    distributionArea: row.distribution_area,
     sortOrder: row.sort_order,
     status,
     createdAt: row.created_at,
@@ -279,6 +282,7 @@ function mapLineSummaryAggRow(row: ManualShiftLineSummaryAggRow): ManualShiftLin
       tenantId: row.tenant_id,
       shiftId: row.shift_id,
       name: row.name,
+      distributionArea: row.distribution_area,
       sortOrder: row.sort_order,
       status: row.status,
       createdAt: row.created_at,

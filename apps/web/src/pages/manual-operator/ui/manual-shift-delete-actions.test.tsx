@@ -25,13 +25,14 @@ const shift = {
   closedAt: null
 };
 
-const line = {
+const line: ManualShiftLine = {
   id: 'line-1',
   tenantId: 'tenant-1',
   shiftId: shift.id,
   name: 'Line A',
+  distributionArea: null,
   sortOrder: 0,
-  status: 'open' as const,
+  status: 'open',
   createdAt: new Date().toISOString(),
   deletedAt: null,
   deletedByProfileId: null,

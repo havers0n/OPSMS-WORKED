@@ -147,6 +147,7 @@ function createRepo() {
       tenant_id: string;
       shift_id: string;
       name: string;
+      distribution_area: string | null;
       sort_order: number;
       created_at: string;
       deleted_at: string | null;
@@ -249,6 +250,7 @@ function createRepo() {
             tenantId: row.tenant_id,
             shiftId: row.shift_id,
             name: row.name,
+            distributionArea: row.distribution_area,
             sortOrder: row.sort_order,
             status: 'open',
             createdAt: row.created_at,
@@ -312,6 +314,7 @@ function createRepo() {
         tenant_id: input.tenantId,
         shift_id: input.shiftId,
         name: input.name,
+        distribution_area: null,
         sort_order: input.sortOrder,
         created_at: nowIso,
         deleted_at: null,

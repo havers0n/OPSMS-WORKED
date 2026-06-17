@@ -80,6 +80,7 @@ function createLine(): ManualShiftLine {
     tenantId: ids.tenant,
     shiftId: ids.shift,
     name: 'Kav A',
+    distributionArea: null,
     sortOrder: 1,
     status: 'open',
     createdAt: '2026-05-26T07:10:00.000Z',
