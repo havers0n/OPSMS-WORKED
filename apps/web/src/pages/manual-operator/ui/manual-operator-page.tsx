@@ -1,25 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
-import {
-  daySummaryQueryOptions,
-  shiftByDateQueryOptions,
-  shiftOrdersQueryOptions
-} from '@/entities/manual-shift/api/queries';
+import { shiftByDateQueryOptions } from '@/entities/manual-shift/api/queries';
 import { useCreateShift } from '@/entities/manual-shift/api/mutations';
-import {
-  selectActiveOrders,
-  selectCheckQueue,
-  selectLineHierarchySummaries,
-  selectLineSummaries,
-  selectOrderDetail,
-  selectPickerDetail,
-  selectPickerWorkloads,
-  selectPointSummaries,
-  selectShiftSummary,
-  type ShiftListOrder
-} from '@/entities/manual-shift/model/shift-selectors';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 import { useAuth } from '@/app/providers/auth-provider';
 import {
@@ -28,19 +12,14 @@ import {
   type ManualOperatorSection,
   routes
 } from '@/shared/config/routes';
-import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
 import { MobileOperatorShell } from './mobile-operator-shell';
 import { ShiftEmptyState } from './shift-empty-state';
 import { ShiftDatePicker } from './shift-date-picker';
-import { LineList } from './line-list';
-import { LineDetail } from './line-detail';
-import { AddLineSheet } from './add-line-sheet';
 import { CheckTab } from './check-tab';
 import { PeopleTab } from './people-tab';
 import { DayTab } from './day-tab';
-import { ImportExcelSheet } from './import-excel-sheet';
-import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
 import { ManualOperatorPlaceholder } from './manual-operator-placeholder';
+import { ManualOperatorWorkSection } from './manual-operator-work-section';
 import { manualOperatorSectionItems } from './manual-operator-navigation';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
@@ -62,14 +41,6 @@ function generateShiftName(): string {
   }).format(new Date());
 }
 
-function MobileLoadingState() {
-  return (
-    <div className="flex items-center justify-center py-20" dir="rtl">
-      <Loader2 size={32} className="animate-spin text-gray-400" />
-    </div>
-  );
-}
-
 function getSectionFromPathname(pathname: string): ManualOperatorSection | null {
   if (pathname === routes.operatorManual) return 'work';
   if (!pathname.startsWith(`${routes.operatorManual}/`)) return null;
@@ -81,62 +52,13 @@ function ManualOperatorSectionContent({
   section,
   shift,
   lines,
-  isReadOnly,
-  canMonthlyImport,
-  activeTabState,
-  onSelectLine,
-  onOpenImportExcel,
-  onOpenMonthlyPreview,
-  onOpenAddLine,
-  selectedLine
+  isReadOnly
 }: {
   section: ManualOperatorSection;
   shift: ManualShiftSession | null;
   lines: ManualShiftLineSummary[];
   isReadOnly: boolean;
-  canMonthlyImport: boolean;
-  activeTabState: {
-    selectedLine: ManualShiftLineSummary | null;
-    setSelectedLine: (line: ManualShiftLineSummary | null) => void;
-    showAddLine: boolean;
-    setShowAddLine: (value: boolean) => void;
-    showImportExcel: boolean;
-    setShowImportExcel: (value: boolean) => void;
-    showMonthlyPreview: boolean;
-    setShowMonthlyPreview: (value: boolean) => void;
-    importSuccessMessage: string | null;
-    setImportSuccessMessage: (value: string | null) => void;
-  };
-  onSelectLine: (line: ManualShiftLineSummary) => void;
-  onOpenImportExcel: () => void;
-  onOpenMonthlyPreview: () => void;
-  onOpenAddLine: () => void;
-  selectedLine: ManualShiftLineSummary | null;
 }) {
-  if (section === 'work') {
-    return (
-      <>
-        {activeTabState.importSuccessMessage && (
-          <div className="mx-4 mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-            {activeTabState.importSuccessMessage}
-          </div>
-        )}
-        <LineList
-          lines={lines}
-          onSelectLine={onSelectLine}
-          canImport={canMonthlyImport}
-          canPreviewMonthly={canMonthlyImport}
-          canAddManual={!isReadOnly}
-          showNoShiftHint={!shift}
-          onImportExcel={onOpenImportExcel}
-          onPreviewMonthly={onOpenMonthlyPreview}
-          onAddLineManually={onOpenAddLine}
-        />
-        {selectedLine && <LineDetail summary={selectedLine} onBack={() => activeTabState.setSelectedLine(null)} />}
-      </>
-    );
-  }
-
   if (section === 'summary') {
     return shift ? (
       <DayTab shiftId={shift.id} shiftName={shift.name} canInteract={!isReadOnly} />
@@ -241,68 +163,12 @@ export function ManualOperatorPage() {
   const todayDate = getTodayDateIsrael();
   const [selectedDate, setSelectedDate] = useState(todayDate);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showAddLine, setShowAddLine] = useState(false);
-  const [showImportExcel, setShowImportExcel] = useState(false);
-  const [showMonthlyPreview, setShowMonthlyPreview] = useState(false);
-  const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
-  const [selectedLine, setSelectedLine] = useState<ManualShiftLineSummary | null>(null);
-  const [selectedDesktopDetail, setSelectedDesktopDetail] = useState<
-    | { type: 'picker'; pickerKey: string }
-    | { type: 'order'; orderId: string }
-    | null
-  >(null);
-  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
-  const [selectedPointName, setSelectedPointName] = useState<string | null>(null);
 
   const isToday = selectedDate === todayDate;
   const { data: shiftData, isLoading } = useQuery(shiftByDateQueryOptions(selectedDate));
   const shift = shiftData?.shift ?? null;
   const lines = shiftData?.lines ?? [];
   const isReadOnly = !isToday || shift?.status === 'closed';
-
-  const { data: daySummary, isLoading: isDaySummaryLoading } = useQuery({
-    ...daySummaryQueryOptions(shift?.id ?? ''),
-    enabled: !!shift?.id && isDesktop
-  });
-  const { data: shiftOrders = [] } = useQuery({
-    ...shiftOrdersQueryOptions(shift?.id ?? ''),
-    enabled: !!shift?.id && isDesktop
-  });
-
-  const byLine = daySummary?.byLine ?? lines;
-  const kpi = useMemo(
-    () => (daySummary ? selectShiftSummary(daySummary, shiftOrders) : undefined),
-    [daySummary, shiftOrders]
-  );
-  const lineSummaries = useMemo(
-    () => selectLineSummaries(byLine, shiftOrders),
-    [byLine, shiftOrders]
-  );
-  const activeOrders = useMemo(() => selectActiveOrders(shiftOrders), [shiftOrders]);
-  const pickerWorkloads = useMemo(() => selectPickerWorkloads(shiftOrders), [shiftOrders]);
-  const checkQueue = useMemo(() => selectCheckQueue(shiftOrders), [shiftOrders]);
-  const pickerDetail = useMemo(() => {
-    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'picker') return null;
-    return selectPickerDetail(
-      selectedDesktopDetail.pickerKey,
-      pickerWorkloads,
-      shiftOrders,
-      lineSummaries
-    );
-  }, [selectedDesktopDetail, pickerWorkloads, shiftOrders, lineSummaries]);
-  const orderDetail = useMemo(() => {
-    if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'order') return null;
-    return selectOrderDetail(selectedDesktopDetail.orderId, shiftOrders, lineSummaries);
-  }, [selectedDesktopDetail, shiftOrders, lineSummaries]);
-  const shiftListOrders = shiftOrders as ShiftListOrder[];
-  const lineHierarchySummaries = useMemo(
-    () => selectLineHierarchySummaries(lineSummaries, shiftListOrders),
-    [lineSummaries, shiftListOrders]
-  );
-  const pointSummaries = useMemo(
-    () => (selectedLineId ? selectPointSummaries(selectedLineId, shiftListOrders) : []),
-    [selectedLineId, shiftListOrders]
-  );
 
   const createShift = useCreateShift();
   const currentMembership = currentTenantId
@@ -318,40 +184,9 @@ export function ManualOperatorPage() {
 
   function handleSelectDate(date: string) {
     setSelectedDate(date);
-    setSelectedLine(null);
-    setSelectedDesktopDetail(null);
-    setSelectedLineId(null);
-    setSelectedPointName(null);
-    setShowMonthlyPreview(false);
-    setShowImportExcel(false);
-    setImportSuccessMessage(null);
-  }
-
-  function handleSelectHierarchyLine(lineId: string) {
-    setSelectedLineId(lineId);
-    setSelectedPointName(null);
-  }
-
-  function handleSelectHierarchyPoint(pointName: string) {
-    setSelectedPointName(pointName);
-  }
-
-  function handleClearHierarchyLine() {
-    setSelectedLineId(null);
-    setSelectedPointName(null);
-  }
-
-  function handleClearHierarchyPoint() {
-    setSelectedPointName(null);
   }
 
   function handleChangeSection(nextSection: ManualOperatorSection) {
-    if (nextSection !== 'work') {
-      setSelectedLine(null);
-      setShowAddLine(false);
-      setShowImportExcel(false);
-      setShowMonthlyPreview(false);
-    }
     navigate(manualOperatorSectionPath(nextSection));
   }
 
@@ -365,26 +200,40 @@ export function ManualOperatorPage() {
       shift={shift}
       lines={lines}
       isReadOnly={isReadOnly}
-      canMonthlyImport={canMonthlyImport}
-      activeTabState={{
-        selectedLine,
-        setSelectedLine,
-        showAddLine,
-        setShowAddLine,
-        showImportExcel,
-        setShowImportExcel,
-        showMonthlyPreview,
-        setShowMonthlyPreview,
-        importSuccessMessage,
-        setImportSuccessMessage
-      }}
-      onSelectLine={setSelectedLine}
-      onOpenImportExcel={() => setShowImportExcel(true)}
-      onOpenMonthlyPreview={() => setShowMonthlyPreview(true)}
-      onOpenAddLine={() => setShowAddLine(true)}
-      selectedLine={selectedLine}
     />
   ) : null;
+
+  if (isDesktop && section === 'work') {
+    return (
+      <>
+        <ManualOperatorWorkSection
+          key={selectedDate}
+          shift={shift}
+          lines={lines}
+          isLoading={isLoading}
+          isReadOnly={isReadOnly}
+          isToday={isToday}
+          canMonthlyImport={canMonthlyImport}
+          isDesktop={isDesktop}
+          selectedDate={selectedDate}
+          todayDate={todayDate}
+          onChangeDate={handleSelectDate}
+          onOpenDatePicker={() => setShowDatePicker(true)}
+          onCreateShift={handleCreateShift}
+          isCreatingShift={createShift.isPending}
+          onChangeSection={handleChangeSection}
+        />
+        {showDatePicker && (
+          <ShiftDatePicker
+            selectedDate={selectedDate}
+            todayDate={todayDate}
+            onSelect={handleSelectDate}
+            onClose={() => setShowDatePicker(false)}
+          />
+        )}
+      </>
+    );
+  }
 
   if (isDesktop && section && section !== 'work') {
     return (
@@ -419,38 +268,25 @@ export function ManualOperatorPage() {
     );
   }
 
-  if (isDesktop && section === 'work') {
+  if (section === 'work') {
     return (
       <>
-        <DesktopOperatorShell
+        <ManualOperatorWorkSection
+          key={selectedDate}
           shift={shift}
-          isLoading={isLoading || (!!shift && isDaySummaryLoading)}
-          kpi={kpi}
-          lineSummaries={lineSummaries}
-          activeOrders={activeOrders}
-          pickerWorkloads={pickerWorkloads}
-          checkQueue={checkQueue}
-          pickerDetail={pickerDetail}
-          orderDetail={orderDetail}
-          selectedDetailType={selectedDesktopDetail?.type ?? null}
-          selectedLineId={selectedLineId}
-          selectedPointName={selectedPointName}
-          lineHierarchySummaries={lineHierarchySummaries}
-          pointSummaries={pointSummaries}
-          onSelectPicker={(pickerKey) => setSelectedDesktopDetail({ type: 'picker', pickerKey })}
-          onSelectOrder={(orderId) => setSelectedDesktopDetail({ type: 'order', orderId })}
-          onCloseDetail={() => setSelectedDesktopDetail(null)}
-          onSelectHierarchyLine={handleSelectHierarchyLine}
-          onSelectHierarchyPoint={handleSelectHierarchyPoint}
-          onClearHierarchyLine={handleClearHierarchyLine}
-          onClearHierarchyPoint={handleClearHierarchyPoint}
+          lines={lines}
+          isLoading={isLoading}
+          isReadOnly={isReadOnly}
+          isToday={isToday}
+          canMonthlyImport={canMonthlyImport}
+          isDesktop={isDesktop}
           selectedDate={selectedDate}
           todayDate={todayDate}
           onChangeDate={handleSelectDate}
           onOpenDatePicker={() => setShowDatePicker(true)}
-          canInteract={!isReadOnly}
           onCreateShift={handleCreateShift}
           isCreatingShift={createShift.isPending}
+          onChangeSection={handleChangeSection}
         />
         {showDatePicker && (
           <ShiftDatePicker
@@ -464,58 +300,26 @@ export function ManualOperatorPage() {
     );
   }
 
-  const fab =
-    section === 'work' && !isReadOnly && shift && !selectedLine && lines.length > 0
-      ? { ariaLabel: 'Add line', onClick: () => setShowAddLine(true) }
-      : undefined;
-
   return (
     <>
       <MobileOperatorShell
         activeSection={section}
         onChangeSection={handleChangeSection}
         shift={shift}
-        fab={fab}
         selectedDate={selectedDate}
         todayDate={todayDate}
         onOpenDatePicker={() => setShowDatePicker(true)}
       >
         {isLoading ? (
-          <MobileLoadingState />
+          <div className="flex items-center justify-center py-20" dir="rtl">
+            <Loader2 size={32} className="animate-spin text-gray-400" />
+          </div>
         ) : !shift ? (
           <ShiftEmptyState onCreateShift={handleCreateShift} isCreating={createShift.isPending} isToday={isToday} />
         ) : (
           sectionContent
         )}
-
-        {showAddLine && shift && !isReadOnly && (
-          <AddLineSheet shiftId={shift.id} onClose={() => setShowAddLine(false)} />
-        )}
-        {showImportExcel && shift && canMonthlyImport && (
-          <ImportExcelSheet
-            shiftId={shift.id}
-            selectedDate={selectedDate}
-            onClose={() => setShowImportExcel(false)}
-            onSuccess={({ linesCreated, ordersCreated }) => {
-              setShowImportExcel(false);
-              setImportSuccessMessage(`יובאו: ${linesCreated} קווים, ${ordersCreated} הזמנות`);
-            }}
-          />
-        )}
-        {showMonthlyPreview && shift && canMonthlyImport && (
-          <MonthlyImportPreviewSheet
-            shiftId={shift.id}
-            selectedDate={selectedDate}
-            onClose={() => setShowMonthlyPreview(false)}
-            onSuccess={({ linesCreated, ordersCreated, orderItemsCreated }) => {
-              setImportSuccessMessage(
-                `ייבוא חודשי הושלם: ${linesCreated} קווים, ${ordersCreated} הזמנות, ${orderItemsCreated} פריטים`
-              );
-            }}
-          />
-        )}
       </MobileOperatorShell>
-
       {showDatePicker && (
         <ShiftDatePicker
           selectedDate={selectedDate}
