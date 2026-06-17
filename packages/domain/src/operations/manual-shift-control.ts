@@ -115,6 +115,7 @@ export const manualShiftLineSchema = z.object({
   tenantId: z.string().uuid(),
   shiftId: z.string().uuid(),
   name: z.string().trim().min(1),
+  distributionArea: z.string().nullable(),
   sortOrder: z.number().int(),
   status: manualShiftLineStatusSchema,
   createdAt: z.string(),
