@@ -3423,44 +3423,47 @@ describe('manual shift monthly import apply', () => {
     return parseManualShiftMonthlyPreview({
       source: {
         fileName: 'monthly.xlsx',
-        sheetName: 'Ч™Ч•Ч Ч™ 26'
+        sheetName: 'יוני 26'
       },
       selectedDate: '2026-06-14',
       rows: [
         {
           rowIndex: 2,
           distributionDateRaw: '14.6.26',
-          rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
-          customerName: 'ЧњЧ§Ч•Ч— Чђ',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
           orderNumber: 'SO-1',
           sku: '1001',
-          description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+          description: 'מוצר א',
           category: 'cat',
           quantity: 2,
-          notes: 'note-a'
+          notes: 'note-a',
+          zone: 'north'
         },
         {
           rowIndex: 3,
           distributionDateRaw: '14.6.26',
-          rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
-          customerName: 'ЧњЧ§Ч•Ч— Чђ',
+          rawDistributionValue: 'עמקים/נקודה א',
+          customerName: 'לקוח א',
           orderNumber: 'SO-1',
           sku: '1001',
-          description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+          description: 'מוצר א',
           category: 'cat',
           quantity: 3,
-          notes: 'note-b'
+          notes: 'note-b',
+          zone: 'north'
         },
         {
           rowIndex: 4,
           distributionDateRaw: '14.6.26',
-          rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Ч‘',
-          customerName: 'ЧњЧ§Ч•Ч— Ч‘',
+          rawDistributionValue: 'עמקים/נקודה ב',
+          customerName: 'לקוח ב',
           orderNumber: 'SO-2',
           sku: '1002',
-          description: 'ЧћЧ•Ч¦ЧЁ Ч‘',
+          description: 'מוצר ב',
           category: 'cat',
-          quantity: -1
+          quantity: -1,
+          zone: 'south'
         }
       ]
     });
@@ -3470,6 +3473,18 @@ describe('manual shift monthly import apply', () => {
     const { repo, service } = makeMonthlyApplyService();
     const parsed = buildMonthlyPreview();
     const plan = planManualShiftMonthlyImportApply(parsed);
+
+    expect(plan.lines[0].orders[0]).toMatchObject({
+      customerName: 'לקוח א',
+      pointName: 'נקודה א',
+      orderNumber: 'SO-1'
+    });
+    expect(plan.lines[0].orders[0].items[0]).toMatchObject({
+      zone: 'north',
+      sku: '1001',
+      quantity: 5
+    });
+    expect(plan.lines[0].distributionArea).toBe('north');
 
     const result = await service.applyMonthlyImport({
       tenantId: ids.tenant,

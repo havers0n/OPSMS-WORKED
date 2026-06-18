@@ -137,7 +137,8 @@ export const manualShiftMonthlyAggregatedGroupSchema = z.object({
   lineRawName: z.string().nullable(),
   lineGroupName: z.string().nullable(),
   lineBucketName: z.string().nullable(),
-  isPickupRow: z.boolean()
+  isPickupRow: z.boolean(),
+  customerName: z.string().nullable().optional()
 });
 export type ManualShiftMonthlyAggregatedGroup = z.infer<typeof manualShiftMonthlyAggregatedGroupSchema>;
 
@@ -154,12 +155,14 @@ export const manualShiftMonthlyApplyItemSchema = z.object({
   quantity: z.number().positive(),
   notes: z.string().nullable(),
   sourceRows: z.array(z.number().int().min(1)).min(1),
-  sortOrder: z.number().int().min(1)
+  sortOrder: z.number().int().min(1),
+  zone: z.string().nullable().optional()
 });
 export type ManualShiftMonthlyApplyItem = z.infer<typeof manualShiftMonthlyApplyItemSchema>;
 
 export const manualShiftMonthlyApplyOrderSchema = z.object({
   pointName: z.string().min(1),
+  customerName: z.string().nullable().optional(),
   orderNumber: z.string().min(1),
   totalQuantity: z.number().positive(),
   sourceRows: z.array(z.number().int().min(1)).min(1),
@@ -319,6 +322,7 @@ type WorkingRow = {
   lineGroupName: string | null;
   lineBucketName: string | null;
   isPickupRow: boolean;
+  customerName: string | null;
 };
 
 function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
@@ -376,7 +380,8 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
     lineRawName: rawDistributionValue,
     lineGroupName,
     lineBucketName,
-    isPickupRow: (normalizeTrimmedString(row.notes)?.includes('איסוף')) ?? false
+    isPickupRow: (normalizeTrimmedString(row.notes)?.includes('איסוף')) ?? false,
+    customerName
   };
 }
 
@@ -531,7 +536,8 @@ export function parseManualShiftMonthlyPreview(
         lineRawName: row.lineRawName,
         lineGroupName: row.lineGroupName,
         lineBucketName: row.lineBucketName,
-        isPickupRow: row.isPickupRow
+        isPickupRow: row.isPickupRow,
+        customerName: row.customerName
       });
     }
 
@@ -756,6 +762,7 @@ export function planManualShiftMonthlyImportApply(
   let skippedGroups = 0;
   let skippedNegativeQuantityRows = 0;
   let skippedZeroQuantityRows = 0;
+  let customerNameConflicts = 0;
 
   for (const group of parsed.groups) {
     const positiveRows = group.rows.filter((row) => row.quantity > 0);
@@ -796,10 +803,17 @@ export function planManualShiftMonthlyImportApply(
       quantity: itemQuantity,
       notes: itemNotes.length > 0 ? itemNotes.join('\n') : null,
       sourceRows,
-      sortOrder: existingOrder ? existingOrder.items.length + 1 : 1
+      sortOrder: existingOrder ? existingOrder.items.length + 1 : 1,
+      zone: group.distributionArea
     };
 
     if (existingOrder) {
+      const groupCust = group.customerName ?? null;
+      const existingCust = existingOrder.customerName ?? null;
+      if (groupCust && existingCust && groupCust !== existingCust) {
+        existingOrder.customerName = null;
+        customerNameConflicts += 1;
+      }
       existingOrder.items.push(item);
       existingOrder.totalQuantity += itemQuantity;
       existingOrder.sourceRows = Array.from(
@@ -810,6 +824,7 @@ export function planManualShiftMonthlyImportApply(
 
     lineOrders.set(orderKey, {
       pointName: group.pointName,
+      customerName: group.customerName ?? null,
       orderNumber: group.orderNumber,
       totalQuantity: itemQuantity,
       sourceRows,
@@ -848,6 +863,16 @@ export function planManualShiftMonthlyImportApply(
       ...line,
       sortOrder: lineIndex + 1
     }));
+
+  if (customerNameConflicts > 0) {
+    parsed.preview.warnings.push({
+      severity: 'warning',
+      code: 'CUSTOMER_NAME_CONFLICTS',
+      message: `${customerNameConflicts} order(s) had conflicting customer names across grouped rows. Customer name will not be stored for those orders.`,
+      count: customerNameConflicts
+    });
+    warningSummary.warning += 1;
+  }
 
   return manualShiftMonthlyApplyPlanSchema.parse({
     preview: parsed.preview,
