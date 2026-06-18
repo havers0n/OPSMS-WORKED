@@ -6,6 +6,18 @@ import { MonthlyImportPreviewSheet } from './monthly-import-preview-sheet';
 const monthlyPreviewMutateAsync = vi.fn();
 const monthlyApplyMutateAsync = vi.fn();
 
+const defaultReplaceSafety = {
+  canReplace: true,
+  activeLinesCount: 0,
+  activeOrdersCount: 0,
+  startedOrdersCount: 0,
+  assignedPickersCount: 0,
+  assignedCheckersCount: 0,
+  checkUnitsCount: 0,
+  nonImportEventsCount: 0,
+  blockReasons: []
+};
+
 vi.mock('@/entities/manual-shift/api/mutations', () => ({
   usePreviewManualShiftMonthlyImport: () => ({
     mutateAsync: monthlyPreviewMutateAsync,
@@ -17,6 +29,10 @@ vi.mock('@/entities/manual-shift/api/mutations', () => ({
     isPending: false,
     error: null
   })
+}));
+
+vi.mock('@/entities/manual-shift/api/queries', () => ({
+  monthlyReplaceSafetyQueryOptions: () => ({ queryKey: ['mock'], queryFn: () => defaultReplaceSafety })
 }));
 
 const previewPayload = {
@@ -88,11 +104,13 @@ describe('MonthlyImportPreviewSheet', () => {
     vi.clearAllMocks();
   });
 
-  it('accepts xlsx files', () => {
+it('accepts xlsx files', () => {
     render(
       <MonthlyImportPreviewSheet
         shiftId="shift-1"
         selectedDate="2026-06-14"
+        hasExistingWork={false}
+        replaceSafety={null}
         onClose={() => undefined}
         onSuccess={() => undefined}
       />
@@ -102,12 +120,14 @@ describe('MonthlyImportPreviewSheet', () => {
     );
   });
 
-  it('requests preview and renders metrics, dates, anomalies, and lines', async () => {
+it('requests preview and renders metrics, dates, anomalies, and lines', async () => {
     monthlyPreviewMutateAsync.mockResolvedValueOnce({ preview: previewPayload });
     render(
       <MonthlyImportPreviewSheet
         shiftId="shift-1"
         selectedDate="2026-06-14"
+        hasExistingWork={false}
+        replaceSafety={null}
         onClose={() => undefined}
         onSuccess={() => undefined}
       />
@@ -126,12 +146,14 @@ describe('MonthlyImportPreviewSheet', () => {
     expect(screen.getByRole('button', { name: 'אשר ייבוא' })).toBeTruthy();
   });
 
-  it('shows translated error when preview request fails', async () => {
+it('shows translated error when preview request fails', async () => {
     monthlyPreviewMutateAsync.mockRejectedValueOnce(new Error('preview failed'));
     render(
       <MonthlyImportPreviewSheet
         shiftId="shift-1"
         selectedDate="2026-06-14"
+        hasExistingWork={false}
+        replaceSafety={null}
         onClose={() => undefined}
         onSuccess={() => undefined}
       />
@@ -144,12 +166,14 @@ describe('MonthlyImportPreviewSheet', () => {
     await waitFor(() => expect(screen.getByText('preview failed')).toBeTruthy());
   });
 
-  it('disables apply when blocking warnings exist', async () => {
+it('disables apply when blocking warnings exist', async () => {
     monthlyPreviewMutateAsync.mockResolvedValueOnce({ preview: previewPayload });
     render(
       <MonthlyImportPreviewSheet
         shiftId="shift-1"
         selectedDate="2026-06-14"
+        hasExistingWork={false}
+        replaceSafety={null}
         onClose={() => undefined}
         onSuccess={() => undefined}
       />
@@ -187,10 +211,12 @@ describe('MonthlyImportPreviewSheet', () => {
       previewAnomalies: previewPayload.anomalies
     });
 
-    render(
+render(
       <MonthlyImportPreviewSheet
         shiftId="shift-1"
         selectedDate="2026-06-14"
+        hasExistingWork={false}
+        replaceSafety={null}
         onClose={() => undefined}
         onSuccess={onSuccess}
       />
@@ -202,10 +228,116 @@ describe('MonthlyImportPreviewSheet', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'אשר ייבוא' })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'אשר ייבוא' }));
 
-    await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shiftId: 'shift-1', file }));
+await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shiftId: 'shift-1', file, mode: 'initial' }));
     expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({
       shiftId: 'shift-1',
       selectedDate: '2026-06-14'
     }));
+  });
+
+  it('shows existing work warning and requires confirmation when hasExistingWork is true and canReplace is true', async () => {
+    const onSuccess = vi.fn();
+    monthlyPreviewMutateAsync.mockResolvedValueOnce({
+      preview: {
+        ...previewPayload,
+        warnings: []
+      }
+    });
+    monthlyApplyMutateAsync.mockResolvedValueOnce({
+      shiftId: 'shift-1',
+      selectedDate: '2026-06-14',
+      linesCreated: 1,
+      ordersCreated: 1,
+      orderItemsCreated: 1,
+      appliedGroups: 1,
+      skippedGroups: 0,
+      skippedNegativeQuantityRows: 0,
+      skippedZeroQuantityRows: 0,
+      warningSummary: { info: 0, warning: 0, blocking: 0 },
+      warnings: [],
+      previewTotals: previewPayload.totals,
+      previewAnomalies: previewPayload.anomalies
+    });
+
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        hasExistingWork={true}
+        replaceSafety={{ ...defaultReplaceSafety, canReplace: true }}
+        onClose={() => undefined}
+        onSuccess={onSuccess}
+      />
+    );
+
+    const file = new File(['x'], 'monthly.xlsx');
+    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ })).toBeTruthy());
+    expect(screen.getByText('כבר קיימים קווים והזמנות ליום הזה.')).toBeTruthy();
+  });
+
+  it('shows blocked message when canReplace is false', () => {
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        hasExistingWork={true}
+        replaceSafety={{ ...defaultReplaceSafety, canReplace: false, blockReasons: ['orders_started', 'picker_assigned'] }}
+        onClose={() => undefined}
+        onSuccess={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('אי אפשר לייבא מחדש אחרי שהעבודה התחילה.')).toBeTruthy();
+  });
+
+  it('sends mode=replace when hasExistingWork is true', async () => {
+    const onSuccess = vi.fn();
+    monthlyPreviewMutateAsync.mockResolvedValueOnce({
+      preview: {
+        ...previewPayload,
+        warnings: []
+      }
+    });
+    monthlyApplyMutateAsync.mockResolvedValueOnce({
+      shiftId: 'shift-1',
+      selectedDate: '2026-06-14',
+      linesCreated: 1,
+      ordersCreated: 1,
+      orderItemsCreated: 1,
+      replacedLines: 1,
+      replacedOrders: 2,
+      replacedItems: 3,
+      appliedGroups: 1,
+      skippedGroups: 0,
+      skippedNegativeQuantityRows: 0,
+      skippedZeroQuantityRows: 0,
+      warningSummary: { info: 0, warning: 0, blocking: 0 },
+      warnings: [],
+      previewTotals: previewPayload.totals,
+      previewAnomalies: previewPayload.anomalies
+    });
+
+    render(
+      <MonthlyImportPreviewSheet
+        shiftId="shift-1"
+        selectedDate="2026-06-14"
+        hasExistingWork={true}
+        replaceSafety={{ ...defaultReplaceSafety, canReplace: true }}
+        onClose={() => undefined}
+        onSuccess={onSuccess}
+      />
+    );
+
+    const file = new File(['x'], 'monthly.xlsx');
+    fireEvent.change(screen.getByLabelText('בחר קובץ אקסל חודשי'), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ }));
+
+    await waitFor(() => expect(monthlyApplyMutateAsync).toHaveBeenCalledWith({ shiftId: 'shift-1', file, mode: 'replace' }));
   });
 });

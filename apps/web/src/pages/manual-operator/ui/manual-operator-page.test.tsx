@@ -281,8 +281,8 @@ describe('ManualOperatorPage queue import placement', () => {
     expect(screen.queryByRole('button', { name: 'הוסף קו ידנית' })).toBeNull();
   });
 
-  it.each([
-    ['closed', {
+it('past date with a closed shift hides import actions', async () => {
+    const response = {
       shift: {
         id: 'shift-closed',
         tenantId: 'tenant-1',
@@ -294,8 +294,32 @@ describe('ManualOperatorPage queue import placement', () => {
         closedAt: new Date().toISOString()
       },
       lines: []
-    }],
-    ['non-empty', {
+    };
+
+    mockedBffRequest.mockImplementation((url: string) => {
+      if (String(url).includes('/api/manual-shifts/by-date?date=2026-06-14')) {
+        return Promise.resolve(response);
+      }
+
+      if (String(url).includes('/api/manual-shifts/by-date?date=2026-06-15')) {
+        return Promise.resolve({ shift: null, lines: [] });
+      }
+
+      return Promise.resolve({ shift: null, lines: [] });
+    });
+
+    renderPage(makeQueryClient());
+
+    await selectMobileDate('2026-06-14');
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'ייבוא יומי קיים' })).toBeNull();
+    });
+  });
+
+  it('active non-empty shift shows re-import option', async () => {
+    const response = {
       shift: {
         id: 'shift-non-empty',
         tenantId: 'tenant-1',
@@ -330,8 +354,8 @@ describe('ManualOperatorPage queue import placement', () => {
           errorCount: 0
         }
       ]
-    }]
-  ])('past date with a %s shift hides import actions', async (_label, response) => {
+    };
+
     mockedBffRequest.mockImplementation((url: string) => {
       if (String(url).includes('/api/manual-shifts/by-date?date=2026-06-14')) {
         return Promise.resolve(response);
@@ -339,6 +363,20 @@ describe('ManualOperatorPage queue import placement', () => {
 
       if (String(url).includes('/api/manual-shifts/by-date?date=2026-06-15')) {
         return Promise.resolve({ shift: null, lines: [] });
+      }
+
+      if (String(url).includes('/monthly-replace-safety')) {
+        return Promise.resolve({
+          canReplace: true,
+          activeLinesCount: 1,
+          activeOrdersCount: 1,
+          startedOrdersCount: 0,
+          assignedPickersCount: 0,
+          assignedCheckersCount: 0,
+          checkUnitsCount: 0,
+          nonImportEventsCount: 0,
+          blockReasons: []
+        });
       }
 
       return Promise.resolve({ shift: null, lines: [] });
@@ -349,8 +387,7 @@ describe('ManualOperatorPage queue import placement', () => {
     await selectMobileDate('2026-06-14');
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'תצוגה מקדימה חודשית' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'ייבוא יומי קיים' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /ייבוא מחדש והחלפת עבודה קיימת/ })).toBeTruthy();
     });
   });
 

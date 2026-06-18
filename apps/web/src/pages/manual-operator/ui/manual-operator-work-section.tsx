@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
 import {
   daySummaryQueryOptions,
+  monthlyReplaceSafetyQueryOptions,
   shiftOrdersQueryOptions,
   workHierarchyQueryOptions
 } from '@/entities/manual-shift/api/queries';
@@ -35,6 +36,7 @@ interface ManualOperatorWorkSectionProps {
   isReadOnly: boolean;
   isToday: boolean;
   canMonthlyImport: boolean;
+  hasExistingWork: boolean;
   isDesktop: boolean;
   selectedDate: string;
   todayDate: string;
@@ -60,6 +62,7 @@ export function ManualOperatorWorkSection({
   isReadOnly,
   isToday,
   canMonthlyImport,
+  hasExistingWork,
   isDesktop,
   selectedDate,
   todayDate,
@@ -90,9 +93,15 @@ export function ManualOperatorWorkSection({
     ...shiftOrdersQueryOptions(shift?.id ?? ''),
     enabled: !!shift?.id && isDesktop
   });
-  const { data: workHierarchy } = useQuery({
+const { data: workHierarchy } = useQuery({
     ...workHierarchyQueryOptions(shift?.id ?? ''),
     enabled: !!shift?.id && isDesktop
+  });
+
+  const canFetchReplaceSafety = canMonthlyImport && hasExistingWork && !!shift?.id;
+  const { data: replaceSafety } = useQuery({
+    ...monthlyReplaceSafetyQueryOptions(shift?.id ?? ''),
+    enabled: canFetchReplaceSafety
   });
 
   const byLine = daySummary?.byLine ?? lines;
@@ -210,9 +219,11 @@ export function ManualOperatorWorkSection({
           <LineList
             lines={lines}
             onSelectLine={setSelectedLine}
-            canImport={canMonthlyImport}
+            canImport={canMonthlyImport && !hasExistingWork}
             canPreviewMonthly={canMonthlyImport}
             canAddManual={!isReadOnly}
+            canReImportMonthly={canMonthlyImport && hasExistingWork}
+            replaceSafety={replaceSafety ?? null}
             showNoShiftHint={!shift}
             onImportExcel={() => setShowImportExcel(true)}
             onPreviewMonthly={() => setShowMonthlyPreview(true)}
@@ -225,7 +236,7 @@ export function ManualOperatorWorkSection({
       {showAddLine && shift && !isReadOnly && (
         <AddLineSheet shiftId={shift.id} onClose={() => setShowAddLine(false)} />
       )}
-      {showImportExcel && shift && canMonthlyImport && (
+      {showImportExcel && shift && canMonthlyImport && !hasExistingWork && (
         <ImportExcelSheet
           shiftId={shift.id}
           selectedDate={selectedDate}
@@ -240,6 +251,8 @@ export function ManualOperatorWorkSection({
         <MonthlyImportPreviewSheet
           shiftId={shift.id}
           selectedDate={selectedDate}
+          hasExistingWork={hasExistingWork}
+          replaceSafety={replaceSafety ?? null}
           onClose={() => setShowMonthlyPreview(false)}
           onSuccess={({ linesCreated, ordersCreated, orderItemsCreated }) => {
             setImportSuccessMessage(

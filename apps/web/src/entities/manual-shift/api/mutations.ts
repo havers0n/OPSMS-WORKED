@@ -156,6 +156,7 @@ type ManualShiftMonthlyPreviewResponse = {
 type ApplyMonthlyManualShiftImportInput = {
   shiftId: string;
   file: File;
+  mode?: 'initial' | 'replace';
 };
 
 type ApplyDailyManualShiftImportInput = {
@@ -557,6 +558,9 @@ async function applyManualShiftMonthlyImport(
   formData.append('file', input.file);
   formData.append('selectedDate', input.selectedDate);
   formData.append('shiftId', input.shiftId);
+  if (input.mode === 'replace') {
+    formData.append('mode', 'replace');
+  }
   return bffRequest<ManualShiftMonthlyApplyResponse>('/api/manual-shifts/import/monthly-apply', {
     method: 'POST',
     body: formData
@@ -702,7 +706,7 @@ export function useApplyManualShiftMonthlyImport(selectedDate: string) {
   return useMutation({
     mutationFn: (input: ApplyMonthlyManualShiftImportInput) =>
       applyManualShiftMonthlyImport({ ...input, selectedDate }),
-    onSuccess: (_data, variables) => {
+onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.byDate(selectedDate) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(variables.shiftId) });
@@ -710,6 +714,7 @@ export function useApplyManualShiftMonthlyImport(selectedDate: string) {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(variables.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(variables.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.monthlyReplaceSafety(variables.shiftId) });
     }
   });
 }

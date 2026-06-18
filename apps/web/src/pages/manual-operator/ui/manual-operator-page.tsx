@@ -176,7 +176,8 @@ export function ManualOperatorPage() {
     : memberships[0] ?? null;
   const canImportExcelByRole =
     currentMembership?.role === 'tenant_admin' || currentMembership?.role === 'platform_admin';
-  const canMonthlyImport = !!shift && shift.status === 'active' && lines.length === 0 && canImportExcelByRole;
+  const canMonthlyImport = !!shift && shift.status === 'active' && canImportExcelByRole;
+  const hasExistingWork = lines.length > 0;
 
   function handleCreateShift() {
     createShift.mutate({ name: generateShiftName(), date: selectedDate });
@@ -214,6 +215,7 @@ export function ManualOperatorPage() {
           isReadOnly={isReadOnly}
           isToday={isToday}
           canMonthlyImport={canMonthlyImport}
+          hasExistingWork={hasExistingWork}
           isDesktop={isDesktop}
           selectedDate={selectedDate}
           todayDate={todayDate}
@@ -279,6 +281,7 @@ export function ManualOperatorPage() {
           isReadOnly={isReadOnly}
           isToday={isToday}
           canMonthlyImport={canMonthlyImport}
+          hasExistingWork={hasExistingWork}
           isDesktop={isDesktop}
           selectedDate={selectedDate}
           todayDate={todayDate}
