@@ -494,11 +494,11 @@ describe('manual shift monthly import parser', () => {
       {
         rowIndex: 2,
         distributionDateRaw: '14.6.26',
-        rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
-        customerName: 'ЧњЧ§Ч•Ч— Чђ',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
         orderNumber: 'SO-1',
         sku: '1001',
-        description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+        description: 'מוצר א',
         category: 'cat',
         quantity: 5,
         notes: 'first'
@@ -506,11 +506,11 @@ describe('manual shift monthly import parser', () => {
       {
         rowIndex: 3,
         distributionDateRaw: '14.6.26',
-        rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Чђ',
-        customerName: 'ЧњЧ§Ч•Ч— Чђ',
+        rawDistributionValue: 'עמקים/נקודה א',
+        customerName: 'לקוח א',
         orderNumber: 'SO-1',
         sku: '1001',
-        description: 'ЧћЧ•Ч¦ЧЁ Чђ',
+        description: 'מוצר א',
         category: 'cat',
         quantity: -1,
         notes: 'second'
@@ -518,11 +518,11 @@ describe('manual shift monthly import parser', () => {
       {
         rowIndex: 4,
         distributionDateRaw: '14.6.26',
-        rawDistributionValue: 'ЧўЧћЧ§Ч™Чќ/Ч Ч§Ч•Ч“Ч” Ч‘',
-        customerName: 'ЧњЧ§Ч•Ч— Ч‘',
+        rawDistributionValue: 'עמקים/נקודה ב',
+        customerName: 'לקוח ב',
         orderNumber: 'SO-2',
         sku: '1002',
-        description: 'ЧћЧ•Ч¦ЧЁ Ч‘',
+        description: 'מוצר ב',
         category: 'cat',
         quantity: 0
       }
@@ -530,8 +530,6 @@ describe('manual shift monthly import parser', () => {
 
     const plan = planManualShiftMonthlyImportApply(preview);
 
-    expect(plan.skippedGroups).toBe(1);
-    expect(plan.skippedNegativeQuantityRows).toBe(1);
     expect(plan.skippedGroups).toBe(1);
     expect(plan.skippedNegativeQuantityRows).toBe(1);
     expect(plan.skippedZeroQuantityRows).toBe(1);
@@ -548,5 +546,249 @@ describe('manual shift monthly import parser', () => {
         }]
       }]
     });
+  });
+
+  it('A: persists customerName from parsed row into apply plan order', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח בדיקה',
+        orderNumber: 'SO26000001',
+        sku: '1001',
+        quantity: 3
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.lines[0]).toMatchObject({
+      lineName: 'קו דרום',
+      orders: [{
+        pointName: 'סלולר',
+        customerName: 'לקוח בדיקה',
+        orderNumber: 'SO26000001'
+      }]
+    });
+  });
+
+  it('B: no-slash fallback preserves customerName and uses it as pointName', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום',
+        customerName: 'לקוח ללא סלאש',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(result.groups[0].pointName).toBe('לקוח ללא סלאש');
+    expect(result.groups[0].customerName).toBe('לקוח ללא סלאש');
+    expect(result.groups[0].lineName).toBe('קו דרום');
+    expect(plan.lines[0].orders[0]).toMatchObject({
+      pointName: 'לקוח ללא סלאש',
+      customerName: 'לקוח ללא סלאש'
+    });
+  });
+
+  it('C: item zone persistence from איזור הפצה into apply plan item', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3,
+        zone: 'דרום'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.lines[0]).toMatchObject({
+      distributionArea: 'דרום'
+    });
+    expect(plan.lines[0].orders[0].items[0]).toMatchObject({
+      zone: 'דרום'
+    });
+  });
+
+  it('D: prefix is not area — zone is separate from line group prefix', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'שפלה צפונית/פז עוקף רמלה',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 5,
+        zone: 'שפלה 1'
+      }
+    ]));
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(preview.groups[0].lineName).toBe('שפלה צפונית');
+    expect(preview.groups[0].distributionArea).toBe('שפלה 1');
+    expect(plan.lines[0].distributionArea).toBe('שפלה 1');
+    expect(plan.lines[0].orders[0].pointName).toBe('פז עוקף רמלה');
+    expect(plan.lines[0].orders[0].items[0].zone).toBe('שפלה 1');
+  });
+
+  it('E: duplicate rows for same date/line/point/order/sku still aggregate quantity and notes', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        notes: 'הערה 1'
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3,
+        notes: 'הערה 2'
+      }
+    ]));
+
+    expect(result.preview.totals.aggregatedSkuGroups).toBe(1);
+    expect(result.groups[0].totalQuantity).toBe(5);
+    expect(result.groups[0].notes).toContain('הערה 1');
+    expect(result.groups[0].notes).toContain('הערה 2');
+    expect(result.groups[0].sourceRows).toEqual([2, 3]);
+  });
+
+  it('F: negative and zero quantity rows produce anomalies but are not applied', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: -2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 0
+      }
+    ]));
+
+    expect(preview.preview.anomalies.negativeQuantityRows).toBe(1);
+    expect(preview.preview.warnings).toContainEqual(expect.objectContaining({
+      code: 'NEGATIVE_QUANTITY_ROWS'
+    }));
+
+    const plan = planManualShiftMonthlyImportApply(preview);
+    expect(plan.skippedGroups).toBe(1);
+    expect(plan.skippedNegativeQuantityRows).toBe(1);
+    expect(plan.skippedZeroQuantityRows).toBe(1);
+    expect(plan.appliedGroups).toBe(0);
+    expect(plan.lines).toEqual([]);
+  });
+
+  it('detects conflicting customer names for same apply order and sets customerName to null', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח ב',
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 3
+      }
+    ]));
+
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.lines[0].orders[0].customerName).toBeNull();
+    expect(plan.warningSummary.warning).toBeGreaterThanOrEqual(1);
+    expect(plan.preview.warnings).toContainEqual(expect.objectContaining({
+      severity: 'warning',
+      code: 'CUSTOMER_NAME_CONFLICTS'
+    }));
+  });
+
+  it('does not flag conflict when all customer names for same order are identical', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 3
+      }
+    ]));
+
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.lines[0].orders[0].customerName).toBe('לקוח א');
+  });
+
+  it('does not flag conflict when one of the rows has null customerName', () => {
+    const preview = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: 'לקוח א',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'קו דרום/סלולר',
+        customerName: null,
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 3
+      }
+    ]));
+
+    const plan = planManualShiftMonthlyImportApply(preview);
+
+    expect(plan.lines[0].orders[0].customerName).toBe('לקוח א');
   });
 });
