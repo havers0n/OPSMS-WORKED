@@ -354,10 +354,9 @@ function buildWorkingRow(row: ManualShiftMonthlyParsedRow): WorkingRow {
       lineBucketName = pointName;
     } else {
       lineName = rawDistributionValue;
-      pointName = customerName;
-      usedPointFallback = pointName !== null;
+      pointName = rawDistributionValue;
       lineGroupName = rawDistributionValue;
-      lineBucketName = null;
+      lineBucketName = rawDistributionValue;
     }
   }
 
@@ -569,8 +568,6 @@ export function parseManualShiftMonthlyPreview(
       lineEntry.negativeQuantityRows += 1;
       rowAnomalyCount += 1;
     }
-    if (row.usedPointFallback) rowAnomalyCount += 1;
-    if (!row.hadSlash) rowAnomalyCount += 1;
     if (row.notes?.includes('איסוף')) rowAnomalyCount += 1;
     if (row.notes?.includes('השלמה')) rowAnomalyCount += 1;
     if (row.orderNumber && !/^SO/i.test(row.orderNumber)) rowAnomalyCount += 1;
@@ -636,15 +633,6 @@ export function parseManualShiftMonthlyPreview(
       code: 'NON_SO_ORDER_ROWS',
       message: 'Order values not starting with SO are present in the preview.',
       count: nonSoOrderRows
-    });
-  }
-
-  if (pointFallbackRows > 0) {
-    topWarnings.push({
-      severity: 'warning',
-      code: 'POINT_FALLBACK_ROWS',
-      message: 'Some rows used customer name as the derived point because the distribution value had no slash.',
-      count: pointFallbackRows
     });
   }
 

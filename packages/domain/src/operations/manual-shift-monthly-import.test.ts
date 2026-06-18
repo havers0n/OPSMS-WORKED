@@ -120,7 +120,7 @@ describe('manual shift monthly import parser', () => {
     expect(result.preview.dateSummary.skippedOtherDateRows).toBe(1);
   });
 
-  it('uses customer fallback point when distribution value has no slash', () => {
+  it('uses route value as point when distribution value has no slash', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
         rowIndex: 2,
@@ -134,8 +134,9 @@ describe('manual shift monthly import parser', () => {
     ]));
 
     expect(result.preview.anomalies.rowsWithoutDistributionSlash).toBe(1);
-    expect(result.preview.anomalies.pointFallbackRows).toBe(1);
-    expect(result.groups[0]?.pointName).toBe('לקוח fallback');
+    expect(result.preview.anomalies.pointFallbackRows).toBe(0);
+    expect(result.groups[0]?.pointName).toBe('עמקים');
+    expect(result.groups[0]?.customerName).toBe('לקוח fallback');
   });
 
   it('distinguishes unique order numbers from order groups', () => {
@@ -350,7 +351,7 @@ describe('manual shift monthly import parser', () => {
     expect(result.groups[0].pointName).toBe('פז עוקף רמלה');
   });
 
-  it('handles no-slash case with null lineBucketName and preserved legacy fallback', () => {
+  it('handles no-slash case with lineBucketName set to route value', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
         rowIndex: 2,
@@ -368,10 +369,11 @@ describe('manual shift monthly import parser', () => {
       distributionArea: 'דרום',
       lineRawName: 'קו דרום',
       lineGroupName: 'קו דרום',
-      lineBucketName: null
+      lineBucketName: 'קו דרום'
     });
     expect(result.groups[0].lineName).toBe('קו דרום');
-    expect(result.groups[0].pointName).toBe('לקוח fallback');
+    expect(result.groups[0].pointName).toBe('קו דרום');
+    expect(result.groups[0].customerName).toBe('לקוח fallback');
   });
 
   it('sets isPickupRow true when notes contain איסוף', () => {
@@ -572,7 +574,7 @@ describe('manual shift monthly import parser', () => {
     });
   });
 
-  it('B: no-slash fallback preserves customerName and uses it as pointName', () => {
+  it('B: no-slash uses route value as pointName while preserving customerName separately', () => {
     const result = parseManualShiftMonthlyPreview(buildInput([
       {
         rowIndex: 2,
@@ -586,11 +588,11 @@ describe('manual shift monthly import parser', () => {
     ]));
     const plan = planManualShiftMonthlyImportApply(result);
 
-    expect(result.groups[0].pointName).toBe('לקוח ללא סלאש');
+    expect(result.groups[0].pointName).toBe('קו דרום');
     expect(result.groups[0].customerName).toBe('לקוח ללא סלאש');
     expect(result.groups[0].lineName).toBe('קו דרום');
     expect(plan.lines[0].orders[0]).toMatchObject({
-      pointName: 'לקוח ללא סלאש',
+      pointName: 'קו דרום',
       customerName: 'לקוח ללא סלאש'
     });
   });
@@ -790,5 +792,65 @@ describe('manual shift monthly import parser', () => {
     const plan = planManualShiftMonthlyImportApply(preview);
 
     expect(plan.lines[0].orders[0].customerName).toBe('לקוח א');
+  });
+
+  it('C: no-slash route must not use customerName as pointName', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'חיפה',
+        customerName: 'דור אלון - דלית אל כרמל',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 2,
+        zone: 'חיפה'
+      }
+    ]));
+
+    expect(result.groups[0].pointName).toBe('חיפה');
+    expect(result.groups[0].customerName).toBe('דור אלון - דלית אל כרמל');
+    expect(result.groups[0].pointName).not.toBe(result.groups[0].customerName);
+    expect(result.groups[0].lineName).toBe('חיפה');
+    expect(result.groups[0].distributionArea).toBe('חיפה');
+    expect(result.groups[0].lineBucketName).toBe('חיפה');
+    expect(result.preview.anomalies.pointFallbackRows).toBe(0);
+  });
+
+  it('D: mixed slash and no-slash rows under same orderNumber produce separate buckets without conflict', () => {
+    const result = parseManualShiftMonthlyPreview(buildInput([
+      {
+        rowIndex: 2,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'חיפה/רכב',
+        customerName: 'ספרינט מוטורס',
+        orderNumber: 'SO-1',
+        sku: '1001',
+        quantity: 3
+      },
+      {
+        rowIndex: 3,
+        distributionDateRaw: '14.6.26',
+        rawDistributionValue: 'חיפה',
+        customerName: 'ספרינט מוטורס',
+        orderNumber: 'SO-1',
+        sku: '1002',
+        quantity: 2
+      }
+    ]));
+
+    const plan = planManualShiftMonthlyImportApply(result);
+
+    expect(result.preview.totals.lines).toBe(1);
+    expect(result.preview.totals.derivedPoints).toBe(2);
+
+    const orderKeys = plan.lines[0].orders.map((o) => o.pointName).sort();
+    expect(orderKeys).toEqual(['חיפה', 'רכב']);
+
+    expect(plan.lines[0].orders[0].customerName).toBe('ספרינט מוטורס');
+    expect(plan.lines[0].orders[1].customerName).toBe('ספרינט מוטורס');
+
+    const conflictWarning = plan.preview.warnings.find((w) => w.code === 'CUSTOMER_NAME_CONFLICTS');
+    expect(conflictWarning).toBeUndefined();
   });
 });
