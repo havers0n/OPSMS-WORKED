@@ -337,6 +337,7 @@ function createServiceMock(overrides: Partial<ManualShiftsService> = {}): Manual
     getPeopleSummary: vi.fn(async () => peopleSummary),
     getDaySummary: vi.fn(async () => daySummary),
     listBindableUsers: vi.fn(async () => [] as BindableUser[]),
+    getShiftWorkHierarchy: vi.fn(async () => ({ shiftId: '', areas: [] })),
     ...overrides
   };
 }
@@ -2041,6 +2042,183 @@ describe('manual shifts routes', () => {
       });
 
       expect(response.statusCode).toBe(200);
+
+      await app.close();
+    });
+  });
+
+  describe('work-hierarchy', () => {
+    it('returns work hierarchy for a valid shift', async () => {
+      const hierarchy = {
+        shiftId: ids.shift,
+        areas: [
+          {
+            areaName: 'דרום' as const,
+            displayName: 'דרום',
+            totalLines: 1,
+            totalBuckets: 2,
+            totalOrders: 2,
+            totalQuantity: 30,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: ids.line,
+                lineGroupName: 'קו דרום',
+                distributionArea: 'דרום',
+                status: 'in_progress' as const,
+                totalBuckets: 2,
+                totalOrders: 2,
+                totalQuantity: 30,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: 'סלולר',
+                    displayName: 'סלולר',
+                    totalOrders: 1,
+                    totalQuantity: 10,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: ids.order,
+                        orderNumber: 'SO-1',
+                        customerName: null,
+                        pointName: 'סלולר',
+                        status: 'queued' as const,
+                        totalQuantity: 10,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  },
+                  {
+                    bucketName: 'פז השקמה',
+                    displayName: 'פז השקמה',
+                    totalOrders: 1,
+                    totalQuantity: 20,
+                    statusBreakdown: { queued: 0, picking: 0, waitingCheck: 1, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+                        orderNumber: 'SO-2',
+                        customerName: 'לקוח ב',
+                        pointName: 'פז השקמה',
+                        status: 'waiting_check' as const,
+                        totalQuantity: 20,
+                        hasAshlama: true,
+                        hasCheckUnits: true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getShiftWorkHierarchy: vi.fn(async () => hierarchy)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        shiftId: ids.shift,
+        areas: [
+          {
+            areaName: 'דרום',
+            displayName: 'דרום',
+            totalLines: 1,
+            lines: [
+              {
+                lineId: ids.line,
+                lineGroupName: 'קו דרום',
+                distributionArea: 'דרום',
+                buckets: [
+                  { bucketName: 'סלולר', displayName: 'סלולר', totalOrders: 1 },
+                  { bucketName: 'פז השקמה', displayName: 'פז השקמה', totalOrders: 1 }
+                ]
+              }
+            ]
+          }
+        ]
+      });
+      expect(service.getShiftWorkHierarchy).toHaveBeenCalledWith({
+        tenantId: ids.tenant,
+        shiftId: ids.shift
+      });
+
+      await app.close();
+    });
+
+    it('handles null area and null bucket gracefully', async () => {
+      const hierarchy = {
+        shiftId: ids.shift,
+        areas: [
+          {
+            areaName: null,
+            displayName: 'ללא איזור',
+            totalLines: 1,
+            totalBuckets: 1,
+            totalOrders: 1,
+            totalQuantity: 5,
+            statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+            lines: [
+              {
+                lineId: ids.line,
+                lineGroupName: 'מרכז',
+                distributionArea: null,
+                status: 'open' as const,
+                totalBuckets: 1,
+                totalOrders: 1,
+                totalQuantity: 5,
+                statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                buckets: [
+                  {
+                    bucketName: null,
+                    displayName: 'קו ראשי',
+                    totalOrders: 1,
+                    totalQuantity: 5,
+                    statusBreakdown: { queued: 1, picking: 0, waitingCheck: 0, returned: 0, done: 0 },
+                    orders: [
+                      {
+                        orderId: ids.order,
+                        orderNumber: null,
+                        customerName: null,
+                        pointName: null,
+                        status: 'queued' as const,
+                        totalQuantity: 5,
+                        hasAshlama: false,
+                        hasCheckUnits: false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      const service = createServiceMock({
+        getShiftWorkHierarchy: vi.fn(async () => hierarchy)
+      });
+      const app = await buildTestApp(service);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/manual-shifts/${ids.shift}/work-hierarchy`
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.areas[0].areaName).toBeNull();
+      expect(body.areas[0].displayName).toBe('ללא איזור');
+      expect(body.areas[0].lines[0].buckets[0].bucketName).toBeNull();
+      expect(body.areas[0].lines[0].buckets[0].displayName).toBe('קו ראשי');
 
       await app.close();
     });

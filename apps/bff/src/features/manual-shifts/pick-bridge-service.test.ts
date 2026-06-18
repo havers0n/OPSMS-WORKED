@@ -214,7 +214,10 @@ function createManualShiftsRepoMock(order: ManualShiftOrder | null): ManualShift
     listOrdersItemRollups: vi.fn(async (_orderIds: string[]) => new Map()),
     findWorkerByAuthUserId: vi.fn(async () => null),
     setWorkerAuthUser: vi.fn(async () => {}),
-    listBindableUsers: vi.fn(async () => [])
+    listBindableUsers: vi.fn(async () => []),
+    listShiftCheckUnits: vi.fn(async () => []),
+    listShiftAshlamot: vi.fn(async () => []),
+    listShiftWorkHierarchy: vi.fn(async () => ({ shiftId: '', areas: [] }))
   };
 }
 

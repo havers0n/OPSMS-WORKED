@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildOrderStatusBreakdown,
   calculateSizeFromLineCount,
   canTransitionManualShiftOrderToDoneWithCheckUnits,
   canTransitionManualShiftOrderStatus,
@@ -10,6 +11,7 @@ import {
   manualShiftOrderCheckUnitSchema,
   manualShiftOrderItemSchema,
   manualShiftOrderSchema,
+  manualShiftWorkHierarchyResponseSchema,
   summarizeManualShiftOrderCheckUnits,
   manualShiftTodayResponseSchema
 } from './manual-shift-control';
@@ -298,6 +300,246 @@ describe('manual shift control contracts', () => {
         units: [{ status: 'checked' }]
       })
     ).toBe(3);
+  });
+});
+
+describe('manual shift work hierarchy schemas', () => {
+  it('parses a valid hierarchy response', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [
+        {
+          areaName: 'דרום',
+          displayName: 'דרום',
+          totalLines: 1,
+          totalBuckets: 2,
+          totalOrders: 3,
+          totalQuantity: 42,
+          statusBreakdown: {
+            queued: 1,
+            picking: 1,
+            waitingCheck: 1,
+            returned: 0,
+            done: 0
+          },
+          lines: [
+            {
+              lineId: '44444444-4444-4444-8444-444444444444',
+              lineGroupName: 'קו דרום',
+              distributionArea: 'דרום',
+              status: 'in_progress',
+              totalBuckets: 2,
+              totalOrders: 3,
+              totalQuantity: 42,
+              statusBreakdown: {
+                queued: 1,
+                picking: 1,
+                waitingCheck: 1,
+                returned: 0,
+                done: 0
+              },
+              buckets: [
+                {
+                  bucketName: 'סלולר',
+                  displayName: 'סלולר',
+                  totalOrders: 2,
+                  totalQuantity: 30,
+                  statusBreakdown: {
+                    queued: 1,
+                    picking: 0,
+                    waitingCheck: 1,
+                    returned: 0,
+                    done: 0
+                  },
+                  orders: [
+                    {
+                      orderId: '55555555-5555-4555-8555-555555555555',
+                      orderNumber: 'SO-1',
+                      customerName: 'לקוח א',
+                      pointName: 'סלולר',
+                      status: 'queued',
+                      totalQuantity: 10,
+                      hasAshlama: false,
+                      hasCheckUnits: true
+                    },
+                    {
+                      orderId: '55555555-5555-4555-8555-555555555556',
+                      orderNumber: 'SO-2',
+                      customerName: 'לקוח ב',
+                      pointName: 'סלולר',
+                      status: 'waiting_check',
+                      totalQuantity: 20,
+                      hasAshlama: true,
+                      hasCheckUnits: false
+                    }
+                  ]
+                },
+                {
+                  bucketName: 'פז השקמה',
+                  displayName: 'פז השקמה',
+                  totalOrders: 1,
+                  totalQuantity: 12,
+                  statusBreakdown: {
+                    queued: 0,
+                    picking: 1,
+                    waitingCheck: 0,
+                    returned: 0,
+                    done: 0
+                  },
+                  orders: [
+                    {
+                      orderId: '55555555-5555-4555-8555-555555555557',
+                      orderNumber: null,
+                      customerName: null,
+                      pointName: 'פז השקמה',
+                      status: 'picking',
+                      totalQuantity: 12,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    expect(result.shiftId).toBe('33333333-3333-4333-8333-333333333333');
+    expect(result.areas).toHaveLength(1);
+    expect(result.areas[0].lines[0].buckets).toHaveLength(2);
+  });
+
+  it('accepts null areaName and null bucketName with fallback displayNames', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [
+        {
+          areaName: null,
+          displayName: 'ללא איזור',
+          totalLines: 1,
+          totalBuckets: 1,
+          totalOrders: 1,
+          totalQuantity: 5,
+          statusBreakdown: {
+            queued: 1,
+            picking: 0,
+            waitingCheck: 0,
+            returned: 0,
+            done: 0
+          },
+          lines: [
+            {
+              lineId: '44444444-4444-4444-8444-444444444444',
+              lineGroupName: 'מרכז',
+              distributionArea: null,
+              status: 'open',
+              totalBuckets: 1,
+              totalOrders: 1,
+              totalQuantity: 5,
+              statusBreakdown: {
+                queued: 1,
+                picking: 0,
+                waitingCheck: 0,
+                returned: 0,
+                done: 0
+              },
+              buckets: [
+                {
+                  bucketName: null,
+                  displayName: 'קו ראשי',
+                  totalOrders: 1,
+                  totalQuantity: 5,
+                  statusBreakdown: {
+                    queued: 1,
+                    picking: 0,
+                    waitingCheck: 0,
+                    returned: 0,
+                    done: 0
+                  },
+                  orders: [
+                    {
+                      orderId: '55555555-5555-4555-8555-555555555558',
+                      orderNumber: 'SO-3',
+                      customerName: null,
+                      pointName: null,
+                      status: 'queued',
+                      totalQuantity: 5,
+                      hasAshlama: false,
+                      hasCheckUnits: false
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    expect(result.areas[0].areaName).toBeNull();
+    expect(result.areas[0].lines[0].buckets[0].bucketName).toBeNull();
+  });
+
+  it('validates required totals and statusBreakdown fields', () => {
+    expect(() =>
+      manualShiftWorkHierarchyResponseSchema.parse({
+        shiftId: '33333333-3333-4333-8333-333333333333',
+        areas: []
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects missing required fields', () => {
+    expect(() =>
+      manualShiftWorkHierarchyResponseSchema.parse({
+        shiftId: 'not-a-uuid',
+        areas: []
+      })
+    ).toThrow();
+  });
+
+  it('validates statusBreakdown with optional blocked field', () => {
+    const result = manualShiftWorkHierarchyResponseSchema.parse({
+      shiftId: '33333333-3333-4333-8333-333333333333',
+      areas: [
+        {
+          areaName: 'דרום',
+          displayName: 'דרום',
+          totalLines: 0,
+          totalBuckets: 0,
+          totalOrders: 0,
+          totalQuantity: 0,
+          statusBreakdown: {
+            queued: 0,
+            picking: 0,
+            waitingCheck: 0,
+            returned: 0,
+            done: 0,
+            blocked: 2
+          },
+          lines: []
+        }
+      ]
+    });
+    expect(result.areas[0].statusBreakdown.blocked).toBe(2);
+  });
+
+  it('buildOrderStatusBreakdown computes correct counts', () => {
+    const result = buildOrderStatusBreakdown([
+      { status: 'queued' },
+      { status: 'picking' },
+      { status: 'waiting_check' },
+      { status: 'returned' },
+      { status: 'done' },
+      { status: 'done' }
+    ]);
+    expect(result).toEqual({
+      queued: 1,
+      picking: 1,
+      waitingCheck: 1,
+      returned: 1,
+      done: 2
+    });
   });
 });
 
