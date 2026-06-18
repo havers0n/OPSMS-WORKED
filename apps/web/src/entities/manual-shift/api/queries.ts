@@ -9,6 +9,7 @@ import type {
   ManualShiftPeopleSummary,
   ManualShiftDaySummary,
   ManualShiftWorker,
+  ManualShiftWorkHierarchyResponse,
   OpenAshlamaBoardItem
 } from '@wos/domain';
 import { queryOptions } from '@tanstack/react-query';
@@ -21,6 +22,7 @@ export const manualShiftKeys = {
   lines: (shiftId: string) => [...manualShiftKeys.all, 'lines', shiftId] as const,
   lineOrders: (lineId: string) => [...manualShiftKeys.all, 'line-orders', lineId] as const,
   shiftOrders: (shiftId: string) => [...manualShiftKeys.all, 'shift-orders', shiftId] as const,
+  workHierarchy: (shiftId: string) => [...manualShiftKeys.all, 'work-hierarchy', shiftId] as const,
   orderCheckUnits: (orderId: string) => [...manualShiftKeys.all, 'order-check-units', orderId] as const,
   orderAshlamot: (orderId: string) => [...manualShiftKeys.all, 'order-ashlamot', orderId] as const,
   orderEvents: (orderId: string) => [...manualShiftKeys.all, 'order-events', orderId] as const,
@@ -79,6 +81,19 @@ export function shiftOrdersQueryOptions(shiftId: string) {
   return queryOptions({
     queryKey: manualShiftKeys.shiftOrders(shiftId),
     queryFn: () => fetchShiftOrders(shiftId),
+    enabled: !!shiftId,
+    staleTime: 10_000
+  });
+}
+
+async function fetchWorkHierarchy(shiftId: string): Promise<ManualShiftWorkHierarchyResponse> {
+  return bffRequest<ManualShiftWorkHierarchyResponse>(`/api/manual-shifts/${shiftId}/work-hierarchy`);
+}
+
+export function workHierarchyQueryOptions(shiftId: string) {
+  return queryOptions({
+    queryKey: manualShiftKeys.workHierarchy(shiftId),
+    queryFn: () => fetchWorkHierarchy(shiftId),
     enabled: !!shiftId,
     staleTime: 10_000
   });

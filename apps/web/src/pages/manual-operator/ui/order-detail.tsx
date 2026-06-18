@@ -69,7 +69,7 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
   const totalQuantity = orderDetail?.totalQuantity ?? 0;
 
   function transition(status: ManualShiftOrder['status']) {
-    updateStatus.mutate({ orderId: order.id, lineId: order.lineId, status });
+    updateStatus.mutate({ orderId: order.id, lineId: order.lineId, shiftId: order.shiftId, status });
   }
 
   const isCheckActive =
@@ -323,6 +323,7 @@ export function OrderDetail({ order: orderProp, onClose, onDeleted }: OrderDetai
         <ErrorFlow
           orderId={order.id}
           lineId={order.lineId}
+          shiftId={order.shiftId}
           orderNumber={order.orderNumber}
           onClose={() => setShowErrorFlow(false)}
         />

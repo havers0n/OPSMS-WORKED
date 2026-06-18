@@ -33,7 +33,7 @@ export function AddOrderSheet({ lineId, shiftId, onClose }: AddOrderSheetProps) 
   const { data: workers } = useQuery(shiftWorkersQueryOptions(shiftId));
   const activeWorkers = (workers ?? []).filter((w) => w.active);
 
-  const createOrder = useCreateManualShiftOrder(lineId);
+  const createOrder = useCreateManualShiftOrder(lineId, shiftId);
 
   const lineCount = lineCountStr ? parseInt(lineCountStr, 10) : null;
   const autoSize: ManualShiftOrderSize | null =

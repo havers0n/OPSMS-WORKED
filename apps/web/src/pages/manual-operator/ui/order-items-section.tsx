@@ -56,6 +56,24 @@ export function OrderItemsSection({ items, totalQuantity }: OrderItemsSectionPro
                   <div className="mt-0.5 break-words text-sm text-gray-700">{item.description}</div>
                 </>
               )}
+              {item.category && (
+                <>
+                  <div className="mt-2 text-[11px] font-medium text-gray-500">קטגוריה</div>
+                  <div className="mt-0.5 break-words text-sm text-gray-700">{item.category}</div>
+                </>
+              )}
+              {item.zone && (
+                <>
+                  <div className="mt-2 text-[11px] font-medium text-gray-500">אזור</div>
+                  <div className="mt-0.5 break-words text-sm text-gray-700">{item.zone}</div>
+                </>
+              )}
+              {item.notes && (
+                <>
+                  <div className="mt-2 text-[11px] font-medium text-gray-500">הערות</div>
+                  <div className="mt-0.5 break-words text-sm text-gray-700">{item.notes}</div>
+                </>
+              )}
             </div>
           </div>
         ))}

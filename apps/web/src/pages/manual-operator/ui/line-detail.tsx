@@ -34,7 +34,7 @@ export function LineDetail({ summary, onBack }: LineDetailProps) {
   const [lineMessage, setLineMessage] = useState<string | null>(null);
 
   const { data: orders = [], isLoading } = useQuery(lineOrdersQueryOptions(line.id));
-  const createOrder = useCreateManualShiftOrder(line.id);
+  const createOrder = useCreateManualShiftOrder(line.id, line.shiftId);
   const deleteLine = useDeleteManualShiftLine(line.id, { shiftId: line.shiftId });
   const restoreOrder = useRestoreManualShiftOrder(deletedOrder?.id ?? '', {
     lineId: line.id,
@@ -227,7 +227,9 @@ export function LineDetail({ summary, onBack }: LineDetailProps) {
         <AddOrderSheet lineId={line.id} shiftId={line.shiftId} onClose={closeOverlay} />
       )}
 
-      {overlay === 'bulk-paste' && <BulkPasteSheet lineId={line.id} onClose={closeOverlay} />}
+      {overlay === 'bulk-paste' && (
+        <BulkPasteSheet lineId={line.id} shiftId={line.shiftId} onClose={closeOverlay} />
+      )}
 
       {overlay === 'line-delete' && (
         <DeleteConfirmSheet

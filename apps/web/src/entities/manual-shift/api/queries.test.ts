@@ -3,6 +3,7 @@ import {
   manualShiftKeys,
   todayShiftQueryOptions,
   shiftOrdersQueryOptions,
+  workHierarchyQueryOptions,
   orderCheckUnitsQueryOptions,
   peopleSummaryQueryOptions,
   daySummaryQueryOptions,
@@ -39,6 +40,14 @@ describe('manualShiftKeys', () => {
     expect(manualShiftKeys.shiftOrders(SHIFT_A)).toEqual([
       'manual-shift',
       'shift-orders',
+      SHIFT_A
+    ]);
+  });
+
+  it('workHierarchy key is scoped to shiftId', () => {
+    expect(manualShiftKeys.workHierarchy(SHIFT_A)).toEqual([
+      'manual-shift',
+      'work-hierarchy',
       SHIFT_A
     ]);
   });
@@ -102,6 +111,27 @@ describe('shiftOrdersQueryOptions', () => {
 
   it('is disabled when shiftId is empty', () => {
     expect(shiftOrdersQueryOptions('').enabled).toBe(false);
+  });
+});
+
+describe('workHierarchyQueryOptions', () => {
+  it('uses the workHierarchy query key', () => {
+    expect(workHierarchyQueryOptions(SHIFT_A).queryKey).toEqual([
+      'manual-shift',
+      'work-hierarchy',
+      SHIFT_A
+    ]);
+  });
+
+  it('calls work-hierarchy endpoint in queryFn', async () => {
+    const queryFn = workHierarchyQueryOptions(SHIFT_A).queryFn;
+    expect(queryFn).toBeTypeOf('function');
+    await queryFn?.({} as never);
+    expect(bffRequest).toHaveBeenCalledWith(`/api/manual-shifts/${SHIFT_A}/work-hierarchy`);
+  });
+
+  it('is disabled when shiftId is empty', () => {
+    expect(workHierarchyQueryOptions('').enabled).toBe(false);
   });
 });
 

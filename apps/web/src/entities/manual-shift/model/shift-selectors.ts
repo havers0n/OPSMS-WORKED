@@ -3,7 +3,8 @@ import type {
   ManualShiftLineSummary,
   ManualShiftOrder,
   ManualShiftOrderStatus,
-  ManualShiftOrderCheckUnit
+  ManualShiftOrderCheckUnit,
+  ManualShiftWorkHierarchyResponse
 } from '@wos/domain';
 import {
   summarizeManualShiftOrderCheckUnits as domainSummarizeManualShiftOrderCheckUnits,
@@ -669,6 +670,7 @@ export interface StatusBreakdown {
 export interface LineHierarchySummary {
   lineId: string;
   lineName: string;
+  distributionArea?: string | null;
   lineStatus: LineSummary['lineStatus'];
   ordersCount: number;
   itemLinesCount: number;
@@ -679,6 +681,7 @@ export interface LineHierarchySummary {
 export interface HierarchyOrder {
   orderId: string;
   orderNumber: string | null;
+  customerName?: string | null;
   status: ManualShiftOrderStatus;
   pointName: string;
   pickerName: string | null;
@@ -696,6 +699,10 @@ export interface PointHierarchySummary {
   orders: HierarchyOrder[];
 }
 
+function toHierarchyPointName(pointName: string | null | undefined, displayName: string): string {
+  return normalizePointName(pointName ?? displayName);
+}
+
 export function selectLineHierarchySummaries(
   lineSummaries: LineSummary[],
   orders: ShiftListOrder[]
@@ -709,6 +716,7 @@ export function selectLineHierarchySummaries(
   return lineSummaries.map((line): LineHierarchySummary => ({
     lineId: line.lineId,
     lineName: line.lineName,
+    distributionArea: null,
     lineStatus: line.lineStatus,
     ordersCount: line.totalOrders,
     itemLinesCount: line.totalLineCount,
@@ -754,6 +762,7 @@ export function selectPointSummaries(
       hierarchyOrders.push({
         orderId: o.id,
         orderNumber: o.orderNumber,
+        customerName: o.customerName,
         status: o.status,
         pointName: normalizePointName(o.pointName),
         pickerName: o.pickerName,
@@ -774,6 +783,63 @@ export function selectPointSummaries(
 
   result.sort((a, b) => b.ordersCount - a.ordersCount);
   return result;
+}
+
+export function selectWorkHierarchyLineSummaries(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined
+): LineHierarchySummary[] {
+  if (!hierarchy) return [];
+
+  const result: LineHierarchySummary[] = [];
+  for (const area of hierarchy.areas) {
+    for (const line of area.lines) {
+      result.push({
+        lineId: line.lineId,
+        lineName: line.lineGroupName,
+        distributionArea: line.distributionArea,
+        lineStatus: line.status,
+        ordersCount: line.totalOrders,
+        itemLinesCount: line.totalBuckets,
+        totalQuantity: line.totalQuantity,
+        statusBreakdown: line.statusBreakdown
+      });
+    }
+  }
+
+  return result;
+}
+
+export function selectWorkHierarchyPointSummaries(
+  hierarchy: ManualShiftWorkHierarchyResponse | undefined,
+  lineId: string
+): PointHierarchySummary[] {
+  if (!hierarchy || !lineId) return [];
+
+  for (const area of hierarchy.areas) {
+    const line = area.lines.find((entry) => entry.lineId === lineId);
+    if (!line) continue;
+
+    return line.buckets.map((bucket) => ({
+      pointName: bucket.displayName,
+      ordersCount: bucket.totalOrders,
+      itemLinesCount: bucket.totalOrders,
+      totalQuantity: bucket.totalQuantity,
+      statusBreakdown: bucket.statusBreakdown,
+      orders: bucket.orders.map((order) => ({
+        orderId: order.orderId,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        status: order.status,
+        pointName: toHierarchyPointName(order.pointName, bucket.displayName),
+        pickerName: null,
+        checkerName: null,
+        lineCount: 0,
+        totalQuantity: order.totalQuantity
+      }))
+    }));
+  }
+
+  return [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

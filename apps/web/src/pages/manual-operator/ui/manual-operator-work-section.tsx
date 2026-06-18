@@ -4,19 +4,19 @@ import { Loader2 } from 'lucide-react';
 import type { ManualShiftLineSummary, ManualShiftSession } from '@wos/domain';
 import {
   daySummaryQueryOptions,
-  shiftOrdersQueryOptions
+  shiftOrdersQueryOptions,
+  workHierarchyQueryOptions
 } from '@/entities/manual-shift/api/queries';
 import {
   selectActiveOrders,
   selectCheckQueue,
-  selectLineHierarchySummaries,
   selectLineSummaries,
   selectOrderDetail,
   selectPickerDetail,
   selectPickerWorkloads,
-  selectPointSummaries,
   selectShiftSummary,
-  type ShiftListOrder
+  selectWorkHierarchyLineSummaries,
+  selectWorkHierarchyPointSummaries
 } from '@/entities/manual-shift/model/shift-selectors';
 import type { ManualOperatorSection } from '@/shared/config/routes';
 import { DesktopOperatorShell } from './desktop/desktop-operator-shell';
@@ -90,6 +90,10 @@ export function ManualOperatorWorkSection({
     ...shiftOrdersQueryOptions(shift?.id ?? ''),
     enabled: !!shift?.id && isDesktop
   });
+  const { data: workHierarchy } = useQuery({
+    ...workHierarchyQueryOptions(shift?.id ?? ''),
+    enabled: !!shift?.id && isDesktop
+  });
 
   const byLine = daySummary?.byLine ?? lines;
   const kpi = useMemo(
@@ -116,14 +120,13 @@ export function ManualOperatorWorkSection({
     if (!selectedDesktopDetail || selectedDesktopDetail.type !== 'order') return null;
     return selectOrderDetail(selectedDesktopDetail.orderId, shiftOrders, lineSummaries);
   }, [selectedDesktopDetail, shiftOrders, lineSummaries]);
-  const shiftListOrders = shiftOrders as ShiftListOrder[];
   const lineHierarchySummaries = useMemo(
-    () => selectLineHierarchySummaries(lineSummaries, shiftListOrders),
-    [lineSummaries, shiftListOrders]
+    () => selectWorkHierarchyLineSummaries(workHierarchy),
+    [workHierarchy]
   );
   const pointSummaries = useMemo(
-    () => (selectedLineId ? selectPointSummaries(selectedLineId, shiftListOrders) : []),
-    [selectedLineId, shiftListOrders]
+    () => (selectedLineId ? selectWorkHierarchyPointSummaries(workHierarchy, selectedLineId) : []),
+    [selectedLineId, workHierarchy]
   );
 
   function handleSelectHierarchyLine(lineId: string) {
@@ -150,7 +153,6 @@ export function ManualOperatorWorkSection({
         shift={shift}
         isLoading={isLoading || (!!shift && isDaySummaryLoading)}
         kpi={kpi}
-        lineSummaries={lineSummaries}
         activeOrders={activeOrders}
         pickerWorkloads={pickerWorkloads}
         checkQueue={checkQueue}

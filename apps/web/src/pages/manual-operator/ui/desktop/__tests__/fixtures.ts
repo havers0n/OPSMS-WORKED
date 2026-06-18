@@ -120,7 +120,7 @@ export const mockPickers: PickerWorkload[] = [
     returned: 1,
     done: 0,
     wipCount: 5,
-    avgLinesPerOrder: 6.0,
+    avgLinesPerOrder: 6,
     humanMinutes: null
   },
   {
@@ -136,7 +136,7 @@ export const mockPickers: PickerWorkload[] = [
     returned: 1,
     done: 0,
     wipCount: 3,
-    avgLinesPerOrder: 5.0,
+    avgLinesPerOrder: 5,
     humanMinutes: null
   }
 ];
@@ -247,6 +247,7 @@ export const mockLineHierarchySummaries: LineHierarchySummary[] = [
   {
     lineId: 'line-1',
     lineName: 'קו צפון',
+    distributionArea: 'צפון',
     lineStatus: 'in_progress',
     ordersCount: 10,
     itemLinesCount: 50,
@@ -256,6 +257,7 @@ export const mockLineHierarchySummaries: LineHierarchySummary[] = [
   {
     lineId: 'line-2',
     lineName: 'קו דרום',
+    distributionArea: null,
     lineStatus: 'open',
     ordersCount: 10,
     itemLinesCount: 30,
@@ -275,6 +277,7 @@ export const mockPointSummaries: PointHierarchySummary[] = [
       {
         orderId: 'order-1',
         orderNumber: 'ORD-001',
+        customerName: 'לקוח א',
         status: 'picking',
         pointName: 'נקודה א',
         pickerName: 'דוד',
@@ -285,6 +288,7 @@ export const mockPointSummaries: PointHierarchySummary[] = [
       {
         orderId: 'order-3',
         orderNumber: null,
+        customerName: null,
         status: 'returned',
         pointName: 'ללא נקודה',
         pickerName: 'שרה',

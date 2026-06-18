@@ -39,6 +39,7 @@ export function DesktopOrderMiniCard({ order, onClick }: DesktopOrderMiniCardPro
           {STATUS_LABEL[order.status]}
         </span>
       </div>
+      {order.customerName && <p className="mb-1 text-xs text-gray-500 truncate">{order.customerName}</p>}
       <div className="flex items-baseline gap-3 text-xs text-gray-600">
         {order.pickerName && <span>מלקט: {order.pickerName}</span>}
         <span>{order.lineCount} שורות</span>

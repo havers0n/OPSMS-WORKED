@@ -46,6 +46,11 @@ const emptyDaySummary = {
   byPicker: []
 };
 
+const emptyWorkHierarchy = {
+  shiftId: mockShift.id,
+  areas: []
+};
+
 function makeQC() {
   return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
@@ -108,6 +113,7 @@ describe('ManualOperatorPage responsive rendering', () => {
       mockedBffRequest.mockImplementation((url: string) => {
         if (url.includes('/day-summary')) return Promise.resolve(emptyDaySummary);
         if (url.includes('/orders')) return Promise.resolve([]);
+        if (url.includes('/work-hierarchy')) return Promise.resolve(emptyWorkHierarchy);
         return Promise.resolve({ shift: mockShift, lines: [] });
       });
 
@@ -126,6 +132,7 @@ describe('ManualOperatorPage responsive rendering', () => {
       mockedBffRequest.mockImplementation((url: string) => {
         if (url.includes('/day-summary')) return Promise.resolve(emptyDaySummary);
         if (url.includes('/orders')) return Promise.resolve([]);
+        if (url.includes('/work-hierarchy')) return Promise.resolve(emptyWorkHierarchy);
         return Promise.resolve({ shift: mockShift, lines: [] });
       });
 

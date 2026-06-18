@@ -5,14 +5,15 @@ import { useBulkCreateManualShiftOrders } from '@/entities/manual-shift/api/muta
 
 interface BulkPasteSheetProps {
   lineId: string;
+  shiftId: string;
   onClose: () => void;
 }
 
-export function BulkPasteSheet({ lineId, onClose }: BulkPasteSheetProps) {
+export function BulkPasteSheet({ lineId, shiftId, onClose }: BulkPasteSheetProps) {
   const [rawText, setRawText] = useState('');
   const [result, setResult] = useState<ManualShiftBulkAddResult | null>(null);
 
-  const bulkCreate = useBulkCreateManualShiftOrders(lineId);
+  const bulkCreate = useBulkCreateManualShiftOrders(lineId, shiftId);
 
   function handleSubmit() {
     if (!rawText.trim()) return;

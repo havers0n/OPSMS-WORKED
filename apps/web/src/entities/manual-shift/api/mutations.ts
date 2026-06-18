@@ -364,6 +364,7 @@ function invalidateOrderQueries(
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(lineId) });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(shiftId) });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(shiftId) });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(shiftId) });
 }
@@ -393,6 +394,7 @@ function invalidateLineQueries(
 ) {
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(shiftId) });
+  void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(shiftId) });
   void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(lineId) });
 }
 
@@ -435,23 +437,25 @@ export function useCreateLine(shiftId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(shiftId) });
       void queryClient.invalidateQueries({ queryKey: [...manualShiftKeys.all, 'by-date'] });
     }
   });
 }
 
-export function useCreateManualShiftOrder(lineId: string) {
+export function useCreateManualShiftOrder(lineId: string, shiftId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: Omit<CreateOrderInput, 'lineId'>) => createOrder({ ...input, lineId }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(lineId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(shiftId) });
     }
   });
 }
 
-export function useBulkCreateManualShiftOrders(lineId: string) {
+export function useBulkCreateManualShiftOrders(lineId: string, shiftId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: Omit<BulkCreateOrdersInput, 'lineId'>) =>
@@ -459,6 +463,7 @@ export function useBulkCreateManualShiftOrders(lineId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lineOrders(lineId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(shiftId) });
     }
   });
 }
@@ -467,11 +472,15 @@ export function useUpdateManualShiftOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: updateOrderStatus,
-    onSuccess: (_data, variables) => {
+    onSuccess: (_data, variables: UpdateOrderStatusInput & { shiftId: string }) => {
       void queryClient.invalidateQueries({
         queryKey: manualShiftKeys.lineOrders(variables.lineId)
       });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(variables.shiftId) });
     }
   });
 }
@@ -480,11 +489,15 @@ export function useCreateManualShiftOrderError() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createOrderError,
-    onSuccess: (_data, variables) => {
+    onSuccess: (_data, variables: CreateOrderErrorInput & { shiftId: string }) => {
       void queryClient.invalidateQueries({
         queryKey: manualShiftKeys.lineOrders(variables.lineId)
       });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(variables.shiftId) });
     }
   });
 }
@@ -693,6 +706,7 @@ export function useApplyManualShiftMonthlyImport(selectedDate: string) {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.byDate(selectedDate) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(variables.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(variables.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(variables.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(variables.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(variables.shiftId) });
@@ -708,6 +722,7 @@ export function useApplyManualShiftExcelImport(selectedDate: string) {
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.today() });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.byDate(selectedDate) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.shiftOrders(data.shiftId) });
+      void queryClient.invalidateQueries({ queryKey: manualShiftKeys.workHierarchy(data.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.daySummary(data.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.peopleSummary(data.shiftId) });
       void queryClient.invalidateQueries({ queryKey: manualShiftKeys.lines(data.shiftId) });

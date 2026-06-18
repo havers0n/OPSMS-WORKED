@@ -38,7 +38,7 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
 
   function handleOK(order: ManualShiftOrder) {
     updateStatus.mutate(
-      { orderId: order.id, lineId: order.lineId, status: 'done' },
+      { orderId: order.id, lineId: order.lineId, shiftId, status: 'done' },
       { onSuccess: invalidateSummaries }
     );
   }
@@ -89,6 +89,7 @@ export function CheckTab({ shiftId, lines }: CheckTabProps) {
         <ErrorFlow
           orderId={errorFlowOrder.id}
           lineId={errorFlowOrder.lineId}
+          shiftId={errorFlowOrder.shiftId}
           orderNumber={errorFlowOrder.orderNumber}
           onClose={handleErrorFlowClose}
         />

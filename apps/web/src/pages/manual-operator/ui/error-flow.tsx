@@ -26,11 +26,12 @@ const ERROR_TYPES: ManualShiftOrderErrorType[] = [
 interface ErrorFlowProps {
   orderId: string;
   lineId: string;
+  shiftId: string;
   orderNumber: string | null;
   onClose: () => void;
 }
 
-export function ErrorFlow({ orderId, lineId, orderNumber, onClose }: ErrorFlowProps) {
+export function ErrorFlow({ orderId, lineId, shiftId, orderNumber, onClose }: ErrorFlowProps) {
   const [selectedType, setSelectedType] = useState<ManualShiftOrderErrorType | null>(null);
   const [comment, setComment] = useState('');
 
@@ -39,7 +40,7 @@ export function ErrorFlow({ orderId, lineId, orderNumber, onClose }: ErrorFlowPr
   function handleSubmit() {
     if (!selectedType) return;
     createError.mutate(
-      { orderId, lineId, type: selectedType, comment: comment.trim() || undefined },
+      { orderId, lineId, shiftId, type: selectedType, comment: comment.trim() || undefined },
       { onSuccess: onClose }
     );
   }

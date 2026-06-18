@@ -28,10 +28,12 @@ export function DesktopLineSummaryCard({ line, onClick }: DesktopLineSummaryCard
         />
         <p className="text-sm font-semibold text-gray-900 truncate flex-1 min-w-0">{line.lineName}</p>
       </div>
+      {line.distributionArea && (
+        <p className="mb-2 text-xs text-gray-500">אזור הפצה: {line.distributionArea}</p>
+      )}
       <div className="flex items-baseline gap-3 mb-2 text-xs text-gray-600">
         <span>{line.ordersCount} הזמנות</span>
-        <span>{line.itemLinesCount} פריטים</span>
-        <span>{line.totalQuantity} יח׳</span>
+        <span>{line.totalQuantity} יח'</span>
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
         {sb.queued > 0 && <span className="text-gray-500">{sb.queued} בתור</span>}

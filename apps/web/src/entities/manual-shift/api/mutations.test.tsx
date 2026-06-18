@@ -8,10 +8,14 @@ import {
   useApplyManualShiftMonthlyImport,
   usePreviewManualShiftExcelImport,
   usePreviewManualShiftMonthlyImport,
+  useBulkCreateManualShiftOrders,
+  useCreateManualShiftOrder,
   useCreateManualShiftOrderCheckUnit,
+  useCreateManualShiftOrderError,
   usePatchManualShiftOrder,
   usePatchManualShiftOrderCheckUnit,
   useStartManualShiftOrderPicking,
+  useUpdateManualShiftOrderStatus,
   useUpdateManualShiftOrderCheckUnitStatus
 } from './mutations';
 import { manualShiftKeys } from './queries';
@@ -94,6 +98,7 @@ describe('usePatchManualShiftOrder', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
   });
@@ -118,6 +123,78 @@ describe('useStartManualShiftOrderPicking', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+  });
+});
+
+describe('desktop hierarchy invalidation coverage', () => {
+  it('create order invalidates line, today, and work hierarchy queries', async () => {
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useCreateManualShiftOrder('l1', 's1'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ pointName: 'Point A', status: 'queued' });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
+  });
+
+  it('bulk create invalidates line, today, and work hierarchy queries', async () => {
+    vi.mocked(bffRequest).mockResolvedValueOnce({ createdCount: 1, rows: [], skippedRows: [] });
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useBulkCreateManualShiftOrders('l1', 's1'), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ rawText: 'Point A' });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
+  });
+
+  it('status update invalidates hierarchy-facing shift queries', async () => {
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useUpdateManualShiftOrderStatus(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId: 'o1',
+        lineId: 'l1',
+        shiftId: 's1',
+        status: 'done'
+      });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
+  });
+
+  it('error creation invalidates hierarchy-facing shift queries', async () => {
+    const { invalidateSpy, wrapper } = createWrapper();
+    const { result } = renderHook(() => useCreateManualShiftOrderError(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        orderId: 'o1',
+        lineId: 'l1',
+        shiftId: 's1',
+        type: 'other'
+      });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
   });
@@ -205,6 +282,7 @@ describe('manual shift import mutations', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.byDate('2026-06-01') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lines('s1') });
@@ -270,6 +348,7 @@ describe('manual shift import mutations', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.byDate('2026-06-14') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lines('s1') });
@@ -303,6 +382,7 @@ describe('manual shift order check unit mutations', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
   });
@@ -325,10 +405,14 @@ describe('manual shift order check unit mutations', () => {
     const shiftCalls = invalidateSpy.mock.calls.filter(
       ([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: manualShiftKeys.shiftOrders('s1') })
     );
+    const hierarchyCalls = invalidateSpy.mock.calls.filter(
+      ([arg]) => JSON.stringify(arg) === JSON.stringify({ queryKey: manualShiftKeys.workHierarchy('s1') })
+    );
 
     expect(todayCalls.length).toBeGreaterThanOrEqual(2);
     expect(lineCalls.length).toBeGreaterThanOrEqual(2);
     expect(shiftCalls.length).toBeGreaterThanOrEqual(2);
+    expect(hierarchyCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('status mutation sends expected request shape', async () => {
@@ -380,6 +464,7 @@ describe('manual shift order check unit mutations', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.today() });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.lineOrders('l1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.shiftOrders('s1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.workHierarchy('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.peopleSummary('s1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: manualShiftKeys.daySummary('s1') });
   });
