@@ -25,6 +25,7 @@ import type {
   ManualShiftTodayResponse,
   ManualShiftWorker,
   ManualShiftWorkerRole,
+  ManualShiftWorkHierarchyResponse,
   OpenAshlamaBoardItem
 } from '@wos/domain';
 import {
@@ -255,6 +256,10 @@ export type ManualShiftsService = {
     selectedDate: string;
     plan: ManualShiftMonthlyApplyPlan;
   }): Promise<ManualShiftMonthlyApplyResponse>;
+  getShiftWorkHierarchy(input: {
+    tenantId: string;
+    shiftId: string;
+  }): Promise<ManualShiftWorkHierarchyResponse>;
 };
 
 function formatLocalDate(date: Date, timeZone: string) {
@@ -1779,6 +1784,15 @@ export function createManualShiftsServiceFromRepo(
         byLine: lineSummaries,
         byPicker
       };
+    },
+
+    async getShiftWorkHierarchy(input) {
+      const shift = await requireShift(input.shiftId);
+      if (shift.tenantId !== input.tenantId) {
+        throw manualShiftNotFound(input.shiftId);
+      }
+
+      return repo.listShiftWorkHierarchy(input.shiftId);
     }
   };
 }

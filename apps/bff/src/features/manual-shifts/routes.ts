@@ -43,6 +43,7 @@ import {
   manualShiftImportPreviewResponseSchema,
   manualShiftMonthlyImportPreviewResponseSchema,
   manualShiftMonthlyApplyResponseSchema,
+  manualShiftWorkHierarchyResponseSchema,
   applyManualShiftImportRequestSchema,
   applyManualShiftImportResponseSchema,
   manualShiftDeleteRestoreBodySchema,
@@ -1145,6 +1146,18 @@ export function registerManualShiftsRoutes(
     }).id;
     const items = await getManualShiftsService(auth).listOpenShiftAshlamot({ tenantId, shiftId });
     return parseOrThrow(openAshlamaBoardResponseSchema, items);
+  });
+
+  app.get('/api/manual-shifts/:shiftId/work-hierarchy', async (request, reply) => {
+    const auth = await getAuthContext(request, reply);
+    if (!auth) return;
+
+    const tenantId = requireTenant(auth);
+    const shiftId = parseOrThrow(idResponseSchema, {
+      id: (request.params as { shiftId: string }).shiftId
+    }).id;
+    const hierarchy = await getManualShiftsService(auth).getShiftWorkHierarchy({ tenantId, shiftId });
+    return parseOrThrow(manualShiftWorkHierarchyResponseSchema, hierarchy);
   });
 
   // ── Pick bridge ──────────────────────────────────────────────────────────────

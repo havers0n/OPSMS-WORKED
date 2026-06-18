@@ -501,3 +501,78 @@ export function getEffectiveExpectedCheckUnitsCount(input: {
   ).length;
   return Math.max(declaredPalletCount, relevantUnitsCount);
 }
+
+export const manualShiftOrderStatusBreakdownSchema = z.object({
+  queued: z.number().int().min(0),
+  picking: z.number().int().min(0),
+  waitingCheck: z.number().int().min(0),
+  returned: z.number().int().min(0),
+  done: z.number().int().min(0),
+  blocked: z.number().int().min(0).optional()
+});
+export type ManualShiftOrderStatusBreakdown = z.infer<typeof manualShiftOrderStatusBreakdownSchema>;
+
+export const manualShiftWorkHierarchyOrderSchema = z.object({
+  orderId: z.string().uuid(),
+  orderNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  pointName: z.string().nullable(),
+  status: manualShiftOrderStatusSchema,
+  totalQuantity: z.number().min(0),
+  hasAshlama: z.boolean(),
+  hasCheckUnits: z.boolean()
+});
+export type ManualShiftWorkHierarchyOrder = z.infer<typeof manualShiftWorkHierarchyOrderSchema>;
+
+export const manualShiftWorkHierarchyBucketSchema = z.object({
+  bucketName: z.string().nullable(),
+  displayName: z.string(),
+  totalOrders: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  statusBreakdown: manualShiftOrderStatusBreakdownSchema,
+  orders: z.array(manualShiftWorkHierarchyOrderSchema)
+});
+export type ManualShiftWorkHierarchyBucket = z.infer<typeof manualShiftWorkHierarchyBucketSchema>;
+
+export const manualShiftWorkHierarchyLineSchema = z.object({
+  lineId: z.string().uuid(),
+  lineGroupName: z.string(),
+  distributionArea: z.string().nullable(),
+  status: manualShiftLineStatusSchema,
+  totalBuckets: z.number().int().min(0),
+  totalOrders: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  statusBreakdown: manualShiftOrderStatusBreakdownSchema,
+  buckets: z.array(manualShiftWorkHierarchyBucketSchema)
+});
+export type ManualShiftWorkHierarchyLine = z.infer<typeof manualShiftWorkHierarchyLineSchema>;
+
+export const manualShiftWorkHierarchyAreaSchema = z.object({
+  areaName: z.string().nullable(),
+  displayName: z.string(),
+  totalLines: z.number().int().min(0),
+  totalBuckets: z.number().int().min(0),
+  totalOrders: z.number().int().min(0),
+  totalQuantity: z.number().min(0),
+  statusBreakdown: manualShiftOrderStatusBreakdownSchema,
+  lines: z.array(manualShiftWorkHierarchyLineSchema)
+});
+export type ManualShiftWorkHierarchyArea = z.infer<typeof manualShiftWorkHierarchyAreaSchema>;
+
+export const manualShiftWorkHierarchyResponseSchema = z.object({
+  shiftId: z.string().uuid(),
+  areas: z.array(manualShiftWorkHierarchyAreaSchema)
+});
+export type ManualShiftWorkHierarchyResponse = z.infer<typeof manualShiftWorkHierarchyResponseSchema>;
+
+export function buildOrderStatusBreakdown(
+  orders: ReadonlyArray<Pick<ManualShiftOrder, 'status'>>
+): ManualShiftOrderStatusBreakdown {
+  return {
+    queued: orders.filter((o) => o.status === 'queued').length,
+    picking: orders.filter((o) => o.status === 'picking').length,
+    waitingCheck: orders.filter((o) => o.status === 'waiting_check').length,
+    returned: orders.filter((o) => o.status === 'returned').length,
+    done: orders.filter((o) => o.status === 'done').length
+  };
+}

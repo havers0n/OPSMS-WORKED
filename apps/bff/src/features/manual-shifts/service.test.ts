@@ -618,9 +618,12 @@ function createRepo() {
     }),
     findWorkerByAuthUserId: vi.fn(async (_tenantId: string, _authUserId: string) => null),
     setWorkerAuthUser: vi.fn(async (_workerId: string, _authUserId: string | null) => {}),
-    listBindableUsers: vi.fn(async (_tenantId: string) => [])
+    listBindableUsers: vi.fn(async (_tenantId: string) => []),
+    listShiftCheckUnits: vi.fn(async (_shiftId: string) => []),
+    listShiftAshlamot: vi.fn(async (_shiftId: string) => []),
+    listShiftWorkHierarchy: vi.fn(async (_shiftId: string) => ({ shiftId: '', areas: [] }))
   };
-
+ 
   return { repo, state };
 }
 

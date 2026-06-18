@@ -17,8 +17,14 @@ import type {
   ManualShiftSession,
   ManualShiftWorker,
   ManualShiftWorkerRole,
+  ManualShiftWorkHierarchyArea,
+  ManualShiftWorkHierarchyBucket,
+  ManualShiftWorkHierarchyLine,
+  ManualShiftWorkHierarchyOrder,
+  ManualShiftWorkHierarchyResponse,
   OpenAshlamaBoardItem
 } from '@wos/domain';
+import { deriveManualShiftLineStatus } from '@wos/domain';
 
 type PostgrestLikeError = {
   code?: string;
@@ -683,6 +689,9 @@ export type ManualShiftsRepo = {
     createdByName: string | null;
   }): Promise<ManualShiftOrderError>;
   listShiftErrors(shiftId: string): Promise<ManualShiftOrderError[]>;
+  listShiftCheckUnits(shiftId: string): Promise<ManualShiftOrderCheckUnit[]>;
+  listShiftAshlamot(shiftId: string): Promise<ManualShiftOrderAshlama[]>;
+  listShiftWorkHierarchy(shiftId: string): Promise<ManualShiftWorkHierarchyResponse>;
 };
 
 export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRepo {
@@ -1491,6 +1500,44 @@ export function createManualShiftsRepo(supabase: SupabaseClient): ManualShiftsRe
       }
 
       return ((data ?? []) as ManualShiftOrderErrorRow[]).map(mapErrorRow);
+    },
+
+    async listShiftCheckUnits(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_check_units')
+        .select(checkUnitColumns)
+        .eq('shift_id', shiftId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftOrderCheckUnitRow[]).map(mapCheckUnitRow);
+    },
+
+    async listShiftAshlamot(shiftId) {
+      const { data, error } = await supabase
+        .from('manual_shift_order_ashlamot')
+        .select(ashlamaColumns)
+        .eq('shift_id', shiftId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return ((data ?? []) as ManualShiftOrderAshlamaRow[]).map(mapAshlamaRow);
+    },
+
+    async listShiftWorkHierarchy(shiftId) {
+      const [lineRows, orders, checkUnits, ashlamot] = await Promise.all([
+        this.listShiftLines(shiftId),
+        this.listShiftOrders(shiftId),
+        this.listShiftCheckUnits(shiftId),
+        this.listShiftAshlamot(shiftId)
+      ]);
+
+      const orderIds = orders.map((o) => o.id);
+      const rollups = orderIds.length > 0
+        ? await this.listOrdersItemRollups(orderIds)
+        : new Map<string, { lineCount: number; totalQuantity: number }>();
+
+      return buildShiftWorkHierarchy(shiftId, lineRows, orders, rollups, checkUnits, ashlamot);
     }
   };
 }
@@ -1500,4 +1547,146 @@ export function mapManualShiftLineRowToDomain(
   status: ManualShiftLine['status']
 ) {
   return mapLineRow(row, status);
+}
+
+function computeStatusBreakdown(
+  orders: ReadonlyArray<{ status: string }>
+): {
+  queued: number;
+  picking: number;
+  waitingCheck: number;
+  returned: number;
+  done: number;
+} {
+  return {
+    queued: orders.filter((o) => o.status === 'queued').length,
+    picking: orders.filter((o) => o.status === 'picking').length,
+    waitingCheck: orders.filter((o) => o.status === 'waiting_check').length,
+    returned: orders.filter((o) => o.status === 'returned').length,
+    done: orders.filter((o) => o.status === 'done').length
+  };
+}
+
+function buildShiftWorkHierarchy(
+  shiftId: string,
+  lineRows: ManualShiftLineRow[],
+  orders: ManualShiftOrder[],
+  rollups: Map<string, { lineCount: number; totalQuantity: number }>,
+  checkUnits: ManualShiftOrderCheckUnit[],
+  ashlamot: ManualShiftOrderAshlama[]
+): ManualShiftWorkHierarchyResponse {
+  const checkUnitsByOrderId = new Map<string, ManualShiftOrderCheckUnit[]>();
+  for (const cu of checkUnits) {
+    const list = checkUnitsByOrderId.get(cu.orderId) ?? [];
+    list.push(cu);
+    checkUnitsByOrderId.set(cu.orderId, list);
+  }
+
+  const ashlamotByOrderId = new Map<string, ManualShiftOrderAshlama[]>();
+  for (const a of ashlamot) {
+    const list = ashlamotByOrderId.get(a.orderId) ?? [];
+    list.push(a);
+    ashlamotByOrderId.set(a.orderId, list);
+  }
+
+  const ordersByLineId = new Map<string, ManualShiftOrder[]>();
+  for (const order of orders) {
+    const list = ordersByLineId.get(order.lineId) ?? [];
+    list.push(order);
+    ordersByLineId.set(order.lineId, list);
+  }
+
+  const lines: ManualShiftWorkHierarchyLine[] = [];
+  for (const row of lineRows) {
+    const lineOrders = ordersByLineId.get(row.id) ?? [];
+
+    const bucketsMap = new Map<string | null, ManualShiftOrder[]>();
+    for (const order of lineOrders) {
+      const bucketName = order.pointName;
+      const list = bucketsMap.get(bucketName) ?? [];
+      list.push(order);
+      bucketsMap.set(bucketName, list);
+    }
+
+    const buckets: ManualShiftWorkHierarchyBucket[] = [];
+    for (const [bucketName, bucketOrders] of bucketsMap) {
+      const hierarchyOrders: ManualShiftWorkHierarchyOrder[] = bucketOrders.map((o) => {
+        const rollup = rollups.get(o.id);
+        const totalQuantity = rollup ? rollup.totalQuantity : 0;
+        const orderCheckUnits = checkUnitsByOrderId.get(o.id) ?? [];
+        const orderAshlamot = ashlamotByOrderId.get(o.id) ?? [];
+        return {
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          customerName: o.customerName,
+          pointName: o.pointName,
+          status: o.status,
+          totalQuantity,
+          hasAshlama: orderAshlamot.some((a) => a.status === 'open'),
+          hasCheckUnits: orderCheckUnits.length > 0
+        };
+      });
+
+      buckets.push({
+        bucketName,
+        displayName: bucketName ?? 'קו ראשי',
+        totalOrders: bucketOrders.length,
+        totalQuantity: hierarchyOrders.reduce((s, o) => s + o.totalQuantity, 0),
+        statusBreakdown: computeStatusBreakdown(bucketOrders),
+        orders: hierarchyOrders
+      });
+    }
+
+    buckets.sort((a, b) => {
+      if (a.bucketName === null) return -1;
+      if (b.bucketName === null) return 1;
+      return a.bucketName.localeCompare(b.bucketName);
+    });
+
+    lines.push({
+      lineId: row.id,
+      lineGroupName: row.name,
+      distributionArea: row.distribution_area,
+      status: deriveManualShiftLineStatus(lineOrders),
+      totalBuckets: buckets.length,
+      totalOrders: lineOrders.length,
+      totalQuantity: buckets.reduce((s, b) => s + b.totalQuantity, 0),
+      statusBreakdown: computeStatusBreakdown(lineOrders),
+      buckets
+    });
+  }
+
+  const areasMap = new Map<string | null, ManualShiftWorkHierarchyLine[]>();
+  for (const line of lines) {
+    const area = line.distributionArea;
+    const list = areasMap.get(area) ?? [];
+    list.push(line);
+    areasMap.set(area, list);
+  }
+
+  const areas: ManualShiftWorkHierarchyArea[] = [];
+  for (const [areaName, areaLines] of areasMap) {
+    const areaOrders = areaLines.flatMap((l) => l.buckets.flatMap((b) => b.orders));
+    areas.push({
+      areaName,
+      displayName: areaName ?? 'ללא איזור',
+      totalLines: areaLines.length,
+      totalBuckets: areaLines.reduce((s, l) => s + l.totalBuckets, 0),
+      totalOrders: areaOrders.length,
+      totalQuantity: areaLines.reduce((s, l) => s + l.totalQuantity, 0),
+      statusBreakdown: computeStatusBreakdown(areaOrders.map((o) => ({ status: o.status }))),
+      lines: areaLines
+    });
+  }
+
+  areas.sort((a, b) => {
+    if (a.areaName === null) return -1;
+    if (b.areaName === null) return 1;
+    return a.areaName.localeCompare(b.areaName);
+  });
+
+  return {
+    shiftId,
+    areas
+  };
 }
